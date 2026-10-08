@@ -25,6 +25,22 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **A Cloudflare block list connector.** An agent that catches an attacker at
+  3 a.m. can now act: `cloudflare.block_ip` adds one literal address to one
+  configured Cloudflare IP list that a firewall rule blocks at the edge — and
+  nothing else. The guards live in code, not in prompts: private and reserved
+  ranges are refused unconditionally, the instance's protected ranges (the
+  installation's egress, shared anonymizer ranges) refuse the same way, a
+  daily ceiling counted from the list itself bounds a misled night, and an
+  address already listed succeeds without a duplicate. Every entry carries a
+  timestamped `fuseone:auto:` comment for the operator's external expiry job,
+  so blocks are temporary by design. Account, list, protected ranges and the
+  sealed token are configured in the console like every connector.
+
 ## [0.54.0] — 2026-10-06
 
 ### Added

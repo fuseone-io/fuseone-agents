@@ -21,12 +21,24 @@ export function GraviteePolicyFields({
   return (
     <section className="grid gap-4 border-t pt-5">
       <div>
-        <h3 className="text-sm font-medium">{t("connectors.graviteeExpiryPolicy")}</h3>
-        <p className="text-xs text-muted-foreground">{t("connectors.graviteeExpiryPolicyHint")}</p>
+        <h3 className="text-sm font-medium">
+          {t("connectors.graviteeExpiryPolicy")}
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          {t("connectors.graviteeExpiryPolicyHint")}
+        </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <TTLField form={form} name="minTTLSeconds" label={t("connectors.graviteeMinTTL")} />
-        <TTLField form={form} name="maxTTLSeconds" label={t("connectors.graviteeMaxTTL")} />
+        <TTLField
+          form={form}
+          name="minTTLSeconds"
+          label={t("connectors.graviteeMinTTL")}
+        />
+        <TTLField
+          form={form}
+          name="maxTTLSeconds"
+          label={t("connectors.graviteeMaxTTL")}
+        />
       </div>
       <FormField
         control={form.control}
@@ -34,8 +46,12 @@ export function GraviteePolicyFields({
         render={({ field }) => (
           <FormItem className="flex items-start justify-between gap-4 rounded-lg border p-3">
             <div>
-              <FormLabel className="m-0">{t("connectors.graviteeAllowNoExpiry")}</FormLabel>
-              <FormDescription>{t("connectors.graviteeAllowNoExpiryHint")}</FormDescription>
+              <FormLabel className="m-0">
+                {t("connectors.graviteeAllowNoExpiry")}
+              </FormLabel>
+              <FormDescription>
+                {t("connectors.graviteeAllowNoExpiryHint")}
+              </FormDescription>
             </div>
             <FormControl>
               <Switch checked={field.value} onCheckedChange={field.onChange} />

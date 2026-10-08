@@ -22,7 +22,8 @@ const vault: GovernedConnector = {
     {
       id: "vault.write_secret",
       name: "Write secret",
-      summary: "Writes a generated key or certificate to an allowed Vault path.",
+      summary:
+        "Writes a generated key or certificate to an allowed Vault path.",
       effects: ["write"],
       approval: "policy",
       secretHandling: "reference_only",
@@ -206,7 +207,9 @@ describe("governed connector catalogue", () => {
     );
 
     expect(screen.getAllByText("Executável")).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Configurar" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Configurar" })).toHaveLength(
+      2,
+    );
     expect(screen.getByRole("button", { name: "Editar" })).toBeInTheDocument();
     expect(screen.getByText("db.internal:5432/appx")).toBeInTheDocument();
     expect(screen.getByText("prod/app-x-readonly")).toBeInTheDocument();
@@ -234,16 +237,26 @@ describe("governed connector catalogue", () => {
       />,
     );
 
-    const configured = screen.getByRole("heading", { name: "apim" }).closest("article")!;
-    expect(within(configured).getByRole("button", { name: "Editar" })).toBeInTheDocument();
+    const configured = screen
+      .getByRole("heading", { name: "apim" })
+      .closest("article")!;
+    expect(
+      within(configured).getByRole("button", { name: "Editar" }),
+    ).toBeInTheDocument();
     expect(within(configured).getByText("checkout-api")).toBeInTheDocument();
     expect(within(configured).getByText("86400-7776000 s")).toBeInTheDocument();
 
-    const catalogue = screen.getByRole("heading", {
-      name: "Governed Gravitee subscriptions",
-    }).closest("article")!;
-    await user.click(within(catalogue).getByRole("button", { name: "Configurar" }));
-    expect(screen.getByRole("heading", { name: "Configurar Gravitee" })).toBeInTheDocument();
+    const catalogue = screen
+      .getByRole("heading", {
+        name: "Governed Gravitee subscriptions",
+      })
+      .closest("article")!;
+    await user.click(
+      within(catalogue).getByRole("button", { name: "Configurar" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Configurar Gravitee" }),
+    ).toBeInTheDocument();
   });
 
   it("offers Gravitee from the single new-instance menu", async () => {
@@ -264,8 +277,12 @@ describe("governed connector catalogue", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Nova instância" }));
-    await user.click(await screen.findByRole("menuitem", { name: "Configurar Gravitee" }));
-    expect(screen.getByRole("heading", { name: "Configurar Gravitee" })).toBeInTheDocument();
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Configurar Gravitee" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Configurar Gravitee" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps the catalogue visible when configured instances fail to load", () => {
@@ -295,13 +312,15 @@ describe("governed connector catalogue", () => {
       <ConnectorCatalogPanel
         data={{
           connectors: [],
-          instances: [{
-            name: "future-prod",
-            connector: "future",
-            enabled: true,
-            scopeKind: "installation",
-            hasToken: false,
-          }],
+          instances: [
+            {
+              name: "future-prod",
+              connector: "future",
+              enabled: true,
+              scopeKind: "installation",
+              hasToken: false,
+            },
+          ],
           catalogLoading: false,
           instancesLoading: false,
           catalogError: null,
@@ -312,11 +331,16 @@ describe("governed connector catalogue", () => {
       />,
     );
 
-    const configured = screen.getByRole("heading", { name: "future-prod" }).closest("article")!;
-    expect(within(configured).queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+    const configured = screen
+      .getByRole("heading", { name: "future-prod" })
+      .closest("article")!;
+    expect(
+      within(configured).queryByRole("button", { name: "Editar" }),
+    ).not.toBeInTheDocument();
     expect(within(configured).queryByText("Token")).not.toBeInTheDocument();
-    expect(within(configured).getByRole("button", { name: "Remover instância" }))
-      .toBeInTheDocument();
+    expect(
+      within(configured).getByRole("button", { name: "Remover instância" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps configured instances visible when the catalogue fails to load", () => {

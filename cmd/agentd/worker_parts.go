@@ -127,7 +127,10 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 	)
 	parts.native = connectortools.New(
 		parts.catalog, parts.catalog, parts.content, vaultClient,
-	).WithSQLRuntime(sqlRuntime)
+	).WithSQLRuntime(sqlRuntime).
+		WithCloudflare(connectortools.NewCloudflareBlocker(
+			connectortools.NewHTTPCloudflareClient(nil),
+		))
 	if parts.configPool != nil {
 		graviteeAccess := connectortools.NewGraviteeAccessResolver(connectorSettings, vaultClient)
 		graviteeRemote := connectortools.NewHTTPGraviteeClient(nil)

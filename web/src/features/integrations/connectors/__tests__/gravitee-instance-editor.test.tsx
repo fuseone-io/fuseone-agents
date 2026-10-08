@@ -46,26 +46,31 @@ describe("Gravitee connector instance editor", () => {
     let request: Request | undefined;
     vi.stubGlobal("fetch", async (next: Request) => {
       request = next;
-      return new Response(JSON.stringify({
-        ...listed,
-        gravitee: {
-          address: "https://apim.internal/management/v2",
-          organization: "org-prod",
-          environment: "env-prod",
-          allowedReferences: [{ type: "API", id: "checkout-api" }],
-          minTTLSeconds: 86_400,
-          maxTTLSeconds: 7_776_000,
-          allowNoExpiry: false,
-          credentialSource: {
-            kind: "vault_kv_secret",
-            vaultInstance: "secrets",
-            path: "integrations/gravitee/prod",
-            field: "access_token",
+      return new Response(
+        JSON.stringify({
+          ...listed,
+          gravitee: {
+            address: "https://apim.internal/management/v2",
+            organization: "org-prod",
+            environment: "env-prod",
+            allowedReferences: [{ type: "API", id: "checkout-api" }],
+            minTTLSeconds: 86_400,
+            maxTTLSeconds: 7_776_000,
+            allowNoExpiry: false,
+            credentialSource: {
+              kind: "vault_kv_secret",
+              vaultInstance: "secrets",
+              path: "integrations/gravitee/prod",
+              field: "access_token",
+            },
           },
-        },
-      }), { status: 200, headers: { "Content-Type": "application/json" } });
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
     });
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );
@@ -81,13 +86,17 @@ describe("Gravitee connector instance editor", () => {
       { wrapper },
     );
 
-    expect(screen.queryByLabelText("Caminho do segredo")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Caminho do segredo"),
+    ).not.toBeInTheDocument();
     expect(await screen.findByLabelText("Caminho do segredo")).toHaveValue(
       "integrations/gravitee/prod",
     );
     await waitFor(() => expect(request).toBeDefined());
     const url = new URL(request!.url);
-    expect(url.pathname).toBe("/api/v1/admin/integrations/connectors/instances/apim");
+    expect(url.pathname).toBe(
+      "/api/v1/admin/integrations/connectors/instances/apim",
+    );
     expect(Object.fromEntries(url.searchParams)).toEqual({
       scopeKind: "area",
       company: "acme",
@@ -97,9 +106,12 @@ describe("Gravitee connector instance editor", () => {
 
   it("waits for a fresh detail instead of mounting a cached credential boundary", async () => {
     let release!: (response: Response) => void;
-    const fetcher = vi.fn(() => new Promise<Response>((resolve) => {
-      release = resolve;
-    }));
+    const fetcher = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    );
     vi.stubGlobal("fetch", fetcher);
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -123,13 +135,20 @@ describe("Gravitee connector instance editor", () => {
       { wrapper },
     );
 
-    expect(screen.queryByLabelText("Caminho do segredo")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Caminho do segredo"),
+    ).not.toBeInTheDocument();
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
     await act(async () => {
-      release(new Response(JSON.stringify({
-        ...listed,
-        gravitee: graviteeDetail("integrations/gravitee/current"),
-      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+      release(
+        new Response(
+          JSON.stringify({
+            ...listed,
+            gravitee: graviteeDetail("integrations/gravitee/current"),
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
     });
     expect(await screen.findByLabelText("Caminho do segredo")).toHaveValue(
       "integrations/gravitee/current",

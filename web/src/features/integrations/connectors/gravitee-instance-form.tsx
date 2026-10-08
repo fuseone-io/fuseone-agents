@@ -54,22 +54,30 @@ export function GraviteeInstanceForm({
     name: ["scopeKind", "company", "area"],
   });
   const choices = useMemo(
-    () => vaultChoices(instances, {
-      scopeKind,
-      company: targetCompany,
-      area: targetArea,
-    }),
+    () =>
+      vaultChoices(instances, {
+        scopeKind,
+        company: targetCompany,
+        area: targetArea,
+      }),
     [instances, scopeKind, targetCompany, targetArea],
   );
 
   async function submit(values: GraviteeInstanceValues) {
     form.clearErrors(["vaultInstance", "credentialPath"]);
     const issue = values.enabled
-      ? graviteeBindingIssue(instances, values, values.vaultInstance, values.credentialPath)
+      ? graviteeBindingIssue(
+          instances,
+          values,
+          values.vaultInstance,
+          values.credentialPath,
+        )
       : null;
     if (issue) {
       form.setError(
-        issue === "connectors.graviteeVaultPathOutside" ? "credentialPath" : "vaultInstance",
+        issue === "connectors.graviteeVaultPathOutside"
+          ? "credentialPath"
+          : "vaultInstance",
         { message: issue },
       );
       return;
@@ -87,14 +95,24 @@ export function GraviteeInstanceForm({
     <PropertiesSheet
       open
       onOpenChange={(open) => !open && onClose()}
-      title={instance ? t("connectors.editGraviteeInstance") : t("connectors.newGravitee")}
+      title={
+        instance
+          ? t("connectors.editGraviteeInstance")
+          : t("connectors.newGravitee")
+      }
       description={t("connectors.graviteeInstanceSheetHint")}
       className="lg:max-w-[760px]"
     >
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(submit)} className="flex min-h-0 flex-1 flex-col">
+        <form
+          onSubmit={form.handleSubmit(submit)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
           <PropertiesSheetBody className="space-y-6">
-            <ConnectorIdentityFields editing={instance !== null} connector="gravitee" />
+            <ConnectorIdentityFields
+              editing={instance !== null}
+              connector="gravitee"
+            />
             <GraviteeTargetFields form={form} />
             <GraviteePolicyFields form={form} />
             <GraviteeVaultFields form={form} choices={choices} />

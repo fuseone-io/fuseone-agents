@@ -21,10 +21,14 @@ describe("connector instance editor", () => {
   it.each<ConfigurableConnector>(["gravitee", "sql"])(
     "refuses an empty %s detail instead of opening a creation form",
     async (connector) => {
-      vi.stubGlobal("fetch", async () => new Response(null, {
-        status: 200,
-        headers: { "Content-Length": "0" },
-      }));
+      vi.stubGlobal(
+        "fetch",
+        async () =>
+          new Response(null, {
+            status: 200,
+            headers: { "Content-Length": "0" },
+          }),
+      );
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
@@ -53,9 +57,13 @@ describe("connector instance editor", () => {
       );
 
       expect(await screen.findByRole("alert")).toBeInTheDocument();
-      expect(screen.queryByLabelText("Nome da instância")).not.toBeInTheDocument();
-      expect(client.getQueryState(integrationKeys.connectorInstance(instance))?.error)
-        .toMatchObject({ message: "connector instance detail is missing" });
+      expect(
+        screen.queryByLabelText("Nome da instância"),
+      ).not.toBeInTheDocument();
+      expect(
+        client.getQueryState(integrationKeys.connectorInstance(instance))
+          ?.error,
+      ).toMatchObject({ message: "connector instance detail is missing" });
     },
   );
 });

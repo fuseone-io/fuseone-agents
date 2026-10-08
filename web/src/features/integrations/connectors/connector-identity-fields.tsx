@@ -66,12 +66,20 @@ export function ConnectorIdentityFields({
               disabled={editing}
             >
               <FormControl>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
               </FormControl>
               <SelectContent>
-                <SelectItem value="area">{t("connectors.scope.area")}</SelectItem>
-                <SelectItem value="company">{t("connectors.scope.company")}</SelectItem>
-                <SelectItem value="installation">{t("connectors.scope.installation")}</SelectItem>
+                <SelectItem value="area">
+                  {t("connectors.scope.area")}
+                </SelectItem>
+                <SelectItem value="company">
+                  {t("connectors.scope.company")}
+                </SelectItem>
+                <SelectItem value="installation">
+                  {t("connectors.scope.installation")}
+                </SelectItem>
               </SelectContent>
             </Select>
             <FormMessage />

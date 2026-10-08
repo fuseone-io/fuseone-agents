@@ -5520,6 +5520,7 @@ components:
         vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
         sql: { $ref: '#/components/schemas/ConnectorSQLResponse' }
         gravitee: { $ref: '#/components/schemas/ConnectorGraviteeResponse' }
+        cloudflare: { $ref: '#/components/schemas/ConnectorCloudflareConfig' }
 
     ConnectorInstanceDetail:
       type: object
@@ -5543,6 +5544,7 @@ components:
         vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
         sql: { $ref: '#/components/schemas/ConnectorSQLInput' }
         gravitee: { $ref: '#/components/schemas/ConnectorGraviteeInput' }
+        cloudflare: { $ref: '#/components/schemas/ConnectorCloudflareConfig' }
 
     ConnectorGraviteeReference:
       type: object
@@ -5749,13 +5751,37 @@ components:
         maxRows: { type: integer, minimum: 1, maximum: 10000 }
         maxBytes: { type: integer, minimum: 1024, maximum: 1048576 }
 
+    ConnectorCloudflareConfig:
+      type: object
+      required: [accountId, listId]
+      description: >
+        One Cloudflare IP list a firewall rule blocks at the edge. The
+        connector writes that list and nothing else; protected ranges are
+        CIDRs block_ip refuses on top of the private and reserved ranges the
+        code always refuses.
+      properties:
+        baseUrl:
+          type: string
+          description: API endpoint; empty means the public Cloudflare API.
+        accountId: { type: string, maxLength: 64 }
+        listId: { type: string, maxLength: 64 }
+        protectedRanges:
+          type: array
+          maxItems: 256
+          items: { type: string, maxLength: 64 }
+        maxBlocksPerDay:
+          type: integer
+          minimum: 0
+          maximum: 10000
+          description: Automatic entries allowed per day; zero means the default.
+
     ConnectorInstanceInput:
       type: object
       required: [connector, scopeKind]
       properties:
         connector:
           type: string
-          description: Connector shape, such as vault, sql or gravitee.
+          description: Connector shape, such as vault, sql, gravitee or cloudflare.
         enabled:
           type: boolean
           default: true
@@ -5765,6 +5791,7 @@ components:
         vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
         sql: { $ref: '#/components/schemas/ConnectorSQLInput' }
         gravitee: { $ref: '#/components/schemas/ConnectorGraviteeInput' }
+        cloudflare: { $ref: '#/components/schemas/ConnectorCloudflareConfig' }
         token:
           type: string
           description: >

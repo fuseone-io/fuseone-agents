@@ -1414,7 +1414,23 @@
       "none": "no secret",
       "reference_only": "secrets by reference",
       "plaintext_requires_approval": "plaintext needs approval"
-    }
+    },
+    "newCloudflare": "New Cloudflare block list",
+    "cloudflareSheetHint": "One Cloudflare IP list that a firewall rule blocks at the edge. The connector writes that list and nothing else.",
+    "cloudflareAccountId": "Account ID",
+    "cloudflareListId": "List ID",
+    "cloudflareBaseUrl": "API endpoint",
+    "cloudflareBaseUrlHint": "Empty uses the public Cloudflare API.",
+    "protectedRanges": "Protected ranges",
+    "protectedRangesHint": "CIDRs that must never be blocked (the installation's egress, shared anonymizer ranges), one per line. Private and reserved ranges are always refused, in code.",
+    "protectedRangesInvalid": "Each range must be a CIDR, such as 203.0.113.0/24.",
+    "maxBlocksPerDay": "Daily block ceiling",
+    "maxBlocksPerDayHint": "Automatic entries allowed per day. Zero uses the default (20).",
+    "maxBlocksPerDayInvalid": "A whole number between 0 and 10000.",
+    "cloudflareToken": "API token",
+    "accountIdInvalid": "A valid account id.",
+    "listIdInvalid": "A valid list id.",
+    "baseUrlInvalid": "An https address."
   },
   "interview": {
     "assistantFailed": "The assistant could not answer",

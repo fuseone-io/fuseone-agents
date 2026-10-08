@@ -183,6 +183,14 @@ func connectorInstanceDetail(
 			},
 		}
 	}
+	if instance.Connector == "cloudflare" {
+		detail["cloudflare"] = map[string]any{
+			"accountId":       instance.Cloudflare.AccountID,
+			"listId":          instance.Cloudflare.ListID,
+			"protectedRanges": len(instance.Cloudflare.ProtectedRanges),
+			"maxBlocksPerDay": instance.Cloudflare.MaxBlocksPerDay,
+		}
+	}
 	if instance.Connector == "vault" {
 		detail["vault"] = map[string]any{
 			"address":             instance.Vault.Address,

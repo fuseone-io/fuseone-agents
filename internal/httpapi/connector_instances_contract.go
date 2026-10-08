@@ -25,6 +25,7 @@ func connectorInstanceInput(
 		Name: name, Connector: strings.TrimSpace(body.Connector),
 		Enabled: enabled, Vault: vaultConfigFromRequest(body.Vault),
 		SQL: sqlConfigFromInput(body.Sql), Gravitee: graviteeConfigFromInput(body.Gravitee),
+		Cloudflare: cloudflareConfigFromInput(body.Cloudflare),
 	}
 	clear := body.ClearToken != nil && *body.ClearToken
 	return settings.ScopeKind(body.ScopeKind), scope, instance, body.Token, clear, nil
@@ -83,6 +84,9 @@ func connectorInstanceResponse(instance connectortools.ConfiguredInstance) opena
 	if instance.Connector == "gravitee" {
 		item.Gravitee = ptr(graviteeConfigToResponse(instance.Gravitee))
 	}
+	if instance.Connector == "cloudflare" {
+		item.Cloudflare = ptr(cloudflareConfigToAPI(instance.Cloudflare))
+	}
 	return item
 }
 
@@ -102,7 +106,47 @@ func connectorInstanceDetailResponse(instance connectortools.ConfiguredInstance)
 	if instance.Connector == "gravitee" {
 		item.Gravitee = ptr(graviteeConfigToInput(instance.Gravitee))
 	}
+	if instance.Connector == "cloudflare" {
+		item.Cloudflare = ptr(cloudflareConfigToAPI(instance.Cloudflare))
+	}
 	return item
+}
+
+// cloudflareConfigToAPI serves listing and detail alike: the whole shape is
+// non-secret — the token lives sealed beside it, never in it.
+func cloudflareConfigToAPI(cfg connectortools.CloudflareConfig) openapi.ConnectorCloudflareConfig {
+	out := openapi.ConnectorCloudflareConfig{
+		AccountId: cfg.AccountID, ListId: cfg.ListID,
+	}
+	if cfg.BaseURL != "" {
+		out.BaseUrl = ptr(cfg.BaseURL)
+	}
+	if len(cfg.ProtectedRanges) > 0 {
+		out.ProtectedRanges = ptr(append([]string{}, cfg.ProtectedRanges...))
+	}
+	if cfg.MaxBlocksPerDay != 0 {
+		out.MaxBlocksPerDay = ptr(cfg.MaxBlocksPerDay)
+	}
+	return out
+}
+
+func cloudflareConfigFromInput(in *openapi.ConnectorCloudflareConfig) connectortools.CloudflareConfig {
+	if in == nil {
+		return connectortools.CloudflareConfig{}
+	}
+	out := connectortools.CloudflareConfig{
+		AccountID: in.AccountId, ListID: in.ListId,
+	}
+	if in.BaseUrl != nil {
+		out.BaseURL = *in.BaseUrl
+	}
+	if in.ProtectedRanges != nil {
+		out.ProtectedRanges = append([]string{}, (*in.ProtectedRanges)...)
+	}
+	if in.MaxBlocksPerDay != nil {
+		out.MaxBlocksPerDay = *in.MaxBlocksPerDay
+	}
+	return out
 }
 
 func graviteeConfigFromInput(in *openapi.ConnectorGraviteeInput) connectortools.GraviteeConfig {

@@ -17,6 +17,7 @@ const (
 	CodeConnectorUnavailable     = "connector_unavailable"
 	CodeConnectorOutOfScope      = "connector_out_of_scope"
 	CodeConnectorBadArguments    = "connector_bad_arguments"
+	CodeConnectorGuardRefused    = "connector_guard_refused"
 	CodeConnectorPathNotAllowed  = "connector_path_not_allowed"
 	CodeConnectorArtifactMissing = "connector_artifact_missing"
 	CodeConnectorDigestMismatch  = "connector_digest_mismatch"
@@ -39,9 +40,10 @@ type Instance struct {
 	Scope     domain.Scope
 	Enabled   bool
 
-	Vault    VaultConfig
-	SQL      SQLConfig
-	Gravitee GraviteeConfig
+	Vault      VaultConfig
+	SQL        SQLConfig
+	Gravitee   GraviteeConfig
+	Cloudflare CloudflareConfig
 	// Token is what the instance authenticates with, for the connectors that
 	// authenticate with one. RequiresToken says which; bound connectors are not
 	// among them.

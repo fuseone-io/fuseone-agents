@@ -7,7 +7,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/shared/states";
 import { Panel } from "@/components/shared/panel";
 import type { ConnectorInstance } from "@/features/integrations/api";
 import {
@@ -90,7 +94,9 @@ export function ConnectorInstancesPanel({
                   ? () => actions.edit(instance)
                   : undefined
               }
-              onDelete={view.canConfigure ? () => actions.remove(instance) : undefined}
+              onDelete={
+                view.canConfigure ? () => actions.remove(instance) : undefined
+              }
             />
           ))}
         </div>

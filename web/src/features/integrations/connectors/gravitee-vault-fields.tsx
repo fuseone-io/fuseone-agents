@@ -34,14 +34,20 @@ export function GraviteeVaultFields({
   return (
     <section className="grid gap-4 border-t pt-5">
       <div>
-        <h3 className="text-sm font-medium">{t("connectors.graviteeCredentialSource")}</h3>
-        <p className="text-xs text-muted-foreground">{t("connectors.graviteeCredentialSourceHint")}</p>
+        <h3 className="text-sm font-medium">
+          {t("connectors.graviteeCredentialSource")}
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          {t("connectors.graviteeCredentialSourceHint")}
+        </p>
       </div>
       {choices.length === 0 && (
         <Alert>
           <AlertTriangle aria-hidden />
           <AlertTitle>{t("connectors.noUsableVault")}</AlertTitle>
-          <AlertDescription>{t("connectors.noUsableVaultHint")}</AlertDescription>
+          <AlertDescription>
+            {t("connectors.noUsableVaultHint")}
+          </AlertDescription>
         </Alert>
       )}
       <FormField
@@ -52,7 +58,9 @@ export function GraviteeVaultFields({
             <FormLabel>{t("connectors.vaultInstance")}</FormLabel>
             <Select value={field.value} onValueChange={field.onChange}>
               <FormControl>
-                <SelectTrigger><SelectValue placeholder={t("connectors.chooseVault")} /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder={t("connectors.chooseVault")} />
+                </SelectTrigger>
               </FormControl>
               <SelectContent>
                 {selected && !selectedListed && (
@@ -61,20 +69,35 @@ export function GraviteeVaultFields({
                   </SelectItem>
                 )}
                 {choices.map((choice) => (
-                  <SelectItem key={choice.name} value={choice.name} disabled={choice.ambiguous}>
-                    {choice.label}{choice.ambiguous ? ` · ${t("connectors.ambiguous")}` : ""}
+                  <SelectItem
+                    key={choice.name}
+                    value={choice.name}
+                    disabled={choice.ambiguous}
+                  >
+                    {choice.label}
+                    {choice.ambiguous ? ` · ${t("connectors.ambiguous")}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <FormDescription>{t("connectors.graviteeVaultInstanceHint")}</FormDescription>
+            <FormDescription>
+              {t("connectors.graviteeVaultInstanceHint")}
+            </FormDescription>
             <FormMessage />
           </FormItem>
         )}
       />
       <div className="grid gap-3 sm:grid-cols-2">
-        <VaultTextField form={form} name="credentialPath" label={t("connectors.graviteeCredentialPath")} />
-        <VaultTextField form={form} name="credentialField" label={t("connectors.graviteeCredentialField")} />
+        <VaultTextField
+          form={form}
+          name="credentialPath"
+          label={t("connectors.graviteeCredentialPath")}
+        />
+        <VaultTextField
+          form={form}
+          name="credentialField"
+          label={t("connectors.graviteeCredentialField")}
+        />
       </div>
     </section>
   );
@@ -96,7 +119,9 @@ function VaultTextField({
       render={({ field }) => (
         <FormItem>
           <FormLabel>{label}</FormLabel>
-          <FormControl><Input {...field} autoComplete="off" className="font-mono" /></FormControl>
+          <FormControl>
+            <Input {...field} autoComplete="off" className="font-mono" />
+          </FormControl>
           <FormMessage />
         </FormItem>
       )}

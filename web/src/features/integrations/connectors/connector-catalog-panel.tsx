@@ -3,7 +3,11 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/shared/states";
 import { LoadMore } from "@/components/shared/load-more";
 import type {
   ConnectorInstance,
@@ -232,7 +236,9 @@ function ConnectorOperations({ connector }: { connector: GovernedConnector }) {
     <div>
       <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
         {t("connectors.operations")}
-        <span className="font-mono text-2xs">{connector.operations.length}</span>
+        <span className="font-mono text-2xs">
+          {connector.operations.length}
+        </span>
       </div>
       <div className="space-y-2">
         {connector.operations.slice(0, 3).map((operation) => (
@@ -293,7 +299,9 @@ function OperationRow({
   );
 }
 
-function effectClass(effect: GovernedConnector["operations"][number]["effects"][number]) {
+function effectClass(
+  effect: GovernedConnector["operations"][number]["effects"][number],
+) {
   return cn(
     "text-2xs",
     (effect === "write" || effect === "destructive") &&

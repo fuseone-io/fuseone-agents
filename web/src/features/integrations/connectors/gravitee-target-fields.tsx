@@ -22,8 +22,12 @@ export function GraviteeTargetFields({
   return (
     <section className="grid gap-4 border-t pt-5">
       <div>
-        <h3 className="text-sm font-medium">{t("connectors.graviteeTarget")}</h3>
-        <p className="text-xs text-muted-foreground">{t("connectors.graviteeTargetHint")}</p>
+        <h3 className="text-sm font-medium">
+          {t("connectors.graviteeTarget")}
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          {t("connectors.graviteeTargetHint")}
+        </p>
       </div>
       <TargetField
         form={form}
@@ -32,8 +36,16 @@ export function GraviteeTargetFields({
         description={t("connectors.graviteeAddressHint")}
       />
       <div className="grid gap-3 sm:grid-cols-2">
-        <TargetField form={form} name="organization" label={t("connectors.graviteeOrganization")} />
-        <TargetField form={form} name="environment" label={t("connectors.graviteeEnvironment")} />
+        <TargetField
+          form={form}
+          name="organization"
+          label={t("connectors.graviteeOrganization")}
+        />
+        <TargetField
+          form={form}
+          name="environment"
+          label={t("connectors.graviteeEnvironment")}
+        />
       </div>
       <TargetField
         form={form}
@@ -63,7 +75,9 @@ function TargetField({
       render={({ field }) => (
         <FormItem>
           <FormLabel>{label}</FormLabel>
-          <FormControl><Input {...field} autoComplete="off" className="font-mono" /></FormControl>
+          <FormControl>
+            <Input {...field} autoComplete="off" className="font-mono" />
+          </FormControl>
           {description && <FormDescription>{description}</FormDescription>}
           <FormMessage />
         </FormItem>

@@ -12,22 +12,32 @@ export function GraviteeInstanceFacts({
   const reference = gravitee?.allowedReferences[0];
   return (
     <>
-      <Fact label={t("connectors.graviteeAddress")} value={gravitee?.address ?? "-"} />
+      <Fact
+        label={t("connectors.graviteeAddress")}
+        value={gravitee?.address ?? "-"}
+      />
       <Fact
         label={t("connectors.graviteeTarget")}
-        value={gravitee ? `${gravitee.organization}/${gravitee.environment}` : "-"}
+        value={
+          gravitee ? `${gravitee.organization}/${gravitee.environment}` : "-"
+        }
       />
-      <Fact label={t("connectors.graviteeAPIReference")} value={reference?.id ?? "-"} />
+      <Fact
+        label={t("connectors.graviteeAPIReference")}
+        value={reference?.id ?? "-"}
+      />
       <Fact
         label={t("connectors.graviteeExpiryPolicy")}
-        value={gravitee
-          ? t(
-              gravitee.allowNoExpiry
-                ? "connectors.graviteeTTLRangeNoExpiry"
-                : "connectors.graviteeTTLRange",
-              { min: gravitee.minTTLSeconds, max: gravitee.maxTTLSeconds },
-            )
-          : "-"}
+        value={
+          gravitee
+            ? t(
+                gravitee.allowNoExpiry
+                  ? "connectors.graviteeTTLRangeNoExpiry"
+                  : "connectors.graviteeTTLRange",
+                { min: gravitee.minTTLSeconds, max: gravitee.maxTTLSeconds },
+              )
+            : "-"
+        }
       />
       <Fact
         label={t("connectors.vaultInstance")}

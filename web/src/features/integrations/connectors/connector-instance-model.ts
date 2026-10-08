@@ -9,7 +9,9 @@ export const connectorInstanceName = /^[a-z0-9][a-z0-9_-]{0,62}$/;
 
 export const connectorInstanceSchema = z
   .object({
-    name: z.string().regex(connectorInstanceName, "connectors.instanceNameInvalid"),
+    name: z
+      .string()
+      .regex(connectorInstanceName, "connectors.instanceNameInvalid"),
     enabled: z.boolean(),
     scopeKind: z.enum(["installation", "company", "area"]),
     company: z.string(),
@@ -68,7 +70,9 @@ export function connectorInstanceDefaults(
     address: instance?.vault?.address ?? "",
     mount: instance?.vault?.mount ?? "secret",
     namespace: instance?.vault?.namespace ?? "",
-    allowedPathPrefixes: (instance?.vault?.allowedPathPrefixes ?? []).join("\n"),
+    allowedPathPrefixes: (instance?.vault?.allowedPathPrefixes ?? []).join(
+      "\n",
+    ),
     token: "",
     clearToken: false,
   };
@@ -80,8 +84,10 @@ export function connectorInstancePayload(
 ): ConnectorInstanceSaveInput | null {
   const prefixes = pathPrefixes(values.allowedPathPrefixes);
   if (prefixes.length === 0) return null;
-  if (values.enabled && !hasStoredToken && values.token.trim() === "") return null;
-  if (values.enabled && values.clearToken && values.token.trim() === "") return null;
+  if (values.enabled && !hasStoredToken && values.token.trim() === "")
+    return null;
+  if (values.enabled && values.clearToken && values.token.trim() === "")
+    return null;
 
   const body: ConnectorInstanceInput = {
     connector: "vault",
