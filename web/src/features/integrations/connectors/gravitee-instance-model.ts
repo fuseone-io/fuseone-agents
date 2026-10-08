@@ -23,28 +23,45 @@ const maxTTLSeconds = 365 * 24 * 60 * 60;
 
 export const graviteeInstanceSchema = z
   .object({
-    name: z.string().regex(connectorInstanceName, "connectors.instanceNameInvalid"),
+    name: z
+      .string()
+      .regex(connectorInstanceName, "connectors.instanceNameInvalid"),
     enabled: z.boolean(),
     scopeKind: z.enum(["installation", "company", "area"]),
     company: z.string(),
     area: z.string(),
-    address: z.string().trim().refine(validGraviteeAddress, "connectors.graviteeAddressInvalid"),
-    organization: z.string().regex(graviteeID, "connectors.graviteeOrganizationInvalid"),
-    environment: z.string().regex(graviteeID, "connectors.graviteeEnvironmentInvalid"),
+    address: z
+      .string()
+      .trim()
+      .refine(validGraviteeAddress, "connectors.graviteeAddressInvalid"),
+    organization: z
+      .string()
+      .regex(graviteeID, "connectors.graviteeOrganizationInvalid"),
+    environment: z
+      .string()
+      .regex(graviteeID, "connectors.graviteeEnvironmentInvalid"),
     apiReference: z.string().regex(graviteeID, "connectors.graviteeAPIInvalid"),
-    minTTLSeconds: z.number({ invalid_type_error: "connectors.graviteeTTLInvalid" })
-      .int().min(1, "connectors.graviteeTTLInvalid")
+    minTTLSeconds: z
+      .number({ invalid_type_error: "connectors.graviteeTTLInvalid" })
+      .int()
+      .min(1, "connectors.graviteeTTLInvalid")
       .max(maxTTLSeconds, "connectors.graviteeTTLInvalid"),
-    maxTTLSeconds: z.number({ invalid_type_error: "connectors.graviteeTTLInvalid" })
-      .int().min(1, "connectors.graviteeTTLInvalid")
+    maxTTLSeconds: z
+      .number({ invalid_type_error: "connectors.graviteeTTLInvalid" })
+      .int()
+      .min(1, "connectors.graviteeTTLInvalid")
       .max(maxTTLSeconds, "connectors.graviteeTTLInvalid"),
     allowNoExpiry: z.boolean(),
-    vaultInstance: z.string().regex(connectorInstanceName, "connectors.graviteeVaultRequired"),
-    credentialPath: z.string().max(512, "connectors.graviteeCredentialPathInvalid").refine(
-      validVaultPath,
-      "connectors.graviteeCredentialPathInvalid",
-    ),
-    credentialField: z.string().regex(vaultField, "connectors.graviteeCredentialFieldInvalid"),
+    vaultInstance: z
+      .string()
+      .regex(connectorInstanceName, "connectors.graviteeVaultRequired"),
+    credentialPath: z
+      .string()
+      .max(512, "connectors.graviteeCredentialPathInvalid")
+      .refine(validVaultPath, "connectors.graviteeCredentialPathInvalid"),
+    credentialField: z
+      .string()
+      .regex(vaultField, "connectors.graviteeCredentialFieldInvalid"),
   })
   .superRefine((values, ctx) => {
     requireScope(values, ctx);
@@ -116,7 +133,8 @@ export function graviteeBindingIssue(
   const matches = vaultsNamed(instances, target, name);
   if (matches.length > 1) return "connectors.graviteeVaultAmbiguous";
   const vault = matches[0];
-  if (!vault || !usableVault(vault)) return "connectors.graviteeVaultUnavailable";
+  if (!vault || !usableVault(vault))
+    return "connectors.graviteeVaultUnavailable";
   if (!vaultOwnsPath(vault, path)) return "connectors.graviteeVaultPathOutside";
   return null;
 }
@@ -124,9 +142,15 @@ export function graviteeBindingIssue(
 function validGraviteeAddress(raw: string): boolean {
   try {
     const parsed = new URL(raw);
-    if (!raw.toLowerCase().startsWith("https://") || parsed.protocol !== "https:" ||
-      parsed.username || parsed.password ||
-      parsed.search || parsed.hash || blockedLiteral(parsed.hostname)) {
+    if (
+      !raw.toLowerCase().startsWith("https://") ||
+      parsed.protocol !== "https:" ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash ||
+      blockedLiteral(parsed.hostname)
+    ) {
       return false;
     }
     return !relativePath(raw);
@@ -142,7 +166,10 @@ function relativePath(raw: string): boolean {
   const encoded = afterAuthority.slice(slash).split(/[?#]/, 1)[0]!;
   try {
     const decoded = decodeURIComponent(encoded);
-    return decoded.includes("\0") || decoded.split("/").some((part) => part === "." || part === "..");
+    return (
+      decoded.includes("\0") ||
+      decoded.split("/").some((part) => part === "." || part === "..")
+    );
   } catch {
     return true;
   }
@@ -161,7 +188,10 @@ function concreteScope(value: string): string {
 }
 
 function validVaultPath(raw: string): boolean {
-  return vaultPath.test(raw) && !raw.split("/").some((part) => part === "." || part === "..");
+  return (
+    vaultPath.test(raw) &&
+    !raw.split("/").some((part) => part === "." || part === "..")
+  );
 }
 
 function requireScope(values: GraviteeInstanceValues, ctx: z.RefinementCtx) {

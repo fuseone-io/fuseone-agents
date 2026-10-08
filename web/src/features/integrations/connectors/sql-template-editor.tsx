@@ -35,7 +35,9 @@ export function SQLTemplateEditor({
     <section className="grid gap-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-medium">{t("connectors.sqlTemplates")}</h3>
+          <h3 className="text-sm font-medium">
+            {t("connectors.sqlTemplates")}
+          </h3>
           <p className="text-xs text-muted-foreground">
             {t("connectors.sqlTemplatesHint")}
           </p>
@@ -108,7 +110,9 @@ function SQLTemplateFields({
             <FormControl>
               <Input {...field} className="font-mono" autoComplete="off" />
             </FormControl>
-            <FormDescription>{t("connectors.sqlTemplateIdHint")}</FormDescription>
+            <FormDescription>
+              {t("connectors.sqlTemplateIdHint")}
+            </FormDescription>
             <FormMessage />
           </FormItem>
         )}
@@ -120,7 +124,11 @@ function SQLTemplateFields({
           <FormItem>
             <FormLabel>{t("connectors.sqlQuery")}</FormLabel>
             <FormControl>
-              <Textarea {...field} className="min-h-32 font-mono text-xs" spellCheck={false} />
+              <Textarea
+                {...field}
+                className="min-h-32 font-mono text-xs"
+                spellCheck={false}
+              />
             </FormControl>
             <FormDescription>{t("connectors.sqlQueryHint")}</FormDescription>
             <FormMessage />
@@ -249,7 +257,9 @@ function ParameterFields({
                 {...field}
                 className="font-mono"
                 autoComplete="off"
-                aria-label={t("connectors.sqlParameterName", { number: parameterIndex + 1 })}
+                aria-label={t("connectors.sqlParameterName", {
+                  number: parameterIndex + 1,
+                })}
                 placeholder={t("connectors.sqlParameterNamePlaceholder")}
               />
             </FormControl>
@@ -264,12 +274,18 @@ function ParameterFields({
           <FormItem>
             <Select value={field.value} onValueChange={field.onChange}>
               <FormControl>
-                <SelectTrigger aria-label={t("connectors.sqlParameterType", { number: parameterIndex + 1 })}>
+                <SelectTrigger
+                  aria-label={t("connectors.sqlParameterType", {
+                    number: parameterIndex + 1,
+                  })}
+                >
                   <SelectValue />
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
-                {(["text", "integer", "number", "boolean", "timestamp"] as const).map((type) => (
+                {(
+                  ["text", "integer", "number", "boolean", "timestamp"] as const
+                ).map((type) => (
                   <SelectItem key={type} value={type}>
                     {t(`connectors.sqlParameterTypes.${type}`)}
                   </SelectItem>
@@ -285,7 +301,9 @@ function ParameterFields({
         size="icon"
         variant="ghost"
         onClick={onRemove}
-        aria-label={t("connectors.removeSQLParameter", { number: parameterIndex + 1 })}
+        aria-label={t("connectors.removeSQLParameter", {
+          number: parameterIndex + 1,
+        })}
       >
         <Trash2 className="size-4" aria-hidden />
       </Button>

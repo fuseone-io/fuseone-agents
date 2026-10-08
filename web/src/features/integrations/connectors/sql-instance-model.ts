@@ -11,7 +11,8 @@ import {
 export { vaultChoices } from "@/features/integrations/connectors/vault-instance-options";
 
 const identifier = /^[a-z][a-z0-9_]{0,63}$/;
-const hostname = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+const hostname =
+  /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 const ipAddress = z.string().ip();
 const parameterType = z.enum([
   "text",
@@ -43,7 +44,9 @@ const sqlTemplateSchema = z.object({
 
 export const sqlInstanceSchema = z
   .object({
-    name: z.string().regex(connectorInstanceName, "connectors.instanceNameInvalid"),
+    name: z
+      .string()
+      .regex(connectorInstanceName, "connectors.instanceNameInvalid"),
     enabled: z.boolean(),
     scopeKind: z.enum(["installation", "company", "area"]),
     company: z.string(),
@@ -60,8 +63,14 @@ export const sqlInstanceSchema = z
     port: z.number().int().min(1).max(65_535),
     database: z.string().trim().min(1, "connectors.sqlDatabaseRequired"),
     vaultInstance: z.string().trim().min(1, "connectors.sqlVaultRequired"),
-    credentialMount: z.string().trim().min(1, "connectors.sqlCredentialMountRequired"),
-    credentialRole: z.string().trim().min(1, "connectors.sqlCredentialRoleRequired"),
+    credentialMount: z
+      .string()
+      .trim()
+      .min(1, "connectors.sqlCredentialMountRequired"),
+    credentialRole: z
+      .string()
+      .trim()
+      .min(1, "connectors.sqlCredentialRoleRequired"),
     templates: z.array(sqlTemplateSchema).max(64),
   })
   .superRefine((values, ctx) => {
@@ -70,22 +79,30 @@ export const sqlInstanceSchema = z
       issue(ctx, ["templates"], "connectors.sqlTemplateRequired");
     }
     unique(values.templates.map((template) => template.id)).forEach((id) => {
-      const index = values.templates.findIndex((template) => template.id === id);
+      const index = values.templates.findIndex(
+        (template) => template.id === id,
+      );
       issue(ctx, ["templates", index, "id"], "connectors.sqlTemplateDuplicate");
     });
     values.templates.forEach((template, templateIndex) => {
-      unique(template.parameters.map((parameter) => parameter.name)).forEach((name) => {
-        const index = template.parameters.findIndex((parameter) => parameter.name === name);
-        issue(
-          ctx,
-          ["templates", templateIndex, "parameters", index, "name"],
-          "connectors.sqlParameterDuplicate",
-        );
-      });
+      unique(template.parameters.map((parameter) => parameter.name)).forEach(
+        (name) => {
+          const index = template.parameters.findIndex(
+            (parameter) => parameter.name === name,
+          );
+          issue(
+            ctx,
+            ["templates", templateIndex, "parameters", index, "name"],
+            "connectors.sqlParameterDuplicate",
+          );
+        },
+      );
       const placeholders = new Set(
         [...template.sql.matchAll(/\$(\d+)/g)].map((match) => Number(match[1])),
       );
-      const complete = template.parameters.every((_, index) => placeholders.has(index + 1));
+      const complete = template.parameters.every((_, index) =>
+        placeholders.has(index + 1),
+      );
       if (placeholders.size !== template.parameters.length || !complete) {
         issue(
           ctx,
@@ -140,7 +157,9 @@ export function emptySQLTemplate(): SQLTemplateValues {
   };
 }
 
-export function sqlInstancePayload(values: SQLInstanceValues): ConnectorInstanceSaveInput {
+export function sqlInstancePayload(
+  values: SQLInstanceValues,
+): ConnectorInstanceSaveInput {
   const body: ConnectorInstanceInput = {
     connector: "sql",
     enabled: values.enabled,
@@ -192,6 +211,10 @@ function unique(values: string[]): string[] {
   return [...duplicates];
 }
 
-function issue(ctx: z.RefinementCtx, path: (string | number)[], message: string) {
+function issue(
+  ctx: z.RefinementCtx,
+  path: (string | number)[],
+  message: string,
+) {
   ctx.addIssue({ code: "custom", path, message });
 }

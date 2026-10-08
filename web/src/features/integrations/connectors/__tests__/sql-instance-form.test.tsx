@@ -42,14 +42,16 @@ const sqlInstance: ConnectorInstanceDetail = {
       mount: "database",
       role: "app-x-readonly",
     },
-    templates: [{
-      id: "",
-      sql: "",
-      parameters: [],
-      timeoutSeconds: 30,
-      maxRows: 200,
-      maxBytes: 65_536,
-    }],
+    templates: [
+      {
+        id: "",
+        sql: "",
+        parameters: [],
+        timeoutSeconds: 30,
+        maxRows: 200,
+        maxBytes: 65_536,
+      },
+    ],
   },
 };
 
@@ -89,8 +91,13 @@ describe("SQL connector instance form", () => {
       screen.getByLabelText("Query registrada"),
       "select $1::text as echo",
     );
-    await user.click(screen.getByRole("button", { name: "Adicionar parâmetro" }));
-    await user.type(screen.getByRole("textbox", { name: "Nome do parâmetro 1" }), "message");
+    await user.click(
+      screen.getByRole("button", { name: "Adicionar parâmetro" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Nome do parâmetro 1" }),
+      "message",
+    );
     await user.click(screen.getByRole("button", { name: "Salvar" }));
 
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
@@ -113,18 +120,22 @@ describe("SQL connector instance form", () => {
             mount: "database",
             role: "app-x-readonly",
           },
-          templates: [{
-            id: "lookup",
-            sql: "select $1::text as echo",
-            parameters: [{ name: "message", type: "text" }],
-            timeoutSeconds: 30,
-            maxRows: 200,
-            maxBytes: 65_536,
-          }],
+          templates: [
+            {
+              id: "lookup",
+              sql: "select $1::text as echo",
+              parameters: [{ name: "message", type: "text" }],
+              timeoutSeconds: 30,
+              maxRows: 200,
+              maxBytes: 65_536,
+            },
+          ],
         },
       },
     });
-    expect(screen.queryByLabelText(/password|senha|dsn/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/password|senha|dsn/i),
+    ).not.toBeInTheDocument();
   });
 
   it("offers the compatible Vault binding by its governed name", async () => {
@@ -155,13 +166,19 @@ describe("SQL connector instance form", () => {
       />,
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Nenhum Vault compatível");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Nenhum Vault compatível",
+    );
     expect(screen.getByText(/HTTPS, ativa e com token/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Salvar" }));
     expect(
-      await screen.findByText("Informe o host sem protocolo, porta ou credencial."),
+      await screen.findByText(
+        "Informe o host sem protocolo, porta ou credencial.",
+      ),
     ).toBeInTheDocument();
-    expect(screen.queryByText("connectors.sqlHostRequired")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("connectors.sqlHostRequired"),
+    ).not.toBeInTheDocument();
   });
 });

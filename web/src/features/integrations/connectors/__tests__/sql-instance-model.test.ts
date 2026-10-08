@@ -49,14 +49,16 @@ const detail: ConnectorInstanceDetail = {
       mount: "database",
       role: "app-x-readonly",
     },
-    templates: [{
-      id: "orders_by_customer",
-      sql: "select id from orders where customer_id = $1",
-      parameters: [{ name: "customer_id", type: "text" }],
-      timeoutSeconds: 10,
-      maxRows: 200,
-      maxBytes: 65_536,
-    }],
+    templates: [
+      {
+        id: "orders_by_customer",
+        sql: "select id from orders where customer_id = $1",
+        parameters: [{ name: "customer_id", type: "text" }],
+        timeoutSeconds: 10,
+        maxRows: 200,
+        maxBytes: 65_536,
+      },
+    ],
   },
 };
 
@@ -83,7 +85,8 @@ describe("SQL connector instance form model", () => {
 
     const result = sqlInstanceSchema.safeParse(values);
     expect(result.success).toBe(false);
-    if (result.success) throw new Error("an ambiguous SQL contract was accepted");
+    if (result.success)
+      throw new Error("an ambiguous SQL contract was accepted");
     expect(result.error.issues.map((issue) => issue.message)).toEqual(
       expect.arrayContaining([
         "connectors.sqlTemplateDuplicate",
@@ -111,17 +114,25 @@ describe("SQL connector instance form model", () => {
   });
 
   it("offers only unambiguous HTTPS Vaults that contain the SQL scope", () => {
-    const choices = vaultChoices([
-      vault("global", "installation"),
-      vault("prod", "company", "acme"),
-      vault("prod", "area", "acme", "platform"),
-      vault("mixed", "area", "acme", "platform"),
-      { ...vault("mixed", "company", "acme"), enabled: false },
-      vault("other", "area", "acme", "payments"),
-      { ...vault("plain", "area", "acme", "platform"), vault: {
-        address: "http://vault.internal", mount: "secret", allowedPathPrefixes: ["db"],
-      } },
-    ], { scopeKind: "area", company: "acme", area: "platform" });
+    const choices = vaultChoices(
+      [
+        vault("global", "installation"),
+        vault("prod", "company", "acme"),
+        vault("prod", "area", "acme", "platform"),
+        vault("mixed", "area", "acme", "platform"),
+        { ...vault("mixed", "company", "acme"), enabled: false },
+        vault("other", "area", "acme", "payments"),
+        {
+          ...vault("plain", "area", "acme", "platform"),
+          vault: {
+            address: "http://vault.internal",
+            mount: "secret",
+            allowedPathPrefixes: ["db"],
+          },
+        },
+      ],
+      { scopeKind: "area", company: "acme", area: "platform" },
+    );
 
     expect(choices).toEqual([
       { name: "global", label: "global · installation", ambiguous: false },

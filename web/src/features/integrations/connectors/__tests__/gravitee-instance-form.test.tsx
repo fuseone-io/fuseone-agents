@@ -72,12 +72,20 @@ describe("Gravitee connector instance form", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Prazo mínimo (segundos)")).toHaveValue(86_400);
-    expect(screen.getByLabelText("Prazo máximo (segundos)")).toHaveValue(7_776_000);
+    expect(screen.getByLabelText("Prazo mínimo (segundos)")).toHaveValue(
+      86_400,
+    );
+    expect(screen.getByLabelText("Prazo máximo (segundos)")).toHaveValue(
+      7_776_000,
+    );
     expect(screen.getByLabelText("Campo do token")).toHaveValue("access_token");
     await user.click(screen.getByRole("combobox", { name: "Instância Vault" }));
-    expect(await screen.findByRole("option", { name: "secrets · acme" })).toBeInTheDocument();
-    expect(screen.queryByLabelText(/token do gravitee/i)).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: "secrets · acme" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/token do gravitee/i),
+    ).not.toBeInTheDocument();
   });
 
   it("preserves the fixed gateway and Vault boundary while editing", async () => {
@@ -93,8 +101,12 @@ describe("Gravitee connector instance form", () => {
     );
 
     expect(screen.getByLabelText("Nome da instância")).toBeDisabled();
-    expect(screen.getByRole("combobox", { name: "Escopo da instância" })).toBeDisabled();
-    expect(screen.queryByLabelText(/token do gravitee/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Escopo da instância" }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByLabelText(/token do gravitee/i),
+    ).not.toBeInTheDocument();
     await user.clear(screen.getByLabelText("Ambiente"));
     await user.type(screen.getByLabelText("Ambiente"), "env-next");
     await user.click(screen.getByRole("button", { name: "Salvar" }));
@@ -137,6 +149,8 @@ describe("Gravitee connector instance form", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Salvar" }));
-    expect(await screen.findByText(/fora dos prefixos permitidos/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/fora dos prefixos permitidos/i),
+    ).toBeInTheDocument();
   });
 });

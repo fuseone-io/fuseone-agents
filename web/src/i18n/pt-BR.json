@@ -1414,7 +1414,23 @@
       "none": "sem segredo",
       "reference_only": "segredos por referência",
       "plaintext_requires_approval": "plaintext exige aprovação"
-    }
+    },
+    "newCloudflare": "Nova lista de bloqueio Cloudflare",
+    "cloudflareSheetHint": "Uma lista de IPs da Cloudflare que uma regra de firewall bloqueia na borda. O conector escreve essa lista e nada mais.",
+    "cloudflareAccountId": "Account ID",
+    "cloudflareListId": "List ID",
+    "cloudflareBaseUrl": "Endpoint da API",
+    "cloudflareBaseUrlHint": "Vazio usa a API pública da Cloudflare.",
+    "protectedRanges": "Faixas protegidas",
+    "protectedRangesHint": "CIDRs que nunca podem ser bloqueados (saída da instalação, faixas de anonimizador compartilhadas), um por linha. Faixas privadas e reservadas já são recusadas sempre, em código.",
+    "protectedRangesInvalid": "Cada faixa precisa ser um CIDR, como 203.0.113.0/24.",
+    "maxBlocksPerDay": "Teto de bloqueios por dia",
+    "maxBlocksPerDayHint": "Entradas automáticas permitidas por dia. Zero usa o padrão (20).",
+    "maxBlocksPerDayInvalid": "Um número inteiro entre 0 e 10000.",
+    "cloudflareToken": "API token",
+    "accountIdInvalid": "Um id de conta válido.",
+    "listIdInvalid": "Um id de lista válido.",
+    "baseUrlInvalid": "Um endereço https."
   },
   "interview": {
     "assistantFailed": "O assistente não conseguiu responder",

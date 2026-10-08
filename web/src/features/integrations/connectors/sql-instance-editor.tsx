@@ -63,7 +63,9 @@ function ExistingSQLInstanceEditor({
         title={t("connectors.editSQLInstance")}
         description={t("connectors.loadingSQLInstance")}
       >
-        <PropertiesSheetBody><LoadingRows rows={5} /></PropertiesSheetBody>
+        <PropertiesSheetBody>
+          <LoadingRows rows={5} />
+        </PropertiesSheetBody>
       </PropertiesSheet>
     );
   }
@@ -76,7 +78,10 @@ function ExistingSQLInstanceEditor({
         description={t("connectors.sqlInstanceSheetHint")}
       >
         <PropertiesSheetBody>
-          <ErrorState error={detail.error ?? new Error("SQL instance detail is missing")} onRetry={() => void detail.refetch()} />
+          <ErrorState
+            error={detail.error ?? new Error("SQL instance detail is missing")}
+            onRetry={() => void detail.refetch()}
+          />
         </PropertiesSheetBody>
       </PropertiesSheet>
     );

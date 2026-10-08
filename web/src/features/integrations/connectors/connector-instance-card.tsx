@@ -28,7 +28,9 @@ export function ConnectorInstanceCard({
               {instance.name}
             </h3>
             <Badge variant={instance.enabled ? "secondary" : "outline"}>
-              {instance.enabled ? t("connectors.enabled") : t("common.disabled")}
+              {instance.enabled
+                ? t("connectors.enabled")
+                : t("common.disabled")}
             </Badge>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -60,24 +62,72 @@ export function ConnectorInstanceCard({
         ) : instance.connector === "gravitee" ? (
           <>
             <GraviteeInstanceFacts instance={instance} t={t} />
-            <Fact label={t("connectors.updatedAt")} value={updated(instance, t)} />
+            <Fact
+              label={t("connectors.updatedAt")}
+              value={updated(instance, t)}
+            />
           </>
         ) : instance.connector === "vault" ? (
           <VaultFacts instance={instance} t={t} />
+        ) : instance.connector === "cloudflare" ? (
+          <CloudflareFacts instance={instance} t={t} />
         ) : (
-          <Fact label={t("connectors.updatedAt")} value={updated(instance, t)} />
+          <Fact
+            label={t("connectors.updatedAt")}
+            value={updated(instance, t)}
+          />
         )}
       </div>
     </article>
   );
 }
 
-function VaultFacts({ instance, t }: { instance: ConnectorInstance; t: TFunction }) {
+function CloudflareFacts({
+  instance,
+  t,
+}: {
+  instance: ConnectorInstance;
+  t: TFunction;
+}) {
+  return (
+    <>
+      <Fact
+        label={t("connectors.cloudflareListId")}
+        value={instance.cloudflare?.listId ?? ""}
+      />
+      <Fact
+        label={t("connectors.protectedRanges")}
+        value={String(instance.cloudflare?.protectedRanges?.length ?? 0)}
+      />
+      <Fact
+        label={t("connectors.token")}
+        value={
+          instance.hasToken
+            ? t("connectors.tokenStored")
+            : t("connectors.tokenMissing")
+        }
+      />
+      <Fact label={t("connectors.updatedAt")} value={updated(instance, t)} />
+    </>
+  );
+}
+
+function VaultFacts({
+  instance,
+  t,
+}: {
+  instance: ConnectorInstance;
+  t: TFunction;
+}) {
   return (
     <>
       <Fact label={t("connectors.token")} value={tokenState(instance, t)} />
       <Fact label={t("connectors.updatedAt")} value={updated(instance, t)} />
-      <Fact label={t("connectors.vaultMount")} value={instance.vault?.mount ?? "-"} mono />
+      <Fact
+        label={t("connectors.vaultMount")}
+        value={instance.vault?.mount ?? "-"}
+        mono
+      />
       <Fact
         label={t("connectors.allowedPathPrefixes")}
         value={(instance.vault?.allowedPathPrefixes ?? []).join(", ") || "-"}
@@ -87,7 +137,13 @@ function VaultFacts({ instance, t }: { instance: ConnectorInstance; t: TFunction
   );
 }
 
-function SQLFacts({ instance, t }: { instance: ConnectorInstance; t: TFunction }) {
+function SQLFacts({
+  instance,
+  t,
+}: {
+  instance: ConnectorInstance;
+  t: TFunction;
+}) {
   const sql = instance.sql;
   const source = sql?.credentialSource;
   return (
@@ -104,7 +160,10 @@ function SQLFacts({ instance, t }: { instance: ConnectorInstance; t: TFunction }
         value={source ? `${source.vaultInstance}/${source.role}` : "-"}
         mono
       />
-      <Fact label={t("connectors.sqlTemplates")} value={String(sql?.templates.length ?? 0)} />
+      <Fact
+        label={t("connectors.sqlTemplates")}
+        value={String(sql?.templates.length ?? 0)}
+      />
     </>
   );
 }
@@ -141,5 +200,7 @@ function tokenState(instance: ConnectorInstance, t: TFunction) {
 }
 
 function updated(instance: ConnectorInstance, t: TFunction) {
-  return instance.updatedAt ? formatRelative(instance.updatedAt) : t("connectors.never");
+  return instance.updatedAt
+    ? formatRelative(instance.updatedAt)
+    : t("connectors.never");
 }

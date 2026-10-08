@@ -57,15 +57,28 @@ function ExistingGraviteeInstanceEditor({
   const detail = useConnectorInstance(instance);
   if (detail.isLoading || detail.isFetching) {
     return (
-      <EditorShell title={t("connectors.editGraviteeInstance")} description={t("connectors.loadingGraviteeInstance")} onClose={onClose}>
+      <EditorShell
+        title={t("connectors.editGraviteeInstance")}
+        description={t("connectors.loadingGraviteeInstance")}
+        onClose={onClose}
+      >
         <LoadingRows rows={5} />
       </EditorShell>
     );
   }
   if (detail.error || !detail.data) {
     return (
-      <EditorShell title={t("connectors.editGraviteeInstance")} description={t("connectors.graviteeInstanceSheetHint")} onClose={onClose}>
-        <ErrorState error={detail.error ?? new Error("Gravitee instance detail is missing")} onRetry={() => void detail.refetch()} />
+      <EditorShell
+        title={t("connectors.editGraviteeInstance")}
+        description={t("connectors.graviteeInstanceSheetHint")}
+        onClose={onClose}
+      >
+        <ErrorState
+          error={
+            detail.error ?? new Error("Gravitee instance detail is missing")
+          }
+          onRetry={() => void detail.refetch()}
+        />
       </EditorShell>
     );
   }
@@ -91,7 +104,12 @@ function EditorShell({
   children: React.ReactNode;
 }) {
   return (
-    <PropertiesSheet open onOpenChange={(open) => !open && onClose()} title={title} description={description}>
+    <PropertiesSheet
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={title}
+      description={description}
+    >
       <PropertiesSheetBody>{children}</PropertiesSheetBody>
     </PropertiesSheet>
   );

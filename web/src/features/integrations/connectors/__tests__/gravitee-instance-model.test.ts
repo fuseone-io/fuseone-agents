@@ -109,7 +109,10 @@ describe("Gravitee connector instance form model", () => {
     ["opaque HTTPS URL", { address: "https:apim.internal" }],
     ["relative URL segment", { address: "https://apim.internal/a/../admin" }],
     ["metadata address", { address: "https://169.254.169.254" }],
-    ["IPv4-mapped metadata address", { address: "https://[::ffff:169.254.1.1]" }],
+    [
+      "IPv4-mapped metadata address",
+      { address: "https://[::ffff:169.254.1.1]" },
+    ],
     ["invalid organization", { organization: "../org" }],
     ["invalid API", { apiReference: "another/api" }],
     ["inverted TTL", { minTTLSeconds: 20, maxTTLSeconds: 10 }],
@@ -117,30 +120,57 @@ describe("Gravitee connector instance form model", () => {
     ["credential traversal", { credentialPath: "integrations/../admin" }],
     ["credential field as path", { credentialField: "data/token" }],
   ])("refuses %s before it reaches the server", (_name, change) => {
-    const values = { ...graviteeInstanceDefaults(detail, "ignored", "ignored"), ...change };
+    const values = {
+      ...graviteeInstanceDefaults(detail, "ignored", "ignored"),
+      ...change,
+    };
     expect(graviteeInstanceSchema.safeParse(values).success).toBe(false);
   });
 
   it("requires the chosen Vault to be unique, usable and to own the credential path", () => {
-    const target = { scopeKind: "area" as const, company: "acme", area: "platform" };
-    expect(graviteeBindingIssue([vault()], target, "secrets", "integrations/gravitee/prod"))
-      .toBeNull();
-    expect(graviteeBindingIssue([vault()], target, "secrets", "other/service"))
-      .toBe("connectors.graviteeVaultPathOutside");
-    expect(graviteeBindingIssue([vault({ hasToken: false })], target, "secrets", "integrations/gravitee/prod"))
-      .toBe("connectors.graviteeVaultUnavailable");
-    expect(graviteeBindingIssue([
-      vault(),
-      vault({ scopeKind: "area", area: "platform" }),
-    ], target, "secrets", "integrations/gravitee/prod"))
-      .toBe("connectors.graviteeVaultAmbiguous");
+    const target = {
+      scopeKind: "area" as const,
+      company: "acme",
+      area: "platform",
+    };
+    expect(
+      graviteeBindingIssue(
+        [vault()],
+        target,
+        "secrets",
+        "integrations/gravitee/prod",
+      ),
+    ).toBeNull();
+    expect(
+      graviteeBindingIssue([vault()], target, "secrets", "other/service"),
+    ).toBe("connectors.graviteeVaultPathOutside");
+    expect(
+      graviteeBindingIssue(
+        [vault({ hasToken: false })],
+        target,
+        "secrets",
+        "integrations/gravitee/prod",
+      ),
+    ).toBe("connectors.graviteeVaultUnavailable");
+    expect(
+      graviteeBindingIssue(
+        [vault(), vault({ scopeKind: "area", area: "platform" })],
+        target,
+        "secrets",
+        "integrations/gravitee/prod",
+      ),
+    ).toBe("connectors.graviteeVaultAmbiguous");
   });
 
   it("does not let an area Vault supply a wider company instance", () => {
     const target = { scopeKind: "company" as const, company: "acme", area: "" };
-    expect(graviteeBindingIssue([
-      vault({ scopeKind: "area", area: "platform" }),
-    ], target, "secrets", "integrations/gravitee/prod"))
-      .toBe("connectors.graviteeVaultUnavailable");
+    expect(
+      graviteeBindingIssue(
+        [vault({ scopeKind: "area", area: "platform" })],
+        target,
+        "secrets",
+        "integrations/gravitee/prod",
+      ),
+    ).toBe("connectors.graviteeVaultUnavailable");
   });
 });

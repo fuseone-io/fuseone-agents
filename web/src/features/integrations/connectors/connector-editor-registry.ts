@@ -1,7 +1,14 @@
-import { Database, KeyRound, ShieldCheck, type LucideIcon } from "lucide-react";
+import {
+  Database,
+  Globe,
+  KeyRound,
+  ShieldCheck,
+  type LucideIcon,
+} from "lucide-react";
 import type { ComponentType } from "react";
 import type { ConnectorInstance } from "@/features/integrations/api";
 import { ConnectorInstanceForm } from "@/features/integrations/connectors/connector-instance-form";
+import { CloudflareInstanceForm } from "@/features/integrations/connectors/cloudflare-instance-form";
 import type { ConnectorInstanceSaver } from "@/features/integrations/connectors/connector-instance-model";
 import { GraviteeInstanceEditor } from "@/features/integrations/connectors/gravitee-instance-editor";
 import { SQLInstanceEditor } from "@/features/integrations/connectors/sql-instance-editor";
@@ -38,6 +45,12 @@ const editors = [
     label: "connectors.newGravitee",
     icon: KeyRound,
     Editor: GraviteeInstanceEditor,
+  },
+  {
+    connector: "cloudflare",
+    label: "connectors.newCloudflare",
+    icon: Globe,
+    Editor: CloudflareInstanceForm,
   },
 ] as const satisfies readonly EditorDefinition[];
 

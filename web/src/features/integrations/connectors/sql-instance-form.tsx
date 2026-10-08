@@ -68,16 +68,19 @@ export function SQLInstanceForm({
   const targetCompany = form.watch("company");
   const targetArea = form.watch("area");
   const choices = useMemo(
-    () => vaultChoices(instances, {
-      scopeKind,
-      company: targetCompany,
-      area: targetArea,
-    }),
+    () =>
+      vaultChoices(instances, {
+        scopeKind,
+        company: targetCompany,
+        area: targetArea,
+      }),
     [instances, scopeKind, targetCompany, targetArea],
   );
 
   async function submit(values: SQLInstanceValues) {
-    const choice = choices.find((candidate) => candidate.name === values.vaultInstance);
+    const choice = choices.find(
+      (candidate) => candidate.name === values.vaultInstance,
+    );
     if (values.enabled && (!choice || choice.ambiguous)) {
       form.setError("vaultInstance", {
         message: choice?.ambiguous
@@ -99,7 +102,9 @@ export function SQLInstanceForm({
     <PropertiesSheet
       open
       onOpenChange={(open) => !open && onClose()}
-      title={instance ? t("connectors.editSQLInstance") : t("connectors.newSQL")}
+      title={
+        instance ? t("connectors.editSQLInstance") : t("connectors.newSQL")
+      }
       description={t("connectors.sqlInstanceSheetHint")}
       className="lg:max-w-[880px]"
     >
@@ -109,7 +114,10 @@ export function SQLInstanceForm({
           className="flex min-h-0 flex-1 flex-col"
         >
           <PropertiesSheetBody className="space-y-6">
-            <ConnectorIdentityFields editing={instance !== null} connector="sql" />
+            <ConnectorIdentityFields
+              editing={instance !== null}
+              connector="sql"
+            />
             <SQLTargetFields form={form} />
             <VaultBindingFields form={form} choices={choices} />
             <SQLTemplateEditor form={form} />
@@ -128,13 +136,19 @@ export function SQLInstanceForm({
   );
 }
 
-function SQLTargetFields({ form }: { form: ReturnType<typeof useForm<SQLInstanceValues>> }) {
+function SQLTargetFields({
+  form,
+}: {
+  form: ReturnType<typeof useForm<SQLInstanceValues>>;
+}) {
   const { t } = useTranslation();
   return (
     <section className="grid gap-4 border-t pt-5">
       <div>
         <h3 className="text-sm font-medium">{t("connectors.sqlTarget")}</h3>
-        <p className="text-xs text-muted-foreground">{t("connectors.sqlTargetHint")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("connectors.sqlTargetHint")}
+        </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
         <SQLTextField form={form} name="host" label={t("connectors.sqlHost")} />
@@ -151,7 +165,9 @@ function SQLTargetFields({ form }: { form: ReturnType<typeof useForm<SQLInstance
                   max={65_535}
                   value={field.value}
                   onBlur={field.onBlur}
-                  onChange={(event) => field.onChange(event.target.valueAsNumber)}
+                  onChange={(event) =>
+                    field.onChange(event.target.valueAsNumber)
+                  }
                 />
               </FormControl>
               <FormMessage />
@@ -159,7 +175,11 @@ function SQLTargetFields({ form }: { form: ReturnType<typeof useForm<SQLInstance
           )}
         />
       </div>
-      <SQLTextField form={form} name="database" label={t("connectors.sqlDatabase")} />
+      <SQLTextField
+        form={form}
+        name="database"
+        label={t("connectors.sqlDatabase")}
+      />
     </section>
   );
 }
@@ -177,14 +197,20 @@ function VaultBindingFields({
   return (
     <section className="grid gap-4 border-t pt-5">
       <div>
-        <h3 className="text-sm font-medium">{t("connectors.sqlCredentialSource")}</h3>
-        <p className="text-xs text-muted-foreground">{t("connectors.sqlCredentialSourceHint")}</p>
+        <h3 className="text-sm font-medium">
+          {t("connectors.sqlCredentialSource")}
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          {t("connectors.sqlCredentialSourceHint")}
+        </p>
       </div>
       {choices.length === 0 && (
         <Alert>
           <AlertTriangle aria-hidden />
           <AlertTitle>{t("connectors.noUsableVault")}</AlertTitle>
-          <AlertDescription>{t("connectors.noUsableVaultHint")}</AlertDescription>
+          <AlertDescription>
+            {t("connectors.noUsableVaultHint")}
+          </AlertDescription>
         </Alert>
       )}
       <FormField
@@ -195,27 +221,46 @@ function VaultBindingFields({
             <FormLabel>{t("connectors.vaultInstance")}</FormLabel>
             <Select value={field.value} onValueChange={field.onChange}>
               <FormControl>
-                <SelectTrigger><SelectValue placeholder={t("connectors.chooseVault")} /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder={t("connectors.chooseVault")} />
+                </SelectTrigger>
               </FormControl>
               <SelectContent>
                 {selected && !selectedListed && (
-                  <SelectItem value={selected} disabled>{selected} · {t("connectors.unavailable")}</SelectItem>
+                  <SelectItem value={selected} disabled>
+                    {selected} · {t("connectors.unavailable")}
+                  </SelectItem>
                 )}
                 {choices.map((choice) => (
-                  <SelectItem key={choice.name} value={choice.name} disabled={choice.ambiguous}>
-                    {choice.label}{choice.ambiguous ? ` · ${t("connectors.ambiguous")}` : ""}
+                  <SelectItem
+                    key={choice.name}
+                    value={choice.name}
+                    disabled={choice.ambiguous}
+                  >
+                    {choice.label}
+                    {choice.ambiguous ? ` · ${t("connectors.ambiguous")}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <FormDescription>{t("connectors.vaultInstanceHint")}</FormDescription>
+            <FormDescription>
+              {t("connectors.vaultInstanceHint")}
+            </FormDescription>
             <FormMessage />
           </FormItem>
         )}
       />
       <div className="grid gap-3 sm:grid-cols-2">
-        <SQLTextField form={form} name="credentialMount" label={t("connectors.sqlCredentialMount")} />
-        <SQLTextField form={form} name="credentialRole" label={t("connectors.sqlCredentialRole")} />
+        <SQLTextField
+          form={form}
+          name="credentialMount"
+          label={t("connectors.sqlCredentialMount")}
+        />
+        <SQLTextField
+          form={form}
+          name="credentialRole"
+          label={t("connectors.sqlCredentialRole")}
+        />
       </div>
     </section>
   );

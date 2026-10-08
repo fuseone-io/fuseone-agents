@@ -21,39 +21,35 @@ import {
   PropertiesSheetFooter,
 } from "@/components/shared/properties-sheet";
 import { useActiveScope } from "@/features/scope/active-scope";
-import type { ConnectorInstance } from "@/features/integrations/api";
 import { ConnectorIdentityFields } from "@/features/integrations/connectors/connector-identity-fields";
 import {
-  connectorInstanceDefaults,
-  connectorInstancePayload,
-  connectorInstanceSchema,
-  type ConnectorInstanceSaver,
-  type ConnectorInstanceValues,
-} from "@/features/integrations/connectors/connector-instance-model";
+  cloudflareInstanceDefaults,
+  cloudflareInstancePayload,
+  cloudflareInstanceSchema,
+  type CloudflareInstanceValues,
+} from "@/features/integrations/connectors/cloudflare-instance-model";
+import type { ConnectorEditorProps } from "@/features/integrations/connectors/connector-editor-registry";
 import { problemMessage } from "@/lib/api/problem-message";
 
-type ConnectorTextField = "name" | "address" | "mount" | "namespace" | "token";
-
-export function ConnectorInstanceForm({
+export function CloudflareInstanceForm({
   instance,
   onClose,
   onSave,
-}: {
-  instance: ConnectorInstance | null;
-  onClose: () => void;
-  onSave: ConnectorInstanceSaver;
-}) {
+}: ConnectorEditorProps) {
   const { t } = useTranslation();
   const company = useActiveScope((s) => s.company);
   const area = useActiveScope((s) => s.area);
-  const form = useForm<ConnectorInstanceValues>({
-    resolver: zodResolver(connectorInstanceSchema),
+  const form = useForm<CloudflareInstanceValues>({
+    resolver: zodResolver(cloudflareInstanceSchema),
     mode: "onChange",
-    defaultValues: connectorInstanceDefaults(instance, company, area),
+    defaultValues: cloudflareInstanceDefaults(instance, company, area),
   });
 
-  async function submit(values: ConnectorInstanceValues) {
-    const input = connectorInstancePayload(values, instance?.hasToken === true);
+  async function submit(values: CloudflareInstanceValues) {
+    const input = cloudflareInstancePayload(
+      values,
+      instance?.hasToken === true,
+    );
     if (!input) {
       form.setError("token", { message: "connectors.tokenRequired" });
       return;
@@ -71,8 +67,10 @@ export function ConnectorInstanceForm({
     <PropertiesSheet
       open
       onOpenChange={(open) => !open && onClose()}
-      title={instance ? t("connectors.editInstance") : t("connectors.newVault")}
-      description={t("connectors.instanceSheetHint")}
+      title={
+        instance ? t("connectors.editInstance") : t("connectors.newCloudflare")
+      }
+      description={t("connectors.cloudflareSheetHint")}
     >
       <Form {...form}>
         <form
@@ -82,9 +80,12 @@ export function ConnectorInstanceForm({
           <PropertiesSheetBody className="space-y-4">
             <ConnectorIdentityFields
               editing={instance !== null}
-              connector="vault"
+              connector="cloudflare"
             />
-            <VaultFields form={form} hasToken={instance?.hasToken === true} />
+            <CloudflareFields
+              form={form}
+              hasToken={instance?.hasToken === true}
+            />
           </PropertiesSheetBody>
           <PropertiesSheetFooter>
             <Button type="button" variant="outline" onClick={onClose}>
@@ -100,61 +101,74 @@ export function ConnectorInstanceForm({
   );
 }
 
-function VaultFields({
+function CloudflareFields({
   form,
   hasToken,
 }: {
-  form: ReturnType<typeof useForm<ConnectorInstanceValues>>;
+  form: ReturnType<typeof useForm<CloudflareInstanceValues>>;
   hasToken: boolean;
 }) {
   const { t } = useTranslation();
   return (
     <div className="grid gap-4">
-      <TextField
-        form={form}
-        name="address"
-        label={t("connectors.vaultAddress")}
-        mono
-      />
       <div className="grid gap-3 sm:grid-cols-2">
-        <TextField
+        <Text
           form={form}
-          name="mount"
-          label={t("connectors.vaultMount")}
-          mono
+          name="accountId"
+          label={t("connectors.cloudflareAccountId")}
         />
-        <TextField
+        <Text
           form={form}
-          name="namespace"
-          label={t("connectors.vaultNamespace")}
-          mono
+          name="listId"
+          label={t("connectors.cloudflareListId")}
         />
       </div>
+      <Text
+        form={form}
+        name="baseUrl"
+        label={t("connectors.cloudflareBaseUrl")}
+        description={t("connectors.cloudflareBaseUrlHint")}
+      />
       <FormField
         control={form.control}
-        name="allowedPathPrefixes"
+        name="protectedRanges"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>{t("connectors.allowedPathPrefixes")}</FormLabel>
+            <FormLabel>{t("connectors.protectedRanges")}</FormLabel>
             <FormControl>
               <Textarea {...field} className="min-h-24 font-mono" />
             </FormControl>
             <FormDescription>
-              {t("connectors.allowedPathPrefixesHint")}
+              {t("connectors.protectedRangesHint")}
             </FormDescription>
             <FormMessage />
           </FormItem>
         )}
       />
-      <TextField
+      <FormField
+        control={form.control}
+        name="maxBlocksPerDay"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>{t("connectors.maxBlocksPerDay")}</FormLabel>
+            <FormControl>
+              <Input {...field} type="number" min={0} className="font-mono" />
+            </FormControl>
+            <FormDescription>
+              {t("connectors.maxBlocksPerDayHint")}
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <Text
         form={form}
         name="token"
-        label={t("connectors.vaultToken")}
+        label={t("connectors.cloudflareToken")}
         type="password"
         description={
           hasToken ? t("connectors.tokenKept") : t("connectors.tokenNew")
         }
-        mono
       />
       {hasToken && (
         <FormField
@@ -179,20 +193,18 @@ function VaultFields({
   );
 }
 
-function TextField({
+function Text({
   form,
   name,
   label,
   description,
   type = "text",
-  mono,
 }: {
-  form: ReturnType<typeof useForm<ConnectorInstanceValues>>;
-  name: ConnectorTextField;
+  form: ReturnType<typeof useForm<CloudflareInstanceValues>>;
+  name: "accountId" | "listId" | "baseUrl" | "token";
   label: string;
   description?: string;
   type?: string;
-  mono?: boolean;
 }) {
   return (
     <FormField
@@ -206,7 +218,7 @@ function TextField({
               {...field}
               type={type}
               autoComplete="off"
-              className={mono ? "font-mono" : undefined}
+              className="font-mono"
             />
           </FormControl>
           {description && <FormDescription>{description}</FormDescription>}
