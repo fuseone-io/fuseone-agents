@@ -71,8 +71,6 @@ function agentRequirementIsDone(
     case "tools":
       return (draft.tools ?? []).length > 0;
     case "budget":
-      return (
-        (draft.budget?.micros ?? 0) > 0 || (draft.budget?.steps ?? 0) > 0
-      );
+      return (draft.budget?.micros ?? 0) > 0 || (draft.budget?.steps ?? 0) > 0;
   }
 }

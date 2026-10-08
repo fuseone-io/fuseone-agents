@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { SimulationReportView } from "@/features/agents/simulation-report";
 import { setLocale } from "@/i18n";
-import type { SimulationCase, SimulationReport } from "@/features/agents/simulation-api";
+import type {
+  SimulationCase,
+  SimulationReport,
+} from "@/features/agents/simulation-api";
 
 vi.mock("@/features/agents/version-comparison", () => ({
   VersionComparison: () => null,
@@ -26,7 +29,10 @@ function renderReport(cases: SimulationCase[]) {
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
-        <SimulationReportView agentId="triage" report={report as unknown as SimulationQuery} />
+        <SimulationReportView
+          agentId="triage"
+          report={report as unknown as SimulationQuery}
+        />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -56,7 +62,8 @@ describe("simulation report", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: Request | RequestInfo | URL, init?: RequestInit) => {
-        const request = input instanceof Request ? input : new Request(input, init);
+        const request =
+          input instanceof Request ? input : new Request(input, init);
         posted.push(JSON.parse(await request.text()));
         return new Response(JSON.stringify({ id: "reg-1" }), {
           status: 201,
@@ -81,14 +88,18 @@ describe("simulation report", () => {
     renderReport([answeredCase({ reason: "attempts_exhausted" })]);
 
     expect(screen.getByRole("button", { name: "Correct" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Save case" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save case" }),
+    ).not.toBeInTheDocument();
   });
 
   it("does not offer to save a corpus case again", () => {
     renderReport([answeredCase({ id: "case-1" })]);
 
     expect(screen.getByRole("button", { name: "Correct" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Save case" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save case" }),
+    ).not.toBeInTheDocument();
   });
 
   it("only marks the case being saved as pending", async () => {

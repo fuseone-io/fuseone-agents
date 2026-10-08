@@ -50,7 +50,10 @@ export function StepInspector({
   return (
     <div className="flex w-[300px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-border p-4">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="step-name" className="text-2xs uppercase tracking-label">
+        <Label
+          htmlFor="step-name"
+          className="text-2xs uppercase tracking-label"
+        >
           {t("agents.stepOf", { number: at + 1, total })}
         </Label>
         <Input
@@ -94,7 +97,10 @@ export function StepInspector({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="step-stops" className="text-2xs uppercase tracking-label">
+        <Label
+          htmlFor="step-stops"
+          className="text-2xs uppercase tracking-label"
+        >
           {t("agents.stopsWhenLabel")}
         </Label>
         <Input

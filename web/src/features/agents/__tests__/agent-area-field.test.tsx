@@ -8,16 +8,21 @@ import { setLocale } from "@/i18n";
 function stubScopes() {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          items: [
-            { company: "default", area: "platform", label: "Default platform" },
-            { company: "acme", area: "platform", label: "Acme platform" },
-          ],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            items: [
+              {
+                company: "default",
+                area: "platform",
+                label: "Default platform",
+              },
+              { company: "acme", area: "platform", label: "Acme platform" },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
     ),
   );
 }
@@ -53,8 +58,13 @@ describe("the agent area field", () => {
     const onChange = renderField();
 
     await user.click(screen.getByRole("combobox", { name: "Area" }));
-    await user.click(await screen.findByRole("option", { name: /acme\/platform/ }));
+    await user.click(
+      await screen.findByRole("option", { name: /acme\/platform/ }),
+    );
 
-    expect(onChange).toHaveBeenCalledWith({ company: "acme", area: "platform" });
+    expect(onChange).toHaveBeenCalledWith({
+      company: "acme",
+      area: "platform",
+    });
   });
 });

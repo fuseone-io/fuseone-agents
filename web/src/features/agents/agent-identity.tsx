@@ -64,7 +64,6 @@ export function AgentIdentity({
           </span>
         </div>
       </div>
-
     </div>
   );
 }

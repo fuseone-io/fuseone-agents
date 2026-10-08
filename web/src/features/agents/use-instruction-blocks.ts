@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { parse, serialise, type Block } from "@/features/agents/instruction-blocks";
+import {
+  parse,
+  serialise,
+  type Block,
+} from "@/features/agents/instruction-blocks";
 import { findings } from "@/features/agents/instruction-lint";
 import { useListReorder } from "@/features/agents/use-list-reorder";
 import type { Policy, Tool } from "@/lib/api/client";

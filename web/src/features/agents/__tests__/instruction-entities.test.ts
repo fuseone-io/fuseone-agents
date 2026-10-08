@@ -67,8 +67,8 @@ describe("what an instruction names", () => {
       ...CATALOGUE,
     ];
 
-    expect(
-      segments("crm.lookup", catalogue, []).map((s) => s.text),
-    ).toEqual(["crm.lookup"]);
+    expect(segments("crm.lookup", catalogue, []).map((s) => s.text)).toEqual([
+      "crm.lookup",
+    ]);
   });
 });

@@ -41,7 +41,12 @@ export function AgentMoreMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-9" aria-label={label}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-9"
+          aria-label={label}
+        >
           <Ellipsis className="size-4" aria-hidden />
         </Button>
       </DropdownMenuTrigger>

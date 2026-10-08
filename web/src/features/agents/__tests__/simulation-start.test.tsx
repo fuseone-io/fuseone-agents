@@ -64,9 +64,13 @@ function stubApi({
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request | RequestInfo | URL, init?: RequestInit) => {
-      const request = input instanceof Request ? input : new Request(input, init);
+      const request =
+        input instanceof Request ? input : new Request(input, init);
       const path = new URL(request.url).pathname;
-      if (request.method === "GET" && path.endsWith("/agents/triage/regressions")) {
+      if (
+        request.method === "GET" &&
+        path.endsWith("/agents/triage/regressions")
+      ) {
         if (regressionsError) {
           return new Response(JSON.stringify({ title: "broken" }), {
             status: 500,
@@ -164,7 +168,9 @@ describe("starting a simulation", () => {
     await user.click(screen.getByRole("button", { name: "Paste JSON" }));
     await user.type(screen.getByLabelText("Cases"), '{{"a":1}\n{{"a":2}\n');
 
-    expect(await screen.findByText(/Expected about R\$0\.40/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Expected about R\$0\.40/),
+    ).toBeInTheDocument();
     expect(screen.getByText(/maximum R\$1\.00/)).toBeInTheDocument();
   });
 
@@ -173,7 +179,9 @@ describe("starting a simulation", () => {
 
     renderStart({ agent: PRICED_AGENT });
 
-    expect(await screen.findByText(/Expected about R\$0\.60/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Expected about R\$0\.60/),
+    ).toBeInTheDocument();
     expect(screen.getByText(/maximum R\$1\.50/)).toBeInTheDocument();
   });
 
@@ -199,7 +207,9 @@ describe("starting a simulation", () => {
       await screen.findByText(/historical average is R\$0\.80 per run/),
     ).toBeInTheDocument();
     expect(screen.getByText(/at most R\$0\.20/)).toBeInTheDocument();
-    expect(screen.queryByText(/Expected about R\$1\.60/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Expected about R\$1\.60/),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps corpus failures distinct from missing money ceilings", async () => {

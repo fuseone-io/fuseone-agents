@@ -34,6 +34,18 @@ field" is a commit message.
   id, which is exactly where typing from memory fails — and typing stays
   valid for a tool an operator is about to configure.
 
+### Fixed
+
+- **The `@` tool popover opens at the caret.** In a long instruction block
+  it used to land past the end of the form, behind a scrollbar: the hidden
+  mirror that positions it wrapped with a different font size than the
+  textarea (the ui component's own won), and the textarea scrolled inside
+  itself while the mirror never does. The mirror now copies the textarea's
+  computed typography — class strings drift, computed styles cannot — and
+  the textarea sizes itself to its content. Measured in the browser: the
+  anchor lands within one pixel of the caret line, end or middle of text.
+
+
 ## [0.58.1] — 2026-10-08
 
 ### Security

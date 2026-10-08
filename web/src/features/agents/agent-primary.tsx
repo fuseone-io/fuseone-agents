@@ -2,7 +2,10 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Play, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useSetAgentPaused, useSetAgentRetired } from "@/features/agents/agent-editor-api";
+import {
+  useSetAgentPaused,
+  useSetAgentRetired,
+} from "@/features/agents/agent-editor-api";
 import { RunNowDialog } from "@/features/agents/run-now-dialog";
 import { problemMessage } from "@/lib/api/problem-message";
 import type { Agent } from "@/lib/api/client";

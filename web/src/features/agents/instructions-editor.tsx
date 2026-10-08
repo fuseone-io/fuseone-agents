@@ -104,7 +104,9 @@ export function InstructionsEditor({
               // Typed `/` becomes the block it asked for: the slash is the
               // gesture and never reaches the payload.
               const next = blocks.map((one, i) =>
-                i === menu?.at ? { ...one, text: one.text.replace(/\/$/, "") } : one,
+                i === menu?.at
+                  ? { ...one, text: one.text.replace(/\/$/, "") }
+                  : one,
               );
               write([...next, { kind, text: "" }]);
               setMenu(undefined);
@@ -125,7 +127,12 @@ export function InstructionsEditor({
           />
 
           <InstructionsStrip
-            summary={summarise(blocks, tools.catalogue, tools.policies, instructions)}
+            summary={summarise(
+              blocks,
+              tools.catalogue,
+              tools.policies,
+              instructions,
+            )}
             findings={found}
             tokens={tokens}
           />

@@ -16,7 +16,9 @@ describe("an agent's definition", () => {
     // it would teach a reader the opposite.
     render(<AgentDefinition instructions="Responda o cliente." />);
 
-    expect(screen.queryByRole("tab", { name: "Passos" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: "Passos" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Responda o cliente.")).toBeInTheDocument();
   });
 

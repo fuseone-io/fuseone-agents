@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { fieldOf, incomplete, TRIGGER_KINDS } from "@/features/agents/trigger-kinds";
+import {
+  fieldOf,
+  incomplete,
+  TRIGGER_KINDS,
+} from "@/features/agents/trigger-kinds";
 
 /*
 A conversation is a fourth way in, and the one that carries nothing.

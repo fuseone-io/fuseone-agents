@@ -92,6 +92,8 @@ describe("the agent's primary action", () => {
     // server leaves it stopped on purpose.
     renderPrimary({ retired: true, paused: true });
 
-    expect(screen.getByRole("button", { name: /Reativar/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Reativar/ }),
+    ).toBeInTheDocument();
   });
 });

@@ -1,6 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { labelOf } from "@/features/agents/instruction-blocks";
-import { diffInstructions, type BlockDiff } from "@/features/agents/instruction-diff";
+import {
+  diffInstructions,
+  type BlockDiff,
+} from "@/features/agents/instruction-diff";
 import { cn } from "@/lib/utils";
 
 /**

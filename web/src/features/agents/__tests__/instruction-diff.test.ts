@@ -26,7 +26,10 @@ describe("what publishing would change in the prose", () => {
   });
 
   it("shows the words that went and the words that came", () => {
-    const now = WAS.replace("Se não encontrar o cliente.", "Se não achar o cliente.");
+    const now = WAS.replace(
+      "Se não encontrar o cliente.",
+      "Se não achar o cliente.",
+    );
     const changed = diffInstructions(WAS, now).find(
       (block) => block.state === "changed",
     );

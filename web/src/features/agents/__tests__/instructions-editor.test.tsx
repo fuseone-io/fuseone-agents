@@ -26,7 +26,9 @@ describe("adding a block", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /Novo bloco/ }));
 
-    expect(await screen.findByRole("menuitem", { name: /Objetivo/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("menuitem", { name: /Objetivo/ }),
+    ).toBeInTheDocument();
   });
 
   it("adds the kind that was picked", async () => {
@@ -40,7 +42,9 @@ describe("adding a block", () => {
     );
 
     await userEvent.click(screen.getByRole("button", { name: /Novo bloco/ }));
-    await userEvent.click(await screen.findByRole("menuitem", { name: /Nunca/ }));
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: /Nunca/ }),
+    );
 
     // An empty block contributes nothing to the payload, so what changes is
     // the text only once somebody writes in it.
@@ -61,7 +65,9 @@ describe("writing in a block that was just added", () => {
     );
 
     await userEvent.click(screen.getByRole("button", { name: /Novo bloco/ }));
-    await userEvent.click(await screen.findByRole("menuitem", { name: /Nunca/ }));
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: /Nunca/ }),
+    );
 
     expect(
       await screen.findByRole("textbox", { name: "Nunca" }),

@@ -20,7 +20,8 @@ export function gateStops(
   policies: Policy[],
 ): boolean {
   return (step.reaches ?? []).some((tool) => {
-    const effect = catalogue.find((one) => one.toolId === tool)?.effect ?? "write";
+    const effect =
+      catalogue.find((one) => one.toolId === tool)?.effect ?? "write";
     return ruleFor(tool, effect, policies).kind !== "allowed";
   });
 }

@@ -1,4 +1,8 @@
-import { parse, type Block, type BlockKind } from "@/features/agents/instruction-blocks";
+import {
+  parse,
+  type Block,
+  type BlockKind,
+} from "@/features/agents/instruction-blocks";
 import { align } from "@/features/agents/align";
 
 export interface Piece {
@@ -70,15 +74,27 @@ function keyOf(block: Block): string {
 }
 
 function unchanged(block: Block): BlockDiff {
-  return { kind: block.kind, state: "same", pieces: [{ kind: "same", text: block.text }] };
+  return {
+    kind: block.kind,
+    state: "same",
+    pieces: [{ kind: "same", text: block.text }],
+  };
 }
 
 function whole(block: Block, state: "added" | "removed"): BlockDiff {
-  return { kind: block.kind, state, pieces: [{ kind: state, text: block.text }] };
+  return {
+    kind: block.kind,
+    state,
+    pieces: [{ kind: state, text: block.text }],
+  };
 }
 
 function edited(before: Block, after: Block): BlockDiff {
-  return { kind: after.kind, state: "changed", pieces: words(before.text, after.text) };
+  return {
+    kind: after.kind,
+    state: "changed",
+    pieces: words(before.text, after.text),
+  };
 }
 
 /**

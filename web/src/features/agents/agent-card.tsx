@@ -243,8 +243,7 @@ function capabilityPacks(
       tools: list,
       canWrite: list.some((tool) => writes(effects.get(tool))),
       allRead:
-        list.length > 0 &&
-        list.every((tool) => effects.get(tool) === "read"),
+        list.length > 0 && list.every((tool) => effects.get(tool) === "read"),
     }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
@@ -255,13 +254,7 @@ function packName(tool: string): string {
   return "tools";
 }
 
-function CapabilityChip({
-  pack,
-  t,
-}: {
-  pack: CapabilityPack;
-  t: TFunction;
-}) {
+function CapabilityChip({ pack, t }: { pack: CapabilityPack; t: TFunction }) {
   return (
     <span
       title={packTitle(pack, t)}
@@ -277,7 +270,8 @@ function CapabilityChip({
 }
 
 function packClass(pack: CapabilityPack): string {
-  if (pack.canWrite) return "border border-primary bg-surface-accent text-text-accent";
+  if (pack.canWrite)
+    return "border border-primary bg-surface-accent text-text-accent";
   if (pack.allRead) return "border bg-muted text-muted-foreground";
   return "border border-dashed border-border-strong bg-card text-muted-foreground";
 }
@@ -367,7 +361,8 @@ function renderPackIcon(name: string) {
 }
 
 function renderDomainIcon(agent: Agent) {
-  const haystack = `${agent.agentId} ${agent.name} ${agent.scope.area}`.toLowerCase();
+  const haystack =
+    `${agent.agentId} ${agent.name} ${agent.scope.area}`.toLowerCase();
   if (haystack.includes("security") || haystack.includes("access"))
     return <ShieldCheck className="size-4" aria-hidden />;
   if (haystack.includes("support") || haystack.includes("triage"))

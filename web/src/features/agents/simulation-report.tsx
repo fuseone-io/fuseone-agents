@@ -114,7 +114,9 @@ export function SimulationReportView({
             {report.data.cases.map((entry, i) => {
               const needsLook = caseNeedsLook(entry);
               const canSave =
-                !entry.id && !needsLook && baselineExpectations(entry).length > 0;
+                !entry.id &&
+                !needsLook &&
+                baselineExpectations(entry).length > 0;
               return (
                 <li key={entry.runId ?? entry.id ?? i}>
                   {/* Correct stays available for every real run: a clean
@@ -124,7 +126,9 @@ export function SimulationReportView({
                   <CaseRow
                     index={i + 1}
                     entry={entry}
-                    onCorrect={entry.runId ? () => setCorrecting(entry) : undefined}
+                    onCorrect={
+                      entry.runId ? () => setCorrecting(entry) : undefined
+                    }
                     onSaveCase={
                       entry.runId && canSave ? () => saveCase(entry) : undefined
                     }

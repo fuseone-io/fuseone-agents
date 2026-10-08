@@ -6,7 +6,10 @@ import { Mono } from "@/components/shared/mono";
 import { formatMicros, formatTokens } from "@/lib/format";
 import type { Agent } from "@/lib/api/client";
 
-export function AgentCapabilities({ agent, compact = false }: {
+export function AgentCapabilities({
+  agent,
+  compact = false,
+}: {
   agent: Agent;
   compact?: boolean;
 }) {
@@ -16,7 +19,8 @@ export function AgentCapabilities({ agent, compact = false }: {
   const effects = new Map(
     (tools.data?.items ?? []).map((t) => [t.toolId, t.effect] as const),
   );
-  const shownTools = compact && !expanded ? agent.tools.slice(0, 6) : agent.tools;
+  const shownTools =
+    compact && !expanded ? agent.tools.slice(0, 6) : agent.tools;
   const hidden = Math.max(agent.tools.length - shownTools.length, 0);
 
   return (

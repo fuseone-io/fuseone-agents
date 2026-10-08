@@ -30,7 +30,11 @@ export function useAgent(agentId: string, version?: string) {
   });
 }
 
-export function useAgentTrust(agentId: string, version?: string, enabled = true) {
+export function useAgentTrust(
+  agentId: string,
+  version?: string,
+  enabled = true,
+) {
   return useQuery({
     enabled: enabled && agentId !== "",
     queryKey: [

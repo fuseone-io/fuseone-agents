@@ -28,7 +28,10 @@ export function InstructionsViewTabs({
   const { t } = useTranslation();
 
   return (
-    <Tabs value={view} onValueChange={(next) => onChange(next as InstructionsView)}>
+    <Tabs
+      value={view}
+      onValueChange={(next) => onChange(next as InstructionsView)}
+    >
       <TabsList className="h-8">
         <TabsTrigger value="write">
           <Pencil aria-hidden />

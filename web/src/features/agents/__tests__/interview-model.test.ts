@@ -40,7 +40,9 @@ describe("what an interview leaves behind", () => {
   it("carries what the agent must know before acting", () => {
     const draft = draftFromInterview(ANSWERS, TRANSLATED, "pt-BR");
 
-    expect(draft.instructions).toContain("Quem é o cliente e qual o plano dele.");
+    expect(draft.instructions).toContain(
+      "Quem é o cliente e qual o plano dele.",
+    );
   });
 
   /*

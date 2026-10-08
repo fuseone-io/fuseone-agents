@@ -85,9 +85,9 @@ function stubApi() {
         ? TOOLS
         : url.includes("/agents/templates")
           ? TEMPLATES
-        : url.includes("/agents/suporte")
-          ? AGENT
-          : { items: [] };
+          : url.includes("/agents/suporte")
+            ? AGENT
+            : { items: [] };
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -222,7 +222,9 @@ describe("the agent editor, control by control", () => {
     await userEvent.click(await screen.findByRole("tab", { name: /Passos/ }));
 
     await userEvent.click(screen.getByRole("button", { name: /^Passo$/ }));
-    expect(await screen.findByRole("button", { name: /Editar o passo 1/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /Editar o passo 1/ }),
+    ).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("tab", { name: /Fluxo/ }));
     // Adding one selects it, which is what the inspector is for.
@@ -231,9 +233,13 @@ describe("the agent editor, control by control", () => {
 
   it("grants a tool from the catalogue", async () => {
     openEditor();
-    await userEvent.click(await screen.findByRole("tab", { name: /Ferramentas/ }));
+    await userEvent.click(
+      await screen.findByRole("tab", { name: /Ferramentas/ }),
+    );
 
-    const row = await screen.findByRole("checkbox", { name: /Conceder crm\.reply/ });
+    const row = await screen.findByRole("checkbox", {
+      name: /Conceder crm\.reply/,
+    });
     await userEvent.click(row);
 
     // The tab's own count is the fact: membership changed.
@@ -250,7 +256,9 @@ describe("the agent editor, control by control", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: /Novo bloco/ }),
     );
-    await userEvent.click(await screen.findByRole("menuitem", { name: /Nunca/ }));
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: /Nunca/ }),
+    );
     const box = await screen.findByRole("textbox", { name: "Nunca" });
     await userEvent.click(box);
     await userEvent.type(

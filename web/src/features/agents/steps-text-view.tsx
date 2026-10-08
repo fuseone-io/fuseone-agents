@@ -44,7 +44,11 @@ export function StepsTextView({
           key={at}
           step={step}
           index={at}
-          stops={gateStops(step, catalogue, policies) ? t("agents.mayStopHere") : undefined}
+          stops={
+            gateStops(step, catalogue, policies)
+              ? t("agents.mayStopHere")
+              : undefined
+          }
           onEdit={() => onEdit(at)}
           drag={drag}
         />

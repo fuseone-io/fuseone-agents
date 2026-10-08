@@ -84,7 +84,9 @@ describe("what an instruction promises and the policy refuses", () => {
         [],
         HELD,
       ),
-    ).toEqual([{ at: 0, tool: "erp.refund", why: "refused", because: undefined }]);
+    ).toEqual([
+      { at: 0, tool: "erp.refund", why: "refused", because: undefined },
+    ]);
   });
 });
 

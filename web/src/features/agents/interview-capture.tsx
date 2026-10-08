@@ -58,7 +58,11 @@ export function InterviewCapture({
             </Button>
             <Button onClick={onSuggest} disabled={empty || suggesting}>
               <WandSparkles className="size-4" aria-hidden />
-              {t(suggesting ? "interview.suggesting" : "interview.suggestAnswers")}
+              {t(
+                suggesting
+                  ? "interview.suggesting"
+                  : "interview.suggestAnswers",
+              )}
             </Button>
           </div>
         </div>

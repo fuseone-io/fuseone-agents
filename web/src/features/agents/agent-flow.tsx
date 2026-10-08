@@ -54,7 +54,10 @@ export function AgentFlow({ steps }: { steps: AgentStep[] }) {
 
               {step.stopsWhen && (
                 <p className="mt-1.5 flex items-start gap-1.5 text-2xs text-muted-foreground">
-                  <CircleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+                  <CircleAlert
+                    className="mt-px size-3.5 shrink-0"
+                    aria-hidden
+                  />
                   {t("agents.stopsWhen", { what: step.stopsWhen })}
                 </p>
               )}
@@ -74,7 +77,9 @@ function Rail({ index, last }: { index: number; last: boolean }) {
         {index}
       </span>
       {!last && <span className="w-px flex-1 bg-border" />}
-      {last && <CircleDot className="mt-1 size-3 text-muted-foreground" aria-hidden />}
+      {last && (
+        <CircleDot className="mt-1 size-3 text-muted-foreground" aria-hidden />
+      )}
     </div>
   );
 }

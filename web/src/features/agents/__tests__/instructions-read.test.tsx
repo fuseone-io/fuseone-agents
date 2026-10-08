@@ -15,7 +15,9 @@ describe("a published instruction", () => {
   it("puts each block's label in the margin", () => {
     render(
       <InstructionsRead
-        instructions={"Objetivo\nAtender chamados.\n\nQuando parar\nSe não achar o cliente."}
+        instructions={
+          "Objetivo\nAtender chamados.\n\nQuando parar\nSe não achar o cliente."
+        }
       />,
     );
 
@@ -42,7 +44,9 @@ describe("a published instruction", () => {
     // way through structuring, and the half that is labelled has to keep it.
     render(
       <InstructionsRead
-        instructions={"Atender chamados.\n\nQuando parar\nSe não achar o cliente."}
+        instructions={
+          "Atender chamados.\n\nQuando parar\nSe não achar o cliente."
+        }
       />,
     );
 
