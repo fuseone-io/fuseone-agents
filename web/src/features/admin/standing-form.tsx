@@ -37,6 +37,7 @@ import {
 } from "@/components/shared/properties-sheet";
 import { useTools } from "@/features/admin/api";
 import { useAgents } from "@/features/agents/api";
+import { useScopes } from "@/features/scope/api";
 import { useActiveScope } from "@/features/scope/active-scope";
 import { cn } from "@/lib/utils";
 import { useCreateStandingApproval } from "@/features/admin/standing-api";
@@ -130,15 +131,28 @@ export function StandingForm({ onClose }: { onClose: () => void }) {
               suggest={t("admin.standingSuggestAgents")}
               useSuggestions={useAgentSuggestions}
             />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field form={form} name="company" label={t("scope.label")} mono />
-              <Field form={form} name="area" label={t("admin.area")} mono />
+            <div className="grid items-start gap-3 sm:grid-cols-2">
+              <SuggestedField
+                form={form}
+                name="company"
+                label={t("scope.label")}
+                suggest={t("admin.standingSuggestCompanies")}
+                useSuggestions={useCompanySuggestions}
+              />
+              <SuggestedField
+                form={form}
+                name="area"
+                label={t("admin.area")}
+                suggest={t("admin.standingSuggestAreas")}
+                useSuggestions={useAreaSuggestions}
+              />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid items-start gap-3 sm:grid-cols-2">
               <Field
                 form={form}
                 name="dailyCap"
                 label={t("admin.standingDailyCap")}
+                description={t("admin.standingDailyCapHint")}
                 type="number"
               />
               <Field
@@ -192,6 +206,24 @@ function useToolSuggestions(open: boolean): Suggestion[] {
   }));
 }
 
+function useCompanySuggestions(open: boolean): Suggestion[] {
+  const scopes = useScopes();
+  if (!open) return [];
+  const seen = new Set<string>();
+  return (scopes.data?.items ?? [])
+    .filter((s) => !seen.has(s.company) && seen.add(s.company))
+    .map((s) => ({ value: s.company, hint: "" }));
+}
+
+function useAreaSuggestions(open: boolean): Suggestion[] {
+  const scopes = useScopes();
+  if (!open) return [];
+  return (scopes.data?.items ?? []).map((s) => ({
+    value: s.area,
+    hint: s.company,
+  }));
+}
+
 function useAgentSuggestions(open: boolean): Suggestion[] {
   const agents = useAgents();
   return open
@@ -217,7 +249,7 @@ function SuggestedField({
   useSuggestions,
 }: {
   form: ReturnType<typeof useForm<Values>>;
-  name: "toolId" | "agentId";
+  name: "toolId" | "agentId" | "company" | "area";
   label: string;
   description?: string;
   suggest: string;

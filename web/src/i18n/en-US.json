@@ -196,7 +196,10 @@
     "standingRevokeTitle": "Revoke this standing approval?",
     "standingRevokeBody": "{{tool}} for {{agent}} goes back to needing a human click on every use. The row stays in the trail.",
     "standingSuggestTools": "Suggest governed tools",
-    "standingSuggestAgents": "Suggest agents"
+    "standingSuggestAgents": "Suggest agents",
+    "standingSuggestCompanies": "Suggest declared companies",
+    "standingSuggestAreas": "Suggest declared areas",
+    "standingDailyCapHint": "Uses this mandate may release per day."
   },
   "agents": {
     "aCostOrStepCeiling": "A cost or step ceiling",

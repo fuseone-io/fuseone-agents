@@ -6,8 +6,15 @@ import { StandingForm } from "@/features/admin/standing-form";
 import { setLocale } from "@/i18n";
 
 const lists = vi.hoisted(() => ({
-  tools: { data: { items: [{ toolId: "cloudflare.edge.unblock_ip", effect: "write" }] } },
-  agents: { data: { items: [{ agentId: "security-sentinel", name: "Sentinel" }] } },
+  tools: {
+    data: {
+      items: [{ toolId: "cloudflare.edge.unblock_ip", effect: "write" }],
+    },
+  },
+  agents: {
+    data: { items: [{ agentId: "security-sentinel", name: "Sentinel" }] },
+  },
+  scopes: { data: { items: [{ company: "acme", area: "platform" }] } },
 }));
 
 vi.mock("@/features/admin/api", async (importOriginal) => ({
@@ -17,6 +24,10 @@ vi.mock("@/features/admin/api", async (importOriginal) => ({
 vi.mock("@/features/agents/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/agents/api")>()),
   useAgents: () => lists.agents,
+}));
+vi.mock("@/features/scope/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/scope/api")>()),
+  useScopes: () => lists.scopes,
 }));
 
 beforeEach(() => {
@@ -41,8 +52,12 @@ describe("the standing approval form", () => {
     await userEvent.click(
       screen.getByRole("combobox", { name: "Suggest governed tools" }),
     );
-    await userEvent.click(await screen.findByText("cloudflare.edge.unblock_ip"));
-    expect(screen.getByLabelText("Tool")).toHaveValue("cloudflare.edge.unblock_ip");
+    await userEvent.click(
+      await screen.findByText("cloudflare.edge.unblock_ip"),
+    );
+    expect(screen.getByLabelText("Tool")).toHaveValue(
+      "cloudflare.edge.unblock_ip",
+    );
 
     await userEvent.click(
       screen.getByRole("combobox", { name: "Suggest agents" }),
@@ -58,4 +73,14 @@ describe("the standing approval form", () => {
     await userEvent.type(screen.getByLabelText("Tool"), "x");
     expect(screen.getByLabelText("Tool")).toHaveValue("x");
   });
+});
+
+// The scope pair suggests the declared scopes, like every list here.
+it("offers the declared companies and areas", async () => {
+  mount();
+  await userEvent.click(
+    screen.getByRole("combobox", { name: "Suggest declared areas" }),
+  );
+  await userEvent.click(await screen.findByText("platform"));
+  expect(screen.getByLabelText("Area")).toHaveValue("platform");
 });
