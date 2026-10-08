@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { Input } from "@/components/ui/input";
-import { Section, Labelled } from "@/features/policies/section";
+import { Section } from "@/features/policies/section";
+import { ToolField } from "@/features/policies/tool-field";
 import { cn } from "@/lib/utils";
 import type { PolicyInput } from "@/lib/api/client";
 
@@ -19,15 +19,10 @@ export function ScopeSection({
 
   return (
     <Section title={t("policies.scope")} hint={t("policies.scopeReach")}>
-      <Labelled label={t("admin.tool")} htmlFor="resource">
-        <Input
-          id="resource"
-          value={draft.resource ?? ""}
-          onChange={(e) => patch({ resource: e.target.value })}
-          placeholder={t("policies.resourcePlaceholder")}
-          className="font-mono"
-        />
-      </Labelled>
+      <ToolField
+        value={draft.resource ?? ""}
+        onChange={(resource) => patch({ resource })}
+      />
 
       <fieldset className="flex flex-col gap-1.5">
         <legend className="text-2xs uppercase tracking-label text-muted-foreground">

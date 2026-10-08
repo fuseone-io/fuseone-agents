@@ -2180,7 +2180,8 @@
     "reachScopesEmpty": "Name at least one area, or the rule governs nothing.",
     "useTyped": "Use \"{{value}}\"",
     "removeFromSet": "Remove {{value}}",
-    "suggestOwner": "Suggest people from the directory"
+    "suggestOwner": "Suggest people from the directory",
+    "suggestTool": "Suggest governed tools"
   },
   "problem": {
     "conflict": "That does not hold for the current state: {{detail}}",

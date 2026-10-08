@@ -2180,7 +2180,8 @@
     "reachScopesEmpty": "Nomeie ao menos uma área, ou a regra não governa nada.",
     "useTyped": "Usar \"{{value}}\"",
     "removeFromSet": "Tirar {{value}}",
-    "suggestOwner": "Sugerir pessoas do diretório"
+    "suggestOwner": "Sugerir pessoas do diretório",
+    "suggestTool": "Sugerir ferramentas governadas"
   },
   "problem": {
     "conflict": "Isso não vale para o estado atual: {{detail}}",
