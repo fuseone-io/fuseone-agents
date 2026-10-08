@@ -25,6 +25,15 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **The policy page offers the governed tools.** The Tool field suggests
+  the ids the platform already governs — effect beside each — and typing
+  stays just as valid: a glob is a legitimate rule, and no listing offers
+  every id a policy may name.
+
 ## [0.56.0] — 2026-10-08
 
 ### Added
