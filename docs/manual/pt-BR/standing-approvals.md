@@ -28,7 +28,10 @@ próprio, bloqueios que expiram.
 
 Uma aprovação permanente libera o park — não torna a ferramenta segura.
 Esse julgamento é seu, e o campo de motivo obrigatório é onde você o
-escreve.
+escreve. O `unblock_ip` da lista de bloqueio é o contra-exemplo pronto:
+**não** conceda mandato para ele. Remover proteção é exatamente a ação que
+um agente enganado nunca deve tomar sem supervisão, e o clique humano é o
+teto dele.
 
 ## Os limites do mandato
 

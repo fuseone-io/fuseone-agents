@@ -28,6 +28,7 @@ const maxCloudflareReasonChars = 200
 type CloudflareListClient interface {
 	Items(ctx context.Context, cfg CloudflareConfig, credential SecretValue) ([]CloudflareListItem, error)
 	AddItem(ctx context.Context, cfg CloudflareConfig, credential SecretValue, ip, comment string) (string, error)
+	DeleteItem(ctx context.Context, cfg CloudflareConfig, credential SecretValue, id string) (string, error)
 }
 
 // CloudflareBlocker guards the block list. Every refusal lives here, in
@@ -78,6 +79,12 @@ func (l *Layer) invokeCloudflareNative(
 			return failed(CodeConnectorBadArguments), nil
 		}
 		return l.cloudflareBlock(ctx, instance, credential, call, args)
+	case "cloudflare.unblock_ip":
+		args, ok := decodeCloudflareBlockArgs(call.Args)
+		if !ok {
+			return failed(CodeConnectorBadArguments), nil
+		}
+		return l.cloudflareUnblock(ctx, instance, credential, call, args)
 	default:
 		return failed(CodeConnectorUnavailable), nil
 	}
@@ -141,6 +148,66 @@ func (l *Layer) cloudflareBlock(
 	return l.storeJSON(ctx, call, domain.Labels{}, map[string]any{
 		"operation": "cloudflare.block_ip", "blocked": canonical,
 		"alreadyBlocked": false, "comment": comment, "operationId": operationID,
+	})
+}
+
+/*
+cloudflareUnblock removes one automatically blocked address.
+
+The one guard that matters most: only an entry the connector itself wrote —
+the fuseone:auto comment — may fall. A person's entry, or a person's wider
+range that covers the address, is a person's decision; the agent reports it
+and never undoes it. An address not on the list is already in the desired
+state and succeeds saying so, so a retry never fails on its own success.
+*/
+func (l *Layer) cloudflareUnblock(
+	ctx context.Context, instance Instance, credential SecretValue,
+	call engine.Call, args cloudflareBlockArgs,
+) (engine.ToolResult, error) {
+	addr, err := netip.ParseAddr(args.IP)
+	if err != nil {
+		return failed(CodeConnectorBadArguments), nil
+	}
+	items, err := l.cloudflare.remote.Items(ctx, instance.Cloudflare, credential)
+	if err != nil {
+		return cloudflareFailure(err)
+	}
+	canonical := addr.Unmap().String()
+	var exact *CloudflareListItem
+	for i, item := range items {
+		if existing, parseErr := netip.ParseAddr(item.IP); parseErr == nil &&
+			existing.Unmap() == addr.Unmap() {
+			exact = &items[i]
+			continue
+		}
+		if prefix, parseErr := netip.ParsePrefix(item.IP); parseErr == nil &&
+			prefix.Contains(addr.Unmap()) {
+			// A range covering the address: ranges are never written by this
+			// connector, so this is a person's decision and the address
+			// stays blocked by it whatever happens to the exact entry.
+			return failed(CodeConnectorGuardRefused), nil
+		}
+	}
+	if exact == nil {
+		return l.storeJSON(ctx, call, domain.Labels{}, map[string]any{
+			"operation": "cloudflare.unblock_ip", "unblocked": canonical,
+			"alreadyAbsent": true,
+		})
+	}
+	if !strings.HasPrefix(exact.Comment, cloudflareCommentPrefix) {
+		return failed(CodeConnectorGuardRefused), nil
+	}
+	operationID, err := l.cloudflare.remote.DeleteItem(ctx, instance.Cloudflare, credential, exact.ID)
+	if err != nil {
+		return cloudflareFailure(err)
+	}
+	// The removed entry's comment stays out of the result on purpose: it is
+	// stored text that once came through a model, and echoing it back into
+	// a model's context would hand stored content a second life as input.
+	// The run's own ledger already holds why the block was made.
+	return l.storeJSON(ctx, call, domain.Labels{}, map[string]any{
+		"operation": "cloudflare.unblock_ip", "unblocked": canonical,
+		"alreadyAbsent": false, "operationId": operationID,
 	})
 }
 
@@ -273,6 +340,24 @@ func cloudflareBlockSchema() map[string]any {
 			"reason": map[string]any{
 				"type":        "string",
 				"description": fmt.Sprintf("Short plain-text evidence for the block, at most %d characters.", maxCloudflareReasonChars),
+			},
+		},
+		"required":             []string{"ip"},
+		"additionalProperties": false,
+	}
+}
+
+func cloudflareUnblockSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"ip": map[string]any{
+				"type":        "string",
+				"description": "One literal IP address to remove from the block list. Only automatically blocked entries can be removed.",
+			},
+			"reason": map[string]any{
+				"type":        "string",
+				"description": "Short plain-text reason for restoring access.",
 			},
 		},
 		"required":             []string{"ip"},

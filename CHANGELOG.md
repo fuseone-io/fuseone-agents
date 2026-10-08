@@ -25,6 +25,15 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **`cloudflare.unblock_ip`.** The other direction, under the strictest
+  guard of all: it removes only entries the connector itself wrote — a
+  person's entry, or a person's wider range covering the address, is a
+  person's decision and is refused. An absent address succeeds saying so.
+
 ## [0.57.0] — 2026-10-08
 
 ### Added

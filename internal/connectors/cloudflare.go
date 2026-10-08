@@ -8,6 +8,7 @@ var cloudflareConnector = Connector{
 	Maturity: MaturityRuntime,
 	Guarantees: []string{
 		"only the one configured list is ever written, never rules, zones or DNS",
+		"unblocking removes only entries the connector itself wrote; a person's entry or range is never undone",
 		"private, reserved and instance-protected ranges are refused in code",
 		"entries carry a machine-readable comment so an external job can expire them",
 		"a daily ceiling bounds how many addresses one day may add",
@@ -23,6 +24,20 @@ var cloudflareConnector = Connector{
 			Summary:        "Reads the configured block list's entries with their comments and ages.",
 			Effects:        []Effect{EffectRead},
 			Approval:       ApprovalNone,
+			SecretHandling: SecretNone,
+			CachePolicy:    CacheNever,
+		},
+		{
+			ID:   "cloudflare.unblock_ip",
+			Name: "Unblock IP",
+			// Write like its sibling: removing an expiring, re-blockable
+			// entry is reversible twice over. It may only remove what the
+			// connector itself wrote — a person's entry is a person's
+			// decision — so the worst a misled call restores is an address
+			// the next sweep can block again.
+			Summary:        "Removes one automatically blocked address from the configured list. Never touches a person's entry.",
+			Effects:        []Effect{EffectWrite},
+			Approval:       ApprovalPolicy,
 			SecretHandling: SecretNone,
 			CachePolicy:    CacheNever,
 		},

@@ -111,3 +111,31 @@ func TestHTTPCloudflareClient_items_walksTheCursor(t *testing.T) {
 		t.Fatalf("items = %+v", items)
 	}
 }
+
+// The delete names one entry by id, as a DELETE with the bearer; the token
+// never appears in the body.
+func TestHTTPCloudflareClient_deleteItem_sendsTheOneId(t *testing.T) {
+	t.Parallel()
+	var method, body string
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method = r.Method
+		raw := make([]byte, 512)
+		n, _ := r.Body.Read(raw)
+		body = string(raw[:n])
+		fmt.Fprint(w, `{"success":true,"result":{"operation_id":"op-del"}}`)
+	}))
+	defer server.Close()
+
+	client := NewHTTPCloudflareClient(server.Client())
+	operationID, err := client.DeleteItem(t.Context(), cloudflareTestConfig(server.URL),
+		SecretValue{value: "CANARY-token"}, "item-a1")
+	if err != nil {
+		t.Fatalf("DeleteItem: %v", err)
+	}
+	if operationID != "op-del" || method != http.MethodDelete {
+		t.Fatalf("op=%q method=%q", operationID, method)
+	}
+	if !strings.Contains(body, `"id":"item-a1"`) || strings.Contains(body, "CANARY") {
+		t.Fatalf("body = %q", body)
+	}
+}

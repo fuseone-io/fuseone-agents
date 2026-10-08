@@ -62,6 +62,8 @@ func schemaFor(operationID string) (map[string]any, bool) {
 		return graviteeSubscriptionSchema(), true
 	case "cloudflare.block_ip":
 		return cloudflareBlockSchema(), true
+	case "cloudflare.unblock_ip":
+		return cloudflareUnblockSchema(), true
 	case "cloudflare.list_blocks":
 		return cloudflareListSchema(), true
 	default:

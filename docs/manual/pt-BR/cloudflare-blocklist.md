@@ -56,6 +56,13 @@ Endereço que já está na lista retorna sucesso sem uma segunda escrita, então
 a lista nunca cresce duplicatas. Toda recusa é uma falha limpa de ferramenta,
 com código registrado no run.
 
+O `unblock_ip` é a direção contrária, sob a guarda mais estrita de todas:
+remove **somente entradas que o próprio conector escreveu** — o comentário
+`fuseone:auto:`. Entrada de pessoa, ou faixa mais larga de pessoa cobrindo o
+endereço, é decisão de pessoa: a chamada é recusada e o endereço continua
+bloqueado. Endereço fora da lista já está no estado desejado e retorna
+sucesso dizendo isso.
+
 ## Configurando uma instância
 
 Integrações → Conectores → Nova lista de bloqueio Cloudflare. Account ID e
