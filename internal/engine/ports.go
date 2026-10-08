@@ -296,3 +296,27 @@ type Envelope struct {
 	Model  string
 	Effort string
 }
+
+// StandingGrant is a human approval given ahead of time: the person's name,
+// the mandate's id, and the reason they wrote when they granted it.
+type StandingGrant struct {
+	ID     string
+	By     domain.UserID
+	Reason string
+}
+
+/*
+StandingApprovals answers whether a standing human grant covers a parked
+call, consuming one of the grant's daily uses when it does.
+
+Claim is the whole contract: covering and spending are one atomic question,
+so two runs cannot spend the same slot. The engine releases the park with
+the grant owner's name exactly as a hand click would; a port error means
+nobody covers, and the park stands for a human — the grant path fails
+closed in every direction (PRD SE-06 names exactly one exception to the
+taint rule, and it is a human's approval; this is that approval, durable).
+*/
+type StandingApprovals interface {
+	Claim(ctx context.Context, tool domain.ToolID, agent domain.AgentID,
+		scope domain.Scope, run domain.RunID, at time.Time) (StandingGrant, bool, error)
+}
