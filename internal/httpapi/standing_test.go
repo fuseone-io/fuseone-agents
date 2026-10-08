@@ -48,7 +48,7 @@ func TestCreateStandingApproval_needsItsOwnPermissionAndLeavesATrail(t *testing.
 	server := standingServer(spy)
 	body := &openapi.CreateStandingApprovalJSONRequestBody{
 		ToolId: "cloudflare.edge.block_ip", AgentId: "sentinel",
-		Scope: openapi.Scope{Company: "acme", Area: "platform"},
+		Scope:    openapi.Scope{Company: "acme", Area: "platform"},
 		DailyCap: 5, Reason: "night shift blocking",
 	}
 

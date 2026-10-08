@@ -290,38 +290,38 @@ func (i *Integrations) PutMCPServer(
 			}
 
 			return settings.Setting{
-				ScopeKind: settings.ScopeInstallation,
-				Kind:      settings.KindMCPServer, Name: server.Name,
-				Value: value, Secret: merged.Sealed(),
-				// Nothing left to keep is a removal to carry out, not a
-				// write to skip: the store's own rule makes "clear it" and
-				// "do not mention it" the same request otherwise, and one
-				// of those is somebody revoking.
-				ClearSecret: merged.Empty(),
-				Enabled:     server.Enabled, UpdatedBy: string(by),
-			}, map[string]any{
-				// Never a credential, only which of them are now held.
-				//
-				// `transport`, not `kind`: `kind` is the provider's word,
-				// and an administrative trail that renames a field is a
-				// trail whose older half no longer answers the query that
-				// reads its newer half.
-				"transport": transport, "command": server.Command, "url": server.URL,
-				"protocolMode": server.MCPProtocolModeOf(),
-				"enabled":      server.Enabled, "tokenChanged": given.Token != nil,
-				"headersChanged":        given.Headers != nil,
-				"oauthChanged":          given.OAuth != nil,
-				"acceptsLocalExecution": server.AcceptsLocalExecution,
-				"variables":             len(merged.Env),
-				"hasOAuth":              merged.OAuth != nil && !merged.OAuth.Empty(),
-				"configFileChanged":     given.ConfigFile != nil,
-				"hasConfigFile":         merged.ConfigFile != "",
-				"configFileEnv":         configEnv,
-				"surface":               surfaceSize(surface),
-				"rateLimit":             rateLimitDetail(rateLimit),
-				"cache":                 resultCacheDetail(cache),
-				"stdioEgress":           stdioEgressDetail(stdioEgress),
-			}, nil
+					ScopeKind: settings.ScopeInstallation,
+					Kind:      settings.KindMCPServer, Name: server.Name,
+					Value: value, Secret: merged.Sealed(),
+					// Nothing left to keep is a removal to carry out, not a
+					// write to skip: the store's own rule makes "clear it" and
+					// "do not mention it" the same request otherwise, and one
+					// of those is somebody revoking.
+					ClearSecret: merged.Empty(),
+					Enabled:     server.Enabled, UpdatedBy: string(by),
+				}, map[string]any{
+					// Never a credential, only which of them are now held.
+					//
+					// `transport`, not `kind`: `kind` is the provider's word,
+					// and an administrative trail that renames a field is a
+					// trail whose older half no longer answers the query that
+					// reads its newer half.
+					"transport": transport, "command": server.Command, "url": server.URL,
+					"protocolMode": server.MCPProtocolModeOf(),
+					"enabled":      server.Enabled, "tokenChanged": given.Token != nil,
+					"headersChanged":        given.Headers != nil,
+					"oauthChanged":          given.OAuth != nil,
+					"acceptsLocalExecution": server.AcceptsLocalExecution,
+					"variables":             len(merged.Env),
+					"hasOAuth":              merged.OAuth != nil && !merged.OAuth.Empty(),
+					"configFileChanged":     given.ConfigFile != nil,
+					"hasConfigFile":         merged.ConfigFile != "",
+					"configFileEnv":         configEnv,
+					"surface":               surfaceSize(surface),
+					"rateLimit":             rateLimitDetail(rateLimit),
+					"cache":                 resultCacheDetail(cache),
+					"stdioEgress":           stdioEgressDetail(stdioEgress),
+				}, nil
 		},
 	})
 }
@@ -575,18 +575,18 @@ func (i *Integrations) PutMCPPersonalCredential(
 					"admin: encode personal MCP credential: %w", err)
 			}
 			return settings.Setting{
-				ScopeKind: settings.ScopeInstallation,
-				Kind:      settings.KindMCPUserCredential, Name: key,
-				Value: value, Secret: merged.Sealed(),
-				Enabled: true, UpdatedBy: string(by),
-			}, map[string]any{
-				"server": name, "principal": string(by),
-				"tokenChanged":   given.Token != nil,
-				"headersChanged": given.Headers != nil,
-				"oauthChanged":   given.OAuth != nil,
-				"hasHeaders":     len(merged.Headers) > 0,
-				"hasOAuth":       merged.OAuth != nil && !merged.OAuth.Empty(),
-			}, nil
+					ScopeKind: settings.ScopeInstallation,
+					Kind:      settings.KindMCPUserCredential, Name: key,
+					Value: value, Secret: merged.Sealed(),
+					Enabled: true, UpdatedBy: string(by),
+				}, map[string]any{
+					"server": name, "principal": string(by),
+					"tokenChanged":   given.Token != nil,
+					"headersChanged": given.Headers != nil,
+					"oauthChanged":   given.OAuth != nil,
+					"hasHeaders":     len(merged.Headers) > 0,
+					"hasOAuth":       merged.OAuth != nil && !merged.OAuth.Empty(),
+				}, nil
 		},
 	})
 }
@@ -823,20 +823,20 @@ func (i *Integrations) RefreshMCPServerOAuth(
 			}
 
 			return settings.Setting{
-				ScopeKind: settings.ScopeInstallation,
-				Kind:      settings.KindMCPServer, Name: name,
-				Value: value, Secret: merged.Sealed(),
-				ClearSecret: merged.Empty(),
-				Enabled:     stored.Enabled, UpdatedBy: string(domain.SystemWorker),
-			}, map[string]any{
-				"accessTokenChanged":  was.AccessToken != next.AccessToken,
-				"refreshTokenChanged": was.RefreshToken != next.RefreshToken,
-				"tokenTypeChanged":    was.TokenType != next.TokenType,
-				"expiresAtChanged":    was.ExpiresAtUnix != next.ExpiresAtUnix,
-				"scopesChanged":       !slices.Equal(was.Scopes, next.Scopes),
-				"hasRefreshToken":     next.RefreshToken != "",
-				"scopeCount":          len(next.Scopes),
-			}, nil
+					ScopeKind: settings.ScopeInstallation,
+					Kind:      settings.KindMCPServer, Name: name,
+					Value: value, Secret: merged.Sealed(),
+					ClearSecret: merged.Empty(),
+					Enabled:     stored.Enabled, UpdatedBy: string(domain.SystemWorker),
+				}, map[string]any{
+					"accessTokenChanged":  was.AccessToken != next.AccessToken,
+					"refreshTokenChanged": was.RefreshToken != next.RefreshToken,
+					"tokenTypeChanged":    was.TokenType != next.TokenType,
+					"expiresAtChanged":    was.ExpiresAtUnix != next.ExpiresAtUnix,
+					"scopesChanged":       !slices.Equal(was.Scopes, next.Scopes),
+					"hasRefreshToken":     next.RefreshToken != "",
+					"scopeCount":          len(next.Scopes),
+				}, nil
 		},
 	})
 }
@@ -879,21 +879,21 @@ func (i *Integrations) refreshMCPPersonalOAuth(
 			}
 
 			return settings.Setting{
-				ScopeKind: settings.ScopeInstallation,
-				Kind:      settings.KindMCPUserCredential, Name: key,
-				Value: value, Secret: merged.Sealed(),
-				ClearSecret: merged.Empty(),
-				Enabled:     stored.Enabled, UpdatedBy: string(domain.SystemWorker),
-			}, map[string]any{
-				"server": name, "principal": string(principal),
-				"accessTokenChanged":  was.AccessToken != next.AccessToken,
-				"refreshTokenChanged": was.RefreshToken != next.RefreshToken,
-				"tokenTypeChanged":    was.TokenType != next.TokenType,
-				"expiresAtChanged":    was.ExpiresAtUnix != next.ExpiresAtUnix,
-				"scopesChanged":       !slices.Equal(was.Scopes, next.Scopes),
-				"hasRefreshToken":     next.RefreshToken != "",
-				"scopeCount":          len(next.Scopes),
-			}, nil
+					ScopeKind: settings.ScopeInstallation,
+					Kind:      settings.KindMCPUserCredential, Name: key,
+					Value: value, Secret: merged.Sealed(),
+					ClearSecret: merged.Empty(),
+					Enabled:     stored.Enabled, UpdatedBy: string(domain.SystemWorker),
+				}, map[string]any{
+					"server": name, "principal": string(principal),
+					"accessTokenChanged":  was.AccessToken != next.AccessToken,
+					"refreshTokenChanged": was.RefreshToken != next.RefreshToken,
+					"tokenTypeChanged":    was.TokenType != next.TokenType,
+					"expiresAtChanged":    was.ExpiresAtUnix != next.ExpiresAtUnix,
+					"scopesChanged":       !slices.Equal(was.Scopes, next.Scopes),
+					"hasRefreshToken":     next.RefreshToken != "",
+					"scopeCount":          len(next.Scopes),
+				}, nil
 		},
 	})
 }
