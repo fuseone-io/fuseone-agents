@@ -100,6 +100,15 @@ type Report struct {
 	// carries the answer only when nobody did — otherwise every mention-opened
 	// run would be answered twice, once in its thread and once in the room.
 	Asked bool
+	// AskedChannel, AskedConversation and AskedThread are where the ask
+	// happened. Announcements about the run follow that thread in that one
+	// conversation — a card at the top level beside a conversation happening
+	// in a thread is a question posted where nobody is looking. The thread id
+	// belongs to one channel's message, so it never travels to another
+	// conversation.
+	AskedChannel      string
+	AskedConversation string
+	AskedThread       string
 }
 
 // Conversation is one place inside a channel, and the scope it speaks for.
