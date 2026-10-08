@@ -1,3 +1,11 @@
+---
+title: Lista de bloqueio Cloudflare
+summary: Deixe um agente bloquear um atacante na borda da Cloudflare, dentro de guardas que vivem em código e bloqueios que expiram por desenho.
+section: integrations
+tags: cloudflare, firewall, block list, security, connector
+order: 19
+---
+
 # Lista de bloqueio Cloudflare
 
 O conector dá ao agente um poder estreito: adicionar o endereço de um

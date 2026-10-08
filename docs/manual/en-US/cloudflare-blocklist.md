@@ -1,3 +1,11 @@
+---
+title: Cloudflare block list
+summary: Let an agent block an attacker at the Cloudflare edge, inside guards that live in code and blocks that expire by design.
+section: integrations
+tags: cloudflare, firewall, block list, security, connector
+order: 19
+---
+
 # Cloudflare block list
 
 The connector gives an agent one narrow power: add an attacker's address to
