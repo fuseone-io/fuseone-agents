@@ -61,7 +61,10 @@ remove **somente entradas que o próprio conector escreveu** — o comentário
 `fuseone:auto:`. Entrada de pessoa, ou faixa mais larga de pessoa cobrindo o
 endereço, é decisão de pessoa: a chamada é recusada e o endereço continua
 bloqueado. Endereço fora da lista já está no estado desejado e retorna
-sucesso dizendo isso.
+sucesso dizendo isso. E remover proteção sempre carrega a identidade de uma
+decisão humana: um unblock cuja chamada nenhum clique e nenhum mandato
+liberou é recusado em código, diga o que disser uma policy de allow — cada
+remoção é nomeada, contada e limitada pelo seu caminho de decisão.
 
 ## Configurando uma instância
 

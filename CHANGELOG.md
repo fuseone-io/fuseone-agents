@@ -25,6 +25,18 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Security
+
+- **Unblocking always carries a decision's identity.** An allow policy that
+  lowers the Gate's ladder could have let a misled run strip the block list
+  unattended; `unblock_ip` now refuses in code any call no click and no
+  standing mandate released, so each removal is named, counted and capped.
+  Results that echo stored list comments are labeled untrusted, closing a
+  cross-run taint-laundering path the adversarial review of 0.58.0 found;
+  and the catalog guarantee now says what the daily ceiling truly bounds.
+
 ## [0.58.0] — 2026-10-08
 
 ### Added

@@ -18,6 +18,7 @@ const (
 	CodeConnectorOutOfScope       = "connector_out_of_scope"
 	CodeConnectorBadArguments     = "connector_bad_arguments"
 	CodeConnectorGuardRefused     = "connector_guard_refused"
+	CodeConnectorNeedsDecision    = "connector_needs_decision"
 	CodeConnectorUpstreamAuth     = "connector_upstream_refused_auth"
 	CodeConnectorUpstreamNotFound = "connector_upstream_not_found"
 	CodeConnectorPathNotAllowed   = "connector_path_not_allowed"
