@@ -114,7 +114,10 @@ removes <strong>only entries the connector itself wrote</strong> — the <code d
 comment. A person’s entry, or a person’s wider range covering the address,
 is a person’s decision: the call is refused and the address stays blocked.
 An address not on the list is already in the desired state and succeeds
-saying so.</p>
+saying so. And removing protection always carries a human decision’s
+identity: an unblock whose call no click and no standing mandate released
+is refused in code, whatever an allow policy said — each removal is named,
+counted and capped by its decision path.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="configuring-an-instance">Configuring an instance</h2><a class="sl-anchor-link" href="#configuring-an-instance"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Configuring an instance”</span></a></div>
 <p>Integrations → Connectors → New Cloudflare block list. Account ID and List ID
 name the one list; the API token is sealed on save and never returned — the
