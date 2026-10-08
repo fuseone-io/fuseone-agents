@@ -25,6 +25,15 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **The standing-approval form offers what the platform governs.** Tool and
+  agent are picked from the governed listings — a mandate demands an exact
+  id, which is exactly where typing from memory fails — and typing stays
+  valid for a tool an operator is about to configure.
+
 ## [0.58.1] — 2026-10-08
 
 ### Security

@@ -194,7 +194,9 @@
     "standingUntil": "até {{when}}",
     "standingRevoke": "Revogar",
     "standingRevokeTitle": "Revogar esta aprovação permanente?",
-    "standingRevokeBody": "{{tool}} para {{agent}} volta a exigir um clique humano em cada uso. A linha fica na trilha."
+    "standingRevokeBody": "{{tool}} para {{agent}} volta a exigir um clique humano em cada uso. A linha fica na trilha.",
+    "standingSuggestTools": "Sugerir ferramentas governadas",
+    "standingSuggestAgents": "Sugerir agentes"
   },
   "agents": {
     "aCostOrStepCeiling": "Um teto de custo ou de passos",
