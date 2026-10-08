@@ -46,7 +46,9 @@ export function stopTargetsFor(
 }
 
 function canStopInstallation(grant: MeGrant): boolean {
-  return canReadRuns(grant) && grant.company === INSTALLATION && grant.area === "";
+  return (
+    canReadRuns(grant) && grant.company === INSTALLATION && grant.area === ""
+  );
 }
 
 function canStopScope(grant: MeGrant, scope: RegisteredScope): boolean {

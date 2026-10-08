@@ -1,7 +1,10 @@
 import { Link } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Mono } from "@/components/shared/mono";
-import { roleSummary, type ScopeGrant } from "@/features/admin/person-access-model";
+import {
+  roleSummary,
+  type ScopeGrant,
+} from "@/features/admin/person-access-model";
 
 export function PersonAccessChip({ group }: { group: ScopeGrant }) {
   const { t } = useTranslation();

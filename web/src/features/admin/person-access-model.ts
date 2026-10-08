@@ -26,9 +26,10 @@ export function groupGrants(grants: HeldGrant[]): ScopeGrant[] {
 
   for (const grant of grants) {
     const scope = scopeOf(grant);
-    const existing =
-      byScope.get(scope) ??
-      ({ roles: new Set<Role>(), origins: new Set<"local" | "provider">() });
+    const existing = byScope.get(scope) ?? {
+      roles: new Set<Role>(),
+      origins: new Set<"local" | "provider">(),
+    };
     existing.roles.add(grant.role);
     existing.origins.add(grant.asserted ? "provider" : "local");
     byScope.set(scope, existing);

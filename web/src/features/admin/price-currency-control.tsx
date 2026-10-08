@@ -4,12 +4,7 @@ import { useForm, type ControllerRenderProps } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-} from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { currentCurrency } from "@/lib/format";
 import { useMoney, useSetMoney } from "@/features/money/api";

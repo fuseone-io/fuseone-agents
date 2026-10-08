@@ -11,6 +11,7 @@ import { PricesPanel } from "@/features/admin/prices-panel";
 import { IdentityPanel } from "@/features/admin/identity-panel";
 import { PeoplePanel } from "@/features/admin/people-panel";
 import { RetentionPanel } from "@/features/admin/retention-panel";
+import { StandingPanel } from "@/features/admin/standing-panel";
 import { AreasPanel } from "@/features/admin/areas-panel";
 import { BudgetsPanel } from "@/features/admin/budgets-panel";
 import { BrandingPanel } from "@/features/admin/branding-panel";
@@ -29,6 +30,7 @@ const ADMIN_PANELS = {
   areas: AreasPanel,
   identity: IdentityPanel,
   people: PeoplePanel,
+  standing: StandingPanel,
   prices: PricesPanel,
   budgets: BudgetsPanel,
   retention: RetentionPanel,
@@ -47,7 +49,8 @@ export function AdminPage() {
   const can = me === null ? null : me?.can;
   const visibleGroups = visibleAdminTabGroups(can);
   const visibleTabs = visibleGroups.flatMap((group) => group.tabs);
-  const active = visibleTabs.find((item) => item.value === tab.value) ?? visibleTabs[0];
+  const active =
+    visibleTabs.find((item) => item.value === tab.value) ?? visibleTabs[0];
   const value = active?.value;
   const ActivePanel = value ? ADMIN_PANELS[value] : null;
 

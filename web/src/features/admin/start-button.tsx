@@ -37,10 +37,7 @@ export function StartButton({ stop }: { stop: Stop }) {
       },
       {
         onSuccess: () => toast.success(t("stops.started")),
-        onError: (error: unknown) =>
-          toast.error(
-            problemMessage(error, t),
-          ),
+        onError: (error: unknown) => toast.error(problemMessage(error, t)),
       },
     );
 
@@ -54,7 +51,9 @@ export function StartButton({ stop }: { stop: Stop }) {
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("stops.startTitle")}</AlertDialogTitle>
-          <AlertDialogDescription>{t("stops.startHelp")}</AlertDialogDescription>
+          <AlertDialogDescription>
+            {t("stops.startHelp")}
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>

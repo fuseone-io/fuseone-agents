@@ -29,6 +29,7 @@ describe("administration tabs", () => {
       "companies",
       "areas",
       "people",
+      "standing",
       "prices",
       "budgets",
       "retention",

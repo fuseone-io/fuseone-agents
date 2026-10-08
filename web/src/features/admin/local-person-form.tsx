@@ -54,7 +54,9 @@ export function LocalPersonForm({ onClose }: { onClose: () => void }) {
         password: values.password,
         display: values.display.trim() || undefined,
       });
-      toast.success(t("people.created"), { description: t("people.holdsNothing") });
+      toast.success(t("people.created"), {
+        description: t("people.holdsNothing"),
+      });
       onClose();
     } catch (error) {
       toast.error(problemMessage(error, t));
@@ -81,7 +83,11 @@ export function LocalPersonForm({ onClose }: { onClose: () => void }) {
                 <FormItem>
                   <FormLabel>{t("people.username")}</FormLabel>
                   <FormControl>
-                    <Input {...field} className="font-mono" autoComplete="off" />
+                    <Input
+                      {...field}
+                      className="font-mono"
+                      autoComplete="off"
+                    />
                   </FormControl>
                   <FormDescription>{t("people.usernameHint")}</FormDescription>
                   <FormMessage />
@@ -95,7 +101,11 @@ export function LocalPersonForm({ onClose }: { onClose: () => void }) {
                 <FormItem>
                   <FormLabel>{t("people.password")}</FormLabel>
                   <FormControl>
-                    <Input {...field} type="password" autoComplete="new-password" />
+                    <Input
+                      {...field}
+                      type="password"
+                      autoComplete="new-password"
+                    />
                   </FormControl>
                   <FormDescription>{t("people.passwordHint")}</FormDescription>
                   <FormMessage />

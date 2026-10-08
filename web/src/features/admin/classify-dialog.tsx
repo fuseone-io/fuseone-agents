@@ -10,10 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  ClassifyFields,
-  type Ruling,
-} from "@/features/admin/classify-fields";
+import { ClassifyFields, type Ruling } from "@/features/admin/classify-fields";
 import {
   blankRuling,
   classificationInput,
@@ -82,9 +79,7 @@ export function ClassifyDialog({
       );
       onClose();
     } catch (error) {
-      toast.error(
-        problemMessage(error, t),
-      );
+      toast.error(problemMessage(error, t));
     }
   }
 
@@ -139,8 +134,7 @@ export function ClassifyDialog({
           <Button
             onClick={() => void submit()}
             disabled={
-              classify.isPending ||
-              classificationInput(tool, ruling) === null
+              classify.isPending || classificationInput(tool, ruling) === null
             }
           >
             {t("admin.recordClassification")}

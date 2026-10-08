@@ -71,10 +71,7 @@ export function StopButton() {
           setOpen(false);
           setReason("");
         },
-        onError: (error: unknown) =>
-          toast.error(
-            problemMessage(error, t),
-          ),
+        onError: (error: unknown) => toast.error(problemMessage(error, t)),
       },
     );
 

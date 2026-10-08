@@ -48,7 +48,8 @@ vi.mock("@/features/companies/api", async (importOriginal) => {
 });
 
 vi.mock("@/features/session/api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/features/session/api")>();
+  const actual =
+    await importOriginal<typeof import("@/features/session/api")>();
   return { ...actual, useMe: () => ({ data: hooks.me }) };
 });
 

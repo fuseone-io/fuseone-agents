@@ -3,10 +3,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Mono } from "@/components/shared/mono";
 import { RemoveButton } from "@/components/shared/remove-button";
-import {
-  useDeletePrice,
-  type ModelPrice,
-} from "@/features/admin/prices-api";
+import { useDeletePrice, type ModelPrice } from "@/features/admin/prices-api";
 import { formatCurrencyMicros, formatMicros } from "@/lib/format";
 
 export function PriceRow({

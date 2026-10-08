@@ -105,8 +105,10 @@ function BudgetRow({
           {budget.micros
             ? formatMicros(budget.micros)
             : t("admin.noAmountCeiling")}
-          {budget.steps ? ` · ${t("simulation.stepCount", { count: budget.steps })}` : ""} ·{" "}
-          {PERIOD[budget.period]}
+          {budget.steps
+            ? ` · ${t("simulation.stepCount", { count: budget.steps })}`
+            : ""}{" "}
+          · {PERIOD[budget.period]}
         </Mono>
       </button>
       <Badge

@@ -10,13 +10,11 @@ import {
   ScrollText,
   Sparkles,
   Users,
+  ShieldCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import {
-  type AdminTab,
-  type AdminTabValue,
-} from "@/features/admin/admin-tabs";
+import { type AdminTab, type AdminTabValue } from "@/features/admin/admin-tabs";
 import { useTools } from "@/features/admin/api";
 import { waitingFor } from "@/features/admin/waiting-tools";
 import { cn } from "@/lib/utils";
@@ -30,6 +28,7 @@ const ADMIN_TAB_ICONS: Record<AdminTabValue, LucideIcon> = {
   companies: Building2,
   areas: Layers,
   people: Users,
+  standing: ShieldCheck,
   prices: CircleDollarSign,
   budgets: Gauge,
   retention: Archive,

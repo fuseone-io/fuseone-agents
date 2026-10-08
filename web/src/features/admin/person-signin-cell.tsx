@@ -32,7 +32,10 @@ export function PersonLastSeenCell({ lastSeen }: { lastSeen?: string }) {
   );
 }
 
-function signInState(person: Person, t: TFunction): {
+function signInState(
+  person: Person,
+  t: TFunction,
+): {
   Icon: LucideIcon;
   label: string;
 } {
@@ -44,7 +47,8 @@ function signInState(person: Person, t: TFunction): {
       }),
     };
   }
-  if (person.kind !== "user") return { Icon: Lock, label: t("people.serviceToken") };
+  if (person.kind !== "user")
+    return { Icon: Lock, label: t("people.serviceToken") };
   if (person.username) return { Icon: Lock, label: t("people.localPassword") };
   return { Icon: CircleSlash, label: t("people.noPassword") };
 }

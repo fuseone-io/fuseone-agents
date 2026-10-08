@@ -21,9 +21,14 @@ export function StopBanner() {
   return (
     <div className="flex flex-col gap-2">
       {stops.map((stop) => (
-        <Alert key={`${stop.level}-${stop.scope?.area}-${stop.agentId}`} variant="destructive">
+        <Alert
+          key={`${stop.level}-${stop.scope?.area}-${stop.agentId}`}
+          variant="destructive"
+        >
           <OctagonX aria-hidden className="size-4" />
-          <AlertTitle>{t(`stops.stopped.${stop.level}`, target(stop))}</AlertTitle>
+          <AlertTitle>
+            {t(`stops.stopped.${stop.level}`, target(stop))}
+          </AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-4">
             <span>
               {stop.reason}
@@ -38,7 +43,10 @@ export function StopBanner() {
 }
 
 /** What the sentence names, for a stop of each level. */
-function target(stop: { scope?: { company: string; area: string }; agentId?: string }) {
+function target(stop: {
+  scope?: { company: string; area: string };
+  agentId?: string;
+}) {
   return {
     where: stop.scope?.area || stop.scope?.company || "",
     agent: stop.agentId ?? "",
