@@ -40,6 +40,16 @@ field" is a commit message.
   Admin), and creation, revocation and every use land in the trail.
   NT-007 records why a policy-side taint waiver was rejected instead.
 
+### Fixed
+
+- **A run's approval card follows the thread that opened it.** A run opened
+  from a message used to have its approval request posted at the channel's
+  top level while the conversation happened in the thread — a question
+  posted where nobody was looking. The card, and every announcement about
+  that run, now lands in the origin thread of its own conversation; other
+  configured rooms, ticket rooms and unasked runs are untouched.
+
+
 ## [0.55.0] — 2026-10-08
 
 ### Added

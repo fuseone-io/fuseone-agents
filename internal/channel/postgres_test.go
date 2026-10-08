@@ -1155,3 +1155,39 @@ func TestUnreported_saysWhetherAnAskOpenedTheRun(t *testing.T) {
 		t.Fatalf("asked = %v, want only the run an ask opened", asked)
 	}
 }
+
+// And it says where: the ask's channel, conversation and thread travel on
+// the report, so the reporter can put the run's cards where the people are.
+func TestUnreported_carriesTheAsksOrigin(t *testing.T) {
+	store, pool := channelStore(t)
+
+	appendStep(t, pool, "run-asked-origin", domain.StepRunStarted, nil)
+	appendStep(t, pool, "run-asked-origin", domain.StepRunFinished, []byte(`{"outcome":"ok"}`))
+	if _, err := pool.Exec(t.Context(),
+		`delete from channel_inbox where event_id = 'ev-origin'`); err != nil {
+		t.Fatalf("clear the seed: %v", err)
+	}
+	if _, err := pool.Exec(t.Context(), `
+		insert into channel_inbox (channel, conversation, event_id, message, asked_by, text, thread,
+		                           agent, run_as, source, payload, digest, status, run_id)
+		values ('acme-slack', 'C07', 'ev-origin', 'm-9', 'usr_ana', 'go', '171234.5678',
+		        'triage', 'usr_ana', '{}', '{}'::bytea, 'sha256:00', 'opened', 'run-asked-origin')`); err != nil {
+		t.Fatalf("seed the ask: %v", err)
+	}
+
+	pending, err := store.Unreported(t.Context(), time.Now().Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	for _, r := range pending {
+		if r.RunID != "run-asked-origin" {
+			continue
+		}
+		if r.AskedChannel != "acme-slack" || r.AskedConversation != "C07" ||
+			r.AskedThread != "171234.5678" {
+			t.Fatalf("origin = %q %q %q, want the ask's", r.AskedChannel, r.AskedConversation, r.AskedThread)
+		}
+		return
+	}
+	t.Fatal("the asked run was not listed")
+}

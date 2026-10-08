@@ -111,6 +111,27 @@ func (r *Reporter) Sweep(ctx context.Context, limit int) (int, error) {
 // It answers how many messages left and how many conversations were owed one
 // at all — which are different questions. Nothing sent because everybody had
 // already heard is finished; nothing sent because nobody was listening is not.
+/*
+threadedPlaces routes a run's announcements into the thread that opened it.
+
+A run opened from a message belongs to that message's thread, and so does
+everything the platform says about it — the approval card, the parked
+notice. The thread id belongs to one channel's message, so only the
+conversation the ask came from is threaded; every other place posts where
+it always did. Ticket rooms are rewritten after this and keep precedence.
+*/
+func threadedPlaces(report Report, places []Conversation) []Conversation {
+	if report.AskedThread == "" {
+		return places
+	}
+	for i, place := range places {
+		if place.Channel == report.AskedChannel && place.ID == report.AskedConversation {
+			places[i].Thread = report.AskedThread
+		}
+	}
+	return places
+}
+
 func (r *Reporter) announce(
 	ctx context.Context, pass *fanout, report Report,
 ) (sent, told int, err error) {
@@ -122,6 +143,7 @@ func (r *Reporter) announce(
 		)
 		return 0, 0, errors.Join(err, r.recordFailures(ctx, r.failuresFor(report, Conversation{}, err)))
 	}
+	places = threadedPlaces(report, places)
 	places, err = pass.ticketPlaces(ctx, report, places)
 	if errors.Is(err, errReviewPending) {
 		// Owed and not yet sayable. Left unreported with nothing recorded

@@ -119,12 +119,19 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		       `+announcementSeq+`,
 		       runs.phase = 'awaiting_approval',
 		       runs.ticket_key, runs.ticket_revision,
-		       -- Whether some conversation ask opened this run. The ask path
-		       -- answers in the thread that asked, so a finished announcement
-		       -- carries the run's own text only when nobody did.
-		       exists (select 1 from channel_inbox
-		               where channel_inbox.run_id = runs.run_id)
+		       -- Whether some conversation ask opened this run, and where. The
+		       -- ask path answers in the thread that asked, so a finished
+		       -- announcement carries the run's own text only when nobody
+		       -- did — and the thread is where this run's cards belong.
+		       asked.found, asked.channel, asked.conversation, asked.thread
 		from runs
+		left join lateral (
+		    select true as found, i.channel, i.conversation, i.thread
+		    from channel_inbox i
+		    where i.run_id = runs.run_id
+		    order by i.event_id
+		    limit 1
+		) asked on true
 		-- What has already been attempted, so a page that failed goes to the
 		-- back. Ordered by recency alone, more stopped runs than fit in one
 		-- sweep meant the same page came back forever: one destination
@@ -189,10 +196,19 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 	for rows.Next() {
 		var r Report
 		var company, area, event, ticketKey string
+		var asked *bool
+		var askedChannel, askedConversation, askedThread *string
 		if err := rows.Scan(&r.RunID, &r.AgentID, &r.Version, &company, &area,
 			&event, &r.At, &r.Tool, &r.Reason, &r.AtSeq, &r.AwaitingDecision,
-			&ticketKey, &r.Ticket.Revision, &r.Asked); err != nil {
+			&ticketKey, &r.Ticket.Revision,
+			&asked, &askedChannel, &askedConversation, &askedThread); err != nil {
 			return nil, err
+		}
+		r.Asked = asked != nil && *asked
+		if r.Asked {
+			r.AskedChannel = orEmpty(askedChannel)
+			r.AskedConversation = orEmpty(askedConversation)
+			r.AskedThread = orEmpty(askedThread)
 		}
 		r.Ticket.Key = domain.TicketKey(ticketKey)
 		r.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
@@ -387,4 +403,11 @@ func (p *Postgres) AboutRun(
 		return "", false, fmt.Errorf("channel: resolve %s in %s/%s: %w", ref, channel, conversation, err)
 	}
 	return domain.RunID(run), true, nil
+}
+
+func orEmpty(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
