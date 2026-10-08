@@ -3393,6 +3393,7 @@ export interface components {
             vault?: components["schemas"]["ConnectorVaultConfig"];
             sql?: components["schemas"]["ConnectorSQLResponse"];
             gravitee?: components["schemas"]["ConnectorGraviteeResponse"];
+            cloudflare?: components["schemas"]["ConnectorCloudflareConfig"];
         };
         /** @description The authored, non-secret configuration available only to connector configurers. SQL text is present because editing any other SQL field must not erase or replace a registered query. Gravitee's fixed Vault location is present for the same read-edit-write reason. Token presence is metadata; token bytes and generated credentials never leave storage. */
         ConnectorInstanceDetail: {
@@ -3409,6 +3410,7 @@ export interface components {
             vault?: components["schemas"]["ConnectorVaultConfig"];
             sql?: components["schemas"]["ConnectorSQLInput"];
             gravitee?: components["schemas"]["ConnectorGraviteeInput"];
+            cloudflare?: components["schemas"]["ConnectorCloudflareConfig"];
         };
         ConnectorGraviteeReference: {
             /**
@@ -3513,8 +3515,18 @@ export interface components {
             maxRows: number;
             maxBytes: number;
         };
+        /** @description One Cloudflare IP list a firewall rule blocks at the edge. The connector writes that list and nothing else; protected ranges are CIDRs block_ip refuses on top of the private and reserved ranges the code always refuses. */
+        ConnectorCloudflareConfig: {
+            /** @description API endpoint; empty means the public Cloudflare API. */
+            baseUrl?: string;
+            accountId: string;
+            listId: string;
+            protectedRanges?: string[];
+            /** @description Automatic entries allowed per day; zero means the default. */
+            maxBlocksPerDay?: number;
+        };
         ConnectorInstanceInput: {
-            /** @description Connector shape, such as vault, sql or gravitee. */
+            /** @description Connector shape, such as vault, sql, gravitee or cloudflare. */
             connector: string;
             /** @default true */
             enabled: boolean;
@@ -3524,6 +3536,7 @@ export interface components {
             vault?: components["schemas"]["ConnectorVaultConfig"];
             sql?: components["schemas"]["ConnectorSQLInput"];
             gravitee?: components["schemas"]["ConnectorGraviteeInput"];
+            cloudflare?: components["schemas"]["ConnectorCloudflareConfig"];
             /** @description Connector token to seal. Only connectors that authenticate with a token of their own accept it; bound connectors such as SQL and Gravitee reject it. */
             token?: string;
             /** @description Remove the stored token. An enabled connector that authenticates directly is refused unless the same request also supplies a replacement. Bound connectors never keep a token of their own. */
