@@ -25,6 +25,15 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **The standing-approval form's scope suggests, and its ceiling row
+  aligns.** Company and area are picked from the declared scopes like every
+  list here, and the daily-ceiling field gained the hint that keeps its row
+  level with the expiry's.
+
 ## [0.59.0] — 2026-10-08
 
 ### Added
