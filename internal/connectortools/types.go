@@ -17,6 +17,7 @@ const (
 	CodeConnectorUnavailable     = "connector_unavailable"
 	CodeConnectorOutOfScope      = "connector_out_of_scope"
 	CodeConnectorBadArguments    = "connector_bad_arguments"
+	CodeConnectorGuardRefused    = "connector_guard_refused"
 	CodeConnectorPathNotAllowed  = "connector_path_not_allowed"
 	CodeConnectorArtifactMissing = "connector_artifact_missing"
 	CodeConnectorDigestMismatch  = "connector_digest_mismatch"
