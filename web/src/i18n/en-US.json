@@ -1457,7 +1457,8 @@
     "cloudflareToken": "API token",
     "accountIdInvalid": "A valid account id.",
     "listIdInvalid": "A valid list id.",
-    "baseUrlInvalid": "An https address."
+    "baseUrlInvalid": "An https address.",
+    "cloudflareIdsHint": "The 32-character id from the Cloudflare dashboard — not the name."
   },
   "interview": {
     "assistantFailed": "The assistant could not answer",

@@ -120,10 +120,9 @@ func (l *Layer) cloudflareBlock(
 	if err != nil {
 		return cloudflareFailure(err)
 	}
-	canonical := addr.Unmap().String()
+	canonical := cloudflareEntryFor(addr)
 	for _, item := range items {
-		if existing, parseErr := netip.ParseAddr(item.IP); parseErr == nil &&
-			existing.Unmap() == addr.Unmap() {
+		if cloudflareEntryCovers(item.IP, addr) {
 			return l.storeJSON(ctx, call, domain.Labels{}, map[string]any{
 				"operation": "cloudflare.block_ip", "blocked": canonical,
 				"alreadyBlocked": true, "comment": item.Comment,
@@ -199,7 +198,40 @@ func cloudflareFailure(err error) (engine.ToolResult, error) {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return engine.ToolResult{}, err
 	}
+	// The class and never the body: an authorization refusal, a missing
+	// list and a plain failure each send the operator to a different fix.
+	var remote cloudflareRemoteError
+	if errors.As(err, &remote) {
+		switch remote.status {
+		case 401, 403:
+			return failed(CodeConnectorUpstreamAuth), nil
+		case 404:
+			return failed(CodeConnectorUpstreamNotFound), nil
+		}
+	}
 	return failed(CodeConnectorUpstreamFailed), nil
+}
+
+// cloudflareEntryFor is what the list stores for one blocked actor: the
+// address itself, IPv4 or IPv6 — verified against the real API, which
+// accepts both as single entries.
+func cloudflareEntryFor(addr netip.Addr) string {
+	return addr.Unmap().String()
+}
+
+// cloudflareEntryCovers is the idempotence read: a stored entry covers the
+// address when it is the same address or a prefix containing it — an
+// operator may add a covering CIDR by hand, and a block inside it is
+// already done.
+func cloudflareEntryCovers(entry string, addr netip.Addr) bool {
+	addr = addr.Unmap()
+	if existing, err := netip.ParseAddr(entry); err == nil {
+		return existing.Unmap() == addr
+	}
+	if prefix, err := netip.ParsePrefix(entry); err == nil {
+		return prefix.Contains(addr)
+	}
+	return false
 }
 
 func decodeCloudflareBlockArgs(raw []byte) (cloudflareBlockArgs, bool) {

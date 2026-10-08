@@ -116,11 +116,13 @@ function CloudflareFields({
           form={form}
           name="accountId"
           label={t("connectors.cloudflareAccountId")}
+          description={t("connectors.cloudflareIdsHint")}
         />
         <Text
           form={form}
           name="listId"
           label={t("connectors.cloudflareListId")}
+          description={t("connectors.cloudflareIdsHint")}
         />
       </div>
       <Text
