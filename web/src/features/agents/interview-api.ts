@@ -8,7 +8,8 @@ export type InterviewCapture = components["schemas"]["InterviewCapture"];
 export type InterviewDraft = components["schemas"]["InterviewDraft"];
 export type InterviewSuggestedAnswers =
   components["schemas"]["InterviewSuggestedAnswers"];
-export type InterviewSuggestions = components["schemas"]["InterviewSuggestions"];
+export type InterviewSuggestions =
+  components["schemas"]["InterviewSuggestions"];
 
 /**
  * The prose half of the interview, translated by the model Administração

@@ -80,7 +80,10 @@ vi.mock("@/features/agents/agent-runs", () => ({
 
 vi.mock("@/features/agents/agent-capabilities", () => ({
   AgentCapabilities: ({ compact }: { compact?: boolean }) => (
-    <aside data-testid="capability-rail" data-compact={compact ? "yes" : "no"} />
+    <aside
+      data-testid="capability-rail"
+      data-compact={compact ? "yes" : "no"}
+    />
   ),
 }));
 
@@ -133,7 +136,13 @@ describe("the agent overview", () => {
       instructions: "The definition is not the landing view.",
       source: "console",
       steps: [],
-      versions: [{ versionId: "vb6148c24", latest: true, publishedAt: "2026-08-20T00:26:59Z" }],
+      versions: [
+        {
+          versionId: "vb6148c24",
+          latest: true,
+          publishedAt: "2026-08-20T00:26:59Z",
+        },
+      ],
     };
     detail.trust = {
       versionId: "vb6148c24",
@@ -193,10 +202,10 @@ describe("the agent overview", () => {
       "no",
     );
     expect(screen.getByText("R$0.25")).toBeInTheDocument();
+    expect(screen.getByText("R$4.84 total across 19 runs")).toBeInTheDocument();
     expect(
-      screen.getByText("R$4.84 total across 19 runs"),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("The definition is not the landing view.")).not.toBeInTheDocument();
+      screen.queryByText("The definition is not the landing view."),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Ready to validate")).not.toBeInTheDocument();
     expect(screen.queryByText("Trust center")).not.toBeInTheDocument();
     expect(
@@ -241,15 +250,16 @@ describe("the agent overview", () => {
 
     await userEvent.click(screen.getByRole("tab", { name: "Control center" }));
 
-    expect(screen.getByRole("link", { name: "Continue: Capability pack" })).toHaveAttribute(
-      "href",
-      "/agents/troubleshooting-devops/edit",
-    );
+    expect(
+      screen.getByRole("link", { name: "Continue: Capability pack" }),
+    ).toHaveAttribute("href", "/agents/troubleshooting-devops/edit");
     expect(screen.getByRole("link", { name: "Simulate" })).toHaveAttribute(
       "href",
       "/agents/troubleshooting-devops/simulate",
     );
-    expect(screen.queryByRole("link", { name: "Simulate from menu" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Simulate from menu" }),
+    ).not.toBeInTheDocument();
   });
 
   it("moves the simulation shortcut into the guide until trust sees a good battery", async () => {
@@ -271,14 +281,14 @@ describe("the agent overview", () => {
 
     await userEvent.click(screen.getByRole("tab", { name: "Control center" }));
 
-    expect(screen.getByRole("link", { name: "Continue: Rehearsal" })).toHaveAttribute(
-      "href",
-      "/agents/troubleshooting-devops/simulate",
-    );
-    expect(screen.queryByRole("link", { name: "Simulate" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Simulate from menu" })).toHaveAttribute(
-      "href",
-      "/agents/troubleshooting-devops/simulate",
-    );
+    expect(
+      screen.getByRole("link", { name: "Continue: Rehearsal" }),
+    ).toHaveAttribute("href", "/agents/troubleshooting-devops/simulate");
+    expect(
+      screen.queryByRole("link", { name: "Simulate" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Simulate from menu" }),
+    ).toHaveAttribute("href", "/agents/troubleshooting-devops/simulate");
   });
 });

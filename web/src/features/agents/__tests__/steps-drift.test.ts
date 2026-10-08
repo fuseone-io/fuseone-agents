@@ -179,12 +179,9 @@ describe("what Never forbids and the stages still carry", () => {
     ];
 
     expect(
-      contradictions(
-        [],
-        "Never\nDo not use Outline for this run.",
-        catalogue,
-        ["outline.list_documents"],
-      ),
+      contradictions([], "Never\nDo not use Outline for this run.", catalogue, [
+        "outline.list_documents",
+      ]),
     ).toEqual([
       {
         why: "forbiddenReach",

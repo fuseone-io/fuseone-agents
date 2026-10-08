@@ -38,7 +38,11 @@ interface WrittenFields {
 
 const FACTS = [
   { icon: Brain, key: "simulation.factThinks", tone: "text-text-accent" },
-  { icon: Unplug, key: "simulation.factToolsDry", tone: "text-muted-foreground" },
+  {
+    icon: Unplug,
+    key: "simulation.factToolsDry",
+    tone: "text-muted-foreground",
+  },
   {
     icon: MessageSquareOff,
     key: "simulation.factReplyHeld",
@@ -92,10 +96,13 @@ export function SimulationStart({
   const pastedCount = countCases(cases);
   const chosenCount = source === "write" ? written.length : pastedCount;
   const readiness = simulationReadiness({ agent, agentLoading, agentError, t });
-  const manualReady = fields.subject.trim() !== "" || fields.message.trim() !== "";
+  const manualReady =
+    fields.subject.trim() !== "" || fields.message.trim() !== "";
   const blocksStart = readiness?.blocksStart || start.isPending;
   const canStart =
-    !blocksStart && (source === "corpus" || (source === "write" ? written.length > 0 : pastedCount > 0));
+    !blocksStart &&
+    (source === "corpus" ||
+      (source === "write" ? written.length > 0 : pastedCount > 0));
 
   const startWith = (input: { cases?: string; corpus?: boolean }) =>
     start.mutate(input, {
@@ -212,7 +219,9 @@ export function SimulationStart({
                 />
               </div>
               <div className="flex min-w-0 flex-col gap-1.5">
-                <Label htmlFor="sim-message">{t("simulation.messageItself")}</Label>
+                <Label htmlFor="sim-message">
+                  {t("simulation.messageItself")}
+                </Label>
                 <Textarea
                   id="sim-message"
                   value={fields.message}
@@ -317,7 +326,9 @@ export function SimulationStart({
           {source !== "corpus" && chosenCount === 0 ? (
             <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center">
               <ListPlus className="size-5 text-muted-foreground" aria-hidden />
-              <p className="text-sm font-medium">{t("simulation.noSituation")}</p>
+              <p className="text-sm font-medium">
+                {t("simulation.noSituation")}
+              </p>
               <p className="max-w-md text-sm text-muted-foreground">
                 {t("simulation.noSituationHint")}
               </p>
@@ -348,7 +359,9 @@ export function SimulationStart({
                   ))
                 ) : (
                   <SituationRow
-                    title={t("simulation.pastedSituations", { count: pastedCount })}
+                    title={t("simulation.pastedSituations", {
+                      count: pastedCount,
+                    })}
                     subtitle={t("simulation.serverValidates")}
                     state={t("simulation.notRehearsed")}
                   />
@@ -364,7 +377,10 @@ export function SimulationStart({
           <ul className="divide-y">
             {FACTS.map(({ icon: Icon, key, tone }) => (
               <li key={key} className="flex items-start gap-3 py-2.5">
-                <Icon className={cn("mt-0.5 size-3.5 shrink-0", tone)} aria-hidden />
+                <Icon
+                  className={cn("mt-0.5 size-3.5 shrink-0", tone)}
+                  aria-hidden
+                />
                 <span className="min-w-0 text-sm text-muted-foreground">
                   {t(key)}
                 </span>
@@ -520,13 +536,7 @@ function SituationRow({
   );
 }
 
-function RailCard({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+function RailCard({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex min-w-0 flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm">
       <h2 className="text-2xs uppercase tracking-label text-muted-foreground">

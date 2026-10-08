@@ -8,7 +8,11 @@ import { useTranslation } from "react-i18next";
  * also what somebody copies at three in the morning to work out what the
  * agent was actually told.
  */
-export function InstructionsPayload({ instructions }: { instructions: string }) {
+export function InstructionsPayload({
+  instructions,
+}: {
+  instructions: string;
+}) {
   const { t } = useTranslation();
 
   return (
@@ -16,7 +20,9 @@ export function InstructionsPayload({ instructions }: { instructions: string }) 
       <pre className="max-w-full rounded-lg bg-muted p-4 font-mono text-xs/[1.75] whitespace-pre-wrap break-words sm:max-w-[78ch]">
         {instructions.trim() || t("agents.nothingWritten")}
       </pre>
-      <p className="text-2xs text-muted-foreground">{t("agents.payloadIsThis")}</p>
+      <p className="text-2xs text-muted-foreground">
+        {t("agents.payloadIsThis")}
+      </p>
     </div>
   );
 }

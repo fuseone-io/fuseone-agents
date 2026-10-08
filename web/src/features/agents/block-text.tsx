@@ -86,6 +86,18 @@ export function BlockText({
     }
   }, [writing, cite.open, pendingCaret, block.text, onCaretApplied]);
 
+  // The textarea is sized to its content, never scrolling inside itself:
+  // the mirror cannot scroll, and a textarea that scrolls while the mirror
+  // does not puts the anchor rows below the caret — which is exactly the
+  // popover arriving "at the end of the form". rows counts only newlines
+  // and is blind to soft wrapping, so the height comes from scrollHeight.
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!writing || !textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [writing, block.text, localText]);
+
   useLayoutEffect(() => {
     const anchor = anchorRef.current;
     if (!anchor) return;
@@ -96,15 +108,24 @@ export function BlockText({
     const mirror = mirrorRef.current;
     const marker = markerRef.current;
     if (!mirror || !marker) return;
+    // The mirror wraps exactly like the textarea or the anchor lies. Class
+    // strings drift — the ui component's own text size once beat this
+    // file's and put the anchor two hundred pixels below the caret — so
+    // the typography is copied from the computed styles, which cannot.
+    syncMirrorTypography(textareaRef.current, mirror);
 
     const mirrorRect = mirror.getBoundingClientRect();
     const markerRect = marker.getBoundingClientRect();
     const lineHeight = lineHeightOf(mirror);
+    // Belt beside the sizing suspenders: if the textarea still scrolled —
+    // a zoom rounding, a future style — the anchor follows the visual
+    // caret, not the text position.
+    const scrolled = textareaRef.current?.scrollTop ?? 0;
 
     placeAnchor(
       anchor,
       markerRect.left - mirrorRect.left,
-      markerRect.top - mirrorRect.top + lineHeight,
+      markerRect.top - mirrorRect.top + lineHeight - scrolled,
     );
   }, [writing, cite.open, citeMarker, localText]);
 
@@ -162,14 +183,14 @@ export function BlockText({
           onBlur={() => !cite.open && onWriting(false)}
           placeholder={t("agents.blockPlaceholder")}
           aria-label={label}
-          rows={Math.max(2, block.text.split("\n").length + 1)}
-          className="min-w-0 resize-none border-0 bg-transparent p-0 text-base/[1.65] break-words shadow-none text-pretty focus-visible:ring-0"
+          rows={2}
+          className="min-w-0 resize-none overflow-hidden border-0 bg-transparent p-0 text-base/[1.65] break-words shadow-none focus-visible:ring-0"
         />
         <div
           aria-hidden="true"
           data-cite-mirror="tool"
           ref={mirrorRef}
-          className="pointer-events-none absolute inset-x-0 top-0 -z-10 whitespace-pre-wrap break-words text-base/[1.65] text-pretty opacity-0"
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 whitespace-pre-wrap break-words text-base/[1.65] opacity-0"
         >
           {localText.slice(0, citeMarker ?? 0)}
           <span ref={markerRef}>
@@ -191,6 +212,32 @@ function citableTools(catalogue: Tool[], enabled?: string[]): Tool[] {
 function markerBeforeCursor(text: string, cursor?: number): number | null {
   const at = cursor === undefined ? text.length - 1 : cursor - 1;
   return at >= 0 && text[at] === "@" ? at : null;
+}
+
+export const MIRRORED_STYLES = [
+  "fontFamily",
+  "fontSize",
+  "fontWeight",
+  "lineHeight",
+  "letterSpacing",
+  "textTransform",
+  "textIndent",
+  "wordBreak",
+  "overflowWrap",
+  "whiteSpace",
+  "textWrap",
+  "padding",
+] as const;
+
+export function syncMirrorTypography(
+  textarea: HTMLTextAreaElement | null,
+  mirror: HTMLElement,
+) {
+  if (!textarea) return;
+  const computed = getComputedStyle(textarea);
+  for (const property of MIRRORED_STYLES) {
+    mirror.style[property as "fontSize"] = computed[property as "fontSize"];
+  }
 }
 
 function lineHeightOf(element: Element): number {

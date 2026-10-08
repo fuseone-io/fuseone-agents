@@ -26,7 +26,8 @@ export function InstructionProse({
   return (
     <p className="min-w-0 text-base/[1.65] whitespace-pre-wrap break-words text-pretty">
       {segments(text, catalogue, policies).map((segment, at) => {
-        if (segment.kind === "text") return <span key={at}>{segment.text}</span>;
+        if (segment.kind === "text")
+          return <span key={at}>{segment.text}</span>;
 
         if (segment.kind === "limit") {
           return (

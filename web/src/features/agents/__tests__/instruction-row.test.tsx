@@ -154,10 +154,9 @@ describe("a block of an instruction", () => {
   it("renders block titles with enough weight to scan the structure", () => {
     renderRow("Compare os dois lados.");
 
-    expect(screen.getByRole("button", { name: /Objetivo|Purpose/ })).toHaveClass(
-      "font-semibold",
-      "text-foreground",
-    );
+    expect(
+      screen.getByRole("button", { name: /Objetivo|Purpose/ }),
+    ).toHaveClass("font-semibold", "text-foreground");
   });
 
   it("opens the enabled tool picker from a how-to-act block", async () => {
@@ -397,7 +396,9 @@ describe("a sentence the policy refuses", () => {
 
     expect(screen.getByText("POL-114")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /Remover a frase/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Remover a frase/ }),
+    );
 
     // The sentence, and not the block: an author told about one sentence
     // must not lose the three around it.

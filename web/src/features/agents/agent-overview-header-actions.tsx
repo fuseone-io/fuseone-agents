@@ -51,7 +51,9 @@ export function HeaderActions({
         agentId={agent.agentId}
         onRetire={() => setRetiring(true)}
         label={t("agents.moreActions")}
-        simulateTo={hideSimulate ? `/agents/${agent.agentId}/simulate` : undefined}
+        simulateTo={
+          hideSimulate ? `/agents/${agent.agentId}/simulate` : undefined
+        }
       />
       {retiring && (
         <RetireDialog

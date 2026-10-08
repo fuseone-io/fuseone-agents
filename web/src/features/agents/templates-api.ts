@@ -25,8 +25,9 @@ export function useTemplates() {
   return useQuery({
     queryKey: ["agent-templates", locale],
     queryFn: async () =>
-      unwrap(await api.GET("/agents/templates", { params: { query: { locale } } }))
-        .items,
+      unwrap(
+        await api.GET("/agents/templates", { params: { query: { locale } } }),
+      ).items,
     staleTime: Infinity,
   });
 }

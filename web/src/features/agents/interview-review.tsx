@@ -53,9 +53,7 @@ export function InterviewReview({
               id={`interview-${question.fills}`}
               value={answers[question.fills]}
               maxLength={MAX_FIELD_CHARS}
-              onChange={(event) =>
-                onChange(question.fills, event.target.value)
-              }
+              onChange={(event) => onChange(question.fills, event.target.value)}
               className="min-h-[112px] resize-y text-sm leading-6"
             />
           </div>

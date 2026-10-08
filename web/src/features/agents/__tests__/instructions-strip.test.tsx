@@ -15,13 +15,7 @@ const SUMMARY = { tools: 2, stops: 1, characters: 1840 };
 
 describe("what the instructions card adds up to", () => {
   it("shows the count the provider measured", () => {
-    render(
-      <InstructionsStrip
-        summary={SUMMARY}
-        findings={[]}
-        tokens={412}
-      />,
-    );
+    render(<InstructionsStrip summary={SUMMARY} findings={[]} tokens={412} />);
 
     expect(screen.getByText(/412 tokens/)).toBeInTheDocument();
     expect(screen.queryByText(/caracteres/)).not.toBeInTheDocument();

@@ -71,7 +71,10 @@ function Headline({ finding }: { finding: Finding }) {
   if (finding.why === "notEnabled") {
     return (
       <p className="flex items-start gap-2 text-xs">
-        <CircleAlert className="mt-px size-4 shrink-0 text-warning" aria-hidden />
+        <CircleAlert
+          className="mt-px size-4 shrink-0 text-warning"
+          aria-hidden
+        />
         <span>
           {t("agents.agentDoesNotHold")}{" "}
           <Mono className="text-2xs">{finding.tool}</Mono>

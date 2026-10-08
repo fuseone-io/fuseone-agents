@@ -27,7 +27,10 @@ export interface StepContradiction {
  * describing a step nobody drew — is not flagged, because prose is allowed to
  * say more than the permissions do, and that is the safe way round.
  */
-export function undescribed(steps: AgentStep[], instructions: string): string[] {
+export function undescribed(
+  steps: AgentStep[],
+  instructions: string,
+): string[] {
   const text = instructions.toLowerCase();
 
   const reached = new Set<string>();
@@ -40,7 +43,9 @@ export function undescribed(steps: AgentStep[], instructions: string): string[] 
     // customer up with lookup" has described it, and demanding they paste an
     // identifier would make this fire on every well-written agent.
     const short = tool.includes(".") ? tool.slice(tool.indexOf(".") + 1) : tool;
-    return !text.includes(tool.toLowerCase()) && !text.includes(short.toLowerCase());
+    return (
+      !text.includes(tool.toLowerCase()) && !text.includes(short.toLowerCase())
+    );
   });
 }
 
@@ -171,10 +176,7 @@ function escape(word: string): string {
 }
 
 function canonicalText(text: string): string {
-  return text
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase();
+  return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 }
 
 const EXTERNAL_ACTION =

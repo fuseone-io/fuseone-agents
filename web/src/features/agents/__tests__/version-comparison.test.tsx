@@ -69,7 +69,11 @@ describe("comparing two versions", () => {
   });
 
   it("shows nothing when one version was never run against the corpus", async () => {
-    stubComparison(409, { type: "fuseone:conflict", title: "Conflict", status: 409 });
+    stubComparison(409, {
+      type: "fuseone:conflict",
+      title: "Conflict",
+      status: 409,
+    });
     const { container } = renderPanel();
 
     await new Promise((resolve) => setTimeout(resolve, 0));

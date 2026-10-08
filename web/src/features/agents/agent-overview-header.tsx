@@ -162,7 +162,9 @@ function HeaderStats({ agent }: { agent: Agent }) {
           <dt className="text-2xs uppercase tracking-label text-muted-foreground">
             {label}
           </dt>
-          <dd className="font-mono text-sm font-medium tabular-nums">{value}</dd>
+          <dd className="font-mono text-sm font-medium tabular-nums">
+            {value}
+          </dd>
           <p className="truncate text-2xs text-muted-foreground">{note}</p>
         </div>
       ))}

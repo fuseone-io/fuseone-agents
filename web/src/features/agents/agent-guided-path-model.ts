@@ -5,7 +5,12 @@ import {
 import type { EditorTab } from "@/features/agents/editor-tabs";
 import type { MCPUserCredential } from "@/features/integrations/api";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
-import type { Agent, AgentDefinition, AgentTrust, Tool } from "@/lib/api/client";
+import type {
+  Agent,
+  AgentDefinition,
+  AgentTrust,
+  Tool,
+} from "@/lib/api/client";
 import type { components } from "@/lib/api/schema.gen";
 
 export type GuidedAgentStepID =
@@ -161,7 +166,9 @@ export function publishedAgentGuideSteps(
     {
       id: "launch",
       labelKey: "agents.guideLaunch",
-      bodyKey: running ? "agents.guideLaunchHint" : "agents.guideLaunchPausedHint",
+      bodyKey: running
+        ? "agents.guideLaunchHint"
+        : "agents.guideLaunchPausedHint",
       done: running,
     },
   ];
@@ -223,7 +230,9 @@ function toolStep(
     };
   }
 
-  const outsideSurface = chosen.filter((tool) => tool.onSurface === false).length;
+  const outsideSurface = chosen.filter(
+    (tool) => tool.onSurface === false,
+  ).length;
   if (outsideSurface > 0) {
     return {
       done: false,
@@ -303,7 +312,8 @@ function startableConversations(
       count +
       channel.conversations.filter((conversation) => {
         if (!conversation.enabled) return false;
-        if (!sameScope(conversation.scope, draft.company, draft.area)) return false;
+        if (!sameScope(conversation.scope, draft.company, draft.area))
+          return false;
         const mode = conversation.mode ?? "mentions";
         if (mode === "mentions") return true;
         if (!agentId) return false;
@@ -325,7 +335,9 @@ function missingPersonalCredentialServers(
   context: GuidedAgentContext,
 ) {
   if (!context.recipes || !context.credentials) return 0;
-  const recipes = new Map(context.recipes.map((recipe) => [recipe.server, recipe]));
+  const recipes = new Map(
+    context.recipes.map((recipe) => [recipe.server, recipe]),
+  );
   const credentials = new Map(
     context.credentials.map((credential) => [credential.server, credential]),
   );

@@ -19,7 +19,11 @@ export function normaliseLearning(
   }
   return {
     mode: policy.mode,
-    minObservations: boundedInt(policy.minObservations, 2, MAX_MIN_OBSERVATIONS),
+    minObservations: boundedInt(
+      policy.minObservations,
+      2,
+      MAX_MIN_OBSERVATIONS,
+    ),
     ttlDays: boundedInt(policy.ttlDays, 1, MAX_TTL_DAYS),
   };
 }

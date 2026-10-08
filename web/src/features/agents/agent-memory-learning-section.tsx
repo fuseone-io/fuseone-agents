@@ -32,10 +32,7 @@ export function AgentMemoryLearningSection({
 
   const setMode = (mode: LearningMode) =>
     patch({
-      memoryLearning:
-        mode === "off"
-          ? undefined
-          : { ...policy, mode },
+      memoryLearning: mode === "off" ? undefined : { ...policy, mode },
     });
   const setNumber = (over: Partial<MemoryLearningPolicy>) =>
     patch({ memoryLearning: { ...policy, ...over } });

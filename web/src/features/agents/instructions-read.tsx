@@ -33,7 +33,8 @@ export function InstructionsRead({ instructions }: { instructions: string }) {
           key={at}
           className={cn(
             "min-w-0 items-start py-2.5",
-            labelled && "grid grid-cols-[72px_minmax(0,1fr)] gap-x-3 sm:grid-cols-[104px_minmax(0,1fr)] sm:gap-x-5",
+            labelled &&
+              "grid grid-cols-[72px_minmax(0,1fr)] gap-x-3 sm:grid-cols-[104px_minmax(0,1fr)] sm:gap-x-5",
             !labelled && "max-w-[68ch]",
           )}
         >
@@ -41,7 +42,9 @@ export function InstructionsRead({ instructions }: { instructions: string }) {
             <span
               className={cn(
                 "pt-[3px] text-right text-[10px]/5 font-medium uppercase tracking-label",
-                block.kind === "never" ? "text-danger" : "text-muted-foreground",
+                block.kind === "never"
+                  ? "text-danger"
+                  : "text-muted-foreground",
               )}
             >
               {labelOf(block.kind, i18n.language)}

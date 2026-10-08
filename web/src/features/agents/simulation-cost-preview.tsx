@@ -42,7 +42,9 @@ export function SimulationCostPreview({
         aria-hidden
       />
       <div className="min-w-0 space-y-1">
-        <p className="text-sm font-medium">{t("simulation.costPreviewTitle")}</p>
+        <p className="text-sm font-medium">
+          {t("simulation.costPreviewTitle")}
+        </p>
         <p className="text-sm text-muted-foreground">
           {costPreviewText({
             t,
@@ -56,9 +58,7 @@ export function SimulationCostPreview({
             error: source === "corpus" && corpus.isError,
           })}
         </p>
-        <p className="text-xs text-muted-foreground">
-          {budgetShape(agent, t)}
-        </p>
+        <p className="text-xs text-muted-foreground">{budgetShape(agent, t)}</p>
       </div>
     </div>
   );
@@ -92,7 +92,8 @@ function costPreviewText({
     });
   }
   if (source === "corpus" && error) {
-    if (perRunMicros <= 0) return t("simulation.costPreviewCorpusUnknownUnbounded");
+    if (perRunMicros <= 0)
+      return t("simulation.costPreviewCorpusUnknownUnbounded");
     return t("simulation.costPreviewCorpusUnknown", {
       perRun: formatMicros(perRunMicros),
     });
@@ -135,18 +136,29 @@ function costPreviewText({
   });
 }
 
-function budgetShape(agent: Agent | undefined, t: ReturnType<typeof useTranslation>["t"]) {
+function budgetShape(
+  agent: Agent | undefined,
+  t: ReturnType<typeof useTranslation>["t"],
+) {
   const budget = agent?.budget;
   if (!budget) return t("simulation.costPreviewBudgetUnknown");
   const parts = [
-    budget.steps ? t("simulation.costPreviewSteps", { n: formatTokens(budget.steps) }) : "",
-    budget.tokens ? t("simulation.costPreviewTokens", { n: formatTokens(budget.tokens) }) : "",
+    budget.steps
+      ? t("simulation.costPreviewSteps", { n: formatTokens(budget.steps) })
+      : "",
+    budget.tokens
+      ? t("simulation.costPreviewTokens", { n: formatTokens(budget.tokens) })
+      : "",
     budget.toolCalls
-      ? t("simulation.costPreviewToolCalls", { n: formatTokens(budget.toolCalls) })
+      ? t("simulation.costPreviewToolCalls", {
+          n: formatTokens(budget.toolCalls),
+        })
       : "",
   ].filter(Boolean);
   if (budget.micros) {
-    parts.unshift(t("simulation.costPreviewMoney", { amount: formatMicros(budget.micros) }));
+    parts.unshift(
+      t("simulation.costPreviewMoney", { amount: formatMicros(budget.micros) }),
+    );
   }
   if (parts.length === 0) return t("simulation.costPreviewNoRunCeiling");
   return t("simulation.costPreviewBudget", { budget: parts.join(" · ") });

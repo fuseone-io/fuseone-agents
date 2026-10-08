@@ -39,9 +39,7 @@ export function AgentGuidedPath({
             aria-hidden
           />
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold">
-              {t(titleKey)}
-            </h2>
+            <h2 className="truncate text-sm font-semibold">{t(titleKey)}</h2>
             <p className="truncate text-2xs text-muted-foreground">
               {t(subtitleKey)}
             </p>
@@ -99,7 +97,8 @@ function StepControl({
   const className = cn(
     "flex h-full w-full min-w-0 items-start gap-2 rounded-lg border bg-card/60 px-3 py-2 text-left transition-colors",
     step.done && "border-border-subtle bg-transparent",
-    (step.to || (step.tab && onOpen)) && "hover:border-primary/50 hover:bg-card",
+    (step.to || (step.tab && onOpen)) &&
+      "hover:border-primary/50 hover:bg-card",
   );
   const body = (
     <>

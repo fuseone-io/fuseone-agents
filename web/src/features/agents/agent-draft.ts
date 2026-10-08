@@ -118,7 +118,12 @@ export function changesBetween(
   after: AgentDefinition,
 ): Change[] {
   const changes: Change[] = [];
-  const compare = (field: string, from: unknown, to: unknown, quiet = false) => {
+  const compare = (
+    field: string,
+    from: unknown,
+    to: unknown,
+    quiet = false,
+  ) => {
     const left = render(from);
     const right = render(to);
     if (left !== right) changes.push({ field, from: left, to: right, quiet });
@@ -141,7 +146,11 @@ export function changesBetween(
   compare("agents.fieldTools", before.tools, after.tools);
   compare("agents.fieldBudget", before.budget, after.budget);
   compare("agents.fieldTriggers", before.triggers, after.triggers);
-  compare("agents.fieldMemoryLearning", before.memoryLearning, after.memoryLearning);
+  compare(
+    "agents.fieldMemoryLearning",
+    before.memoryLearning,
+    after.memoryLearning,
+  );
   // The steps are a change worth naming: they are what the Gate is meant to
   // obey, and "0 changes" on a screen where somebody just redrew the process
   // is the summary telling them their work did not land.

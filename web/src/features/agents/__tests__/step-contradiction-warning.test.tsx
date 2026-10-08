@@ -17,7 +17,9 @@ describe("a contradiction between Never and the stages", () => {
     expect(screen.getByText(/passo 1 ainda para por/i)).toBeInTheDocument();
     expect(screen.getByText("runbook")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /Revisar passos/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Revisar passos/ }),
+    );
 
     expect(onOpen).toHaveBeenCalledOnce();
   });

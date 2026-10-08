@@ -1,10 +1,5 @@
 export type BlockKind =
-  | "prose"
-  | "objective"
-  | "howToAct"
-  | "whenToStop"
-  | "never"
-  | "howToReply";
+  "prose" | "objective" | "howToAct" | "whenToStop" | "never" | "howToReply";
 
 export interface Block {
   kind: BlockKind;

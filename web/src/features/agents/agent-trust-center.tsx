@@ -158,9 +158,10 @@ function evidenceTarget(agent: Agent, item: TrustEvidence) {
 function trustValues(values?: Record<string, unknown>) {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(values ?? {})) {
-    out[key] = key.endsWith("Micros") && typeof value === "number"
-      ? formatMicros(value)
-      : value;
+    out[key] =
+      key.endsWith("Micros") && typeof value === "number"
+        ? formatMicros(value)
+        : value;
   }
   return out;
 }

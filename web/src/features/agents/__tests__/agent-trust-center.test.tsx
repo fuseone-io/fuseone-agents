@@ -46,15 +46,20 @@ describe("AgentTrustCenter", () => {
     );
 
     expect(screen.getByText("needs review")).toBeInTheDocument();
-    expect(screen.getByText(/Run, cost, Gate and human-decision evidence use/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Run, cost, Gate and human-decision evidence use/),
+    ).toBeInTheDocument();
     expect(screen.getByText("Cost comparison")).toBeInTheDocument();
-    expect(screen.getByText(/Average cost moved from R\$0\.10 to R\$0\.90/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Average cost moved from R\$0\.10 to R\$0\.90/),
+    ).toBeInTheDocument();
     expect(screen.getByText("Human decisions")).toBeInTheDocument();
-    expect(screen.getByText("1 run(s) are waiting for a person.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Cost comparison/ })).toHaveAttribute(
-      "href",
-      "/cost",
-    );
+    expect(
+      screen.getByText("1 run(s) are waiting for a person."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Cost comparison/ }),
+    ).toHaveAttribute("href", "/cost");
   });
 
   it("explains how missing comparison evidence appears and when no action exists", () => {
@@ -103,7 +108,9 @@ describe("AgentTrustCenter", () => {
       screen.getByText(/Run the saved situations on this version/),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/priced runs from this version and the previous version/),
+      screen.getByText(
+        /priced runs from this version and the previous version/,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/There is nothing to trigger manually/),

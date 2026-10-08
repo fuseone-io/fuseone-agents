@@ -19,7 +19,10 @@ describe("what an instruction amounts to", () => {
     const found = summarise(
       [
         { kind: "objective", text: "Use crm.lookup." },
-        { kind: "howToAct", text: "Depois use crm.lookup de novo e crm.reply." },
+        {
+          kind: "howToAct",
+          text: "Depois use crm.lookup de novo e crm.reply.",
+        },
       ],
       CATALOGUE,
       [],

@@ -48,7 +48,9 @@ export function StepGuardrails({
         return (
           <li key={tool} className="flex flex-col gap-0.5">
             <Mono className="text-2xs">{tool}</Mono>
-            <span className={`flex items-center gap-1.5 text-2xs ${TONE[rule.kind]}`}>
+            <span
+              className={`flex items-center gap-1.5 text-2xs ${TONE[rule.kind]}`}
+            >
               <Icon className="size-3.5 shrink-0" aria-hidden />
               {t(rule.label, rule.labelValues)}
             </span>

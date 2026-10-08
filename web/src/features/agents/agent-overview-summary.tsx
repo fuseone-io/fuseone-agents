@@ -38,7 +38,8 @@ export function AgentOverviewSummary({ agent }: { agent: Agent }) {
     },
     {
       label: t("agents.averageCostPerRun"),
-      value: averageCost === undefined ? "—" : formatCost({ micros: averageCost }),
+      value:
+        averageCost === undefined ? "—" : formatCost({ micros: averageCost }),
       note: t("agents.totalCostAcrossRuns", {
         total: formatCost({ micros: activity?.costMicros ?? 0 }),
         count: activity?.runs ?? 0,

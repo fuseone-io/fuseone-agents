@@ -6,7 +6,12 @@ import {
   guidedAgentSteps,
   publishedAgentGuideSteps,
 } from "@/features/agents/agent-guided-path-model";
-import type { Agent, AgentDefinition, AgentTrust, Tool } from "@/lib/api/client";
+import type {
+  Agent,
+  AgentDefinition,
+  AgentTrust,
+  Tool,
+} from "@/lib/api/client";
 import type { MCPUserCredential } from "@/features/integrations/api";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 import type { components } from "@/lib/api/schema.gen";
@@ -74,7 +79,9 @@ describe("the guided first-agent path", () => {
     );
 
     expect(
-      steps.filter((step) => !step.optional).map((step) => [step.id, step.done]),
+      steps
+        .filter((step) => !step.optional)
+        .map((step) => [step.id, step.done]),
     ).toEqual([
       ["identity", true],
       ["instructions", true],
@@ -175,9 +182,13 @@ describe("the guided first-agent path", () => {
   });
 
   it("turns a published paused agent into a launch check instead of a hidden precondition", () => {
-    const steps = publishedAgentGuideSteps(agent({ paused: true }), "Do work.", {
-      catalogue: [tool("github.list_issues")],
-    });
+    const steps = publishedAgentGuideSteps(
+      agent({ paused: true }),
+      "Do work.",
+      {
+        catalogue: [tool("github.list_issues")],
+      },
+    );
 
     expect(steps.map((step) => [step.id, step.done, step.optional])).toEqual([
       ["tools", true, undefined],
@@ -271,7 +282,9 @@ function agent(overrides: Partial<Agent> = {}): Agent {
   };
 }
 
-function trustEvidence(status: AgentTrust["evidence"][number]["status"]): AgentTrust {
+function trustEvidence(
+  status: AgentTrust["evidence"][number]["status"],
+): AgentTrust {
   return {
     versionId: "v123",
     status: status === "good" ? "ready" : "needs_evidence",

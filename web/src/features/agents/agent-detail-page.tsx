@@ -58,7 +58,13 @@ export function AgentDetailPage() {
   }
   if (!agent.data) return null;
 
-  const { agent: published, instructions, source, steps, versions } = agent.data;
+  const {
+    agent: published,
+    instructions,
+    source,
+    steps,
+    versions,
+  } = agent.data;
   const guide = publishedAgentGuideSteps(published, instructions, {
     agentId,
     catalogue: tools.data?.items,

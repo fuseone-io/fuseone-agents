@@ -10,15 +10,29 @@ const tools = [
 
 const draft = (over: Partial<AgentDefinition> = {}): AgentDefinition =>
   ({
-    name: "Suporte", company: "acme", area: "cx", provider: "anthropic", model: "m",
-    instructions: "", tools: [], budget: { micros: 500_000, steps: 60 },
-    triggers: [], ...over,
+    name: "Suporte",
+    company: "acme",
+    area: "cx",
+    provider: "anthropic",
+    model: "m",
+    instructions: "",
+    tools: [],
+    budget: { micros: 500_000, steps: 60 },
+    triggers: [],
+    ...over,
   }) as AgentDefinition;
 
 describe("reading back what the platform understood", () => {
   it("says who it asks before acting, derived from the Gate rather than from a setting", () => {
-    const lines = narrate(draft({ tools: ["crm.lookup", "crm.reply"] }), tools, []);
-    expect(lines).toContainEqual({ key: "narrative.asks", values: { tools: "crm.reply" } });
+    const lines = narrate(
+      draft({ tools: ["crm.lookup", "crm.reply"] }),
+      tools,
+      [],
+    );
+    expect(lines).toContainEqual({
+      key: "narrative.asks",
+      values: { tools: "crm.reply" },
+    });
   });
 
   it("says plainly when nothing will stop for a person", () => {
@@ -30,15 +44,23 @@ describe("reading back what the platform understood", () => {
 
   it("names what it will never be allowed to do", () => {
     const lines = narrate(draft({ tools: ["crm.purge"] }), tools, []);
-    expect(lines).toContainEqual({ key: "narrative.never", values: { tools: "crm.purge" } });
+    expect(lines).toContainEqual({
+      key: "narrative.never",
+      values: { tools: "crm.purge" },
+    });
   });
 
   it("describes the ceiling as what happens, not as a number nobody reads", () => {
     const lines = narrate(draft(), tools, []);
-    expect(lines.at(-1)).toEqual({ key: "narrative.boundedBoth", values: { micros: 500_000, steps: 60 } });
+    expect(lines.at(-1)).toEqual({
+      key: "narrative.boundedBoth",
+      values: { micros: 500_000, steps: 60 },
+    });
   });
 
   it("says an agent nothing triggers only runs when somebody asks", () => {
-    expect(narrate(draft(), tools, [])[0]).toEqual({ key: "narrative.startedByHand" });
+    expect(narrate(draft(), tools, [])[0]).toEqual({
+      key: "narrative.startedByHand",
+    });
   });
 });
