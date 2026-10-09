@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:18-alpine
+        image: mirror.gcr.io/library/postgres:18-alpine
         env:
           POSTGRES_USER: agents
           POSTGRES_PASSWORD: agents
@@ -146,7 +146,7 @@ jobs:
     needs: [go, web]
     services:
       postgres:
-        image: postgres:18-alpine
+        image: mirror.gcr.io/library/postgres:18-alpine
         env:
           POSTGRES_USER: agents
           POSTGRES_PASSWORD: agents
