@@ -3,7 +3,7 @@
 # database in one command, not to describe a deployment.
 services:
   postgres:
-    image: postgres:18-alpine
+    image: mirror.gcr.io/library/postgres:18-alpine
     environment:
       POSTGRES_USER: agents
       POSTGRES_PASSWORD: agents
@@ -29,7 +29,7 @@ services:
   # credentials against the ledger database would prove the guarantees at the
   # one destination the connector must never reach.
   sql-postgres:
-    image: postgres:18-alpine
+    image: mirror.gcr.io/library/postgres:18-alpine
     environment:
       POSTGRES_USER: sqladmin
       POSTGRES_PASSWORD: sqladmin
