@@ -71,6 +71,25 @@ export function ConnectorInstanceCard({
           <VaultFacts instance={instance} t={t} />
         ) : instance.connector === "cloudflare" ? (
           <CloudflareFacts instance={instance} t={t} />
+        ) : instance.connector === "elasticsearch" ? (
+          <>
+            <Fact
+              label={t("connectors.esIndex")}
+              value={instance.elasticsearch?.index ?? ""}
+            />
+            <Fact
+              label={t("connectors.token")}
+              value={
+                instance.hasToken
+                  ? t("connectors.tokenStored")
+                  : t("connectors.tokenMissing")
+              }
+            />
+            <Fact
+              label={t("connectors.updatedAt")}
+              value={updated(instance, t)}
+            />
+          </>
         ) : (
           <Fact
             label={t("connectors.updatedAt")}

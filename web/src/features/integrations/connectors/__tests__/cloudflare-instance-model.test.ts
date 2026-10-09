@@ -53,10 +53,14 @@ describe("the cloudflare instance model", () => {
 
   it("sends the token only when typed, and clearToken only alone", () => {
     const typed = { ...values(), token: "cf-token" };
-    expect(cloudflareInstancePayload(typed, false)?.body.token).toBe("cf-token");
+    expect(cloudflareInstancePayload(typed, false)?.body.token).toBe(
+      "cf-token",
+    );
 
     const cleared = { ...values(), enabled: false, clearToken: true };
-    expect(cloudflareInstancePayload(cleared, true)?.body.clearToken).toBe(true);
+    expect(cloudflareInstancePayload(cleared, true)?.body.clearToken).toBe(
+      true,
+    );
   });
 
   it("rejects a protected range that is not a CIDR", () => {
