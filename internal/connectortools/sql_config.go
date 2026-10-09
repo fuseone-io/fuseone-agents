@@ -56,7 +56,8 @@ type SQLConfig struct {
 // token because it authenticates to Vault; bound connectors take authority
 // from it and must not carry a second credential of their own.
 func RequiresToken(connector string) bool {
-	return connector == "vault" || connector == "cloudflare"
+	return connector == "vault" || connector == "cloudflare" ||
+		connector == "elasticsearch"
 }
 
 func validateSQLConfig(instance Instance) error {

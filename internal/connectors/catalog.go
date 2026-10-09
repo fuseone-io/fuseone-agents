@@ -8,6 +8,7 @@ var catalog = []Connector{
 	sqlConnector,
 	graviteeConnector,
 	cloudflareConnector,
+	elasticsearchConnector,
 	objectStorageConnector,
 	identityConnector,
 	kubernetesConnector,
