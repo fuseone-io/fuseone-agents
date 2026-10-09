@@ -104,9 +104,10 @@ type StoredInstance struct {
 	// A pointer, because omitempty does not elide a struct: every vault
 	// instance would otherwise store an empty sql object in a value operators
 	// read.
-	SQL        *SQLConfig        `json:"sql,omitempty"`
-	Gravitee   *GraviteeConfig   `json:"gravitee,omitempty"`
-	Cloudflare *CloudflareConfig `json:"cloudflare,omitempty"`
+	SQL           *SQLConfig           `json:"sql,omitempty"`
+	Gravitee      *GraviteeConfig      `json:"gravitee,omitempty"`
+	Cloudflare    *CloudflareConfig    `json:"cloudflare,omitempty"`
+	Elasticsearch *ElasticsearchConfig `json:"elasticsearch,omitempty"`
 }
 
 func (s *Settings) instance(ctx context.Context, row settings.Setting) (Instance, error) {
@@ -131,25 +132,27 @@ func SettingInstance(row settings.Setting) (Instance, error) {
 		return Instance{}, fmt.Errorf("connector: decode %s: %w", row.Name, err)
 	}
 	return Instance{
-		Connector:  strings.TrimSpace(stored.Connector),
-		Name:       row.Name,
-		Scope:      instanceScope(row),
-		Enabled:    row.Enabled,
-		Vault:      stored.Vault,
-		SQL:        storedSQL(stored.SQL),
-		Gravitee:   storedGravitee(stored.Gravitee),
-		Cloudflare: storedCloudflare(stored.Cloudflare),
-		HasToken:   row.HasSecret,
+		Connector:     strings.TrimSpace(stored.Connector),
+		Name:          row.Name,
+		Scope:         instanceScope(row),
+		Enabled:       row.Enabled,
+		Vault:         stored.Vault,
+		SQL:           storedSQL(stored.SQL),
+		Gravitee:      storedGravitee(stored.Gravitee),
+		Cloudflare:    storedCloudflare(stored.Cloudflare),
+		Elasticsearch: storedElasticsearch(stored.Elasticsearch),
+		HasToken:      row.HasSecret,
 	}, nil
 }
 
 func SettingValue(instance Instance) (json.RawMessage, error) {
 	value, err := json.Marshal(StoredInstance{
-		Connector:  strings.TrimSpace(instance.Connector),
-		Vault:      instance.Vault,
-		SQL:        sqlToStore(instance.SQL),
-		Gravitee:   graviteeToStore(instance.Gravitee),
-		Cloudflare: cloudflareToStore(instance.Cloudflare),
+		Connector:     strings.TrimSpace(instance.Connector),
+		Vault:         instance.Vault,
+		SQL:           sqlToStore(instance.SQL),
+		Gravitee:      graviteeToStore(instance.Gravitee),
+		Cloudflare:    cloudflareToStore(instance.Cloudflare),
+		Elasticsearch: elasticsearchToStore(instance.Elasticsearch),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("connector: encode %s: %w", instance.Name, err)
@@ -197,6 +200,8 @@ func ValidateInstanceConfig(instance Instance) error {
 		return validateGraviteeConfig(instance)
 	case "cloudflare":
 		return validateCloudflareConfig(instance)
+	case "elasticsearch":
+		return validateElasticsearchConfig(instance)
 	default:
 		return fmt.Errorf("connector: unsupported connector %q", instance.Connector)
 	}

@@ -183,6 +183,14 @@ func connectorInstanceDetail(
 			},
 		}
 	}
+	if instance.Connector == "elasticsearch" {
+		detail["elasticsearch"] = map[string]any{
+			"baseUrl":       instance.Elasticsearch.BaseURL,
+			"username":      instance.Elasticsearch.Username,
+			"index":         instance.Elasticsearch.Index,
+			"maxWindowDays": instance.Elasticsearch.MaxWindowDays,
+		}
+	}
 	if instance.Connector == "cloudflare" {
 		detail["cloudflare"] = map[string]any{
 			"accountId":       instance.Cloudflare.AccountID,

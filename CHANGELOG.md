@@ -25,6 +25,18 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **A governed Elasticsearch window.** Historical traffic questions — the
+  busiest addresses on a path over days, one path's recent requests — as
+  named queries over one fixed index pattern. The model supplies values,
+  never structure: an unknown argument is refused, the index and the field
+  mapping are instance configuration, every window is capped, and results
+  carry only the projected fields, labeled untrusted. Configured in the
+  console like every connector, with the password sealed.
+
 ## [0.59.1] — 2026-10-08
 
 ### Fixed

@@ -13,16 +13,17 @@ import (
 
 // Layer adds governed connector tools beside an existing tool layer.
 type Layer struct {
-	base       engine.Tools
-	catalog    engine.Catalog
-	content    engine.ContentStore
-	vault      VaultClient
-	sql        SQLRunner
-	gravitee   engine.ApprovalEvidencer
-	inspect    GraviteeInspectionRunner
-	accept     GraviteeAcceptanceRunner
-	answers    *TicketAnswers
-	cloudflare *CloudflareBlocker
+	base          engine.Tools
+	catalog       engine.Catalog
+	content       engine.ContentStore
+	vault         VaultClient
+	sql           SQLRunner
+	gravitee      engine.ApprovalEvidencer
+	inspect       GraviteeInspectionRunner
+	accept        GraviteeAcceptanceRunner
+	answers       *TicketAnswers
+	cloudflare    *CloudflareBlocker
+	elasticsearch ElasticsearchSearcher
 
 	mu        sync.RWMutex
 	instances map[instanceKey]Instance
@@ -315,6 +316,8 @@ func (l *Layer) Invoke(ctx context.Context, call engine.Call) (engine.ToolResult
 		return l.invokeGraviteeNative(ctx, instance, op, call)
 	case "cloudflare":
 		return l.invokeCloudflareNative(ctx, instance, op, call)
+	case "elasticsearch":
+		return l.invokeElasticsearchNative(ctx, instance, op, call)
 	default:
 		return failed(CodeConnectorUnavailable), nil
 	}

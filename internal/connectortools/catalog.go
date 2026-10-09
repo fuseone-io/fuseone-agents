@@ -66,6 +66,10 @@ func schemaFor(operationID string) (map[string]any, bool) {
 		return cloudflareUnblockSchema(), true
 	case "cloudflare.list_blocks":
 		return cloudflareListSchema(), true
+	case "elasticsearch.top_ips":
+		return elasticsearchTopIPsSchema(), true
+	case "elasticsearch.resource_history":
+		return elasticsearchHistorySchema(), true
 	default:
 		return nil, false
 	}

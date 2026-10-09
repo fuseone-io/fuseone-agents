@@ -25,7 +25,8 @@ func connectorInstanceInput(
 		Name: name, Connector: strings.TrimSpace(body.Connector),
 		Enabled: enabled, Vault: vaultConfigFromRequest(body.Vault),
 		SQL: sqlConfigFromInput(body.Sql), Gravitee: graviteeConfigFromInput(body.Gravitee),
-		Cloudflare: cloudflareConfigFromInput(body.Cloudflare),
+		Cloudflare:    cloudflareConfigFromInput(body.Cloudflare),
+		Elasticsearch: elasticsearchConfigFromInput(body.Elasticsearch),
 	}
 	clear := body.ClearToken != nil && *body.ClearToken
 	return settings.ScopeKind(body.ScopeKind), scope, instance, body.Token, clear, nil
@@ -87,6 +88,9 @@ func connectorInstanceResponse(instance connectortools.ConfiguredInstance) opena
 	if instance.Connector == "cloudflare" {
 		item.Cloudflare = ptr(cloudflareConfigToAPI(instance.Cloudflare))
 	}
+	if instance.Connector == "elasticsearch" {
+		item.Elasticsearch = ptr(elasticsearchConfigToAPI(instance.Elasticsearch))
+	}
 	return item
 }
 
@@ -109,7 +113,59 @@ func connectorInstanceDetailResponse(instance connectortools.ConfiguredInstance)
 	if instance.Connector == "cloudflare" {
 		item.Cloudflare = ptr(cloudflareConfigToAPI(instance.Cloudflare))
 	}
+	if instance.Connector == "elasticsearch" {
+		item.Elasticsearch = ptr(elasticsearchConfigToAPI(instance.Elasticsearch))
+	}
 	return item
+}
+
+// elasticsearchConfigToAPI serves listing and detail alike: the whole shape
+// is non-secret — the password lives sealed beside it, never in it.
+func elasticsearchConfigToAPI(cfg connectortools.ElasticsearchConfig) openapi.ConnectorElasticsearchConfig {
+	out := openapi.ConnectorElasticsearchConfig{
+		BaseUrl: cfg.BaseURL, Username: cfg.Username, Index: cfg.Index,
+	}
+	if cfg.TimestampField != "" {
+		out.TimestampField = ptr(cfg.TimestampField)
+	}
+	if cfg.IPField != "" {
+		out.IpField = ptr(cfg.IPField)
+	}
+	if cfg.PathField != "" {
+		out.PathField = ptr(cfg.PathField)
+	}
+	if cfg.StatusField != "" {
+		out.StatusField = ptr(cfg.StatusField)
+	}
+	if cfg.MaxWindowDays != 0 {
+		out.MaxWindowDays = ptr(cfg.MaxWindowDays)
+	}
+	return out
+}
+
+func elasticsearchConfigFromInput(in *openapi.ConnectorElasticsearchConfig) connectortools.ElasticsearchConfig {
+	if in == nil {
+		return connectortools.ElasticsearchConfig{}
+	}
+	out := connectortools.ElasticsearchConfig{
+		BaseURL: in.BaseUrl, Username: in.Username, Index: in.Index,
+	}
+	if in.TimestampField != nil {
+		out.TimestampField = *in.TimestampField
+	}
+	if in.IpField != nil {
+		out.IPField = *in.IpField
+	}
+	if in.PathField != nil {
+		out.PathField = *in.PathField
+	}
+	if in.StatusField != nil {
+		out.StatusField = *in.StatusField
+	}
+	if in.MaxWindowDays != nil {
+		out.MaxWindowDays = *in.MaxWindowDays
+	}
+	return out
 }
 
 // cloudflareConfigToAPI serves listing and detail alike: the whole shape is

@@ -43,10 +43,11 @@ type Instance struct {
 	Scope     domain.Scope
 	Enabled   bool
 
-	Vault      VaultConfig
-	SQL        SQLConfig
-	Gravitee   GraviteeConfig
-	Cloudflare CloudflareConfig
+	Vault         VaultConfig
+	SQL           SQLConfig
+	Gravitee      GraviteeConfig
+	Cloudflare    CloudflareConfig
+	Elasticsearch ElasticsearchConfig
 	// Token is what the instance authenticates with, for the connectors that
 	// authenticate with one. RequiresToken says which; bound connectors are not
 	// among them.
