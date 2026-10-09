@@ -3476,6 +3476,7 @@ export interface components {
             sql?: components["schemas"]["ConnectorSQLResponse"];
             gravitee?: components["schemas"]["ConnectorGraviteeResponse"];
             cloudflare?: components["schemas"]["ConnectorCloudflareConfig"];
+            elasticsearch?: components["schemas"]["ConnectorElasticsearchConfig"];
         };
         /** @description The authored, non-secret configuration available only to connector configurers. SQL text is present because editing any other SQL field must not erase or replace a registered query. Gravitee's fixed Vault location is present for the same read-edit-write reason. Token presence is metadata; token bytes and generated credentials never leave storage. */
         ConnectorInstanceDetail: {
@@ -3493,6 +3494,7 @@ export interface components {
             sql?: components["schemas"]["ConnectorSQLInput"];
             gravitee?: components["schemas"]["ConnectorGraviteeInput"];
             cloudflare?: components["schemas"]["ConnectorCloudflareConfig"];
+            elasticsearch?: components["schemas"]["ConnectorElasticsearchConfig"];
         };
         ConnectorGraviteeReference: {
             /**
@@ -3607,8 +3609,22 @@ export interface components {
             /** @description Automatic entries allowed per day; zero means the default. */
             maxBlocksPerDay?: number;
         };
+        /** @description One governed window over one index pattern. The index and the field mapping are configuration; a model supplies values to named queries, never structure. The sealed token is the basic-auth password. */
+        ConnectorElasticsearchConfig: {
+            /** @description Cluster endpoint; plain http is common in-cluster. */
+            baseUrl: string;
+            username: string;
+            /** @description Fixed index pattern; arguments never choose an index. */
+            index: string;
+            timestampField?: string;
+            ipField?: string;
+            pathField?: string;
+            statusField?: string;
+            /** @description Window ceiling in days; zero means the default (7). */
+            maxWindowDays?: number;
+        };
         ConnectorInstanceInput: {
-            /** @description Connector shape, such as vault, sql, gravitee or cloudflare. */
+            /** @description Connector shape, such as vault, sql, gravitee, cloudflare or elasticsearch. */
             connector: string;
             /** @default true */
             enabled: boolean;
@@ -3619,6 +3635,7 @@ export interface components {
             sql?: components["schemas"]["ConnectorSQLInput"];
             gravitee?: components["schemas"]["ConnectorGraviteeInput"];
             cloudflare?: components["schemas"]["ConnectorCloudflareConfig"];
+            elasticsearch?: components["schemas"]["ConnectorElasticsearchConfig"];
             /** @description Connector token to seal. Only connectors that authenticate with a token of their own accept it; bound connectors such as SQL and Gravitee reject it. */
             token?: string;
             /** @description Remove the stored token. An enabled connector that authenticates directly is refused unless the same request also supplies a replacement. Bound connectors never keep a token of their own. */

@@ -5619,6 +5619,7 @@ components:
         sql: { $ref: '#/components/schemas/ConnectorSQLResponse' }
         gravitee: { $ref: '#/components/schemas/ConnectorGraviteeResponse' }
         cloudflare: { $ref: '#/components/schemas/ConnectorCloudflareConfig' }
+        elasticsearch: { $ref: '#/components/schemas/ConnectorElasticsearchConfig' }
 
     ConnectorInstanceDetail:
       type: object
@@ -5643,6 +5644,7 @@ components:
         sql: { $ref: '#/components/schemas/ConnectorSQLInput' }
         gravitee: { $ref: '#/components/schemas/ConnectorGraviteeInput' }
         cloudflare: { $ref: '#/components/schemas/ConnectorCloudflareConfig' }
+        elasticsearch: { $ref: '#/components/schemas/ConnectorElasticsearchConfig' }
 
     ConnectorGraviteeReference:
       type: object
@@ -5873,13 +5875,39 @@ components:
           maximum: 10000
           description: Automatic entries allowed per day; zero means the default.
 
+    ConnectorElasticsearchConfig:
+      type: object
+      required: [baseUrl, username, index]
+      description: >
+        One governed window over one index pattern. The index and the field
+        mapping are configuration; a model supplies values to named queries,
+        never structure. The sealed token is the basic-auth password.
+      properties:
+        baseUrl:
+          type: string
+          description: Cluster endpoint; plain http is common in-cluster.
+        username: { type: string, maxLength: 128 }
+        index:
+          type: string
+          maxLength: 255
+          description: Fixed index pattern; arguments never choose an index.
+        timestampField: { type: string, maxLength: 255 }
+        ipField: { type: string, maxLength: 255 }
+        pathField: { type: string, maxLength: 255 }
+        statusField: { type: string, maxLength: 255 }
+        maxWindowDays:
+          type: integer
+          minimum: 0
+          maximum: 30
+          description: Window ceiling in days; zero means the default (7).
+
     ConnectorInstanceInput:
       type: object
       required: [connector, scopeKind]
       properties:
         connector:
           type: string
-          description: Connector shape, such as vault, sql, gravitee or cloudflare.
+          description: Connector shape, such as vault, sql, gravitee, cloudflare or elasticsearch.
         enabled:
           type: boolean
           default: true
@@ -5890,6 +5918,7 @@ components:
         sql: { $ref: '#/components/schemas/ConnectorSQLInput' }
         gravitee: { $ref: '#/components/schemas/ConnectorGraviteeInput' }
         cloudflare: { $ref: '#/components/schemas/ConnectorCloudflareConfig' }
+        elasticsearch: { $ref: '#/components/schemas/ConnectorElasticsearchConfig' }
         token:
           type: string
           description: >
