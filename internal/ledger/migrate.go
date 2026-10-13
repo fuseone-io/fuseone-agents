@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,7 +52,25 @@ type appliedMigration struct {
 // still collide in the catalogue.
 const migrationLock int64 = 8010081
 
-func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
+// Migrate applies migrations and sends rollout/rollback skew warnings to logger
+// when one is supplied. The optional form keeps migration-only callers that do
+// not have an application logger yet source-compatible.
+func Migrate(ctx context.Context, pool *pgxpool.Pool, loggers ...*slog.Logger) error {
+	var logger *slog.Logger
+	if len(loggers) > 0 {
+		logger = loggers[0]
+	}
+	return migrate(ctx, pool, migrationLogger(logger))
+}
+
+func migrationLogger(logger *slog.Logger) *slog.Logger {
+	if logger != nil {
+		return logger
+	}
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+func migrate(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error {
 	files, err := fs.Glob(migrationFS, "sql/*.sql")
 	if err != nil {
 		return fmt.Errorf("list migrations: %w", err)
@@ -104,7 +124,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	if err != nil {
 		return err
 	}
-	if err := validateApplied(migrations, applied); err != nil {
+	if err := validateApplied(migrations, applied, logger); err != nil {
 		return err
 	}
 	if err := baselineLegacy(ctx, conn, applied); err != nil {
@@ -194,15 +214,12 @@ func digestBytes(body []byte) string {
 }
 
 func validateApplied(
-	migrations []embeddedMigration, applied map[string]appliedMigration,
+	migrations []embeddedMigration, applied map[string]appliedMigration, logger *slog.Logger,
 ) error {
 	known := make(map[string]embeddedMigration, len(migrations))
-	knownVersions := make([]string, 0, len(migrations))
 	for _, migration := range migrations {
 		known[migration.version] = migration
-		knownVersions = append(knownVersions, migration.version)
 	}
-	slices.Sort(knownVersions)
 	appliedVersions := make([]string, 0, len(applied))
 	for version := range applied {
 		appliedVersions = append(appliedVersions, version)
@@ -212,8 +229,8 @@ func validateApplied(
 		record := applied[version]
 		migration, exists := known[version]
 		if !exists {
-			if len(knownVersions) > 0 && version > knownVersions[len(knownVersions)-1] {
-				slog.Default().Warn("migration was recorded by a newer release; continuing for rollback compatibility", "version", version)
+			if isToleratedFutureMigration(version, migrations, applied) {
+				logger.Warn("migration was recorded by a newer release; continuing for rollback compatibility", "version", version)
 				continue
 			}
 			return fmt.Errorf("migration %s is recorded but is not present in this binary; restore the matching release or investigate the database before continuing", version)
@@ -232,6 +249,48 @@ func validateApplied(
 		}
 	}
 	return nil
+}
+
+func isToleratedFutureMigration(version string, migrations []embeddedMigration, applied map[string]appliedMigration) bool {
+	unknownNumber, ok := migrationNumber(version)
+	if !ok {
+		return false
+	}
+
+	maxKnown := -1
+	for _, migration := range migrations {
+		number, ok := migrationNumber(migration.version)
+		if !ok || number > maxKnown {
+			maxKnown = number
+		}
+	}
+	if unknownNumber <= maxKnown {
+		return false
+	}
+
+	for _, migration := range migrations {
+		if _, done := applied[migration.version]; done {
+			continue
+		}
+		number, ok := migrationNumber(migration.version)
+		if !ok || number <= unknownNumber {
+			return false
+		}
+	}
+	return true
+}
+
+func migrationNumber(version string) (int, bool) {
+	if len(version) < 5 || version[4] != '_' {
+		return 0, false
+	}
+	for _, digit := range version[:4] {
+		if digit < '0' || digit > '9' {
+			return 0, false
+		}
+	}
+	number, err := strconv.Atoi(version[:4])
+	return number, err == nil
 }
 
 func migrationDigestMismatch(version, recorded, expected string) error {

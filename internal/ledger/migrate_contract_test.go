@@ -1,7 +1,10 @@
 package ledger
 
 import (
+	"bytes"
+	"io"
 	"io/fs"
+	"log/slog"
 	"reflect"
 	"sort"
 	"strings"
@@ -27,6 +30,7 @@ func TestLegacyMigrationDigests_matchEmbeddedHistory(t *testing.T) {
 	if !reflect.DeepEqual(expected, legacyMigrationDigests) {
 		missing := make([]string, 0)
 		unexpected := make([]string, 0)
+		mismatched := make([]string, 0)
 		for version := range expected {
 			if _, ok := legacyMigrationDigests[version]; !ok {
 				missing = append(missing, version)
@@ -37,9 +41,15 @@ func TestLegacyMigrationDigests_matchEmbeddedHistory(t *testing.T) {
 				unexpected = append(unexpected, version)
 			}
 		}
+		for version, want := range expected {
+			if got, ok := legacyMigrationDigests[version]; ok && got != want {
+				mismatched = append(mismatched, version)
+			}
+		}
 		sort.Strings(missing)
 		sort.Strings(unexpected)
-		t.Fatalf("legacy digest map differs from embedded history: missing=%v unexpected=%v", missing, unexpected)
+		sort.Strings(mismatched)
+		t.Fatalf("legacy digest map differs from embedded history: missing=%v unexpected=%v mismatched=%v", missing, unexpected, mismatched)
 	}
 }
 
@@ -50,7 +60,7 @@ func TestValidateApplied_refusesChangedMigration(t *testing.T) {
 
 	err := validateApplied(migrations, map[string]appliedMigration{
 		version: {digest: &recorded},
-	})
+	}, discardMigrationLogger())
 	if err == nil {
 		t.Fatal("validateApplied accepted a changed migration")
 	}
@@ -69,7 +79,7 @@ func TestValidateApplied_refusesUnknownMigrationInsideKnownHistory(t *testing.T)
 	recorded := "digest"
 	err := validateApplied([]embeddedMigration{{version: "0081_inbox_run_index"}}, map[string]appliedMigration{
 		"0080_not_known": {digest: &recorded},
-	})
+	}, discardMigrationLogger())
 	if err == nil || !strings.Contains(err.Error(), "0080_not_known") {
 		t.Fatalf("error = %v, want unknown migration refusal", err)
 	}
@@ -77,21 +87,57 @@ func TestValidateApplied_refusesUnknownMigrationInsideKnownHistory(t *testing.T)
 
 func TestValidateApplied_allowsUnknownMigrationAfterKnownHistory(t *testing.T) {
 	recorded := "digest"
-	err := validateApplied([]embeddedMigration{{version: "0081_inbox_run_index"}}, map[string]appliedMigration{
-		"0082_future": {digest: &recorded},
-	})
+	knownBody := []byte("known")
+	knownDigest := digestBytes(knownBody)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	err := validateApplied([]embeddedMigration{{version: "0081_inbox_run_index", body: knownBody, digest: knownDigest}}, map[string]appliedMigration{
+		"0081_inbox_run_index": {digest: &knownDigest},
+		"0082_future":          {digest: &recorded},
+	}, logger)
 	if err != nil {
 		t.Fatalf("validateApplied refused a future migration during rollback: %v", err)
+	}
+	if !strings.Contains(logs.String(), "newer release") || !strings.Contains(logs.String(), "0082_future") {
+		t.Fatalf("warning = %q, want future migration warning", logs.String())
+	}
+}
+
+func TestValidateApplied_refusesFutureMigrationWhenWorkRemainsBelowIt(t *testing.T) {
+	recorded := "digest"
+	err := validateApplied([]embeddedMigration{
+		{version: "0081_inbox_run_index"},
+		{version: "0082_pending"},
+	}, map[string]appliedMigration{
+		"0083_future": {digest: &recorded},
+	}, discardMigrationLogger())
+	if err == nil || !strings.Contains(err.Error(), "0083_future") {
+		t.Fatalf("error = %v, want divergent future migration refusal", err)
+	}
+}
+
+func TestValidateApplied_refusesMalformedAndSameNumberUnknownMigrations(t *testing.T) {
+	known := []embeddedMigration{{version: "0081_inbox_run_index"}}
+	for _, version := range []string{"0081_other_name", "zzz_backfill"} {
+		recorded := "digest"
+		err := validateApplied(known, map[string]appliedMigration{version: {digest: &recorded}}, discardMigrationLogger())
+		if err == nil || !strings.Contains(err.Error(), version) {
+			t.Errorf("error for %s = %v, want refusal", version, err)
+		}
 	}
 }
 
 func TestValidateApplied_requiresDigestAfterLegacyBoundary(t *testing.T) {
 	err := validateApplied([]embeddedMigration{{version: "0082_future", body: []byte("select 1")}}, map[string]appliedMigration{
 		"0082_future": {},
-	})
+	}, discardMigrationLogger())
 	if err == nil || !strings.Contains(err.Error(), "no recorded digest") {
 		t.Fatalf("error = %v, want missing digest refusal", err)
 	}
+}
+
+func discardMigrationLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
 func TestDigestBytes_isStableOverExactBytes(t *testing.T) {
