@@ -68,15 +68,15 @@ func harness(t *testing.T, tools *recorder) (compensate.Deps, engine.Start, []co
 	}
 
 	return compensate.Deps{
-		Ledger: store, Gate: gate.New(), Tools: tools, Clock: frozen{},
-		Catalog: effects{
-			"crm.charge.refund": domain.EffectFinancial,
-			"crm.order.cancel":  domain.EffectWrite,
-		},
-	}, start, []compensate.Act{
-		{Tool: "crm.charge", Seq: 4, Undo: "crm.charge.refund"},
-		{Tool: "crm.order", Seq: 2, Undo: "crm.order.cancel"},
-	}
+			Ledger: store, Gate: gate.New(), Tools: tools, Clock: frozen{},
+			Catalog: effects{
+				"crm.charge.refund": domain.EffectFinancial,
+				"crm.order.cancel":  domain.EffectWrite,
+			},
+		}, start, []compensate.Act{
+			{Tool: "crm.charge", Seq: 4, Undo: "crm.charge.refund"},
+			{Tool: "crm.order", Seq: 2, Undo: "crm.order.cancel"},
+		}
 }
 
 func TestPerform_undoesEachActAndRecordsIt(t *testing.T) {
