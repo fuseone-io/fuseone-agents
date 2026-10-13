@@ -25,6 +25,31 @@ field" is a commit message.
 
 ---
 
+## [0.60.1] — 2026-10-13
+
+### Upgrade notes
+
+- **The first boot of this version stamps your migration history.** Every
+  applied migration's SHA-256 digest is recorded, and from then on the
+  process refuses to start when an applied migration's bytes no longer match
+  what the release ships — the error names the version and both digests,
+  never the SQL. An installation whose `migrations/` files were ever edited
+  in place will stop here: restore the canonical files, or correct the
+  schema with a new migration, never by editing an applied one.
+- **Rolling back to an older release still boots.** A migration recorded by
+  a newer release than the running binary is logged loudly and left
+  untouched. The refusal is reserved for genuine anomalies: an unknown
+  version inside the known history, a name that is not a migration, or a
+  newer row with work still pending beneath it — each of those means the
+  history diverged, and the process stops instead of papering over it.
+
+### Fixed
+
+- **Migration history is verified, not assumed.** (#79) The run ledger's
+  guarantees start at the schema that holds it; now the schema's own history
+  is held to the same standard — append-only, tamper-evident, corrected
+  forward.
+
 ## [0.60.0] — 2026-10-09
 
 ### Added
