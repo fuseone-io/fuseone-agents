@@ -60,6 +60,54 @@ func TestMigrate_twoProcessesStartingTogether_bothSucceed(t *testing.T) {
 			t.Errorf("caller %d: %v", i+1, err)
 		}
 	}
+
+	var missingDigests int
+	if err := pool.QueryRow(t.Context(), `
+		select count(*) from schema_migrations
+		where digest is null or digest_source <> 'applied'
+	`).Scan(&missingDigests); err != nil {
+		t.Fatalf("read migration digests: %v", err)
+	}
+	if missingDigests != 0 {
+		t.Fatalf("fresh migrations without applied digests = %d", missingDigests)
+	}
+}
+
+func TestMigrate_legacyRowsReceiveCanonicalBaseline(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL is unset; skipping the migration baseline")
+	}
+	pool, err := pgxpool.New(t.Context(), dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if _, err := pool.Exec(t.Context(), `
+		update schema_migrations
+		set digest = null, digest_source = null
+		where version <= '0081_inbox_run_index'
+	`); err != nil {
+		t.Fatalf("remove historical digests: %v", err)
+	}
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("baseline: %v", err)
+	}
+
+	var missingBaseline int
+	if err := pool.QueryRow(t.Context(), `
+		select count(*) from schema_migrations
+		where version <= '0081_inbox_run_index'
+		  and (digest is null or digest_source <> 'baseline')
+	`).Scan(&missingBaseline); err != nil {
+		t.Fatalf("read baseline: %v", err)
+	}
+	if missingBaseline != 0 {
+		t.Fatalf("legacy rows without baseline digests = %d", missingBaseline)
+	}
 }
 
 /*

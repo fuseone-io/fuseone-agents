@@ -135,7 +135,7 @@ func openStore(ctx context.Context, dsn string) (Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
-	if err := ledger.Migrate(ctx, pool); err != nil {
+	if err := ledger.Migrate(ctx, pool, slog.Default()); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
@@ -162,7 +162,7 @@ func migrate(args []string) error {
 	}
 	defer pool.Close()
 
-	if err := ledger.Migrate(ctx, pool); err != nil {
+	if err := ledger.Migrate(ctx, pool, slog.Default()); err != nil {
 		return err
 	}
 	slog.Info("migrations applied")
