@@ -127,6 +127,26 @@ func TestValidateApplied_refusesMalformedAndSameNumberUnknownMigrations(t *testi
 	}
 }
 
+func TestValidateApplied_malformedEmbeddedVersionDoesNotDisarmInsideHistoryRefusal(t *testing.T) {
+	// A letter-prefixed embedded name sorts after every NNNN_ file, so if the
+	// max-known scan mishandles it the ceiling collapses to zero and an unknown
+	// row INSIDE known history slips through the skew tolerance.
+	knownBody := []byte("known")
+	knownDigest := digestBytes(knownBody)
+	divergent := "digest"
+	err := validateApplied([]embeddedMigration{
+		{version: "0081_inbox_run_index", body: knownBody, digest: knownDigest},
+		{version: "zzz_seed", body: knownBody, digest: knownDigest},
+	}, map[string]appliedMigration{
+		"0081_inbox_run_index": {digest: &knownDigest},
+		"zzz_seed":             {digest: &knownDigest},
+		"0079_divergent":       {digest: &divergent},
+	}, discardMigrationLogger())
+	if err == nil || !strings.Contains(err.Error(), "0079_divergent") {
+		t.Fatalf("error = %v, want inside-history refusal despite malformed embedded version", err)
+	}
+}
+
 func TestValidateApplied_requiresDigestAfterLegacyBoundary(t *testing.T) {
 	err := validateApplied([]embeddedMigration{{version: "0082_future", body: []byte("select 1")}}, map[string]appliedMigration{
 		"0082_future": {},

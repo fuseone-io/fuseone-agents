@@ -260,7 +260,7 @@ func isToleratedFutureMigration(version string, migrations []embeddedMigration, 
 	maxKnown := -1
 	for _, migration := range migrations {
 		number, ok := migrationNumber(migration.version)
-		if !ok || number > maxKnown {
+		if ok && number > maxKnown {
 			maxKnown = number
 		}
 	}
