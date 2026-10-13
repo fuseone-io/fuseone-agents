@@ -89,6 +89,7 @@ func TestMigrate_legacyRowsReceiveCanonicalBaseline(t *testing.T) {
 	if _, err := pool.Exec(t.Context(), `
 		update schema_migrations
 		set digest = null, digest_source = null
+		where version <= '0081_inbox_run_index'
 	`); err != nil {
 		t.Fatalf("remove historical digests: %v", err)
 	}
@@ -99,7 +100,8 @@ func TestMigrate_legacyRowsReceiveCanonicalBaseline(t *testing.T) {
 	var missingBaseline int
 	if err := pool.QueryRow(t.Context(), `
 		select count(*) from schema_migrations
-		where digest is null or digest_source <> 'baseline'
+		where version <= '0081_inbox_run_index'
+		  and (digest is null or digest_source <> 'baseline')
 	`).Scan(&missingBaseline); err != nil {
 		t.Fatalf("read baseline: %v", err)
 	}

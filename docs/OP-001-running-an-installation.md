@@ -112,8 +112,15 @@ baseline says that the current embedded files match the known release history;
 it does not prove which bytes an older installation executed at the time. New
 migrations, beginning with 0082, must be recorded with a digest in the same
 transaction that applies them. A missing digest after that boundary, or a
-recorded migration unknown to the running release, stops the migration job and
-the application.
+recorded migration unknown inside the running release's history stops the
+migration job and the application. A migration recorded strictly after that
+history is treated as rollout or rollback skew: it is logged loudly and left
+untouched so the older release can start safely.
+
+For contributors, adding a migration means adding a new, higher-numbered
+`sql/*.sql` file. The migrator records its SHA-256 digest automatically when it
+applies the file; do not edit an already-applied file or add its digest to the
+legacy baseline map. Correct an applied migration with a new migration instead.
 
 **`--timeout 25m` matters.** Helm waits five minutes for hooks by default and
 then abandons the release, and neither `activeDeadlineSeconds` nor the job's own

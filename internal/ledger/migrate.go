@@ -6,6 +6,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -145,8 +146,7 @@ func applyOne(ctx context.Context, conn migrator, version string, body []byte, d
 	}
 	if _, err := tx.Exec(ctx,
 		`insert into schema_migrations (version, digest, digest_source)
-		 values ($1, $2, 'applied')
-		 on conflict (version) do nothing`, version, digest); err != nil {
+		 values ($1, $2, 'applied')`, version, digest); err != nil {
 		return fmt.Errorf("record %s: %w", version, err)
 	}
 	return tx.Commit(ctx)
@@ -197,12 +197,25 @@ func validateApplied(
 	migrations []embeddedMigration, applied map[string]appliedMigration,
 ) error {
 	known := make(map[string]embeddedMigration, len(migrations))
+	knownVersions := make([]string, 0, len(migrations))
 	for _, migration := range migrations {
 		known[migration.version] = migration
+		knownVersions = append(knownVersions, migration.version)
 	}
-	for version, record := range applied {
+	slices.Sort(knownVersions)
+	appliedVersions := make([]string, 0, len(applied))
+	for version := range applied {
+		appliedVersions = append(appliedVersions, version)
+	}
+	slices.Sort(appliedVersions)
+	for _, version := range appliedVersions {
+		record := applied[version]
 		migration, exists := known[version]
 		if !exists {
+			if len(knownVersions) > 0 && version > knownVersions[len(knownVersions)-1] {
+				slog.Default().Warn("migration was recorded by a newer release; continuing for rollback compatibility", "version", version)
+				continue
+			}
 			return fmt.Errorf("migration %s is recorded but is not present in this binary; restore the matching release or investigate the database before continuing", version)
 		}
 		if record.digest == nil || *record.digest == "" {

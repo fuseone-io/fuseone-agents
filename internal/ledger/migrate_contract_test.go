@@ -1,9 +1,47 @@
 package ledger
 
 import (
+	"io/fs"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
+
+func TestLegacyMigrationDigests_matchEmbeddedHistory(t *testing.T) {
+	files, err := fs.Glob(migrationFS, "sql/*.sql")
+	if err != nil {
+		t.Fatalf("list migrations: %v", err)
+	}
+	migrations, err := embeddedMigrations(migrationFS, files)
+	if err != nil {
+		t.Fatalf("read migrations: %v", err)
+	}
+
+	expected := make(map[string]string)
+	for _, migration := range migrations {
+		if migration.version <= migrationDigestBoundary {
+			expected[migration.version] = migration.digest
+		}
+	}
+	if !reflect.DeepEqual(expected, legacyMigrationDigests) {
+		missing := make([]string, 0)
+		unexpected := make([]string, 0)
+		for version := range expected {
+			if _, ok := legacyMigrationDigests[version]; !ok {
+				missing = append(missing, version)
+			}
+		}
+		for version := range legacyMigrationDigests {
+			if _, ok := expected[version]; !ok {
+				unexpected = append(unexpected, version)
+			}
+		}
+		sort.Strings(missing)
+		sort.Strings(unexpected)
+		t.Fatalf("legacy digest map differs from embedded history: missing=%v unexpected=%v", missing, unexpected)
+	}
+}
 
 func TestValidateApplied_refusesChangedMigration(t *testing.T) {
 	const version = "0081_inbox_run_index"
@@ -27,13 +65,23 @@ func TestValidateApplied_refusesChangedMigration(t *testing.T) {
 	}
 }
 
-func TestValidateApplied_refusesUnknownMigration(t *testing.T) {
+func TestValidateApplied_refusesUnknownMigrationInsideKnownHistory(t *testing.T) {
 	recorded := "digest"
-	err := validateApplied(nil, map[string]appliedMigration{
-		"9999_not_known": {digest: &recorded},
+	err := validateApplied([]embeddedMigration{{version: "0081_inbox_run_index"}}, map[string]appliedMigration{
+		"0080_not_known": {digest: &recorded},
 	})
-	if err == nil || !strings.Contains(err.Error(), "9999_not_known") {
+	if err == nil || !strings.Contains(err.Error(), "0080_not_known") {
 		t.Fatalf("error = %v, want unknown migration refusal", err)
+	}
+}
+
+func TestValidateApplied_allowsUnknownMigrationAfterKnownHistory(t *testing.T) {
+	recorded := "digest"
+	err := validateApplied([]embeddedMigration{{version: "0081_inbox_run_index"}}, map[string]appliedMigration{
+		"0082_future": {digest: &recorded},
+	})
+	if err != nil {
+		t.Fatalf("validateApplied refused a future migration during rollback: %v", err)
 	}
 }
 
