@@ -99,6 +99,22 @@ lock, so a second one waits rather than racing. Memory reconciliation runs as a
 second job right after, filling in what the platform can now derive about
 memory written before it could.
 
+Migration files are immutable history. The migrator records a SHA-256 digest of
+the exact embedded bytes when it applies a migration, and checks every recorded
+digest before applying anything later. If a file that was already applied has
+changed, startup stops with the migration version and the recorded and expected
+digests; it never re-runs that file or prints its SQL. Restore the matching
+release or make a new corrective migration after investigating the schema.
+
+Installations upgraded from the two-column `schema_migrations` table have a
+non-retroactive baseline for the canonical history through migration 0081. A
+baseline says that the current embedded files match the known release history;
+it does not prove which bytes an older installation executed at the time. New
+migrations, beginning with 0082, must be recorded with a digest in the same
+transaction that applies them. A missing digest after that boundary, or a
+recorded migration unknown to the running release, stops the migration job and
+the application.
+
 **`--timeout 25m` matters.** Helm waits five minutes for hooks by default and
 then abandons the release, and neither `activeDeadlineSeconds` nor the job's own
 `--timeout` can change what the client is willing to wait — they bound the pod
