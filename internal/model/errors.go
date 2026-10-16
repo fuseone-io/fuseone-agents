@@ -219,7 +219,10 @@ func transientEvidence(message, bodyCode string) (string, bool) {
 			return code, true
 		}
 	}
-	if status, err := strconv.Atoi(bodyCode); err == nil && status >= 100 {
+	// The code field usually carries the upstream HTTP status, but it may be
+	// a provider's own numeric code instead; outside the HTTP range it is
+	// noise, never evidence.
+	if status, err := strconv.Atoi(bodyCode); err == nil && status >= 100 && status <= 599 {
 		if code, retryable := classifyStatus(status, ""); retryable {
 			return code, true
 		}

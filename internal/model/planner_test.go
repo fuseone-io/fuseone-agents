@@ -1102,24 +1102,44 @@ func TestOpenAICompatible_transientWrappedIn400_isRetryable(t *testing.T) {
 func TestOpenAICompatible_genuineBadRequest_stillParksAsPermanent(t *testing.T) {
 	t.Parallel()
 
-	// The input a lax reclassifier would wrongly wave through: a plain 400
-	// with no transience marker anywhere must stay non-retryable, or an
-	// invalid request burns budget forever while hiding the fault.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = io.WriteString(w, `{"error":{"message":"litellm.BadRequestError: model gpt-x is not in model_list","type":"invalid_request_error","param":"model","code":"400"}}`)
-	}))
-	t.Cleanup(srv.Close)
-
-	_, err := plannerFor(t, model.KindOpenAICompatible, srv.URL, model.Config{}).
-		Plan(context.Background(), input())
-
-	var provider *model.ProviderError
-	if !errors.As(err, &provider) {
-		t.Fatalf("Plan = %v, want a provider error", err)
+	// Inputs a lax reclassifier would wrongly wave through: a plain 400
+	// with no transience marker must stay non-retryable, or an invalid
+	// request burns budget forever while hiding the fault. The code field
+	// may carry a provider's own numeric code, not an HTTP status — a
+	// number outside the HTTP range is noise, never evidence.
+	cases := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "no marker anywhere",
+			body: `{"error":{"message":"litellm.BadRequestError: model gpt-x is not in model_list","type":"invalid_request_error","param":"model","code":"400"}}`,
+		},
+		{
+			name: "provider-specific numeric code beyond the HTTP range",
+			body: `{"error":{"message":"invalid request","type":"invalid_request_error","param":null,"code":"1001"}}`,
+		},
 	}
-	if provider.Code != model.CodeBadRequest || provider.Retryable {
-		t.Errorf("classified %q retryable=%t, want %q non-retryable", provider.Code, provider.Retryable, model.CodeBadRequest)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			t.Cleanup(srv.Close)
+
+			_, err := plannerFor(t, model.KindOpenAICompatible, srv.URL, model.Config{}).
+				Plan(context.Background(), input())
+
+			var provider *model.ProviderError
+			if !errors.As(err, &provider) {
+				t.Fatalf("Plan = %v, want a provider error", err)
+			}
+			if provider.Code != model.CodeBadRequest || provider.Retryable {
+				t.Errorf("classified %q retryable=%t, want %q non-retryable", provider.Code, provider.Retryable, model.CodeBadRequest)
+			}
+		})
 	}
 }
 
