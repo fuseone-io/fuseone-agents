@@ -1029,6 +1029,123 @@ func TestOpenAICompatible_overloadBecomesAStableProviderFailure(t *testing.T) {
 	}
 }
 
+func TestOpenAICompatible_transientWrappedIn400_isRetryable(t *testing.T) {
+	t.Parallel()
+
+	// A proxy in front of the provider (LiteLLM) sometimes wraps a transient
+	// upstream failure in a 400. The status alone says permanent; the body
+	// proves otherwise, and the body wins.
+	cases := []struct {
+		name string
+		body string
+		code string
+	}{
+		{
+			name: "connection error named in the message",
+			body: `{"error":{"message":"litellm.APIConnectionError: APIConnectionError: OpenAIException - Connection error.","type":null,"param":null,"code":"500"}}`,
+			code: model.CodeProviderUnavailable,
+		},
+		{
+			name: "timeout named in the message",
+			body: `{"error":{"message":"litellm.Timeout: Connection timed out after 600.0 seconds","type":null,"param":null,"code":"408"}}`,
+			code: model.CodeProviderUnavailable,
+		},
+		{
+			name: "service unavailable named in the message",
+			body: `{"error":{"message":"litellm.ServiceUnavailableError: No deployments available for selected model","type":null,"param":null}}`,
+			code: model.CodeProviderUnavailable,
+		},
+		{
+			name: "internal server error named in the message",
+			body: `{"error":{"message":"litellm.InternalServerError: OpenAIException - server error","type":null,"param":null}}`,
+			code: model.CodeProviderUnavailable,
+		},
+		{
+			name: "rate limit named in the message",
+			body: `{"error":{"message":"litellm.RateLimitError: RateLimitError: OpenAIException - Rate limit reached","type":null,"param":null,"code":"429"}}`,
+			code: model.CodeRateLimited,
+		},
+		{
+			name: "upstream status carried only in the body's code field",
+			body: `{"error":{"message":"upstream failed","type":null,"param":null,"code":"503"}}`,
+			code: model.CodeProviderUnavailable,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			t.Cleanup(srv.Close)
+
+			_, err := plannerFor(t, model.KindOpenAICompatible, srv.URL, model.Config{}).
+				Plan(context.Background(), input())
+
+			var provider *model.ProviderError
+			if !errors.As(err, &provider) {
+				t.Fatalf("Plan = %v, want a provider error", err)
+			}
+			if provider.Code != tc.code || !provider.Retryable {
+				t.Errorf("classified %q retryable=%t, want %q retryable", provider.Code, provider.Retryable, tc.code)
+			}
+			// The wire status stays on the record: the ledger shows the 400
+			// the proxy actually sent, only the retry verdict changes.
+			if provider.Status != http.StatusBadRequest {
+				t.Errorf("Status = %d, want the original 400", provider.Status)
+			}
+		})
+	}
+}
+
+func TestOpenAICompatible_genuineBadRequest_stillParksAsPermanent(t *testing.T) {
+	t.Parallel()
+
+	// The input a lax reclassifier would wrongly wave through: a plain 400
+	// with no transience marker anywhere must stay non-retryable, or an
+	// invalid request burns budget forever while hiding the fault.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"error":{"message":"litellm.BadRequestError: model gpt-x is not in model_list","type":"invalid_request_error","param":"model","code":"400"}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := plannerFor(t, model.KindOpenAICompatible, srv.URL, model.Config{}).
+		Plan(context.Background(), input())
+
+	var provider *model.ProviderError
+	if !errors.As(err, &provider) {
+		t.Fatalf("Plan = %v, want a provider error", err)
+	}
+	if provider.Code != model.CodeBadRequest || provider.Retryable {
+		t.Errorf("classified %q retryable=%t, want %q non-retryable", provider.Code, provider.Retryable, model.CodeBadRequest)
+	}
+}
+
+func TestAnthropic_transientWrappedIn400_isRetryable(t *testing.T) {
+	t.Parallel()
+
+	// The same proxy can sit behind the anthropic kind; the evidence read
+	// must not be an openai-compatible privilege.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"type":"error","error":{"type":"invalid_request_error","message":"litellm.APIConnectionError: AnthropicException - Connection error."}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := plannerFor(t, model.KindAnthropic, srv.URL, model.Config{}).
+		Plan(context.Background(), input())
+
+	var provider *model.ProviderError
+	if !errors.As(err, &provider) {
+		t.Fatalf("Plan = %v, want a provider error", err)
+	}
+	if provider.Code != model.CodeProviderUnavailable || !provider.Retryable {
+		t.Errorf("classified %q retryable=%t, want %q retryable", provider.Code, provider.Retryable, model.CodeProviderUnavailable)
+	}
+}
+
 // --- registry ---------------------------------------------------------------
 
 func TestRegistry_unknownProvider_saysWhatIsAvailable(t *testing.T) {
