@@ -25,6 +25,19 @@ field" is a commit message.
 
 ---
 
+## [0.60.2] — 2026-10-16
+
+### Fixed
+
+- **A transient failure dressed as a 400 retries instead of stopping the
+  run.** A proxy in front of the model (LiteLLM, most commonly) sometimes
+  wraps a timeout or an upstream outage in a 400, which read as "bad
+  request" and parked the run on the spot. The error body is now read for
+  explicit evidence of transience — the proxy's own exception class, or the
+  upstream status it carries — and with evidence the run retries with the
+  usual backoff. A genuine bad request still stops immediately, and the
+  original status stays on the record either way.
+
 ## [0.60.1] — 2026-10-13
 
 ### Upgrade notes
