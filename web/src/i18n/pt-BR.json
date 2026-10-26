@@ -280,6 +280,9 @@
       "unknown": "sem classificação"
     },
     "effort": "Esforço",
+    "cacheTtl": "Cache do prefixo",
+    "cacheTtlDefault": "Padrão do provedor (5m)",
+    "cacheTtlHour": "1 hora — para agentes que rodam pelo menos a cada hora",
     "effortDefault": "padrão",
     "emptyCanvas": "Nenhuma etapa ainda. Peça ao assistente para ler as instruções, ou escreva a primeira.",
     "emptyCatalogue": "Nenhuma ferramenta no catálogo. Um servidor MCP precisa estar conectado antes que um agente possa fazer qualquer coisa.",
@@ -291,6 +294,7 @@
     "fieldArea": "área",
     "fieldBudget": "teto",
     "fieldEffort": "esforço",
+    "fieldCacheTtl": "janela de cache do prefixo",
     "fieldEmits": "Eventos publicados",
     "fieldApprovals": "Aprovações",
     "approvals": "Aprovação humana",

@@ -588,3 +588,22 @@ func TestParse_cachePrefixTTL_unknownWindowRefused(t *testing.T) {
 		t.Fatalf("Parse = %v, want a cache_prefix_ttl refusal", err)
 	}
 }
+
+func TestRender_cachePrefixTTL_survivesTheRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	// The console edits through Render→Parse; a renderer that drops the
+	// field publishes a version that silently pays the short window again.
+	original := parse(t, strings.Replace(valid, "effort: medium\n", "effort: medium\ncache_prefix_ttl: 1h\n", 1))
+	rendered, err := spec.Render(original)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	back, err := spec.Parse("round.agent.md", rendered)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if back.CachePrefixTTL != "1h" {
+		t.Errorf("CachePrefixTTL = %q after the round trip, want 1h", back.CachePrefixTTL)
+	}
+}

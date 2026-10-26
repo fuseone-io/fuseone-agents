@@ -147,6 +147,26 @@ export function AgentBasicsSection({
             </SelectContent>
           </Select>
         </Labelled>
+        <Labelled label={t("agents.cacheTtl")} htmlFor="agent-cache-ttl">
+          <Select
+            value={draft.cachePrefixTtl || "none"}
+            onValueChange={(ttl) =>
+              patch({ cachePrefixTtl: ttl === "none" ? "" : ttl })
+            }
+          >
+            <SelectTrigger id="agent-cache-ttl" className="min-w-0 font-mono">
+              <SelectValue className="truncate" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none" className="font-mono">
+                {t("agents.cacheTtlDefault")}
+              </SelectItem>
+              <SelectItem value="1h" className="font-mono">
+                {t("agents.cacheTtlHour")}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </Labelled>
       </div>
     </Section>
   );

@@ -275,7 +275,8 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 		ID: domain.AgentID(id), Name: in.Name,
 		Company: domain.CompanyID(in.Company), Area: domain.AreaID(in.Area),
 		Provider: in.Provider, Model: in.Model, Effort: valueOr(in.Effort),
-		Instructions: in.Instructions,
+		CachePrefixTTL: valueOr(in.CachePrefixTtl),
+		Instructions:   in.Instructions,
 	}
 	for _, t := range valueOr(in.Tools) {
 		draft.Tools = append(draft.Tools, domain.ToolID(t))
