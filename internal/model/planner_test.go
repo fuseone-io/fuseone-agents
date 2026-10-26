@@ -1678,6 +1678,9 @@ func TestAnthropic_nudgeCallFailing_surfacesTheProviderError(t *testing.T) {
 	if spent.Cost.InputTokens != 1 || spent.Cost.OutputTokens != 1 || spent.Model == "" {
 		t.Errorf("spent = %+v, want the first call's exact usage and its pair", spent)
 	}
+	if spent.Prompt.Total == 0 {
+		t.Errorf("spent.Prompt = %+v, want the breakdown the call was made with", spent.Prompt)
+	}
 }
 
 func TestAnthropic_nudgeReplay_carriesThinkingBlocksWhole(t *testing.T) {

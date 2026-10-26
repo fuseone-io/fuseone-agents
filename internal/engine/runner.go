@@ -91,6 +91,9 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		// retry burns an invoiced call that no budget or trail ever sees.
 		var spent *SpentPlanError
 		if errors.As(err, &spent) {
+			if r.deps.Metrics != nil {
+				r.deps.Metrics.Planning(spent.Prompt, spent.Cost)
+			}
 			if _, aerr := r.append(ctx, state, start, domain.Step{
 				Kind:   domain.StepPlanned,
 				Labels: state.Labels.Clone(),
@@ -100,6 +103,7 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 					Provider: spent.Provider,
 					Model:    spent.Model,
 					Price:    pricePayload(spent.Price),
+					Prompt:   promptInputPayload(spent.Prompt),
 				}),
 			}); aerr != nil {
 				return Status{}, aerr

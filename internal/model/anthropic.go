@@ -179,6 +179,7 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 		rate, configured := a.rateFor(model)
 		return engine.Proposal{}, &engine.SpentPlanError{
 			Cost:     extra,
+			Prompt:   prompt,
 			Price:    priceUse(rate, configured, extra),
 			Provider: a.provider,
 			Model:    model,

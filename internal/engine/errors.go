@@ -31,7 +31,12 @@ released: otherwise every retry burns a successful, invoiced call that no
 budget, trail or FinOps figure ever sees.
 */
 type SpentPlanError struct {
-	Cost     domain.Cost
+	Cost domain.Cost
+	// Prompt is the input breakdown the billed call was made with: the
+	// ledger is one projection of a spend and the pool metrics are the
+	// other, and a billed attempt invisible in either under-reads exactly
+	// the runs burning money on retries.
+	Prompt   domain.PromptInputBreakdown
 	Price    domain.ModelPriceUse
 	Provider string
 	Model    string
