@@ -236,13 +236,16 @@ func (a *Anthropic) cost(u anthropic.Usage, model string) domain.Cost {
 	pr, _ := a.rateFor(model)
 	const perMillion = 1_000_000
 
-	hourWrites := u.CacheCreation.Ephemeral1hInputTokens
-	if u.CacheCreation.Ephemeral1hInputTokens == 0 && u.CacheCreation.Ephemeral5mInputTokens == 0 &&
-		a.cfg.CachePrefixTTL == "1h" {
-		// A proxy that strips the breakdown must err the bill upward, never
-		// silently down: this agent asked for the hour window, so its writes
-		// are presumed to have paid for it.
-		hourWrites = u.CacheCreationInputTokens
+	// The provider documents the total as the sum of the two windows. A
+	// proxy may strip one or both nested fields; whatever the breakdown
+	// fails to explain is presumed to have paid the window this agent asked
+	// for — upward on an hour agent, never silently down.
+	hourWrites := min(u.CacheCreation.Ephemeral1hInputTokens, u.CacheCreationInputTokens)
+	if a.cfg.CachePrefixTTL == "1h" {
+		explained := u.CacheCreation.Ephemeral1hInputTokens + u.CacheCreation.Ephemeral5mInputTokens
+		if unexplained := u.CacheCreationInputTokens - explained; unexplained > 0 {
+			hourWrites = min(hourWrites+unexplained, u.CacheCreationInputTokens)
+		}
 	}
 	hourRate := pr.CacheWrite1hMicros
 	if hourRate == 0 {

@@ -388,3 +388,28 @@ func TestRegisterFromEnv_aProviderItSupplies_isPricedByTheRegistration(t *testin
 			price, priced)
 	}
 }
+
+func TestApplyConfiguration_hourWriteRate_reachesTheRegistry(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "from-the-environment")
+	registry := model.NewRegistry(nil)
+
+	// The screen saved five rates; a conversion that copies four of them
+	// silently under-counts exactly the writes the hour window makes
+	// expensive.
+	if _, err := applyConfiguration(t.Context(), registry, &stubConfig{
+		rates: []admin.ModelPrice{{
+			Provider: "anthropic", Model: "claude-opus-5",
+			InputMicros: 5, CacheWriteMicros: 6, CacheWrite1hMicros: 10,
+		}},
+	}); err != nil {
+		t.Fatalf("applyConfiguration: %v", err)
+	}
+
+	price, priced, err := registry.PriceFor("anthropic", "claude-opus-5")
+	if err != nil {
+		t.Fatalf("PriceFor: %v", err)
+	}
+	if !priced || price.CacheWrite1hMicros != 10 {
+		t.Errorf("rate = %+v priced=%v, want the hour write rate to survive the journey", price, priced)
+	}
+}

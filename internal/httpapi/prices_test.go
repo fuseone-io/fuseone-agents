@@ -48,7 +48,7 @@ func TestListPrices_includesBundledMarketDefaults(t *testing.T) {
 	if price.Source == nil || *price.Source != openapi.MarketDefault {
 		t.Fatalf("source = %v, want market default", price.Source)
 	}
-	if price.InputMicros == nil || *price.InputMicros != 2_500_000 {
+	if price.InputMicros == nil || *price.InputMicros != 5_000_000 {
 		t.Fatalf("input = %v, want the bundled default", price.InputMicros)
 	}
 	if price.Currency == nil || *price.Currency != "USD" {

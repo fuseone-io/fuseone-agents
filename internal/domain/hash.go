@@ -55,6 +55,15 @@ func (s Step) computeHash() []byte {
 	writeBytes(h, []byte(s.PolicyHash))
 	writeInt(h, s.At.UTC().UnixMicro())
 
+	// Sealed only when present, appended after everything the original
+	// formula covered: every step recorded before the hour window existed
+	// has a zero subset, and its hash must keep verifying on upgrade. The
+	// marker keeps the stream unambiguous against the fields above.
+	if s.Cost.CacheWrite1hTokens != 0 {
+		writeBytes(h, []byte("cache_write_1h"))
+		writeInt(h, s.Cost.CacheWrite1hTokens)
+	}
+
 	return h.Sum(nil)
 }
 

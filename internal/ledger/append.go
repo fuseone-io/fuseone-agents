@@ -104,10 +104,11 @@ func insertStep(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 			run_id, seq, kind, company_id, area_id, agent_id, version_id,
 			on_behalf_of, payload, labels,
 			input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-			cost_micros, idem_key, policy_hash, at, prev_hash, hash, opened_at
+			cost_micros, idem_key, policy_hash, at, prev_hash, hash,
+			cache_write_1h_tokens, opened_at
 		) values (
 			$1,$2,$3,$4,$5,$6,$7,$8,coalesce($9,'{}'::jsonb),$10,
-			$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+			$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
 			-- The partition key: when the run started, the same on every step
 			-- of it. Read from the projection rather than passed in, because
 			-- the caller of an append does not know it and a step that guessed
@@ -122,6 +123,7 @@ func insertStep(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 		s.Cost.InputTokens, s.Cost.OutputTokens,
 		s.Cost.CacheReadTokens, s.Cost.CacheWriteTokens, s.Cost.Micros,
 		s.IdemKey, s.PolicyHash, s.At, s.PrevHash, s.Hash,
+		s.Cost.CacheWrite1hTokens,
 	)
 	if err == nil {
 		return nil

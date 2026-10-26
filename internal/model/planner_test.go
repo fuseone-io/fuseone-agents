@@ -1394,3 +1394,72 @@ func TestAnthropic_missingWriteBreakdown_onAnHourAgent_countsEveryWriteAsHour(t 
 			got.Cost.CacheWrite1hTokens, got.Cost.Micros, want)
 	}
 }
+
+func TestAnthropic_partialWriteBreakdown_onAnHourAgent_failsUpward(t *testing.T) {
+	t.Parallel()
+	// A proxy that strips only the 1h field leaves the 5m one standing; the
+	// unexplained remainder must bill at the hour rate the agent asked for,
+	// never silently at the short one.
+	const partial = `{
+	  "id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5",
+	  "content":[{"type":"tool_use","id":"toolu_1","name":"crm.lookup","input":{}}],
+	  "stop_reason":"tool_use",
+	  "usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":90000,
+	           "cache_creation":{"ephemeral_5m_input_tokens":20000}}
+	}`
+	c := serve(t, partial)
+
+	got, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{
+		Model: "claude-opus-5", CachePrefixTTL: "1h",
+		PricePerMTok: model.Prices{
+			InputMicros: 5_000_000, OutputMicros: 25_000_000,
+			CacheWriteMicros: 6_250_000, CacheWrite1hMicros: 10_000_000,
+		},
+	}).Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	want := int64(100*5 + 10*25 + 20_000*6.25 + 70_000*10)
+	if got.Cost.CacheWrite1hTokens != 70000 || got.Cost.Micros != want {
+		t.Errorf("writes1h = %d, Micros = %d; want 70000 and %d",
+			got.Cost.CacheWrite1hTokens, got.Cost.Micros, want)
+	}
+}
+
+func TestMarketPrices_anthropicWindows_followThePublishedMultipliers(t *testing.T) {
+	t.Parallel()
+	// Anthropic publishes the windows as multipliers of input — 1.25x for 5m,
+	// 2x for 1h — so a market row that drifts from them is a typo, not a deal.
+	for _, p := range model.MarketPrices() {
+		name := p.Provider + "/" + p.Model
+		if p.Provider != "anthropic" {
+			continue
+		}
+		if p.Prices.CacheWriteMicros*4 != p.Prices.InputMicros*5 {
+			t.Errorf("%s: 5m write %d is not 1.25x input %d", name, p.Prices.CacheWriteMicros, p.Prices.InputMicros)
+		}
+		if p.Prices.CacheWrite1hMicros != p.Prices.InputMicros*2 {
+			t.Errorf("%s: 1h write %d is not 2x input %d", name, p.Prices.CacheWrite1hMicros, p.Prices.InputMicros)
+		}
+	}
+}
+
+func TestAnthropic_hourOnlyRate_readsAsAppliedNotZero(t *testing.T) {
+	t.Parallel()
+	// With only the hour rate configured, money flows — and the provenance
+	// must say a rate applied, or the screen explains a positive figure as
+	// "zero configured".
+	c := serve(t, anthropicHourCacheWrite)
+
+	got, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{
+		Model:        "claude-opus-5",
+		PricePerMTok: model.Prices{CacheWrite1hMicros: 10_000_000},
+	}).Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if !got.Price.NonZeroApplied {
+		t.Error("NonZeroApplied = false while the hour rate billed the call")
+	}
+}

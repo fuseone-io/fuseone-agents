@@ -15,7 +15,7 @@ const stepColumns = `
 	run_id, seq, kind, company_id, area_id, agent_id, version_id, on_behalf_of,
 	payload, labels,
 	input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_micros,
-	idem_key, policy_hash, at, prev_hash, hash`
+	idem_key, policy_hash, at, prev_hash, hash, cache_write_1h_tokens`
 
 func scanSteps(rows pgx.Rows) ([]domain.Step, error) {
 	var out []domain.Step
@@ -38,6 +38,7 @@ func scanSteps(rows pgx.Rows) ([]domain.Step, error) {
 			&s.Cost.InputTokens, &s.Cost.OutputTokens,
 			&s.Cost.CacheReadTokens, &s.Cost.CacheWriteTokens, &s.Cost.Micros,
 			&s.IdemKey, &s.PolicyHash, &s.At, &s.PrevHash, &s.Hash,
+			&s.Cost.CacheWrite1hTokens,
 		); err != nil {
 			return nil, fmt.Errorf("scan step: %w", err)
 		}

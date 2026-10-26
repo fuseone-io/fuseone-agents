@@ -2428,3 +2428,39 @@ func TestAppendIfHead_bothConditionsFail_reportsTheHead(t *testing.T) {
 		}
 	})
 }
+
+func TestAppend_hourWriteSubset_survivesTheRoundTrip(t *testing.T) {
+	base := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+
+	run(t, "the hour subset read back is the one sealed", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, startedAt("run-1", base))
+
+		priced := step("run-1", domain.StepPlanned)
+		priced.At = base.Add(time.Second)
+		priced.Cost = domain.Cost{CacheWriteTokens: 90_000, CacheWrite1hTokens: 70_000, Micros: 825_000}
+		mustAppend(t, s, priced)
+
+		steps, err := s.Read(ctx, "run-1", domain.FirstSeq)
+		if err != nil {
+			t.Fatalf("Read: %v", err)
+		}
+		var got *domain.Step
+		for i := range steps {
+			if steps[i].Kind == domain.StepPlanned {
+				got = &steps[i]
+			}
+		}
+		if got == nil {
+			t.Fatal("the planned step did not come back")
+		}
+		// A subset that zeroes on the round-trip un-seals the invoice: the
+		// stored hash was computed over 70k and the stored row says nothing.
+		if got.Cost.CacheWrite1hTokens != 70_000 || got.Cost.CacheWriteTokens != 90_000 {
+			t.Errorf("cost = %+v, want the hour subset the step carried", got.Cost)
+		}
+		if err := s.Verify(ctx, "run-1"); err != nil {
+			t.Errorf("Verify after round-trip: %v", err)
+		}
+	})
+}
