@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
@@ -31,6 +32,12 @@ type Anthropic struct {
 	provider string
 	cfg      Config
 	tools    ToolSchemas
+
+	// autoToolChoice remembers, per model, that "any" was refused with a 400
+	// and "auto" is the mode this model takes. Learned from the provider's
+	// own answer rather than shipped as a list, because a list in a binary
+	// ages — and scoped to the model that said it, never to the planner.
+	autoToolChoice sync.Map
 }
 
 // ToolSchemas resolves the JSON Schema a tool accepts. The model is only ever
@@ -133,11 +140,13 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	promptGuidance := stableGuidance + volatileGuidance
 	prompt := promptInputBreakdown(in, a.cfg, a.tools, offered, promptGuidance)
 
-	resp, err := a.client.Messages.New(ctx, anthropic.MessageNewParams{
-		// The step's, when it named one. The provider is not overridable: it
-		// carries a credential, and a definition able to choose one could
-		// route an installation's traffic wherever its author liked.
-		Model:     anthropic.Model(or(in.Model, a.cfg.Model)),
+	// The pair this call is actually made against — the step's, when it
+	// named one. The provider is not overridable: it carries a credential,
+	// and a definition able to choose one could route an installation's
+	// traffic wherever its author liked.
+	model := or(in.Model, a.cfg.Model)
+	params := anthropic.MessageNewParams{
+		Model:     anthropic.Model(model),
 		MaxTokens: a.cfg.MaxTokens,
 		System:    a.system(stableGuidance),
 		Messages:  a.messages(in, offered, volatileGuidance),
@@ -145,11 +154,9 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 		// The engine can execute at most one proposal per turn, and finishing
 		// is a platform tool. Requiring a single tool use prevents the model
 		// from returning free text that the ledger cannot record as an action.
-		ToolChoice: anthropic.ToolChoiceUnionParam{
-			OfAny: &anthropic.ToolChoiceAnyParam{
-				DisableParallelToolUse: anthropic.Bool(true),
-			},
-		},
+		// A model that refuses the requirement is downgraded to auto — see
+		// toolChoiceFor — and free text then reads back as the run's outcome.
+		ToolChoice: a.toolChoiceFor(model),
 		// Adaptive is the only supported mode on current models; a fixed
 		// thinking budget is rejected.
 		Thinking: anthropic.ThinkingConfigParamUnion{
@@ -158,7 +165,12 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 		OutputConfig: anthropic.OutputConfigParam{
 			Effort: anthropic.OutputConfigEffort(or(in.Effort, a.cfg.Effort)),
 		},
-	})
+	}
+	resp, err := a.client.Messages.New(ctx, params)
+	if err != nil && a.learnAutoToolChoice(model, err) {
+		params.ToolChoice = a.toolChoiceFor(model)
+		resp, err = a.client.Messages.New(ctx, params)
+	}
 	if err != nil {
 		return engine.Proposal{}, classifyAnthropic(a.provider, err)
 	}
@@ -166,9 +178,6 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	// Check the stop reason before reading content. A refusal returns HTTP 200
 	// with an empty or partial content list, so indexing straight into
 	// content[0] turns a policy decision into a nil dereference.
-	// The pair this call was actually made against — not the agent's default,
-	// which is what every figure below would otherwise be attributed to.
-	model := or(in.Model, a.cfg.Model)
 	rate, configured := a.rateFor(model)
 	cost := a.cost(resp.Usage, model)
 	price := priceUse(rate, configured, cost)
@@ -177,6 +186,43 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	}
 
 	return a.proposalFrom(resp, offered, prompt, cost, price, model), nil
+}
+
+// toolChoiceFor is the structural guarantee where the model takes it, and
+// the learned downgrade where it refused: with auto, free text reads back as
+// the run's outcome instead of an error nobody can act on.
+func (a *Anthropic) toolChoiceFor(model string) anthropic.ToolChoiceUnionParam {
+	if _, auto := a.autoToolChoice.Load(model); auto {
+		return anthropic.ToolChoiceUnionParam{
+			OfAuto: &anthropic.ToolChoiceAutoParam{
+				DisableParallelToolUse: anthropic.Bool(true),
+			},
+		}
+	}
+	return anthropic.ToolChoiceUnionParam{
+		OfAny: &anthropic.ToolChoiceAnyParam{
+			DisableParallelToolUse: anthropic.Bool(true),
+		},
+	}
+}
+
+// learnAutoToolChoice reads a refusal of the required-tool mode and records
+// it, answering whether the call is worth one retry. Only the named refusal
+// counts: a plain 400 retried on a hunch would hide a genuinely bad request
+// behind a second identical failure.
+func (a *Anthropic) learnAutoToolChoice(model string, err error) bool {
+	if _, already := a.autoToolChoice.Load(model); already {
+		return false
+	}
+	var apiErr *anthropic.Error
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != 400 {
+		return false
+	}
+	if !strings.Contains(anthropicErrorMessage(apiErr), "tool_choice") {
+		return false
+	}
+	a.autoToolChoice.Store(model, struct{}{})
+	return true
 }
 
 /*

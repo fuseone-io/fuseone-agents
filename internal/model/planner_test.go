@@ -1463,3 +1463,118 @@ func TestAnthropic_hourOnlyRate_readsAsAppliedNotZero(t *testing.T) {
 		t.Error("NonZeroApplied = false while the hour rate billed the call")
 	}
 }
+
+const toolChoiceRejection = `{"type":"error","error":{"type":"invalid_request_error","message":"tool_choice: type 'any' is not supported by this model; use 'auto'"}}`
+
+func TestAnthropic_modelRejectingAnyToolChoice_learnsAutoAndRetries(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	calls := 0
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		choice, _ := body["tool_choice"].(map[string]any)
+		if choice["type"] == "any" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, toolChoiceRejection)
+			return
+		}
+		_, _ = io.WriteString(w, anthropicToolUse)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5-5"})
+	got, err := p.Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan after the downgrade: %v", err)
+	}
+	if got.Tool != "crm.lookup" {
+		t.Errorf("Tool = %q, want the proposal from the retried call", got.Tool)
+	}
+	bodies := c.all()
+	if len(bodies) != 2 {
+		t.Fatalf("calls = %d, want the refusal and one retry", len(bodies))
+	}
+	retried, _ := bodies[1]["tool_choice"].(map[string]any)
+	if retried["type"] != "auto" || retried["disable_parallel_tool_use"] != true {
+		t.Errorf("retry tool_choice = %v, want auto with parallel use still off", retried)
+	}
+
+	// Learned, not rediscovered: the next turn pays no 400.
+	if _, err := p.Plan(context.Background(), input()); err != nil {
+		t.Fatalf("second Plan: %v", err)
+	}
+	bodies = c.all()
+	if len(bodies) != 3 {
+		t.Fatalf("calls = %d, want exactly one more", len(bodies))
+	}
+	learned, _ := bodies[2]["tool_choice"].(map[string]any)
+	if learned["type"] != "auto" {
+		t.Errorf("learned tool_choice = %v, want auto from the first request", learned)
+	}
+}
+
+func TestAnthropic_ordinaryBadRequest_isNotMistakenForAToolChoiceLimit(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"type":"error","error":{"type":"invalid_request_error","message":"max_tokens is too large"}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := plannerFor(t, model.KindAnthropic, srv.URL, model.Config{}).
+		Plan(context.Background(), input())
+
+	var provider *model.ProviderError
+	if !errors.As(err, &provider) || provider.Code != model.CodeBadRequest {
+		t.Fatalf("err = %v, want the plain bad request", err)
+	}
+	if calls != 1 {
+		t.Errorf("calls = %d; a genuine bad request must not be retried", calls)
+	}
+}
+
+func TestAnthropic_toolChoiceLearning_isPerModel(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		choice, _ := body["tool_choice"].(map[string]any)
+		if body["model"] == "claude-opus-5-5" && choice["type"] == "any" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, toolChoiceRejection)
+			return
+		}
+		_, _ = io.WriteString(w, anthropicToolUse)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5-5"})
+	if _, err := p.Plan(context.Background(), input()); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	// A step naming the older model keeps the structural guarantee: the
+	// limit belongs to the model that stated it, never to the planner.
+	stepInput := input()
+	stepInput.Model = "claude-opus-5"
+	if _, err := p.Plan(context.Background(), stepInput); err != nil {
+		t.Fatalf("Plan with the step override: %v", err)
+	}
+	bodies := c.all()
+	last, _ := bodies[len(bodies)-1]["tool_choice"].(map[string]any)
+	if bodies[len(bodies)-1]["model"] != "claude-opus-5" || last["type"] != "any" {
+		t.Errorf("override call = model %v choice %v, want any on the model that takes it",
+			bodies[len(bodies)-1]["model"], last)
+	}
+}
