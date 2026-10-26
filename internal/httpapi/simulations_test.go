@@ -214,7 +214,7 @@ func TestSimulationCase_whenTheStoredOutcomeWasErased_omitsItAndNamesTheState(t 
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	if _, err := content.Erase(ctx, "run-1", "retention"); err != nil {
+	if _, err := content.Erase(ctx, "run", "run-1", "retention"); err != nil {
 		t.Fatalf("Erase: %v", err)
 	}
 

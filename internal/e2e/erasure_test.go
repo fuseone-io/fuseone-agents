@@ -40,7 +40,7 @@ func TestErase_theChainStillVerifiesAndTheTrailStillReads(t *testing.T) {
 		before := p.steps(t, "run-erase-1")
 		ref := resultRef(t, before)
 
-		erased, err := p.content.Erase(t.Context(), "run-erase-1", "subject request")
+		erased, err := p.content.Erase(t.Context(), "run", "run-erase-1", "subject request")
 		if err != nil {
 			t.Fatalf("Erase: %v", err)
 		}

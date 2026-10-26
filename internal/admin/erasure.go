@@ -16,7 +16,7 @@ import (
 // correction to the record is a new step, and an erasure is not a correction —
 // it is the payload going while the record of it happening stays.
 type Content interface {
-	Erase(ctx context.Context, owner string, reason string) (int, error)
+	Erase(ctx context.Context, kind, owner, reason string) (int, error)
 	ErasePast(ctx context.Context, before time.Time, reason string) (int, error)
 }
 
@@ -54,7 +54,7 @@ func (e *Erasures) ForSubject(
 ) (int, error) {
 	erased := 0
 	for _, run := range runs {
-		count, err := e.content.Erase(ctx, string(run), "subject")
+		count, err := e.content.Erase(ctx, "run", string(run), "subject")
 		if err != nil {
 			return erased, fmt.Errorf("admin: erase %s: %w", run, err)
 		}

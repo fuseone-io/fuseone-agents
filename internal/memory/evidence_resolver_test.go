@@ -243,7 +243,7 @@ fails, this is exactly the state the installation is in.
 func TestResolve_erasedContent_isASourceThatIsGone(t *testing.T) {
 	t.Parallel()
 	r, cited := finished(t, "run-1")
-	if _, err := r.content.Erase(context.Background(), "run-1", "subject"); err != nil {
+	if _, err := r.content.Erase(context.Background(), "run", "run-1", "subject"); err != nil {
 		t.Fatalf("Erase: %v", err)
 	}
 

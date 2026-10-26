@@ -6,14 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/netguard"
 )
 
 var ErrNoProvider = errors.New("auth: no such identity provider")
@@ -53,6 +56,7 @@ type OIDCProvider struct {
 
 // OIDC runs the browser sign-in flow.
 type OIDC struct {
+	web *http.Client
 	// mu guards providers. The administration area writes this map while
 	// sign-in requests read it: configuring a provider is no longer something
 	// that only happens before the server starts serving.
@@ -81,7 +85,33 @@ func NewOIDC(baseURL string, secure bool) *OIDC {
 		discovered: make(map[string]*oidc.Provider),
 		baseURL:    strings.TrimSuffix(baseURL, "/"),
 		secure:     secure,
+		web:        guardedWebClient(),
 	}
+}
+
+/*
+guardedWebClient is what discovery and the token exchange ride on.
+
+The issuer is operator input, and the default client would follow it — and
+any redirect it answers — to cloud metadata or a link-local address, which
+are credentials rather than identity providers. Same policy as every other
+outbound client in this platform: private addresses are a normal case, the
+metadata plane is never one. The environment proxy is refused for the same
+reason the connectors refuse it — once a proxy resolves the name, nothing
+here can prove where the request went.
+*/
+func guardedWebClient() *http.Client {
+	transport := &http.Transport{}
+	netguard.GuardHTTPTransport(transport)
+	return &http.Client{
+		Transport: netguard.RefuseEnvironmentProxy(transport),
+		Timeout:   15 * time.Second,
+	}
+}
+
+// webCtx makes every oidc and oauth2 call in ctx use the guarded client.
+func (o *OIDC) webCtx(ctx context.Context) context.Context {
+	return oidc.ClientContext(ctx, o.web)
 }
 
 // IdentityProviderRevision turns the durable provider row into a cheap change
@@ -124,7 +154,7 @@ func (o *OIDC) discover(ctx context.Context, issuer string) (*oidc.Provider, err
 	if found := o.discovered[issuer]; found != nil {
 		return found, nil
 	}
-	discovered, err := oidc.NewProvider(ctx, issuer)
+	discovered, err := oidc.NewProvider(o.webCtx(ctx), issuer)
 	if err != nil {
 		return nil, err
 	}

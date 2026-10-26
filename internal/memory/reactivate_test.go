@@ -225,7 +225,7 @@ func expectErasedContentEndsTheMemory(t *testing.T, ctx context.Context, store r
 	t.Helper()
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 	r, disabled := disabledMemory(t, ctx, store, now)
-	if _, err := r.content.Erase(ctx, string(r.id), "the subject asked"); err != nil {
+	if _, err := r.content.Erase(ctx, "run", string(r.id), "the subject asked"); err != nil {
 		t.Fatalf("Erase: %v", err)
 	}
 

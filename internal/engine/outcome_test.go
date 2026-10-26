@@ -60,7 +60,7 @@ func TestRun_finished_putsTheAnswerWhereErasureReachesIt(t *testing.T) {
 
 	// The point of the move: the same erasure that reaches a tool's arguments
 	// now reaches the model's answer.
-	if _, err := h.content.Erase(context.Background(), "run-1", "subject request"); err != nil {
+	if _, err := h.content.Erase(context.Background(), "run", "run-1", "subject request"); err != nil {
 		t.Fatalf("Erase: %v", err)
 	}
 	if _, err := h.content.Get(context.Background(), p.OutcomeRef); err == nil {
@@ -91,7 +91,7 @@ func TestOutcomeOf_answerErased_saysSoRatherThanReadingEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	if _, err := store.Erase(context.Background(), "run-1", "retention"); err != nil {
+	if _, err := store.Erase(context.Background(), "run", "run-1", "retention"); err != nil {
 		t.Fatalf("Erase: %v", err)
 	}
 

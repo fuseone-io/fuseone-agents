@@ -76,6 +76,18 @@ func (s *Server) PutIdentityProvider(
 	if req.Body.ClientSecret != nil {
 		secret = *req.Body.ClientSecret
 	}
+	// A stored secret follows the mapping it was entered for. Re-pointing
+	// the issuer or the client id while omitting the secret would send the
+	// old credential to whatever the new issuer's discovery names — so a
+	// changed pairing demands its own secret, stated fresh.
+	if secret == "" {
+		if refused, err := s.secretReuseAcrossIssuers(ctx, provider); err != nil {
+			return nil, err
+		} else if refused {
+			return openapi.PutIdentityProvider400ApplicationProblemPlusJSONResponse(
+				invalid("a changed issuer or client id needs its own client secret")), nil
+		}
+	}
 	if err := s.identity.PutIdentityProvider(ctx, callerOf(ctx), identityScope, provider, secret); err != nil {
 		return openapi.PutIdentityProvider400ApplicationProblemPlusJSONResponse(
 			upstreamRefused(err.Error())), nil
@@ -93,6 +105,23 @@ func (s *Server) PutIdentityProvider(
 			savedNotReachable(err.Error())), nil
 	}
 	return openapi.PutIdentityProvider204Response{}, nil
+}
+
+// secretReuseAcrossIssuers answers whether this write would carry a stored
+// secret to a different issuer/client pairing.
+func (s *Server) secretReuseAcrossIssuers(
+	ctx context.Context, provider domain.IdentityProvider,
+) (bool, error) {
+	stored, err := s.identity.IdentityProviders(ctx)
+	if err != nil {
+		return false, fmt.Errorf("read identity providers: %w", err)
+	}
+	for _, p := range stored {
+		if p.ID == provider.ID {
+			return p.Issuer != provider.Issuer || p.ClientID != provider.ClientID, nil
+		}
+	}
+	return false, nil
 }
 
 func (s *Server) DeleteIdentityProvider(

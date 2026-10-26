@@ -54,7 +54,7 @@ func TestAdvance_erasableContentStaysOutsideTheLedger(t *testing.T) {
 			t.Errorf("%s content = %q, want %q", name, got, want[name])
 		}
 	}
-	if _, err := h.content.Erase(ctx, string(start.RunID), "retention"); err != nil {
+	if _, err := h.content.Erase(ctx, "run", string(start.RunID), "retention"); err != nil {
 		t.Fatalf("Erase: %v", err)
 	}
 	for name, ref := range refs {

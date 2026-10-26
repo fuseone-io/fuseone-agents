@@ -1,6 +1,7 @@
 package auth_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -187,4 +188,19 @@ func fakeOIDCIssuer(t *testing.T) string {
 	issuer = server.URL
 	t.Cleanup(server.Close)
 	return issuer
+}
+
+func TestAdd_metadataIssuer_refusedBeforeAnyRequest(t *testing.T) {
+	t.Parallel()
+	o := auth.NewOIDC("https://console.example", true)
+
+	// The issuer is operator input, and the default client would walk it —
+	// and any redirect it answers — straight to the metadata plane, which
+	// is a credential, not an identity provider.
+	err := o.Add(context.Background(), &auth.OIDCProvider{
+		ID: "evil", Issuer: "http://169.254.169.254/latest", ClientID: "x",
+	})
+	if err == nil || !strings.Contains(err.Error(), "cloud metadata") {
+		t.Fatalf("Add = %v, want the blocked-address refusal", err)
+	}
 }

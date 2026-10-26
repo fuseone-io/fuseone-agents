@@ -2888,7 +2888,7 @@ func TestPostgresHydrateSuggestions_sourceGone_recordsTheEndingInTheTrail(t *tes
 	if err != nil {
 		t.Fatalf("Suggest: %v", err)
 	}
-	if _, err := run.content.Erase(ctx, string(run.id), "the subject asked"); err != nil {
+	if _, err := run.content.Erase(ctx, "run", string(run.id), "the subject asked"); err != nil {
 		t.Fatalf("Erase: %v", err)
 	}
 
@@ -2935,7 +2935,7 @@ func TestPostgresHydrateSuggestions_endingFailsToRecord_leavesTheProposal(t *tes
 	if err != nil {
 		t.Fatalf("Suggest: %v", err)
 	}
-	if _, err := run.content.Erase(ctx, string(run.id), "the subject asked"); err != nil {
+	if _, err := run.content.Erase(ctx, "run", string(run.id), "the subject asked"); err != nil {
 		t.Fatalf("Erase: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
@@ -3081,7 +3081,7 @@ func expectHydrationEndsAnErasedMemory(t *testing.T, ctx context.Context, store 
 	if err != nil {
 		t.Fatalf("Assert: %v", err)
 	}
-	if _, err := r.content.Erase(ctx, string(r.id), "the subject asked"); err != nil {
+	if _, err := r.content.Erase(ctx, "run", string(r.id), "the subject asked"); err != nil {
 		t.Fatalf("Erase: %v", err)
 	}
 
@@ -3147,7 +3147,7 @@ func TestPostgresHydrate_sourceGone_isDatedWhenItWasDiscovered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Assert: %v", err)
 	}
-	if _, err := r.content.Erase(ctx, string(r.id), "the subject asked"); err != nil {
+	if _, err := r.content.Erase(ctx, "run", string(r.id), "the subject asked"); err != nil {
 		t.Fatalf("Erase: %v", err)
 	}
 

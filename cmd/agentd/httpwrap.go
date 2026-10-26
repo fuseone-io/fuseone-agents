@@ -53,6 +53,21 @@ func (p *problemRecorder) Write(b []byte) (int, error) {
 	return p.ResponseWriter.Write(b)
 }
 
+// maxRequestBody bounds every request body before the router sees it. The
+// generated handlers decode before the route's own authorization runs, so
+// the ceiling has to stand in front of all of them; the few endpoints with
+// smaller ceilings of their own keep them, since the smaller bound wins.
+const maxRequestBody = 2 << 20
+
+func withBodyLimit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func withRequestLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

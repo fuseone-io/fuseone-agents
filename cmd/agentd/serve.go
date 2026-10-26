@@ -319,9 +319,13 @@ func serve(args []string) error {
 
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           withRequestLog(root),
+		Handler:           withRequestLog(withBodyLimit(root)),
 		ReadHeaderTimeout: 10 * time.Second,
-		// No write timeout: the run event stream is long-lived by design.
+		// ReadTimeout bounds reading the request, body included: without it a
+		// slow trickle holds a connection for ever. Responses are untouched,
+		// so the run event stream stays long-lived; no write timeout for the
+		// same reason.
+		ReadTimeout: 60 * time.Second,
 		IdleTimeout: 120 * time.Second,
 	}
 

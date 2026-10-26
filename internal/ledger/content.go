@@ -152,11 +152,11 @@ content was segregated in the first place (AU-04).
 Erasing what is already erased is not an error. The caller is asking for a
 state, not for an event, and a retry after a failure must not refuse.
 */
-func (c *Content) Erase(ctx context.Context, owner string, reason string) (int, error) {
+func (c *Content) Erase(ctx context.Context, kind, owner, reason string) (int, error) {
 	tag, err := c.pool.Exec(ctx, `
 		update run_content
-		set bytes = null, erased_at = now(), erased_reason = $2
-		where run_id = $1 and erased_at is null`, owner, reason)
+		set bytes = null, erased_at = now(), erased_reason = $3
+		where owner_kind = $1 and run_id = $2 and erased_at is null`, kind, owner, reason)
 	if err != nil {
 		return 0, fmt.Errorf("ledger: erase content of %s: %w", owner, err)
 	}
