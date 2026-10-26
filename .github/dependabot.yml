@@ -1,0 +1,45 @@
+# Security updates only. The repository setting opens a pull request when an
+# advisory lands; the zero limits below keep routine version bumps out of the
+# queue — an upgrade somebody wants is a decision, not a drip. One grouped
+# pull request per manifest, so a wave of advisories arrives as one review.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      go-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      console-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /docs/site
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      docs-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      actions-security:
+        applies-to: security-updates
+        patterns: ["*"]
