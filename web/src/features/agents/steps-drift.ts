@@ -94,17 +94,34 @@ export function contradictions(
 
 function forbiddenTerms(instructions: string, catalogue: Tool[]) {
   const words = new Map<string, string>();
-  const counts = new Map<string, number>();
+  const itemsOfWord = new Map<string, Set<number>>();
+  const hammered = new Set<string>();
+  const inShortItem = new Set<string>();
   const tools = new Set<string>();
   const never = parse(instructions).filter((block) => block.kind === "never");
 
+  let itemIndex = 0;
   for (const block of never) {
-    const text = canonicalText(block.text);
-    for (const word of wordsOf(text)) {
-      words.set(word, word);
-      counts.set(word, (counts.get(word) ?? 0) + 1);
+    for (const item of itemsOf(block.text)) {
+      const text = canonicalText(item);
+      const seen = new Map<string, number>();
+      for (const word of wordsOf(text)) {
+        words.set(word, word);
+        seen.set(word, (seen.get(word) ?? 0) + 1);
+        let members = itemsOfWord.get(word);
+        if (!members) itemsOfWord.set(word, (members = new Set()));
+        members.add(itemIndex);
+      }
+      // A word the author hammers twice inside one prohibition is its
+      // subject; a short prohibition makes every noun in it the subject.
+      for (const [word, count] of seen) {
+        if (count > 1) hammered.add(word);
+        if (seen.size <= 6) inShortItem.add(word);
+      }
+      itemIndex += 1;
     }
 
+    const text = canonicalText(block.text);
     for (const tool of catalogue) {
       const short = shortName(tool.toolId);
       if (
@@ -117,13 +134,21 @@ function forbiddenTerms(instructions: string, catalogue: Tool[]) {
     }
   }
 
-  return {
-    words,
-    repeatedWords: new Set(
-      [...counts].filter(([, count]) => count > 1).map(([word]) => word),
-    ),
-    tools,
-  };
+  return { words, itemsOfWord, hammered, inShortItem, tools };
+}
+
+/**
+ * One prohibition at a time. Bullets are items; a block written as plain
+ * prose is one item per line. The split is what lets a long item's
+ * incidental nouns stay ordinary words instead of becoming a forbidden
+ * vocabulary an operator has to write around.
+ */
+function itemsOf(text: string): string[] {
+  const bullets = text
+    .split(/\n(?=\s*[-*\u2022])/u)
+    .flatMap((chunk) => (chunk.trim() ? [chunk] : []));
+  if (bullets.length > 1) return bullets;
+  return text.split("\n").flatMap((line) => (line.trim() ? [line] : []));
 }
 
 function wordsOf(text: string): string[] {
@@ -144,14 +169,33 @@ function forbiddenStopTerm(
     hasWord(stopsWhen, term),
   );
   if (matched.length === 0) return undefined;
-  return (
-    matched.find((term) => strongStopTerm(term, forbidden.repeatedWords)) ??
-    (matched.length >= 2 ? matched[0] : undefined)
-  );
+
+  const strong = matched.find((term) => strongStopTerm(term, forbidden));
+  if (strong) return strong;
+
+  // Two matches only count together when one prohibition holds both: a stop
+  // overlapping a single item is echoing it, while two lone nouns from two
+  // long items is how an honest card gets rewritten three times.
+  for (let i = 0; i < matched.length; i += 1) {
+    const a = matched[i] ?? "";
+    const items = forbidden.itemsOfWord.get(a) ?? new Set<number>();
+    for (let j = i + 1; j < matched.length; j += 1) {
+      const other =
+        forbidden.itemsOfWord.get(matched[j] ?? "") ?? new Set<number>();
+      if ([...items].some((item) => other.has(item))) return a;
+    }
+  }
+  return undefined;
 }
 
-function strongStopTerm(term: string, repeated: Set<string>): boolean {
-  return repeated.has(term) || term.length >= 8 || /[_-]|\d/.test(term);
+function strongStopTerm(
+  term: string,
+  forbidden: ReturnType<typeof forbiddenTerms>,
+): boolean {
+  if (/[_-]|\d/.test(term)) return true;
+  if (forbidden.hammered.has(term)) return true;
+  if ((forbidden.itemsOfWord.get(term)?.size ?? 0) >= 3) return true;
+  return term.length >= 8 && forbidden.inShortItem.has(term);
 }
 
 function missingInformationStop(text: string): boolean {
