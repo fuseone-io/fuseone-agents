@@ -97,5 +97,6 @@ func (p Prices) nonZeroAppliedTo(cost domain.Cost) bool {
 	return cost.InputTokens > 0 && p.InputMicros > 0 ||
 		cost.OutputTokens > 0 && p.OutputMicros > 0 ||
 		cost.CacheReadTokens > 0 && p.CacheReadMicros > 0 ||
-		cost.CacheWriteTokens > 0 && p.CacheWriteMicros > 0
+		cost.CacheWriteTokens > 0 && p.CacheWriteMicros > 0 ||
+		cost.CacheWrite1hTokens > 0 && p.CacheWrite1hMicros > 0
 }

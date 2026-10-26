@@ -169,3 +169,8 @@ Deixe sem valor para agentes disparados sob demanda ou menos que de hora em
 hora: eles pagariam a escrita dobrada sem nunca colher a leitura. O valor
 faz parte da definição publicada, então mudá-lo é uma versão nova como
 qualquer outra edição.
+
+A janela de uma hora tem tarifa própria de escrita na tela de preços —
+"escrita de cache 1h" — porque o provedor cobra acima da janela curta.
+Configure-a quando algum agente usar a janela de 1h; vazia, as escritas de
+1h cobram na tarifa curta, o que as subestima.

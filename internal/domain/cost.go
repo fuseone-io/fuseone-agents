@@ -14,26 +14,33 @@ type Cost struct {
 	OutputTokens     int64
 	CacheReadTokens  int64
 	CacheWriteTokens int64
-	Micros           int64
+	// CacheWrite1hTokens is the subset of CacheWriteTokens written with the
+	// hour-long window, which the provider bills at its own, higher rate.
+	// A subset rather than a sibling so every reader of the total stays
+	// correct without knowing windows exist.
+	CacheWrite1hTokens int64
+	Micros             int64
 }
 
 func (c Cost) Add(o Cost) Cost {
 	return Cost{
-		InputTokens:      c.InputTokens + o.InputTokens,
-		OutputTokens:     c.OutputTokens + o.OutputTokens,
-		CacheReadTokens:  c.CacheReadTokens + o.CacheReadTokens,
-		CacheWriteTokens: c.CacheWriteTokens + o.CacheWriteTokens,
-		Micros:           c.Micros + o.Micros,
+		InputTokens:        c.InputTokens + o.InputTokens,
+		OutputTokens:       c.OutputTokens + o.OutputTokens,
+		CacheReadTokens:    c.CacheReadTokens + o.CacheReadTokens,
+		CacheWriteTokens:   c.CacheWriteTokens + o.CacheWriteTokens,
+		CacheWrite1hTokens: c.CacheWrite1hTokens + o.CacheWrite1hTokens,
+		Micros:             c.Micros + o.Micros,
 	}
 }
 
 func (c Cost) Sub(o Cost) Cost {
 	return Cost{
-		InputTokens:      c.InputTokens - o.InputTokens,
-		OutputTokens:     c.OutputTokens - o.OutputTokens,
-		CacheReadTokens:  c.CacheReadTokens - o.CacheReadTokens,
-		CacheWriteTokens: c.CacheWriteTokens - o.CacheWriteTokens,
-		Micros:           c.Micros - o.Micros,
+		InputTokens:        c.InputTokens - o.InputTokens,
+		OutputTokens:       c.OutputTokens - o.OutputTokens,
+		CacheReadTokens:    c.CacheReadTokens - o.CacheReadTokens,
+		CacheWriteTokens:   c.CacheWriteTokens - o.CacheWriteTokens,
+		CacheWrite1hTokens: c.CacheWrite1hTokens - o.CacheWrite1hTokens,
+		Micros:             c.Micros - o.Micros,
 	}
 }
 

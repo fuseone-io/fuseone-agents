@@ -187,3 +187,33 @@ func TestNewStep_invalidInput_rejected(t *testing.T) {
 		})
 	}
 }
+
+func TestVerifyLink_hourSubsetTamperedAfterSealing_detected(t *testing.T) {
+	t.Parallel()
+
+	priced := base()
+	priced.Cost = Cost{CacheWriteTokens: 90_000, CacheWrite1hTokens: 70_000, Micros: 825_000}
+	s := mustStep(t, nil, priced)
+
+	// Moving writes between windows changes the invoice while every total the
+	// old formula sealed stays identical — the subset must be sealed too.
+	s.Cost.CacheWrite1hTokens = 0
+
+	if err := s.VerifyLink(nil); err != ErrHashMismatch {
+		t.Errorf("VerifyLink = %v, want %v", err, ErrHashMismatch)
+	}
+}
+
+func TestStepHash_zeroHourSubset_keepsThePreWindowFormula(t *testing.T) {
+	t.Parallel()
+
+	// Every step sealed before the hour window existed has a zero subset.
+	// Its hash must come out of today's formula unchanged, or the whole
+	// recorded chain of every installation stops verifying on upgrade.
+	plain := base()
+	plain.Cost = Cost{InputTokens: 100, CacheWriteTokens: 90_000, Micros: 500}
+	sealed := mustStep(t, nil, plain)
+	if err := sealed.VerifyLink(nil); err != nil {
+		t.Fatalf("a zero-subset step no longer verifies: %v", err)
+	}
+}

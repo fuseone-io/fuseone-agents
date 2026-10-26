@@ -162,3 +162,8 @@ changes every run and caching it longer is money for tokens never read again.
 Leave it unset for agents triggered ad hoc or less than hourly: they would
 pay the doubled write and never collect the read. The value is part of the
 published definition, so changing it is a new version like any other edit.
+
+The hour window has its own write rate on the prices screen — "cache write
+1h" — because the provider bills it above the short window's. Configure it
+when any agent uses the hour window; left empty, hour writes bill at the
+short rate, which understates them.

@@ -33,13 +33,16 @@ type ModelPrice struct {
 	Model    string `json:"model"`
 	Source   string `json:"source,omitempty"`
 
-	InputMicros      int64  `json:"inputMicros"`
-	OutputMicros     int64  `json:"outputMicros"`
-	CacheReadMicros  int64  `json:"cacheReadMicros"`
-	CacheWriteMicros int64  `json:"cacheWriteMicros"`
-	Currency         string `json:"currency,omitempty"`
-	SourceURL        string `json:"sourceUrl,omitempty"`
-	SourceUpdatedAt  string `json:"sourceUpdatedAt,omitempty"`
+	InputMicros      int64 `json:"inputMicros"`
+	OutputMicros     int64 `json:"outputMicros"`
+	CacheReadMicros  int64 `json:"cacheReadMicros"`
+	CacheWriteMicros int64 `json:"cacheWriteMicros"`
+	// CacheWrite1hMicros prices the hour-window writes; zero bills them at
+	// CacheWriteMicros.
+	CacheWrite1hMicros int64  `json:"cacheWrite1hMicros,omitempty"`
+	Currency           string `json:"currency,omitempty"`
+	SourceURL          string `json:"sourceUrl,omitempty"`
+	SourceUpdatedAt    string `json:"sourceUpdatedAt,omitempty"`
 }
 
 // ErrNoModel means a rate was given for a provider without naming a model.

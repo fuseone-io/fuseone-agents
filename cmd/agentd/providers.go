@@ -213,10 +213,11 @@ func pricesFrom(ctx context.Context, from providerConfig) (map[string]map[string
 			priced[r.Provider] = map[string]model.Prices{}
 		}
 		priced[r.Provider][r.Model] = model.Prices{
-			InputMicros:      r.InputMicros,
-			OutputMicros:     r.OutputMicros,
-			CacheReadMicros:  r.CacheReadMicros,
-			CacheWriteMicros: r.CacheWriteMicros,
+			InputMicros:        r.InputMicros,
+			OutputMicros:       r.OutputMicros,
+			CacheReadMicros:    r.CacheReadMicros,
+			CacheWriteMicros:   r.CacheWriteMicros,
+			CacheWrite1hMicros: r.CacheWrite1hMicros,
 		}
 	}
 	return priced, nil

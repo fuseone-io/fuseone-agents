@@ -3285,6 +3285,13 @@ export interface components {
             cacheReadMicros?: number;
             /** Format: int64 */
             cacheWriteMicros?: number;
+            /**
+             * Format: int64
+             * @description Rate for cache writes made with the hour-long window, which the
+             *     provider bills above the short window's. Absent or zero, hour
+             *     writes bill at cacheWriteMicros.
+             */
+            cacheWrite1hMicros?: number;
             /** @description Public pricing page used for a market default. */
             sourceUrl?: string;
             /** @description Date the bundled market default was checked. */

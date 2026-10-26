@@ -5291,6 +5291,13 @@ components:
         outputMicros: { type: integer, format: int64 }
         cacheReadMicros: { type: integer, format: int64 }
         cacheWriteMicros: { type: integer, format: int64 }
+        cacheWrite1hMicros:
+          type: integer
+          format: int64
+          description: |
+            Rate for cache writes made with the hour-long window, which the
+            provider bills above the short window's. Absent or zero, hour
+            writes bill at cacheWriteMicros.
         sourceUrl:
           type: string
           description: Public pricing page used for a market default.

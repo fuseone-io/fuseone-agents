@@ -41,6 +41,11 @@ export function PriceRow({
             cacheRead: formatPrice(price, price.cacheReadMicros ?? 0),
             cacheWrite: formatPrice(price, price.cacheWriteMicros ?? 0),
           })}
+          {(price.cacheWrite1hMicros ?? 0) > 0 &&
+            " " +
+              t("admin.rateLine1h", {
+                cacheWrite1h: formatPrice(price, price.cacheWrite1hMicros ?? 0),
+              })}
         </Mono>
         {isMarketDefault && price.sourceUpdatedAt && (
           <div className="mt-1 text-xs text-muted-foreground">
