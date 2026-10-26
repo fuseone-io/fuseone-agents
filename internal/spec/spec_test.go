@@ -559,3 +559,32 @@ func TestRender_anAgentThatAsksForNothing_writesNoBlock(t *testing.T) {
 		t.Errorf("rendered an approvals block nobody asked for:\n%s", out)
 	}
 }
+
+func TestParse_cachePrefixTTL_acceptsTheTwoKnownWindows(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct{ line, want string }{
+		{line: "", want: ""},
+		{line: "cache_prefix_ttl: 5m\n", want: "5m"},
+		{line: "cache_prefix_ttl: 1h\n", want: "1h"},
+	}
+	for _, tc := range cases {
+		s := parse(t, strings.Replace(valid, "effort: medium\n", "effort: medium\n"+tc.line, 1))
+		if s.CachePrefixTTL != tc.want {
+			t.Errorf("CachePrefixTTL = %q, want %q", s.CachePrefixTTL, tc.want)
+		}
+	}
+}
+
+func TestParse_cachePrefixTTL_unknownWindowRefused(t *testing.T) {
+	t.Parallel()
+
+	// 2h is the value somebody invents by analogy; the provider only sells
+	// two windows, and a silently dropped TTL would bill at a rate nobody
+	// chose.
+	_, err := spec.Parse("test.agent.md", []byte(
+		strings.Replace(valid, "effort: medium\n", "effort: medium\ncache_prefix_ttl: 2h\n", 1)))
+	if err == nil || !strings.Contains(err.Error(), "cache_prefix_ttl") {
+		t.Fatalf("Parse = %v, want a cache_prefix_ttl refusal", err)
+	}
+}

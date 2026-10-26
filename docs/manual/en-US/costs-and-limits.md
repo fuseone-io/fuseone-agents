@@ -139,3 +139,26 @@ trail.
 5. Run a new run.
 6. If cost is still zero, check whether the worker loaded the revision and
    whether the model name matches exactly.
+
+## The cache prefix window
+
+An agent's instructions and tool schemas are a stable prefix the provider can
+cache. By default the cache lives five minutes: plenty inside one run, gone
+before the next hourly one, so an agent triggered on the hour re-writes its
+whole prefix every run — and cache writes are the expensive class.
+
+An agent definition may choose the longer window in its frontmatter:
+
+```yaml
+cache_prefix_ttl: 1h
+```
+
+The hour window doubles the write rate but lets the next run read the prefix
+back instead of re-writing it; for an agent that runs at least once an hour
+the write happens once and the rest of the day reads. Only the stable prefix
+is affected — the conversation itself keeps the short window, because it
+changes every run and caching it longer is money for tokens never read again.
+
+Leave it unset for agents triggered ad hoc or less than hourly: they would
+pay the doubled write and never collect the read. The value is part of the
+published definition, so changing it is a new version like any other edit.

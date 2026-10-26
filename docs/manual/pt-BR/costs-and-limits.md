@@ -143,3 +143,29 @@ trilha de cada execução.
 5. Rode uma run nova.
 6. Se o custo continuar zero, confira se o worker carregou a revisão e se o
    nome do modelo bate exatamente.
+
+## A janela de cache do prefixo
+
+As instruções e os schemas de tools de um agente formam um prefixo estável
+que o provedor consegue cachear. Por padrão o cache vive cinco minutos:
+sobra dentro de uma run, acaba antes da próxima run horária — então um
+agente disparado de hora em hora re-escreve o prefixo inteiro a cada run, e
+escrita de cache é a classe cara.
+
+A definição do agente pode escolher a janela longa no frontmatter:
+
+```yaml
+cache_prefix_ttl: 1h
+```
+
+A janela de uma hora dobra a tarifa de escrita, mas deixa a run seguinte ler
+o prefixo de volta em vez de re-escrevê-lo; para um agente que roda pelo
+menos uma vez por hora, a escrita acontece uma vez e o resto do dia é
+leitura. Só o prefixo estável é afetado — a conversa em si continua na
+janela curta, porque muda a cada run e cacheá-la por mais tempo é dinheiro
+em tokens que nunca serão lidos de novo.
+
+Deixe sem valor para agentes disparados sob demanda ou menos que de hora em
+hora: eles pagariam a escrita dobrada sem nunca colher a leitura. O valor
+faz parte da definição publicada, então mudá-lo é uma versão nova como
+qualquer outra edição.

@@ -40,6 +40,14 @@ type Spec struct {
 	Model    string
 	Effort   string
 
+	// CachePrefixTTL is how long the provider may keep this agent's stable
+	// prefix cached: empty or 5m is the provider default, 1h pays the longer
+	// write so an agent triggered on the hour reads its prefix back instead
+	// of re-writing it. Explicit in the definition, never inferred from the
+	// trigger: the doubled write rate is a choice somebody should be able to
+	// read here.
+	CachePrefixTTL string
+
 	// Tools is the capability pack, resolved to concrete tool ids. The author
 	// picks a pack; this is what the pack expanded to (PRD SE-03).
 	Tools          []domain.ToolID
@@ -93,6 +101,7 @@ type frontmatter struct {
 	Provider string    `yaml:"provider"`
 	Model    string    `yaml:"model"`
 	Effort   string    `yaml:"effort"`
+	CacheTTL string    `yaml:"cache_prefix_ttl,omitempty"`
 	Tools    []string  `yaml:"tools"`
 	Triggers []Trigger `yaml:"triggers"`
 	Emits    Emits     `yaml:"emits,omitempty"`
@@ -140,6 +149,7 @@ func Parse(source string, data []byte) (Spec, error) {
 		Provider:       fm.Provider,
 		Model:          fm.Model,
 		Effort:         fm.Effort,
+		CachePrefixTTL: fm.CacheTTL,
 		Triggers:       fm.Triggers,
 		Emits:          fm.Emits,
 		Steps:          fm.Steps,
@@ -196,6 +206,9 @@ func (s Spec) validate() error {
 	}
 	if s.Provider == "" {
 		problems = append(problems, "provider is required")
+	}
+	if s.CachePrefixTTL != "" && s.CachePrefixTTL != "5m" && s.CachePrefixTTL != "1h" {
+		problems = append(problems, "cache_prefix_ttl must be 5m or 1h; the provider sells no other window")
 	}
 	problems = append(problems, triggerProblems(s.Triggers)...)
 	problems = append(problems, emitProblems(s.Emits)...)

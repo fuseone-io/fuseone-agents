@@ -52,6 +52,12 @@ type Config struct {
 	MaxTokens int64
 	// SystemPrompt is the agent's instructions, from its specification.
 	SystemPrompt string
+	// CachePrefixTTL stretches the stable prefix's cache window: "1h" pays
+	// the doubled write rate so a run on the next hour reads the prefix back
+	// instead of re-writing it. Empty or "5m" keeps the provider default.
+	// Applied to the prefix breakpoint only — the conversation tail changes
+	// every run, and an hour of it is money for tokens never read again.
+	CachePrefixTTL string
 	// PricePerMTok converts usage into the ledger's money. Set per model from
 	// the installation's own price list; zero means cost is recorded as tokens
 	// only, never as a guess.

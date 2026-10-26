@@ -98,8 +98,9 @@ func (r *Resolver) planner(spec Spec) (engine.Planner, error) {
 		}
 
 		planner, err := r.providers.Planner(spec.Provider, model.Config{
-			Model:  spec.Model,
-			Effort: spec.Effort,
+			Model:          spec.Model,
+			Effort:         spec.Effort,
+			CachePrefixTTL: spec.CachePrefixTTL,
 			// The body of the definition is the system prompt: what the author
 			// reviewed is what the model receives.
 			SystemPrompt: spec.Instructions,

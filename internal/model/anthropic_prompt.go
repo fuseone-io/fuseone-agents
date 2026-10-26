@@ -16,8 +16,19 @@ func (a *Anthropic) system(guidance string) []anthropic.TextBlockParam {
 	if guidance != "" {
 		blocks = append(blocks, anthropic.TextBlockParam{Text: guidance})
 	}
-	blocks[len(blocks)-1].CacheControl = anthropic.NewCacheControlEphemeralParam()
+	blocks[len(blocks)-1].CacheControl = a.prefixCacheControl()
 	return blocks
+}
+
+// prefixCacheControl is the one place the longer window applies. The ordering
+// rule — longer TTLs before shorter — holds by construction: this breakpoint
+// precedes the message tail, which keeps the default.
+func (a *Anthropic) prefixCacheControl() anthropic.CacheControlEphemeralParam {
+	cache := anthropic.NewCacheControlEphemeralParam()
+	if a.cfg.CachePrefixTTL == "1h" {
+		cache.TTL = anthropic.CacheControlEphemeralTTLTTL1h
+	}
+	return cache
 }
 
 // messages caches the ledger prefix and places changing guidance after it.
