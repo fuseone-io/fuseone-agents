@@ -233,7 +233,12 @@ func serve(args []string) error {
 	}
 
 	apiHandler := openapi.HandlerWithOptions(
-		openapi.NewStrictHandler(api, nil),
+		openapi.NewStrictHandlerWithOptions(api, nil, openapi.StrictHTTPServerOptions{
+			RequestErrorHandlerFunc: requestProblem,
+			ResponseErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
+				writeProblem(w, http.StatusInternalServerError, "Internal error", err.Error())
+			},
+		}),
 		openapi.StdHTTPServerOptions{
 			BaseURL:    "/api/v1",
 			BaseRouter: http.NewServeMux(),

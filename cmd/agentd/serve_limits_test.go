@@ -64,3 +64,19 @@ func errorsAs(err error, target any) bool {
 	}
 	return false
 }
+
+func TestRequestProblem_bodyOverCeiling_answers413(t *testing.T) {
+	t.Parallel()
+
+	rec := httptest.NewRecorder()
+	requestProblem(rec, nil, &http.MaxBytesError{Limit: maxRequestBody})
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413: the caller must hear \"shrink it\", not \"fix it\"", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	requestProblem(rec, nil, io.ErrUnexpectedEOF)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want the plain 400 for everything else", rec.Code)
+	}
+}
