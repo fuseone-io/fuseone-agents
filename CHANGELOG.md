@@ -25,6 +25,19 @@ field" is a commit message.
 
 ---
 
+## [0.67.0] — 2026-10-26
+
+### Added
+
+- **Each tool server carries its own call ceiling.** Sixty seconds was
+  the one timeout every tool call lived under, and a log store
+  aggregating an hour of the busiest stream has different physics than
+  a CRM lookup. The server's configuration gains a per-call ceiling (5
+  to 600 seconds) that binds the call itself on every transport;
+  connect and discovery are never strangled by a short one, zero resets
+  to the default, and a server that chose nothing keeps today's
+  behaviour.
+
 ## [0.66.0] — 2026-10-26
 
 ### Added
