@@ -1669,6 +1669,15 @@ func TestAnthropic_nudgeCallFailing_surfacesTheProviderError(t *testing.T) {
 	if !errors.As(err, &provider) || !provider.Retryable {
 		t.Fatalf("err = %v, want the nudge call's own retryable failure", err)
 	}
+	// The text call succeeded and was billed; the error carries that spend
+	// so the turn can put it on the ledger before any retry burns another.
+	var spent *engine.SpentPlanError
+	if !errors.As(err, &spent) {
+		t.Fatalf("err = %v, want the spend travelling with it", err)
+	}
+	if spent.Cost.InputTokens != 1 || spent.Cost.OutputTokens != 1 || spent.Model == "" {
+		t.Errorf("spent = %+v, want the first call's exact usage and its pair", spent)
+	}
 }
 
 func TestAnthropic_nudgeReplay_carriesThinkingBlocksWhole(t *testing.T) {

@@ -240,6 +240,50 @@ func TestTurn_transientFailure_backsOffInsteadOfParking(t *testing.T) {
 	}
 }
 
+func TestTurn_spentPlanFailure_putsTheSpendOnTheLedgerAndRetries(t *testing.T) {
+	t.Parallel()
+
+	spent := &engine.SpentPlanError{
+		Cost:     domain.Cost{InputTokens: 1, OutputTokens: 1, Micros: 30},
+		Provider: "anthropic", Model: "claude-opus-5-5",
+		Err: &model.ProviderError{Provider: "anthropic", Code: model.CodeProviderUnavailable, Retryable: true},
+	}
+	s := newSetup(t, Config{MaxAttempts: 3, BaseBackoff: time.Second}, &flakyPlanner{failures: 1, err: spent}, nil)
+	openRun(t, s.store)
+
+	if _, err := s.worker.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+
+	if got := phaseOf(t, s.store); got == engine.PhaseParked {
+		t.Error("a retryable spent failure parked the run")
+	}
+	// The provider billed that call whether or not the turn survived it: the
+	// ledger holds the spend exactly once, with the pair it belongs to.
+	runs, err := s.store.Runs(context.Background())
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("Runs = %v, %v", runs, err)
+	}
+	steps, err := s.store.Read(context.Background(), runs[0], domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	recorded := 0
+	for _, step := range steps {
+		if step.Kind == domain.StepPlanned && step.Cost.Micros == 30 {
+			recorded++
+			var payload domain.PlannedPayload
+			if err := json.Unmarshal(step.Payload, &payload); err != nil ||
+				payload.Provider != "anthropic" || payload.Model != "claude-opus-5-5" {
+				t.Errorf("payload = %s, want the pair the spend belongs to", step.Payload)
+			}
+		}
+	}
+	if recorded != 1 {
+		t.Errorf("spend steps = %d, want exactly one", recorded)
+	}
+}
+
 func TestTurn_repeatedFailures_parkForAHuman(t *testing.T) {
 	t.Parallel()
 

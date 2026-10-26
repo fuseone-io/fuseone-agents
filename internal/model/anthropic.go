@@ -176,7 +176,14 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	}
 	resp, extra, nudgeErr := a.nudgeFreeText(ctx, model, params, resp)
 	if nudgeErr != nil {
-		return engine.Proposal{}, classifyAnthropic(a.provider, nudgeErr)
+		rate, configured := a.rateFor(model)
+		return engine.Proposal{}, &engine.SpentPlanError{
+			Cost:     extra,
+			Price:    priceUse(rate, configured, extra),
+			Provider: a.provider,
+			Model:    model,
+			Err:      classifyAnthropic(a.provider, nudgeErr),
+		}
 	}
 
 	// Check the stop reason before reading content. A refusal returns HTTP 200
@@ -234,8 +241,10 @@ func (a *Anthropic) nudgeFreeText(
 	second, err := a.client.Messages.New(ctx, nudged)
 	if err != nil {
 		// Quietly accepting the status text here would be the bug this
-		// exists to remove; the turn fails and the worker's retry runs.
-		return nil, domain.Cost{}, err
+		// exists to remove; the turn fails and the worker's retry runs —
+		// with the first call's spend travelling along, because it was
+		// billed whether or not this one answered.
+		return nil, firstCost, err
 	}
 	return second, firstCost, nil
 }

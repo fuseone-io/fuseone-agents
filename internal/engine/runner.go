@@ -85,6 +85,26 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 
 	proposal, err := r.plan(ctx, state, start)
 	if err != nil {
+		// A turn can spend before it fails — a provider call that succeeded
+		// followed by one that did not. The failure still ends the turn, but
+		// the spend goes on the ledger first: released unrecorded, every
+		// retry burns an invoiced call that no budget or trail ever sees.
+		var spent *SpentPlanError
+		if errors.As(err, &spent) {
+			if _, aerr := r.append(ctx, state, start, domain.Step{
+				Kind:   domain.StepPlanned,
+				Labels: state.Labels.Clone(),
+				Cost:   spent.Cost,
+				Payload: mustJSON(domain.PlannedPayload{
+					Node:     StepNameAt(start, state.Called),
+					Provider: spent.Provider,
+					Model:    spent.Model,
+					Price:    pricePayload(spent.Price),
+				}),
+			}); aerr != nil {
+				return Status{}, aerr
+			}
+		}
 		return Status{}, err
 	}
 	if r.deps.Metrics != nil {
