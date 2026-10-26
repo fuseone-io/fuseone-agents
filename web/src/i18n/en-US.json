@@ -1613,6 +1613,8 @@
     "configFileEnvInvalid": "Use an environment variable name, such as TOOLBOX_CONFIG.",
     "rateLimitPerSecond": "Calls per second",
     "rateLimitBurst": "Burst",
+    "callTimeout": "Call timeout (s)",
+    "callTimeoutInvalid": "Between 5 and 600 seconds, or empty for the default (60).",
     "rateLimitHint": "Optional per-worker token bucket for tool calls to this server. Leave both empty or zero for no limit; with multiple workers, each worker has its own bucket.",
     "rateLimitRateInvalid": "Use a non-negative decimal rate, such as 0.5.",
     "rateLimitBurstInvalid": "Use a non-negative whole number.",

@@ -28,6 +28,8 @@ var (
 	ErrBadMCPProtocol   = errors.New("admin: unknown MCP protocol mode")
 	ErrBadConfigFileEnv = errors.New(
 		"admin: the managed config file environment variable must be a shell variable name")
+	ErrBadMCPCallTimeout = errors.New(
+		"admin: a call timeout is between 5 and 600 seconds")
 	ErrBadMCPRateLimit = errors.New(
 		"admin: MCP rate limit needs both a positive rate and a positive burst, or neither")
 	ErrBadMCPResultCache = errors.New(
@@ -87,6 +89,9 @@ type storedServer struct {
 	// the effective cap scales with the replica count; it is an operational
 	// guard, not a distributed quota.
 	RateLimit *domain.MCPRateLimit `json:"rateLimit,omitempty"`
+	// CallTimeoutSeconds is the per-call ceiling for this server; absent is
+	// the platform default.
+	CallTimeoutSeconds *int `json:"callTimeoutSeconds,omitempty"`
 	// Cache is also per worker process. It is an optimisation for read results,
 	// not a distributed truth about the external system.
 	Cache *domain.MCPResultCache `json:"cache,omitempty"`
@@ -154,6 +159,7 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 			ProtocolMode:          stored.ProtocolMode,
 			Surface:               stored.Surface,
 			RateLimit:             stored.RateLimit,
+			CallTimeout:           stored.CallTimeoutSeconds,
 			Cache:                 stored.Cache,
 			StdioEgress:           stored.StdioEgress,
 			AcceptsLocalExecution: stored.AcceptsLocalExecution,
@@ -208,6 +214,10 @@ func (i *Integrations) PutMCPServer(
 	case server.ConfigFileEnv != nil && !validConfigFileEnv(*server.ConfigFileEnv):
 		return ErrBadConfigFileEnv
 	}
+	if server.CallTimeout != nil && *server.CallTimeout != 0 &&
+		(*server.CallTimeout < 5 || *server.CallTimeout > 600) {
+		return ErrBadMCPCallTimeout
+	}
 	rateLimit, err := normalizedRateLimit(server.RateLimit)
 	if err != nil {
 		return err
@@ -252,6 +262,14 @@ func (i *Integrations) PutMCPServer(
 			if surface == nil {
 				surface = was.Surface
 			}
+			// Omitted keeps the stored ceiling; zero is the explicit way
+			// back to the default — the same word the rate limit uses.
+			callTimeout := server.CallTimeout
+			if callTimeout == nil {
+				callTimeout = was.CallTimeoutSeconds
+			} else if *callTimeout == 0 {
+				callTimeout = nil
+			}
 			if server.RateLimit == nil {
 				rateLimit = was.RateLimit
 			}
@@ -277,6 +295,7 @@ func (i *Integrations) PutMCPServer(
 				ProtocolMode:          storedProtocolMode(transport, server.MCPProtocolModeOf()),
 				Surface:               surface,
 				RateLimit:             rateLimit,
+				CallTimeoutSeconds:    callTimeout,
 				Cache:                 cache,
 				StdioEgress:           stdioEgress,
 				ConfigFileEnv:         configEnv,

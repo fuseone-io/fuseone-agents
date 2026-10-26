@@ -1613,6 +1613,8 @@
     "configFileEnvInvalid": "Use um nome de variável, como TOOLBOX_CONFIG.",
     "rateLimitPerSecond": "Chamadas por segundo",
     "rateLimitBurst": "Rajada",
+    "callTimeout": "Timeout por chamada (s)",
+    "callTimeoutInvalid": "Entre 5 e 600 segundos, ou vazio para o padrão (60).",
     "rateLimitHint": "Bucket opcional por worker para chamadas de ferramentas deste servidor. Deixe os dois campos vazios ou zero para não limitar; com vários workers, cada um tem o próprio bucket.",
     "rateLimitRateInvalid": "Use uma taxa decimal não negativa, como 0.5.",
     "rateLimitBurstInvalid": "Use um número inteiro não negativo.",

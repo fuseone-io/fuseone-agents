@@ -51,6 +51,7 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 	if req.Body.RateLimit != nil {
 		server.RateLimit = rateLimitFromRequest(req.Body.RateLimit)
 	}
+	server.CallTimeout = req.Body.CallTimeoutSeconds
 	if req.Body.Cache != nil {
 		server.Cache = resultCacheFromRequest(req.Body.Cache)
 	}

@@ -41,8 +41,9 @@ func (e *ServerRateLimitError) Summary() domain.FailureSummary {
 }
 
 type serverOptions struct {
-	rateLimit *domain.MCPRateLimit
-	cache     *domain.MCPResultCache
+	rateLimit   *domain.MCPRateLimit
+	cache       *domain.MCPResultCache
+	callTimeout time.Duration
 }
 
 type ServerOption func(*serverOptions)
@@ -57,6 +58,20 @@ func WithRateLimit(limit *domain.MCPRateLimit) ServerOption {
 			RatePerSecond: limit.RatePerSecond,
 			Burst:         limit.Burst,
 		}
+	}
+}
+
+// WithCallTimeout is the server's own per-call ceiling, in seconds. Nil or
+// non-positive means the catalogue default: by the time a value reaches here
+// the administration layer has already bounded it, and zero is its word for
+// "back to the default".
+func WithCallTimeout(seconds *int) ServerOption {
+	return func(options *serverOptions) {
+		if seconds == nil || *seconds <= 0 {
+			options.callTimeout = 0
+			return
+		}
+		options.callTimeout = time.Duration(*seconds) * time.Second
 	}
 }
 

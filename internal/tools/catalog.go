@@ -124,6 +124,8 @@ type Catalog struct {
 	sessions map[string]Session
 	entries  map[domain.ToolID]Entry
 	limiters map[string]*serverLimiter
+	// timeouts are the per-server call ceilings; absent means the default.
+	timeouts map[string]time.Duration
 	caches   map[string]*resultCache
 
 	content engine.ContentStore
@@ -209,6 +211,7 @@ func NewCatalog(content engine.ContentStore) *Catalog {
 		sessions: make(map[string]Session),
 		entries:  make(map[domain.ToolID]Entry),
 		limiters: make(map[string]*serverLimiter),
+		timeouts: make(map[string]time.Duration),
 		caches:   make(map[string]*resultCache),
 		content:  content,
 		timeout:  60 * time.Second,

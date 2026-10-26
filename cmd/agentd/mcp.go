@@ -67,6 +67,7 @@ func connectServer(
 	if err := catalog.AddServer(ctx, server.Name, managed, server.Surface,
 		tools.WithRateLimit(server.RateLimit),
 		tools.WithResultCache(server.Cache),
+		tools.WithCallTimeout(server.CallTimeout),
 	); err != nil {
 		_ = managed.Close()
 		return fmt.Errorf("import tools from %s: %w", server.Name, err)
@@ -89,6 +90,7 @@ func transportFor(
 			client = legacyMCPClient(client)
 		}
 		client = withTolerantCancel(server.Name, client)
+		client = applyCallTimeout(server, client)
 		return &mcp.StreamableClientTransport{
 			Endpoint:   server.URL,
 			HTTPClient: client,
@@ -111,6 +113,26 @@ func transportFor(
 }
 
 func noop() {}
+
+// applyCallTimeout lifts the transport bound to fit the server's own
+// per-call ceiling. Lifts only: the client is shared with connect and
+// discovery, so a short ceiling must not strangle a cold start — the precise
+// per-call bound lives in the catalogue's Invoke context, not here. Nothing
+// chosen changes nothing, and a credential-less server grows a client only
+// when there is a ceiling for it to carry.
+func applyCallTimeout(server domain.MCPServer, client *http.Client) *http.Client {
+	if server.CallTimeout == nil {
+		return client
+	}
+	chosen := time.Duration(*server.CallTimeout) * time.Second
+	if client == nil {
+		client = &http.Client{Transport: baseHTTPTransport(), Timeout: 60 * time.Second}
+	}
+	if chosen > client.Timeout {
+		client.Timeout = chosen
+	}
+	return client
+}
 
 func legacyMCPClient(client *http.Client) *http.Client {
 	if client == nil {

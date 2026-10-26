@@ -203,6 +203,12 @@ function RateLimitFields({ form }: { form: UseFormReturn<ServerFormValues> }) {
           label={t("mcp.rateLimitBurst")}
           placeholder="5"
         />
+        <Field
+          form={form}
+          name="callTimeoutSeconds"
+          label={t("mcp.callTimeout")}
+          placeholder="60"
+        />
       </div>
       <p className="text-xs text-muted-foreground">{t("mcp.rateLimitHint")}</p>
     </div>
@@ -445,6 +451,7 @@ function Field({
     | "args"
     | "configFileEnv"
     | "rateLimitPerSecond"
+    | "callTimeoutSeconds"
     | "rateLimitBurst"
     | "cacheTTLSeconds"
     | "cacheMaxEntries"

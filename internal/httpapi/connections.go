@@ -102,16 +102,17 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 		configured[srv.Name] = true
 		server := openapi.MCPServer{
 			Name: srv.Name, Args: &srv.Args, Enabled: srv.Enabled,
-			Transport:     ptr(openapi.Transport(srv.TransportOf())),
-			ProtocolMode:  ptr(openapi.MCPProtocolMode(srv.MCPProtocolModeOf())),
-			RateLimit:     rateLimitToResponse(srv.RateLimit),
-			Cache:         resultCacheToResponse(srv.Cache),
-			HasSecret:     ptr(srv.HasSecret),
-			HasOAuth:      ptr(srv.HasOAuth),
-			HasVariables:  ptr(srv.HasVariables),
-			HasConfigFile: ptr(srv.HasConfigFile),
-			Managed:       ptr(true),
-			UpdatedBy:     ptr(srv.UpdatedBy), UpdatedAt: ptr(srv.UpdatedAt),
+			Transport:          ptr(openapi.Transport(srv.TransportOf())),
+			ProtocolMode:       ptr(openapi.MCPProtocolMode(srv.MCPProtocolModeOf())),
+			RateLimit:          rateLimitToResponse(srv.RateLimit),
+			CallTimeoutSeconds: srv.CallTimeout,
+			Cache:              resultCacheToResponse(srv.Cache),
+			HasSecret:          ptr(srv.HasSecret),
+			HasOAuth:           ptr(srv.HasOAuth),
+			HasVariables:       ptr(srv.HasVariables),
+			HasConfigFile:      ptr(srv.HasConfigFile),
+			Managed:            ptr(true),
+			UpdatedBy:          ptr(srv.UpdatedBy), UpdatedAt: ptr(srv.UpdatedAt),
 			// What was brought in, and who accepted running it. Both are
 			// stored and neither reached the screen, so a server somebody had
 			// narrowed read back as all-in — and saving anything from that

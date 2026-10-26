@@ -1423,3 +1423,36 @@ func (r *recordingPublisher) Publish(_ context.Context, entries []domain.ToolEnt
 	r.entries = append([]domain.ToolEntry(nil), entries...)
 	return nil
 }
+
+func TestApplyCallTimeout_servesTheServersOwnCeiling(t *testing.T) {
+	t.Parallel()
+	seconds := 120
+	slow := domain.MCPServer{Name: "grafana", CallTimeout: &seconds}
+	fast := domain.MCPServer{Name: "crm"}
+
+	withClient := applyCallTimeout(slow, &http.Client{Timeout: 60 * time.Second})
+	if withClient.Timeout != 120*time.Second {
+		t.Errorf("Timeout = %v, want the server's own 120s", withClient.Timeout)
+	}
+	// The client is the outer bound shared with connect and discovery: a
+	// short per-call ceiling must not strangle a cold start, so it only
+	// ever lifts the transport, never lowers it.
+	five := 5
+	quick := domain.MCPServer{Name: "crm", CallTimeout: &five}
+	if lifted := applyCallTimeout(quick, &http.Client{Timeout: 60 * time.Second}); lifted.Timeout != 60*time.Second {
+		t.Errorf("Timeout = %v, want the 60s transport floor kept", lifted.Timeout)
+	}
+	// A server that chose nothing keeps the platform default.
+	kept := applyCallTimeout(fast, &http.Client{Timeout: 60 * time.Second})
+	if kept.Timeout != 60*time.Second {
+		t.Errorf("Timeout = %v, want the 60s default kept", kept.Timeout)
+	}
+	// A credential-less server with a chosen ceiling still gets a client
+	// that honours it; nil stays nil only when nothing was chosen.
+	if made := applyCallTimeout(slow, nil); made == nil || made.Timeout != 120*time.Second {
+		t.Errorf("made = %+v, want a client carrying the ceiling", made)
+	}
+	if applyCallTimeout(fast, nil) != nil {
+		t.Error("a server that chose nothing should not grow a client from nowhere")
+	}
+}
