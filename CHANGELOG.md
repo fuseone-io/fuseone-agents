@@ -25,6 +25,17 @@ field" is a commit message.
 
 ---
 
+## [0.65.0] — 2026-10-26
+
+### Added
+
+- **The cache window is editable where agents are edited.** The identity
+  section gains a "Prefix cache" choice beside effort — provider default,
+  or one hour for agents that run at least hourly — and the value rides
+  the whole console path: saved, shown back, and named in the version
+  diff when it changes. Until now the window could only be set by
+  editing the definition text directly.
+
 ## [0.64.0] — 2026-10-26
 
 ### Added
