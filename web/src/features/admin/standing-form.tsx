@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -73,7 +73,11 @@ export function StandingForm({ onClose }: { onClose: () => void }) {
   const area = useActiveScope((s) => s.area);
   const create = useCreateStandingApproval();
   const form = useForm<Values>({
-    resolver: zodResolver(schema),
+    // zod 4 types coerced fields' INPUT as unknown; these forms are typed by
+    // their OUTPUT, which is also what every field submits. The cast states
+    // that equality once instead of threading three generics through each
+    // subcomponent.
+    resolver: zodResolver(schema) as Resolver<Values>,
     mode: "onChange",
     defaultValues: {
       toolId: "",
