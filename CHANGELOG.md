@@ -25,6 +25,19 @@ field" is a commit message.
 
 ---
 
+## [0.66.0] — 2026-10-26
+
+### Added
+
+- **A model that refuses the required-tool mode is learned, not worked
+  around.** The planner requires one tool use per turn; a newer model
+  answering 400 to that requirement used to be silently swapped by the
+  proxy in front — the definition said one model, the behaviour and the
+  invoice said another. The refusal now downgrades that one model to
+  auto, remembered so the next turn pays no second 400, scoped to the
+  model that said it. Agents can now run the newer models exactly as
+  their definitions name them.
+
 ## [0.65.1] — 2026-10-26
 
 ### Security
