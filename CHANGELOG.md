@@ -25,6 +25,28 @@ field" is a commit message.
 
 ---
 
+## [0.65.1] — 2026-10-26
+
+### Security
+
+- **Every open dependency advisory is closed.** The one that ran in
+  production — the OpenAPI library behind the HTTP layer, carrying four
+  highs — moves to its patched line. The console bundle's schema
+  validator moves past a memory-exhaustion advisory, the docs site's
+  lock catches up with fixes its ranges already allowed (two criticals
+  among them), and the build toolchain's pair of criticals goes with
+  the test runner's patched major. Audit reports zero across all three
+  manifests.
+
+### Fixed
+
+- **A thorough "Never" block no longer fights the step editor.** The
+  drift warning judged a word by its length, so careful prose made
+  ordinary stage descriptions read as conflicts and operators reworded
+  cards to appease a word list. Strength now comes from the
+  prohibition's shape — identifiers, hammered words, short items — and
+  every true conflict the suite pins still fires.
+
 ## [0.65.0] — 2026-10-26
 
 ### Added
