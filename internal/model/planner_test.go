@@ -1578,3 +1578,112 @@ func TestAnthropic_toolChoiceLearning_isPerModel(t *testing.T) {
 			bodies[len(bodies)-1]["model"], last)
 	}
 }
+
+func TestAnthropic_underLearnedAuto_freeTextIsNudgedNotFinal(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	calls := 0
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		choice, _ := body["tool_choice"].(map[string]any)
+		if choice["type"] == "any" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, toolChoiceRejection)
+			return
+		}
+		if calls <= 2 {
+			// The downgrade retry, then the model's polite status text.
+			if calls == 2 {
+				_, _ = io.WriteString(w, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5-5",
+				  "content":[{"type":"text","text":"Memória carregada; pendente executar V1."}],
+				  "stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+				return
+			}
+		}
+		_, _ = io.WriteString(w, anthropicToolUse)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5-5"})
+	got, err := p.Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	// The status text must not have closed the run: the nudged retry's tool
+	// proposal is the answer.
+	if got.Tool != "crm.lookup" || got.Outcome != "" {
+		t.Fatalf("proposal = tool %q outcome %q, want the tool from the nudged call", got.Tool, got.Outcome)
+	}
+	bodies := c.all()
+	if len(bodies) != 3 {
+		t.Fatalf("calls = %d, want refusal, text, nudged retry", len(bodies))
+	}
+	raw, _ := json.Marshal(bodies[2])
+	if !strings.Contains(string(raw), "Memória carregada") {
+		t.Error("the nudged call does not carry the model's own text back to it")
+	}
+}
+
+func TestAnthropic_underLearnedAuto_textTwiceIsTheOutcome(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	text := `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5-5",
+	  "content":[{"type":"text","text":"acabou mesmo"}],
+	  "stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		choice, _ := body["tool_choice"].(map[string]any)
+		if choice["type"] == "any" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, toolChoiceRejection)
+			return
+		}
+		_, _ = io.WriteString(w, text)
+	}))
+	t.Cleanup(srv.Close)
+
+	got, err := plannerFor(t, model.KindAnthropic, srv.URL, model.Config{Model: "claude-opus-5-5"}).
+		Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	// Insisting forever would burn budget against a model that has said its
+	// piece twice; the second text stands as the outcome.
+	if got.Outcome != "acabou mesmo" || calls != 3 {
+		t.Fatalf("outcome = %q after %d calls, want the second text accepted", got.Outcome, calls)
+	}
+}
+
+func TestAnthropic_withoutDowngrade_textOnlyStaysTheOutcome(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5",
+		  "content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	got, err := plannerFor(t, model.KindAnthropic, srv.URL, model.Config{Model: "claude-opus-5"}).
+		Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	// Under the structural mode text-only is already the provider breaking
+	// the contract its tool_choice accepted; today's reading stands and no
+	// nudge fires.
+	if got.Outcome != "ok" || calls != 1 {
+		t.Fatalf("outcome = %q after %d calls, want today's behaviour untouched", got.Outcome, calls)
+	}
+}
