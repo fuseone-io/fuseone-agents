@@ -25,6 +25,19 @@ field" is a commit message.
 
 ---
 
+## [0.61.0] — 2026-10-26
+
+### Added
+
+- **An agent can keep its stable prefix cached for the hour.** The
+  definition chooses it — `cache_prefix_ttl: 1h` — and an agent triggered
+  on the hour then reads its instructions and tool schemas back from the
+  provider's cache instead of re-writing them every run, which in a real
+  installation was half the model bill. The conversation itself keeps the
+  short window, and agents that run less often should leave the field
+  unset: they would pay the doubled write rate and never collect the
+  read. The manual's cost page explains when each window pays.
+
 ## [0.60.2] — 2026-10-16
 
 ### Fixed
