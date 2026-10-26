@@ -25,6 +25,17 @@ field" is a commit message.
 
 ---
 
+## [0.64.0] — 2026-10-26
+
+### Added
+
+- **A proxy alias inherits its canonical market reference.** Behind a
+  gateway the models that bill are the proxy's own names, which the
+  bundled price list cannot know; now every model a provider declares
+  inherits the reference of the canonical id it carries, shown under the
+  alias's own spelling so saving it configures the pair the runs use.
+  References remain suggestions — only a saved rate feeds cost.
+
 ## [0.63.0] — 2026-10-26
 
 ### Added
