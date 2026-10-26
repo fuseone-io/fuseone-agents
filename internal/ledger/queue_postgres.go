@@ -88,10 +88,11 @@ func (p *Postgres) claim(
 	}
 
 	leasedUntil := time.Now().Add(lease)
-	if _, err := tx.Exec(ctx, `
+	if err := tx.QueryRow(ctx, `
 		update runs
-		set leased_until = $2, lease_owner = $3
-		where run_id = $1`, runID, leasedUntil, owner); err != nil {
+		set leased_until = $2, lease_owner = $3, lease_epoch = lease_epoch + 1
+		where run_id = $1
+		returning lease_epoch`, runID, leasedUntil, owner).Scan(&c.Epoch); err != nil {
 		return domain.Claim{}, fmt.Errorf("write lease: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -107,6 +108,25 @@ func (p *Postgres) claim(
 	return c, nil
 }
 
+// Renew extends a held lease without releasing it.
+//
+// The epoch is the fence: a renewal from a worker whose lease was already
+// claimed over — or released — changes nothing and reports ErrLeaseLost, so
+// the caller knows to abandon the turn rather than keep acting on the run.
+func (p *Postgres) Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error {
+	tag, err := p.pool.Exec(ctx, `
+		update runs set leased_until = $3
+		where run_id = $1 and lease_epoch = $2 and leased_until is not null`,
+		string(runID), epoch, time.Now().Add(lease))
+	if err != nil {
+		return fmt.Errorf("renew lease: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrLeaseLost
+	}
+	return nil
+}
+
 // Release ends a lease and records what happened.
 //
 // Progress resets the attempt count. The counter measures *consecutive*
@@ -119,7 +139,7 @@ func (p *Postgres) Release(ctx context.Context, runID domain.RunID, outcome doma
 		nextAttempt = time.Now()
 	}
 
-	_, err := p.pool.Exec(ctx, `
+	tag, err := p.pool.Exec(ctx, `
 		update runs set
 			leased_until    = null,
 			lease_owner     = null,
@@ -133,12 +153,17 @@ func (p *Postgres) Release(ctx context.Context, runID domain.RunID, outcome doma
 			failure_status     = $8,
 			failure_request_id = $9,
 			failure_retryable  = $10
-		where run_id = $1`,
+		where run_id = $1 and lease_epoch = $11`,
 		string(runID), nextAttempt, outcome.Failed(), outcomeReason(outcome), outcome.Parked,
 		outcomeFailureCode(outcome), outcomeFailureProvider(outcome), outcomeFailureStatus(outcome),
-		outcomeFailureRequestID(outcome), outcomeFailureRetryable(outcome))
+		outcomeFailureRequestID(outcome), outcomeFailureRetryable(outcome), outcome.Epoch)
 	if err != nil {
 		return fmt.Errorf("release lease: %w", err)
+	}
+	// A stale release is not a write that failed; it is an outcome that no
+	// longer has anywhere to go. The successor's turn owns the run's story now.
+	if tag.RowsAffected() == 0 {
+		return domain.ErrLeaseLost
 	}
 	return nil
 }

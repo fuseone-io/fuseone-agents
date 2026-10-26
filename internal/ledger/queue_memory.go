@@ -24,6 +24,9 @@ type leaseState struct {
 	// this fake refuse work the real store would hand out.
 	parkedAt    int
 	leasedUntil time.Time
+	// epoch is the fencing token: bumped by every claim, demanded back by
+	// Renew and Release, exactly as the lease_epoch column does in Postgres.
+	epoch int64
 }
 
 func (m *Memory) Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error) {
@@ -82,6 +85,7 @@ func (m *Memory) claim(
 		}
 
 		st.leasedUntil = now.Add(lease)
+		st.epoch++
 		m.leases[id] = st
 		m.owners[id] = owner
 
@@ -95,9 +99,29 @@ func (m *Memory) claim(
 			Phase:       phase,
 			Attempts:    st.attempts,
 			LeasedUntil: st.leasedUntil,
+			Epoch:       st.epoch,
 		}, nil
 	}
 	return domain.Claim{}, domain.ErrNoClaimableRun
+}
+
+// Renew extends a held lease without releasing it, refusing a caller whose
+// epoch is no longer current — the same fence the Postgres queue enforces.
+func (m *Memory) Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	st := m.leases[runID]
+	if st.epoch != epoch || st.leasedUntil.IsZero() {
+		return domain.ErrLeaseLost
+	}
+	st.leasedUntil = m.now().Add(lease)
+	m.leases[runID] = st
+	return nil
 }
 
 func (m *Memory) Release(ctx context.Context, runID domain.RunID, outcome domain.ClaimOutcome) error {
@@ -109,6 +133,11 @@ func (m *Memory) Release(ctx context.Context, runID domain.RunID, outcome domain
 	defer m.mu.Unlock()
 
 	st := m.leases[runID]
+	// A stale release has nowhere to go: the successor's turn owns the run's
+	// story now. Same fence as the lease_epoch predicate in Postgres.
+	if st.epoch != outcome.Epoch {
+		return domain.ErrLeaseLost
+	}
 	st.leasedUntil = time.Time{}
 	if outcome.Failed() {
 		st.attempts++

@@ -10,6 +10,11 @@ import (
 // work arriving.
 var ErrNoClaimableRun = errors.New("no claimable run")
 
+// ErrLeaseLost means the caller's lease epoch is no longer the current one:
+// the lease expired and another worker claimed the run. Whatever the caller
+// was about to do on the run's behalf must not happen — the successor owns it.
+var ErrLeaseLost = errors.New("lease lost to a newer claim")
+
 // Claim is a run leased to one worker for one turn.
 //
 // The lease is time-bound rather than a held lock. Advancing a run makes a
@@ -31,10 +36,19 @@ type Claim struct {
 	Attempts int
 	// LeasedUntil is when another worker may take this run over.
 	LeasedUntil time.Time
+	// Epoch is the fencing token for this lease. Every claim advances it, and
+	// Renew and Release only act when the caller still holds the current one —
+	// so a worker that was suspended past its lease wakes up fenced out
+	// instead of trampling its successor.
+	Epoch int64
 }
 
 // ClaimOutcome is how a turn ended, and what the queue should do next.
 type ClaimOutcome struct {
+	// Epoch is the fencing token of the claim being released. A release whose
+	// epoch is no longer current is refused with ErrLeaseLost: the lease
+	// already belongs to another worker, and this outcome is stale news.
+	Epoch int64
 	// NextAttemptAt is when the run becomes claimable again. Zero means
 	// immediately — the normal case, since one turn rarely finishes a run.
 	NextAttemptAt time.Time

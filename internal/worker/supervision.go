@@ -95,6 +95,10 @@ func (w *Worker) park(ctx context.Context, claim domain.Claim, reason error, cod
 }
 
 func (w *Worker) release(ctx context.Context, claim domain.Claim, outcome domain.ClaimOutcome) error {
+	// The outcome carries the claim's fencing token: stamped here, in the one
+	// place every release goes through, so no turn path can forget it.
+	outcome.Epoch = claim.Epoch
+
 	// Release with a fresh context: cancelling the worker must still hand the
 	// lease back, or the run waits out the full lease before anyone retries.
 	relCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)

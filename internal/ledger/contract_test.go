@@ -35,6 +35,7 @@ type Store interface {
 	Runs(ctx context.Context) ([]domain.RunID, error)
 	Verify(ctx context.Context, runID domain.RunID) error
 	Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error)
+	Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error
 	Release(ctx context.Context, runID domain.RunID, outcome domain.ClaimOutcome) error
 	Stats(ctx context.Context, filter domain.RunFilter) (domain.RunStats, error)
 	RuntimeHealth(ctx context.Context, filter domain.RunFilter) (domain.RuntimeHealth, error)
@@ -383,14 +384,52 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		held, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
-		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{}); err != nil {
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{Epoch: held.Epoch}); err != nil {
 			t.Fatalf("Release: %v", err)
 		}
 		if _, err := s.Claim(ctx, "w2", lease); err != nil {
 			t.Errorf("Claim after release = %v, want a claim", err)
+		}
+	})
+
+	run(t, "an expired holder can neither release nor renew the successor's lease", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		// A negative lease is already expired: the suspended worker that
+		// wakes up late, in two lines.
+		old, err := s.Claim(ctx, "w1", -time.Second)
+		if err != nil {
+			t.Fatalf("expired Claim: %v", err)
+		}
+		next, err := s.Claim(ctx, "w2", lease)
+		if err != nil {
+			t.Fatalf("successor Claim: %v", err)
+		}
+		if next.Epoch <= old.Epoch {
+			t.Fatalf("epochs = %d then %d, want every claim to advance the fence", old.Epoch, next.Epoch)
+		}
+
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{Epoch: old.Epoch}); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("stale Release = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		if err := s.Renew(ctx, "run-1", old.Epoch, lease); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("stale Renew = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		// The successor's lease survived both attempts.
+		if _, err := s.Claim(ctx, "w3", lease); !errors.Is(err, domain.ErrNoClaimableRun) {
+			t.Fatalf("third Claim = %v, want the successor still holding", err)
+		}
+
+		if err := s.Renew(ctx, "run-1", next.Epoch, lease); err != nil {
+			t.Fatalf("holder Renew: %v", err)
+		}
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{Epoch: next.Epoch}); err != nil {
+			t.Fatalf("holder Release: %v", err)
 		}
 	})
 
@@ -413,7 +452,6 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		boom := domain.ClaimOutcome{Err: errors.New("upstream refused")}
 		for want := range 2 {
 			c, err := s.Claim(ctx, "w1", lease)
 			if err != nil {
@@ -422,6 +460,7 @@ func TestQueueContract(t *testing.T) {
 			if c.Attempts != want {
 				t.Fatalf("Attempts = %d on claim %d, want %d", c.Attempts, want, want)
 			}
+			boom := domain.ClaimOutcome{Err: errors.New("upstream refused"), Epoch: c.Epoch}
 			if err := s.Release(ctx, "run-1", boom); err != nil {
 				t.Fatalf("Release: %v", err)
 			}
@@ -429,10 +468,11 @@ func TestQueueContract(t *testing.T) {
 
 		// A turn that makes progress clears the count: the threshold measures
 		// consecutive failures, not failures ever.
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		fine, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
-		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{}); err != nil {
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{Epoch: fine.Epoch}); err != nil {
 			t.Fatalf("Release: %v", err)
 		}
 		c, err := s.Claim(ctx, "w1", lease)
@@ -448,10 +488,12 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		c, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
 		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{
+			Epoch:         c.Epoch,
 			Err:           errors.New("upstream refused"),
 			NextAttemptAt: time.Now().Add(time.Hour),
 		}); err != nil {
@@ -467,11 +509,13 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		c, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
 		since := time.Now().Add(-time.Minute)
 		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{
+			Epoch:         c.Epoch,
 			Err:           errors.New("provider overloaded"),
 			NextAttemptAt: time.Now().Add(time.Hour),
 			Failure: &domain.FailureSummary{
@@ -506,11 +550,12 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		c, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
 		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{
-			Err: errors.New("gave up"), Parked: true,
+			Epoch: c.Epoch, Err: errors.New("gave up"), Parked: true,
 		}); err != nil {
 			t.Fatalf("Release: %v", err)
 		}
@@ -526,11 +571,12 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		c, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
 		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{
-			Err: errors.New("gave up"), Parked: true,
+			Epoch: c.Epoch, Err: errors.New("gave up"), Parked: true,
 		}); err != nil {
 			t.Fatalf("Release: %v", err)
 		}
@@ -556,11 +602,12 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		c, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
 		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{
-			Err: errors.New("budget exhausted"), Parked: true,
+			Epoch: c.Epoch, Err: errors.New("budget exhausted"), Parked: true,
 		}); err != nil {
 			t.Fatalf("Release: %v", err)
 		}
@@ -866,11 +913,13 @@ func TestPostgresRelease_classifiedProviderFailureStoresOnlyStableCodeInLastErro
 
 	store := ledger.NewPostgres(pool)
 	mustAppend(t, store, startedAt("run-1", time.Now()))
-	if _, err := store.Claim(ctx, "w1", time.Minute); err != nil {
+	held, err := store.Claim(ctx, "w1", time.Minute)
+	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
 	if err := store.Release(ctx, "run-1", domain.ClaimOutcome{
-		Err: errors.New(`{"error":{"message":"Authorization header contained prompt text"}}`),
+		Epoch: held.Epoch,
+		Err:   errors.New(`{"error":{"message":"Authorization header contained prompt text"}}`),
 		Failure: &domain.FailureSummary{
 			Code:      "model_auth_failed",
 			Provider:  "anthropic",
@@ -2090,7 +2139,7 @@ func TestClaimContract_theTwoHalvesOfTheQueueNeverOverlap(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
-		if err := s.Simulations().Release(ctx, claimed.RunID, domain.ClaimOutcome{}); err != nil {
+		if err := s.Simulations().Release(ctx, claimed.RunID, domain.ClaimOutcome{Epoch: claimed.Epoch}); err != nil {
 			t.Fatalf("Release: %v", err)
 		}
 		// A simulated run is a run: the lease, the backoff and the parking are
