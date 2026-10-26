@@ -58,6 +58,11 @@ type Config struct {
 	// Applied to the prefix breakpoint only — the conversation tail changes
 	// every run, and an hour of it is money for tokens never read again.
 	CachePrefixTTL string
+	// CacheKey names the cache this agent's requests should share — the
+	// agent's own id, set by the resolver. Only sent to providers that
+	// declare SupportsPromptCacheKey; the Anthropic path has no use for it,
+	// since its cache is keyed by the prefix itself.
+	CacheKey string
 	// PricePerMTok converts usage into the ledger's money. Set per model from
 	// the installation's own price list; zero means cost is recorded as tokens
 	// only, never as a guess.

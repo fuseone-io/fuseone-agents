@@ -62,6 +62,12 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	if o.provider.SupportsReasoningEffort {
 		body.ReasoningEffort = o.cfg.Effort
 	}
+	// Same discipline for the cache key: it steers cache routing and
+	// accounting per agent where the provider takes it, and is a 400 where
+	// it does not.
+	if o.provider.SupportsPromptCacheKey {
+		body.PromptCacheKey = o.cfg.CacheKey
+	}
 
 	var out chatResponse
 	if err := o.post(ctx, "/chat/completions", body, &out); err != nil {
@@ -292,6 +298,7 @@ type chatRequest struct {
 	Tools           []chatTool    `json:"tools,omitempty"`
 	MaxTokens       int64         `json:"max_tokens,omitempty"`
 	ReasoningEffort string        `json:"reasoning_effort,omitempty"`
+	PromptCacheKey  string        `json:"prompt_cache_key,omitempty"`
 }
 
 type chatMessage struct {
