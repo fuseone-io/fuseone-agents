@@ -1434,6 +1434,14 @@ func TestApplyCallTimeout_servesTheServersOwnCeiling(t *testing.T) {
 	if withClient.Timeout != 120*time.Second {
 		t.Errorf("Timeout = %v, want the server's own 120s", withClient.Timeout)
 	}
+	// The client is the outer bound shared with connect and discovery: a
+	// short per-call ceiling must not strangle a cold start, so it only
+	// ever lifts the transport, never lowers it.
+	five := 5
+	quick := domain.MCPServer{Name: "crm", CallTimeout: &five}
+	if lifted := applyCallTimeout(quick, &http.Client{Timeout: 60 * time.Second}); lifted.Timeout != 60*time.Second {
+		t.Errorf("Timeout = %v, want the 60s transport floor kept", lifted.Timeout)
+	}
 	// A server that chose nothing keeps the platform default.
 	kept := applyCallTimeout(fast, &http.Client{Timeout: 60 * time.Second})
 	if kept.Timeout != 60*time.Second {

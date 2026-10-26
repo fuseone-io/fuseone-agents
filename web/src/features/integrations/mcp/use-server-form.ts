@@ -75,9 +75,10 @@ export function useServerForm(
         configFile: values.configFile || undefined,
         configFileEnv: values.configFileEnv,
         rateLimit: rateLimitFromValues(values),
-        callTimeoutSeconds: values.callTimeoutSeconds.trim()
-          ? Number(values.callTimeoutSeconds.trim())
-          : undefined,
+        // The form always states this field: a number chooses, and empty
+        // is zero — the explicit reset — so clearing it really goes back
+        // to the default instead of silently keeping the old ceiling.
+        callTimeoutSeconds: Number(values.callTimeoutSeconds.trim() || "0"),
         cache: resultCacheFromValues(values),
         stdioEgress: stdioEgressFromValues(values),
         acceptsLocalExecution: values.acceptsLocalExecution,

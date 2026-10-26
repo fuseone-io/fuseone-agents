@@ -2077,7 +2077,7 @@ func TestProvidersWithCredentials_withoutTheMasterKey_keepsEveryProviderAndOpens
 
 func TestPutMCPServer_callTimeoutOutsideTheWindow_refused(t *testing.T) {
 	i := newIntegrations(t)
-	for _, seconds := range []int{0, 4, 601} {
+	for _, seconds := range []int{1, 4, 601} {
 		s := seconds
 		server := domain.MCPServer{
 			Name: "grafana", Transport: domain.TransportHTTP,
@@ -2089,6 +2089,37 @@ func TestPutMCPServer_callTimeoutOutsideTheWindow_refused(t *testing.T) {
 		if !errors.Is(err, admin.ErrBadMCPCallTimeout) {
 			t.Fatalf("PutMCPServer(%d) = %v, want the bounds refusal", s, err)
 		}
+	}
+}
+
+func TestPutMCPServer_zeroCallTimeout_resetsToTheDefault(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	seconds := 120
+	server := domain.MCPServer{
+		Name: "grafana", Transport: domain.TransportHTTP,
+		URL: "https://tools.example.com/mcp", Enabled: true,
+		CallTimeout: &seconds,
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	// Zero is the explicit way back to the default — the same word the rate
+	// limit beside it uses for "disable". Omitting keeps; zero resets.
+	zero := 0
+	server.CallTimeout = &zero
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer reset: %v", err)
+	}
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if len(servers) != 1 || servers[0].CallTimeout != nil {
+		t.Fatalf("read back = %+v, want the ceiling gone", servers)
 	}
 }
 

@@ -214,7 +214,8 @@ func (i *Integrations) PutMCPServer(
 	case server.ConfigFileEnv != nil && !validConfigFileEnv(*server.ConfigFileEnv):
 		return ErrBadConfigFileEnv
 	}
-	if server.CallTimeout != nil && (*server.CallTimeout < 5 || *server.CallTimeout > 600) {
+	if server.CallTimeout != nil && *server.CallTimeout != 0 &&
+		(*server.CallTimeout < 5 || *server.CallTimeout > 600) {
 		return ErrBadMCPCallTimeout
 	}
 	rateLimit, err := normalizedRateLimit(server.RateLimit)
@@ -261,9 +262,13 @@ func (i *Integrations) PutMCPServer(
 			if surface == nil {
 				surface = was.Surface
 			}
+			// Omitted keeps the stored ceiling; zero is the explicit way
+			// back to the default — the same word the rate limit uses.
 			callTimeout := server.CallTimeout
 			if callTimeout == nil {
 				callTimeout = was.CallTimeoutSeconds
+			} else if *callTimeout == 0 {
+				callTimeout = nil
 			}
 			if server.RateLimit == nil {
 				rateLimit = was.RateLimit

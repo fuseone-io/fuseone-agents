@@ -903,3 +903,54 @@ func TestAddServer_anUnknownServer_importsWithNoSuggestion(t *testing.T) {
 		t.Errorf("Suggested = %+v, want nothing for a server nobody catalogued", entry.Suggested)
 	}
 }
+
+// deadlineServer reports how much ceiling Invoke actually granted the call.
+type deadlineServer struct {
+	fakeServer
+	remaining time.Duration
+}
+
+func (d *deadlineServer) CallTool(ctx context.Context, p *mcp.CallToolParams) (*mcp.CallToolResult, error) {
+	if dl, ok := ctx.Deadline(); ok {
+		d.remaining = time.Until(dl)
+	}
+	return d.fakeServer.CallTool(ctx, p)
+}
+
+func TestInvoke_serversOwnCeiling_reachesTheCallContext(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	slow := &deadlineServer{fakeServer: *lookupServer()}
+	plain := &deadlineServer{fakeServer: *lookupServer()}
+	seconds := 120
+	c := tools.NewCatalog(engine.NewMemoryContent())
+	if err := c.AddServer(ctx, "crm", slow, nil, tools.WithCallTimeout(&seconds)); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	if err := c.AddServer(ctx, "billing", plain, nil); err != nil {
+		t.Fatalf("AddServer plain: %v", err)
+	}
+	if err := c.Classify(domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectRead}); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	if err := c.Classify(domain.ToolClassification{Tool: "billing.lookup", Effect: domain.EffectRead}); err != nil {
+		t.Fatalf("Classify billing: %v", err)
+	}
+
+	// The ceiling the operator chose is the one the call runs under — the
+	// transport's own timeout alone was the bug this exists to pin.
+	if _, err := c.Invoke(ctx, engine.Call{RunID: "run-1", Seq: 1, Tool: "crm.lookup", Args: []byte(`{}`)}); err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if slow.remaining <= 100*time.Second || slow.remaining > 120*time.Second {
+		t.Errorf("granted = %v, want the configured 120s ceiling", slow.remaining)
+	}
+
+	if _, err := c.Invoke(ctx, engine.Call{RunID: "run-1", Seq: 2, Tool: "billing.lookup", Args: []byte(`{}`)}); err != nil {
+		t.Fatalf("Invoke billing: %v", err)
+	}
+	if plain.remaining <= 50*time.Second || plain.remaining > 60*time.Second {
+		t.Errorf("granted = %v, want the 60s default for a server that chose nothing", plain.remaining)
+	}
+}

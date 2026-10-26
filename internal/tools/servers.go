@@ -77,6 +77,11 @@ func (c *Catalog) AddServer(
 
 	old := c.sessions[name]
 	c.sessions[name] = &liveSession{session}
+	if opts.callTimeout > 0 {
+		c.timeouts[name] = opts.callTimeout
+	} else {
+		delete(c.timeouts, name)
+	}
 	if limiter := newServerLimiter(opts.rateLimit, time.Now()); limiter != nil {
 		c.limiters[name] = limiter
 	} else {
@@ -134,6 +139,7 @@ func (c *Catalog) RemoveServer(name string) error {
 	session, connected := c.sessions[name]
 	delete(c.sessions, name)
 	delete(c.limiters, name)
+	delete(c.timeouts, name)
 	delete(c.caches, name)
 	for id, entry := range c.entries {
 		if entry.Server == name {
