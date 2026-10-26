@@ -189,6 +189,12 @@ type MCPServer struct {
 	*/
 	Surface *[]string
 
+	// CallTimeout bounds one tool call to this server, in seconds. Nil is
+	// the platform default: upstreams have different physics — a log store
+	// aggregating an hour needs a ceiling a CRM lookup never would — and the
+	// ceiling belongs where the operator can read it.
+	CallTimeout *int
+
 	// RateLimit bounds tool calls sent from one worker process to this server.
 	// Nil means no limit. With multiple workers, each worker has its own bucket.
 	RateLimit *MCPRateLimit

@@ -35,6 +35,12 @@ export const serverSchema = z
     configFileEnv: z
       .string()
       .regex(/^[A-Za-z_][A-Za-z0-9_]*$|^$/, "mcp.configFileEnvInvalid"),
+    callTimeoutSeconds: z
+      .string()
+      .regex(/^$|^\d+$/, "mcp.callTimeoutInvalid")
+      .refine((v) => v.trim() === "" || (Number(v) >= 5 && Number(v) <= 600), {
+        message: "mcp.callTimeoutInvalid",
+      }),
     rateLimitPerSecond: z
       .string()
       .regex(/^$|^(?:0|[1-9]\d*)(?:\.\d+)?$/, "mcp.rateLimitRateInvalid"),

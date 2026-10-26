@@ -2074,3 +2074,50 @@ func TestProvidersWithCredentials_withoutTheMasterKey_keepsEveryProviderAndOpens
 		t.Errorf("the switched-off provider = %+v, want it listed and left sealed", one)
 	}
 }
+
+func TestPutMCPServer_callTimeoutOutsideTheWindow_refused(t *testing.T) {
+	i := newIntegrations(t)
+	for _, seconds := range []int{0, 4, 601} {
+		s := seconds
+		server := domain.MCPServer{
+			Name: "grafana", Transport: domain.TransportHTTP,
+			URL: "https://tools.example.com/mcp", Enabled: true,
+			CallTimeout: &s,
+		}
+		err := i.PutMCPServer(context.Background(), "usr_ana", platform, server,
+			domain.MCPCredentialPatch{})
+		if !errors.Is(err, admin.ErrBadMCPCallTimeout) {
+			t.Fatalf("PutMCPServer(%d) = %v, want the bounds refusal", s, err)
+		}
+	}
+}
+
+func TestPutMCPServer_callTimeout_roundTripsAndSurvivesAnOmittingWrite(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	seconds := 120
+	server := domain.MCPServer{
+		Name: "grafana", Transport: domain.TransportHTTP,
+		URL: "https://tools.example.com/mcp", Enabled: true,
+		CallTimeout: &seconds,
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	// The slower upstream stays slower across an edit made for another
+	// reason: an omitted ceiling keeps the stored one, like the rate limit.
+	server.CallTimeout = nil
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer again: %v", err)
+	}
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if len(servers) != 1 || servers[0].CallTimeout == nil || *servers[0].CallTimeout != 120 {
+		t.Fatalf("read back = %+v, want the 120s ceiling kept", servers)
+	}
+}

@@ -75,6 +75,9 @@ export function useServerForm(
         configFile: values.configFile || undefined,
         configFileEnv: values.configFileEnv,
         rateLimit: rateLimitFromValues(values),
+        callTimeoutSeconds: values.callTimeoutSeconds.trim()
+          ? Number(values.callTimeoutSeconds.trim())
+          : undefined,
         cache: resultCacheFromValues(values),
         stdioEgress: stdioEgressFromValues(values),
         acceptsLocalExecution: values.acceptsLocalExecution,
@@ -119,6 +122,7 @@ function defaultServerValues(
     oauthScopes: "",
     configFile: "",
     configFileEnv: server?.configFileEnv ?? "",
+    callTimeoutSeconds: server?.callTimeoutSeconds?.toString() ?? "",
     rateLimitPerSecond: server?.rateLimit?.ratePerSecond?.toString() ?? "",
     rateLimitBurst: server?.rateLimit?.burst?.toString() ?? "",
     cacheTTLSeconds: server?.cache?.ttlSeconds?.toString() ?? "",

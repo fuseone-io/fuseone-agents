@@ -89,6 +89,7 @@ func transportFor(
 			client = legacyMCPClient(client)
 		}
 		client = withTolerantCancel(server.Name, client)
+		client = applyCallTimeout(server, client)
 		return &mcp.StreamableClientTransport{
 			Endpoint:   server.URL,
 			HTTPClient: client,
@@ -111,6 +112,20 @@ func transportFor(
 }
 
 func noop() {}
+
+// applyCallTimeout puts the server's own per-call ceiling on its client.
+// Nothing chosen changes nothing: the constructors' default stands, and a
+// credential-less server keeps its nil client rather than growing one.
+func applyCallTimeout(server domain.MCPServer, client *http.Client) *http.Client {
+	if server.CallTimeout == nil {
+		return client
+	}
+	if client == nil {
+		client = &http.Client{Transport: baseHTTPTransport()}
+	}
+	client.Timeout = time.Duration(*server.CallTimeout) * time.Second
+	return client
+}
 
 func legacyMCPClient(client *http.Client) *http.Client {
 	if client == nil {

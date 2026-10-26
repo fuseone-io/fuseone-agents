@@ -3736,6 +3736,7 @@ export interface components {
              */
             surface?: string[] | null;
             rateLimit?: components["schemas"]["MCPRateLimit"] | null;
+            callTimeoutSeconds?: number | null;
             cache?: components["schemas"]["MCPResultCache"] | null;
             /** @description The stored egress request for a stdio server. Absent means inherit. */
             stdioEgress?: components["schemas"]["MCPStdioEgress"] | null;
@@ -7901,6 +7902,8 @@ export interface operations {
                     surface?: string[];
                     /** @description Per-worker token bucket for outgoing tool calls to this server. Omit to leave the choice as it stands. Send both fields as zero to disable it. */
                     rateLimit?: components["schemas"]["MCPRateLimit"];
+                    /** @description Ceiling for one tool call to this server, 5 to 600 seconds. Omit to leave the choice as it stands; absent means the platform default of 60. */
+                    callTimeoutSeconds?: number;
                     /** @description Per-worker in-memory cache for successful read-only tool results from this server. Omit to leave the choice as it stands. Send both fields as zero to disable it. */
                     cache?: components["schemas"]["MCPResultCache"];
                     /** @description Egress request for a local stdio process. Omit to leave the stored choice as it stands. Send mode inherit to clear it. Send mode proxied with destinations to require a worker egress proxy before the process starts. The proxy environment is not, by itself, network containment; a deployment-level egress policy is still the enforcement boundary. */

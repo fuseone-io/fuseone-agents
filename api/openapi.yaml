@@ -2787,6 +2787,12 @@ paths:
                     Per-worker token bucket for outgoing tool calls to this
                     server. Omit to leave the choice as it stands. Send both
                     fields as zero to disable it.
+                callTimeoutSeconds:
+                  type: integer
+                  description: >
+                    Ceiling for one tool call to this server, 5 to 600
+                    seconds. Omit to leave the choice as it stands; absent
+                    means the platform default of 60.
                 cache:
                   allOf: [{ $ref: '#/components/schemas/MCPResultCache' }]
                   description: >
@@ -6059,6 +6065,9 @@ components:
             call reaches it, and the Gate is never asked.
         rateLimit:
           allOf: [{ $ref: '#/components/schemas/MCPRateLimit' }]
+          nullable: true
+        callTimeoutSeconds:
+          type: integer
           nullable: true
         cache:
           allOf: [{ $ref: '#/components/schemas/MCPResultCache' }]
