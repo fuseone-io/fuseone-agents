@@ -1628,6 +1628,88 @@ func TestAnthropic_underLearnedAuto_freeTextIsNudgedNotFinal(t *testing.T) {
 	if !strings.Contains(string(raw), "Memória carregada") {
 		t.Error("the nudged call does not carry the model's own text back to it")
 	}
+	// Both calls happened; the invoice is their sum, not the second twice.
+	if got.Cost.InputTokens != 1201 || got.Cost.OutputTokens != 81 ||
+		got.Cost.CacheReadTokens != 9000 || got.Cost.CacheWriteTokens != 300 {
+		t.Errorf("cost = %+v, want the first text call plus the nudged one", got.Cost)
+	}
+}
+
+func TestAnthropic_nudgeCallFailing_surfacesTheProviderError(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		choice, _ := body["tool_choice"].(map[string]any)
+		switch {
+		case choice["type"] == "any":
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, toolChoiceRejection)
+		case calls == 2:
+			_, _ = io.WriteString(w, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5-5",
+			  "content":[{"type":"text","text":"status intermediário"}],
+			  "stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+		default:
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, `{"type":"error","error":{"type":"overloaded_error","message":"try later"}}`)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := plannerFor(t, model.KindAnthropic, srv.URL, model.Config{Model: "claude-opus-5-5"}).
+		Plan(context.Background(), input())
+
+	// A failed nudge must fail the turn so the worker's retry machinery
+	// runs — quietly accepting the status text is the bug this PR removes.
+	var provider *model.ProviderError
+	if !errors.As(err, &provider) || !provider.Retryable {
+		t.Fatalf("err = %v, want the nudge call's own retryable failure", err)
+	}
+}
+
+func TestAnthropic_nudgeReplay_carriesThinkingBlocksWhole(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	calls := 0
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		choice, _ := body["tool_choice"].(map[string]any)
+		if choice["type"] == "any" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, toolChoiceRejection)
+			return
+		}
+		if calls == 2 {
+			_, _ = io.WriteString(w, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5-5",
+			  "content":[{"type":"thinking","thinking":"planejando a varredura","signature":"sig"},
+			             {"type":"text","text":"vou executar V1"}],
+			  "stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+			return
+		}
+		_, _ = io.WriteString(w, anthropicToolUse)
+	}))
+	t.Cleanup(c.server.Close)
+
+	if _, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5-5"}).
+		Plan(context.Background(), input()); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	bodies := c.all()
+	raw, _ := json.Marshal(bodies[len(bodies)-1])
+	// Adaptive thinking means real answers carry thinking blocks, and the
+	// provider wants them replayed whole in multi-turn conversations.
+	if !strings.Contains(string(raw), "planejando a varredura") {
+		t.Error("the nudged call drops the thinking block from the replayed answer")
+	}
 }
 
 func TestAnthropic_underLearnedAuto_textTwiceIsTheOutcome(t *testing.T) {

@@ -174,7 +174,10 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	if err != nil {
 		return engine.Proposal{}, classifyAnthropic(a.provider, err)
 	}
-	resp, extra := a.nudgeFreeText(ctx, model, params, resp)
+	resp, extra, nudgeErr := a.nudgeFreeText(ctx, model, params, resp)
+	if nudgeErr != nil {
+		return engine.Proposal{}, classifyAnthropic(a.provider, nudgeErr)
+	}
 
 	// Check the stop reason before reading content. A refusal returns HTTP 200
 	// with an empty or partial content list, so indexing straight into
@@ -212,24 +215,29 @@ returned so the turn's cost stays the whole truth.
 func (a *Anthropic) nudgeFreeText(
 	ctx context.Context, model string,
 	params anthropic.MessageNewParams, resp *anthropic.Message,
-) (*anthropic.Message, domain.Cost) {
+) (*anthropic.Message, domain.Cost, error) {
 	if _, auto := a.autoToolChoice.Load(model); !auto {
-		return resp, domain.Cost{}
+		return resp, domain.Cost{}, nil
 	}
 	if resp.StopReason == anthropic.StopReasonRefusal || hasToolUse(resp) {
-		return resp, domain.Cost{}
+		return resp, domain.Cost{}, nil
 	}
+	// The superseded answer's usage travels back as the extra: the caller
+	// prices the final response, and the invoice is the sum of both calls.
+	firstCost := a.cost(resp.Usage, model)
 	nudged := params
+	// The answer goes back whole — thinking blocks included — the way the
+	// provider wants a multi-turn conversation continued.
 	nudged.Messages = append(append([]anthropic.MessageParam{}, params.Messages...),
-		anthropic.NewAssistantMessage(anthropic.NewTextBlock(textOf(resp))),
+		resp.ToParam(),
 		anthropic.NewUserMessage(anthropic.NewTextBlock(autoNudge)))
 	second, err := a.client.Messages.New(ctx, nudged)
 	if err != nil {
-		// The first answer stands; a nudge that failed to send must not turn
-		// a readable outcome into an error.
-		return resp, domain.Cost{}
+		// Quietly accepting the status text here would be the bug this
+		// exists to remove; the turn fails and the worker's retry runs.
+		return nil, domain.Cost{}, err
 	}
-	return second, a.cost(second.Usage, model)
+	return second, firstCost, nil
 }
 
 func hasToolUse(resp *anthropic.Message) bool {
@@ -239,16 +247,6 @@ func hasToolUse(resp *anthropic.Message) bool {
 		}
 	}
 	return false
-}
-
-func textOf(resp *anthropic.Message) string {
-	var out strings.Builder
-	for _, block := range resp.Content {
-		if text, ok := block.AsAny().(anthropic.TextBlock); ok {
-			out.WriteString(text.Text)
-		}
-	}
-	return out.String()
 }
 
 // toolChoiceFor is the structural guarantee where the model takes it, and
