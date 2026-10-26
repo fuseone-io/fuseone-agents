@@ -146,3 +146,49 @@ func TestResolve_cachePrefixTTL_reachesTheProviderWire(t *testing.T) {
 		t.Errorf("request carries no 1h ttl; the published window never reached the wire")
 	}
 }
+
+func TestResolve_agentIDRidesAsThePromptCacheKey(t *testing.T) {
+	registry := openRegistry(t)
+	ctx := context.Background()
+
+	var captured atomic.Pointer[string]
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body := string(raw)
+		captured.Store(&body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	authored := published(t, definition)
+	if err := registry.Publish(ctx, authored, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	providers := model.NewRegistry(nil)
+	if err := providers.Register(model.Provider{
+		Name: "openai", Kind: model.KindOpenAICompatible,
+		BaseURL: srv.URL, APIKey: "test", SupportsPromptCacheKey: true,
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	resolved, err := spec.NewResolver(registry, providers, nil).
+		Resolve(ctx, authored.ID, authored.Version)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+
+	_, _ = resolved.Planner.Plan(ctx, engine.PlanInput{
+		Transcript: []engine.Turn{{Kind: engine.TurnInput, Text: "hi"}},
+		Tools:      []domain.ToolID{"crm.lookup"},
+	})
+	body := captured.Load()
+	if body == nil {
+		t.Fatal("the provider was never called")
+	}
+	if !strings.Contains(*body, `"prompt_cache_key":"triage"`) {
+		t.Errorf("request carries no agent cache key; the resolver stopped naming it")
+	}
+}

@@ -44,6 +44,13 @@ type Provider struct {
 	// opt-in per provider rather than always-on.
 	SupportsReasoningEffort bool
 
+	// SupportsPromptCacheKey gates the prompt_cache_key field, which routes
+	// an agent's requests to the same cache shard and keeps cache accounting
+	// per agent. Opt-in for the same reason as the effort field: an
+	// OpenAI-compatible endpoint fronting another vendor's model may refuse
+	// the unknown name.
+	SupportsPromptCacheKey bool
+
 	// ReportsCachedTokens records whether usage accounting distinguishes cache
 	// reads from ordinary input. Where it does not, cached tokens are billed
 	// as input — an over-estimate, never a silent under-count. The console
@@ -67,6 +74,7 @@ var Presets = map[string]Provider{
 		Name: "openai", Kind: KindOpenAICompatible,
 		BaseURL:                 "https://api.openai.com/v1",
 		SupportsReasoningEffort: true, ReportsCachedTokens: true,
+		SupportsPromptCacheKey: true,
 	},
 	"deepseek": {
 		Name: "deepseek", Kind: KindOpenAICompatible,

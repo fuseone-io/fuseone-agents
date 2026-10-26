@@ -1252,3 +1252,56 @@ func TestAnthropic_defaultPrefix_sendsNoTTL(t *testing.T) {
 		t.Errorf("default request carries a ttl: an agent nobody opted in would pay the hour rate")
 	}
 }
+
+func TestOpenAICompatible_promptCacheKey_sentOnlyWhereTheProviderAcceptsIt(t *testing.T) {
+	t.Parallel()
+
+	// The strict providers answer 400 to unknown fields, so the key rides
+	// only where the provider is known to take it.
+	cases := []struct {
+		name     string
+		supports bool
+		key      string
+		want     bool
+	}{
+		{name: "supported provider with a key", supports: true, key: "ticket-triage", want: true},
+		{name: "strict provider never sees the field", supports: false, key: "ticket-triage", want: false},
+		{name: "no key means no field even where supported", supports: true, key: "", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := serve(t, openAIToolCall)
+			reg := model.NewRegistry(nil)
+			if err := reg.Register(model.Provider{
+				Name: "under-test", Kind: model.KindOpenAICompatible,
+				BaseURL: c.server.URL, APIKey: "test-key",
+				SupportsPromptCacheKey: tc.supports,
+			}); err != nil {
+				t.Fatalf("Register: %v", err)
+			}
+			p, err := reg.Planner("under-test", model.Config{CacheKey: tc.key}, schemas{})
+			if err != nil {
+				t.Fatalf("Planner: %v", err)
+			}
+			if _, err := p.Plan(context.Background(), input()); err != nil {
+				t.Fatalf("Plan: %v", err)
+			}
+
+			got, present := c.last()["prompt_cache_key"]
+			if present != tc.want {
+				t.Fatalf("prompt_cache_key present = %t, want %t", present, tc.want)
+			}
+			if tc.want && got != "ticket-triage" {
+				t.Errorf("prompt_cache_key = %v, want the agent's own key", got)
+			}
+		})
+	}
+}
+
+func TestPreset_openai_acceptsThePromptCacheKey(t *testing.T) {
+	t.Parallel()
+	if !model.Presets["openai"].SupportsPromptCacheKey {
+		t.Error("the openai preset should accept prompt_cache_key; without it every installation opts in by hand")
+	}
+}
