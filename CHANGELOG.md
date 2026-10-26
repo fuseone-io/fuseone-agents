@@ -25,6 +25,19 @@ field" is a commit message.
 
 ---
 
+## [0.63.0] — 2026-10-26
+
+### Added
+
+- **The hour cache window is priced at its own rate.** The prices screen
+  gains "cache write 1h", the provider's own usage breakdown decides
+  which writes pay it — a partially stripped breakdown bills upward,
+  never silently down — and the hour subset is recorded and sealed on
+  the step like every other financial fact. Market defaults follow the
+  published multipliers; left unconfigured, hour writes keep billing at
+  the short rate, visible on the screen. Configure the fifth rate on any
+  installation whose agents use cache_prefix_ttl.
+
 ## [0.62.0] — 2026-10-26
 
 ### Added
