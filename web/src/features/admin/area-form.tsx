@@ -17,11 +17,11 @@ import { useRegisterScope } from "@/features/scope/api";
 import type { RegisteredScope } from "@/features/scope/api";
 import { problemMessage } from "@/lib/api/problem-message";
 
-const schema: z.ZodType<AreaFormValues> = z.object({
+const schema = z.object({
   company: z.string().min(1, "admin.sayCompany"),
   name: z.string().min(1, "admin.areaNeedsName"),
   label: z.string(),
-});
+}) satisfies z.ZodType<AreaFormValues>;
 
 /**
  * Declares an area.

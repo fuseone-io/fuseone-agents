@@ -42,12 +42,12 @@ export const graviteeInstanceSchema = z
       .regex(graviteeID, "connectors.graviteeEnvironmentInvalid"),
     apiReference: z.string().regex(graviteeID, "connectors.graviteeAPIInvalid"),
     minTTLSeconds: z
-      .number({ invalid_type_error: "connectors.graviteeTTLInvalid" })
+      .number({ error: "connectors.graviteeTTLInvalid" })
       .int()
       .min(1, "connectors.graviteeTTLInvalid")
       .max(maxTTLSeconds, "connectors.graviteeTTLInvalid"),
     maxTTLSeconds: z
-      .number({ invalid_type_error: "connectors.graviteeTTLInvalid" })
+      .number({ error: "connectors.graviteeTTLInvalid" })
       .int()
       .min(1, "connectors.graviteeTTLInvalid")
       .max(maxTTLSeconds, "connectors.graviteeTTLInvalid"),

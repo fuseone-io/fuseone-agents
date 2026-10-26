@@ -13,7 +13,7 @@ export { vaultChoices } from "@/features/integrations/connectors/vault-instance-
 const identifier = /^[a-z][a-z0-9_]{0,63}$/;
 const hostname =
   /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-const ipAddress = z.string().ip();
+const ipAddress = z.union([z.ipv4(), z.ipv6()]);
 const parameterType = z.enum([
   "text",
   "integer",

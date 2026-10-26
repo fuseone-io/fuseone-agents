@@ -19,13 +19,13 @@ import { CompanyFormFields } from "@/features/companies/company-form-fields";
 import type { CompanyFormValues } from "@/features/companies/company-form-fields";
 import { problemMessage } from "@/lib/api/problem-message";
 
-const schema: z.ZodType<CompanyFormValues> = z.object({
+const schema = z.object({
   id: z
     .string()
     .min(1, "companies.needsId")
     .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "companies.idShape"),
   label: z.string(),
-});
+}) satisfies z.ZodType<CompanyFormValues>;
 
 /**
  * Registering a company.

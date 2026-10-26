@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -39,7 +39,11 @@ export function ElasticsearchInstanceForm({
   const company = useActiveScope((s) => s.company);
   const area = useActiveScope((s) => s.area);
   const form = useForm<ElasticsearchInstanceValues>({
-    resolver: zodResolver(elasticsearchInstanceSchema),
+    // zod 4 types coerced fields' INPUT as unknown; these forms are typed by
+    // their OUTPUT, which is also what every field submits. The cast states
+    // that equality once instead of threading three generics through each
+    // subcomponent.
+    resolver: zodResolver(elasticsearchInstanceSchema) as Resolver<ElasticsearchInstanceValues>,
     mode: "onChange",
     defaultValues: elasticsearchInstanceDefaults(instance, company, area),
   });
