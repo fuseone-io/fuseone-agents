@@ -1205,3 +1205,50 @@ func TestPresets_coverTheProvidersOperatorsExpect(t *testing.T) {
 		}
 	}
 }
+
+func TestAnthropic_hourPrefix_capsTheStablePrefixAndLeavesTheTailShort(t *testing.T) {
+	t.Parallel()
+	c := serve(t, anthropicToolUse)
+
+	_, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{CachePrefixTTL: "1h"}).
+		Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	system, _ := c.last()["system"].([]any)
+	if len(system) == 0 {
+		t.Fatal("no system blocks on the wire")
+	}
+	prefix, _ := system[len(system)-1].(map[string]any)
+	control, _ := prefix["cache_control"].(map[string]any)
+	if control["ttl"] != "1h" {
+		t.Errorf("prefix cache_control = %v, want ttl 1h", control)
+	}
+
+	// The tail changes every run; caching it for an hour pays double for
+	// tokens that are never read again.
+	messages, _ := c.last()["messages"].([]any)
+	for _, m := range messages {
+		raw, _ := json.Marshal(m)
+		if strings.Contains(string(raw), `"ttl"`) {
+			t.Errorf("a message block carries a ttl: %s", raw)
+		}
+	}
+}
+
+func TestAnthropic_defaultPrefix_sendsNoTTL(t *testing.T) {
+	t.Parallel()
+	c := serve(t, anthropicToolUse)
+
+	_, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{}).
+		Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	raw, _ := json.Marshal(c.last())
+	if strings.Contains(string(raw), `"ttl"`) {
+		t.Errorf("default request carries a ttl: an agent nobody opted in would pay the hour rate")
+	}
+}

@@ -2,8 +2,15 @@ package spec_test
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/model"
 	"github.com/fuseone/agents/internal/spec"
 )
@@ -86,5 +93,56 @@ func TestResolve_rebuildsThePlannerWhenPricesChange(t *testing.T) {
 	}
 	if got := model.RateOf(second.Planner); got.InputMicros != 9_000_000 {
 		t.Fatalf("second rate = %+v, want refreshed planner", got)
+	}
+}
+
+func TestResolve_cachePrefixTTL_reachesTheProviderWire(t *testing.T) {
+	registry := openRegistry(t)
+	ctx := context.Background()
+
+	var captured atomic.Pointer[string]
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body := string(raw)
+		captured.Store(&body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5",
+			"content":[{"type":"tool_use","id":"t1","name":"crm.lookup","input":{}}],
+			"stop_reason":"tool_use","usage":{"input_tokens":1,"output_tokens":1}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	def := strings.Replace(definition, "provider: openai", "provider: anthropic", 1)
+	def = strings.Replace(def, "model: test-model", "model: claude-opus-5\ncache_prefix_ttl: 1h", 1)
+	authored := published(t, def)
+	if err := registry.Publish(ctx, authored, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	providers := model.NewRegistry(nil)
+	if err := providers.Register(model.Provider{
+		Name: "anthropic", Kind: model.KindAnthropic, BaseURL: srv.URL, APIKey: "test",
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	resolved, err := spec.NewResolver(registry, providers, nil).
+		Resolve(ctx, authored.ID, authored.Version)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+
+	// The definition is the whole journey: what the author wrote has to be
+	// what the provider receives, or the field is decoration.
+	_, _ = resolved.Planner.Plan(ctx, engine.PlanInput{
+		Transcript: []engine.Turn{{Kind: engine.TurnInput, Text: "hi"}},
+		Tools:      []domain.ToolID{"crm.lookup"},
+	})
+	body := captured.Load()
+	if body == nil {
+		t.Fatal("the provider was never called")
+	}
+	if !strings.Contains(*body, `"ttl":"1h"`) {
+		t.Errorf("request carries no 1h ttl; the published window never reached the wire")
 	}
 }
