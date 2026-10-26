@@ -41,6 +41,9 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	session, connected := c.sessions[entry.Server]
 	cache := c.caches[entry.Server]
 	timeout := c.timeout
+	if chosen, ok := c.timeouts[entry.Server]; ok {
+		timeout = chosen
+	}
 	content := c.content
 	metrics := c.metrics
 	health := c.health

@@ -2791,8 +2791,8 @@ paths:
                   type: integer
                   description: >
                     Ceiling for one tool call to this server, 5 to 600
-                    seconds. Omit to leave the choice as it stands; absent
-                    means the platform default of 60.
+                    seconds. Omit to leave the choice as it stands; send 0
+                    to reset to the platform default of 60.
                 cache:
                   allOf: [{ $ref: '#/components/schemas/MCPResultCache' }]
                   description: >
