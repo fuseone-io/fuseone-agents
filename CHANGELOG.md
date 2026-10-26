@@ -25,6 +25,17 @@ field" is a commit message.
 
 ---
 
+## [0.62.0] — 2026-10-26
+
+### Added
+
+- **An agent's requests share a named cache on OpenAI-style providers.**
+  Each agent's calls carry its own cache key where the provider accepts
+  one — steadier cache hits under load, and the provider's cache
+  accounting can tell agents apart. Sent only to providers that declare
+  support (the OpenAI preset does); endpoints fronting other vendors'
+  models never see the unknown field.
+
 ## [0.61.0] — 2026-10-26
 
 ### Added
