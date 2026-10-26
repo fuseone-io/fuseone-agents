@@ -25,6 +25,23 @@ field" is a commit message.
 
 ---
 
+## [0.68.0] — 2026-10-26
+
+### Fixed
+
+- **Free text no longer ends a run on the newer models.** A model that
+  refuses the required-tool mode runs under auto, where a polite status
+  line mid-run used to read back as the run's final answer — a scan
+  once ended at its memory step reporting its own work as pending. Such
+  text is now handed back once with the instruction to continue; only
+  the finish tool ends the run. A model that answers text twice has
+  said its piece, and the second text stands.
+- **A turn that spends before failing leaves the spend on the record.**
+  When the follow-up call fails, the billed first call now reaches the
+  ledger, the budget, FinOps and the pool metrics — cost, pair, price
+  and prompt breakdown — exactly once per attempt, before the run is
+  released for retry.
+
 ## [0.67.0] — 2026-10-26
 
 ### Added
