@@ -1305,3 +1305,92 @@ func TestPreset_openai_acceptsThePromptCacheKey(t *testing.T) {
 		t.Error("the openai preset should accept prompt_cache_key; without it every installation opts in by hand")
 	}
 }
+
+const anthropicHourCacheWrite = `{
+  "id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5",
+  "content":[{"type":"tool_use","id":"toolu_1","name":"crm.lookup","input":{}}],
+  "stop_reason":"tool_use",
+  "usage":{"input_tokens":100,"output_tokens":10,"cache_read_input_tokens":0,
+           "cache_creation_input_tokens":90000,
+           "cache_creation":{"ephemeral_5m_input_tokens":20000,"ephemeral_1h_input_tokens":70000}}
+}`
+
+func TestAnthropic_hourCacheWrites_arePricedAtTheirOwnRate(t *testing.T) {
+	t.Parallel()
+	c := serve(t, anthropicHourCacheWrite)
+
+	got, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{
+		Model: "claude-opus-5",
+		PricePerMTok: model.Prices{
+			InputMicros: 5_000_000, OutputMicros: 25_000_000,
+			CacheWriteMicros: 6_250_000, CacheWrite1hMicros: 10_000_000,
+		},
+	}).Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	if got.Cost.CacheWriteTokens != 90000 || got.Cost.CacheWrite1hTokens != 70000 {
+		t.Errorf("writes = %d total / %d hour, want 90000/70000",
+			got.Cost.CacheWriteTokens, got.Cost.CacheWrite1hTokens)
+	}
+	// 100*5 + 10*25 + 20000*6.25 + 70000*10 in micros-per-million terms.
+	want := int64(100*5 + 10*25 + 20_000*6.25 + 70_000*10)
+	if got.Cost.Micros != want {
+		t.Errorf("Micros = %d, want %d — the hour window has its own rate", got.Cost.Micros, want)
+	}
+}
+
+func TestAnthropic_hourCacheWrites_withoutOwnRate_billAtTheShortRate(t *testing.T) {
+	t.Parallel()
+	c := serve(t, anthropicHourCacheWrite)
+
+	got, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{
+		Model: "claude-opus-5",
+		PricePerMTok: model.Prices{
+			InputMicros: 5_000_000, OutputMicros: 25_000_000,
+			CacheWriteMicros: 6_250_000,
+		},
+	}).Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	// Unconfigured is unconfigured: no invented multiplier, today's rate,
+	// corrected on the prices screen rather than guessed in code.
+	want := int64(100*5 + 10*25 + 90_000*6.25)
+	if got.Cost.Micros != want {
+		t.Errorf("Micros = %d, want %d", got.Cost.Micros, want)
+	}
+}
+
+func TestAnthropic_missingWriteBreakdown_onAnHourAgent_countsEveryWriteAsHour(t *testing.T) {
+	t.Parallel()
+	// A proxy that strips the breakdown must err the bill upward, never
+	// silently down: the agent asked for the hour window, so the writes are
+	// presumed to have paid for it.
+	const noBreakdown = `{
+	  "id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5",
+	  "content":[{"type":"tool_use","id":"toolu_1","name":"crm.lookup","input":{}}],
+	  "stop_reason":"tool_use",
+	  "usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":90000}
+	}`
+	c := serve(t, noBreakdown)
+
+	got, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{
+		Model: "claude-opus-5", CachePrefixTTL: "1h",
+		PricePerMTok: model.Prices{
+			InputMicros: 5_000_000, OutputMicros: 25_000_000,
+			CacheWriteMicros: 6_250_000, CacheWrite1hMicros: 10_000_000,
+		},
+	}).Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	want := int64(100*5 + 10*25 + 90_000*10)
+	if got.Cost.CacheWrite1hTokens != 90000 || got.Cost.Micros != want {
+		t.Errorf("writes1h = %d, Micros = %d; want 90000 and %d",
+			got.Cost.CacheWrite1hTokens, got.Cost.Micros, want)
+	}
+}

@@ -29,10 +29,11 @@ var marketPrices = map[string]MarketPrice{
 	"anthropic/claude-opus-5": {
 		Provider: "anthropic", Model: "claude-opus-5",
 		Prices: Prices{
-			InputMicros:      2_500_000,
-			OutputMicros:     12_500_000,
-			CacheReadMicros:  250_000,
-			CacheWriteMicros: 3_125_000,
+			InputMicros:        2_500_000,
+			OutputMicros:       12_500_000,
+			CacheReadMicros:    250_000,
+			CacheWriteMicros:   3_125_000,
+			CacheWrite1hMicros: 5_000_000,
 		},
 		Currency:        "USD",
 		SourceURL:       "https://platform.claude.com/docs/en/about-claude/pricing",

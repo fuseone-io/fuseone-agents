@@ -88,6 +88,11 @@ type Prices struct {
 	OutputMicros     int64
 	CacheReadMicros  int64
 	CacheWriteMicros int64
+	// CacheWrite1hMicros is the hour-window write rate, which the provider
+	// bills above the short window's. Zero means unconfigured, and hour
+	// writes then bill at CacheWriteMicros — today's figure, corrected on
+	// the prices screen, never a multiplier invented in code.
+	CacheWrite1hMicros int64
 }
 
 func (p Prices) IsZero() bool {
@@ -231,17 +236,32 @@ func (a *Anthropic) cost(u anthropic.Usage, model string) domain.Cost {
 	pr, _ := a.rateFor(model)
 	const perMillion = 1_000_000
 
+	hourWrites := u.CacheCreation.Ephemeral1hInputTokens
+	if u.CacheCreation.Ephemeral1hInputTokens == 0 && u.CacheCreation.Ephemeral5mInputTokens == 0 &&
+		a.cfg.CachePrefixTTL == "1h" {
+		// A proxy that strips the breakdown must err the bill upward, never
+		// silently down: this agent asked for the hour window, so its writes
+		// are presumed to have paid for it.
+		hourWrites = u.CacheCreationInputTokens
+	}
+	hourRate := pr.CacheWrite1hMicros
+	if hourRate == 0 {
+		hourRate = pr.CacheWriteMicros
+	}
+
 	micros := u.InputTokens*pr.InputMicros/perMillion +
 		u.OutputTokens*pr.OutputMicros/perMillion +
 		u.CacheReadInputTokens*pr.CacheReadMicros/perMillion +
-		u.CacheCreationInputTokens*pr.CacheWriteMicros/perMillion
+		(u.CacheCreationInputTokens-hourWrites)*pr.CacheWriteMicros/perMillion +
+		hourWrites*hourRate/perMillion
 
 	return domain.Cost{
-		InputTokens:      u.InputTokens,
-		OutputTokens:     u.OutputTokens,
-		CacheReadTokens:  u.CacheReadInputTokens,
-		CacheWriteTokens: u.CacheCreationInputTokens,
-		Micros:           micros,
+		InputTokens:        u.InputTokens,
+		OutputTokens:       u.OutputTokens,
+		CacheReadTokens:    u.CacheReadInputTokens,
+		CacheWriteTokens:   u.CacheCreationInputTokens,
+		CacheWrite1hTokens: hourWrites,
+		Micros:             micros,
 	}
 }
 

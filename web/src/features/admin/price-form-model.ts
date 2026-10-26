@@ -14,12 +14,17 @@ export const priceFormSchema = z.object({
   outputMicros: rateField,
   cacheReadMicros: rateField,
   cacheWriteMicros: rateField,
+  cacheWrite1hMicros: rateField,
 });
 
 export type PriceFormValues = z.infer<typeof priceFormSchema>;
 export type PriceRateName = keyof Pick<
   PriceFormValues,
-  "inputMicros" | "outputMicros" | "cacheReadMicros" | "cacheWriteMicros"
+  | "inputMicros"
+  | "outputMicros"
+  | "cacheReadMicros"
+  | "cacheWriteMicros"
+  | "cacheWrite1hMicros"
 >;
 export type PriceSuggestion = Pick<ModelPrice, "provider" | "model">;
 
@@ -28,6 +33,7 @@ export const PRICE_RATES: { field: PriceRateName; label: string }[] = [
   { field: "outputMicros", label: "admin.rateOutput" },
   { field: "cacheReadMicros", label: "admin.rateCacheRead" },
   { field: "cacheWriteMicros", label: "admin.rateCacheWrite" },
+  { field: "cacheWrite1hMicros", label: "admin.rateCacheWrite1h" },
 ];
 
 export function initialPriceFormValues(
@@ -46,6 +52,7 @@ export function initialPriceFormValues(
     outputMicros: rateText(price.outputMicros),
     cacheReadMicros: rateText(price.cacheReadMicros),
     cacheWriteMicros: rateText(price.cacheWriteMicros),
+    cacheWrite1hMicros: rateText(price.cacheWrite1hMicros),
   };
 }
 
@@ -57,6 +64,7 @@ export function modelPriceFromForm(values: PriceFormValues): ModelPrice {
     outputMicros: rateMicros(values.outputMicros),
     cacheReadMicros: rateMicros(values.cacheReadMicros),
     cacheWriteMicros: rateMicros(values.cacheWriteMicros),
+    cacheWrite1hMicros: rateMicros(values.cacheWrite1hMicros),
   };
 }
 
@@ -85,6 +93,7 @@ function blankPrice(provider: string, model: string): PriceFormValues {
     outputMicros: "",
     cacheReadMicros: "",
     cacheWriteMicros: "",
+    cacheWrite1hMicros: "",
   };
 }
 

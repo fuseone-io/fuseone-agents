@@ -111,9 +111,10 @@ func priceFrom(p admin.ModelPrice) openapi.ModelPrice {
 		Provider: p.Provider, Model: p.Model,
 		InputMicros: ptr(p.InputMicros), OutputMicros: ptr(p.OutputMicros),
 		CacheReadMicros: ptr(p.CacheReadMicros), CacheWriteMicros: ptr(p.CacheWriteMicros),
-		Source:    ptr(sourceOf(p.Source)),
-		Currency:  ptrNonEmpty(p.Currency),
-		SourceUrl: ptrNonEmpty(p.SourceURL), SourceUpdatedAt: ptrNonEmpty(p.SourceUpdatedAt),
+		CacheWrite1hMicros: ptr(p.CacheWrite1hMicros),
+		Source:             ptr(sourceOf(p.Source)),
+		Currency:           ptrNonEmpty(p.Currency),
+		SourceUrl:          ptrNonEmpty(p.SourceURL), SourceUpdatedAt: ptrNonEmpty(p.SourceUpdatedAt),
 	}
 }
 
@@ -121,11 +122,12 @@ func marketPriceFrom(p model.MarketPrice) openapi.ModelPrice {
 	return openapi.ModelPrice{
 		Provider: p.Provider, Model: p.Model,
 		InputMicros: ptr(p.Prices.InputMicros), OutputMicros: ptr(p.Prices.OutputMicros),
-		CacheReadMicros:  ptr(p.Prices.CacheReadMicros),
-		CacheWriteMicros: ptr(p.Prices.CacheWriteMicros),
-		Source:           ptr(openapi.MarketDefault),
-		Currency:         ptrNonEmpty(p.Currency),
-		SourceUrl:        ptrNonEmpty(p.SourceURL), SourceUpdatedAt: ptrNonEmpty(p.SourceUpdatedAt),
+		CacheReadMicros:    ptr(p.Prices.CacheReadMicros),
+		CacheWriteMicros:   ptr(p.Prices.CacheWriteMicros),
+		CacheWrite1hMicros: ptr(p.Prices.CacheWrite1hMicros),
+		Source:             ptr(openapi.MarketDefault),
+		Currency:           ptrNonEmpty(p.Currency),
+		SourceUrl:          ptrNonEmpty(p.SourceURL), SourceUpdatedAt: ptrNonEmpty(p.SourceUpdatedAt),
 	}
 }
 
@@ -134,6 +136,7 @@ func priceInto(in openapi.ModelPrice) admin.ModelPrice {
 		Provider: in.Provider, Model: in.Model,
 		InputMicros: valueOr(in.InputMicros), OutputMicros: valueOr(in.OutputMicros),
 		CacheReadMicros: valueOr(in.CacheReadMicros), CacheWriteMicros: valueOr(in.CacheWriteMicros),
+		CacheWrite1hMicros: valueOr(in.CacheWrite1hMicros),
 	}
 }
 
