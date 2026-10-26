@@ -449,3 +449,32 @@ func TestCounter_whileTheProtocolIsBeingChanged_neverPanics(t *testing.T) {
 	}
 	<-done
 }
+
+func TestMarketPriceFor_aliasWithCanonicalSuffix_inheritsTheReference(t *testing.T) {
+	t.Parallel()
+
+	// Behind a proxy the model keeps the vendor's id as a suffix of the
+	// proxy's own alias. The reference is about the model, not the spelling.
+	cases := []struct {
+		name            string
+		provider, model string
+		want            bool
+	}{
+		{name: "exact key still wins", provider: "anthropic", model: "claude-opus-5", want: true},
+		{name: "proxy alias inherits by suffix", provider: "anthropic", model: "anthropic-claude-opus-5", want: true},
+		{name: "no separator boundary means a different model", provider: "anthropic", model: "xclaude-opus-5", want: false},
+		{name: "another provider's alias inherits nothing", provider: "openai", model: "anthropic-claude-opus-5", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p, ok := model.MarketPriceFor(tc.provider, tc.model)
+			if ok != tc.want {
+				t.Fatalf("MarketPriceFor(%s, %s) = %v, want %v", tc.provider, tc.model, ok, tc.want)
+			}
+			if ok && p.Prices.CacheWrite1hMicros == 0 {
+				t.Errorf("reference carries no hour rate: %+v", p.Prices)
+			}
+		})
+	}
+}

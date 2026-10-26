@@ -3,6 +3,7 @@ package model
 import (
 	"maps"
 	"slices"
+	"strings"
 )
 
 const (
@@ -83,9 +84,33 @@ func priceKey(provider, model string) string {
 }
 
 // MarketPriceFor returns the bundled public default for a model.
+//
+// An exact key wins. Failing that, a proxy's alias inherits the reference of
+// the canonical model it carries as a suffix — behind a gateway the vendor's
+// id survives inside the alias (anthropic-claude-opus-5), and the reference
+// is about the model, not the spelling. The boundary character keeps a
+// genuinely different model from inheriting by coincidence, and the longest
+// canonical suffix wins so a more specific id is never shadowed by a shorter
+// one.
 func MarketPriceFor(provider, model string) (MarketPrice, bool) {
-	p, ok := marketPrices[priceKey(provider, model)]
-	return p, ok
+	if p, ok := marketPrices[priceKey(provider, model)]; ok {
+		return p, true
+	}
+	var best MarketPrice
+	found := false
+	for _, p := range marketPrices {
+		if p.Provider != provider || !strings.HasSuffix(model, p.Model) {
+			continue
+		}
+		boundary := model[len(model)-len(p.Model)-1]
+		if boundary != '-' && boundary != '/' && boundary != '.' && boundary != ':' {
+			continue
+		}
+		if !found || len(p.Model) > len(best.Model) {
+			best, found = p, true
+		}
+	}
+	return best, found
 }
 
 // MarketPrices returns every bundled public default in stable order.

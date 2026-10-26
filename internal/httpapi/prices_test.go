@@ -120,3 +120,66 @@ func findPrice(
 	t.Fatalf("missing price %s/%s in %+v", provider, model, prices)
 	return openapi.ModelPrice{}
 }
+
+func TestListPrices_proxyAliasInheritsAMarketSuggestion(t *testing.T) {
+	t.Parallel()
+
+	// Behind a proxy the models that actually price runs are the proxy's
+	// aliases, and the bundled defaults only know canonical ids — the
+	// operator's declared model list is what bridges the two.
+	integrations := &fakeAdmin{providers: []domain.ModelProvider{{
+		Name: "anthropic", Enabled: true,
+		Models: []string{"anthropic-claude-opus-5", "gemini-2.5-pro"},
+	}}}
+	resp, err := NewServer(ledger.NewMemory(), "test").WithRates(&ratesSpy{}).
+		WithAdministration(nil, nil, integrations).
+		ListPrices(as(domain.RoleAuthor), openapi.ListPricesRequestObject{})
+	if err != nil {
+		t.Fatalf("ListPrices: %v", err)
+	}
+	page := resp.(openapi.ListPrices200JSONResponse)
+
+	alias := findPrice(t, page.Items, "anthropic", "anthropic-claude-opus-5")
+	if alias.Source == nil || *alias.Source != openapi.MarketDefault {
+		t.Fatalf("source = %v, want a market default suggestion", alias.Source)
+	}
+	if alias.CacheWrite1hMicros == nil || *alias.CacheWrite1hMicros != 10_000_000 {
+		t.Errorf("cacheWrite1h = %v, want the canonical reference", alias.CacheWrite1hMicros)
+	}
+	for _, item := range page.Items {
+		if item.Model == "gemini-2.5-pro" {
+			t.Error("an alias with no canonical suffix invented a reference")
+		}
+	}
+}
+
+func TestListPrices_configuredAliasSuppressesTheSuggestion(t *testing.T) {
+	t.Parallel()
+
+	integrations := &fakeAdmin{providers: []domain.ModelProvider{{
+		Name: "anthropic", Enabled: true, Models: []string{"anthropic-claude-opus-5"},
+	}}}
+	resp, err := NewServer(ledger.NewMemory(), "test").
+		WithRates(&ratesSpy{prices: []admin.ModelPrice{{
+			Provider: "anthropic", Model: "anthropic-claude-opus-5", InputMicros: 5_000_000,
+		}}}).
+		WithAdministration(nil, nil, integrations).
+		ListPrices(as(domain.RoleAuthor), openapi.ListPricesRequestObject{})
+	if err != nil {
+		t.Fatalf("ListPrices: %v", err)
+	}
+	page := resp.(openapi.ListPrices200JSONResponse)
+
+	count := 0
+	for _, item := range page.Items {
+		if item.Provider == "anthropic" && item.Model == "anthropic-claude-opus-5" {
+			count++
+			if item.Source != nil && *item.Source == openapi.MarketDefault {
+				t.Error("the configured rate is shadowed by its own suggestion")
+			}
+		}
+	}
+	if count != 1 {
+		t.Errorf("rows for the alias = %d, want exactly the configured one", count)
+	}
+}

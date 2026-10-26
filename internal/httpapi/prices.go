@@ -53,8 +53,10 @@ func (s *Server) ListPrices(
 		if _, ok := seen[p.Provider+"/"+p.Model]; ok {
 			continue
 		}
+		seen[p.Provider+"/"+p.Model] = struct{}{}
 		items = append(items, marketPriceFrom(p))
 	}
+	items = append(items, s.aliasSuggestions(ctx, seen)...)
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].Provider == items[j].Provider {
 			return items[i].Model < items[j].Model
@@ -104,6 +106,44 @@ func (s *Server) DeletePrice(
 		return nil, err
 	}
 	return openapi.DeletePrice204Response{}, nil
+}
+
+// aliasSuggestions are market references for the models an installation's
+// providers actually declare. Behind a proxy the models that price runs are
+// the proxy's aliases, which the bundled table cannot know by name — the
+// operator's declared list is what bridges the two, and the suggestion keeps
+// the alias's own spelling so saving it configures the pair the runs use.
+func (s *Server) aliasSuggestions(
+	ctx context.Context, seen map[string]struct{},
+) []openapi.ModelPrice {
+	if s.integrations == nil {
+		return nil
+	}
+	providers, err := s.integrations.Providers(ctx)
+	if err != nil {
+		// A list that cannot be read costs the suggestions, never the rates.
+		return nil
+	}
+	var items []openapi.ModelPrice
+	for _, p := range providers {
+		if !p.Enabled {
+			continue
+		}
+		for _, alias := range p.Models {
+			if _, ok := seen[p.Name+"/"+alias]; ok {
+				continue
+			}
+			reference, ok := model.MarketPriceFor(p.Name, alias)
+			if !ok {
+				continue
+			}
+			seen[p.Name+"/"+alias] = struct{}{}
+			reference.Model = alias
+			reference.Provider = p.Name
+			items = append(items, marketPriceFrom(reference))
+		}
+	}
+	return items
 }
 
 func priceFrom(p admin.ModelPrice) openapi.ModelPrice {
