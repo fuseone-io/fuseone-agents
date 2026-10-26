@@ -240,6 +240,67 @@ func TestTurn_transientFailure_backsOffInsteadOfParking(t *testing.T) {
 	}
 }
 
+func TestTurn_spentPlanFailure_putsTheSpendOnTheLedgerAndRetries(t *testing.T) {
+	t.Parallel()
+
+	spent := &engine.SpentPlanError{
+		Cost: domain.Cost{InputTokens: 1, OutputTokens: 1,
+			CacheReadTokens: 320, CacheWriteTokens: 640, Micros: 30},
+		Prompt:   domain.PromptInputBreakdown{Unit: "bytes", Instructions: 12},
+		Provider: "anthropic", Model: "claude-opus-5-5",
+		Err: &model.ProviderError{Provider: "anthropic", Code: model.CodeProviderUnavailable, Retryable: true},
+	}
+	reg := NewMetricsRegistry()
+	s := newSetup(t, Config{MaxAttempts: 3, BaseBackoff: time.Second}, &flakyPlanner{failures: 1, err: spent}, nil)
+	s.worker.WithMetrics(reg.Pool("runs", 4))
+	openRun(t, s.store)
+
+	if _, err := s.worker.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+
+	if got := phaseOf(t, s.store); got == engine.PhaseParked {
+		t.Error("a retryable spent failure parked the run")
+	}
+	// The provider billed that call whether or not the turn survived it: the
+	// ledger holds the spend exactly once, with the pair it belongs to.
+	runs, err := s.store.Runs(context.Background())
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("Runs = %v, %v", runs, err)
+	}
+	steps, err := s.store.Read(context.Background(), runs[0], domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	recorded := 0
+	for _, step := range steps {
+		if step.Kind == domain.StepPlanned && step.Cost.Micros == 30 {
+			recorded++
+			var payload domain.PlannedPayload
+			if err := json.Unmarshal(step.Payload, &payload); err != nil ||
+				payload.Provider != "anthropic" || payload.Model != "claude-opus-5-5" ||
+				payload.Prompt == nil {
+				t.Errorf("payload = %s, want the pair and the prompt breakdown", step.Payload)
+			}
+		}
+	}
+	if recorded != 1 {
+		t.Errorf("spend steps = %d, want exactly one", recorded)
+	}
+	// Prometheus is the other projection: the billed attempt's cache tokens
+	// must land there too, or dashboards under-read exactly the runs that
+	// are burning money on retries.
+	body := metricsBody(reg)
+	for _, want := range []string{
+		`fuseone_worker_model_cache_tokens_total{pool="runs",operation="read"} 320`,
+		`fuseone_worker_model_cache_tokens_total{pool="runs",operation="write"} 640`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("metrics body missing %q", want)
+		}
+	}
+}
+
 func TestTurn_repeatedFailures_parkForAHuman(t *testing.T) {
 	t.Parallel()
 

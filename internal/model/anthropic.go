@@ -174,18 +174,89 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	if err != nil {
 		return engine.Proposal{}, classifyAnthropic(a.provider, err)
 	}
+	resp, extra, nudgeErr := a.nudgeFreeText(ctx, model, params, resp)
+	if nudgeErr != nil {
+		rate, configured := a.rateFor(model)
+		return engine.Proposal{}, &engine.SpentPlanError{
+			Cost:     extra,
+			Prompt:   prompt,
+			Price:    priceUse(rate, configured, extra),
+			Provider: a.provider,
+			Model:    model,
+			Err:      classifyAnthropic(a.provider, nudgeErr),
+		}
+	}
 
 	// Check the stop reason before reading content. A refusal returns HTTP 200
 	// with an empty or partial content list, so indexing straight into
 	// content[0] turns a policy decision into a nil dereference.
 	rate, configured := a.rateFor(model)
-	cost := a.cost(resp.Usage, model)
+	cost := a.cost(resp.Usage, model).Add(extra)
 	price := priceUse(rate, configured, cost)
 	if resp.StopReason == anthropic.StopReasonRefusal {
 		return engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: a.provider, Model: model}, providerRefused(a.provider)
 	}
 
 	return a.proposalFrom(resp, offered, prompt, cost, price, model), nil
+}
+
+// autoNudge is said once to a model that answered free text under the
+// learned auto mode. Under the structural mode text cannot end a run; auto
+// traded that guarantee for compatibility, and this hands the model one
+// chance to keep its side of it.
+const autoNudge = "Continue the run: call the next tool now, or finish " +
+	"through the finish tool. Free text does not end the run and is not " +
+	"delivered to anyone."
+
+/*
+nudgeFreeText restores, behaviourally, what the auto downgrade traded away.
+
+A model on tool_choice any cannot end a run with prose — the mode refuses it
+structurally. A model learned down to auto can, and a polite status line
+mid-run then reads back as the run's outcome: the run in the field ended at
+its memory step, reporting the scan as pending, because the model summarised
+before acting. The text is handed back with one instruction to continue; a
+model that answers text twice has said its piece, and insisting further
+would burn budget against a decision already made. The extra call's usage is
+returned so the turn's cost stays the whole truth.
+*/
+func (a *Anthropic) nudgeFreeText(
+	ctx context.Context, model string,
+	params anthropic.MessageNewParams, resp *anthropic.Message,
+) (*anthropic.Message, domain.Cost, error) {
+	if _, auto := a.autoToolChoice.Load(model); !auto {
+		return resp, domain.Cost{}, nil
+	}
+	if resp.StopReason == anthropic.StopReasonRefusal || hasToolUse(resp) {
+		return resp, domain.Cost{}, nil
+	}
+	// The superseded answer's usage travels back as the extra: the caller
+	// prices the final response, and the invoice is the sum of both calls.
+	firstCost := a.cost(resp.Usage, model)
+	nudged := params
+	// The answer goes back whole — thinking blocks included — the way the
+	// provider wants a multi-turn conversation continued.
+	nudged.Messages = append(append([]anthropic.MessageParam{}, params.Messages...),
+		resp.ToParam(),
+		anthropic.NewUserMessage(anthropic.NewTextBlock(autoNudge)))
+	second, err := a.client.Messages.New(ctx, nudged)
+	if err != nil {
+		// Quietly accepting the status text here would be the bug this
+		// exists to remove; the turn fails and the worker's retry runs —
+		// with the first call's spend travelling along, because it was
+		// billed whether or not this one answered.
+		return nil, firstCost, err
+	}
+	return second, firstCost, nil
+}
+
+func hasToolUse(resp *anthropic.Message) bool {
+	for _, block := range resp.Content {
+		if _, ok := block.AsAny().(anthropic.ToolUseBlock); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // toolChoiceFor is the structural guarantee where the model takes it, and
