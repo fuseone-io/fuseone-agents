@@ -42,6 +42,9 @@ func agentFrom(a domain.AgentSummary) openapi.Agent {
 	if a.Effort != "" {
 		agent.Effort = ptr(a.Effort)
 	}
+	if a.CachePrefixTTL != "" {
+		agent.CachePrefixTtl = ptr(a.CachePrefixTTL)
+	}
 	if a.PublishedBy != "" {
 		agent.PublishedBy = ptr(string(a.PublishedBy))
 	}

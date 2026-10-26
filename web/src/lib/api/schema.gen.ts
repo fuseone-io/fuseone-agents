@@ -4491,6 +4491,12 @@ export interface components {
             provider: string;
             model: string;
             effort?: string;
+            /**
+             * @description How long the provider may keep the agent's stable prefix cached.
+             *     Empty or 5m is the provider default; 1h pays the longer write so
+             *     an hourly agent reads its prefix back instead of re-writing it.
+             */
+            cachePrefixTtl?: string;
             /** @description The capability pack resolved to concrete tools. What is not here cannot be invoked. */
             tools: string[];
             budget: components["schemas"]["Budget"];
@@ -4534,6 +4540,12 @@ export interface components {
             provider: string;
             model: string;
             effort?: string;
+            /**
+             * @description How long the provider may keep the agent's stable prefix cached.
+             *     Empty or 5m is the provider default; 1h pays the longer write so
+             *     an hourly agent reads its prefix back instead of re-writing it.
+             */
+            cachePrefixTtl?: string;
             /** @description What the agent is for, in the author's own words. */
             instructions: string;
             /** @description The capability pack. What is not here cannot be invoked. */

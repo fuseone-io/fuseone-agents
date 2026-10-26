@@ -75,6 +75,7 @@ export function toDefinition(
     provider: agent.provider,
     model: agent.model,
     effort: agent.effort,
+    cachePrefixTtl: agent.cachePrefixTtl,
     instructions: instructions ?? "",
     tools: agent.tools,
     budget: agent.budget,
@@ -137,6 +138,7 @@ export function changesBetween(
     `${after.provider}/${after.model}`,
   );
   compare("agents.fieldEffort", before.effort, after.effort);
+  compare("agents.fieldCacheTtl", before.cachePrefixTtl, after.cachePrefixTtl);
   compare(
     "agents.fieldInstructions",
     size(before.instructions),

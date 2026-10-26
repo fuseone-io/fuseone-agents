@@ -7141,6 +7141,12 @@ components:
         provider: { type: string }
         model: { type: string }
         effort: { type: string }
+        cachePrefixTtl:
+          type: string
+          description: |
+            How long the provider may keep the agent's stable prefix cached.
+            Empty or 5m is the provider default; 1h pays the longer write so
+            an hourly agent reads its prefix back instead of re-writing it.
         tools:
           type: array
           description: The capability pack resolved to concrete tools. What is not here cannot be invoked.
@@ -7197,6 +7203,12 @@ components:
         provider: { type: string }
         model: { type: string }
         effort: { type: string }
+        cachePrefixTtl:
+          type: string
+          description: |
+            How long the provider may keep the agent's stable prefix cached.
+            Empty or 5m is the provider default; 1h pays the longer write so
+            an hourly agent reads its prefix back instead of re-writing it.
         instructions:
           type: string
           description: What the agent is for, in the author's own words.

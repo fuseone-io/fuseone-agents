@@ -32,6 +32,9 @@ type AgentSummary struct {
 	Provider string
 	Model    string
 	Effort   string
+	// CachePrefixTTL is the stable-prefix cache window the definition chose;
+	// empty is the provider default.
+	CachePrefixTTL string
 
 	Tools          []ToolID
 	Budget         Budget

@@ -372,6 +372,7 @@ function definitionFromAgent(
     provider: agent.provider,
     model: agent.model,
     effort: agent.effort,
+    cachePrefixTtl: agent.cachePrefixTtl,
     instructions: instructions ?? "",
     tools: agent.tools,
     budget: agent.budget,

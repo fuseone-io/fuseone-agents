@@ -280,6 +280,9 @@
       "unknown": "unclassified"
     },
     "effort": "Effort",
+    "cacheTtl": "Prefix cache",
+    "cacheTtlDefault": "Provider default (5m)",
+    "cacheTtlHour": "1 hour — for agents that run at least hourly",
     "effortDefault": "default",
     "emptyCanvas": "No stages yet. Ask the assistant to read the instructions, or write the first one.",
     "emptyCatalogue": "No tool in the catalogue. An MCP server has to be connected before an agent can do anything at all.",
@@ -291,6 +294,7 @@
     "fieldArea": "area",
     "fieldBudget": "ceiling",
     "fieldEffort": "effort",
+    "fieldCacheTtl": "prefix cache window",
     "fieldEmits": "Events published",
     "fieldApprovals": "Approvals",
     "approvals": "Human approval",

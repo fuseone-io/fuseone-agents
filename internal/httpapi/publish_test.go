@@ -675,3 +675,22 @@ func TestPublishAgent_withoutAnApprovalPolicy_publishesNone(t *testing.T) {
 		t.Errorf("approvals = %+v, want the console alone", got)
 	}
 }
+
+func TestPublishAgent_cachePrefixTTLSurvivesTheConsolePath(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher()
+
+	_, err := publishServer(t, pub).PublishAgent(
+		inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+			d.CachePrefixTtl = ptr("1h")
+		})},
+	)
+	if err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+
+	if len(pub.published) != 1 || pub.published[0].CachePrefixTTL != "1h" {
+		t.Fatalf("published ttl = %+v, want the hour window to survive the form", pub.published)
+	}
+}
