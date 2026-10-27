@@ -73,12 +73,47 @@ func withoutTool(pack gate.Pack, remove domain.ToolID) gate.Pack {
 	return gate.NewPack(out...)
 }
 
+// closedTools is what forward movement has put behind a run: tools reachable
+// in steps before the one it is at, and on the surface of this turn no more.
+// Judged against envelopeForState — the surface the model actually sees —
+// never the bare step union: memory learning, a ticket and context artifacts
+// re-offer platform tools whatever step anchored them, and a payload calling
+// one of those closed would contradict the prompt it describes. Recorded on
+// the planned step so the trail can say the envelope narrowed because the
+// run advanced — which otherwise reads exactly like an outage (#152).
+func closedTools(start Start, state State) []domain.ToolID {
+	at := StepAt(start, state.Called)
+	if at == 0 {
+		return nil
+	}
+	open := envelopeForState(start, state)
+	seen := map[domain.ToolID]bool{}
+	var closed []domain.ToolID
+	for _, step := range start.Steps[:at] {
+		for _, tool := range step.Reaches {
+			if open.Allows(tool) || seen[tool] {
+				continue
+			}
+			seen[tool] = true
+			closed = append(closed, tool)
+		}
+	}
+	return closed
+}
+
 // StepAt is the step a run has advanced to: the furthest one whose tools it
 // has already used. It is what the ledger records against a proposal, so a
 // correction can be anchored where the run actually was (PRD FU-13).
 func StepAt(start Start, called []domain.ToolID) int {
 	at := 0
 	for _, tool := range called {
+		// A platform tool is an ambient capability — memory, context, the
+		// ticket answer — whatever step it was anchored in. Using one is not
+		// evidence the run did that step's work, and advancing on it closed
+		// every earlier step over a memory lookup (#152).
+		if tool.PlatformOwned() {
+			continue
+		}
 		if i, ok := stepOf(start.Steps, tool); ok && i > at {
 			at = i
 		}
@@ -112,13 +147,30 @@ func SpendAt(start Start, called []domain.ToolID) (model, effort string) {
 		return "", ""
 	}
 
-	// Before anything has been called the run is entering the first step.
-	// After that it is entering the one past the furthest it has reached.
+	// Before any step's own work has been done the run is entering the first
+	// step. After that it is entering the one past the furthest it has
+	// reached. "Work" is a step tool, never a platform one: the engine's own
+	// initial memory lookup fills Called, and letting it move the spend would
+	// price reasoning still in the first step at the second's rate (#153).
 	at := 0
-	if len(called) > 0 {
+	if stepWorked(start, called) {
 		at = min(StepAt(start, called)+1, len(start.Steps)-1)
 	}
 	return start.Steps[at].Model, start.Steps[at].Effort
+}
+
+// stepWorked reports whether any called tool was a step's own work — a
+// non-platform tool some step reaches.
+func stepWorked(start Start, called []domain.ToolID) bool {
+	for _, tool := range called {
+		if tool.PlatformOwned() {
+			continue
+		}
+		if _, ok := stepOf(start.Steps, tool); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // stepOf reports which step first reaches a tool.

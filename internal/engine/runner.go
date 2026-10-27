@@ -118,6 +118,7 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 					Price:            pricePayload(spent.Price),
 					Prompt:           promptInputPayload(spent.Prompt),
 					UnavailableTools: toolStrings(spent.Unavailable),
+					ClosedTools:      toolStrings(closedTools(start, state)),
 				}),
 			}); aerr != nil {
 				return Status{}, aerr
@@ -138,6 +139,9 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		// What the prompt could not offer, so the trail explains a run that
 		// worked without part of its pack (#148).
 		UnavailableTools: toolStrings(proposal.Unavailable),
+		// What forward movement put behind the run, so a narrowed envelope
+		// never reads as an outage (#152).
+		ClosedTools: toolStrings(closedTools(start, state)),
 	}
 	if state, err = r.appendPlanned(ctx, state, start, domain.Step{
 		Kind:   domain.StepPlanned,
