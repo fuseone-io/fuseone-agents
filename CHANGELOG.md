@@ -44,8 +44,27 @@ field" is a commit message.
   landing before or during the supervisor's parking is honoured: the
   compensation stays claimable instead of being buried under a parked run,
   and a run that already ended is not relabelled as parked.
+- **An oversized request is told so.** A body over the 2 MB ceiling now
+  answers 413 instead of a generic 400, and a request stops waiting for
+  ever on a client that never finishes sending (60s read timeout; event
+  streams are unaffected). The ceiling comfortably holds the largest
+  legitimate simulation and regression uploads.
 
+### Security
 
+- **Identity-provider traffic goes through the egress guard.** OIDC
+  discovery and token exchange now run behind the same guard as every
+  other outbound call, refusing metadata and link-local destinations and
+  the environment's proxy.
+- **A changed identity provider needs its own client secret.** Pointing an
+  existing connection at a different issuer or client id while silently
+  keeping the stored secret is refused, so a secret can no longer be
+  replayed against a provider it was never issued for.
+- **Erasure reaches exactly the run it names.** Stored content is erased
+  by owner kind and id, so a run's erasure can no longer touch records
+  that merely share its identifier.
+
+## [0.68.0] — 2026-10-26
 
 ### Fixed
 
