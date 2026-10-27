@@ -25,6 +25,9 @@ type epochLedger struct {
 	// readCap, when non-zero, truncates reads to that many steps: the stale
 	// fold of a worker that read the run before a later write landed.
 	readCap atomic.Int64
+	// ambiguous makes fenced appends commit and then answer context.Canceled:
+	// the write landed, the caller cannot know it did.
+	ambiguous atomic.Bool
 }
 
 func (l *epochLedger) Read(ctx context.Context, runID domain.RunID, fromSeq int64) ([]domain.Step, error) {
@@ -40,6 +43,14 @@ func (l *epochLedger) AppendIfLeaseAndHead(
 ) (domain.Step, error) {
 	if epoch != l.current.Load() {
 		return domain.Step{}, domain.ErrLeaseLost
+	}
+	if l.ambiguous.Load() {
+		// The ambiguous commit: the write reaches the store — a commit does
+		// not care that its caller was cancelled — but the answer is lost.
+		if _, err := l.Memory.AppendIfHead(context.Background(), head, s); err != nil {
+			return domain.Step{}, err
+		}
+		return domain.Step{}, context.Canceled
 	}
 	var sealed domain.Step
 	var err error
@@ -300,5 +311,41 @@ func TestAdvance_twoAttemptsBilledOverTheSameHead_bothSpendsLand(t *testing.T) {
 	}
 	if micros != 300 {
 		t.Fatalf("ledger micros = %d, want 300: two distinct charges, two records", micros)
+	}
+}
+
+func TestAdvance_ambiguousCommitOnTheBilledRecord_theSpendLandsExactlyOnce(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	planner := &cancellingPlanner{cancel: cancel, cost: domain.Cost{Micros: 12_345}}
+	h, l := newFenceHarnessWith(t, planner)
+	if _, err := l.Memory.Append(context.Background(), domain.Step{
+		RunID: "run-1", Kind: domain.StepRunStarted,
+		Scope:   domain.Scope{Company: "acme", Area: "cx"},
+		AgentID: "triage", At: time.Now(), Payload: []byte(`{}`),
+	}); err != nil {
+		t.Fatalf("open run: %v", err)
+	}
+	// The primary write commits, but the cancellation swallows its answer:
+	// the caller cannot tell a landed write from a lost one. Recording again
+	// "to be safe" bills the same call twice.
+	l.ambiguous.Store(true)
+
+	if _, err := h.runner.Advance(ctx, h.fencedStart(t)); err == nil {
+		t.Fatal("Advance = nil, want the cancellation to end the turn")
+	}
+
+	steps, err := l.Memory.Read(context.Background(), "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	var micros int64
+	for _, s := range steps {
+		micros += s.Cost.Micros
+	}
+	if micros != 12_345 {
+		t.Fatalf("ledger micros = %d, want 12345 exactly once: an ambiguous commit was double-recorded", micros)
 	}
 }

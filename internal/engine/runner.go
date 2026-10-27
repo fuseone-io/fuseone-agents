@@ -282,6 +282,18 @@ act on. The fence error still ends the turn.
 func (r *Runner) appendPlanned(
 	ctx context.Context, state State, start Start, s domain.Step,
 ) (State, error) {
+	// The key goes on before the FIRST write, and the fallback carries the
+	// same one. A commit whose answer was swallowed — cancelled between
+	// landing and returning — is indistinguishable from a lost write; only an
+	// identical key lets the retry's ErrIdemConflict prove that this exact
+	// charge is already on the record instead of billing it twice. Epoch in
+	// the key: two attempts fenced over the same head are two real charges,
+	// each under its own claim, and one claim makes one planning call — so
+	// run+seq+epoch provably names one charge.
+	if s.Cost != (domain.Cost{}) {
+		s.IdemKey = fmt.Sprintf("planned-spend:%s:%d:%d", start.RunID, state.Seq+1, start.LeaseEpoch)
+	}
+
 	next, err := r.append(ctx, state, start, s)
 	// A context already cancelled counts as fenced too: the cancellation that
 	// races a billed response arrives as context.Canceled on the append, and
@@ -298,12 +310,6 @@ func (r *Runner) appendPlanned(
 	defer stop()
 
 	spend := r.stamp(start, s)
-	// Epoch in the key: two attempts fenced over the same head are two real
-	// charges, each under its own claim — the key must separate them, and
-	// must still collapse a replay of the same attempt. One claim makes one
-	// planning call, so run+seq+epoch provably names one charge; a conflict
-	// is therefore that charge already on the record, not a lost one.
-	spend.IdemKey = fmt.Sprintf("planned-spend:%s:%d:%d", start.RunID, state.Seq+1, start.LeaseEpoch)
 	if _, aerr := r.deps.Ledger.Append(spendCtx, spend); aerr != nil && !errors.Is(aerr, domain.ErrIdemConflict) {
 		return State{}, fmt.Errorf("engine: billed spend not recorded after the fence (%v): %w", err, aerr)
 	}
