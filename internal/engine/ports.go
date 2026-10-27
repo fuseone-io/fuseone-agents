@@ -237,12 +237,16 @@ type Servers interface {
 	Expected(ctx context.Context, server string) (bool, error)
 }
 
-// Connections is which servers this worker currently holds a live session
-// to. Schema presence cannot answer it: the catalogue deliberately keeps a
-// dead session's entries until the reconciler replaces them, and it hides a
-// live server's tools the Curator took off the surface.
+// Connections names the MCP server a tool is registered under on this
+// worker and whether that server holds a live session. Schema presence
+// cannot answer it: the catalogue deliberately keeps a dead session's
+// entries until the reconciler replaces them, and it hides a live server's
+// tools the Curator took off the surface. Ownership is declared by
+// registration, never inferred from the ID's prefix — a native connector's
+// "sql.app-x.run" must not answer for an MCP server that happens to be
+// called "sql" — so anything outside the MCP catalogue is owned by nobody.
 type Connections interface {
-	Connected(server string) bool
+	Session(id domain.ToolID) (server string, live, owned bool)
 }
 
 // DedupeStore coordinates semantic effect idempotency across runs of the same

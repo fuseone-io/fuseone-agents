@@ -35,10 +35,27 @@ func (e *expecting) Expected(_ context.Context, server string) (bool, error) {
 	return e.servers[server], nil
 }
 
-// holding answers which servers this worker holds a live session to.
-type holding map[string]bool
+// holding answers which server owns a tool on this worker and whether that
+// server's session is live. Ownership is per tool, as registration makes it.
+type holding struct {
+	owner map[domain.ToolID]string
+	live  map[string]bool
+}
 
-func (h holding) Connected(server string) bool { return h[server] }
+func (h holding) Session(id domain.ToolID) (string, bool, bool) {
+	server, owned := h.owner[id]
+	return server, h.live[server], owned
+}
+
+// crmHeld registers the three crm envelope tools under the crm server.
+func crmHeld(live bool) holding {
+	return holding{
+		owner: map[domain.ToolID]string{
+			"crm.lookup": "crm", "crm.note": "crm", "crm.refund": "crm",
+		},
+		live: map[string]bool{"crm": live},
+	}
+}
 
 // capturingPlanner records every PlanInput and finishes the run.
 type capturingPlanner struct {
@@ -57,7 +74,7 @@ func TestPlan_aPackToolWhoseExpectedServerIsGone_failsRetryableBeforeTheModel(t 
 	planner := &capturingPlanner{}
 	h.runner.deps.Planner = planner
 	h.runner.deps.Schemas = describing{"crm.lookup": true, "crm.note": true}
-	h.runner.deps.Connections = holding{}
+	h.runner.deps.Connections = crmHeld(false)
 	h.runner.deps.Servers = &expecting{servers: map[string]bool{"crm": true}}
 
 	_, err := h.runner.Advance(context.Background(), h.start(t, generousBudget()))
@@ -125,7 +142,7 @@ func TestPlan_nothingMissing_neverAsksWhichServersAreExpected(t *testing.T) {
 	servers := &expecting{servers: map[string]bool{"crm": true}}
 	h.runner.deps.Planner = planner
 	h.runner.deps.Schemas = describing{"crm.lookup": true, "crm.note": true, "crm.refund": true}
-	h.runner.deps.Connections = holding{"crm": true}
+	h.runner.deps.Connections = crmHeld(true)
 	h.runner.deps.Servers = servers
 
 	if _, err := h.runner.Advance(context.Background(), h.start(t, generousBudget())); err != nil {
@@ -149,7 +166,7 @@ func TestPlan_platformToolsAreNeverReportedUnavailable(t *testing.T) {
 	// through the memory layer in production, and the check must not read
 	// that as an outage of a server called "$fuseone".
 	h.runner.deps.Schemas = describing{"crm.lookup": true, "crm.note": true, "crm.refund": true}
-	h.runner.deps.Connections = holding{"crm": true}
+	h.runner.deps.Connections = crmHeld(true)
 	h.runner.deps.Servers = &expecting{servers: map[string]bool{}}
 
 	start := h.start(t, generousBudget())
@@ -195,7 +212,7 @@ func TestPlan_aDeadSessionWhoseEntriesAreStillCatalogued_parksBeforeTheModel(t *
 	planner := &capturingPlanner{}
 	h.runner.deps.Planner = planner
 	h.runner.deps.Schemas = describing{"crm.lookup": true, "crm.note": true, "crm.refund": true}
-	h.runner.deps.Connections = holding{"crm": false}
+	h.runner.deps.Connections = crmHeld(false)
 	h.runner.deps.Servers = &expecting{servers: map[string]bool{"crm": true}}
 
 	_, err := h.runner.Advance(context.Background(), h.start(t, generousBudget()))
@@ -222,7 +239,7 @@ func TestPlan_aToolOffTheSurfaceOfALiveServer_isANoteNotAnOutage(t *testing.T) {
 	planner := &capturingPlanner{}
 	h.runner.deps.Planner = planner
 	h.runner.deps.Schemas = describing{"crm.lookup": true, "crm.note": true}
-	h.runner.deps.Connections = holding{"crm": true}
+	h.runner.deps.Connections = crmHeld(true)
 	h.runner.deps.Servers = &expecting{servers: map[string]bool{"crm": true}}
 
 	if _, err := h.runner.Advance(context.Background(), h.start(t, generousBudget())); err != nil {
@@ -265,4 +282,78 @@ func TestPlan_twoServersMissing_theExpectedOneStopsTheTurn(t *testing.T) {
 	if len(planner.inputs) != 0 {
 		t.Error("the model was called despite the outage")
 	}
+}
+
+// The reviewer's reproduction on #150 round 3: a fully described native
+// connector tool must not park the run because an MCP server that happens
+// to share its prefix is configured and disconnected. Ownership is declared
+// by registration, never inferred from the ID's shape — and a namespace the
+// catalogue owns nothing under must not cost a settings read per turn.
+func TestPlan_aNativeToolSharingADisconnectedServersPrefix_runsUntouched(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	planner := &capturingPlanner{}
+	servers := &expecting{servers: map[string]bool{"sql": true}}
+	h.runner.deps.Planner = planner
+	h.runner.deps.Schemas = describing{
+		"crm.lookup": true, "crm.note": true, "crm.refund": true,
+		"sql.app-x.run_query_template": true,
+	}
+	h.runner.deps.Connections = crmHeld(true)
+	h.runner.deps.Servers = servers
+
+	start := h.start(t, generousBudget())
+	start.Pack = gate.NewPack("crm.lookup", "crm.note", "crm.refund", "sql.app-x.run_query_template")
+
+	if _, err := h.runner.Advance(context.Background(), start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if len(planner.inputs) == 0 {
+		t.Fatal("the model was never called")
+	}
+	if got := planner.inputs[0].Unavailable; got != nil {
+		t.Errorf("Unavailable = %v, want none: the native tool is described and owned by nobody's session", got)
+	}
+	if servers.asks != 0 {
+		t.Errorf("settings were read %d times for a namespace the catalogue does not own", servers.asks)
+	}
+}
+
+// A nudge that fails after a billed call appends a planned step for the
+// spend. That prompt went out without part of the pack too, and a spent
+// step that does not say so leaves the trail mute exactly where the money
+// went (#150 round 3).
+func TestPlan_aSpentFailure_stillRecordsWhatThePromptCouldNotOffer(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	h.runner.deps.Planner = &spendingPlanner{err: &SpentPlanError{
+		Cost:     domain.Cost{Micros: 1200, InputTokens: 300},
+		Provider: "anthropic",
+		Model:    "claude-opus-5",
+		Err:      context.DeadlineExceeded,
+	}}
+	h.runner.deps.Schemas = describing{"crm.lookup": true, "crm.note": true}
+	h.runner.deps.Connections = holding{}
+	h.runner.deps.Servers = &expecting{servers: map[string]bool{}}
+
+	if _, err := h.runner.Advance(context.Background(), h.start(t, generousBudget())); err == nil {
+		t.Fatal("Advance swallowed the planner failure")
+	}
+
+	var p domain.PlannedPayload
+	if err := h.lastPayloadOf(t, domain.StepPlanned, &p); err != nil {
+		t.Fatalf("payload: %v", err)
+	}
+	if len(p.UnavailableTools) != 1 || p.UnavailableTools[0] != "crm.refund" {
+		t.Errorf("recorded %v, want the billed prompt's missing tool", p.UnavailableTools)
+	}
+}
+
+// spendingPlanner fails every plan after having billed a call.
+type spendingPlanner struct{ err *SpentPlanError }
+
+func (p *spendingPlanner) Plan(context.Context, PlanInput) (Proposal, error) {
+	return Proposal{}, p.err
 }
