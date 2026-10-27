@@ -101,6 +101,11 @@ type PlannedPayload struct {
 	// model was told the same thing, so a run that proceeded without part of
 	// its pack says so here rather than only in its own prose.
 	UnavailableTools []string `json:"unavailableTools,omitempty"`
+	// ClosedTools is what forward movement had put behind this planning call:
+	// tools reachable only in steps before the one the run is at. An envelope
+	// narrowed by advancement reads exactly like an outage to anyone the
+	// trail does not tell (#152).
+	ClosedTools []string `json:"closedTools,omitempty"`
 }
 
 const (

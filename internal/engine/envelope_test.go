@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -86,6 +87,59 @@ func TestStepAt_aPlatformToolAnchoredInALateStep_doesNotAdvanceTheRun(t *testing
 	}
 	if !envelopeOf(start, called).Allows("lookup") {
 		t.Error("the first step closed because the run consulted memory")
+	}
+}
+
+func TestClosedTools_namesWhatForwardMovementPutBehind(t *testing.T) {
+	t.Parallel()
+
+	// "shared" appears again in a later step, so moving forward never closes
+	// it; "lookup" and "probe" exist only behind the run, and they are what
+	// the trail must name — a narrowed envelope nothing narrates reads
+	// exactly like a tool outage (#152).
+	start := Start{Steps: []Envelope{
+		{Name: "um", Reaches: []domain.ToolID{"lookup"}},
+		{Name: "dois", Reaches: []domain.ToolID{"probe", "shared"}},
+		{Name: "tres", Reaches: []domain.ToolID{"reply", "shared"}},
+	}}
+
+	if got := closedTools(start, nil); got != nil {
+		t.Errorf("closedTools before any call = %v, want none", got)
+	}
+
+	got := closedTools(start, []domain.ToolID{"reply"})
+	if len(got) != 2 || got[0] != "lookup" || got[1] != "probe" {
+		t.Errorf("closedTools = %v, want lookup and probe, in step order", got)
+	}
+}
+
+func TestAdvance_afterForwardMovement_thePlannedStepNamesTheClosedTools(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	start := h.start(t, generousBudget())
+	start.Steps = []Envelope{
+		{Name: "prepare", Reaches: []domain.ToolID{"crm.note"}},
+		{Name: "investigate", Reaches: []domain.ToolID{"crm.lookup"}},
+	}
+
+	ctx := context.Background()
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance 1: %v", err)
+	}
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance 2: %v", err)
+	}
+
+	var p domain.PlannedPayload
+	if err := h.lastPayloadOf(t, domain.StepPlanned, &p); err != nil {
+		t.Fatalf("payload: %v", err)
+	}
+	if p.Node != "investigate" {
+		t.Errorf("node = %q, want investigate", p.Node)
+	}
+	if len(p.ClosedTools) != 1 || p.ClosedTools[0] != "crm.note" {
+		t.Errorf("closedTools = %v, want the step the run moved past", p.ClosedTools)
 	}
 }
 

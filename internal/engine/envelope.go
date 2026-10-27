@@ -73,6 +73,30 @@ func withoutTool(pack gate.Pack, remove domain.ToolID) gate.Pack {
 	return gate.NewPack(out...)
 }
 
+// closedTools is what forward movement has put behind a run: tools reachable
+// in steps before the one it is at, and in none from there on. Recorded on
+// the planned step so the trail can say the envelope narrowed because the
+// run advanced — which otherwise reads exactly like an outage (#152).
+func closedTools(start Start, called []domain.ToolID) []domain.ToolID {
+	at := StepAt(start, called)
+	if at == 0 {
+		return nil
+	}
+	open := envelopeOf(start, called)
+	seen := map[domain.ToolID]bool{}
+	var closed []domain.ToolID
+	for _, step := range start.Steps[:at] {
+		for _, tool := range step.Reaches {
+			if open.Allows(tool) || seen[tool] {
+				continue
+			}
+			seen[tool] = true
+			closed = append(closed, tool)
+		}
+	}
+	return closed
+}
+
 // StepAt is the step a run has advanced to: the furthest one whose tools it
 // has already used. It is what the ledger records against a proposal, so a
 // correction can be anchored where the run actually was (PRD FU-13).
