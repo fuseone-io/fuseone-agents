@@ -218,6 +218,9 @@ func (s *Server) PutModelProvider(ctx context.Context, req openapi.PutModelProvi
 	if req.Body.Models != nil {
 		provider.Models = *req.Body.Models
 	}
+	if req.Body.AutoToolChoiceModels != nil {
+		provider.AutoToolChoiceModels = *req.Body.AutoToolChoiceModels
+	}
 	if req.Body.Enabled != nil {
 		provider.Enabled = *req.Body.Enabled
 	}

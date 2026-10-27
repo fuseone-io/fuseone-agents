@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/model"
 )
 
@@ -411,5 +414,62 @@ func TestApplyConfiguration_hourWriteRate_reachesTheRegistry(t *testing.T) {
 	}
 	if !priced || price.CacheWrite1hMicros != 10 {
 		t.Errorf("rate = %+v priced=%v, want the hour write rate to survive the journey", price, priced)
+	}
+}
+
+/*
+A model declared auto in the console reaches the planner as auto on the first
+call.
+
+The declaration crosses four conversions on the way — the stored row, the
+administration read, providerFrom, the registry's config injection — and a
+field dropped by any one of them silently reverts the agent to the 400-and-
+fallback behaviour the declaration exists to end. This test is the whole
+journey, so none of those layers can lose it alone.
+*/
+func TestApplyConfiguration_aDeclaredAutoModel_reachesThePlannerAsAutoFromTheFirstCall(t *testing.T) {
+	var mu sync.Mutex
+	var choices []string
+	vendor := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body struct {
+			ToolChoice struct {
+				Type string `json:"type"`
+			} `json:"tool_choice"`
+		}
+		_ = json.Unmarshal(raw, &body)
+		mu.Lock()
+		choices = append(choices, body.ToolChoice.Type)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"m","type":"message","role":"assistant","model":"anthropic-claude-opus-5-5",
+		  "content":[{"type":"tool_use","id":"t1","name":"finish","input":{"outcome":"done"}}],
+		  "stop_reason":"tool_use","usage":{"input_tokens":1,"output_tokens":1}}`)
+	}))
+	t.Cleanup(vendor.Close)
+
+	registry := model.NewRegistry(vendor.Client())
+	config := &stubConfig{providers: []domain.ModelProvider{{
+		Name: "litellm", Kind: "anthropic", BaseURL: vendor.URL,
+		Enabled: true, HasKey: true,
+		AutoToolChoiceModels: []string{"anthropic-claude-opus-5-5"},
+	}}}
+	if _, err := applyConfiguration(t.Context(), registry, config); err != nil {
+		t.Fatalf("applyConfiguration: %v", err)
+	}
+
+	planner, err := registry.Planner("litellm",
+		model.Config{Model: "anthropic-claude-opus-5-5"}, nil)
+	if err != nil {
+		t.Fatalf("Planner: %v", err)
+	}
+	if _, err := planner.Plan(t.Context(), engine.PlanInput{}); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(choices) != 1 || choices[0] != "auto" {
+		t.Fatalf("tool_choice per call = %v, want one call already on auto: a middle layer dropped the declaration", choices)
 	}
 }

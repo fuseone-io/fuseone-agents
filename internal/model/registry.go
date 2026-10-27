@@ -106,6 +106,7 @@ func (r *Registry) SetConfigured(ps []Provider, claimed ...string) {
 	for _, p := range ps {
 		p.Prices = clonePriceMap(p.Prices)
 		p.Models = slices.Clone(p.Models)
+		p.AutoToolChoiceModels = slices.Clone(p.AutoToolChoiceModels)
 		if before, held := r.providers[p.Name]; !held || !sameProvider(before, p) {
 			changed = true
 		}
@@ -134,6 +135,7 @@ func sameProvider(a, b Provider) bool {
 		a.SupportsReasoningEffort == b.SupportsReasoningEffort &&
 		a.ReportsCachedTokens == b.ReportsCachedTokens &&
 		slices.Equal(a.Models, b.Models) &&
+		slices.Equal(a.AutoToolChoiceModels, b.AutoToolChoiceModels) &&
 		maps.Equal(a.Headers, b.Headers) &&
 		maps.Equal(a.Prices, b.Prices)
 }
@@ -210,7 +212,17 @@ func (r *Registry) Planner(providerName string, cfg Config, tools ToolSchemas) (
 		return nil, fmt.Errorf("model: provider %q is not configured; available: %v", providerName, r.Names())
 	}
 
-	return r.plannerFrom(p, withPrice(p, cfg), tools)
+	return r.plannerFrom(p, withAutoToolChoice(p, withPrice(p, cfg)), tools)
+}
+
+// withAutoToolChoice hands the provider's declared downgrades to the planner,
+// the same way withPrice hands it the rates: provider facts ride the config,
+// so the planner needs no second source to consult.
+func withAutoToolChoice(p Provider, cfg Config) Config {
+	if len(p.AutoToolChoiceModels) > 0 {
+		cfg.AutoToolChoice = append([]string(nil), p.AutoToolChoiceModels...)
+	}
+	return cfg
 }
 
 /*

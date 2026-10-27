@@ -1281,7 +1281,9 @@
     "acceptLocalExecutionWhy": "Um servidor local é um programa que esta instalação inicia. Roda como o worker, no sistema de ficheiros dele, e alcança tudo o que o worker alcança — o Gate decide o que uma ferramenta pode fazer e não decide nada sobre o que um processo pode ler. O seu nome fica registado nesta decisão.",
     "acceptLocalExecutionRequired": "Aceite o que é um servidor local, ou use HTTP para alcançar este.",
     "models": "Modelos que este endpoint serve",
-    "modelsHint": "Um por linha. São sugestões para quem escreve um agente, nunca um limite — atrás de um proxy os nomes são os que você configurou lá, e nada que venha no binário consegue adivinhá-los."
+    "modelsHint": "Um por linha. São sugestões para quem escreve um agente, nunca um limite — atrás de um proxy os nomes são os que você configurou lá, e nada que venha no binário consegue adivinhá-los.",
+    "autoToolChoiceModels": "Modelos conduzidos com tool_choice auto",
+    "autoToolChoiceModelsHint": "Um por linha. Esses modelos recusam o modo de ferramenta obrigatória; atrás de um gateway com fallback a recusa nunca chega à plataforma, então declare-os aqui."
   },
   "connectors": {
     "title": "Connectors governados",

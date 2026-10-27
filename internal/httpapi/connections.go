@@ -174,7 +174,8 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 			Name: p.Name, Kind: openapi.ModelProviderKind(p.Kind), BaseUrl: p.BaseURL,
 			// An empty array and never null: a provider with no list is a
 			// provider that offers none, and the schema says array or absent.
-			Models: ptr(append([]string{}, p.Models...)),
+			Models:               ptr(append([]string{}, p.Models...)),
+			AutoToolChoiceModels: ptr(append([]string{}, p.AutoToolChoiceModels...)),
 			// Only whether a credential exists. The credential itself never
 			// leaves the vault through this API.
 			Enabled: p.Enabled, HasKey: p.HasKey,

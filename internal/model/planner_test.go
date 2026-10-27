@@ -1781,3 +1781,104 @@ func TestAnthropic_withoutDowngrade_textOnlyStaysTheOutcome(t *testing.T) {
 		t.Fatalf("outcome = %q after %d calls, want today's behaviour untouched", got.Outcome, calls)
 	}
 }
+
+func TestAnthropic_declaredAutoToolChoice_firstCallPaysNoRefusal(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		choice, _ := body["tool_choice"].(map[string]any)
+		if body["model"] == "claude-opus-5-5" && choice["type"] == "any" {
+			// What the 400 path would see — except a gateway with fallback
+			// routing swallows this and serves the call with another model,
+			// so the declaration must spare the refusal entirely.
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, toolChoiceRejection)
+			return
+		}
+		_, _ = io.WriteString(w, anthropicToolUse)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{
+		Model:          "claude-opus-5-5",
+		AutoToolChoice: []string{"claude-opus-5-5"},
+	})
+	got, err := p.Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if got.Tool != "crm.lookup" {
+		t.Errorf("Tool = %q, want the proposal from the single call", got.Tool)
+	}
+	bodies := c.all()
+	if len(bodies) != 1 {
+		t.Fatalf("calls = %d, want exactly one: the declaration spares the refusal", len(bodies))
+	}
+	first, _ := bodies[0]["tool_choice"].(map[string]any)
+	if first["type"] != "auto" || first["disable_parallel_tool_use"] != true {
+		t.Errorf("first tool_choice = %v, want auto with parallel use off from the very first call", first)
+	}
+
+	// The declaration is per model: a step naming an undeclared one keeps
+	// the structural guarantee.
+	stepInput := input()
+	stepInput.Model = "claude-opus-5"
+	if _, err := p.Plan(context.Background(), stepInput); err != nil {
+		t.Fatalf("Plan with the step override: %v", err)
+	}
+	bodies = c.all()
+	last, _ := bodies[len(bodies)-1]["tool_choice"].(map[string]any)
+	if bodies[len(bodies)-1]["model"] != "claude-opus-5" || last["type"] != "any" {
+		t.Errorf("override call = model %v choice %v, want any on the model nobody declared",
+			bodies[len(bodies)-1]["model"], last)
+	}
+}
+
+func TestAnthropic_underDeclaredAuto_freeTextIsNudgedNotFinal(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	calls := 0
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		if calls == 1 {
+			_, _ = io.WriteString(w, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5-5",
+			  "content":[{"type":"text","text":"Memória carregada; pendente executar V1."}],
+			  "stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+			return
+		}
+		_, _ = io.WriteString(w, anthropicToolUse)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{
+		Model:          "claude-opus-5-5",
+		AutoToolChoice: []string{"claude-opus-5-5"},
+	})
+	got, err := p.Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	// The guard that made the learned downgrade safe must hold for the
+	// declared one: status text is handed back once, never the outcome.
+	if got.Tool != "crm.lookup" || got.Outcome != "" {
+		t.Fatalf("proposal = tool %q outcome %q, want the tool from the nudged call", got.Tool, got.Outcome)
+	}
+	bodies := c.all()
+	if len(bodies) != 2 {
+		t.Fatalf("calls = %d, want the text and the nudged retry", len(bodies))
+	}
+	raw, _ := json.Marshal(bodies[1])
+	if !strings.Contains(string(raw), "Memória carregada") {
+		t.Error("the nudged call does not carry the model's own text back to it")
+	}
+}

@@ -304,8 +304,14 @@ type ModelProvider struct {
 	// one that refused a model released last week would be worse than no list.
 	// It matters most behind a proxy, where the names are whatever somebody
 	// configured there and nothing shipped in a binary can guess them.
-	Models  []string
-	Enabled bool
+	Models []string
+	// AutoToolChoiceModels names the models this endpoint must drive with
+	// tool_choice "auto" from the first call. The platform can learn the
+	// same fact from a refusal — but a gateway with fallback routing
+	// swallows the refusal and silently serves the call with another model,
+	// so the fact has to be declarable where the endpoint is configured.
+	AutoToolChoiceModels []string
+	Enabled              bool
 	// HasKey reports that a credential is stored, never what it is.
 	HasKey    bool
 	UpdatedBy string

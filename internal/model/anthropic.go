@@ -70,6 +70,12 @@ type Config struct {
 	// declare SupportsPromptCacheKey; the Anthropic path has no use for it,
 	// since its cache is keyed by the prefix itself.
 	CacheKey string
+	// AutoToolChoice names the models driven with tool_choice "auto" from
+	// the first call. The adaptive path learns the same fact from a 400 —
+	// but a gateway with fallback routing swallows that refusal and silently
+	// serves the call with another model, so nothing is ever learned. This
+	// is the declared form: no refusal roundtrip, and it survives restarts.
+	AutoToolChoice []string
 	// PricePerMTok converts usage into the ledger's money. Set per model from
 	// the installation's own price list; zero means cost is recorded as tokens
 	// only, never as a guess.
@@ -121,7 +127,14 @@ func (c *Config) withDefaults() {
 
 func New(client anthropic.Client, provider string, cfg Config, tools ToolSchemas) *Anthropic {
 	cfg.withDefaults()
-	return &Anthropic{client: client, provider: provider, cfg: cfg, tools: tools}
+	a := &Anthropic{client: client, provider: provider, cfg: cfg, tools: tools}
+	// Declared downgrades seed the same map the 400 path writes, so the
+	// choice, the free-text nudge and the learn-once guard all behave
+	// identically — just from the first call, with no refusal to wait for.
+	for _, m := range cfg.AutoToolChoice {
+		a.autoToolChoice.Store(m, struct{}{})
+	}
+	return a
 }
 
 var _ engine.Planner = (*Anthropic)(nil)

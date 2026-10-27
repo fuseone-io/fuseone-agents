@@ -300,6 +300,7 @@ export function usePutProvider() {
       kind: "anthropic" | "openai_compatible";
       baseUrl: string;
       models?: string[];
+      autoToolChoiceModels?: string[];
       apiKey?: string;
       enabled: boolean;
     }) =>
@@ -310,6 +311,7 @@ export function usePutProvider() {
             kind: input.kind,
             baseUrl: input.baseUrl,
             models: input.models,
+            autoToolChoiceModels: input.autoToolChoiceModels,
             enabled: input.enabled,
             ...(input.apiKey ? { apiKey: input.apiKey } : {}),
           },

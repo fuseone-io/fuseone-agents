@@ -36,8 +36,9 @@ func (i *Integrations) Providers(ctx context.Context) ([]domain.ModelProvider, e
 		}
 		out = append(out, domain.ModelProvider{
 			Name: row.Name, Kind: stored.Kind, BaseURL: stored.BaseURL,
-			Models:  stored.Models,
-			Enabled: row.Enabled, HasKey: row.HasSecret,
+			Models:               stored.Models,
+			AutoToolChoiceModels: stored.AutoToolChoiceModels,
+			Enabled:              row.Enabled, HasKey: row.HasSecret,
 			UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
 		})
 	}
@@ -83,7 +84,9 @@ func (i *Integrations) ProvidersWithCredentials(ctx context.Context) ([]Configur
 		out = append(out, ConfiguredProvider{
 			ModelProvider: domain.ModelProvider{
 				Name: row.Name, Kind: stored.Kind, BaseURL: stored.BaseURL,
-				Models: stored.Models, Enabled: row.Enabled, HasKey: row.HasSecret,
+				Models:               stored.Models,
+				AutoToolChoiceModels: stored.AutoToolChoiceModels,
+				Enabled:              row.Enabled, HasKey: row.HasSecret,
 				UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
 			},
 			APIKey:     row.Secret,
@@ -112,8 +115,15 @@ func (i *Integrations) PutProvider(ctx context.Context, by domain.UserID, scope 
 	if err != nil {
 		return err
 	}
+	// Cleaned and bounded exactly like the model list: it is the same kind
+	// of paste, decoded by every process on every refresh.
+	declared, err := cleanModels(provider.AutoToolChoiceModels)
+	if err != nil {
+		return err
+	}
 	value, err := json.Marshal(storedProvider{
 		Kind: provider.Kind, BaseURL: provider.BaseURL, Models: models,
+		AutoToolChoiceModels: declared,
 	})
 	if err != nil {
 		return fmt.Errorf("admin: encode provider: %w", err)
