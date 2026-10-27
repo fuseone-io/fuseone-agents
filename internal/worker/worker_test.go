@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -679,6 +680,8 @@ type fencedQueue struct {
 	renewNoop  bool
 	releaseErr error
 	releases   atomic.Int32
+	mu         sync.Mutex
+	outcomes   []domain.ClaimOutcome
 }
 
 func (q *fencedQueue) Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error {
@@ -698,6 +701,9 @@ func (q *fencedQueue) Renew(ctx context.Context, runID domain.RunID, epoch int64
 
 func (q *fencedQueue) Release(ctx context.Context, runID domain.RunID, outcome domain.ClaimOutcome) error {
 	q.releases.Add(1)
+	q.mu.Lock()
+	q.outcomes = append(q.outcomes, outcome)
+	q.mu.Unlock()
 	if q.releaseErr != nil {
 		return q.releaseErr
 	}
@@ -1026,5 +1032,97 @@ func TestTurn_renewalHangsInsteadOfFailing_turnIsStillCancelledBeforeExpiry(t *t
 	case <-p.sawCancel:
 	default:
 		t.Fatal("the planner was never cancelled")
+	}
+}
+
+// headHookLedger lets a test act in the gap between the supervisor reading
+// the head and writing on top of it — the gap a human's abandonment lands in.
+type headHookLedger struct {
+	*ledger.Memory
+	afterHead func()
+}
+
+func (l *headHookLedger) Head(ctx context.Context, runID domain.RunID) (domain.Step, error) {
+	s, err := l.Memory.Head(ctx, runID)
+	if l.afterHead != nil {
+		l.afterHead()
+	}
+	return s, err
+}
+
+func TestPark_humanAbandonsBetweenTheReadAndTheWrite_parkStandsDown(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	hooked := &headHookLedger{Memory: store}
+	q := &fencedQueue{Memory: store, renewed: make(chan struct{}, 1)}
+	w := newFencedWorker(t, Config{}, &flakyPlanner{}, q, store)
+	w.deps.Ledger = hooked
+	openRun(t, store)
+
+	claim, err := store.Claim(context.Background(), "w1", time.Minute)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	hooked.afterHead = func() {
+		hooked.afterHead = nil
+		if _, err := store.Append(context.Background(), domain.Step{
+			RunID: "run-1", Kind: domain.StepAbandoned,
+			Scope: domain.Scope{Company: "acme", Area: "cx"}, AgentID: "triage",
+			At:      time.Now(),
+			Payload: []byte(`{"by":"ana","reason":"over","compensate":true}`),
+		}); err != nil {
+			t.Errorf("abandonment: %v", err)
+		}
+	}
+
+	if err := w.park(context.Background(), claim, errors.New("gave up"), "attempts_exhausted"); err != nil {
+		t.Fatalf("park = %v, want a quiet stand-down over the abandonment", err)
+	}
+
+	// The person ended the run; the park must not bury that under a step that
+	// blocks the compensation from ever being claimed.
+	if got := phaseOf(t, store); got != engine.PhaseCompensating {
+		t.Fatalf("phase = %v, want compensating: the park overwrote the abandonment", got)
+	}
+	if _, err := store.Claim(context.Background(), "w2", time.Minute); err != nil {
+		t.Errorf("Claim for the compensation = %v, want the run claimable", err)
+	}
+}
+
+func TestPark_headAlreadyTerminal_releaseDoesNotRelabelTheRunParked(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	q := &fencedQueue{Memory: store, renewed: make(chan struct{}, 1)}
+	w := newFencedWorker(t, Config{}, &flakyPlanner{}, q, store)
+	openRun(t, store)
+
+	claim, err := store.Claim(context.Background(), "w1", time.Minute)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	// The runner already ended the run inside this very turn.
+	if _, err := store.Append(context.Background(), domain.Step{
+		RunID: "run-1", Kind: domain.StepRunFinished,
+		Scope: domain.Scope{Company: "acme", Area: "cx"}, AgentID: "triage",
+		At: time.Now(), Payload: []byte(`{"reason":"finish_tool"}`),
+	}); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+
+	if err := w.park(context.Background(), claim, errors.New("late failure"), "attempts_exhausted"); err != nil {
+		t.Fatalf("park: %v", err)
+	}
+
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.outcomes) != 1 {
+		t.Fatalf("releases = %d, want exactly one", len(q.outcomes))
+	}
+	// Parked on the outcome is what flips the projection's phase; a finished
+	// run relabelled parked reads as work a human still owes.
+	if q.outcomes[0].Parked {
+		t.Error("a terminal run was released as parked, overwriting its ending in the projection")
 	}
 }

@@ -54,10 +54,15 @@ func (w *Worker) park(ctx context.Context, claim domain.Claim, reason error, cod
 	w.metrics.Park(code)
 
 	head, err := w.deps.Ledger.Head(ctx, claim.RunID)
-	if err == nil && head.Kind.Terminal() {
+	if err != nil {
+		return fmt.Errorf("read head before parking %s: %w", claim.RunID, err)
+	}
+	if head.Kind.Terminal() {
 		// The runner already recorded it — a budget ceiling, most often. A
-		// second parking would be a correction of something that is not wrong.
-		outcome := domain.ClaimOutcome{Err: reason, Parked: true}
+		// second parking would be a correction of something that is not wrong,
+		// and Parked on the outcome would relabel the recorded ending in the
+		// projection — so the lease goes back carrying the failure alone.
+		outcome := domain.ClaimOutcome{Err: reason}
 		if failure, ok := model.FailureSummaryOf(reason); ok {
 			outcome.Failure = &failure
 		}
@@ -72,22 +77,32 @@ func (w *Worker) park(ctx context.Context, claim domain.Claim, reason error, cod
 	if err != nil {
 		return fmt.Errorf("encode parking of %s: %w", claim.RunID, err)
 	}
-	// Fenced on the lease alone: a worker that lost the run must not park it
-	// over the successor's live turn — the failure it would record is stale.
-	if _, err := w.deps.Ledger.AppendIfLeaseAndHead(ctx, claim.Epoch, domain.StepRef{}, domain.Step{
-		RunID:      claim.RunID,
-		Kind:       domain.StepParked,
-		Scope:      claim.Scope,
-		AgentID:    claim.AgentID,
-		VersionID:  claim.VersionID,
-		OnBehalfOf: claim.OnBehalfOf,
-		At:         w.clock.Now(),
-		Payload:    payload,
-	}); err != nil {
+	// Fenced on the lease and on the head it was decided against: a worker
+	// that lost the run must not park it over the successor's live turn, and
+	// a parking decided before a human's abandonment landed must not bury
+	// that abandonment under a step that blocks the compensation.
+	if _, err := w.deps.Ledger.AppendIfLeaseAndHead(ctx, claim.Epoch,
+		domain.StepRef{Seq: head.Seq, Kind: head.Kind}, domain.Step{
+			RunID:      claim.RunID,
+			Kind:       domain.StepParked,
+			Scope:      claim.Scope,
+			AgentID:    claim.AgentID,
+			VersionID:  claim.VersionID,
+			OnBehalfOf: claim.OnBehalfOf,
+			At:         w.clock.Now(),
+			Payload:    payload,
+		}); err != nil {
 		if errors.Is(err, domain.ErrLeaseLost) {
 			w.log.Warn("lease lost before parking; leaving the run to its successor",
 				"run", claim.RunID)
 			return nil
+		}
+		if errors.Is(err, domain.ErrHeadMoved) {
+			// Somebody acted on the run after this parking was decided — an
+			// abandonment, most importantly. Their act stands; the lease goes
+			// back clean so the run is picked up as it is now.
+			w.log.Warn("the run moved before parking; standing down", "run", claim.RunID)
+			return w.release(ctx, claim, domain.ClaimOutcome{})
 		}
 		// Released anyway: a run left leased because its parking could not be
 		// written waits out the whole lease and is then retried by somebody
