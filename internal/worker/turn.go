@@ -162,15 +162,16 @@ func (w *Worker) keepLease(ctx context.Context, claim domain.Claim) (context.Con
 	turnCtx, cancel := context.WithCancelCause(ctx)
 	done := make(chan struct{})
 
+	// Config.withDefaults floors the lease, so the interval can never hand
+	// NewTicker a non-positive duration.
 	interval := w.cfg.Lease / 3
-	if interval < time.Millisecond {
-		// A lease under 3ns would hand NewTicker a zero interval, and a
-		// floor this small never outlives any real lease's margin.
-		interval = time.Millisecond
-	}
+	// Two and a half intervals: a proof delivered by the very next tick beats
+	// the guard deterministically, and a second consecutive silence is judged
+	// before the lease's edge at three.
+	margin := 2*interval + interval/2
 
 	results := make(chan error)
-	go func() { // the asker: stopped by turnCtx, unless the store ignores it
+	go func() { // the asker: stopped by turnCtx, and never wedged by the store
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -179,7 +180,21 @@ func (w *Worker) keepLease(ctx context.Context, claim domain.Claim) (context.Con
 				return
 			case <-ticker.C:
 				renewCtx, stop := context.WithTimeout(turnCtx, interval)
-				err := w.queue.Renew(renewCtx, claim.RunID, claim.Epoch, w.cfg.Lease)
+				// The call gets a goroutine of its own: a store that ignores
+				// its context traps at most this one call, never the ticker —
+				// a blackhole that recovers must find the asker still asking.
+				// The buffered channel lets a late answer be dropped instead
+				// of pinning the goroutine for ever.
+				answer := make(chan error, 1)
+				go func() {
+					answer <- w.queue.Renew(renewCtx, claim.RunID, claim.Epoch, w.cfg.Lease)
+				}()
+				var err error
+				select {
+				case err = <-answer:
+				case <-renewCtx.Done():
+					err = renewCtx.Err()
+				}
 				stop()
 				select {
 				case results <- err:
@@ -192,7 +207,7 @@ func (w *Worker) keepLease(ctx context.Context, claim domain.Claim) (context.Con
 
 	go func() { // the judge: owns the cancel, never blocks on the store
 		defer close(done)
-		guard := time.NewTimer(2 * interval)
+		guard := time.NewTimer(margin)
 		defer guard.Stop()
 		failures := 0
 		for {
@@ -209,7 +224,7 @@ func (w *Worker) keepLease(ctx context.Context, claim domain.Claim) (context.Con
 					if !guard.Stop() {
 						<-guard.C
 					}
-					guard.Reset(2 * interval)
+					guard.Reset(margin)
 				case errors.Is(err, domain.ErrLeaseLost):
 					cancel(domain.ErrLeaseLost)
 					return

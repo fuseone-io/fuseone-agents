@@ -1161,3 +1161,72 @@ func TestPark_humanAlreadyAbandoned_parkStandsDownInsteadOfBuryingIt(t *testing.
 		t.Errorf("Claim for the compensation = %v, want the run claimable", err)
 	}
 }
+
+// hangOnceQueue hangs its first renewal for ever, ignoring the context — and
+// answers normally from the second on: a blackhole that recovers.
+type hangOnceQueue struct {
+	*ledger.Memory
+	calls atomic.Int32
+	stuck chan struct{}
+}
+
+func (q *hangOnceQueue) Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error {
+	if q.calls.Add(1) == 1 {
+		<-q.stuck
+		return nil
+	}
+	return q.Memory.Renew(ctx, runID, epoch, lease)
+}
+
+func TestTurn_oneHungRenewal_doesNotWedgeTheAskerForGood(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	q := &hangOnceQueue{Memory: store, stuck: make(chan struct{})}
+	defer close(q.stuck)
+	p := newGatedPlanner()
+	w := newFencedWorker(t, Config{Lease: 150 * time.Millisecond}, p, q, store)
+	openRun(t, store)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := w.turn(context.Background(), slog.New(slog.DiscardHandler))
+		done <- err
+	}()
+
+	// The second tick must still ask: an asker stuck inside the first call
+	// means one slow renewal silently disables renewal for the whole turn.
+	deadline := time.After(5 * time.Second)
+	for q.calls.Load() < 2 {
+		select {
+		case <-deadline:
+			t.Fatal("the asker wedged behind one hung renewal and never asked again")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	close(p.release)
+
+	if err := <-done; err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	select {
+	case <-p.sawCancel:
+		t.Fatal("the turn was cancelled although the second renewal proved the lease")
+	default:
+	}
+	if got := phaseOf(t, store); got != engine.PhaseFinished {
+		t.Errorf("phase = %v, want finished: the recovered renewal should carry the turn", got)
+	}
+}
+
+func TestConfigWithDefaults_tinyLease_isRaisedToAFloorTheGuardCanBeat(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{Lease: 2 * time.Millisecond}
+	cfg.withDefaults()
+	// Below the floor, the renew tick bottoms out and the guard fires after
+	// the lease has already expired — a watchdog that barks post mortem.
+	if cfg.Lease < 30*time.Millisecond {
+		t.Fatalf("Lease = %v, want at least the 30ms floor", cfg.Lease)
+	}
+}

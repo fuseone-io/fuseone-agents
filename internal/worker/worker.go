@@ -100,6 +100,13 @@ func (c *Config) withDefaults() {
 	if c.Lease <= 0 {
 		c.Lease = 2 * time.Minute
 	}
+	// Below this floor the renew tick bottoms out against the scheduler and
+	// the guard fires after the lease has already expired — a watchdog that
+	// barks post mortem. A lease too short to renew is a misconfiguration,
+	// answered by the nearest workable value rather than a panic.
+	if c.Lease < 30*time.Millisecond {
+		c.Lease = 30 * time.Millisecond
+	}
 	if c.IdleWait <= 0 {
 		c.IdleWait = time.Second
 	}
