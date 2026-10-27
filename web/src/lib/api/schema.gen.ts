@@ -3939,6 +3939,14 @@ export interface components {
             baseUrl: string;
             /** @description The models this endpoint serves, as the installation configured them. */
             models?: string[];
+            /**
+             * @description Models driven with tool_choice "auto" from the first call. The
+             *     platform can learn this from a refusal, but a gateway with
+             *     fallback routing swallows the refusal and silently serves the
+             *     call with another model — declaring it here spares the roundtrip
+             *     and survives restarts.
+             */
+            autoToolChoiceModels?: string[];
             enabled: boolean;
             /** @description Whether a credential is stored. The credential itself never leaves the vault through this API. */
             hasKey: boolean;
@@ -8462,6 +8470,12 @@ export interface operations {
                     models?: string[];
                     /** @description Sealed in the vault on arrival and never returned. Omit it to keep the stored credential — changing a base URL should not require re-entering a key. */
                     apiKey?: string;
+                    /**
+                     * @description Models this endpoint must drive with tool_choice "auto"
+                     *     from the first call, declared instead of learned from a
+                     *     refusal a fallback-routing gateway would swallow.
+                     */
+                    autoToolChoiceModels?: string[];
                     /** @default true */
                     enabled?: boolean;
                 };
