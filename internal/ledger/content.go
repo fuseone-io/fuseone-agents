@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -142,7 +143,7 @@ func (c *Content) Metadata(ctx context.Context, ref string) (domain.ContentMetad
 }
 
 /*
-Erase removes everything one owner's content holds, leaving a tombstone.
+EraseTx removes everything one owner's content holds, leaving a tombstone.
 
 This is per-subject erasure (NF-09), and it reaches the referenced content
 rather than the ledger: the step keeps its reference and its digest, neither
@@ -152,8 +153,16 @@ content was segregated in the first place (AU-04).
 Erasing what is already erased is not an error. The caller is asking for a
 state, not for an event, and a retry after a failure must not refuse.
 */
-func (c *Content) Erase(ctx context.Context, kind, owner, reason string) (int, error) {
-	tag, err := c.pool.Exec(ctx, `
+func (c *Content) EraseTx(
+	ctx context.Context, tx pgx.Tx, kind, owner, reason string,
+) (int, error) {
+	return eraseOwner(ctx, tx, kind, owner, reason)
+}
+
+func eraseOwner(
+	ctx context.Context, conn contentExecutor, kind, owner, reason string,
+) (int, error) {
+	tag, err := conn.Exec(ctx, `
 		update run_content
 		set bytes = null, erased_at = now(), erased_reason = $3
 		where owner_kind = $1 and run_id = $2 and erased_at is null`, kind, owner, reason)
@@ -163,13 +172,21 @@ func (c *Content) Erase(ctx context.Context, kind, owner, reason string) (int, e
 	return int(tag.RowsAffected()), nil
 }
 
-// ErasePast is retention: everything stored before a moment goes.
+// ErasePastTx is retention: everything stored before a moment goes.
 //
 // The moment is computed by the caller from what the installation configured,
 // and never defaulted here. A purge that ran on a default nobody chose would
 // be the one operation in this system that destroys data without being asked.
-func (c *Content) ErasePast(ctx context.Context, before time.Time, reason string) (int, error) {
-	tag, err := c.pool.Exec(ctx, `
+func (c *Content) ErasePastTx(
+	ctx context.Context, tx pgx.Tx, before time.Time, reason string,
+) (int, error) {
+	return eraseBefore(ctx, tx, before, reason)
+}
+
+func eraseBefore(
+	ctx context.Context, conn contentExecutor, before time.Time, reason string,
+) (int, error) {
+	tag, err := conn.Exec(ctx, `
 		update run_content
 		set bytes = null, erased_at = now(), erased_reason = $2
 		where created_at < $1 and erased_at is null`, before.UTC(), reason)
@@ -177,4 +194,8 @@ func (c *Content) ErasePast(ctx context.Context, before time.Time, reason string
 		return 0, fmt.Errorf("ledger: erase content before %s: %w", before, err)
 	}
 	return int(tag.RowsAffected()), nil
+}
+
+type contentExecutor interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 }

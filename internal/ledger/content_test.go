@@ -69,9 +69,52 @@ func boundedStores(t *testing.T, limit int) map[string]func(*testing.T) ContentS
 		if _, err := pool.Exec(context.Background(), `truncate run_content`); err != nil {
 			t.Fatalf("truncate: %v", err)
 		}
-		return ledger.NewContent(pool).WithLimit(limit)
+		return postgresContentStore{Content: ledger.NewContent(pool).WithLimit(limit), pool: pool}
 	}
 	return stores
+}
+
+// postgresContentStore gives the cross-store contract its state-oriented API
+// without leaving an autocommit erasure method on the production store.
+type postgresContentStore struct {
+	*ledger.Content
+	pool *pgxpool.Pool
+}
+
+func (s postgresContentStore) Erase(
+	ctx context.Context, kind, owner, reason string,
+) (int, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	erased, err := s.EraseTx(ctx, tx, kind, owner, reason)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return erased, nil
+}
+
+func (s postgresContentStore) ErasePast(
+	ctx context.Context, before time.Time, reason string,
+) (int, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	erased, err := s.ErasePastTx(ctx, tx, before, reason)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return erased, nil
 }
 
 func TestContentContract(t *testing.T) {

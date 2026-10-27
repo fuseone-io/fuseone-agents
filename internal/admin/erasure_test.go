@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
@@ -27,6 +28,7 @@ func erasuresFor(t *testing.T, now func() time.Time) (*admin.Erasures, *ledger.C
 		 delete from memory_suggestions;
 		 delete from memory_assertions;
 		 delete from runs where run_id like 'run-retention-%';
+		 delete from admin_events where target = 'content';
 		 delete from settings where kind = 'retention'`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
@@ -85,6 +87,46 @@ func TestSweep_pastTheWindow_erasesAndRecordsIt(t *testing.T) {
 	action, _ := lastTrailDetail(t, openPool(t), "content")
 	if action != "content.expired" {
 		t.Errorf("action = %q", action)
+	}
+}
+
+func TestSweep_auditWriteFails_rollsBackContentAndOperationalRows(t *testing.T) {
+	now := time.Date(2032, 8, 23, 12, 0, 0, 0, time.UTC)
+	erasures, content := erasuresFor(t, func() time.Time { return now })
+	pool := openPool(t)
+	ctx := context.Background()
+	old := now.Add(-6 * 365 * 24 * time.Hour)
+
+	ref, err := content.Put(ctx, "run-atomic-sweep", 1, []byte("must survive"))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		insert into channel_inbox (
+			channel, conversation, event_id, message, payload, digest, status, answered_at, at)
+		values ('slack', 'C-atomic', 'E-atomic', 'M-atomic', 'old', 'digest', 'refused', $1, $1)`,
+		old); err != nil {
+		t.Fatalf("seed inbox: %v", err)
+	}
+	rejectExpiredAdminEvent(t, pool)
+
+	erased, err := erasures.Sweep(ctx)
+	if err == nil {
+		t.Fatal("Sweep succeeded despite the rejected administrative record")
+	}
+	if erased != 0 {
+		t.Fatalf("erased = %d, want no committed erasure", erased)
+	}
+	if got, err := content.Get(ctx, ref); err != nil || string(got) != "must survive" {
+		t.Fatalf("Get after rollback = %q, %v; want the original bytes", got, err)
+	}
+	if got := rowCount(t, pool,
+		`select count(*) from channel_inbox where event_id = 'E-atomic'`); got != 1 {
+		t.Fatalf("inbox rows after rollback = %d, want 1", got)
+	}
+	if got := rowCount(t, pool,
+		`select count(*) from admin_events where action = 'content.expired'`); got != 0 {
+		t.Fatalf("administrative records = %d, want none", got)
 	}
 }
 
@@ -250,6 +292,40 @@ func TestForSubject_erasesTheRunsItWasGivenAndNoOthers(t *testing.T) {
 	// in the other direction.
 	if _, err := content.Get(ctx, theirs); err != nil {
 		t.Errorf("Get(theirs) = %v, want it untouched", err)
+	}
+}
+
+func TestForSubject_secondRunFails_rollsBackTheWholeRequest(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	ctx := context.Background()
+
+	first, err := content.Put(ctx, "run-atomic-first", 1, []byte("first"))
+	if err != nil {
+		t.Fatalf("Put first: %v", err)
+	}
+	second, err := content.Put(ctx, "run-atomic-second", 1, []byte("second"))
+	if err != nil {
+		t.Fatalf("Put second: %v", err)
+	}
+	rejectSecondRunErasure(t, pool)
+
+	erased, err := erasures.ForSubject(ctx, "usr_ana", domain.Scope{},
+		[]domain.RunID{"run-atomic-first", "run-atomic-second"}, "titular pediu")
+	if err == nil {
+		t.Fatal("ForSubject succeeded despite the rejected second run")
+	}
+	if erased != 0 {
+		t.Fatalf("erased = %d, want no committed erasure", erased)
+	}
+	for ref, want := range map[string]string{first: "first", second: "second"} {
+		if got, err := content.Get(ctx, ref); err != nil || string(got) != want {
+			t.Errorf("Get(%s) after rollback = %q, %v; want %q", ref, got, err, want)
+		}
+	}
+	if got := rowCount(t, pool,
+		`select count(*) from admin_events where action = 'content.erased'`); got != 0 {
+		t.Fatalf("administrative records = %d, want none", got)
 	}
 }
 
@@ -442,6 +518,65 @@ func memoryEventCount(t *testing.T, pool interface {
 	if err := pool.QueryRow(context.Background(),
 		`select count(*) from memory_assertion_events where action = $1`, action).Scan(&count); err != nil {
 		t.Fatalf("memory event count: %v", err)
+	}
+	return count
+}
+
+func rejectExpiredAdminEvent(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `
+		create or replace function test_reject_admin_event() returns trigger
+		language plpgsql as $$
+		begin
+			if new.action = 'content.expired' then
+				raise exception 'rejected administrative record';
+			end if;
+			return new;
+		end
+		$$;
+		drop trigger if exists test_reject_admin_event on admin_events;
+		create trigger test_reject_admin_event before insert on admin_events
+		for each row execute function test_reject_admin_event()`); err != nil {
+		t.Fatalf("install rejecting audit trigger: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `
+			drop trigger if exists test_reject_admin_event on admin_events;
+			drop function if exists test_reject_admin_event()`)
+	})
+}
+
+func rejectSecondRunErasure(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `
+		create or replace function test_reject_run_erasure() returns trigger
+		language plpgsql as $$
+		begin
+			if new.run_id = 'run-atomic-second' and old.erased_at is null and new.erased_at is not null then
+				raise exception 'rejected run erasure';
+			end if;
+			return new;
+		end
+		$$;
+		drop trigger if exists test_reject_run_erasure on run_content;
+		create trigger test_reject_run_erasure before update on run_content
+		for each row execute function test_reject_run_erasure()`); err != nil {
+		t.Fatalf("install rejecting erasure trigger: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `
+			drop trigger if exists test_reject_run_erasure on run_content;
+			drop function if exists test_reject_run_erasure()`)
+	})
+}
+
+func rowCount(t *testing.T, pool *pgxpool.Pool, query string) int {
+	t.Helper()
+	var count int
+	if err := pool.QueryRow(context.Background(), query).Scan(&count); err != nil {
+		t.Fatalf("count rows: %v", err)
 	}
 	return count
 }
