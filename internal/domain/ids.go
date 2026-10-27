@@ -20,10 +20,16 @@ type (
 const SystemWorker UserID = "system:worker"
 
 // PlatformOwned reports whether a tool is served by the platform process
-// itself rather than by a registered MCP server. Platform tools are always
-// describable, so no availability question ever applies to them.
+// itself rather than by a registered MCP server. The set is explicit: a
+// sigil-based test would exempt a typo of a platform tool, or a vendor
+// squatting the sigil, from every availability check — and exemption is how
+// a tool disappears silently.
 func (t ToolID) PlatformOwned() bool {
-	return strings.HasPrefix(string(t), "$")
+	switch t {
+	case ToolContextRead, ToolTicketAnswer, ToolMemoryFind, ToolMemorySuggest:
+		return true
+	}
+	return false
 }
 
 // Server names the MCP server a tool is registered under — the namespace

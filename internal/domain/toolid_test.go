@@ -36,6 +36,11 @@ func TestToolID_serverIsTheNamespaceBeforeTheFirstDot(t *testing.T) {
 		"gw.apis.list": "gw",
 		// Malformed, but must not panic or invent a server.
 		"nodots": "",
+		// A dollar sign is not a credential. A typo of a platform tool, or a
+		// vendor squatting the sigil, must stay inside the availability check
+		// — exempting it is how it disappears silently again.
+		"$fuseone.memory.fnd": "$fuseone",
+		"$vendor.search":      "$vendor",
 	}
 	for id, want := range cases {
 		if id.PlatformOwned() {
