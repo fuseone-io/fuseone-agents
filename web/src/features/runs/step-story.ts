@@ -122,6 +122,10 @@ export function detailOf(step: Step): Line {
       // not offer part of the pack is the fact the reader is looking for.
       const unavailable = unavailableLine(payload);
       if (unavailable) return unavailable;
+      // Then the envelope narrowed by forward movement — deliberate, but
+      // indistinguishable from an outage unless the trail says so (#152).
+      const closed = closedToolsLine(payload);
+      if (closed) return closed;
       const substitution = modelSubstitutionLine(payload);
       if (substitution) return substitution;
       const prompt = promptLine(payload);
@@ -343,6 +347,20 @@ function modelSubstitutionLine(payload: Record<string, unknown>): Line | undefin
   return {
     key: "runs.storyModelSubstituted",
     values: { requested, served },
+  };
+}
+
+function closedToolsLine(payload: Record<string, unknown>): Line | undefined {
+  const raw = payload.closedTools;
+  if (!Array.isArray(raw)) return undefined;
+  const tools = raw.filter((tool): tool is string => typeof tool === "string");
+  if (tools.length === 0) return undefined;
+  return {
+    key: "runs.storyClosedTools",
+    values: {
+      step: typeof payload.node === "string" ? payload.node : "",
+      tools: tools.join(", "),
+    },
   };
 }
 
