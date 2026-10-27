@@ -310,6 +310,13 @@ func (p *workerParts) deps(gate engine.Gate, metrics *worker.MetricsRegistry) en
 	if p.configPool != nil {
 		deps.Standing = standingPort{store: standing.NewStore(p.configPool)}
 	}
+	// The planner's own schema view, so the runner notices — before spending
+	// a model call — a pack tool this worker cannot offer; and the configured
+	// set, so it can tell an outage from a removal (#148).
+	deps.Schemas = p.toolSchemas()
+	if p.integrations != nil {
+		deps.Servers = expectedServers{servers: p.integrations}
+	}
 	return deps
 }
 
