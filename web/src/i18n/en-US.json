@@ -2576,6 +2576,7 @@
     "failureMCPServerRateLimited": "MCP server rate limit reached",
     "failureMCPToolError": "MCP tool returned an error",
     "failureMCPUnknownServer": "Unknown MCP server",
+    "failureToolServerUnavailable": "Tool server unavailable on the platform",
     "failureMCPUnknownTool": "Unknown MCP tool",
     "failureOther": "Other runtime failure",
     "failureStdioEgressBadRequest": "Stdio proxy request is invalid",

@@ -18,6 +18,7 @@ export const FAILURE_LABELS: Record<string, string> = {
   other: "runtime.failureOther",
   tool_error: "runtime.failureMCPToolError",
   unknown_server: "runtime.failureMCPUnknownServer",
+  tool_server_unavailable: "runtime.failureToolServerUnavailable",
   unknown_tool: "runtime.failureMCPUnknownTool",
   attempts_exhausted: "runtime.failureAttemptsExhausted",
   channel_configuration_read_failed: "runtime.failureChannelConfigurationRead",

@@ -2576,6 +2576,7 @@
     "failureMCPServerRateLimited": "Limite do servidor MCP atingido",
     "failureMCPToolError": "A ferramenta MCP retornou erro",
     "failureMCPUnknownServer": "Servidor MCP desconhecido",
+    "failureToolServerUnavailable": "Servidor de ferramentas indisponível na plataforma",
     "failureMCPUnknownTool": "Ferramenta MCP desconhecida",
     "failureOther": "Outra falha do runtime",
     "failureStdioEgressBadRequest": "A requisição ao proxy stdio é inválida",
