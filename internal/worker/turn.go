@@ -146,37 +146,70 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	return true, w.release(ctx, claim, domain.ClaimOutcome{})
 }
 
-// keepLease renews the claim for as long as the turn runs, at a third of the
-// lease so one missed beat is survivable. A renewal refused with ErrLeaseLost
-// cancels the returned context with that cause. Any other failure is retried
-// once within the margin and then fails closed: two misses in a row put the
-// next tick at the lease's edge, and acting past a lease nobody can prove is
-// held is the suspended-worker hole with a different mask.
+/*
+keepLease renews the claim for as long as the turn runs, at a third of the
+lease so one missed beat is survivable, and cancels the returned context the
+moment the lease can no longer be proven held.
+
+Two goroutines, on purpose. The asker makes the renewal calls, each under its
+own deadline; the judge owns the clock and the cancel. A store that hangs
+without honouring the context traps the asker — never the judge, whose guard
+timer fires at two intervals past the last proof, before the lease's edge.
+Failing open here would be the suspended-worker hole with a different mask:
+a renewal that cannot answer proves nothing, exactly like one that errors.
+*/
 func (w *Worker) keepLease(ctx context.Context, claim domain.Claim) (context.Context, func()) {
 	turnCtx, cancel := context.WithCancelCause(ctx)
 	done := make(chan struct{})
 
-	go func() {
-		defer close(done)
-		interval := w.cfg.Lease / 3
-		if interval < time.Millisecond {
-			// A lease under 3ns would hand NewTicker a zero interval, and a
-			// floor this small never outlives any real lease's margin.
-			interval = time.Millisecond
-		}
+	interval := w.cfg.Lease / 3
+	if interval < time.Millisecond {
+		// A lease under 3ns would hand NewTicker a zero interval, and a
+		// floor this small never outlives any real lease's margin.
+		interval = time.Millisecond
+	}
+
+	results := make(chan error)
+	go func() { // the asker: stopped by turnCtx, unless the store ignores it
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
-
-		failures := 0
 		for {
 			select {
 			case <-turnCtx.Done():
 				return
 			case <-ticker.C:
-				err := w.queue.Renew(turnCtx, claim.RunID, claim.Epoch, w.cfg.Lease)
+				renewCtx, stop := context.WithTimeout(turnCtx, interval)
+				err := w.queue.Renew(renewCtx, claim.RunID, claim.Epoch, w.cfg.Lease)
+				stop()
+				select {
+				case results <- err:
+				case <-turnCtx.Done():
+					return
+				}
+			}
+		}
+	}()
+
+	go func() { // the judge: owns the cancel, never blocks on the store
+		defer close(done)
+		guard := time.NewTimer(2 * interval)
+		defer guard.Stop()
+		failures := 0
+		for {
+			select {
+			case <-turnCtx.Done():
+				return
+			case <-guard.C:
+				cancel(domain.ErrLeaseLost)
+				return
+			case err := <-results:
 				switch {
 				case err == nil:
 					failures = 0
+					if !guard.Stop() {
+						<-guard.C
+					}
+					guard.Reset(2 * interval)
 				case errors.Is(err, domain.ErrLeaseLost):
 					cancel(domain.ErrLeaseLost)
 					return

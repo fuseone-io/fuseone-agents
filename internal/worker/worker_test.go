@@ -982,3 +982,49 @@ func TestTurn_tinyLease_doesNotPanicTheRenewTicker(t *testing.T) {
 		t.Fatalf("turn: %v", err)
 	}
 }
+
+// blackholeQueue answers claims and releases but its renewals neither return
+// nor honour the context — the database is not erroring, it is simply gone.
+type blackholeQueue struct {
+	*ledger.Memory
+	freed chan struct{}
+}
+
+func (q *blackholeQueue) Renew(context.Context, domain.RunID, int64, time.Duration) error {
+	<-q.freed
+	return nil
+}
+
+func TestTurn_renewalHangsInsteadOfFailing_turnIsStillCancelledBeforeExpiry(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	q := &blackholeQueue{Memory: store, freed: make(chan struct{})}
+	defer close(q.freed)
+	p := newGatedPlanner() // only a cancel can end the plan
+	w := newFencedWorker(t, Config{Lease: 90 * time.Millisecond}, p, q, store)
+	openRun(t, store)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := w.turn(context.Background(), slog.New(slog.DiscardHandler))
+		done <- err
+	}()
+
+	// A renewal that hangs proves nothing, exactly like one that errors. The
+	// turn must be cancelled before the lease's edge — not sit inside the
+	// blocked call, acting past an expiry nobody extended.
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("turn = %v, want a quiet stand-down", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the turn outlived a lease nobody could prove was renewed")
+	}
+	select {
+	case <-p.sawCancel:
+	default:
+		t.Fatal("the planner was never cancelled")
+	}
+}
