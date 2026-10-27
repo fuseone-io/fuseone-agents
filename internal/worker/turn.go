@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -39,6 +40,14 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	w.metrics.Claim("claimed")
 
 	log = log.With("run", claim.RunID, "agent", claim.AgentID)
+
+	// Everything the turn does runs under a context fenced by the lease.
+	// Losing the lease cancels in-flight planning and tool calls, so a worker
+	// suspended past its lease stops acting the moment it finds out, rather
+	// than racing the successor that owns the run now. Renewal alone would
+	// not cover that worker: it wakes up with the lease already gone.
+	ctx, stopRenewing := w.keepLease(ctx, claim)
+	defer stopRenewing()
 
 	resolved, err := w.specs.Resolve(ctx, claim.AgentID, claim.VersionID)
 	if err == nil && resolved.Planner == nil {
@@ -69,6 +78,10 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	start.AgentID = claim.AgentID
 	start.VersionID = claim.VersionID
 	start.OnBehalfOf = claim.OnBehalfOf
+	// The fencing token rides with the run into the engine: every append and
+	// every outgoing effect this turn makes is conditional on the lease still
+	// being current — the fence renewal alone cannot provide.
+	start.LeaseEpoch = claim.Epoch
 
 	// Read per claim rather than cached: promotion has to take effect on the
 	// next turn, and a demotion has to take effect faster than that.
@@ -94,6 +107,29 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	deps.Planner = resolved.Planner
 	deps.Metrics = w.metrics
 	status, advErr := engine.NewRunner(deps).Advance(ctx, start)
+	if errors.Is(context.Cause(ctx), domain.ErrLeaseLost) {
+		// Nothing here is this worker's to record any more — no park, no
+		// failure count, no release. The successor's turn owns the run's story.
+		w.metrics.AdvanceFailure("lease_lost", false)
+		log.Warn("lease lost mid-turn; leaving the run to its successor")
+		return true, nil
+	}
+	if errors.Is(advErr, domain.ErrHeadMoved) {
+		// The run moved under this turn — a successor worker, an approval, an
+		// abandonment. The decision this turn made went stale, not wrong: no
+		// park, no failure count, just hand the lease back and let whoever
+		// claims it next fold the run as it stands now.
+		w.metrics.AdvanceFailure("head_moved", false)
+		log.Warn("the run moved under the turn; standing down")
+		return true, w.release(ctx, claim, domain.ClaimOutcome{})
+	}
+	if errors.Is(advErr, domain.ErrLeaseLost) {
+		// Fenced at a write or at an effect: the lease belongs to a successor,
+		// and there is nothing here to release or record.
+		w.metrics.AdvanceFailure("lease_lost", false)
+		log.Warn("lease lost mid-turn; leaving the run to its successor")
+		return true, nil
+	}
 	if advErr != nil {
 		outcome := w.failure(claim, advErr)
 		w.metrics.AdvanceFailure(failureReasonFor(advErr), outcome.Parked)
@@ -108,6 +144,116 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	w.metrics.Advance(status.Phase.String())
 	log.Debug("advanced", "phase", status.Phase.String(), "seq", status.Seq)
 	return true, w.release(ctx, claim, domain.ClaimOutcome{})
+}
+
+// errRenewStarved means every renewal slot in the pool is pinned by a call
+// that never returned: no new proof can even be attempted.
+var errRenewStarved = errors.New("worker: all renewal slots pinned by unanswered calls")
+
+/*
+keepLease renews the claim for as long as the turn runs, at a third of the
+lease so one missed beat is survivable, and cancels the returned context the
+moment the lease can no longer be proven held.
+
+Two goroutines, on purpose. The asker makes the renewal calls, each under its
+own deadline; the judge owns the clock and the cancel. A store that hangs
+without honouring the context traps the asker — never the judge, whose guard
+timer fires at two intervals past the last proof, before the lease's edge.
+Failing open here would be the suspended-worker hole with a different mask:
+a renewal that cannot answer proves nothing, exactly like one that errors.
+*/
+func (w *Worker) keepLease(ctx context.Context, claim domain.Claim) (context.Context, func()) {
+	turnCtx, cancel := context.WithCancelCause(ctx)
+	done := make(chan struct{})
+
+	// Config.withDefaults floors the lease, so the interval can never hand
+	// NewTicker a non-positive duration.
+	interval := w.cfg.Lease / 3
+	// Two and a half intervals: a proof delivered by the very next tick beats
+	// the guard deterministically, and a second consecutive silence is judged
+	// before the lease's edge at three.
+	margin := 2*interval + interval/2
+
+	results := make(chan error)
+	go func() { // the asker: stopped by turnCtx, and never wedged by the store
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-turnCtx.Done():
+				return
+			case <-ticker.C:
+				var err error
+				select {
+				case w.renewSlots <- struct{}{}:
+					renewCtx, stop := context.WithTimeout(turnCtx, interval)
+					// The call gets a goroutine of its own: a store that
+					// ignores its context traps at most this one call, never
+					// the ticker — a blackhole that recovers must find the
+					// asker still asking. The buffered channel lets a late
+					// answer be dropped, and the slot is held exactly as long
+					// as the store holds the goroutine.
+					answer := make(chan error, 1)
+					go func() {
+						defer func() { <-w.renewSlots }()
+						answer <- w.queue.Renew(renewCtx, claim.RunID, claim.Epoch, w.cfg.Lease)
+					}()
+					select {
+					case err = <-answer:
+					case <-renewCtx.Done():
+						err = renewCtx.Err()
+					}
+					stop()
+				default:
+					// Every slot is pinned by a renewal that never returned.
+					// Spawning more would grow the leak without proving the
+					// lease; a starved tick is a failed proof like any other.
+					err = errRenewStarved
+				}
+				select {
+				case results <- err:
+				case <-turnCtx.Done():
+					return
+				}
+			}
+		}
+	}()
+
+	go func() { // the judge: owns the cancel, never blocks on the store
+		defer close(done)
+		guard := time.NewTimer(margin)
+		defer guard.Stop()
+		failures := 0
+		for {
+			select {
+			case <-turnCtx.Done():
+				return
+			case <-guard.C:
+				cancel(domain.ErrLeaseLost)
+				return
+			case err := <-results:
+				switch {
+				case err == nil:
+					failures = 0
+					if !guard.Stop() {
+						<-guard.C
+					}
+					guard.Reset(margin)
+				case errors.Is(err, domain.ErrLeaseLost):
+					cancel(domain.ErrLeaseLost)
+					return
+				default:
+					failures++
+					if failures >= 2 {
+						cancel(domain.ErrLeaseLost)
+						return
+					}
+				}
+			}
+		}
+	}()
+
+	return turnCtx, func() { cancel(nil); <-done }
 }
 
 func failureReasonFor(err error) string {

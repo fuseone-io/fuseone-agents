@@ -26,6 +26,7 @@ type Store interface {
 	engine.Ledger
 	Verify(ctx context.Context, runID domain.RunID) error
 	Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error)
+	Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error
 	Release(ctx context.Context, runID domain.RunID, outcome domain.ClaimOutcome) error
 }
 

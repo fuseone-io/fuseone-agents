@@ -87,11 +87,17 @@ func (p *Postgres) claim(
 		return domain.Claim{}, fmt.Errorf("select claimable: %w", err)
 	}
 
-	leasedUntil := time.Now().Add(lease)
-	if _, err := tx.Exec(ctx, `
+	// The expiry is computed by the database clock, the same one every
+	// liveness judgement reads — a node clock here would make the lease's
+	// length depend on the skew between the two.
+	var leasedUntil time.Time
+	if err := tx.QueryRow(ctx, `
 		update runs
-		set leased_until = $2, lease_owner = $3
-		where run_id = $1`, runID, leasedUntil, owner); err != nil {
+		set leased_until = clock_timestamp() + make_interval(secs => $2),
+		    lease_owner = $3, lease_epoch = lease_epoch + 1
+		where run_id = $1
+		returning lease_epoch, leased_until`,
+		runID, lease.Seconds(), owner).Scan(&c.Epoch, &leasedUntil); err != nil {
 		return domain.Claim{}, fmt.Errorf("write lease: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -107,6 +113,62 @@ func (p *Postgres) claim(
 	return c, nil
 }
 
+// Renew extends a held lease without releasing it.
+//
+// The epoch is the fence: a renewal from a worker whose lease was already
+// claimed over — or released, or simply expired — changes nothing and
+// reports ErrLeaseLost, so the caller knows to abandon the turn rather than
+// keep acting on the run. Lock first, judge second: a volatile clock in the
+// locking statement answers for the moment before the wait.
+func (p *Postgres) Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error {
+	return p.underRowLock(ctx, runID, "renew lease", func(tx pgx.Tx) (int64, error) {
+		tag, err := tx.Exec(ctx, `
+			update runs
+			set leased_until = clock_timestamp() + make_interval(secs => $3)
+			where run_id = $1 and lease_epoch = $2 and leased_until > clock_timestamp()`,
+			string(runID), epoch, lease.Seconds())
+		if err != nil {
+			return 0, err
+		}
+		return tag.RowsAffected(), nil
+	})
+}
+
+// underRowLock takes the runs row lock in a statement of its own and only
+// then runs the conditional write, so its volatile clock is evaluated after
+// any wait. Zero rows from the write is a lost lease.
+func (p *Postgres) underRowLock(
+	ctx context.Context, runID domain.RunID, what string, write func(pgx.Tx) (int64, error),
+) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin %s: %w", what, err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var one int
+	err = tx.QueryRow(ctx,
+		`select 1 from runs where run_id = $1 for update`, string(runID)).Scan(&one)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrLeaseLost
+	}
+	if err != nil {
+		return fmt.Errorf("lock run for %s: %w", what, err)
+	}
+
+	rows, err := write(tx)
+	if err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	if rows == 0 {
+		return domain.ErrLeaseLost
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit %s: %w", what, err)
+	}
+	return nil
+}
+
 // Release ends a lease and records what happened.
 //
 // Progress resets the attempt count. The counter measures *consecutive*
@@ -119,28 +181,33 @@ func (p *Postgres) Release(ctx context.Context, runID domain.RunID, outcome doma
 		nextAttempt = time.Now()
 	}
 
-	_, err := p.pool.Exec(ctx, `
-		update runs set
-			leased_until    = null,
-			lease_owner     = null,
-			attempts        = case when $3 then attempts + 1 else 0 end,
-			next_attempt_at = $2,
-			last_error      = nullif($4, ''),
-			phase           = case when $5 then 'parked' else phase end,
-			updated_at      = now(),
-			failure_code       = $6,
-			failure_provider   = $7,
-			failure_status     = $8,
-			failure_request_id = $9,
-			failure_retryable  = $10
-		where run_id = $1`,
-		string(runID), nextAttempt, outcome.Failed(), outcomeReason(outcome), outcome.Parked,
-		outcomeFailureCode(outcome), outcomeFailureProvider(outcome), outcomeFailureStatus(outcome),
-		outcomeFailureRequestID(outcome), outcomeFailureRetryable(outcome))
-	if err != nil {
-		return fmt.Errorf("release lease: %w", err)
-	}
-	return nil
+	// A stale release is not a write that failed; it is an outcome that no
+	// longer has anywhere to go. Live lease required: a holder waking past
+	// its deadline must not park a run its successor may be advancing.
+	return p.underRowLock(ctx, runID, "release lease", func(tx pgx.Tx) (int64, error) {
+		tag, err := tx.Exec(ctx, `
+			update runs set
+				leased_until    = null,
+				lease_owner     = null,
+				attempts        = case when $3 then attempts + 1 else 0 end,
+				next_attempt_at = $2,
+				last_error      = nullif($4, ''),
+				phase           = case when $5 then 'parked' else phase end,
+				updated_at      = now(),
+				failure_code       = $6,
+				failure_provider   = $7,
+				failure_status     = $8,
+				failure_request_id = $9,
+				failure_retryable  = $10
+			where run_id = $1 and lease_epoch = $11 and leased_until > clock_timestamp()`,
+			string(runID), nextAttempt, outcome.Failed(), outcomeReason(outcome), outcome.Parked,
+			outcomeFailureCode(outcome), outcomeFailureProvider(outcome), outcomeFailureStatus(outcome),
+			outcomeFailureRequestID(outcome), outcomeFailureRetryable(outcome), outcome.Epoch)
+		if err != nil {
+			return 0, err
+		}
+		return tag.RowsAffected(), nil
+	})
 }
 
 func outcomeFailureCode(outcome domain.ClaimOutcome) *string {
@@ -176,4 +243,48 @@ func outcomeFailureRetryable(outcome domain.ClaimOutcome) *bool {
 		return &outcome.Failure.Retryable
 	}
 	return nil
+}
+
+// Fence answers whether the holder of epoch may still act for the run, with
+// the head (when non-zero) still where it left it. It is the synchronous
+// check made immediately before an effect leaves the process: an append can
+// be refused after the fact, an external call cannot.
+func (p *Postgres) Fence(
+	ctx context.Context, runID domain.RunID, epoch int64, head domain.StepRef,
+) error {
+	var current int64
+	var live bool
+	var headSeq *int64
+	var headKind *string
+	err := p.pool.QueryRow(ctx, `
+		select r.lease_epoch,
+		       r.leased_until is not null and r.leased_until > clock_timestamp(),
+		       h.seq, h.kind
+		from runs r
+		left join lateral (
+			select seq, kind from run_steps
+			where run_id = $1 order by seq desc limit 1
+		) h on true
+		where r.run_id = $1`, string(runID),
+	).Scan(&current, &live, &headSeq, &headKind)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrLeaseLost
+	}
+	if err != nil {
+		return fmt.Errorf("read fence: %w", err)
+	}
+
+	// The number current AND the lease live: past leased_until — or after a
+	// release — exclusivity cannot be proven, however unchanged the epoch.
+	if current != epoch || !live {
+		return domain.ErrLeaseLost
+	}
+	if head == (domain.StepRef{}) {
+		return nil
+	}
+	var prev *domain.Step
+	if headSeq != nil && headKind != nil {
+		prev = &domain.Step{Seq: *headSeq, Kind: domain.StepKind(*headKind)}
+	}
+	return headIs(&head, prev)
 }

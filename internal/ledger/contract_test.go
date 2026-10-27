@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -35,7 +36,10 @@ type Store interface {
 	Runs(ctx context.Context) ([]domain.RunID, error)
 	Verify(ctx context.Context, runID domain.RunID) error
 	Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error)
+	Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error
 	Release(ctx context.Context, runID domain.RunID, outcome domain.ClaimOutcome) error
+	AppendIfLeaseAndHead(ctx context.Context, epoch int64, head domain.StepRef, s domain.Step) (domain.Step, error)
+	Fence(ctx context.Context, runID domain.RunID, epoch int64, head domain.StepRef) error
 	Stats(ctx context.Context, filter domain.RunFilter) (domain.RunStats, error)
 	RuntimeHealth(ctx context.Context, filter domain.RunFilter) (domain.RuntimeHealth, error)
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
@@ -383,14 +387,230 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		held, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
-		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{}); err != nil {
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{Epoch: held.Epoch}); err != nil {
 			t.Fatalf("Release: %v", err)
 		}
 		if _, err := s.Claim(ctx, "w2", lease); err != nil {
 			t.Errorf("Claim after release = %v, want a claim", err)
+		}
+	})
+
+	run(t, "an expired holder can neither release nor renew the successor's lease", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		// A negative lease is already expired: the suspended worker that
+		// wakes up late, in two lines.
+		old, err := s.Claim(ctx, "w1", -time.Second)
+		if err != nil {
+			t.Fatalf("expired Claim: %v", err)
+		}
+		next, err := s.Claim(ctx, "w2", lease)
+		if err != nil {
+			t.Fatalf("successor Claim: %v", err)
+		}
+		if next.Epoch <= old.Epoch {
+			t.Fatalf("epochs = %d then %d, want every claim to advance the fence", old.Epoch, next.Epoch)
+		}
+
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{Epoch: old.Epoch}); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("stale Release = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		if err := s.Renew(ctx, "run-1", old.Epoch, lease); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("stale Renew = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		// The successor's lease survived both attempts.
+		if _, err := s.Claim(ctx, "w3", lease); !errors.Is(err, domain.ErrNoClaimableRun) {
+			t.Fatalf("third Claim = %v, want the successor still holding", err)
+		}
+
+		if err := s.Renew(ctx, "run-1", next.Epoch, lease); err != nil {
+			t.Fatalf("holder Renew: %v", err)
+		}
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{Epoch: next.Epoch}); err != nil {
+			t.Fatalf("holder Release: %v", err)
+		}
+	})
+
+	run(t, "a stale epoch cannot append even when the head is unchanged", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		old, err := s.Claim(ctx, "w1", -time.Second)
+		if err != nil {
+			t.Fatalf("expired Claim: %v", err)
+		}
+		next, err := s.Claim(ctx, "w2", lease)
+		if err != nil {
+			t.Fatalf("successor Claim: %v", err)
+		}
+
+		// The successor has written nothing yet, so the head is exactly where
+		// the suspended worker left it — the one case a head check alone lets
+		// through. The lease epoch is what refuses it.
+		head := domain.StepRef{Seq: 1, Kind: domain.StepRunStarted}
+		stale := step("run-1", domain.StepPlanned)
+		if _, err := s.AppendIfLeaseAndHead(ctx, old.Epoch, head, stale); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("stale append = %v, want %v", err, domain.ErrLeaseLost)
+		}
+
+		// The holder writes through the same gate.
+		if _, err := s.AppendIfLeaseAndHead(ctx, next.Epoch, head, step("run-1", domain.StepPlanned)); err != nil {
+			t.Fatalf("holder append: %v", err)
+		}
+		steps, err := s.Read(ctx, "run-1", domain.FirstSeq)
+		if err != nil {
+			t.Fatalf("Read: %v", err)
+		}
+		if len(steps) != 2 {
+			t.Fatalf("ledger has %d steps, want 2: the stale append must not land", len(steps))
+		}
+	})
+
+	run(t, "a zero head fences the append on the lease alone", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		old, err := s.Claim(ctx, "w1", -time.Second)
+		if err != nil {
+			t.Fatalf("expired Claim: %v", err)
+		}
+		next, err := s.Claim(ctx, "w2", lease)
+		if err != nil {
+			t.Fatalf("successor Claim: %v", err)
+		}
+
+		// A caller that does not track the head — parking, the compensation
+		// record — still needs the lease fence.
+		if _, err := s.AppendIfLeaseAndHead(ctx, old.Epoch, domain.StepRef{}, step("run-1", domain.StepParked)); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("stale lease-only append = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		if _, err := s.AppendIfLeaseAndHead(ctx, next.Epoch, domain.StepRef{}, step("run-1", domain.StepPlanned)); err != nil {
+			t.Fatalf("holder lease-only append: %v", err)
+		}
+	})
+
+	run(t, "the fence answers before an effect leaves the process", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		old, err := s.Claim(ctx, "w1", -time.Second)
+		if err != nil {
+			t.Fatalf("expired Claim: %v", err)
+		}
+		next, err := s.Claim(ctx, "w2", lease)
+		if err != nil {
+			t.Fatalf("successor Claim: %v", err)
+		}
+
+		head := domain.StepRef{Seq: 1, Kind: domain.StepRunStarted}
+		if err := s.Fence(ctx, "run-1", old.Epoch, head); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("stale Fence = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		if err := s.Fence(ctx, "run-1", next.Epoch, head); err != nil {
+			t.Fatalf("holder Fence = %v, want the holder cleared to act", err)
+		}
+		if err := s.Fence(ctx, "run-1", next.Epoch, domain.StepRef{Seq: 7, Kind: domain.StepPlanned}); !errors.Is(err, domain.ErrHeadMoved) {
+			t.Fatalf("moved-head Fence = %v, want %v", err, domain.ErrHeadMoved)
+		}
+		if err := s.Fence(ctx, "run-1", next.Epoch, domain.StepRef{}); err != nil {
+			t.Fatalf("zero-head Fence = %v, want the lease alone to clear it", err)
+		}
+	})
+
+	run(t, "an expired or released lease fails the fence, the append and the renewal before any successor", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		// Expired, and nobody has claimed since: the epoch is still this
+		// worker's. Past leased_until, exclusivity can no longer be proven —
+		// a successor may claim at any instant — so an unchanged number must
+		// not read as a licence to act.
+		old, err := s.Claim(ctx, "w1", -time.Second)
+		if err != nil {
+			t.Fatalf("expired Claim: %v", err)
+		}
+		head := domain.StepRef{Seq: 1, Kind: domain.StepRunStarted}
+		if err := s.Fence(ctx, "run-1", old.Epoch, head); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("expired Fence = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		if _, err := s.AppendIfLeaseAndHead(ctx, old.Epoch, domain.StepRef{}, step("run-1", domain.StepPlanned)); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("expired append = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		if err := s.Renew(ctx, "run-1", old.Epoch, lease); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("expired Renew = %v, want %v — a dead lease is not resurrected", err, domain.ErrLeaseLost)
+		}
+
+		// Released: the lease ended on this worker's own say-so, and the
+		// epoch alone must not let it keep acting afterwards.
+		next, err := s.Claim(ctx, "w2", lease)
+		if err != nil {
+			t.Fatalf("Claim: %v", err)
+		}
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{Epoch: next.Epoch}); err != nil {
+			t.Fatalf("Release: %v", err)
+		}
+		if err := s.Fence(ctx, "run-1", next.Epoch, head); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("released Fence = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		if _, err := s.AppendIfLeaseAndHead(ctx, next.Epoch, domain.StepRef{}, step("run-1", domain.StepPlanned)); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("released append = %v, want %v", err, domain.ErrLeaseLost)
+		}
+	})
+
+	run(t, "an expired holder cannot release either — not even to park", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		// Suspended past its deadline, epoch still unchanged: the holder wakes
+		// and tries to hand in its outcome. Past the edge the outcome is
+		// unproven — a Parked here would stop a run a successor may already
+		// be advancing.
+		old, err := s.Claim(ctx, "w1", -time.Second)
+		if err != nil {
+			t.Fatalf("expired Claim: %v", err)
+		}
+		late := domain.ClaimOutcome{Epoch: old.Epoch, Err: errors.New("woke up late"), Parked: true}
+		if err := s.Release(ctx, "run-1", late); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("expired Release = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		// The refused release left no mark: the run is free and unparked.
+		next, err := s.Claim(ctx, "w2", lease)
+		if err != nil {
+			t.Fatalf("Claim after the refused release = %v, want the run free", err)
+		}
+		if next.Attempts != 0 {
+			t.Errorf("attempts = %d, want 0: the refused release must not count", next.Attempts)
+		}
+	})
+
+	run(t, "a release lands once: repeating it with the same epoch is refused", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		held, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
+			t.Fatalf("Claim: %v", err)
+		}
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{Epoch: held.Epoch}); err != nil {
+			t.Fatalf("Release: %v", err)
+		}
+		// The lease ended with the first release. A repeat would count the same
+		// failure twice and overwrite whatever supervision wrote since.
+		again := domain.ClaimOutcome{Epoch: held.Epoch, Err: errors.New("stale retry")}
+		if err := s.Release(ctx, "run-1", again); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("second Release = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		next, err := s.Claim(ctx, "w2", lease)
+		if err != nil {
+			t.Fatalf("Claim after release: %v", err)
+		}
+		if next.Attempts != 0 {
+			t.Errorf("attempts = %d, want 0: the refused repeat must not count a failure", next.Attempts)
 		}
 	})
 
@@ -413,7 +633,6 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		boom := domain.ClaimOutcome{Err: errors.New("upstream refused")}
 		for want := range 2 {
 			c, err := s.Claim(ctx, "w1", lease)
 			if err != nil {
@@ -422,6 +641,7 @@ func TestQueueContract(t *testing.T) {
 			if c.Attempts != want {
 				t.Fatalf("Attempts = %d on claim %d, want %d", c.Attempts, want, want)
 			}
+			boom := domain.ClaimOutcome{Err: errors.New("upstream refused"), Epoch: c.Epoch}
 			if err := s.Release(ctx, "run-1", boom); err != nil {
 				t.Fatalf("Release: %v", err)
 			}
@@ -429,10 +649,11 @@ func TestQueueContract(t *testing.T) {
 
 		// A turn that makes progress clears the count: the threshold measures
 		// consecutive failures, not failures ever.
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		fine, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
-		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{}); err != nil {
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{Epoch: fine.Epoch}); err != nil {
 			t.Fatalf("Release: %v", err)
 		}
 		c, err := s.Claim(ctx, "w1", lease)
@@ -448,10 +669,12 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		c, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
 		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{
+			Epoch:         c.Epoch,
 			Err:           errors.New("upstream refused"),
 			NextAttemptAt: time.Now().Add(time.Hour),
 		}); err != nil {
@@ -467,11 +690,13 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		c, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
 		since := time.Now().Add(-time.Minute)
 		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{
+			Epoch:         c.Epoch,
 			Err:           errors.New("provider overloaded"),
 			NextAttemptAt: time.Now().Add(time.Hour),
 			Failure: &domain.FailureSummary{
@@ -506,11 +731,12 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		c, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
 		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{
-			Err: errors.New("gave up"), Parked: true,
+			Epoch: c.Epoch, Err: errors.New("gave up"), Parked: true,
 		}); err != nil {
 			t.Fatalf("Release: %v", err)
 		}
@@ -526,11 +752,12 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		c, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
 		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{
-			Err: errors.New("gave up"), Parked: true,
+			Epoch: c.Epoch, Err: errors.New("gave up"), Parked: true,
 		}); err != nil {
 			t.Fatalf("Release: %v", err)
 		}
@@ -556,11 +783,12 @@ func TestQueueContract(t *testing.T) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")
 
-		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+		c, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
 		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{
-			Err: errors.New("budget exhausted"), Parked: true,
+			Epoch: c.Epoch, Err: errors.New("budget exhausted"), Parked: true,
 		}); err != nil {
 			t.Fatalf("Release: %v", err)
 		}
@@ -866,11 +1094,13 @@ func TestPostgresRelease_classifiedProviderFailureStoresOnlyStableCodeInLastErro
 
 	store := ledger.NewPostgres(pool)
 	mustAppend(t, store, startedAt("run-1", time.Now()))
-	if _, err := store.Claim(ctx, "w1", time.Minute); err != nil {
+	held, err := store.Claim(ctx, "w1", time.Minute)
+	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
 	if err := store.Release(ctx, "run-1", domain.ClaimOutcome{
-		Err: errors.New(`{"error":{"message":"Authorization header contained prompt text"}}`),
+		Epoch: held.Epoch,
+		Err:   errors.New(`{"error":{"message":"Authorization header contained prompt text"}}`),
 		Failure: &domain.FailureSummary{
 			Code:      "model_auth_failed",
 			Provider:  "anthropic",
@@ -2090,7 +2320,7 @@ func TestClaimContract_theTwoHalvesOfTheQueueNeverOverlap(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Claim: %v", err)
 		}
-		if err := s.Simulations().Release(ctx, claimed.RunID, domain.ClaimOutcome{}); err != nil {
+		if err := s.Simulations().Release(ctx, claimed.RunID, domain.ClaimOutcome{Epoch: claimed.Epoch}); err != nil {
 			t.Fatalf("Release: %v", err)
 		}
 		// A simulated run is a run: the lease, the backoff and the parking are
@@ -2463,4 +2693,243 @@ func TestAppend_hourWriteSubset_survivesTheRoundTrip(t *testing.T) {
 			t.Errorf("Verify after round-trip: %v", err)
 		}
 	})
+}
+
+func TestPostgresAppend_claimCommittingMidAppend_staleWriteIsFenced(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	requireDatabase(t, dsn)
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL is unset; skipping the Postgres implementation")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := ledger.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `truncate run_steps, runs`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	store := ledger.NewPostgres(pool)
+	mustAppend(t, store, startedAt("run-1", time.Now()))
+	old, err := store.Claim(ctx, "w1", time.Minute)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	// A successor's claim is in flight and uncommitted: it holds the row lock
+	// with the bumped epoch. An epoch read that does not share that lock
+	// resolves against the pre-claim snapshot, sees the old number still
+	// current, and lets the stale write through after the claim commits.
+	claimTx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin successor claim: %v", err)
+	}
+	defer func() { _ = claimTx.Rollback(ctx) }()
+	if _, err := claimTx.Exec(ctx, `
+		update runs set lease_epoch = lease_epoch + 1,
+			leased_until = now() + interval '1 minute', lease_owner = 'w2'
+		where run_id = 'run-1'`); err != nil {
+		t.Fatalf("successor claim update: %v", err)
+	}
+
+	appended := make(chan error, 1)
+	go func() {
+		_, err := store.AppendIfLeaseAndHead(ctx, old.Epoch,
+			domain.StepRef{Seq: 1, Kind: domain.StepRunStarted},
+			step("run-1", domain.StepPlanned))
+		appended <- err
+	}()
+
+	// The append must be waiting on the claim's row lock, not already done.
+	select {
+	case err := <-appended:
+		if !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("append finished without waiting for the claim, err = %v", err)
+		}
+		t.Fatal("append answered before the claim committed — it did not share the lock")
+	case <-time.After(300 * time.Millisecond):
+	}
+	if err := claimTx.Commit(ctx); err != nil {
+		t.Fatalf("commit successor claim: %v", err)
+	}
+
+	if err := <-appended; !errors.Is(err, domain.ErrLeaseLost) {
+		t.Fatalf("stale append = %v, want %v once the successor's claim lands", err, domain.ErrLeaseLost)
+	}
+	var steps int
+	if err := pool.QueryRow(ctx, `select count(*) from run_steps where run_id = 'run-1'`).Scan(&steps); err != nil {
+		t.Fatalf("count steps: %v", err)
+	}
+	if steps != 1 {
+		t.Fatalf("run has %d steps, want 1: the stale write landed", steps)
+	}
+}
+
+func TestPostgresAppend_leaseExpiresWhileWaitingForTheLock_staleWriteIsFenced(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	requireDatabase(t, dsn)
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL is unset; skipping the Postgres implementation")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := ledger.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `truncate run_steps, runs`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	store := ledger.NewPostgres(pool)
+	mustAppend(t, store, startedAt("run-1", time.Now()))
+	held, err := store.Claim(ctx, "w1", 400*time.Millisecond)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	// The append begins while the lease is alive, then waits out its whole
+	// remaining life on the ledger's lock. A liveness check frozen at the
+	// transaction's start answers for a moment that is long gone by the time
+	// the write happens.
+	lockTx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin lock holder: %v", err)
+	}
+	defer func() { _ = lockTx.Rollback(ctx) }()
+	if _, err := lockTx.Exec(ctx,
+		`select pg_advisory_xact_lock(hashtextextended('run-1', 0))`); err != nil {
+		t.Fatalf("hold ledger lock: %v", err)
+	}
+
+	appended := make(chan error, 1)
+	go func() {
+		_, err := store.AppendIfLeaseAndHead(ctx, held.Epoch,
+			domain.StepRef{Seq: 1, Kind: domain.StepRunStarted},
+			step("run-1", domain.StepPlanned))
+		appended <- err
+	}()
+
+	// Long enough that the lease is dead beyond doubt before the lock frees.
+	time.Sleep(700 * time.Millisecond)
+	select {
+	case err := <-appended:
+		t.Fatalf("append answered (%v) without waiting for the ledger lock", err)
+	default:
+	}
+	if err := lockTx.Rollback(ctx); err != nil {
+		t.Fatalf("release ledger lock: %v", err)
+	}
+
+	if err := <-appended; !errors.Is(err, domain.ErrLeaseLost) {
+		t.Fatalf("append after the lease died in the queue = %v, want %v", err, domain.ErrLeaseLost)
+	}
+}
+
+// rowLockHarness opens a run, claims it with a short lease, and hands back a
+// transaction holding the runs row lock — the wait every lease check sits
+// behind when a claim, renewal or release is in flight.
+func rowLockHarness(t *testing.T) (*pgxpool.Pool, *ledger.Postgres, domain.Claim, pgx.Tx) {
+	t.Helper()
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	requireDatabase(t, dsn)
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL is unset; skipping the Postgres implementation")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := ledger.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `truncate run_steps, runs`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	store := ledger.NewPostgres(pool)
+	mustAppend(t, store, startedAt("run-1", time.Now()))
+	held, err := store.Claim(ctx, "w1", 400*time.Millisecond)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	lockTx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin row lock holder: %v", err)
+	}
+	t.Cleanup(func() { _ = lockTx.Rollback(ctx) })
+	if _, err := lockTx.Exec(ctx,
+		`select 1 from runs where run_id = 'run-1' for update`); err != nil {
+		t.Fatalf("hold runs row: %v", err)
+	}
+	return pool, store, held, lockTx
+}
+
+func TestPostgresAppend_leaseExpiresWhileWaitingForTheRowLock_staleWriteIsFenced(t *testing.T) {
+	ctx := context.Background()
+	_, store, held, lockTx := rowLockHarness(t)
+
+	appended := make(chan error, 1)
+	go func() {
+		_, err := store.AppendIfLeaseAndHead(ctx, held.Epoch,
+			domain.StepRef{Seq: 1, Kind: domain.StepRunStarted},
+			step("run-1", domain.StepPlanned))
+		appended <- err
+	}()
+
+	// A volatile clock evaluated when the statement starts answers for the
+	// moment BEFORE this wait — and a lock holder that modified nothing
+	// triggers no re-check on its way out.
+	time.Sleep(700 * time.Millisecond)
+	select {
+	case err := <-appended:
+		t.Fatalf("append answered (%v) without waiting for the row lock", err)
+	default:
+	}
+	if err := lockTx.Rollback(ctx); err != nil {
+		t.Fatalf("release row lock: %v", err)
+	}
+
+	if err := <-appended; !errors.Is(err, domain.ErrLeaseLost) {
+		t.Fatalf("append after the lease died behind the row lock = %v, want %v", err, domain.ErrLeaseLost)
+	}
+}
+
+func TestPostgresRenew_leaseExpiresWhileWaitingForTheRowLock_deadLeaseStaysDead(t *testing.T) {
+	ctx := context.Background()
+	_, store, held, lockTx := rowLockHarness(t)
+
+	renewed := make(chan error, 1)
+	go func() {
+		renewed <- store.Renew(ctx, "run-1", held.Epoch, time.Minute)
+	}()
+
+	time.Sleep(700 * time.Millisecond)
+	select {
+	case err := <-renewed:
+		t.Fatalf("renew answered (%v) without waiting for the row lock", err)
+	default:
+	}
+	if err := lockTx.Rollback(ctx); err != nil {
+		t.Fatalf("release row lock: %v", err)
+	}
+
+	if err := <-renewed; !errors.Is(err, domain.ErrLeaseLost) {
+		t.Fatalf("renew after the lease died behind the row lock = %v, want %v — resurrection", err, domain.ErrLeaseLost)
+	}
+	// The proof the lease stayed dead: a successor can claim right away.
+	if _, err := store.Claim(ctx, "w2", time.Minute); err != nil {
+		t.Fatalf("successor Claim = %v, want the run free — the dead lease was extended", err)
+	}
 }

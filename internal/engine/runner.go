@@ -94,7 +94,7 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 			if r.deps.Metrics != nil {
 				r.deps.Metrics.Planning(spent.Prompt, spent.Cost)
 			}
-			if _, aerr := r.append(ctx, state, start, domain.Step{
+			if _, aerr := r.appendPlanned(ctx, state, start, domain.Step{
 				Kind:   domain.StepPlanned,
 				Labels: state.Labels.Clone(),
 				Cost:   spent.Cost,
@@ -121,7 +121,7 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		Price:    pricePayload(proposal.Price),
 		Prompt:   promptInputPayload(proposal.Prompt),
 	}
-	if state, err = r.append(ctx, state, start, domain.Step{
+	if state, err = r.appendPlanned(ctx, state, start, domain.Step{
 		Kind:   domain.StepPlanned,
 		Labels: state.Labels.Clone(),
 		Cost:   proposal.Cost,
@@ -267,17 +267,91 @@ func (r *Runner) plan(ctx context.Context, state State, start Start) (Proposal, 
 	return p, nil
 }
 
-// append seals one step into the ledger and folds it into the state, keeping
-// the in-memory view and the record identical by construction.
-func (r *Runner) append(ctx context.Context, state State, start Start, s domain.Step) (State, error) {
+/*
+appendPlanned seals the turn's planning record, and when the fence refuses it,
+lands the billed spend anyway.
+
+The model call was invoiced whatever the fence says. Metrics saw it before
+this write; a cost that reached Prometheus but never the ledger is exactly
+the drift #131 closed, reopened on the fencing path — budget, FinOps and the
+trail all fold from steps. So on ErrHeadMoved or ErrLeaseLost the cost goes
+in unconditionally, idempotent under a key tied to the head it was decided
+against — a pure record of spend, carrying no stale decision for anyone to
+act on. The fence error still ends the turn.
+*/
+func (r *Runner) appendPlanned(
+	ctx context.Context, state State, start Start, s domain.Step,
+) (State, error) {
+	// The key goes on before the FIRST write, and the fallback carries the
+	// same one. A commit whose answer was swallowed — cancelled between
+	// landing and returning — is indistinguishable from a lost write; only an
+	// identical key lets the retry's ErrIdemConflict prove that this exact
+	// charge is already on the record instead of billing it twice. Epoch in
+	// the key: two attempts fenced over the same head are two real charges,
+	// each under its own claim, and one claim makes one planning call — so
+	// run+seq+epoch provably names one charge.
+	if s.Cost != (domain.Cost{}) {
+		s.IdemKey = fmt.Sprintf("planned-spend:%s:%d:%d", start.RunID, state.Seq+1, start.LeaseEpoch)
+	}
+
+	next, err := r.append(ctx, state, start, s)
+	// A context already cancelled counts as fenced too: the cancellation that
+	// races a billed response arrives as context.Canceled on the append, and
+	// this turn will never retry the write.
+	fenced := errors.Is(err, domain.ErrHeadMoved) || errors.Is(err, domain.ErrLeaseLost) ||
+		(err != nil && ctx.Err() != nil)
+	if !fenced || s.Cost == (domain.Cost{}) {
+		return next, err
+	}
+
+	// The spend write gets a context of its own: the cancellation that fenced
+	// the turn must not also strand the invoice.
+	spendCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer stop()
+
+	spend := r.stamp(start, s)
+	if _, aerr := r.deps.Ledger.Append(spendCtx, spend); aerr != nil && !errors.Is(aerr, domain.ErrIdemConflict) {
+		return State{}, fmt.Errorf("engine: billed spend not recorded after the fence (%v): %w", err, aerr)
+	}
+	return State{}, err
+}
+
+// stamp fills the identity every step of this run carries.
+func (r *Runner) stamp(start Start, s domain.Step) domain.Step {
 	s.RunID = start.RunID
 	s.Scope = start.Scope
 	s.AgentID = start.AgentID
 	s.VersionID = start.VersionID
 	s.OnBehalfOf = start.OnBehalfOf
 	s.At = r.deps.Clock.Now()
+	return s
+}
 
-	sealed, err := r.deps.Ledger.Append(ctx, s)
+// append seals one step into the ledger and folds it into the state, keeping
+// the in-memory view and the record identical by construction.
+func (r *Runner) append(ctx context.Context, state State, start Start, s domain.Step) (State, error) {
+	s = r.stamp(start, s)
+
+	// Conditional on the head this turn folded: a run that moved in between —
+	// a successor worker, an approval, an abandonment — refuses the write with
+	// ErrHeadMoved rather than sealing a stale decision onto it (NF-15). Under
+	// a lease, conditional on the epoch too: a successor's claim moves no
+	// steps, so the head alone cannot tell a fenced worker it lost the run.
+	// Only the opening step has no head to condition on.
+	append := func() (domain.Step, error) {
+		head := state.Head
+		if state.Seq < domain.FirstSeq {
+			head = domain.StepRef{}
+		}
+		if start.LeaseEpoch != 0 {
+			return r.deps.Ledger.AppendIfLeaseAndHead(ctx, start.LeaseEpoch, head, s)
+		}
+		if head == (domain.StepRef{}) {
+			return r.deps.Ledger.Append(ctx, s)
+		}
+		return r.deps.Ledger.AppendIfHead(ctx, head, s)
+	}
+	sealed, err := append()
 	if err != nil {
 		return State{}, fmt.Errorf("engine: append %s: %w", s.Kind, err)
 	}

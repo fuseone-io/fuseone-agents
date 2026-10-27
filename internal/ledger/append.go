@@ -23,7 +23,7 @@ projection that disagrees with the trail are the two ways this record stops
 being worth keeping (PRD AU-01, AU-02).
 */
 func (p *Postgres) appendOnce(
-	ctx context.Context, expect *domain.StepRef, s domain.Step,
+	ctx context.Context, epoch *int64, expect *domain.StepRef, s domain.Step,
 ) (domain.Step, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -43,6 +43,41 @@ func (p *Postgres) appendOnce(
 		`select pg_advisory_xact_lock(hashtextextended($1, 0))`, string(s.RunID),
 	); err != nil {
 		return domain.Step{}, fmt.Errorf("lock run: %w", err)
+	}
+
+	// The lease before the head, inside the same transaction as the write:
+	// a worker fenced out has lost the run whole, and the claim that fenced
+	// it only touches the runs row — the head may not have moved at all.
+	//
+	// The lease check is two statements on purpose. The first takes the row
+	// lock every claim shares — FOR UPDATE — so a claim committing while this
+	// append is in flight is waited for and then seen. The second, issued
+	// only once that lock is already ours, judges liveness: a volatile clock
+	// inside the locking statement is evaluated before the wait, and a lock
+	// holder that modified nothing triggers no re-check on its way out — so
+	// one statement can answer for a moment the lease did not survive.
+	if epoch != nil {
+		var current int64
+		err := tx.QueryRow(ctx, `
+			select lease_epoch from runs where run_id = $1
+			for update`, string(s.RunID),
+		).Scan(&current)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Step{}, domain.ErrLeaseLost
+		}
+		if err != nil {
+			return domain.Step{}, fmt.Errorf("read lease epoch: %w", err)
+		}
+		var live bool
+		if err := tx.QueryRow(ctx, `
+			select leased_until is not null and leased_until > clock_timestamp()
+			from runs where run_id = $1`, string(s.RunID),
+		).Scan(&live); err != nil {
+			return domain.Step{}, fmt.Errorf("judge lease liveness: %w", err)
+		}
+		if current != *epoch || !live {
+			return domain.Step{}, domain.ErrLeaseLost
+		}
 	}
 
 	prev, err := headTx(ctx, tx, s.RunID)

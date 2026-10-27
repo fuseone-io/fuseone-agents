@@ -25,8 +25,12 @@ type Queue interface {
 	// Claim leases one claimable run to owner, or returns
 	// domain.ErrNoClaimableRun.
 	Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error)
+	// Renew extends a lease still held under the claim's epoch, or reports
+	// domain.ErrLeaseLost when a successor has claimed the run since.
+	Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error
 	// Release ends a lease. Progress resets the failure count; a failure
-	// schedules the next attempt and records why.
+	// schedules the next attempt and records why. A release carrying a stale
+	// epoch is refused with domain.ErrLeaseLost.
 	Release(ctx context.Context, runID domain.RunID, outcome domain.ClaimOutcome) error
 }
 
@@ -96,6 +100,13 @@ func (c *Config) withDefaults() {
 	if c.Lease <= 0 {
 		c.Lease = 2 * time.Minute
 	}
+	// Below this floor the renew tick bottoms out against the scheduler and
+	// the guard fires after the lease has already expired — a watchdog that
+	// barks post mortem. A lease too short to renew is a misconfiguration,
+	// answered by the nearest workable value rather than a panic.
+	if c.Lease < 30*time.Millisecond {
+		c.Lease = 30 * time.Millisecond
+	}
 	if c.IdleWait <= 0 {
 		c.IdleWait = time.Second
 	}
@@ -132,6 +143,12 @@ type Worker struct {
 	// metrics is optional. The ledger remains the diagnostic record; metrics
 	// only say whether this pool is moving.
 	metrics *PoolMetrics
+
+	// renewSlots bounds the renewal calls in flight across the whole pool. A
+	// store that ignores its context pins a goroutine until it returns; the
+	// semaphore caps what a continuous blackhole can pin to the pool's
+	// budget instead of two goroutines per turn for ever.
+	renewSlots chan struct{}
 }
 
 // WithUndos wires the Curator's ruling on what compensates what.
@@ -163,7 +180,12 @@ func New(cfg Config, queue Queue, deps engine.Deps, specs Specs, clock engine.Cl
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Worker{cfg: cfg, queue: queue, deps: deps, specs: specs, clock: clock, log: log}
+	return &Worker{
+		cfg: cfg, queue: queue, deps: deps, specs: specs, clock: clock, log: log,
+		// Twice the lanes: every healthy lane renews, with headroom so two
+		// overlapping fast calls never read as starvation.
+		renewSlots: make(chan struct{}, 2*cfg.Concurrency),
+	}
 }
 
 // Run advances claimed runs until ctx is cancelled.

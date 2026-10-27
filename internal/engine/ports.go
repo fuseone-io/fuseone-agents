@@ -261,6 +261,11 @@ type Start struct {
 	// so it arrives with the run rather than with the definition.
 	Stage   domain.Stage
 	Trigger string
+	// LeaseEpoch is the fencing token of the claim this turn runs under.
+	// Non-zero makes every append and every outgoing effect conditional on
+	// the lease still being current; zero — a caller that holds no lease —
+	// keeps the head condition alone.
+	LeaseEpoch int64
 	// MemoryLearning is versioned with the agent definition. A run pinned to an
 	// older version does not begin learning because somebody published a later
 	// toggle.

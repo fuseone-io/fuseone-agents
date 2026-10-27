@@ -37,6 +37,7 @@ func (s *State) Apply(step domain.Step) error {
 		return fmt.Errorf("engine: out-of-order step: got seq %d, want %d", step.Seq, s.Seq+1)
 	}
 	s.Seq = step.Seq
+	s.Head = domain.StepRef{Seq: step.Seq, Kind: step.Kind}
 
 	// Cost rides on the step itself, whatever the kind, so accounting can
 	// never drift from the record it is derived from.

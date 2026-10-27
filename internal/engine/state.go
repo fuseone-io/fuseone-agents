@@ -20,6 +20,21 @@ import (
 // ledger never imports engine.
 type Ledger interface {
 	Append(ctx context.Context, s domain.Step) (domain.Step, error)
+	// AppendIfHead seals a step only onto the head it was decided against,
+	// refusing with domain.ErrHeadMoved when the run moved in between. It is
+	// what fences a worker that keeps acting on a run a successor took over:
+	// lease renewal only notices the loss at the next tick, while the head
+	// check refuses the stale write at the moment it happens.
+	AppendIfHead(ctx context.Context, head domain.StepRef, s domain.Step) (domain.Step, error)
+	// AppendIfLeaseAndHead additionally refuses the write with
+	// domain.ErrLeaseLost when epoch is no longer the run's current lease —
+	// the fence a worker that acts between renewal ticks cannot cross. A zero
+	// head fences on the lease alone.
+	AppendIfLeaseAndHead(ctx context.Context, epoch int64, head domain.StepRef, s domain.Step) (domain.Step, error)
+	// Fence is the synchronous form of the same question, asked immediately
+	// before an effect leaves the process: an append can be refused after the
+	// fact, an external call cannot.
+	Fence(ctx context.Context, runID domain.RunID, epoch int64, head domain.StepRef) error
 	Read(ctx context.Context, runID domain.RunID, fromSeq int64) ([]domain.Step, error)
 	Head(ctx context.Context, runID domain.RunID) (domain.Step, error)
 }
@@ -94,6 +109,11 @@ type State struct {
 
 	Seq   int64
 	Phase Phase
+	// Head is the last step this state was folded through. Appends are made
+	// conditional on it, so a decision taken against a run that has since
+	// moved — another worker's turn, an approval, an abandonment — is refused
+	// instead of sealed onto history it never saw.
+	Head domain.StepRef
 
 	// Spent is settled consumption; Reserved is outstanding reservations that
 	// have not been reconciled yet. The Gate checks Committed, never Spent.

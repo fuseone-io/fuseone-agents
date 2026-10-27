@@ -22,7 +22,9 @@ var (
 	// run_steps, and it is how single-writer is enforced (PRD NF-15).
 	ErrSeqConflict = errors.New("ledger: sequence already claimed by another writer")
 	// ErrIdemConflict means the same idempotency key was already recorded.
-	ErrIdemConflict = errors.New("ledger: idempotency key already used")
+	// It wraps the domain sentinel so a consumer above the stores can match
+	// it without importing this package.
+	ErrIdemConflict = fmt.Errorf("ledger: idempotency key already used: %w", domain.ErrIdemConflict)
 
 	ErrNotFound = domain.ErrRunNotFound
 )
@@ -65,7 +67,7 @@ func NewMemory() *Memory {
 // The caller supplies the step without Seq, PrevHash or Hash: those are the
 // ledger's to assign, because only the ledger knows the head at commit time.
 func (m *Memory) Append(ctx context.Context, s domain.Step) (domain.Step, error) {
-	return m.append(ctx, nil, s)
+	return m.append(ctx, nil, nil, s)
 }
 
 /*
@@ -80,11 +82,54 @@ that serialises the append.
 func (m *Memory) AppendIfHead(
 	ctx context.Context, head domain.StepRef, s domain.Step,
 ) (domain.Step, error) {
-	return m.append(ctx, &head, s)
+	return m.append(ctx, nil, &head, s)
+}
+
+// AppendIfLeaseAndHead seals a step only while epoch is still the run's
+// current lease — the fence a worker that acts between renewal ticks cannot
+// cross — and, when head is non-zero, only onto that head. A zero head
+// fences on the lease alone, for callers that do not track the fold: the
+// parking record, the compensation record.
+func (m *Memory) AppendIfLeaseAndHead(
+	ctx context.Context, epoch int64, head domain.StepRef, s domain.Step,
+) (domain.Step, error) {
+	var expect *domain.StepRef
+	if head != (domain.StepRef{}) {
+		expect = &head
+	}
+	return m.append(ctx, &epoch, expect, s)
+}
+
+// Fence answers whether the holder of epoch may still act for the run, with
+// the head (when non-zero) still where it left it. It is the synchronous
+// check made immediately before an effect leaves the process: an append can
+// be refused after the fact, an external call cannot.
+func (m *Memory) Fence(
+	ctx context.Context, runID domain.RunID, epoch int64, head domain.StepRef,
+) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if !m.leaseHeld(runID, epoch) {
+		return domain.ErrLeaseLost
+	}
+	if head == (domain.StepRef{}) {
+		return nil
+	}
+	steps := m.runs[runID]
+	var prev *domain.Step
+	if n := len(steps); n > 0 {
+		prev = &steps[n-1]
+	}
+	return headIs(&head, prev)
 }
 
 func (m *Memory) append(
-	ctx context.Context, expect *domain.StepRef, s domain.Step,
+	ctx context.Context, epoch *int64, expect *domain.StepRef, s domain.Step,
 ) (domain.Step, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.Step{}, err
@@ -99,6 +144,14 @@ func (m *Memory) append(
 		prev = &steps[n-1]
 	}
 
+	// The lease before the head: a worker fenced out has lost the run whole,
+	// and "the lease is no longer yours" is the answer that stops it, where
+	// "the head moved" invites refolding a run it no longer owns. The lease
+	// must also still be live: past leased_until — or after a release —
+	// exclusivity cannot be proven, however unchanged the number looks.
+	if epoch != nil && !m.leaseHeld(s.RunID, *epoch) {
+		return domain.Step{}, domain.ErrLeaseLost
+	}
 	// The precondition first, and the order is part of the contract rather
 	// than an accident of writing. The store checks the head before it
 	// inserts, so a step that fails both conditions is refused there for the
@@ -127,6 +180,13 @@ func (m *Memory) append(
 		delete(m.lastFailureAt, sealed.RunID)
 	}
 	return sealed, nil
+}
+
+// leaseHeld is the one reading of "may this epoch still act": the number is
+// current AND the lease is live. Callers hold m.mu.
+func (m *Memory) leaseHeld(runID domain.RunID, epoch int64) bool {
+	st := m.leases[runID]
+	return st.epoch == epoch && !st.leasedUntil.IsZero() && st.leasedUntil.After(m.now())
 }
 
 func (m *Memory) now() time.Time {

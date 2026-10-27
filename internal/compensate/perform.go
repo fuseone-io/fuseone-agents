@@ -126,6 +126,15 @@ func performOne(
 	if err := deps.Tools.Reserve(ctx, call); err != nil {
 		return record(ctx, deps, start, act, false, err.Error())
 	}
+	// The last answer before the undo leaves the process: these calls act on
+	// the world, and a worker that lost its lease mid-compensation would run
+	// them beside the successor doing the same. Lease only — the record steps
+	// this loop writes move the head on purpose.
+	if start.LeaseEpoch != 0 {
+		if err := deps.Ledger.Fence(ctx, start.RunID, start.LeaseEpoch, domain.StepRef{}); err != nil {
+			return Outcome{}, fmt.Errorf("compensate: fence before %s: %w", act.Undo, err)
+		}
+	}
 	result, invokeErr := deps.Tools.Invoke(ctx, call)
 	// Both shapes of failure. A tool layer reports a refusal from the far side
 	// in the result and a broken connection as an error, and an undo that did
@@ -182,12 +191,21 @@ func record(
 		return Outcome{}, err
 	}
 
-	if _, err := deps.Ledger.Append(ctx, domain.Step{
+	s := domain.Step{
 		RunID: start.RunID, Kind: domain.StepCompensated,
 		Scope: start.Scope, AgentID: start.AgentID, VersionID: start.VersionID,
 		OnBehalfOf: start.OnBehalfOf, At: deps.Clock.Now(), Payload: payload,
-	}); err != nil {
-		return Outcome{}, fmt.Errorf("compensate: record %s: %w", act.Undo, err)
+	}
+	// Under a lease, the record is fenced on it — lease only, because this
+	// loop's own records move the head between acts.
+	var appendErr error
+	if start.LeaseEpoch != 0 {
+		_, appendErr = deps.Ledger.AppendIfLeaseAndHead(ctx, start.LeaseEpoch, domain.StepRef{}, s)
+	} else {
+		_, appendErr = deps.Ledger.Append(ctx, s)
+	}
+	if appendErr != nil {
+		return Outcome{}, fmt.Errorf("compensate: record %s: %w", act.Undo, appendErr)
 	}
 	return Outcome{Act: act, Done: succeeded, Why: why}, nil
 }
