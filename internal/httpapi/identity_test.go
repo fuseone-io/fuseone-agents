@@ -237,3 +237,33 @@ func TestPutIdentityProvider_adminInTheAdministrationAreaCannotGrantSignInToInst
 		t.Error("an area administrator configured an installation-wide sign-in mapping")
 	}
 }
+
+func TestPutIdentityProvider_changedIssuerWithoutASecret_refused(t *testing.T) {
+	t.Parallel()
+	store := &fakeIdentity{stored: []domain.IdentityProvider{{
+		ID: "keycloak", Issuer: "https://id.example/realms/acme", ClientID: "fuseone",
+	}}}
+	srv := identityServer(store, &fakeSignIn{})
+
+	req := providerInput()
+	req.Body.Issuer = "https://attacker.example"
+	req.Body.ClientSecret = nil
+
+	resp, err := srv.PutIdentityProvider(asInstallation(domain.RoleCurator), req)
+	if err != nil {
+		t.Fatalf("PutIdentityProvider: %v", err)
+	}
+	if _, refused := resp.(openapi.PutIdentityProvider400ApplicationProblemPlusJSONResponse); !refused {
+		t.Fatalf("resp = %T, want the fresh-secret refusal: the stored secret must not follow a new issuer", resp)
+	}
+
+	// The same mapping saved again without a secret stays fine — rotation of
+	// unrelated fields must not demand retyping the credential.
+	same := providerInput()
+	same.Body.ClientSecret = nil
+	if resp, err := srv.PutIdentityProvider(asInstallation(domain.RoleCurator), same); err != nil {
+		t.Fatalf("unchanged put: %v", err)
+	} else if _, ok := resp.(openapi.PutIdentityProvider204Response); !ok {
+		t.Fatalf("unchanged resp = %T, want accepted", resp)
+	}
+}

@@ -42,6 +42,7 @@ func (m *MemoryContent) WithLimit(bytes int) *MemoryContent {
 // answer retention the way the durable store does.
 type object struct {
 	bytes []byte
+	kind  string
 	// digest is of the whole payload, kept beside the truncated bytes for the
 	// same reason the durable store keeps it in a column: what the record says
 	// it is must not change because only part of it was retained.
@@ -90,6 +91,7 @@ func (m *MemoryContent) PutFor(
 	m.data[ref] = object{
 		bytes:  append([]byte(nil), stored...),
 		digest: hex.EncodeToString(sum[:]),
+		kind:   kind,
 		owner:  owner,
 		at:     time.Now(),
 	}
@@ -138,9 +140,11 @@ func (m *MemoryContent) Metadata(ctx context.Context, ref string) (domain.Conten
 	return domain.ContentMetadata{Digest: held.digest, Erased: held.erased}, nil
 }
 
-// Erase removes one owner's content, leaving a tombstone.
-func (m *MemoryContent) Erase(ctx context.Context, owner string, reason string) (int, error) {
-	return m.erase(ctx, func(o object) bool { return o.owner == owner })
+// Erase removes one owner's content in one namespace, leaving a tombstone.
+// The kind is part of the address: erasing a run must not reach a case or a
+// ticket that happens to share the owner string.
+func (m *MemoryContent) Erase(ctx context.Context, kind, owner, reason string) (int, error) {
+	return m.erase(ctx, func(o object) bool { return o.kind == kind && o.owner == owner })
 }
 
 // ErasePast is retention: everything stored before a moment goes.

@@ -124,7 +124,7 @@ func (o *OIDC) CompleteWithProvider(ctx context.Context, w http.ResponseWriter, 
 		return Identity{}, fmt.Errorf("%w: no authorization code", ErrBadCredential)
 	}
 
-	tok, err := p.oauth.Exchange(ctx, code, oauth2.SetAuthURLParam("code_verifier", verifier))
+	tok, err := p.oauth.Exchange(o.webCtx(ctx), code, oauth2.SetAuthURLParam("code_verifier", verifier))
 	if err != nil {
 		return Identity{}, fmt.Errorf("auth: exchange code: %w", err)
 	}

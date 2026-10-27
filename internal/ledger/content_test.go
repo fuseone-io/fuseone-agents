@@ -24,7 +24,7 @@ type ContentStore interface {
 	PutFor(ctx context.Context, kind, owner string, seq int64, data []byte) (string, error)
 	Get(ctx context.Context, ref string) ([]byte, error)
 	Metadata(ctx context.Context, ref string) (domain.ContentMetadata, error)
-	Erase(ctx context.Context, owner string, reason string) (int, error)
+	Erase(ctx context.Context, kind, owner, reason string) (int, error)
 	ErasePast(ctx context.Context, before time.Time, reason string) (int, error)
 }
 
@@ -177,7 +177,7 @@ func TestEraseContract(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Put: %v", err)
 			}
-			erased, err := store.Erase(ctx, "run-1", "subject")
+			erased, err := store.Erase(ctx, "run", "run-1", "subject")
 			if err != nil {
 				t.Fatalf("Erase: %v", err)
 			}
@@ -195,13 +195,40 @@ func TestEraseContract(t *testing.T) {
 			}
 		})
 
+		t.Run(name+"/erasing a run leaves the other kinds' content alone", func(t *testing.T) {
+			store := open(t)
+			ctx := context.Background()
+
+			// The namespaces exist so that erasing a run cannot erase a
+			// case; an owner string shared across kinds is exactly when
+			// that promise is tested.
+			if _, err := store.Put(ctx, "shared", 1, []byte(`{"run":"bytes"}`)); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+			caseRef, err := store.PutFor(ctx, "case", "shared", 1, []byte(`{"case":"bytes"}`))
+			if err != nil {
+				t.Fatalf("PutFor: %v", err)
+			}
+
+			erased, err := store.Erase(ctx, "run", "shared", "subject")
+			if err != nil {
+				t.Fatalf("Erase: %v", err)
+			}
+			if erased != 1 {
+				t.Errorf("erased %d, want only the run's content", erased)
+			}
+			if _, err := store.Get(ctx, caseRef); err != nil {
+				t.Errorf("Get(case) = %v, want the case untouched by a run erasure", err)
+			}
+		})
+
 		t.Run(name+"/erasing one owner leaves another alone", func(t *testing.T) {
 			store := open(t)
 			ctx := context.Background()
 
 			mine, _ := store.Put(ctx, "run-mine", 1, []byte("mine"))
 			theirs, _ := store.Put(ctx, "run-theirs", 1, []byte("theirs"))
-			if _, err := store.Erase(ctx, "run-mine", "subject"); err != nil {
+			if _, err := store.Erase(ctx, "run", "run-mine", "subject"); err != nil {
 				t.Fatalf("Erase: %v", err)
 			}
 
@@ -242,12 +269,12 @@ func TestEraseContract(t *testing.T) {
 			if _, err := store.Put(ctx, "run-1", 1, []byte("x")); err != nil {
 				t.Fatalf("Put: %v", err)
 			}
-			if _, err := store.Erase(ctx, "run-1", "subject"); err != nil {
+			if _, err := store.Erase(ctx, "run", "run-1", "subject"); err != nil {
 				t.Fatalf("first: %v", err)
 			}
 			// A retry after a failed erasure must not refuse: the caller is
 			// asking for a state, not for an event.
-			again, err := store.Erase(ctx, "run-1", "subject")
+			again, err := store.Erase(ctx, "run", "run-1", "subject")
 			if err != nil {
 				t.Fatalf("second: %v", err)
 			}
@@ -334,7 +361,7 @@ func TestContentMetadataContract(t *testing.T) {
 			if err != nil {
 				t.Fatalf("PutFor: %v", err)
 			}
-			if _, err := store.Erase(ctx, "run-1", "subject"); err != nil {
+			if _, err := store.Erase(ctx, "run", "run-1", "subject"); err != nil {
 				t.Fatalf("Erase: %v", err)
 			}
 

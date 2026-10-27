@@ -123,7 +123,7 @@ func TestSweep_anErasedOutcome_saysSo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("put: %v", err)
 	}
-	if _, err := content.Erase(t.Context(), "run-1", "test"); err != nil {
+	if _, err := content.Erase(t.Context(), "run", "run-1", "test"); err != nil {
 		t.Fatalf("erase: %v", err)
 	}
 	r := channel.NewReporter(
