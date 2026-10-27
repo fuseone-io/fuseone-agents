@@ -283,14 +283,28 @@ func (r *Runner) appendPlanned(
 	ctx context.Context, state State, start Start, s domain.Step,
 ) (State, error) {
 	next, err := r.append(ctx, state, start, s)
-	fenced := errors.Is(err, domain.ErrHeadMoved) || errors.Is(err, domain.ErrLeaseLost)
+	// A context already cancelled counts as fenced too: the cancellation that
+	// races a billed response arrives as context.Canceled on the append, and
+	// this turn will never retry the write.
+	fenced := errors.Is(err, domain.ErrHeadMoved) || errors.Is(err, domain.ErrLeaseLost) ||
+		(err != nil && ctx.Err() != nil)
 	if !fenced || s.Cost == (domain.Cost{}) {
 		return next, err
 	}
 
+	// The spend write gets a context of its own: the cancellation that fenced
+	// the turn must not also strand the invoice.
+	spendCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer stop()
+
 	spend := r.stamp(start, s)
-	spend.IdemKey = fmt.Sprintf("planned-spend:%s:%d", start.RunID, state.Seq+1)
-	if _, aerr := r.deps.Ledger.Append(ctx, spend); aerr != nil {
+	// Epoch in the key: two attempts fenced over the same head are two real
+	// charges, each under its own claim — the key must separate them, and
+	// must still collapse a replay of the same attempt. One claim makes one
+	// planning call, so run+seq+epoch provably names one charge; a conflict
+	// is therefore that charge already on the record, not a lost one.
+	spend.IdemKey = fmt.Sprintf("planned-spend:%s:%d:%d", start.RunID, state.Seq+1, start.LeaseEpoch)
+	if _, aerr := r.deps.Ledger.Append(spendCtx, spend); aerr != nil && !errors.Is(aerr, domain.ErrIdemConflict) {
 		return State{}, fmt.Errorf("engine: billed spend not recorded after the fence (%v): %w", err, aerr)
 	}
 	return State{}, err

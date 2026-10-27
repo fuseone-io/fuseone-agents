@@ -22,6 +22,17 @@ type epochLedger struct {
 	// afterAppend runs after a step lands, before the call returns — the seam
 	// where "the worker was suspended right here" is expressed.
 	afterAppend func(kind domain.StepKind)
+	// readCap, when non-zero, truncates reads to that many steps: the stale
+	// fold of a worker that read the run before a later write landed.
+	readCap atomic.Int64
+}
+
+func (l *epochLedger) Read(ctx context.Context, runID domain.RunID, fromSeq int64) ([]domain.Step, error) {
+	steps, err := l.Memory.Read(ctx, runID, fromSeq)
+	if cap := l.readCap.Load(); cap > 0 && int64(len(steps)) > cap {
+		steps = steps[:cap]
+	}
+	return steps, err
 }
 
 func (l *epochLedger) AppendIfLeaseAndHead(
@@ -54,13 +65,17 @@ func (l *epochLedger) Fence(
 
 func newFenceHarness(t *testing.T, proposals ...Proposal) (*harness, *epochLedger) {
 	t.Helper()
+	return newFenceHarnessWith(t, &scriptedPlanner{proposals: proposals})
+}
+
+func newFenceHarnessWith(t *testing.T, planner Planner) (*harness, *epochLedger) {
+	t.Helper()
 	l := &epochLedger{Memory: ledger.NewMemory()}
 	l.current.Store(1)
-	planner := &scriptedPlanner{proposals: proposals}
 	content := NewMemoryContent()
 	tools := &countingTools{content: content, body: []byte(`{"ok":true}`)}
 
-	h := &harness{ledger: l.Memory, planner: planner, tools: tools, content: content}
+	h := &harness{ledger: l.Memory, tools: tools, content: content}
 	h.runner = NewRunner(Deps{
 		Ledger:  l,
 		Content: content,
@@ -203,5 +218,87 @@ func TestAdvance_plannedStepRefusedByAMovedHead_theBilledSpendStillLands(t *test
 	}
 	if micros != 12_345 {
 		t.Fatalf("ledger micros = %d, want 12345: the billed call vanished from the record", micros)
+	}
+}
+
+// cancellingPlanner is the model call that completes — and is billed — at the
+// exact moment the lease is lost: the cancel lands first, the answer follows.
+type cancellingPlanner struct {
+	cancel context.CancelCauseFunc
+	cost   domain.Cost
+}
+
+func (p *cancellingPlanner) Plan(context.Context, PlanInput) (Proposal, error) {
+	p.cancel(domain.ErrLeaseLost)
+	return Proposal{Done: true, Outcome: "completed", Cost: p.cost}, nil
+}
+
+func TestAdvance_cancelCrossesABilledResponse_theSpendStillLands(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	planner := &cancellingPlanner{cancel: cancel, cost: domain.Cost{Micros: 12_345}}
+	h, l := newFenceHarnessWith(t, planner)
+
+	if _, err := h.runner.Advance(ctx, h.fencedStart(t)); err == nil {
+		t.Fatal("Advance = nil, want the cancellation to end the turn")
+	}
+
+	// The provider billed the call whether or not the cancel won the race to
+	// the ledger. A spend write riding the turn's own context dies with it.
+	steps, err := l.Memory.Read(context.Background(), "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	var micros int64
+	for _, s := range steps {
+		micros += s.Cost.Micros
+	}
+	if micros != 12_345 {
+		t.Fatalf("ledger micros = %d, want 12345: the cancellation swallowed the invoice", micros)
+	}
+}
+
+func TestAdvance_twoAttemptsBilledOverTheSameHead_bothSpendsLand(t *testing.T) {
+	t.Parallel()
+
+	h, l := newFenceHarness(t,
+		Proposal{Done: true, Outcome: "completed", Cost: domain.Cost{Micros: 100}},
+		Proposal{Done: true, Outcome: "completed", Cost: domain.Cost{Micros: 200}},
+	)
+	if _, err := l.Memory.Append(context.Background(), domain.Step{
+		RunID: "run-1", Kind: domain.StepRunStarted,
+		Scope:   domain.Scope{Company: "acme", Area: "cx"},
+		AgentID: "triage", At: time.Now(), Payload: []byte(`{}`),
+	}); err != nil {
+		t.Fatalf("open run: %v", err)
+	}
+	// Neither epoch is current any more: both attempts were fenced, and each
+	// made its own billed call. The second worker folded the run before the
+	// first one's spend record landed — the ordinary interleaving, since the
+	// claim that fenced the first happens before its fallback write.
+	l.current.Store(3)
+
+	start := h.fencedStart(t) // epoch 1
+	if _, err := h.runner.Advance(context.Background(), start); !errors.Is(err, domain.ErrLeaseLost) {
+		t.Fatalf("first Advance = %v, want %v", err, domain.ErrLeaseLost)
+	}
+	l.readCap.Store(1) // the second attempt's fold predates the first spend
+	start.LeaseEpoch = 2
+	if _, err := h.runner.Advance(context.Background(), start); !errors.Is(err, domain.ErrLeaseLost) {
+		t.Fatalf("second Advance = %v, want %v", err, domain.ErrLeaseLost)
+	}
+
+	steps, err := l.Memory.Read(context.Background(), "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	var micros int64
+	for _, s := range steps {
+		micros += s.Cost.Micros
+	}
+	if micros != 300 {
+		t.Fatalf("ledger micros = %d, want 300: two distinct charges, two records", micros)
 	}
 }

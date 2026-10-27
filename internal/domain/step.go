@@ -184,3 +184,10 @@ Not a collision to retry. Retrying rediscovers the same fact, and the write
 being refused is the point.
 */
 var ErrHeadMoved = errors.New("domain: the run moved past the step this was decided against")
+
+// ErrIdemConflict means the step's idempotency key is already on the record:
+// this exact write happened. Like ErrHeadMoved it is a statement about the
+// record, not about storage — which is why the stores wrap it rather than
+// each declaring its own, and why a caller may treat it as the write having
+// already succeeded when the key provably names one attempt.
+var ErrIdemConflict = errors.New("domain: idempotency key already recorded")

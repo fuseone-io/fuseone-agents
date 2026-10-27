@@ -22,7 +22,9 @@ var (
 	// run_steps, and it is how single-writer is enforced (PRD NF-15).
 	ErrSeqConflict = errors.New("ledger: sequence already claimed by another writer")
 	// ErrIdemConflict means the same idempotency key was already recorded.
-	ErrIdemConflict = errors.New("ledger: idempotency key already used")
+	// It wraps the domain sentinel so a consumer above the stores can match
+	// it without importing this package.
+	ErrIdemConflict = fmt.Errorf("ledger: idempotency key already used: %w", domain.ErrIdemConflict)
 
 	ErrNotFound = domain.ErrRunNotFound
 )
