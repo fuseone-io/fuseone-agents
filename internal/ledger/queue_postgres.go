@@ -114,9 +114,11 @@ func (p *Postgres) claim(
 // claimed over — or released — changes nothing and reports ErrLeaseLost, so
 // the caller knows to abandon the turn rather than keep acting on the run.
 func (p *Postgres) Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error {
+	// clock_timestamp(), not now(): a renewal that waited on the row lock
+	// must judge liveness at the moment it finally runs, not at its start.
 	tag, err := p.pool.Exec(ctx, `
 		update runs set leased_until = $3
-		where run_id = $1 and lease_epoch = $2 and leased_until > now()`,
+		where run_id = $1 and lease_epoch = $2 and leased_until > clock_timestamp()`,
 		string(runID), epoch, time.Now().Add(lease))
 	if err != nil {
 		return fmt.Errorf("renew lease: %w", err)
@@ -216,7 +218,7 @@ func (p *Postgres) Fence(
 	var headKind *string
 	err := p.pool.QueryRow(ctx, `
 		select r.lease_epoch,
-		       r.leased_until is not null and r.leased_until > now(),
+		       r.leased_until is not null and r.leased_until > clock_timestamp(),
 		       h.seq, h.kind
 		from runs r
 		left join lateral (

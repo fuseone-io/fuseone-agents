@@ -2742,3 +2742,67 @@ func TestPostgresAppend_claimCommittingMidAppend_staleWriteIsFenced(t *testing.T
 		t.Fatalf("run has %d steps, want 1: the stale write landed", steps)
 	}
 }
+
+func TestPostgresAppend_leaseExpiresWhileWaitingForTheLock_staleWriteIsFenced(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	requireDatabase(t, dsn)
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL is unset; skipping the Postgres implementation")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := ledger.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `truncate run_steps, runs`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	store := ledger.NewPostgres(pool)
+	mustAppend(t, store, startedAt("run-1", time.Now()))
+	held, err := store.Claim(ctx, "w1", 400*time.Millisecond)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	// The append begins while the lease is alive, then waits out its whole
+	// remaining life on the ledger's lock. A liveness check frozen at the
+	// transaction's start answers for a moment that is long gone by the time
+	// the write happens.
+	lockTx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin lock holder: %v", err)
+	}
+	defer func() { _ = lockTx.Rollback(ctx) }()
+	if _, err := lockTx.Exec(ctx,
+		`select pg_advisory_xact_lock(hashtextextended('run-1', 0))`); err != nil {
+		t.Fatalf("hold ledger lock: %v", err)
+	}
+
+	appended := make(chan error, 1)
+	go func() {
+		_, err := store.AppendIfLeaseAndHead(ctx, held.Epoch,
+			domain.StepRef{Seq: 1, Kind: domain.StepRunStarted},
+			step("run-1", domain.StepPlanned))
+		appended <- err
+	}()
+
+	// Long enough that the lease is dead beyond doubt before the lock frees.
+	time.Sleep(700 * time.Millisecond)
+	select {
+	case err := <-appended:
+		t.Fatalf("append answered (%v) without waiting for the ledger lock", err)
+	default:
+	}
+	if err := lockTx.Rollback(ctx); err != nil {
+		t.Fatalf("release ledger lock: %v", err)
+	}
+
+	if err := <-appended; !errors.Is(err, domain.ErrLeaseLost) {
+		t.Fatalf("append after the lease died in the queue = %v, want %v", err, domain.ErrLeaseLost)
+	}
+}

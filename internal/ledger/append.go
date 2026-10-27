@@ -54,11 +54,15 @@ func (p *Postgres) appendOnce(
 	// read resolves against the pre-claim snapshot and lets the stale write
 	// through. The lease must also still be live: past leased_until,
 	// exclusivity cannot be proven, however unchanged the epoch looks.
+	// clock_timestamp(), not now(): now() is frozen at the transaction's
+	// start, and this transaction may have spent the lease's whole remaining
+	// life waiting for the locks above — liveness is a fact about the moment
+	// after they were acquired.
 	if epoch != nil {
 		var current int64
 		var live bool
 		err := tx.QueryRow(ctx, `
-			select lease_epoch, leased_until is not null and leased_until > now()
+			select lease_epoch, leased_until is not null and leased_until > clock_timestamp()
 			from runs where run_id = $1
 			for update`, string(s.RunID),
 		).Scan(&current, &live)
