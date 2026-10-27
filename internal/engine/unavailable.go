@@ -80,7 +80,10 @@ func (r *Runner) unavailableTools(
 		case owned && !live:
 			implicated[server] = append(implicated[server], id)
 		case !owned && !described:
-			if prefix := id.Server(); prefix != "" {
+			// Only a dead prefix implicates: a live server that stopped
+			// offering the tool after a re-list made a decision, and an
+			// outage claim about it would park the run for ever.
+			if prefix := id.Server(); prefix != "" && !r.deps.Connections.Connected(prefix) {
 				implicated[prefix] = append(implicated[prefix], id)
 			}
 		}

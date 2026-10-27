@@ -247,6 +247,10 @@ type Servers interface {
 // called "sql" — so anything outside the MCP catalogue is owned by nobody.
 type Connections interface {
 	Session(id domain.ToolID) (server string, live, owned bool)
+	// Connected reports liveness by name, for a tool nobody owns any more:
+	// its prefix is the one signal left, and a live server that merely
+	// stopped offering the tool is a decision, not an outage.
+	Connected(server string) bool
 }
 
 // DedupeStore coordinates semantic effect idempotency across runs of the same

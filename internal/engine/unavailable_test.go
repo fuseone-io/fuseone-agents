@@ -47,6 +47,8 @@ func (h holding) Session(id domain.ToolID) (string, bool, bool) {
 	return server, h.live[server], owned
 }
 
+func (h holding) Connected(server string) bool { return h.live[server] }
+
 // crmHeld registers the three crm envelope tools under the crm server.
 func crmHeld(live bool) holding {
 	return holding{
@@ -356,4 +358,39 @@ type spendingPlanner struct{ err *SpentPlanError }
 
 func (p *spendingPlanner) Plan(context.Context, PlanInput) (Proposal, error) {
 	return Proposal{}, p.err
+}
+
+// A live server that merely stopped offering a tool after a re-list is the
+// Curator's — or the server's — decision: the entry is gone, so nobody owns
+// the ID, but the prefix's server is alive and answering. Parking that as a
+// disconnection would hold the run for ever over an evolution (#150 round 4).
+func TestPlan_aLiveServerThatStoppedOfferingATool_isANoteNotAnOutage(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	planner := &capturingPlanner{}
+	servers := &expecting{servers: map[string]bool{"crm": true}}
+	h.runner.deps.Planner = planner
+	h.runner.deps.Schemas = describing{"crm.lookup": true, "crm.note": true}
+	// refund's entry is gone from the re-listed catalogue — owned by nobody —
+	// while the crm session is alive.
+	h.runner.deps.Connections = holding{
+		owner: map[domain.ToolID]string{"crm.lookup": "crm", "crm.note": "crm"},
+		live:  map[string]bool{"crm": true},
+	}
+	h.runner.deps.Servers = servers
+
+	if _, err := h.runner.Advance(context.Background(), h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if len(planner.inputs) == 0 {
+		t.Fatal("the model was never called")
+	}
+	got := planner.inputs[0].Unavailable
+	if len(got) != 1 || got[0] != "crm.refund" {
+		t.Errorf("Unavailable = %v, want the dropped tool as a note", got)
+	}
+	if servers.asks != 0 {
+		t.Errorf("settings were read %d times for a live server", servers.asks)
+	}
 }
