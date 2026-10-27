@@ -25,6 +25,34 @@ field" is a commit message.
 
 ---
 
+## [0.72.0] — 2026-10-27
+
+### Fixed
+
+- **A run no longer plans silently without the tools its worker cannot
+  offer.** A worker whose MCP session died used to plan runs as if the
+  agent had never been given those tools: the model could not propose
+  them, the Gate saw nothing, and the run finished "clean" having been
+  unable to do its work — intermittently, depending on which worker
+  claimed the run. Now a turn whose envelope needs a server that is
+  configured, enabled and not connected on the claiming worker refuses to
+  run before any model call is paid for, backs off, and parks as "tool
+  server unavailable" — naming the server — only if the outage outlives
+  the retries; a reconnection resumes it on the next attempt. A tool
+  absent for any deliberate reason — server removed or disabled, tool
+  taken off the surface — keeps the run going, with the model told
+  plainly which pack tools are not available and the trail recording the
+  same list on the planning step. Native connector tools are never read
+  as MCP tools, even under an exactly colliding name.
+- **The exhausted-budget banner no longer outlives the budget it measured.**
+  A ceiling raised after a crossing kept its old "spent the budget" banner
+  on the cost screen indefinitely, reporting an amount nobody configured
+  any more — and suppressed the new ceiling's own warnings for the rest of
+  the window. An alert is now served only while the window, the amount and
+  the budget it froze are still the configured ones, a changed ceiling
+  starts the 50/80/100% warnings again, and the banner says which window
+  it measures: today's budget or this month's.
+
 ## [0.71.0] — 2026-10-27
 
 ### Added
