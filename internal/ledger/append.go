@@ -49,28 +49,34 @@ func (p *Postgres) appendOnce(
 	// a worker fenced out has lost the run whole, and the claim that fenced
 	// it only touches the runs row — the head may not have moved at all.
 	//
-	// FOR UPDATE shares the row lock the claim takes, so a claim committing
-	// while this append is in flight is waited for and then seen — a plain
-	// read resolves against the pre-claim snapshot and lets the stale write
-	// through. The lease must also still be live: past leased_until,
-	// exclusivity cannot be proven, however unchanged the epoch looks.
-	// clock_timestamp(), not now(): now() is frozen at the transaction's
-	// start, and this transaction may have spent the lease's whole remaining
-	// life waiting for the locks above — liveness is a fact about the moment
-	// after they were acquired.
+	// The lease check is two statements on purpose. The first takes the row
+	// lock every claim shares — FOR UPDATE — so a claim committing while this
+	// append is in flight is waited for and then seen. The second, issued
+	// only once that lock is already ours, judges liveness: a volatile clock
+	// inside the locking statement is evaluated before the wait, and a lock
+	// holder that modified nothing triggers no re-check on its way out — so
+	// one statement can answer for a moment the lease did not survive.
 	if epoch != nil {
 		var current int64
-		var live bool
 		err := tx.QueryRow(ctx, `
-			select lease_epoch, leased_until is not null and leased_until > clock_timestamp()
-			from runs where run_id = $1
+			select lease_epoch from runs where run_id = $1
 			for update`, string(s.RunID),
-		).Scan(&current, &live)
-		if errors.Is(err, pgx.ErrNoRows) || (err == nil && (current != *epoch || !live)) {
+		).Scan(&current)
+		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Step{}, domain.ErrLeaseLost
 		}
 		if err != nil {
 			return domain.Step{}, fmt.Errorf("read lease epoch: %w", err)
+		}
+		var live bool
+		if err := tx.QueryRow(ctx, `
+			select leased_until is not null and leased_until > clock_timestamp()
+			from runs where run_id = $1`, string(s.RunID),
+		).Scan(&live); err != nil {
+			return domain.Step{}, fmt.Errorf("judge lease liveness: %w", err)
+		}
+		if current != *epoch || !live {
+			return domain.Step{}, domain.ErrLeaseLost
 		}
 	}
 
