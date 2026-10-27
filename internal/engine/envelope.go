@@ -79,6 +79,13 @@ func withoutTool(pack gate.Pack, remove domain.ToolID) gate.Pack {
 func StepAt(start Start, called []domain.ToolID) int {
 	at := 0
 	for _, tool := range called {
+		// A platform tool is an ambient capability — memory, context, the
+		// ticket answer — whatever step it was anchored in. Using one is not
+		// evidence the run did that step's work, and advancing on it closed
+		// every earlier step over a memory lookup (#152).
+		if tool.PlatformOwned() {
+			continue
+		}
 		if i, ok := stepOf(start.Steps, tool); ok && i > at {
 			at = i
 		}

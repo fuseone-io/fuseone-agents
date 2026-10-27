@@ -65,6 +65,30 @@ func TestEnvelopeOf_aToolInNoStep_isReachableNowhere(t *testing.T) {
 	}
 }
 
+func TestStepAt_aPlatformToolAnchoredInALateStep_doesNotAdvanceTheRun(t *testing.T) {
+	t.Parallel()
+
+	// The outage that was not one (#152): an author listed a platform tool in
+	// a late step, the model consulted memory as its opening move, and the run
+	// jumped past every earlier step — their tools gone with no park and no
+	// note, because the narrowing was "legitimate" forward movement. A
+	// platform tool is an ambient capability; using one is not evidence the
+	// run did that step's work.
+	start := Start{Steps: []Envelope{
+		{Name: "um", Reaches: []domain.ToolID{"lookup"}},
+		{Name: "dois", Reaches: []domain.ToolID{"reply"}},
+		{Name: "tres", Reaches: []domain.ToolID{domain.ToolMemoryFind}},
+	}}
+
+	called := []domain.ToolID{domain.ToolMemoryFind}
+	if at := StepAt(start, called); at != 0 {
+		t.Errorf("StepAt = %d, want 0: a memory lookup is not step work", at)
+	}
+	if !envelopeOf(start, called).Allows("lookup") {
+		t.Error("the first step closed because the run consulted memory")
+	}
+}
+
 func TestEnvelopeForState_memorySuggestRequiresLearningPolicy(t *testing.T) {
 	t.Parallel()
 
