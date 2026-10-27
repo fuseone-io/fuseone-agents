@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -39,6 +40,14 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	w.metrics.Claim("claimed")
 
 	log = log.With("run", claim.RunID, "agent", claim.AgentID)
+
+	// Everything the turn does runs under a context fenced by the lease.
+	// Losing the lease cancels in-flight planning and tool calls, so a worker
+	// suspended past its lease stops acting the moment it finds out, rather
+	// than racing the successor that owns the run now. Renewal alone would
+	// not cover that worker: it wakes up with the lease already gone.
+	ctx, stopRenewing := w.keepLease(ctx, claim)
+	defer stopRenewing()
 
 	resolved, err := w.specs.Resolve(ctx, claim.AgentID, claim.VersionID)
 	if err == nil && resolved.Planner == nil {
@@ -94,6 +103,13 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	deps.Planner = resolved.Planner
 	deps.Metrics = w.metrics
 	status, advErr := engine.NewRunner(deps).Advance(ctx, start)
+	if errors.Is(context.Cause(ctx), domain.ErrLeaseLost) {
+		// Nothing here is this worker's to record any more — no park, no
+		// failure count, no release. The successor's turn owns the run's story.
+		w.metrics.AdvanceFailure("lease_lost", false)
+		log.Warn("lease lost mid-turn; leaving the run to its successor")
+		return true, nil
+	}
 	if advErr != nil {
 		outcome := w.failure(claim, advErr)
 		w.metrics.AdvanceFailure(failureReasonFor(advErr), outcome.Parked)
@@ -108,6 +124,35 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	w.metrics.Advance(status.Phase.String())
 	log.Debug("advanced", "phase", status.Phase.String(), "seq", status.Seq)
 	return true, w.release(ctx, claim, domain.ClaimOutcome{})
+}
+
+// keepLease renews the claim for as long as the turn runs, at a third of the
+// lease so one missed beat is survivable. A renewal refused with ErrLeaseLost
+// cancels the returned context with that cause; any other failure waits for
+// the next tick — the lease may well still hold.
+func (w *Worker) keepLease(ctx context.Context, claim domain.Claim) (context.Context, func()) {
+	turnCtx, cancel := context.WithCancelCause(ctx)
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(w.cfg.Lease / 3)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-turnCtx.Done():
+				return
+			case <-ticker.C:
+				err := w.queue.Renew(turnCtx, claim.RunID, claim.Epoch, w.cfg.Lease)
+				if errors.Is(err, domain.ErrLeaseLost) {
+					cancel(domain.ErrLeaseLost)
+					return
+				}
+			}
+		}
+	}()
+
+	return turnCtx, func() { cancel(nil); <-done }
 }
 
 func failureReasonFor(err error) string {

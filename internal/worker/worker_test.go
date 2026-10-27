@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -664,5 +665,145 @@ func TestTurn_noCeilingConfigured_usesTheAgentsOwn(t *testing.T) {
 	}
 	if got := phaseOf(t, s.store); got == engine.PhaseParked {
 		t.Error("a run parked with no ceiling configured anywhere")
+	}
+}
+
+// --- lease fencing -----------------------------------------------------------
+
+// fencedQueue wraps the in-memory store so a test can watch renewals, force a
+// lost lease, and count releases, without reaching into the store's internals.
+type fencedQueue struct {
+	*ledger.Memory
+	renewed    chan struct{}
+	renewErr   error
+	releaseErr error
+	releases   atomic.Int32
+}
+
+func (q *fencedQueue) Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error {
+	if q.renewErr != nil {
+		return q.renewErr
+	}
+	err := q.Memory.Renew(ctx, runID, epoch, lease)
+	select {
+	case q.renewed <- struct{}{}:
+	default:
+	}
+	return err
+}
+
+func (q *fencedQueue) Release(ctx context.Context, runID domain.RunID, outcome domain.ClaimOutcome) error {
+	q.releases.Add(1)
+	if q.releaseErr != nil {
+		return q.releaseErr
+	}
+	return q.Memory.Release(ctx, runID, outcome)
+}
+
+// gatedPlanner holds the turn open until the test lets go — or the context is
+// cancelled, which it reports on sawCancel.
+type gatedPlanner struct {
+	release   chan struct{}
+	sawCancel chan struct{}
+}
+
+func (p *gatedPlanner) Plan(ctx context.Context, _ engine.PlanInput) (engine.Proposal, error) {
+	select {
+	case <-ctx.Done():
+		close(p.sawCancel)
+		return engine.Proposal{}, ctx.Err()
+	case <-p.release:
+		return engine.Proposal{Done: true, Outcome: "completed"}, nil
+	}
+}
+
+func newGatedPlanner() *gatedPlanner {
+	return &gatedPlanner{release: make(chan struct{}), sawCancel: make(chan struct{})}
+}
+
+func newFencedWorker(t *testing.T, cfg Config, planner engine.Planner, queue Queue, store *ledger.Memory) *Worker {
+	t.Helper()
+	clock := frozenClock{t: time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)}
+	deps := engine.Deps{
+		Ledger: store, Content: engine.NewMemoryContent(), Gate: gate.New(),
+		Planner: planner, Tools: noTools{}, Catalog: emptyCatalog{}, Clock: clock,
+	}
+	cfg.Owner = "test-worker"
+	return New(cfg, queue, deps, staticSpecs{planner: planner}, clock, slog.New(slog.DiscardHandler))
+}
+
+func TestTurn_outlastingTheRenewInterval_renewsTheLease(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	q := &fencedQueue{Memory: store, renewed: make(chan struct{}, 1)}
+	p := newGatedPlanner()
+	w := newFencedWorker(t, Config{Lease: 90 * time.Millisecond}, p, q, store)
+	openRun(t, store)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := w.turn(context.Background(), slog.New(slog.DiscardHandler))
+		done <- err
+	}()
+
+	select {
+	case <-q.renewed:
+		// The lease was extended while the turn was still planning: a slow
+		// turn no longer silently outlives its claim.
+	case <-time.After(5 * time.Second):
+		t.Fatal("no renewal while the turn ran past the renew interval")
+	}
+	close(p.release)
+	if err := <-done; err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+}
+
+func TestTurn_leaseLost_cancelsTheTurnAndWalksAwayQuietly(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	q := &fencedQueue{Memory: store, renewed: make(chan struct{}, 1), renewErr: domain.ErrLeaseLost}
+	p := newGatedPlanner() // nothing closes release: only a cancel can end the plan
+	w := newFencedWorker(t, Config{Lease: 60 * time.Millisecond}, p, q, store)
+	openRun(t, store)
+
+	worked, err := w.turn(context.Background(), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	if !worked {
+		t.Fatal("turn reported no work after claiming the run")
+	}
+
+	select {
+	case <-p.sawCancel:
+		// The in-flight model call was fenced: the worker that lost its lease
+		// stopped acting on the run instead of racing its successor.
+	default:
+		t.Fatal("the planner kept running after the lease was lost")
+	}
+	if got := phaseOf(t, store); got == engine.PhaseParked {
+		t.Error("a lost lease parked the run — that is the successor's story to tell")
+	}
+	if got := q.releases.Load(); got != 0 {
+		t.Errorf("releases = %d, want none: the lease is no longer this worker's to hand back", got)
+	}
+}
+
+func TestTurn_releaseFindsTheLeaseAlreadyLost_turnEndsWithoutError(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	q := &fencedQueue{Memory: store, renewed: make(chan struct{}, 1), releaseErr: domain.ErrLeaseLost}
+	s := &flakyPlanner{}
+	w := newFencedWorker(t, Config{}, s, q, store)
+	openRun(t, store)
+
+	// The turn finished, but a successor claimed the run in between: the stale
+	// outcome has nowhere to go, and that is an ending, not a worker fault.
+	if _, err := w.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("turn = %v, want a quiet ending on a lease lost at release", err)
 	}
 }

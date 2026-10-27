@@ -9,6 +9,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -105,6 +106,13 @@ func (w *Worker) release(ctx context.Context, claim domain.Claim, outcome domain
 	defer cancel()
 
 	if err := w.queue.Release(relCtx, claim.RunID, outcome); err != nil {
+		if errors.Is(err, domain.ErrLeaseLost) {
+			// The outcome has nowhere to go: a successor claimed the run after
+			// this turn's lease expired, and its turn owns the story now.
+			w.log.Warn("lease lost at release; leaving the run to its successor",
+				"run", claim.RunID)
+			return nil
+		}
 		return fmt.Errorf("release %s: %w", claim.RunID, err)
 	}
 	return nil

@@ -10,6 +10,7 @@ import (
 // simulated is the half of the queue holding the runs a simulation opened.
 type simulated interface {
 	claimSimulated(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error)
+	Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error
 	Release(ctx context.Context, runID domain.RunID, outcome domain.ClaimOutcome) error
 }
 
@@ -38,6 +39,12 @@ func (q SimulationQueue) Claim(
 	ctx context.Context, owner string, lease time.Duration,
 ) (domain.Claim, error) {
 	return q.src.claimSimulated(ctx, owner, lease)
+}
+
+func (q SimulationQueue) Renew(
+	ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration,
+) error {
+	return q.src.Renew(ctx, runID, epoch, lease)
 }
 
 func (q SimulationQueue) Release(

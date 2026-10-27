@@ -25,8 +25,12 @@ type Queue interface {
 	// Claim leases one claimable run to owner, or returns
 	// domain.ErrNoClaimableRun.
 	Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error)
+	// Renew extends a lease still held under the claim's epoch, or reports
+	// domain.ErrLeaseLost when a successor has claimed the run since.
+	Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error
 	// Release ends a lease. Progress resets the failure count; a failure
-	// schedules the next attempt and records why.
+	// schedules the next attempt and records why. A release carrying a stale
+	// epoch is refused with domain.ErrLeaseLost.
 	Release(ctx context.Context, runID domain.RunID, outcome domain.ClaimOutcome) error
 }
 
