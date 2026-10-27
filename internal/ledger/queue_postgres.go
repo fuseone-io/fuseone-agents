@@ -202,3 +202,42 @@ func outcomeFailureRetryable(outcome domain.ClaimOutcome) *bool {
 	}
 	return nil
 }
+
+// Fence answers whether the holder of epoch may still act for the run, with
+// the head (when non-zero) still where it left it. It is the synchronous
+// check made immediately before an effect leaves the process: an append can
+// be refused after the fact, an external call cannot.
+func (p *Postgres) Fence(
+	ctx context.Context, runID domain.RunID, epoch int64, head domain.StepRef,
+) error {
+	var current int64
+	var headSeq *int64
+	var headKind *string
+	err := p.pool.QueryRow(ctx, `
+		select r.lease_epoch, h.seq, h.kind
+		from runs r
+		left join lateral (
+			select seq, kind from run_steps
+			where run_id = $1 order by seq desc limit 1
+		) h on true
+		where r.run_id = $1`, string(runID),
+	).Scan(&current, &headSeq, &headKind)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrLeaseLost
+	}
+	if err != nil {
+		return fmt.Errorf("read fence: %w", err)
+	}
+
+	if current != epoch {
+		return domain.ErrLeaseLost
+	}
+	if head == (domain.StepRef{}) {
+		return nil
+	}
+	var prev *domain.Step
+	if headSeq != nil && headKind != nil {
+		prev = &domain.Step{Seq: *headSeq, Kind: domain.StepKind(*headKind)}
+	}
+	return headIs(&head, prev)
+}

@@ -37,6 +37,8 @@ type Store interface {
 	Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error)
 	Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error
 	Release(ctx context.Context, runID domain.RunID, outcome domain.ClaimOutcome) error
+	AppendIfLeaseAndHead(ctx context.Context, epoch int64, head domain.StepRef, s domain.Step) (domain.Step, error)
+	Fence(ctx context.Context, runID domain.RunID, epoch int64, head domain.StepRef) error
 	Stats(ctx context.Context, filter domain.RunFilter) (domain.RunStats, error)
 	RuntimeHealth(ctx context.Context, filter domain.RunFilter) (domain.RuntimeHealth, error)
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
@@ -430,6 +432,92 @@ func TestQueueContract(t *testing.T) {
 		}
 		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{Epoch: next.Epoch}); err != nil {
 			t.Fatalf("holder Release: %v", err)
+		}
+	})
+
+	run(t, "a stale epoch cannot append even when the head is unchanged", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		old, err := s.Claim(ctx, "w1", -time.Second)
+		if err != nil {
+			t.Fatalf("expired Claim: %v", err)
+		}
+		next, err := s.Claim(ctx, "w2", lease)
+		if err != nil {
+			t.Fatalf("successor Claim: %v", err)
+		}
+
+		// The successor has written nothing yet, so the head is exactly where
+		// the suspended worker left it — the one case a head check alone lets
+		// through. The lease epoch is what refuses it.
+		head := domain.StepRef{Seq: 1, Kind: domain.StepRunStarted}
+		stale := step("run-1", domain.StepPlanned)
+		if _, err := s.AppendIfLeaseAndHead(ctx, old.Epoch, head, stale); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("stale append = %v, want %v", err, domain.ErrLeaseLost)
+		}
+
+		// The holder writes through the same gate.
+		if _, err := s.AppendIfLeaseAndHead(ctx, next.Epoch, head, step("run-1", domain.StepPlanned)); err != nil {
+			t.Fatalf("holder append: %v", err)
+		}
+		steps, err := s.Read(ctx, "run-1", domain.FirstSeq)
+		if err != nil {
+			t.Fatalf("Read: %v", err)
+		}
+		if len(steps) != 2 {
+			t.Fatalf("ledger has %d steps, want 2: the stale append must not land", len(steps))
+		}
+	})
+
+	run(t, "a zero head fences the append on the lease alone", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		old, err := s.Claim(ctx, "w1", -time.Second)
+		if err != nil {
+			t.Fatalf("expired Claim: %v", err)
+		}
+		next, err := s.Claim(ctx, "w2", lease)
+		if err != nil {
+			t.Fatalf("successor Claim: %v", err)
+		}
+
+		// A caller that does not track the head — parking, the compensation
+		// record — still needs the lease fence.
+		if _, err := s.AppendIfLeaseAndHead(ctx, old.Epoch, domain.StepRef{}, step("run-1", domain.StepParked)); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("stale lease-only append = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		if _, err := s.AppendIfLeaseAndHead(ctx, next.Epoch, domain.StepRef{}, step("run-1", domain.StepPlanned)); err != nil {
+			t.Fatalf("holder lease-only append: %v", err)
+		}
+	})
+
+	run(t, "the fence answers before an effect leaves the process", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		old, err := s.Claim(ctx, "w1", -time.Second)
+		if err != nil {
+			t.Fatalf("expired Claim: %v", err)
+		}
+		next, err := s.Claim(ctx, "w2", lease)
+		if err != nil {
+			t.Fatalf("successor Claim: %v", err)
+		}
+
+		head := domain.StepRef{Seq: 1, Kind: domain.StepRunStarted}
+		if err := s.Fence(ctx, "run-1", old.Epoch, head); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("stale Fence = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		if err := s.Fence(ctx, "run-1", next.Epoch, head); err != nil {
+			t.Fatalf("holder Fence = %v, want the holder cleared to act", err)
+		}
+		if err := s.Fence(ctx, "run-1", next.Epoch, domain.StepRef{Seq: 7, Kind: domain.StepPlanned}); !errors.Is(err, domain.ErrHeadMoved) {
+			t.Fatalf("moved-head Fence = %v, want %v", err, domain.ErrHeadMoved)
+		}
+		if err := s.Fence(ctx, "run-1", next.Epoch, domain.StepRef{}); err != nil {
+			t.Fatalf("zero-head Fence = %v, want the lease alone to clear it", err)
 		}
 	})
 

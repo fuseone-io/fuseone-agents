@@ -32,7 +32,7 @@ func NewPostgres(pool *pgxpool.Pool) *Postgres {
 // in one transaction. The projection can never disagree with the ledger,
 // because there is no moment at which only one of them has been written.
 func (p *Postgres) Append(ctx context.Context, s domain.Step) (domain.Step, error) {
-	return p.appendChecked(ctx, nil, s)
+	return p.appendChecked(ctx, nil, nil, s)
 }
 
 /*
@@ -50,15 +50,30 @@ A refused precondition is an answer and not a collision, so it is not retried.
 func (p *Postgres) AppendIfHead(
 	ctx context.Context, head domain.StepRef, s domain.Step,
 ) (domain.Step, error) {
-	return p.appendChecked(ctx, &head, s)
+	return p.appendChecked(ctx, nil, &head, s)
+}
+
+// AppendIfLeaseAndHead seals a step only while epoch is still the run's
+// current lease — the fence a worker that acts between renewal ticks cannot
+// cross — and, when head is non-zero, only onto that head. A zero head
+// fences on the lease alone, for callers that do not track the fold: the
+// parking record, the compensation record.
+func (p *Postgres) AppendIfLeaseAndHead(
+	ctx context.Context, epoch int64, head domain.StepRef, s domain.Step,
+) (domain.Step, error) {
+	var expect *domain.StepRef
+	if head != (domain.StepRef{}) {
+		expect = &head
+	}
+	return p.appendChecked(ctx, &epoch, expect, s)
 }
 
 func (p *Postgres) appendChecked(
-	ctx context.Context, expect *domain.StepRef, s domain.Step,
+	ctx context.Context, epoch *int64, expect *domain.StepRef, s domain.Step,
 ) (domain.Step, error) {
 	var last error
 	for attempt := range appendRetries {
-		sealed, err := p.appendOnce(ctx, expect, s)
+		sealed, err := p.appendOnce(ctx, epoch, expect, s)
 		switch {
 		case err == nil:
 			return sealed, nil

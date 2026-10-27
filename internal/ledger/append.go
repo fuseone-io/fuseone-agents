@@ -23,7 +23,7 @@ projection that disagrees with the trail are the two ways this record stops
 being worth keeping (PRD AU-01, AU-02).
 */
 func (p *Postgres) appendOnce(
-	ctx context.Context, expect *domain.StepRef, s domain.Step,
+	ctx context.Context, epoch *int64, expect *domain.StepRef, s domain.Step,
 ) (domain.Step, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -43,6 +43,22 @@ func (p *Postgres) appendOnce(
 		`select pg_advisory_xact_lock(hashtextextended($1, 0))`, string(s.RunID),
 	); err != nil {
 		return domain.Step{}, fmt.Errorf("lock run: %w", err)
+	}
+
+	// The lease before the head, inside the same transaction as the write:
+	// a worker fenced out has lost the run whole, and the claim that fenced
+	// it only touches the runs row — the head may not have moved at all.
+	if epoch != nil {
+		var current int64
+		err := tx.QueryRow(ctx,
+			`select lease_epoch from runs where run_id = $1`, string(s.RunID),
+		).Scan(&current)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && current != *epoch) {
+			return domain.Step{}, domain.ErrLeaseLost
+		}
+		if err != nil {
+			return domain.Step{}, fmt.Errorf("read lease epoch: %w", err)
+		}
 	}
 
 	prev, err := headTx(ctx, tx, s.RunID)
