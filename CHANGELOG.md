@@ -25,6 +25,21 @@ field" is a commit message.
 
 ---
 
+## [0.73.0] — 2026-10-27
+
+### Fixed
+
+- **The trail now says which model actually answered.** A gateway that
+  reroutes a call — a fallback policy serving a different model than the
+  one requested — was invisible: the planning step recorded only the
+  requested model, and every cost figure was priced at its rate. The step
+  now records the served model whenever the provider reports a different
+  one, the trail reads "Requested X, but the provider served Y", FinOps
+  attributes the spend to the model that produced it, and the call is
+  billed at the served model's configured rate — falling back to the
+  requested model's rate rather than zero when the served name has none.
+  Failed-but-billed calls carry the same record.
+
 ## [0.72.0] — 2026-10-27
 
 ### Fixed
