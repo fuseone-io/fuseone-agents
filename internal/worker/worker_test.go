@@ -1230,3 +1230,58 @@ func TestConfigWithDefaults_tinyLease_isRaisedToAFloorTheGuardCanBeat(t *testing
 		t.Fatalf("Lease = %v, want at least the 30ms floor", cfg.Lease)
 	}
 }
+
+// countingBlackholeQueue hangs every renewal for ever, counting how many were
+// ever started: the resource bill of a store that ignores its context.
+type countingBlackholeQueue struct {
+	*ledger.Memory
+	started atomic.Int32
+	stuck   chan struct{}
+}
+
+func (q *countingBlackholeQueue) Renew(context.Context, domain.RunID, int64, time.Duration) error {
+	q.started.Add(1)
+	<-q.stuck
+	return nil
+}
+
+func TestTurn_continuousBlackhole_orphanRenewalsAreBoundedAcrossTurns(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	q := &countingBlackholeQueue{Memory: store, stuck: make(chan struct{})}
+	defer close(q.stuck)
+	w := newFencedWorker(t, Config{Concurrency: 1, Lease: 40 * time.Millisecond}, nil, q, store)
+
+	// Five turns against a store that never answers. Every started call is a
+	// goroutine pinned until the store returns — unbounded, that is a leak
+	// that grows with every turn the pool survives.
+	for range 5 {
+		openRun(t, store)
+		p := newGatedPlanner()
+		w.deps.Planner = p
+		w.specs = staticSpecs{planner: p}
+
+		done := make(chan error, 1)
+		go func() {
+			_, err := w.turn(context.Background(), slog.New(slog.DiscardHandler))
+			done <- err
+		}()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatalf("turn: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("a turn against the blackhole never ended")
+		}
+		// Let the lease die so the next turn can claim the run again.
+		time.Sleep(60 * time.Millisecond)
+	}
+
+	// With one slot per concurrency lane (doubled for headroom), the pinned
+	// calls cannot exceed the pool's budget, however many turns run.
+	if got := q.started.Load(); got > 2 {
+		t.Fatalf("renewals started = %d, want at most 2: every one is a goroutine pinned for ever", got)
+	}
+}

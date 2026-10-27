@@ -143,6 +143,12 @@ type Worker struct {
 	// metrics is optional. The ledger remains the diagnostic record; metrics
 	// only say whether this pool is moving.
 	metrics *PoolMetrics
+
+	// renewSlots bounds the renewal calls in flight across the whole pool. A
+	// store that ignores its context pins a goroutine until it returns; the
+	// semaphore caps what a continuous blackhole can pin to the pool's
+	// budget instead of two goroutines per turn for ever.
+	renewSlots chan struct{}
 }
 
 // WithUndos wires the Curator's ruling on what compensates what.
@@ -174,7 +180,12 @@ func New(cfg Config, queue Queue, deps engine.Deps, specs Specs, clock engine.Cl
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Worker{cfg: cfg, queue: queue, deps: deps, specs: specs, clock: clock, log: log}
+	return &Worker{
+		cfg: cfg, queue: queue, deps: deps, specs: specs, clock: clock, log: log,
+		// Twice the lanes: every healthy lane renews, with headroom so two
+		// overlapping fast calls never read as starvation.
+		renewSlots: make(chan struct{}, 2*cfg.Concurrency),
+	}
 }
 
 // Run advances claimed runs until ctx is cancelled.

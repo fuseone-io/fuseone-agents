@@ -146,6 +146,10 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	return true, w.release(ctx, claim, domain.ClaimOutcome{})
 }
 
+// errRenewStarved means every renewal slot in the pool is pinned by a call
+// that never returned: no new proof can even be attempted.
+var errRenewStarved = errors.New("worker: all renewal slots pinned by unanswered calls")
+
 /*
 keepLease renews the claim for as long as the turn runs, at a third of the
 lease so one missed beat is survivable, and cancels the returned context the
@@ -179,23 +183,33 @@ func (w *Worker) keepLease(ctx context.Context, claim domain.Claim) (context.Con
 			case <-turnCtx.Done():
 				return
 			case <-ticker.C:
-				renewCtx, stop := context.WithTimeout(turnCtx, interval)
-				// The call gets a goroutine of its own: a store that ignores
-				// its context traps at most this one call, never the ticker —
-				// a blackhole that recovers must find the asker still asking.
-				// The buffered channel lets a late answer be dropped instead
-				// of pinning the goroutine for ever.
-				answer := make(chan error, 1)
-				go func() {
-					answer <- w.queue.Renew(renewCtx, claim.RunID, claim.Epoch, w.cfg.Lease)
-				}()
 				var err error
 				select {
-				case err = <-answer:
-				case <-renewCtx.Done():
-					err = renewCtx.Err()
+				case w.renewSlots <- struct{}{}:
+					renewCtx, stop := context.WithTimeout(turnCtx, interval)
+					// The call gets a goroutine of its own: a store that
+					// ignores its context traps at most this one call, never
+					// the ticker — a blackhole that recovers must find the
+					// asker still asking. The buffered channel lets a late
+					// answer be dropped, and the slot is held exactly as long
+					// as the store holds the goroutine.
+					answer := make(chan error, 1)
+					go func() {
+						defer func() { <-w.renewSlots }()
+						answer <- w.queue.Renew(renewCtx, claim.RunID, claim.Epoch, w.cfg.Lease)
+					}()
+					select {
+					case err = <-answer:
+					case <-renewCtx.Done():
+						err = renewCtx.Err()
+					}
+					stop()
+				default:
+					// Every slot is pinned by a renewal that never returned.
+					// Spawning more would grow the leak without proving the
+					// lease; a starved tick is a failed proof like any other.
+					err = errRenewStarved
 				}
-				stop()
 				select {
 				case results <- err:
 				case <-turnCtx.Done():
