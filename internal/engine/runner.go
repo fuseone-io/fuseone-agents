@@ -277,7 +277,17 @@ func (r *Runner) append(ctx context.Context, state State, start Start, s domain.
 	s.OnBehalfOf = start.OnBehalfOf
 	s.At = r.deps.Clock.Now()
 
-	sealed, err := r.deps.Ledger.Append(ctx, s)
+	// Conditional on the head this turn folded: a run that moved in between —
+	// a successor worker, an approval, an abandonment — refuses the write with
+	// ErrHeadMoved rather than sealing a stale decision onto it (NF-15). Only
+	// the opening step has no head to condition on.
+	append := func() (domain.Step, error) {
+		if state.Seq < domain.FirstSeq {
+			return r.deps.Ledger.Append(ctx, s)
+		}
+		return r.deps.Ledger.AppendIfHead(ctx, state.Head, s)
+	}
+	sealed, err := append()
 	if err != nil {
 		return State{}, fmt.Errorf("engine: append %s: %w", s.Kind, err)
 	}

@@ -110,6 +110,15 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 		log.Warn("lease lost mid-turn; leaving the run to its successor")
 		return true, nil
 	}
+	if errors.Is(advErr, domain.ErrHeadMoved) {
+		// The run moved under this turn — a successor worker, an approval, an
+		// abandonment. The decision this turn made went stale, not wrong: no
+		// park, no failure count, just hand the lease back and let whoever
+		// claims it next fold the run as it stands now.
+		w.metrics.AdvanceFailure("head_moved", false)
+		log.Warn("the run moved under the turn; standing down")
+		return true, w.release(ctx, claim, domain.ClaimOutcome{})
+	}
 	if advErr != nil {
 		outcome := w.failure(claim, advErr)
 		w.metrics.AdvanceFailure(failureReasonFor(advErr), outcome.Parked)

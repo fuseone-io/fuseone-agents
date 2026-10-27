@@ -701,13 +701,19 @@ func (q *fencedQueue) Release(ctx context.Context, runID domain.RunID, outcome d
 }
 
 // gatedPlanner holds the turn open until the test lets go — or the context is
-// cancelled, which it reports on sawCancel.
+// cancelled, which it reports on sawCancel. It announces on entered that the
+// turn has folded the run and is now planning.
 type gatedPlanner struct {
+	entered   chan struct{}
 	release   chan struct{}
 	sawCancel chan struct{}
 }
 
 func (p *gatedPlanner) Plan(ctx context.Context, _ engine.PlanInput) (engine.Proposal, error) {
+	select {
+	case p.entered <- struct{}{}:
+	default:
+	}
 	select {
 	case <-ctx.Done():
 		close(p.sawCancel)
@@ -718,7 +724,11 @@ func (p *gatedPlanner) Plan(ctx context.Context, _ engine.PlanInput) (engine.Pro
 }
 
 func newGatedPlanner() *gatedPlanner {
-	return &gatedPlanner{release: make(chan struct{}), sawCancel: make(chan struct{})}
+	return &gatedPlanner{
+		entered:   make(chan struct{}, 1),
+		release:   make(chan struct{}),
+		sawCancel: make(chan struct{}),
+	}
 }
 
 func newFencedWorker(t *testing.T, cfg Config, planner engine.Planner, queue Queue, store *ledger.Memory) *Worker {
@@ -805,5 +815,65 @@ func TestTurn_releaseFindsTheLeaseAlreadyLost_turnEndsWithoutError(t *testing.T)
 	// outcome has nowhere to go, and that is an ending, not a worker fault.
 	if _, err := w.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil {
 		t.Fatalf("turn = %v, want a quiet ending on a lease lost at release", err)
+	}
+}
+
+func TestTurn_runMovesUnderTheTurn_staleAppendIsRefusedAndNothingParks(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	q := &fencedQueue{Memory: store, renewed: make(chan struct{}, 1)}
+	p := newGatedPlanner()
+	w := newFencedWorker(t, Config{Lease: time.Minute}, p, q, store)
+	openRun(t, store)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := w.turn(context.Background(), slog.New(slog.DiscardHandler))
+		done <- err
+	}()
+
+	select {
+	case <-p.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the turn never reached planning")
+	}
+	// The run moves while this turn is still planning: a successor worker —
+	// one this worker's next renewal would have discovered — already appended
+	// its own turn. The suspended worker's append must be refused, because
+	// renewal alone cannot fence a worker that acts before its next tick.
+	if _, err := store.Append(context.Background(), domain.Step{
+		RunID: "run-1", Kind: domain.StepPlanned,
+		Scope:   domain.Scope{Company: "acme", Area: "cx"},
+		AgentID: "triage", At: time.Now(), Payload: []byte(`{"node":"successor"}`),
+	}); err != nil {
+		t.Fatalf("successor append: %v", err)
+	}
+	close(p.release)
+
+	if err := <-done; err != nil {
+		t.Fatalf("turn = %v, want a quiet stand-down when the run moved on", err)
+	}
+
+	steps, err := store.Read(context.Background(), "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	// run_started plus the successor's step — and nothing sealed on top by the
+	// worker whose decision went stale.
+	if len(steps) != 2 {
+		t.Fatalf("ledger has %d steps, want 2: the stale turn appended %v", len(steps), steps[2:])
+	}
+	if got := phaseOf(t, store); got == engine.PhaseParked {
+		t.Error("a stale turn parked the run — that is the live run's story, not this worker's")
+	}
+	// And the lease was handed back clean: going stale is not a failure of the
+	// run, so it must be claimable right away with no attempt counted.
+	next, err := store.Claim(context.Background(), "w2", time.Minute)
+	if err != nil {
+		t.Fatalf("Claim after the stand-down = %v, want the run back immediately", err)
+	}
+	if next.Attempts != 0 {
+		t.Errorf("attempts = %d, want 0 — a stale turn is not a failure", next.Attempts)
 	}
 }
