@@ -25,6 +25,19 @@ field" is a commit message.
 
 ---
 
+## [0.71.0] — 2026-10-27
+
+### Added
+
+- **A provider can declare the models that must run under tool_choice
+  "auto".** The platform learns this downgrade from a refusal — but a
+  gateway with fallback routing swallows the refusal and silently serves
+  every call with another model, at that model's price. The provider screen
+  now takes the list directly (one per line, Anthropic-protocol providers
+  only); declared models run under "auto" from the first call, with the
+  same free-text guard, surviving restarts, and an edit reaches already-
+  running workers within the configuration refresh.
+
 ## [0.70.0] — 2026-10-27
 
 ### Upgrade notes
