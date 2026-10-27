@@ -49,7 +49,9 @@ const KEPT: Record<TrailFilter, (step: Step) => boolean> = {
   tools: (step) =>
     step.kind === "tool_called" ||
     step.kind === "tool_returned" ||
-    step.kind === "effect_reconciled",
+    step.kind === "effect_reconciled" ||
+    step.kind === "compensation_started" ||
+    step.kind === "compensated",
   policy: (step) =>
     step.kind === "gate_decided" ||
     step.kind === "approval_requested" ||

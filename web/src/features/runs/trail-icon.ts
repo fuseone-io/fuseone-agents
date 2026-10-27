@@ -51,6 +51,7 @@ const ICONS: Record<StepKind, LucideIcon> = {
   approval_decided: UserRoundCheck,
   resumed: PlayCircle,
   abandoned: CircleSlash,
+  compensation_started: Undo2,
   compensated: Undo2,
   failed: TriangleAlert,
   parked: ShieldAlert,
@@ -88,6 +89,8 @@ export function tileOf(
   if (live) return { icon, tone: "live" };
   switch (step.kind) {
     case "approval_requested":
+      return { icon, tone: "escalate" };
+    case "compensation_started":
       return { icon, tone: "escalate" };
     case "abandoned":
     case "failed":
