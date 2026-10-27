@@ -435,7 +435,9 @@ describe("a planned turn that could not offer part of the pack", () => {
 describe("a planned turn after the run moved past a step", () => {
   // The envelope narrowed because the run advanced, not because anything
   // broke — and a narrowing nothing narrates reads exactly like an outage
-  // to the operator tracing missing tools (#152).
+  // to the operator tracing missing tools (#152). The fixture carries a
+  // model substitution and a prompt composition too, so the movement is
+  // proven to outrank both, not merely to render when it is alone.
   it("says which step the run is at and which tools are behind it", () => {
     const line = detailOf({
       seq: 8,
@@ -445,6 +447,7 @@ describe("a planned turn after the run moved past a step", () => {
       payload: {
         node: "Aprofundar IP",
         model: "opus-5-5",
+        servedModel: "opus-5",
         prompt: { unit: "content_bytes", total: 4096, instructions: 512 },
         closedTools: ["grafana.list_datasources"],
       },
