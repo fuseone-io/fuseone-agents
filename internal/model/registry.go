@@ -106,6 +106,7 @@ func (r *Registry) SetConfigured(ps []Provider, claimed ...string) {
 	for _, p := range ps {
 		p.Prices = clonePriceMap(p.Prices)
 		p.Models = slices.Clone(p.Models)
+		p.AutoToolChoiceModels = slices.Clone(p.AutoToolChoiceModels)
 		if before, held := r.providers[p.Name]; !held || !sameProvider(before, p) {
 			changed = true
 		}
@@ -134,6 +135,7 @@ func sameProvider(a, b Provider) bool {
 		a.SupportsReasoningEffort == b.SupportsReasoningEffort &&
 		a.ReportsCachedTokens == b.ReportsCachedTokens &&
 		slices.Equal(a.Models, b.Models) &&
+		slices.Equal(a.AutoToolChoiceModels, b.AutoToolChoiceModels) &&
 		maps.Equal(a.Headers, b.Headers) &&
 		maps.Equal(a.Prices, b.Prices)
 }

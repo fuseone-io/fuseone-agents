@@ -478,3 +478,56 @@ func TestMarketPriceFor_aliasWithCanonicalSuffix_inheritsTheReference(t *testing
 		})
 	}
 }
+
+func TestSetConfigured_anEditedDeclaredAutoList_movesTheRevision(t *testing.T) {
+	t.Parallel()
+	registry := model.NewRegistry(nil)
+
+	base := model.Provider{
+		Name: "litellm", Kind: model.KindAnthropic, BaseURL: "https://a.internal",
+	}
+	registry.SetConfigured([]model.Provider{base})
+	before := registry.Revision()
+
+	// The operator declares the downgrade on the screen. A revision that does
+	// not move leaves every warmed planner on "any" — which is exactly the
+	// silent-fallback behaviour the declaration exists to end.
+	declared := base
+	declared.AutoToolChoiceModels = []string{"anthropic-claude-opus-5-5"}
+	registry.SetConfigured([]model.Provider{declared})
+	if registry.Revision() == before {
+		t.Fatal("declaring auto-tool-choice models did not move the revision; cached planners keep the old mode")
+	}
+
+	// And withdrawing it must not leave them stuck on "auto" either.
+	atDeclared := registry.Revision()
+	registry.SetConfigured([]model.Provider{base})
+	if registry.Revision() == atDeclared {
+		t.Error("withdrawing the declaration did not move the revision")
+	}
+}
+
+func TestSetConfigured_aCallerReusingItsDeclarationBuffer_cannotAliasTheStoredOne(t *testing.T) {
+	t.Parallel()
+	registry := model.NewRegistry(nil)
+
+	buffer := []string{"anthropic-claude-opus-5-5"}
+	registry.SetConfigured([]model.Provider{{
+		Name: "litellm", Kind: model.KindAnthropic, BaseURL: "https://a.internal",
+		AutoToolChoiceModels: buffer,
+	}})
+
+	// The caller reuses its buffer, as the thirty-second refresh loop may.
+	// If the registry aliased it, the stored copy mutates in lockstep and the
+	// next pass compares the new value against itself: no revision, stale
+	// planners, and nobody changed anything on purpose.
+	buffer[0] = "anthropic-claude-sonnet-5"
+	before := registry.Revision()
+	registry.SetConfigured([]model.Provider{{
+		Name: "litellm", Kind: model.KindAnthropic, BaseURL: "https://a.internal",
+		AutoToolChoiceModels: buffer,
+	}})
+	if registry.Revision() == before {
+		t.Fatal("the stored declaration aliased the caller's buffer; the edit moved nothing")
+	}
+}
