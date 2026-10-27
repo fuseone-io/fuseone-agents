@@ -41,6 +41,11 @@ type Deps struct {
 	// Servers tells a missing tool's server apart from a removed one. Nil
 	// means nothing is expected, and a missing tool is only reported.
 	Servers Servers
+	// Connections is which servers this worker holds a live session to.
+	// Parking needs it and Servers both: outage means configured, enabled
+	// and not connected. Nil means connection state is unknown, and no turn
+	// is refused over it.
+	Connections Connections
 }
 
 // maxConsecutiveBlocks bounds how long the platform argues with a planner that

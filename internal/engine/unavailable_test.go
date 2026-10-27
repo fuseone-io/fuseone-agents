@@ -35,6 +35,11 @@ func (e *expecting) Expected(_ context.Context, server string) (bool, error) {
 	return e.servers[server], nil
 }
 
+// holding answers which servers this worker holds a live session to.
+type holding map[string]bool
+
+func (h holding) Connected(server string) bool { return h[server] }
+
 // capturingPlanner records every PlanInput and finishes the run.
 type capturingPlanner struct {
 	inputs []PlanInput
@@ -52,6 +57,7 @@ func TestPlan_aPackToolWhoseExpectedServerIsGone_failsRetryableBeforeTheModel(t 
 	planner := &capturingPlanner{}
 	h.runner.deps.Planner = planner
 	h.runner.deps.Schemas = describing{"crm.lookup": true, "crm.note": true}
+	h.runner.deps.Connections = holding{}
 	h.runner.deps.Servers = &expecting{servers: map[string]bool{"crm": true}}
 
 	_, err := h.runner.Advance(context.Background(), h.start(t, generousBudget()))
@@ -66,6 +72,11 @@ func TestPlan_aPackToolWhoseExpectedServerIsGone_failsRetryableBeforeTheModel(t 
 	summary := unavailable.Summary()
 	if summary.Code != CodeToolServerUnavailable || !summary.Retryable {
 		t.Errorf("summary = %+v, want retryable %s", summary, CodeToolServerUnavailable)
+	}
+	// The parked payload keeps the summary and drops the error text, so the
+	// server must ride in it or the park names nobody.
+	if summary.Provider != "crm" {
+		t.Errorf("summary.Provider = %q, want the server the park is about", summary.Provider)
 	}
 	if len(planner.inputs) != 0 {
 		t.Errorf("the model was called %d times; a toolless turn must spend nothing", len(planner.inputs))
@@ -82,6 +93,7 @@ func TestPlan_aPackToolOfARemovedServer_isNamedToTheModelAndRecorded(t *testing.
 	// Nothing expects the server: it was removed or disabled on purpose, so
 	// the run proceeds — but saying so, instead of leaving the model to
 	// improvise an explanation.
+	h.runner.deps.Connections = holding{}
 	h.runner.deps.Servers = &expecting{servers: map[string]bool{}}
 
 	if _, err := h.runner.Advance(context.Background(), h.start(t, generousBudget())); err != nil {
@@ -113,6 +125,7 @@ func TestPlan_nothingMissing_neverAsksWhichServersAreExpected(t *testing.T) {
 	servers := &expecting{servers: map[string]bool{"crm": true}}
 	h.runner.deps.Planner = planner
 	h.runner.deps.Schemas = describing{"crm.lookup": true, "crm.note": true, "crm.refund": true}
+	h.runner.deps.Connections = holding{"crm": true}
 	h.runner.deps.Servers = servers
 
 	if _, err := h.runner.Advance(context.Background(), h.start(t, generousBudget())); err != nil {
@@ -136,6 +149,7 @@ func TestPlan_platformToolsAreNeverReportedUnavailable(t *testing.T) {
 	// through the memory layer in production, and the check must not read
 	// that as an outage of a server called "$fuseone".
 	h.runner.deps.Schemas = describing{"crm.lookup": true, "crm.note": true, "crm.refund": true}
+	h.runner.deps.Connections = holding{"crm": true}
 	h.runner.deps.Servers = &expecting{servers: map[string]bool{}}
 
 	start := h.start(t, generousBudget())
@@ -170,6 +184,59 @@ func TestPlan_withNoSchemasPort_plansExactlyAsBefore(t *testing.T) {
 	}
 }
 
+// The catalogue deliberately keeps a dead session's entries until the
+// reconciler replaces them (tools/dead_session_test.go), so schema presence
+// cannot answer whether the server is reachable. In that window every call
+// would fail at invoke; the turn must not start.
+func TestPlan_aDeadSessionWhoseEntriesAreStillCatalogued_parksBeforeTheModel(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	planner := &capturingPlanner{}
+	h.runner.deps.Planner = planner
+	h.runner.deps.Schemas = describing{"crm.lookup": true, "crm.note": true, "crm.refund": true}
+	h.runner.deps.Connections = holding{"crm": false}
+	h.runner.deps.Servers = &expecting{servers: map[string]bool{"crm": true}}
+
+	_, err := h.runner.Advance(context.Background(), h.start(t, generousBudget()))
+
+	var unavailable *ToolServerUnavailableError
+	if !errors.As(err, &unavailable) {
+		t.Fatalf("Advance err = %v, want ToolServerUnavailableError", err)
+	}
+	if unavailable.Server != "crm" || len(unavailable.Tools) != 3 {
+		t.Errorf("named %q with %d tools, want crm with the whole envelope share",
+			unavailable.Server, len(unavailable.Tools))
+	}
+	if len(planner.inputs) != 0 {
+		t.Error("the model was called over a dead session")
+	}
+}
+
+// A tool taken off the surface of a live, configured server is a Curator's
+// decision, not an outage: the run proceeds and the absence is stated.
+func TestPlan_aToolOffTheSurfaceOfALiveServer_isANoteNotAnOutage(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	planner := &capturingPlanner{}
+	h.runner.deps.Planner = planner
+	h.runner.deps.Schemas = describing{"crm.lookup": true, "crm.note": true}
+	h.runner.deps.Connections = holding{"crm": true}
+	h.runner.deps.Servers = &expecting{servers: map[string]bool{"crm": true}}
+
+	if _, err := h.runner.Advance(context.Background(), h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if len(planner.inputs) == 0 {
+		t.Fatal("the model was never called")
+	}
+	got := planner.inputs[0].Unavailable
+	if len(got) != 1 || got[0] != "crm.refund" {
+		t.Errorf("Unavailable = %v, want the off-surface tool as a note", got)
+	}
+}
+
 func TestPlan_twoServersMissing_theExpectedOneStopsTheTurn(t *testing.T) {
 	t.Parallel()
 
@@ -177,9 +244,10 @@ func TestPlan_twoServersMissing_theExpectedOneStopsTheTurn(t *testing.T) {
 	planner := &capturingPlanner{}
 	h.runner.deps.Planner = planner
 	// crm.refund is missing from a removed server; gw.list from one that is
-	// configured and enabled. The outage wins: proceeding would plan a run
-	// that cannot do the part somebody still expects it to do.
+	// configured and enabled but disconnected. The outage wins: proceeding
+	// would plan a run that cannot do the part somebody still expects it to.
 	h.runner.deps.Schemas = describing{"crm.lookup": true, "crm.note": true}
+	h.runner.deps.Connections = holding{}
 	h.runner.deps.Servers = &expecting{servers: map[string]bool{"gw": true}}
 
 	start := h.start(t, generousBudget())

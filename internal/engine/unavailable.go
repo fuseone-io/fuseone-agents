@@ -28,23 +28,31 @@ func (e *ToolServerUnavailableError) Error() string {
 }
 
 func (e *ToolServerUnavailableError) Summary() domain.FailureSummary {
-	return domain.FailureSummary{Code: CodeToolServerUnavailable, Retryable: true}
+	// The server rides in Provider: the parked payload keeps the summary and
+	// drops the error text, and a park that does not name the server sends
+	// the operator hunting (#150 review).
+	return domain.FailureSummary{
+		Code: CodeToolServerUnavailable, Provider: e.Server, Retryable: true,
+	}
 }
 
 /*
 unavailableTools is which of the envelope's tools cannot be offered to the
-model this turn, and whether that is an outage.
+model this turn, and whether the turn may run at all.
 
-Resolution mirrors the planner's own: a tool the Schemas port cannot describe
-is one the planner would silently skip, and the model cannot call what it is
-not offered. Platform-owned tools are never in question — the process itself
-serves them.
+The outage question is answered by connection state, never inferred from
+schema presence — the catalogue deliberately keeps a dead session's entries
+until the reconciler replaces them, and it hides a live server's tool the
+Curator took off the surface. A server the envelope needs that is configured
+and enabled but not connected on this worker refuses the turn, retryably,
+before any money is spent; every one of its calls would fail.
 
-Two different answers on a miss. A missing tool whose server is configured and
-enabled is an outage: the turn refuses to run, retryably, before any money is
-spent. A missing tool whose server is gone on purpose is a fact to state — to
-the model, so its account of the run is accurate, and on the planned step, so
-the trail says what the prompt could not offer.
+A tool the Schemas port cannot describe on a server that is connected — or
+gone on purpose — is a decision, not an outage. The planner would silently
+skip it, and the model cannot call what it is not offered, so the absence is
+stated instead: to the model, so its account of the run is accurate, and on
+the planned step, so the trail says what the prompt could not offer.
+Platform-owned tools are never in question — the process itself serves them.
 */
 func (r *Runner) unavailableTools(
 	ctx context.Context, offered []domain.ToolID,
@@ -53,25 +61,24 @@ func (r *Runner) unavailableTools(
 		return nil, nil
 	}
 	var missing []domain.ToolID
+	servers := map[string][]domain.ToolID{}
 	for _, id := range offered {
 		if id.PlatformOwned() {
 			continue
+		}
+		if server := id.Server(); server != "" {
+			servers[server] = append(servers[server], id)
 		}
 		if _, _, _, ok := r.deps.Schemas.Schema(id); !ok {
 			missing = append(missing, id)
 		}
 	}
-	if len(missing) == 0 || r.deps.Servers == nil {
+	if r.deps.Connections == nil || r.deps.Servers == nil {
 		return missing, nil
 	}
-
-	byServer := map[string][]domain.ToolID{}
-	for _, id := range missing {
-		byServer[id.Server()] = append(byServer[id.Server()], id)
-	}
 	// Sorted so the server a park names is the same one every attempt.
-	for _, server := range slices.Sorted(maps.Keys(byServer)) {
-		if server == "" {
+	for _, server := range slices.Sorted(maps.Keys(servers)) {
+		if r.deps.Connections.Connected(server) {
 			continue
 		}
 		expected, err := r.deps.Servers.Expected(ctx, server)
@@ -79,7 +86,7 @@ func (r *Runner) unavailableTools(
 			return nil, fmt.Errorf("engine: ask whether server %s is expected: %w", server, err)
 		}
 		if expected {
-			return nil, &ToolServerUnavailableError{Server: server, Tools: byServer[server]}
+			return nil, &ToolServerUnavailableError{Server: server, Tools: servers[server]}
 		}
 	}
 	return missing, nil

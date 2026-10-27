@@ -23,6 +23,9 @@ func TestWorkerDeps_carryTheSchemaViewAndTheConfiguredServers(t *testing.T) {
 	if bare.Schemas == nil {
 		t.Error("deps carry no schema view; the engine cannot see a missing pack tool")
 	}
+	if bare.Connections == nil {
+		t.Error("deps carry no connection view; a dead session reads as reachable")
+	}
 	if bare.Servers != nil {
 		t.Error("without an administration store, no server can be expected")
 	}

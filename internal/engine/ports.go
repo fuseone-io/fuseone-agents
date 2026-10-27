@@ -237,6 +237,14 @@ type Servers interface {
 	Expected(ctx context.Context, server string) (bool, error)
 }
 
+// Connections is which servers this worker currently holds a live session
+// to. Schema presence cannot answer it: the catalogue deliberately keeps a
+// dead session's entries until the reconciler replaces them, and it hides a
+// live server's tools the Curator took off the surface.
+type Connections interface {
+	Connected(server string) bool
+}
+
 // DedupeStore coordinates semantic effect idempotency across runs of the same
 // agent and scope. The Gate never talks to this store; the engine resolves the
 // boolean evidence first and passes that evidence into the Gate.
