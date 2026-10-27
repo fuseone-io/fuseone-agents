@@ -5212,6 +5212,11 @@ export interface components {
              * @description The start of the period the spend is measured over.
              */
             since: string;
+            /**
+             * @description The window of the budget this crossing is measured against, taken from the configured ceiling. A daily banner must not read as a monthly one.
+             * @enum {string}
+             */
+            period: "daily" | "monthly";
         };
         Health: {
             /** @enum {string} */
