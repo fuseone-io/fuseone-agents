@@ -36,11 +36,12 @@ type SpentPlanError struct {
 	// ledger is one projection of a spend and the pool metrics are the
 	// other, and a billed attempt invisible in either under-reads exactly
 	// the runs burning money on retries.
-	Prompt   domain.PromptInputBreakdown
-	Price    domain.ModelPriceUse
-	Provider string
-	Model    string
-	Err      error
+	Prompt      domain.PromptInputBreakdown
+	Price       domain.ModelPriceUse
+	Provider    string
+	Model       string
+	ServedModel string
+	Err         error
 	// Unavailable is stamped by the runner, not the planner: the billed
 	// prompt went out without these pack tools, and the spent step must say
 	// so exactly as a successful one would.

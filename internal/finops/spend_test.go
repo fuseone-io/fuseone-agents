@@ -152,6 +152,30 @@ func TestSpend_projectsEachPlanningCallOnce(t *testing.T) {
 	}
 }
 
+func TestSpend_aSubstitutedCall_isAttributedToTheServedModel(t *testing.T) {
+	pool := spendPoolFor(t)
+	store := ledger.NewPostgres(pool)
+	spend := finops.NewSpend(pool)
+	base := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+	seedSpendCursor(t, pool, base)
+
+	appendPlanned(t, store, "run-substituted", base.Add(time.Second),
+		domain.Cost{Micros: 700, InputTokens: 100}, domain.PlannedPayload{
+			Provider: "litellm", Model: "opus-5-5", ServedModel: "opus-5",
+		})
+	if n, err := spend.Project(t.Context(), 100); err != nil || n != 1 {
+		t.Fatalf("Project = %d, %v", n, err)
+	}
+
+	var model string
+	if err := pool.QueryRow(t.Context(), `select model from planning_spend where run_id = 'run-substituted'`).Scan(&model); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if model != "opus-5" {
+		t.Fatalf("projected model = %q, want the model that served the call", model)
+	}
+}
+
 func TestSpend_skipsAPlanningStepThatNamesNoModel(t *testing.T) {
 	pool := spendPoolFor(t)
 	store := ledger.NewPostgres(pool)

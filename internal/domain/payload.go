@@ -77,15 +77,15 @@ type RunOrigin struct {
 type PlannedPayload struct {
 	Node        string `json:"node"`
 	ProposalRef string `json:"proposal_ref,omitempty"`
-	// Provider and Model are the pair this planning call was actually made
-	// against, which is not always the agent's: a step may name its own. Every
-	// other figure on this step — cost, tokens, price provenance — belongs to
-	// that pair, and recording it here is what lets spend be attributed to the
-	// model that produced it rather than to the one the agent happens to
-	// declare.
-	Provider string `json:"provider,omitempty"`
-	Model    string `json:"model,omitempty"`
-	Effort   string `json:"effort,omitempty"`
+	// Provider and Model are the pair this planning call requested, which is
+	// not always the agent's: a step may name its own. ServedModel records a
+	// provider or gateway substitution and is omitted when the response agrees
+	// with the request. Cost and price provenance belong to the served model's
+	// configured rate, falling back to the requested rate when it is unknown.
+	Provider    string `json:"provider,omitempty"`
+	Model       string `json:"model,omitempty"`
+	ServedModel string `json:"servedModel,omitempty"`
+	Effort      string `json:"effort,omitempty"`
 	// Price says whether this planning call had an installation rate behind the
 	// tokens it recorded. Cost.Micros stays the accounting number; this is the
 	// provenance that lets a screen distinguish "unknown price" from "configured

@@ -249,7 +249,7 @@ func TestTurn_spentPlanFailure_putsTheSpendOnTheLedgerAndRetries(t *testing.T) {
 		Cost: domain.Cost{InputTokens: 1, OutputTokens: 1,
 			CacheReadTokens: 320, CacheWriteTokens: 640, Micros: 30},
 		Prompt:   domain.PromptInputBreakdown{Unit: "bytes", Instructions: 12},
-		Provider: "anthropic", Model: "claude-opus-5-5",
+		Provider: "anthropic", Model: "claude-opus-5-5", ServedModel: "claude-opus-5",
 		Err: &model.ProviderError{Provider: "anthropic", Code: model.CodeProviderUnavailable, Retryable: true},
 	}
 	reg := NewMetricsRegistry()
@@ -281,8 +281,9 @@ func TestTurn_spentPlanFailure_putsTheSpendOnTheLedgerAndRetries(t *testing.T) {
 			var payload domain.PlannedPayload
 			if err := json.Unmarshal(step.Payload, &payload); err != nil ||
 				payload.Provider != "anthropic" || payload.Model != "claude-opus-5-5" ||
+				payload.ServedModel != "claude-opus-5" ||
 				payload.Prompt == nil {
-				t.Errorf("payload = %s, want the pair and the prompt breakdown", step.Payload)
+				t.Errorf("payload = %s, want both models and the prompt breakdown", step.Payload)
 			}
 		}
 	}

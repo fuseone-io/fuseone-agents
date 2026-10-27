@@ -89,20 +89,27 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	choice := out.Choices[0]
 	// Providers spell a policy stop differently; treat them all as a refusal
 	// so the caller has one condition to handle across every provider.
-	cost := o.cost(out.Usage)
-	price := priceUse(o.cfg.PricePerMTok, o.cfg.PriceConfigured, cost)
+	use := resolveModelUse(o.cfg, o.cfg.Model, out.Model)
+	cost := o.costAt(out.Usage, use.Price)
+	price := priceUse(use.Price, use.Configured, cost)
 	if choice.FinishReason == "content_filter" {
-		return engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: o.provider.Name, Model: o.cfg.Model}, providerRefused(o.provider.Name)
+		return engine.Proposal{
+			Cost: cost, Prompt: prompt, Price: price, Provider: o.provider.Name,
+			Model: o.cfg.Model, ServedModel: use.Divergence,
+		}, providerRefused(o.provider.Name)
 	}
 
-	return o.proposalFrom(choice, offered, prompt, cost, price), nil
+	return o.proposalFrom(choice, offered, prompt, cost, price, use.Divergence), nil
 }
 
 func (o *OpenAICompatible) proposalFrom(
 	c chatChoice, offered names, prompt domain.PromptInputBreakdown,
-	cost domain.Cost, price domain.ModelPriceUse,
+	cost domain.Cost, price domain.ModelPriceUse, servedModel string,
 ) engine.Proposal {
-	p := engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: o.provider.Name, Model: o.cfg.Model}
+	p := engine.Proposal{
+		Cost: cost, Prompt: prompt, Price: price, Provider: o.provider.Name,
+		Model: o.cfg.Model, ServedModel: servedModel,
+	}
 
 	if len(c.Message.ToolCalls) > 0 {
 		call := c.Message.ToolCalls[0]
@@ -129,8 +136,7 @@ func (o *OpenAICompatible) proposalFrom(
 // hit/miss pair, and most others report nothing at all. On a provider that
 // reports nothing, cached tokens are billed as ordinary input — the figure is
 // an over-estimate, never a silent under-count.
-func (o *OpenAICompatible) cost(u chatUsage) domain.Cost {
-	pr := o.cfg.PricePerMTok
+func (o *OpenAICompatible) costAt(u chatUsage, pr Prices) domain.Cost {
 	const perMillion = 1_000_000
 
 	cached := u.PromptTokensDetails.CachedTokens
@@ -348,6 +354,7 @@ type chatFunctionDef struct {
 type chatResponse struct {
 	Choices []chatChoice `json:"choices"`
 	Usage   chatUsage    `json:"usage"`
+	Model   string       `json:"model"`
 }
 
 type chatChoice struct {
