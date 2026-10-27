@@ -34,6 +34,13 @@ type Deps struct {
 	// Standing releases parked approvals covered by a durable human grant.
 	// Nil means no grants exist and every park waits for a click.
 	Standing StandingApprovals
+	// Schemas is the planner's own view of what a tool looks like, so the
+	// runner can notice — before spending a model call — that a pack tool
+	// cannot be offered at all. Nil disables the check (#148).
+	Schemas Schemas
+	// Servers tells a missing tool's server apart from a removed one. Nil
+	// means nothing is expected, and a missing tool is only reported.
+	Servers Servers
 }
 
 // maxConsecutiveBlocks bounds how long the platform argues with a planner that
@@ -120,6 +127,9 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		Model:    proposal.Model,
 		Price:    pricePayload(proposal.Price),
 		Prompt:   promptInputPayload(proposal.Prompt),
+		// What the prompt could not offer, so the trail explains a run that
+		// worked without part of its pack (#148).
+		UnavailableTools: toolStrings(proposal.Unavailable),
 	}
 	if state, err = r.appendPlanned(ctx, state, start, domain.Step{
 		Kind:   domain.StepPlanned,
@@ -249,12 +259,18 @@ func (r *Runner) plan(ctx context.Context, state State, start Start) (Proposal, 
 	// all, and offering it spent a turn on a refusal the design promised
 	// could not happen.
 	at := StepAt(start, state.Called)
+	offered := envelopeForState(start, state).Tools()
+	unavailable, err := r.unavailableTools(ctx, offered)
+	if err != nil {
+		return Proposal{}, err
+	}
 	p, err := r.deps.Planner.Plan(ctx, PlanInput{
 		State:          state,
 		Transcript:     transcript,
 		Budget:         start.Budget,
 		Remaining:      remaining(start.Budget, state.Committed()),
-		Tools:          envelopeForState(start, state).Tools(),
+		Tools:          offered,
+		Unavailable:    unavailable,
 		MemoryLearning: start.MemoryLearning.Normalize(),
 		Model:          model,
 		Effort:         effort,
@@ -264,6 +280,7 @@ func (r *Runner) plan(ctx context.Context, state State, start Start) (Proposal, 
 	if err != nil {
 		return Proposal{}, fmt.Errorf("engine: plan: %w", err)
 	}
+	p.Unavailable = unavailable
 	return p, nil
 }
 

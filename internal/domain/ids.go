@@ -19,6 +19,27 @@ type (
 // where the platform is preserving an operator's previous decision.
 const SystemWorker UserID = "system:worker"
 
+// PlatformOwned reports whether a tool is served by the platform process
+// itself rather than by a registered MCP server. Platform tools are always
+// describable, so no availability question ever applies to them.
+func (t ToolID) PlatformOwned() bool {
+	return strings.HasPrefix(string(t), "$")
+}
+
+// Server names the MCP server a tool is registered under — the namespace
+// before the first dot, the inverse of how registration builds the ID.
+// Empty for a platform-owned tool, and for an ID with no namespace.
+func (t ToolID) Server() string {
+	if t.PlatformOwned() {
+		return ""
+	}
+	server, _, found := strings.Cut(string(t), ".")
+	if !found {
+		return ""
+	}
+	return server
+}
+
 // Scope locates any record within the installation hierarchy.
 //
 // The hierarchy is Installation -> Company -> Area -> Agent (PRD 3.1). Company
