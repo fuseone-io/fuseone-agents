@@ -204,17 +204,17 @@ func (o *OpenAICompatible) chatTools(in engine.PlanInput, offered names) ([]chat
 			out = append(out, contextReadChatTool(offered))
 			continue
 		}
-		if declared[id] {
-			// The engine resolved this absence and told the model about it.
-			continue
-		}
 		if o.tools == nil {
 			// A rig with no schema view at all; production always has one.
 			continue
 		}
 		_, desc, schema, ok := o.tools.Schema(id)
+		if err := staleDeclaration(id, declared[id], ok); err != nil {
+			return nil, err
+		}
 		if !ok {
-			return nil, vanishedTool(id)
+			// Declared by the engine and still absent: planned around.
+			continue
 		}
 		out = append(out, chatTool{
 			Type: "function",

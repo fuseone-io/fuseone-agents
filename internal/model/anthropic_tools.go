@@ -17,17 +17,17 @@ func (a *Anthropic) toolParams(in engine.PlanInput, offered names) ([]anthropic.
 			out = append(out, contextReadToolParam(offered))
 			continue
 		}
-		if declared[id] {
-			// The engine resolved this absence and told the model about it.
-			continue
-		}
 		if a.tools == nil {
 			// A rig with no schema view at all; production always has one.
 			continue
 		}
 		_, desc, schema, ok := a.tools.Schema(id)
+		if err := staleDeclaration(id, declared[id], ok); err != nil {
+			return nil, err
+		}
 		if !ok {
-			return nil, vanishedTool(id)
+			// Declared by the engine and still absent: planned around.
+			continue
 		}
 		fields, required := propertiesOf(schema)
 		tool := anthropic.ToolParam{
@@ -40,13 +40,24 @@ func (a *Anthropic) toolParams(in engine.PlanInput, offered names) ([]anthropic.
 	return append(out, finishToolParam(offered)), nil
 }
 
-// vanishedTool is a schema present at the engine's preflight and gone at
-// request assembly — the catalogue moved between two reads. Failing before
-// any HTTP is what keeps the omission loud: the retry's preflight sees the
-// new state and classifies it properly (#150 review).
-func vanishedTool(id domain.ToolID) error {
-	return fmt.Errorf(
-		"model: tool %s vanished between the engine's preflight and request assembly", id)
+/*
+staleDeclaration is the catalogue moving between the engine's preflight and
+request assembly, in either direction. A tool the engine saw that assembly
+cannot describe would be silently omitted; a tool the engine declared absent
+that assembly can describe again would be silently withheld — and the model
+could finish the run without a tool it has back. Both abort before any HTTP,
+and the retry's preflight classifies the new state (#150 review).
+*/
+func staleDeclaration(id domain.ToolID, declaredAbsent, describable bool) error {
+	if !declaredAbsent && !describable {
+		return fmt.Errorf(
+			"model: tool %s vanished between the engine's preflight and request assembly", id)
+	}
+	if declaredAbsent && describable {
+		return fmt.Errorf(
+			"model: tool %s reappeared between the engine's preflight and request assembly", id)
+	}
+	return nil
 }
 
 func declaredUnavailable(in engine.PlanInput) map[domain.ToolID]bool {
