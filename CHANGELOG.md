@@ -25,6 +25,28 @@ field" is a commit message.
 
 ---
 
+## [0.74.0] — 2026-10-27
+
+### Fixed
+
+- **Consulting memory no longer jumps a run past its steps.** With steps
+  declared, a run advances by using a step's tools, and the envelope only
+  moves forward. A platform tool — memory, context, the ticket answer —
+  anchored in a late step turned the model's opening memory lookup into
+  that advancement: every earlier step closed silently, with no park and
+  no note, and the run finished reporting its tools "not available at this
+  step". Platform tools no longer advance the step, and no longer advance
+  the per-step model and effort either; where an author anchored one, it
+  still becomes reachable when its step opens.
+
+### Added
+
+- **The trail narrates forward movement.** When advancing past a step
+  closes tools, the planning step records them and the trail reads "the
+  run has moved to step X; earlier steps' tools are behind it" — so a
+  deliberately narrowed envelope no longer looks like a tool outage. A
+  genuine outage still outranks this line.
+
 ## [0.73.0] — 2026-10-27
 
 ### Fixed
