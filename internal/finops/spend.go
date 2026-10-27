@@ -149,7 +149,7 @@ func plannedAfter(ctx context.Context, tx pgx.Tx, from cursor, limit int) ([]pla
 /*
 writeSpend records one call, and reports whether it recorded anything.
 
-A step that names no model is skipped rather than projected or fatal. Steps
+A step that names no requested model is skipped rather than projected or fatal. Steps
 written before the pair existed carry none, and attributing them would put
 spend against a model the step never named; failing on them would stop the
 sweep at the oldest row in the installation and never reach today's.
@@ -169,6 +169,10 @@ func writeSpend(ctx context.Context, tx pgx.Tx, s plannedStep) (bool, error) {
 	if p.Provider == "" || p.Model == "" {
 		return false, nil
 	}
+	model := p.Model
+	if p.ServedModel != "" {
+		model = p.ServedModel
+	}
 
 	status := ""
 	if p.Price != nil {
@@ -181,7 +185,7 @@ func writeSpend(ctx context.Context, tx pgx.Tx, s plannedStep) (bool, error) {
 			cache_read_tokens, cache_write_tokens, price_status)
 		values ($1,$2,$3,$4,$5,$6,$7,($8 at time zone 'UTC')::date,$9,$10,$11,$12,$13,$14)
 		on conflict (run_id, seq) do nothing`,
-		s.runID, s.seq, p.Provider, p.Model, s.agentID, s.companyID, s.areaID, s.at,
+		s.runID, s.seq, p.Provider, model, s.agentID, s.companyID, s.areaID, s.at,
 		s.cost.Micros, s.cost.InputTokens, s.cost.OutputTokens,
 		s.cost.CacheReadTokens, s.cost.CacheWriteTokens, status)
 	if err != nil {

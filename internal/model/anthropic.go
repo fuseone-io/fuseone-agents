@@ -80,11 +80,10 @@ type Config struct {
 	// the installation's own price list; zero means cost is recorded as tokens
 	// only, never as a guess.
 	PricePerMTok Prices
-	// RateFor resolves the rate for a model this call actually used, which is
-	// not always cfg.Model: a step may name its own. Without it the planner
-	// prices every call at the agent's base rate, and a step that switches to
-	// a cheaper model is billed as the expensive one — a FinOps figure that is
-	// wrong in a direction nobody notices.
+	// RateFor resolves the rate for any named model involved in a call: a step
+	// may request something other than cfg.Model, and a gateway may report that
+	// it served something else again. Without it both are billed at the agent's
+	// base rate — a FinOps figure that is wrong in a direction nobody notices.
 	RateFor func(model string) (Prices, bool)
 	// PriceConfigured distinguishes an absent rate from an intentionally zero
 	// one. The numeric rate alone cannot: both are Prices{}.
@@ -190,30 +189,34 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	if err != nil {
 		return engine.Proposal{}, classifyAnthropic(a.provider, err)
 	}
-	resp, extra, nudgeErr := a.nudgeFreeText(ctx, model, params, resp)
+	firstUse := resolveModelUse(a.cfg, model, string(resp.Model))
+	resp, extra, nudgeErr := a.nudgeFreeText(ctx, model, params, resp, firstUse.Price)
 	if nudgeErr != nil {
-		rate, configured := a.rateFor(model)
 		return engine.Proposal{}, &engine.SpentPlanError{
-			Cost:     extra,
-			Prompt:   prompt,
-			Price:    priceUse(rate, configured, extra),
-			Provider: a.provider,
-			Model:    model,
-			Err:      classifyAnthropic(a.provider, nudgeErr),
+			Cost:        extra,
+			Prompt:      prompt,
+			Price:       priceUse(firstUse.Price, firstUse.Configured, extra),
+			Provider:    a.provider,
+			Model:       model,
+			ServedModel: firstUse.Divergence,
+			Err:         classifyAnthropic(a.provider, nudgeErr),
 		}
 	}
 
 	// Check the stop reason before reading content. A refusal returns HTTP 200
 	// with an empty or partial content list, so indexing straight into
 	// content[0] turns a policy decision into a nil dereference.
-	rate, configured := a.rateFor(model)
-	cost := a.cost(resp.Usage, model).Add(extra)
-	price := priceUse(rate, configured, cost)
+	use := resolveModelUse(a.cfg, model, string(resp.Model))
+	cost := a.costAt(resp.Usage, use.Price).Add(extra)
+	price := priceUse(use.Price, use.Configured, cost)
 	if resp.StopReason == anthropic.StopReasonRefusal {
-		return engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: a.provider, Model: model}, providerRefused(a.provider)
+		return engine.Proposal{
+			Cost: cost, Prompt: prompt, Price: price, Provider: a.provider,
+			Model: model, ServedModel: use.Divergence,
+		}, providerRefused(a.provider)
 	}
 
-	return a.proposalFrom(resp, offered, prompt, cost, price, model), nil
+	return a.proposalFrom(resp, offered, prompt, cost, price, model, use.Divergence), nil
 }
 
 // autoNudge is said once to a model that answered free text under the
@@ -238,7 +241,7 @@ returned so the turn's cost stays the whole truth.
 */
 func (a *Anthropic) nudgeFreeText(
 	ctx context.Context, model string,
-	params anthropic.MessageNewParams, resp *anthropic.Message,
+	params anthropic.MessageNewParams, resp *anthropic.Message, firstPrice Prices,
 ) (*anthropic.Message, domain.Cost, error) {
 	if _, auto := a.autoToolChoice.Load(model); !auto {
 		return resp, domain.Cost{}, nil
@@ -248,7 +251,7 @@ func (a *Anthropic) nudgeFreeText(
 	}
 	// The superseded answer's usage travels back as the extra: the caller
 	// prices the final response, and the invoice is the sum of both calls.
-	firstCost := a.cost(resp.Usage, model)
+	firstCost := a.costAt(resp.Usage, firstPrice)
 	nudged := params
 	// The answer goes back whole — thinking blocks included — the way the
 	// provider wants a multi-turn conversation continued.
@@ -313,18 +316,13 @@ func (a *Anthropic) learnAutoToolChoice(model string, err error) bool {
 }
 
 /*
-rateFor answers for the model a call actually used.
+rateFor answers for the model a call names.
 
 Falls back to the planner's own rate only when nothing can resolve the model,
 so a step override is priced as itself rather than as the agent's default.
 */
 func (a *Anthropic) rateFor(model string) (Prices, bool) {
-	if a.cfg.RateFor != nil {
-		if price, ok := a.cfg.RateFor(model); ok || model != a.cfg.Model {
-			return price, ok
-		}
-	}
-	return a.cfg.PricePerMTok, a.cfg.PriceConfigured
+	return rateForConfig(a.cfg, model)
 }
 
 // proposalFrom reads the model's answer.
@@ -333,9 +331,12 @@ func (a *Anthropic) rateFor(model string) (Prices, bool) {
 // owned by the platform, so text alone no longer closes a run by omission.
 func (a *Anthropic) proposalFrom(
 	resp *anthropic.Message, offered names, prompt domain.PromptInputBreakdown,
-	cost domain.Cost, price domain.ModelPriceUse, model string,
+	cost domain.Cost, price domain.ModelPriceUse, model, servedModel string,
 ) engine.Proposal {
-	p := engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: a.provider, Model: model}
+	p := engine.Proposal{
+		Cost: cost, Prompt: prompt, Price: price, Provider: a.provider,
+		Model: model, ServedModel: servedModel,
+	}
 
 	var summary strings.Builder
 	for _, block := range resp.Content {
@@ -365,8 +366,7 @@ func (a *Anthropic) proposalFrom(
 // Cache reads and writes are priced separately and recorded separately: a
 // cache read costs a fraction of an input token, and folding them together is
 // what makes an expensive agent impossible to diagnose.
-func (a *Anthropic) cost(u anthropic.Usage, model string) domain.Cost {
-	pr, _ := a.rateFor(model)
+func (a *Anthropic) costAt(u anthropic.Usage, pr Prices) domain.Cost {
 	const perMillion = 1_000_000
 
 	// The provider documents the total as the sum of the two windows. A

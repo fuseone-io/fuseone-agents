@@ -114,6 +114,7 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 					Node:             StepNameAt(start, state.Called),
 					Provider:         spent.Provider,
 					Model:            spent.Model,
+					ServedModel:      spent.ServedModel,
 					Price:            pricePayload(spent.Price),
 					Prompt:           promptInputPayload(spent.Prompt),
 					UnavailableTools: toolStrings(spent.Unavailable),
@@ -128,11 +129,12 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		r.deps.Metrics.Planning(proposal.Prompt, proposal.Cost)
 	}
 	planned := domain.PlannedPayload{
-		Node:     StepNameAt(start, state.Called),
-		Provider: proposal.Provider,
-		Model:    proposal.Model,
-		Price:    pricePayload(proposal.Price),
-		Prompt:   promptInputPayload(proposal.Prompt),
+		Node:        StepNameAt(start, state.Called),
+		Provider:    proposal.Provider,
+		Model:       proposal.Model,
+		ServedModel: proposal.ServedModel,
+		Price:       pricePayload(proposal.Price),
+		Prompt:      promptInputPayload(proposal.Prompt),
 		// What the prompt could not offer, so the trail explains a run that
 		// worked without part of its pack (#148).
 		UnavailableTools: toolStrings(proposal.Unavailable),

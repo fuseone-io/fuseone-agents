@@ -93,11 +93,12 @@ type Proposal struct {
 	// It is measured by the planner because only the planner knows the final
 	// wire shape: system text, tool schemas and transcript all meet there.
 	Prompt domain.PromptInputBreakdown
-	// Provider and Model are the pair the planner actually called, which the
-	// step records so spend can be attributed to it rather than to whatever
-	// the agent declares.
-	Provider string
-	Model    string
+	// Provider and Model are the pair the planner requested. ServedModel is
+	// populated only when the provider says it served a different model, so the
+	// step can preserve both the request and the financial attribution.
+	Provider    string
+	Model       string
+	ServedModel string
 	// Price is the rate provenance for this planning call. Cost is accounting;
 	// this is only the explanation for zero and precision.
 	Price domain.ModelPriceUse

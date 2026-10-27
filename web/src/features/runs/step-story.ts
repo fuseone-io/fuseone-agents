@@ -122,6 +122,8 @@ export function detailOf(step: Step): Line {
       // not offer part of the pack is the fact the reader is looking for.
       const unavailable = unavailableLine(payload);
       if (unavailable) return unavailable;
+      const substitution = modelSubstitutionLine(payload);
+      if (substitution) return substitution;
       const prompt = promptLine(payload);
       return prompt ?? NOTHING;
     }
@@ -325,6 +327,22 @@ function budgetLine(payload: Record<string, unknown>): Line | undefined {
       already: dim.format(dim.read(committed)),
       requested: dim.format(dim.read(estimate)),
     },
+  };
+}
+
+function modelSubstitutionLine(payload: Record<string, unknown>): Line | undefined {
+  const requested = payload.model;
+  const served = payload.servedModel;
+  if (
+    typeof requested !== "string" ||
+    typeof served !== "string" ||
+    served === requested
+  ) {
+    return undefined;
+  }
+  return {
+    key: "runs.storyModelSubstituted",
+    values: { requested, served },
   };
 }
 

@@ -1653,9 +1653,9 @@ func TestAnthropic_nudgeCallFailing_surfacesTheProviderError(t *testing.T) {
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = io.WriteString(w, toolChoiceRejection)
 		case calls == 2:
-			_, _ = io.WriteString(w, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5-5",
+			_, _ = io.WriteString(w, `{"id":"m","type":"message","role":"assistant","model":"gateway-served",
 			  "content":[{"type":"text","text":"status intermediário"}],
-			  "stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+			  "stop_reason":"end_turn","usage":{"input_tokens":1000000,"output_tokens":1}}`)
 		default:
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = io.WriteString(w, `{"type":"error","error":{"type":"overloaded_error","message":"try later"}}`)
@@ -1663,7 +1663,11 @@ func TestAnthropic_nudgeCallFailing_surfacesTheProviderError(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	_, err := plannerFor(t, model.KindAnthropic, srv.URL, model.Config{Model: "claude-opus-5-5"}).
+	_, err := plannerForPrices(t, model.KindAnthropic, srv.URL,
+		model.Config{Model: "claude-opus-5-5"}, map[string]model.Prices{
+			"claude-opus-5-5": {InputMicros: 2_000_000},
+			"gateway-served":  {InputMicros: 7_000_000},
+		}).
 		Plan(context.Background(), input())
 
 	// A failed nudge must fail the turn so the worker's retry machinery
@@ -1678,8 +1682,12 @@ func TestAnthropic_nudgeCallFailing_surfacesTheProviderError(t *testing.T) {
 	if !errors.As(err, &spent) {
 		t.Fatalf("err = %v, want the spend travelling with it", err)
 	}
-	if spent.Cost.InputTokens != 1 || spent.Cost.OutputTokens != 1 || spent.Model == "" {
+	if spent.Cost.InputTokens != 1_000_000 || spent.Cost.OutputTokens != 1 ||
+		spent.Cost.Micros != 7_000_000 || spent.Model != "claude-opus-5-5" {
 		t.Errorf("spent = %+v, want the first call's exact usage and its pair", spent)
+	}
+	if spent.ServedModel != "gateway-served" {
+		t.Errorf("spent.ServedModel = %q, want the model that billed the failed turn", spent.ServedModel)
 	}
 	if spent.Prompt.Total == 0 {
 		t.Errorf("spent.Prompt = %+v, want the breakdown the call was made with", spent.Prompt)

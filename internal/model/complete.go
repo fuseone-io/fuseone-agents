@@ -81,7 +81,10 @@ func (o *openAICompleter) Complete(ctx context.Context, prompt string) (Completi
 	if len(out.Choices) == 0 {
 		return Completion{}, fmt.Errorf("model: %s returned no choices", o.provider.Name)
 	}
-	return Completion{Text: out.Choices[0].Message.Content, Cost: o.cost(out.Usage)}, nil
+	return Completion{
+		Text: out.Choices[0].Message.Content,
+		Cost: o.costAt(out.Usage, o.cfg.PricePerMTok),
+	}, nil
 }
 
 type anthropicCompleter struct{ *Anthropic }
@@ -112,5 +115,5 @@ func (a *anthropicCompleter) Complete(ctx context.Context, prompt string) (Compl
 			text += block.Text
 		}
 	}
-	return Completion{Text: text, Cost: a.cost(resp.Usage, a.cfg.Model)}, nil
+	return Completion{Text: text, Cost: a.costAt(resp.Usage, a.cfg.PricePerMTok)}, nil
 }
