@@ -166,6 +166,42 @@ func TestAdvance_afterForwardMovement_thePlannedStepNamesTheClosedTools(t *testi
 	}
 }
 
+func TestAdvance_aSpentFailureAfterForwardMovement_stillRecordsTheClosedTools(t *testing.T) {
+	t.Parallel()
+
+	// The billed-failure path builds its own planned payload. Leaving
+	// ClosedTools out of that one constructor keeps every other test green
+	// and the trail mute exactly where the money went (#153 review).
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	start := h.start(t, generousBudget())
+	start.Steps = []Envelope{
+		{Name: "prepare", Reaches: []domain.ToolID{"crm.note"}},
+		{Name: "investigate", Reaches: []domain.ToolID{"crm.lookup"}},
+	}
+
+	ctx := context.Background()
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance 1: %v", err)
+	}
+	h.runner.deps.Planner = &spendingPlanner{err: &SpentPlanError{
+		Cost:     domain.Cost{Micros: 1200, InputTokens: 300},
+		Provider: "anthropic",
+		Model:    "claude-opus-5",
+		Err:      context.DeadlineExceeded,
+	}}
+	if _, err := h.runner.Advance(ctx, start); err == nil {
+		t.Fatal("Advance swallowed the planner failure")
+	}
+
+	var p domain.PlannedPayload
+	if err := h.lastPayloadOf(t, domain.StepPlanned, &p); err != nil {
+		t.Fatalf("payload: %v", err)
+	}
+	if len(p.ClosedTools) != 1 || p.ClosedTools[0] != "crm.note" {
+		t.Errorf("closedTools = %v, want the billed prompt's closed step", p.ClosedTools)
+	}
+}
+
 func TestEnvelopeForState_memorySuggestRequiresLearningPolicy(t *testing.T) {
 	t.Parallel()
 
