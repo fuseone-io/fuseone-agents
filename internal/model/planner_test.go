@@ -1882,3 +1882,88 @@ func TestAnthropic_underDeclaredAuto_freeTextIsNudgedNotFinal(t *testing.T) {
 		t.Error("the nudged call does not carry the model's own text back to it")
 	}
 }
+
+// A pack tool the worker cannot describe is skipped from the offer; the model
+// must be told, or it improvises the explanation (#148).
+func TestAnthropic_unavailablePackTools_areNamedInTheVolatileNote(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, anthropicToolUse)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5"})
+	in := input()
+	in.Unavailable = []domain.ToolID{"grafana.query_loki_logs", "grafana.list_datasources"}
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	body := c.all()[0]
+	system, _ := json.Marshal(body["system"])
+	messages, _ := json.Marshal(body["messages"])
+	if !strings.Contains(string(messages), "grafana.query_loki_logs") ||
+		!strings.Contains(string(messages), "cannot be called") {
+		t.Errorf("messages carry no unavailable-tools note: %s", messages)
+	}
+	// Volatile, never in the cached stable prefix: the set changes as servers
+	// are removed or restored, and a frozen copy would lie.
+	if strings.Contains(string(system), "cannot be called") {
+		t.Errorf("the note leaked into the cached system prefix: %s", system)
+	}
+}
+
+func TestAnthropic_withEveryPackToolOffered_saysNothingAboutAvailability(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, anthropicToolUse)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5"})
+	if _, err := p.Plan(context.Background(), input()); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	whole, _ := json.Marshal(c.all()[0])
+	if strings.Contains(string(whole), "cannot be called") {
+		t.Errorf("an availability note appeared with nothing unavailable: %s", whole)
+	}
+}
+
+func TestOpenAICompatible_unavailablePackTools_areNamedInTheGuidance(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, openAIToolCall)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindOpenAICompatible, c.server.URL, model.Config{Model: "gpt-x"})
+	in := input()
+	in.Unavailable = []domain.ToolID{"grafana.query_loki_logs"}
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	whole, _ := json.Marshal(c.all()[0])
+	if !strings.Contains(string(whole), "grafana.query_loki_logs") ||
+		!strings.Contains(string(whole), "cannot be called") {
+		t.Errorf("request carries no unavailable-tools note: %s", whole)
+	}
+}

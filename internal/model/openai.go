@@ -47,6 +47,11 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	// provider is offered, and the identifier a proposal is read back as.
 	offered := namesFor(in)
 	guidance := prefixStablePlanningNote(in, o.tools, offered)
+	// This path has no volatile slot, so the note rides with the guidance;
+	// the cache it invalidates when the set changes is the automatic one.
+	if note := unavailableToolsNote(in); note != "" {
+		guidance += "\n\n" + note
+	}
 	prompt := promptInputBreakdown(in, o.cfg, o.tools, offered, guidance)
 	body := chatRequest{
 		// Not overridable here, unlike the Anthropic path: this client sends
