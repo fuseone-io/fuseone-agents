@@ -26,6 +26,11 @@ func TestTrail_everyStepSaysWhoActedAndAsWhom(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("classify: %v", err)
 		}
+		if err := p.catalog.Classify(domain.ToolClassification{
+			Tool: "crm.unnote", Effect: domain.EffectWrite,
+		}); err != nil {
+			t.Fatalf("classify the undo: %v", err)
+		}
 		p.gate.allow("crm.note")
 
 		// A run taken through every ending this platform has, so the newest
@@ -61,7 +66,8 @@ func TestTrail_everyStepSaysWhoActedAndAsWhom(t *testing.T) {
 		// certify the step kinds that were always fine.
 		for _, kind := range []domain.StepKind{
 			domain.StepParked, domain.StepResumed,
-			domain.StepCompensated, domain.StepAbandoned, domain.StepFailed,
+			domain.StepCompensationStarted, domain.StepCompensated,
+			domain.StepAbandoned, domain.StepFailed,
 		} {
 			if !kinds[kind] {
 				t.Errorf("the run never produced a %s step; the sample proves less than it looks", kind)

@@ -1035,6 +1035,19 @@ func TestTurn_renewalHangsInsteadOfFailing_turnIsStillCancelledBeforeExpiry(t *t
 	}
 }
 
+func TestAbandonedFailure_unknownCompensationIsExplicitlyActionable(t *testing.T) {
+	t.Parallel()
+
+	got := abandonedFailure(2, 1)
+	if got.Code != "abandoned" {
+		t.Fatalf("code = %q, want abandoned", got.Code)
+	}
+	if !strings.Contains(got.Message, "1 compensation outcome(s) unknown") ||
+		!strings.Contains(got.Message, "manual reconciliation required") {
+		t.Fatalf("message = %q, want the unknown outcome and required action", got.Message)
+	}
+}
+
 // headHookLedger lets a test act in the gap between the supervisor reading
 // the head and writing on top of it — the gap a human's abandonment lands in.
 type headHookLedger struct {

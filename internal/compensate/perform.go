@@ -56,8 +56,9 @@ It does not stop at the first failure. The acts are independent — a refund tha
 cannot be issued is no reason to leave an order standing as well — and stopping
 would leave more behind than continuing, which is the opposite of the point.
 
-Each attempt is a step in the same ledger as the doing, so a second run of this
-finds them and does not repeat what already worked.
+Each attempt is written to the same ledger before the external call. A second
+run therefore does not repeat an undo whose result is absent: for a generic
+tool, absence means unknown rather than safe to retry.
 */
 func Perform(
 	ctx context.Context, deps Deps, start engine.Start, plan []Act,
@@ -69,6 +70,16 @@ func Perform(
 			// Nothing takes it back. Recorded as standing rather than skipped:
 			// this is the half of the answer somebody most needs.
 			out = append(out, Outcome{Act: act, Why: "nothing undoes this tool"})
+			continue
+		}
+		if act.Failed {
+			out = append(out, Outcome{Act: act, Why: "the recorded compensation failed"})
+			continue
+		}
+		if act.Attempted {
+			out = append(out, Outcome{
+				Act: act, Why: "compensation outcome unknown; manual reconciliation required",
+			})
 			continue
 		}
 		outcome, err := performOne(ctx, deps, start, act)
@@ -108,30 +119,37 @@ func performOne(
 		return Outcome{}, fmt.Errorf("compensate: gate: %w", err)
 	}
 	if !decision.Verdict.Executable() {
-		return record(ctx, deps, start, act, false,
+		return recordBeforeInvoke(ctx, deps, start, act,
 			fmt.Sprintf("refused by %s", decision.Rule))
 	}
 
 	args, err := undoArgs(ctx, deps, act)
 	if err != nil {
-		return record(ctx, deps, start, act, false, err.Error())
+		return recordBeforeInvoke(ctx, deps, start, act, err.Error())
 	}
 
+	idemKey := fmt.Sprintf("compensate:%s:%d", start.RunID, act.Seq)
 	call := engine.Call{
-		RunID: start.RunID, Seq: seq, Scope: start.Scope,
+		RunID: start.RunID, Scope: start.Scope,
 		AgentID: start.AgentID, Tool: act.Undo, Args: args,
 		OnBehalfOf: start.OnBehalfOf,
-		IdemKey:    fmt.Sprintf("compensate:%s:%d", start.RunID, act.Seq),
+		IdemKey:    idemKey,
 	}
 	if err := deps.Tools.Reserve(ctx, call); err != nil {
-		return record(ctx, deps, start, act, false, err.Error())
+		return recordBeforeInvoke(ctx, deps, start, act, err.Error())
 	}
+	started, err := recordStarted(ctx, deps, start, act, head, idemKey)
+	if err != nil {
+		return Outcome{}, err
+	}
+	call.Seq = started.Seq
 	// The last answer before the undo leaves the process: these calls act on
 	// the world, and a worker that lost its lease mid-compensation would run
-	// them beside the successor doing the same. Lease only — the record steps
-	// this loop writes move the head on purpose.
+	// them beside the successor doing the same. The durable intent is now the
+	// exact head: a moved head means this act no longer owns the next effect.
 	if start.LeaseEpoch != 0 {
-		if err := deps.Ledger.Fence(ctx, start.RunID, start.LeaseEpoch, domain.StepRef{}); err != nil {
+		startedHead := domain.StepRef{Seq: started.Seq, Kind: started.Kind}
+		if err := deps.Ledger.Fence(ctx, start.RunID, start.LeaseEpoch, startedHead); err != nil {
 			return Outcome{}, fmt.Errorf("compensate: fence before %s: %w", act.Undo, err)
 		}
 	}
@@ -146,6 +164,39 @@ func performOne(
 		return record(ctx, deps, start, act, false, codeOr(result.ErrorCode))
 	}
 	return record(ctx, deps, start, act, true, "")
+}
+
+// recordStarted is the write-ahead intent for an external undo. Once this is
+// sealed, absence of a result means unknown rather than safe-to-retry.
+func recordStarted(
+	ctx context.Context, deps Deps, start engine.Start, act Act,
+	head domain.Step, idemKey string,
+) (domain.Step, error) {
+	payload, err := jsonOf(domain.CompensationStartedPayload{
+		Tool: act.Undo, ForSeq: act.Seq,
+	})
+	if err != nil {
+		return domain.Step{}, err
+	}
+	s := domain.Step{
+		RunID: start.RunID, Kind: domain.StepCompensationStarted,
+		Scope: start.Scope, AgentID: start.AgentID, VersionID: start.VersionID,
+		OnBehalfOf: start.OnBehalfOf, At: deps.Clock.Now(), Payload: payload,
+		IdemKey: idemKey,
+	}
+	var sealed domain.Step
+	expected := domain.StepRef{Seq: head.Seq, Kind: head.Kind}
+	if start.LeaseEpoch != 0 {
+		sealed, err = deps.Ledger.AppendIfLeaseAndHead(
+			ctx, start.LeaseEpoch, expected, s,
+		)
+	} else {
+		sealed, err = deps.Ledger.AppendIfHead(ctx, expected, s)
+	}
+	if err != nil {
+		return domain.Step{}, fmt.Errorf("compensate: record start of %s: %w", act.Undo, err)
+	}
+	return sealed, nil
 }
 
 /*
@@ -175,7 +226,7 @@ func codeOr(code string) string {
 	return code
 }
 
-// record appends the attempt, succeeded or not.
+// record appends the result of an attempt, succeeded or not.
 //
 // Both are written. A compensation that failed is the most important line in
 // the trail: it is the one that says something is still standing and nobody
@@ -184,8 +235,24 @@ func record(
 	ctx context.Context, deps Deps, start engine.Start,
 	act Act, succeeded bool, why string,
 ) (Outcome, error) {
+	return recordResult(ctx, deps, start, act, succeeded, false, why)
+}
+
+// recordBeforeInvoke records a failure while it is still provable that no
+// external effect left this process. Recovery may safely evaluate it again.
+func recordBeforeInvoke(
+	ctx context.Context, deps Deps, start engine.Start, act Act, why string,
+) (Outcome, error) {
+	return recordResult(ctx, deps, start, act, false, true, why)
+}
+
+func recordResult(
+	ctx context.Context, deps Deps, start engine.Start,
+	act Act, succeeded, beforeInvoke bool, why string,
+) (Outcome, error) {
 	payload, err := jsonOf(domain.CompensatedPayload{
 		Tool: act.Undo, ForSeq: act.Seq, Succeeded: succeeded,
+		BeforeInvoke: beforeInvoke,
 	})
 	if err != nil {
 		return Outcome{}, err

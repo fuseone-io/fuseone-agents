@@ -4347,6 +4347,7 @@ components:
         - approval_decided
         - resumed
         - abandoned
+        - compensation_started
         - compensated
         - failed
         - parked

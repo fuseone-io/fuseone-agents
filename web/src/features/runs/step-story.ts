@@ -31,6 +31,7 @@ const TITLES: Record<StepKind, string> = {
   approval_decided: "runs.storyHumanDecided",
   resumed: "runs.storyResumed",
   abandoned: "runs.storyAbandoned",
+  compensation_started: "runs.nodeCompensationStarted",
   compensated: "runs.nodeCompensated",
   failed: "runs.storyFailed",
   parked: "runs.storyParked",

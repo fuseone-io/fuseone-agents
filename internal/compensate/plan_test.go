@@ -142,3 +142,56 @@ func TestPlan_somethingAlreadyCompensated_isNotUndoneTwice(t *testing.T) {
 		t.Errorf("plan = %+v, want it left alone", got)
 	}
 }
+
+func TestPlan_compensationStartedWithoutResult_isUnknownAndNeverRetried(t *testing.T) {
+	t.Parallel()
+
+	started, _ := json.Marshal(domain.CompensationStartedPayload{
+		Tool: "crm.charge.refund", ForSeq: 2,
+	})
+	got := compensate.Plan([]domain.Step{
+		called(2, "crm.charge"), returned(3, "crm.charge", false),
+		{RunID: "run-1", Seq: 4, Kind: domain.StepCompensationStarted, Payload: started},
+	}, catalogue{"crm.charge": "crm.charge.refund"})
+
+	if len(got) != 1 {
+		t.Fatalf("plan = %+v, want the uncertain compensation surfaced", got)
+	}
+	if !got[0].Attempted || got[0].Failed {
+		t.Fatalf("act = %+v, want attempted with unknown outcome", got[0])
+	}
+}
+
+func TestPlan_recordedCompensationFailure_isStandingAndNeverRetried(t *testing.T) {
+	t.Parallel()
+
+	failed, _ := json.Marshal(domain.CompensatedPayload{
+		Tool: "crm.charge.refund", ForSeq: 2, Succeeded: false,
+	})
+	got := compensate.Plan([]domain.Step{
+		called(2, "crm.charge"), returned(3, "crm.charge", false),
+		{RunID: "run-1", Seq: 4, Kind: domain.StepCompensated, Payload: failed},
+	}, catalogue{"crm.charge": "crm.charge.refund"})
+
+	if len(got) != 1 || !got[0].Attempted || !got[0].Failed {
+		t.Fatalf("plan = %+v, want one recorded failed compensation", got)
+	}
+}
+
+func TestPlan_failureProvedBeforeInvoke_canBeRetried(t *testing.T) {
+	t.Parallel()
+
+	failed, _ := json.Marshal(domain.CompensatedPayload{
+		Tool: "crm.charge.refund.v1", ForSeq: 2, Succeeded: false,
+		BeforeInvoke: true,
+	})
+	got := compensate.Plan([]domain.Step{
+		called(2, "crm.charge"), returned(3, "crm.charge", false),
+		{RunID: "run-1", Seq: 4, Kind: domain.StepCompensated, Payload: failed},
+	}, catalogue{"crm.charge": "crm.charge.refund.v2"})
+
+	if len(got) != 1 || got[0].Attempted || got[0].Failed ||
+		got[0].Undo != "crm.charge.refund.v2" {
+		t.Fatalf("plan = %+v, want one safe retry before the effect boundary", got)
+	}
+}

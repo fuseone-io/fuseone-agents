@@ -13,22 +13,23 @@ import (
 type StepKind string
 
 const (
-	StepRunStarted        StepKind = "run_started"
-	StepPlanned           StepKind = "planned"
-	StepGateDecided       StepKind = "gate_decided"
-	StepBudgetReserved    StepKind = "budget_reserved"
-	StepToolCalled        StepKind = "tool_called"
-	StepToolReturned      StepKind = "tool_returned"
-	StepEffectReconciled  StepKind = "effect_reconciled"
-	StepBudgetReconciled  StepKind = "budget_reconciled"
-	StepApprovalRequested StepKind = "approval_requested"
-	StepApprovalDecided   StepKind = "approval_decided"
-	StepResumed           StepKind = "resumed"
-	StepAbandoned         StepKind = "abandoned"
-	StepCompensated       StepKind = "compensated"
-	StepFailed            StepKind = "failed"
-	StepParked            StepKind = "parked"
-	StepRunFinished       StepKind = "run_finished"
+	StepRunStarted          StepKind = "run_started"
+	StepPlanned             StepKind = "planned"
+	StepGateDecided         StepKind = "gate_decided"
+	StepBudgetReserved      StepKind = "budget_reserved"
+	StepToolCalled          StepKind = "tool_called"
+	StepToolReturned        StepKind = "tool_returned"
+	StepEffectReconciled    StepKind = "effect_reconciled"
+	StepBudgetReconciled    StepKind = "budget_reconciled"
+	StepApprovalRequested   StepKind = "approval_requested"
+	StepApprovalDecided     StepKind = "approval_decided"
+	StepResumed             StepKind = "resumed"
+	StepAbandoned           StepKind = "abandoned"
+	StepCompensationStarted StepKind = "compensation_started"
+	StepCompensated         StepKind = "compensated"
+	StepFailed              StepKind = "failed"
+	StepParked              StepKind = "parked"
+	StepRunFinished         StepKind = "run_finished"
 )
 
 var stepKinds = map[StepKind]bool{
@@ -37,7 +38,7 @@ var stepKinds = map[StepKind]bool{
 	StepEffectReconciled: true,
 	StepBudgetReconciled: true, StepApprovalRequested: true,
 	StepApprovalDecided: true, StepResumed: true, StepAbandoned: true,
-	StepCompensated: true, StepFailed: true,
+	StepCompensationStarted: true, StepCompensated: true, StepFailed: true,
 	StepParked: true, StepRunFinished: true,
 }
 

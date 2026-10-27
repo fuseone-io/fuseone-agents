@@ -22,6 +22,7 @@ const VERBS: Record<StepKind, { verb: string; tone: Tone }> = {
   approval_decided: { verb: "runs.verbDecided", tone: "good" },
   resumed: { verb: "runs.verbResumed", tone: "good" },
   abandoned: { verb: "runs.verbAbandoned", tone: "bad" },
+  compensation_started: { verb: "runs.verbCompensationStarted", tone: "warn" },
   compensated: { verb: "runs.verbCompensated", tone: "warn" },
   failed: { verb: "runs.verbFailed", tone: "bad" },
   parked: { verb: "runs.verbParked", tone: "warn" },

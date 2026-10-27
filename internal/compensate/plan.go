@@ -49,6 +49,12 @@ type Act struct {
 	// write. Where the shapes genuinely do not line up, the honest answer is
 	// that no compensator can be declared — not a mapping nobody can audit.
 	ResultRef string
+
+	// Attempted means an undo crossed its durable attempt boundary. Failed
+	// distinguishes a recorded failure from an absent result, whose remote
+	// outcome is unknown. Neither is safe to send again automatically.
+	Attempted bool
+	Failed    bool
 }
 
 /*
@@ -88,15 +94,47 @@ func Plan(steps []domain.Step, catalogue Catalogue) []Act {
 				at.resultRef = p.ResultRef
 			}
 
+		case domain.StepCompensationStarted:
+			var p domain.CompensationStartedPayload
+			if decode(step, &p) != nil {
+				continue
+			}
+			if at, ok := calls[p.ForSeq]; ok {
+				at.attempted = true
+				at.undo = p.Tool
+			}
+
 		case domain.StepCompensated:
 			var p domain.CompensatedPayload
 			if decode(step, &p) != nil {
 				continue
 			}
 			// Recorded in the same ledger as the doing, so a resumed run
-			// reading the trail again does not refund twice.
-			if at, ok := calls[p.ForSeq]; ok && p.Succeeded {
-				at.undone = true
+			// reading the trail again does not refund twice. A failure proved to
+			// precede Invoke is safe to revisit; every other failure is final for
+			// automatic execution because a lost reply might have landed remotely.
+			// Historical payloads omit BeforeInvoke and therefore stay conservative.
+			if at, ok := calls[p.ForSeq]; ok {
+				safeBeforeInvoke := p.BeforeInvoke && !at.attempted && !at.undone
+				switch {
+				case p.Succeeded:
+					at.attempted = true
+					at.compensationFailed = false
+					at.undone = true
+				case safeBeforeInvoke:
+					// No durable attempt boundary was crossed, so a later
+					// recovery may evaluate policy, reservation and the
+					// catalogue's current compensator again.
+					at.compensationFailed = false
+				default:
+					if !at.undone {
+						at.attempted = true
+						at.compensationFailed = true
+					}
+				}
+				if p.Tool != "" && !safeBeforeInvoke {
+					at.undo = p.Tool
+				}
 			}
 		}
 	}
@@ -111,9 +149,13 @@ func Plan(steps []domain.Step, catalogue Catalogue) []Act {
 		case !at.returned || at.failed || at.undone:
 			continue
 		}
-		undo, _ := catalogue.CompensatedBy(at.tool)
+		undo := at.undo
+		if undo == "" {
+			undo, _ = catalogue.CompensatedBy(at.tool)
+		}
 		out = append(out, Act{
 			Tool: at.tool, Seq: at.seq, Undo: undo, ResultRef: at.resultRef,
+			Attempted: at.attempted, Failed: at.compensationFailed,
 		})
 	}
 	return out
@@ -121,12 +163,15 @@ func Plan(steps []domain.Step, catalogue Catalogue) []Act {
 
 // call is one tool invocation as the trail records it.
 type call struct {
-	tool     domain.ToolID
-	seq      int64
-	effect   domain.Effect
-	returned bool
-	failed   bool
-	undone   bool
+	tool               domain.ToolID
+	seq                int64
+	effect             domain.Effect
+	returned           bool
+	failed             bool
+	undone             bool
+	attempted          bool
+	compensationFailed bool
+	undo               domain.ToolID
 	// resultRef is what the call answered with, and what the undo is called
 	// with in turn.
 	resultRef string

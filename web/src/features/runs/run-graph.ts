@@ -149,6 +149,13 @@ function describe(
       };
     case "compensated":
       return { kind: "fault", title: "runs.nodeCompensated", tone: "escalate" };
+    case "compensation_started":
+      return {
+        kind: "fault",
+        title: "runs.nodeCompensationStarted",
+        detail: text("tool"),
+        tone: "escalate",
+      };
     case "failed":
       return {
         kind: "fault",
