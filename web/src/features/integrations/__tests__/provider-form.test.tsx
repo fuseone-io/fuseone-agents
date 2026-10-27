@@ -17,14 +17,17 @@ vi.mock("@/features/integrations/api", async (importOriginal) => {
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-describe("the model provider sheet", () => {
-  beforeEach(() => {
-    Element.prototype.hasPointerCapture ??= () => false;
-    Element.prototype.scrollIntoView ??= () => {};
-    api.mutateAsync.mockReset();
-    api.mutateAsync.mockResolvedValue(undefined);
-  });
+// File scope, so the Radix shims and the mock reset reach every test in
+// every describe — scoped to one block, the suite only passed because the
+// earlier tests happened to run first and install them.
+beforeEach(() => {
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.scrollIntoView ??= () => {};
+  api.mutateAsync.mockReset();
+  api.mutateAsync.mockResolvedValue(undefined);
+});
 
+describe("the model provider sheet", () => {
   // Behind a proxy the model names are the installation's own, so somebody has
   // to be able to say what they are. Pasted one per line, which is how a proxy
   // lists them.
