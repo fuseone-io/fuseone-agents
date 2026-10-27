@@ -29,6 +29,9 @@ func (schemas) Schema(id domain.ToolID) (string, string, map[string]any, bool) {
 	case "crm.lookup":
 		return "crm.lookup", "Look a customer up by email.",
 			map[string]any{"email": map[string]any{"type": "string"}}, true
+	case "crm.search":
+		return "crm.search", "Search customers by name.",
+			map[string]any{"name": map[string]any{"type": "string"}}, true
 	case domain.ToolMemoryFind:
 		return string(id), "Find governed structured memory assertions.",
 			map[string]any{"search": map[string]any{"type": "string"}}, true
@@ -1965,5 +1968,72 @@ func TestOpenAICompatible_unavailablePackTools_areNamedInTheGuidance(t *testing.
 	if !strings.Contains(string(whole), "grafana.query_loki_logs") ||
 		!strings.Contains(string(whole), "cannot be called") {
 		t.Errorf("request carries no unavailable-tools note: %s", whole)
+	}
+}
+
+// The reviewer's race on #150: the runner's preflight saw the schema, the
+// catalogue lost the server before request assembly, and the provider's own
+// lookup came back empty. Skipping would silently omit the tool — the exact
+// defect the preflight exists to end. A tool missing at assembly that the
+// engine did not declare unavailable is an error before any HTTP.
+func TestAnthropic_aSchemaLostBetweenPreflightAndAssembly_failsTheCall(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, anthropicToolUse)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5"})
+	in := input()
+	in.Tools = []domain.ToolID{"crm.lookup", "grafana.query_loki_logs"}
+
+	if _, err := p.Plan(context.Background(), in); err == nil {
+		t.Fatal("Plan succeeded with an undeclared, undescribable tool")
+	}
+	if got := len(c.all()); got != 0 {
+		t.Errorf("requests = %d, want none: the loss must be caught before HTTP", got)
+	}
+
+	// Declared by the engine, the same absence is deliberate and planned
+	// around rather than fatal.
+	in.Unavailable = []domain.ToolID{"grafana.query_loki_logs"}
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan with the absence declared: %v", err)
+	}
+}
+
+func TestOpenAICompatible_aSchemaLostBetweenPreflightAndAssembly_failsTheCall(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, openAIToolCall)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindOpenAICompatible, c.server.URL, model.Config{Model: "gpt-x"})
+	in := input()
+	in.Tools = []domain.ToolID{"crm.lookup", "grafana.query_loki_logs"}
+
+	if _, err := p.Plan(context.Background(), in); err == nil {
+		t.Fatal("Plan succeeded with an undeclared, undescribable tool")
+	}
+	if got := len(c.all()); got != 0 {
+		t.Errorf("requests = %d, want none: the loss must be caught before HTTP", got)
+	}
+
+	in.Unavailable = []domain.ToolID{"grafana.query_loki_logs"}
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan with the absence declared: %v", err)
 	}
 }

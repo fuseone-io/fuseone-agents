@@ -68,9 +68,11 @@ func TestToolParams_aWholeObjectSchema_sendsItsRequiredFields(t *testing.T) {
 	t.Parallel()
 	client := &Anthropic{tools: requiredSchema()}
 
-	tools := client.toolParams([]domain.ToolID{"ticket"}, namesFor(engine.PlanInput{
-		Tools: []domain.ToolID{"ticket"},
-	}))
+	in := engine.PlanInput{Tools: []domain.ToolID{"ticket"}}
+	tools, err := client.toolParams(in, namesFor(in))
+	if err != nil {
+		t.Fatalf("toolParams: %v", err)
+	}
 	if len(tools) < 1 || tools[0].OfTool == nil {
 		t.Fatal("no tools were built")
 	}
@@ -84,9 +86,11 @@ func TestChatTools_aWholeObjectSchema_sendsItsRequiredFields(t *testing.T) {
 	t.Parallel()
 	client := &OpenAICompatible{tools: requiredSchema()}
 
-	tools := client.chatTools([]domain.ToolID{"ticket"}, namesFor(engine.PlanInput{
-		Tools: []domain.ToolID{"ticket"},
-	}))
+	in := engine.PlanInput{Tools: []domain.ToolID{"ticket"}}
+	tools, err := client.chatTools(in, namesFor(in))
+	if err != nil {
+		t.Fatalf("chatTools: %v", err)
+	}
 	if len(tools) < 1 {
 		t.Fatal("no tools were built")
 	}
@@ -116,9 +120,11 @@ func TestChatTools_aWholeObjectSchema_isSentAsFields(t *testing.T) {
 		},
 	}}
 
-	tools := client.chatTools([]domain.ToolID{"ticket"}, namesFor(engine.PlanInput{
-		Tools: []domain.ToolID{"ticket"},
-	}))
+	in := engine.PlanInput{Tools: []domain.ToolID{"ticket"}}
+	tools, err := client.chatTools(in, namesFor(in))
+	if err != nil {
+		t.Fatalf("chatTools: %v", err)
+	}
 	if len(tools) < 1 {
 		t.Fatal("no tools were built")
 	}

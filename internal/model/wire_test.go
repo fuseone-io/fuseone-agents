@@ -327,12 +327,14 @@ func TestAnthropic_aToolOnlyTheTranscriptMentions_isNotOffered(t *testing.T) {
 	}
 
 	tools, _ := c.last()["tools"].([]any)
-	if len(tools) != 1 {
-		t.Fatalf("offered %d tools, want only the platform finish tool", len(tools))
+	if len(tools) != 2 {
+		t.Fatalf("offered %d tools, want this step's tool and the finish tool", len(tools))
 	}
-	tool, _ := tools[0].(map[string]any)
-	if name, _ := tool["name"].(string); name != "_fuseone__finish" {
-		t.Errorf("offered %q, want only the platform finish tool", name)
+	for _, raw := range tools {
+		tool, _ := raw.(map[string]any)
+		if name, _ := tool["name"].(string); name == "crm__lookup" {
+			t.Errorf("offered %q: the transcript widened the pack by the back door", name)
+		}
 	}
 }
 
