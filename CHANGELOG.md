@@ -25,7 +25,27 @@ field" is a commit message.
 
 ---
 
-## [0.68.0] — 2026-10-26
+## [0.69.0] — 2026-10-26
+
+### Fixed
+
+- **A worker that loses its run can no longer act on it.** A worker
+  suspended past its lease — a long GC pause, a frozen node — used to wake
+  up and keep going: releasing the run from under its successor, parking it
+  over a human's abandonment, sealing stale steps onto a history it never
+  saw, and firing tool calls beside the successor's. Every claim now
+  advances a fencing token that every write and every outgoing effect must
+  present, leases are renewed while a turn runs and judged dead by the
+  database's own clock the moment they cannot be proven held, and a fenced
+  worker stands down quietly: no park, no failure counted, the run left to
+  whoever holds it now. Billed model calls caught on the wrong side of the
+  fence still reach the ledger, exactly once.
+- **Parking no longer overwrites what a person decided.** An abandonment
+  landing before or during the supervisor's parking is honoured: the
+  compensation stays claimable instead of being buried under a parked run,
+  and a run that already ended is not relabelled as parked.
+
+
 
 ### Fixed
 
