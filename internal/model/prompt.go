@@ -205,8 +205,11 @@ func unavailableToolsNote(in engine.PlanInput) string {
 	for i, id := range in.Unavailable {
 		names[i] = string(id)
 	}
+	// No cause is stated, because this note cannot know it: the server may
+	// have been removed, disabled, or kept while a Curator took the tool off
+	// the surface. Naming the wrong one would send the model asserting it.
 	return "Unavailable in this run: " + strings.Join(names, ", ") +
-		". These tools are in this agent's pack, but their server is not registered on the platform right now, so they cannot be called. If the task depends on them, say so plainly in your outcome rather than inferring their results."
+		". These tools are in this agent's pack but are not available to this run and cannot be called. If the task depends on them, say so plainly in your outcome rather than inferring their results."
 }
 
 func budgetNote(in engine.PlanInput) string {
