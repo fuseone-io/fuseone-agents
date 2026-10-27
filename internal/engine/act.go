@@ -583,6 +583,15 @@ func (r *Runner) invoke(
 	}
 
 	call.Seq = state.Seq
+	// The last answer before the effect leaves the process. The call record
+	// above was fenced, but a worker can be suspended between that write and
+	// this line — and renewal only notices at its next tick, after the effect
+	// would already be out in the world.
+	if start.LeaseEpoch != 0 {
+		if err := r.deps.Ledger.Fence(ctx, start.RunID, start.LeaseEpoch, state.Head); err != nil {
+			return Status{}, fmt.Errorf("engine: fence before %s: %w", p.Tool, err)
+		}
+	}
 	result, invokeErr := r.deps.Tools.Invoke(ctx, call)
 	returned := domain.ToolReturnedPayload{
 		Tool: p.Tool, ResultRef: result.ResultRef,

@@ -279,13 +279,22 @@ func (r *Runner) append(ctx context.Context, state State, start Start, s domain.
 
 	// Conditional on the head this turn folded: a run that moved in between —
 	// a successor worker, an approval, an abandonment — refuses the write with
-	// ErrHeadMoved rather than sealing a stale decision onto it (NF-15). Only
-	// the opening step has no head to condition on.
+	// ErrHeadMoved rather than sealing a stale decision onto it (NF-15). Under
+	// a lease, conditional on the epoch too: a successor's claim moves no
+	// steps, so the head alone cannot tell a fenced worker it lost the run.
+	// Only the opening step has no head to condition on.
 	append := func() (domain.Step, error) {
+		head := state.Head
 		if state.Seq < domain.FirstSeq {
+			head = domain.StepRef{}
+		}
+		if start.LeaseEpoch != 0 {
+			return r.deps.Ledger.AppendIfLeaseAndHead(ctx, start.LeaseEpoch, head, s)
+		}
+		if head == (domain.StepRef{}) {
 			return r.deps.Ledger.Append(ctx, s)
 		}
-		return r.deps.Ledger.AppendIfHead(ctx, state.Head, s)
+		return r.deps.Ledger.AppendIfHead(ctx, head, s)
 	}
 	sealed, err := append()
 	if err != nil {

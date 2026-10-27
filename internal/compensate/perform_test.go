@@ -183,3 +183,78 @@ func TestPerform_anActWithNothingToUndoIt_isReportedNotSkipped(t *testing.T) {
 		t.Errorf("called %+v with nothing to call", tools.calls)
 	}
 }
+
+func TestPerform_leaseLost_noUndoLeavesTheProcess(t *testing.T) {
+	t.Parallel()
+
+	tools := &recorder{}
+	deps, start, plan := harness(t, tools)
+	// The worker that was asked to compensate lost its lease while suspended:
+	// the store no longer recognises its epoch. Not one undo may fire — the
+	// successor will run the same plan, and these calls act on the world.
+	start.LeaseEpoch = 7
+
+	_, err := compensate.Perform(context.Background(), deps, start, plan)
+	if !errors.Is(err, domain.ErrLeaseLost) {
+		t.Fatalf("Perform = %v, want %v", err, domain.ErrLeaseLost)
+	}
+	if len(tools.calls) != 0 {
+		t.Fatalf("undos fired = %d, want 0: the run belongs to the successor", len(tools.calls))
+	}
+	steps, err := deps.Ledger.Read(context.Background(), start.RunID, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if len(steps) != 1 {
+		t.Fatalf("ledger has %d steps, want the opening alone: a fenced worker records nothing", len(steps))
+	}
+}
+
+func TestPerform_underALiveLease_undoesAndRecordsAsBefore(t *testing.T) {
+	t.Parallel()
+
+	tools := &recorder{}
+	deps, start, plan := harness(t, tools)
+	queue, ok := deps.Ledger.(interface {
+		Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error)
+	})
+	if !ok {
+		t.Fatal("the harness store lost its queue half")
+	}
+	claimed, err := queue.Claim(context.Background(), "w1", time.Minute)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	start.LeaseEpoch = claimed.Epoch
+
+	out, err := compensate.Perform(context.Background(), deps, start, plan)
+	if err != nil {
+		t.Fatalf("Perform: %v", err)
+	}
+	if len(tools.calls) != len(plan) || len(out) != len(plan) {
+		t.Fatalf("undos fired = %d, outcomes = %d, want %d of each", len(tools.calls), len(out), len(plan))
+	}
+}
+
+func TestPerform_gateRefusalUnderALostLease_recordsNothing(t *testing.T) {
+	t.Parallel()
+
+	tools := &recorder{}
+	deps, start, _ := harness(t, tools)
+	start.LeaseEpoch = 7
+	// An undo the catalogue does not know: the Gate refuses it, and the
+	// refusal would be recorded — but the record belongs to the lease holder.
+	plan := []compensate.Act{{Tool: "crm.charge", Seq: 4, Undo: "crm.mystery"}}
+
+	_, err := compensate.Perform(context.Background(), deps, start, plan)
+	if !errors.Is(err, domain.ErrLeaseLost) {
+		t.Fatalf("Perform = %v, want %v", err, domain.ErrLeaseLost)
+	}
+	steps, readErr := deps.Ledger.Read(context.Background(), start.RunID, domain.FirstSeq)
+	if readErr != nil {
+		t.Fatalf("Read: %v", readErr)
+	}
+	if len(steps) != 1 {
+		t.Fatalf("ledger has %d steps, want the opening alone", len(steps))
+	}
+}

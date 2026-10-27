@@ -72,7 +72,9 @@ func (w *Worker) park(ctx context.Context, claim domain.Claim, reason error, cod
 	if err != nil {
 		return fmt.Errorf("encode parking of %s: %w", claim.RunID, err)
 	}
-	if _, err := w.deps.Ledger.Append(ctx, domain.Step{
+	// Fenced on the lease alone: a worker that lost the run must not park it
+	// over the successor's live turn — the failure it would record is stale.
+	if _, err := w.deps.Ledger.AppendIfLeaseAndHead(ctx, claim.Epoch, domain.StepRef{}, domain.Step{
 		RunID:      claim.RunID,
 		Kind:       domain.StepParked,
 		Scope:      claim.Scope,
@@ -82,6 +84,11 @@ func (w *Worker) park(ctx context.Context, claim domain.Claim, reason error, cod
 		At:         w.clock.Now(),
 		Payload:    payload,
 	}); err != nil {
+		if errors.Is(err, domain.ErrLeaseLost) {
+			w.log.Warn("lease lost before parking; leaving the run to its successor",
+				"run", claim.RunID)
+			return nil
+		}
 		// Released anyway: a run left leased because its parking could not be
 		// written waits out the whole lease and is then retried by somebody
 		// else, which is worse than a projection that knows more than the

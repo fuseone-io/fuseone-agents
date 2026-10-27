@@ -26,6 +26,15 @@ type Ledger interface {
 	// lease renewal only notices the loss at the next tick, while the head
 	// check refuses the stale write at the moment it happens.
 	AppendIfHead(ctx context.Context, head domain.StepRef, s domain.Step) (domain.Step, error)
+	// AppendIfLeaseAndHead additionally refuses the write with
+	// domain.ErrLeaseLost when epoch is no longer the run's current lease —
+	// the fence a worker that acts between renewal ticks cannot cross. A zero
+	// head fences on the lease alone.
+	AppendIfLeaseAndHead(ctx context.Context, epoch int64, head domain.StepRef, s domain.Step) (domain.Step, error)
+	// Fence is the synchronous form of the same question, asked immediately
+	// before an effect leaves the process: an append can be refused after the
+	// fact, an external call cannot.
+	Fence(ctx context.Context, runID domain.RunID, epoch int64, head domain.StepRef) error
 	Read(ctx context.Context, runID domain.RunID, fromSeq int64) ([]domain.Step, error)
 	Head(ctx context.Context, runID domain.RunID) (domain.Step, error)
 }

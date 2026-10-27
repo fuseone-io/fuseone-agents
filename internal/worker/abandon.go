@@ -8,6 +8,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -39,6 +40,12 @@ func (w *Worker) undo(ctx context.Context, claim domain.Claim, start engine.Star
 		Ledger: w.deps.Ledger, Gate: w.deps.Gate, Tools: w.deps.Tools,
 		Catalog: w.deps.Catalog, Clock: w.deps.Clock, Content: w.deps.Content,
 	}, start, plan)
+	if errors.Is(err, domain.ErrLeaseLost) {
+		// Fenced mid-compensation: the successor runs the same plan, and the
+		// steps already recorded stop it repeating what worked here.
+		log.Warn("lease lost mid-compensation; leaving the run to its successor")
+		return nil
+	}
 	if err != nil {
 		// The ledger or the Gate is broken, not the undoing. Park so the run
 		// keeps its compensating phase and a later turn finishes the job —
@@ -68,11 +75,18 @@ func (w *Worker) end(ctx context.Context, claim domain.Claim, standing int) erro
 	if err != nil {
 		return fmt.Errorf("encode ending of %s: %w", claim.RunID, err)
 	}
-	if _, err := w.deps.Ledger.Append(ctx, domain.Step{
+	// Fenced on the lease alone: ending the run is the successor's call once
+	// the lease is no longer this worker's.
+	if _, err := w.deps.Ledger.AppendIfLeaseAndHead(ctx, claim.Epoch, domain.StepRef{}, domain.Step{
 		RunID: claim.RunID, Kind: domain.StepFailed, Scope: claim.Scope,
 		AgentID: claim.AgentID, VersionID: claim.VersionID,
 		OnBehalfOf: claim.OnBehalfOf, At: w.deps.Clock.Now(), Payload: payload,
 	}); err != nil {
+		if errors.Is(err, domain.ErrLeaseLost) {
+			w.log.Warn("lease lost before the ending; leaving the run to its successor",
+				"run", claim.RunID)
+			return nil
+		}
 		return fmt.Errorf("end %s: %w", claim.RunID, err)
 	}
 	return w.release(ctx, claim, domain.ClaimOutcome{})

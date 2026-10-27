@@ -78,6 +78,10 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	start.AgentID = claim.AgentID
 	start.VersionID = claim.VersionID
 	start.OnBehalfOf = claim.OnBehalfOf
+	// The fencing token rides with the run into the engine: every append and
+	// every outgoing effect this turn makes is conditional on the lease still
+	// being current — the fence renewal alone cannot provide.
+	start.LeaseEpoch = claim.Epoch
 
 	// Read per claim rather than cached: promotion has to take effect on the
 	// next turn, and a demotion has to take effect faster than that.
@@ -118,6 +122,13 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 		w.metrics.AdvanceFailure("head_moved", false)
 		log.Warn("the run moved under the turn; standing down")
 		return true, w.release(ctx, claim, domain.ClaimOutcome{})
+	}
+	if errors.Is(advErr, domain.ErrLeaseLost) {
+		// Fenced at a write or at an effect: the lease belongs to a successor,
+		// and there is nothing here to release or record.
+		w.metrics.AdvanceFailure("lease_lost", false)
+		log.Warn("lease lost mid-turn; leaving the run to its successor")
+		return true, nil
 	}
 	if advErr != nil {
 		outcome := w.failure(claim, advErr)

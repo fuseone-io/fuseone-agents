@@ -676,6 +676,7 @@ type fencedQueue struct {
 	*ledger.Memory
 	renewed    chan struct{}
 	renewErr   error
+	renewNoop  bool
 	releaseErr error
 	releases   atomic.Int32
 }
@@ -683,6 +684,9 @@ type fencedQueue struct {
 func (q *fencedQueue) Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error {
 	if q.renewErr != nil {
 		return q.renewErr
+	}
+	if q.renewNoop {
+		return nil
 	}
 	err := q.Memory.Renew(ctx, runID, epoch, lease)
 	select {
@@ -875,5 +879,57 @@ func TestTurn_runMovesUnderTheTurn_staleAppendIsRefusedAndNothingParks(t *testin
 	}
 	if next.Attempts != 0 {
 		t.Errorf("attempts = %d, want 0 — a stale turn is not a failure", next.Attempts)
+	}
+}
+
+func TestTurn_successorClaimsWhileTheTurnPlans_theStaleWriteIsFenced(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	// Renewals lie: they return nil without extending — the worker suspended
+	// between ticks, believing its lease holds while it quietly expires.
+	q := &fencedQueue{Memory: store, renewed: make(chan struct{}, 1), renewNoop: true}
+	p := newGatedPlanner()
+	w := newFencedWorker(t, Config{Lease: 50 * time.Millisecond}, p, q, store)
+	openRun(t, store)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := w.turn(context.Background(), slog.New(slog.DiscardHandler))
+		done <- err
+	}()
+
+	select {
+	case <-p.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the turn never reached planning")
+	}
+	// The lease runs out under the planning call, and a successor claims —
+	// writing nothing, so the head is exactly where the stale worker left it.
+	deadline := time.After(5 * time.Second)
+	for {
+		if _, err := store.Claim(context.Background(), "w2", time.Minute); err == nil {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("the successor never managed to claim the expired lease")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	close(p.release)
+
+	if err := <-done; err != nil {
+		t.Fatalf("turn = %v, want a quiet stand-down behind the fence", err)
+	}
+	steps, err := store.Read(context.Background(), "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if len(steps) != 1 {
+		t.Fatalf("ledger has %d steps, want 1: the stale turn sealed %v", len(steps), steps[1:])
+	}
+	if got := phaseOf(t, store); got == engine.PhaseParked {
+		t.Error("a fenced turn parked the run — that is the successor's story")
 	}
 }
