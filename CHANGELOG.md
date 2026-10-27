@@ -25,6 +25,35 @@ field" is a commit message.
 
 ---
 
+## [0.70.0] — 2026-10-27
+
+### Upgrade notes
+
+- Compensation now writes a new step kind (`compensation_started`) into the
+  trail, and a binary from an earlier version cannot read a run that carries
+  it. Complete the rollout before abandoning runs with compensation; a run
+  compensated during the brief window where old and new pods overlap may
+  park and need a resume once the rollout finishes.
+
+### Changed
+
+- **An undo whose outcome is unknown is never sent again.** Compensation
+  records its intent in the trail before the external call fires. After a
+  crash, an attempt with no recorded result means the remote outcome is
+  unknown: the run says so explicitly ("manual reconciliation required")
+  instead of silently refunding or cancelling a second time. A failure
+  proven to have happened before anything left the platform — a Gate
+  refusal, a missing reservation — stays safely retryable, picking up the
+  catalogue's current compensator.
+
+### Fixed
+
+- **An erasure either happens whole or not at all.** A subject erasure and
+  the retention sweep now commit the destroyed bytes, the operational
+  records, the memory marks and the administrative record together. A
+  failure anywhere leaves everything in place, instead of bytes destroyed
+  with no record that it ever happened.
+
 ## [0.69.0] — 2026-10-26
 
 ### Fixed
