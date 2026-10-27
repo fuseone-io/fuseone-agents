@@ -71,3 +71,27 @@ describe("a run parked by a model provider failure", () => {
     expect(screen.queryByText(/provedor desconhecido retornou/i)).not.toBeInTheDocument();
   });
 });
+
+describe("a run parked over an unavailable tool server", () => {
+  // The park payload keeps only the stable summary, so the server rides in
+  // the provider field — and the notice must name it, or the operator goes
+  // hunting across every integration (#150).
+  it("names the disconnected server instead of a generic upstream sentence", () => {
+    render(
+      <RunFailureNotice
+        run={runWithFailure({
+          code: "tool_server_unavailable",
+          provider: "grafana",
+          status: undefined,
+          requestId: undefined,
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText("Servidor de ferramentas indisponível na plataforma"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/grafana/)).toBeInTheDocument();
+    expect(screen.queryByText(/retornou/)).not.toBeInTheDocument();
+  });
+});

@@ -386,3 +386,27 @@ describe("a planned turn", () => {
     });
   });
 });
+
+describe("a planned turn that could not offer part of the pack", () => {
+  // The payload records what the prompt left out; a trail that keeps that
+  // only in JSON explains nothing to the operator reading the story (#150).
+  it("names the tools instead of the routine prompt composition", () => {
+    const line = detailOf({
+      seq: 2,
+      kind: "planned",
+      at: "2026-10-27T14:00:00Z",
+      hash: "h",
+      payload: {
+        prompt: { unit: "content_bytes", total: 4096, instructions: 512 },
+        unavailableTools: ["grafana.query_loki_logs", "grafana.list_datasources"],
+      },
+    } as never);
+
+    expect(line).toEqual({
+      key: "runs.storyUnavailableTools",
+      values: {
+        tools: "grafana.query_loki_logs, grafana.list_datasources",
+      },
+    });
+  });
+});

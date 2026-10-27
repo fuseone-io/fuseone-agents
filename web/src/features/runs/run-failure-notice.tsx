@@ -45,5 +45,10 @@ export function RunFailureNotice({ run }: { run: Run }) {
 
 function runFailureDetail(code: string): string {
   if (code === "dedupe_in_flight") return "runtime.runFailureDedupeInFlightDetail";
+  // The provider field carries the tool server's name on this code; the
+  // generic "returned {{status}}" sentence would claim an HTTP exchange that
+  // never happened.
+  if (code === "tool_server_unavailable")
+    return "runtime.runFailureToolServerUnavailableDetail";
   return "runtime.runFailureDetail";
 }
