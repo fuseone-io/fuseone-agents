@@ -112,7 +112,7 @@ func (m *Memory) Fence(
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if m.leases[runID].epoch != epoch {
+	if !m.leaseHeld(runID, epoch) {
 		return domain.ErrLeaseLost
 	}
 	if head == (domain.StepRef{}) {
@@ -144,8 +144,10 @@ func (m *Memory) append(
 
 	// The lease before the head: a worker fenced out has lost the run whole,
 	// and "the lease is no longer yours" is the answer that stops it, where
-	// "the head moved" invites refolding a run it no longer owns.
-	if epoch != nil && m.leases[s.RunID].epoch != *epoch {
+	// "the head moved" invites refolding a run it no longer owns. The lease
+	// must also still be live: past leased_until — or after a release —
+	// exclusivity cannot be proven, however unchanged the number looks.
+	if epoch != nil && !m.leaseHeld(s.RunID, *epoch) {
 		return domain.Step{}, domain.ErrLeaseLost
 	}
 	// The precondition first, and the order is part of the contract rather
@@ -176,6 +178,13 @@ func (m *Memory) append(
 		delete(m.lastFailureAt, sealed.RunID)
 	}
 	return sealed, nil
+}
+
+// leaseHeld is the one reading of "may this epoch still act": the number is
+// current AND the lease is live. Callers hold m.mu.
+func (m *Memory) leaseHeld(runID domain.RunID, epoch int64) bool {
+	st := m.leases[runID]
+	return st.epoch == epoch && !st.leasedUntil.IsZero() && st.leasedUntil.After(m.now())
 }
 
 func (m *Memory) now() time.Time {

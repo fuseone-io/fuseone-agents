@@ -116,7 +116,7 @@ func (m *Memory) Renew(ctx context.Context, runID domain.RunID, epoch int64, lea
 	defer m.mu.Unlock()
 
 	st := m.leases[runID]
-	if st.epoch != epoch || st.leasedUntil.IsZero() {
+	if !m.leaseHeld(runID, epoch) {
 		return domain.ErrLeaseLost
 	}
 	st.leasedUntil = m.now().Add(lease)

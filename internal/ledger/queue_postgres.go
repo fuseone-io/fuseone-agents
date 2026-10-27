@@ -116,7 +116,7 @@ func (p *Postgres) claim(
 func (p *Postgres) Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error {
 	tag, err := p.pool.Exec(ctx, `
 		update runs set leased_until = $3
-		where run_id = $1 and lease_epoch = $2 and leased_until is not null`,
+		where run_id = $1 and lease_epoch = $2 and leased_until > now()`,
 		string(runID), epoch, time.Now().Add(lease))
 	if err != nil {
 		return fmt.Errorf("renew lease: %w", err)
@@ -211,17 +211,20 @@ func (p *Postgres) Fence(
 	ctx context.Context, runID domain.RunID, epoch int64, head domain.StepRef,
 ) error {
 	var current int64
+	var live bool
 	var headSeq *int64
 	var headKind *string
 	err := p.pool.QueryRow(ctx, `
-		select r.lease_epoch, h.seq, h.kind
+		select r.lease_epoch,
+		       r.leased_until is not null and r.leased_until > now(),
+		       h.seq, h.kind
 		from runs r
 		left join lateral (
 			select seq, kind from run_steps
 			where run_id = $1 order by seq desc limit 1
 		) h on true
 		where r.run_id = $1`, string(runID),
-	).Scan(&current, &headSeq, &headKind)
+	).Scan(&current, &live, &headSeq, &headKind)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ErrLeaseLost
 	}
@@ -229,7 +232,9 @@ func (p *Postgres) Fence(
 		return fmt.Errorf("read fence: %w", err)
 	}
 
-	if current != epoch {
+	// The number current AND the lease live: past leased_until — or after a
+	// release — exclusivity cannot be proven, however unchanged the epoch.
+	if current != epoch || !live {
 		return domain.ErrLeaseLost
 	}
 	if head == (domain.StepRef{}) {

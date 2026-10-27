@@ -48,12 +48,21 @@ func (p *Postgres) appendOnce(
 	// The lease before the head, inside the same transaction as the write:
 	// a worker fenced out has lost the run whole, and the claim that fenced
 	// it only touches the runs row — the head may not have moved at all.
+	//
+	// FOR UPDATE shares the row lock the claim takes, so a claim committing
+	// while this append is in flight is waited for and then seen — a plain
+	// read resolves against the pre-claim snapshot and lets the stale write
+	// through. The lease must also still be live: past leased_until,
+	// exclusivity cannot be proven, however unchanged the epoch looks.
 	if epoch != nil {
 		var current int64
-		err := tx.QueryRow(ctx,
-			`select lease_epoch from runs where run_id = $1`, string(s.RunID),
-		).Scan(&current)
-		if errors.Is(err, pgx.ErrNoRows) || (err == nil && current != *epoch) {
+		var live bool
+		err := tx.QueryRow(ctx, `
+			select lease_epoch, leased_until is not null and leased_until > now()
+			from runs where run_id = $1
+			for update`, string(s.RunID),
+		).Scan(&current, &live)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && (current != *epoch || !live)) {
 			return domain.Step{}, domain.ErrLeaseLost
 		}
 		if err != nil {
