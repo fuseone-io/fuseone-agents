@@ -103,13 +103,36 @@ func TestClosedTools_namesWhatForwardMovementPutBehind(t *testing.T) {
 		{Name: "tres", Reaches: []domain.ToolID{"reply", "shared"}},
 	}}
 
-	if got := closedTools(start, nil); got != nil {
+	if got := closedTools(start, State{}); got != nil {
 		t.Errorf("closedTools before any call = %v, want none", got)
 	}
 
-	got := closedTools(start, []domain.ToolID{"reply"})
+	got := closedTools(start, State{Called: []domain.ToolID{"reply"}})
 	if len(got) != 2 || got[0] != "lookup" || got[1] != "probe" {
 		t.Errorf("closedTools = %v, want lookup and probe, in step order", got)
+	}
+}
+
+func TestClosedTools_aPlatformToolTheTurnStillOffers_isNotBehind(t *testing.T) {
+	t.Parallel()
+
+	// An author anchored memory.find in the first step; memory learning
+	// re-offers it on every turn regardless. After the run advances, the
+	// tool is still in the prompt — a payload calling it closed would be
+	// the trail contradicting the surface the model actually saw (#153
+	// review). The judge must be the turn's effective surface, not the
+	// bare step union.
+	start := Start{
+		MemoryLearning: domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview},
+		Steps: []Envelope{
+			{Name: "um", Reaches: []domain.ToolID{"lookup", domain.ToolMemoryFind}},
+			{Name: "dois", Reaches: []domain.ToolID{"reply"}},
+		},
+	}
+
+	got := closedTools(start, State{Called: []domain.ToolID{"reply"}})
+	if len(got) != 1 || got[0] != "lookup" {
+		t.Errorf("closedTools = %v, want lookup alone: memory.find is still offered", got)
 	}
 }
 

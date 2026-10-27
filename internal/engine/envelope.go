@@ -74,15 +74,19 @@ func withoutTool(pack gate.Pack, remove domain.ToolID) gate.Pack {
 }
 
 // closedTools is what forward movement has put behind a run: tools reachable
-// in steps before the one it is at, and in none from there on. Recorded on
+// in steps before the one it is at, and on the surface of this turn no more.
+// Judged against envelopeForState — the surface the model actually sees —
+// never the bare step union: memory learning, a ticket and context artifacts
+// re-offer platform tools whatever step anchored them, and a payload calling
+// one of those closed would contradict the prompt it describes. Recorded on
 // the planned step so the trail can say the envelope narrowed because the
 // run advanced — which otherwise reads exactly like an outage (#152).
-func closedTools(start Start, called []domain.ToolID) []domain.ToolID {
-	at := StepAt(start, called)
+func closedTools(start Start, state State) []domain.ToolID {
+	at := StepAt(start, state.Called)
 	if at == 0 {
 		return nil
 	}
-	open := envelopeOf(start, called)
+	open := envelopeForState(start, state)
 	seen := map[domain.ToolID]bool{}
 	var closed []domain.ToolID
 	for _, step := range start.Steps[:at] {
