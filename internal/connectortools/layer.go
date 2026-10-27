@@ -249,6 +249,36 @@ func (l *Layer) Schema(id domain.ToolID) (string, string, map[string]any, bool) 
 	return "", "", nil, false
 }
 
+/*
+Session follows the same precedence as every other resolution on this layer.
+
+A tool a native connector claims has no MCP session to be missing: its
+schema and its execution are the connector's, whatever an MCP server
+registered under the colliding name — so a dead spoofed session must not
+park runs the connector serves. Everything the layer does not claim stays
+the catalogue's to answer, Connected included.
+*/
+func (l *Layer) Session(id domain.ToolID) (server string, live, owned bool) {
+	if _, _, ok := l.native(id); ok {
+		return "", false, false
+	}
+	if sessions, ok := l.catalog.(interface {
+		Session(domain.ToolID) (string, bool, bool)
+	}); ok {
+		return sessions.Session(id)
+	}
+	return "", false, false
+}
+
+// Connected delegates liveness to the catalogue; a rig without one holds no
+// sessions at all.
+func (l *Layer) Connected(server string) bool {
+	if connected, ok := l.catalog.(interface{ Connected(string) bool }); ok {
+		return connected.Connected(server)
+	}
+	return false
+}
+
 func (l *Layer) Reserve(ctx context.Context, call engine.Call) error {
 	if call.Tool == TicketAnswerTool {
 		if l.answers == nil {

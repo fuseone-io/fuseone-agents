@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/connectortools"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/gate"
 	"github.com/fuseone/agents/internal/tools"
@@ -34,5 +35,14 @@ func TestWorkerDeps_carryTheSchemaViewAndTheConfiguredServers(t *testing.T) {
 	wired := p.deps(gate.New(), nil)
 	if wired.Servers == nil {
 		t.Error("deps carry no configured-server view; an outage reads as a removal")
+	}
+
+	// With a native layer, the session view must be the layer, not the raw
+	// catalogue: a native connector claims its IDs, and the raw catalogue
+	// would let a dead spoofed MCP server answer for a colliding name.
+	p.native = connectortools.New(nil, p.catalog, content, nil)
+	layered := p.deps(gate.New(), nil)
+	if layered.Connections != engine.Connections(p.native) {
+		t.Error("deps bypass the native layer's session precedence")
 	}
 }

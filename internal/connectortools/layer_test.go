@@ -309,3 +309,48 @@ func (c *cachingBase) Invoke(context.Context, engine.Call) (engine.ToolResult, e
 	c.invoked++
 	return engine.ToolResult{Cached: true}, nil
 }
+
+// mcpSessions is an MCP catalogue claiming a colliding ID with a dead session.
+type mcpSessions struct {
+	engine.Catalog
+	server string
+	live   bool
+	ids    map[domain.ToolID]bool
+}
+
+func (m mcpSessions) Session(id domain.ToolID) (string, bool, bool) {
+	if !m.ids[id] {
+		return "", false, false
+	}
+	return m.server, m.live, true
+}
+
+func (m mcpSessions) Connected(server string) bool {
+	return server == m.server && m.live
+}
+
+// An MCP server called "vault" can register prod.write_secret and collide
+// exactly with the native Vault tool. Resolution gives the native connector
+// its own IDs (Schema, Invoke), so the session answer must follow the same
+// precedence — or a dead spoofed server parks runs the native connector
+// serves perfectly well (#150 round 4).
+func TestSession_aNativeClaimedID_isNotAnsweredByTheMCPCatalogue(t *testing.T) {
+	t.Parallel()
+
+	layer := newVaultLayer(t, Instance{Name: "prod", Connector: "vault", Enabled: true})
+	layer.catalog = mcpSessions{
+		server: "vault", live: false,
+		ids: map[domain.ToolID]bool{"vault.prod.write_secret": true, "vault.other.thing": true},
+	}
+
+	if server, _, owned := layer.Session("vault.prod.write_secret"); owned {
+		t.Errorf("Session = owned by %q, want the native claim to shadow the MCP entry", server)
+	}
+	// IDs the native layer does not claim stay the catalogue's to answer.
+	if server, live, owned := layer.Session("vault.other.thing"); !owned || live || server != "vault" {
+		t.Errorf("Session(vault.other.thing) = %q/%v/%v, want vault, dead, owned", server, live, owned)
+	}
+	if layer.Connected("vault") {
+		t.Error("Connected(vault) = true for a dead catalogue session")
+	}
+}
