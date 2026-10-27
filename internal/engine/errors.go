@@ -41,6 +41,10 @@ type SpentPlanError struct {
 	Provider string
 	Model    string
 	Err      error
+	// Unavailable is stamped by the runner, not the planner: the billed
+	// prompt went out without these pack tools, and the spent step must say
+	// so exactly as a successful one would.
+	Unavailable []domain.ToolID
 }
 
 func (e *SpentPlanError) Error() string {

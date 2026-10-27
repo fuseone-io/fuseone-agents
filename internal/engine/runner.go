@@ -111,11 +111,12 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 				Labels: state.Labels.Clone(),
 				Cost:   spent.Cost,
 				Payload: mustJSON(domain.PlannedPayload{
-					Node:     StepNameAt(start, state.Called),
-					Provider: spent.Provider,
-					Model:    spent.Model,
-					Price:    pricePayload(spent.Price),
-					Prompt:   promptInputPayload(spent.Prompt),
+					Node:             StepNameAt(start, state.Called),
+					Provider:         spent.Provider,
+					Model:            spent.Model,
+					Price:            pricePayload(spent.Price),
+					Prompt:           promptInputPayload(spent.Prompt),
+					UnavailableTools: toolStrings(spent.Unavailable),
 				}),
 			}); aerr != nil {
 				return Status{}, aerr
@@ -283,6 +284,12 @@ func (r *Runner) plan(ctx context.Context, state State, start Start) (Proposal, 
 		StopsWhen:      stopsWhenAt(start, at),
 	})
 	if err != nil {
+		// A billed failure still describes the prompt that was paid for,
+		// and that prompt went out without the same tools.
+		var spent *SpentPlanError
+		if errors.As(err, &spent) {
+			spent.Unavailable = unavailable
+		}
 		return Proposal{}, fmt.Errorf("engine: plan: %w", err)
 	}
 	p.Unavailable = unavailable
