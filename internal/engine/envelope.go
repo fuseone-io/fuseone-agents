@@ -143,13 +143,30 @@ func SpendAt(start Start, called []domain.ToolID) (model, effort string) {
 		return "", ""
 	}
 
-	// Before anything has been called the run is entering the first step.
-	// After that it is entering the one past the furthest it has reached.
+	// Before any step's own work has been done the run is entering the first
+	// step. After that it is entering the one past the furthest it has
+	// reached. "Work" is a step tool, never a platform one: the engine's own
+	// initial memory lookup fills Called, and letting it move the spend would
+	// price reasoning still in the first step at the second's rate (#153).
 	at := 0
-	if len(called) > 0 {
+	if stepWorked(start, called) {
 		at = min(StepAt(start, called)+1, len(start.Steps)-1)
 	}
 	return start.Steps[at].Model, start.Steps[at].Effort
+}
+
+// stepWorked reports whether any called tool was a step's own work — a
+// non-platform tool some step reaches.
+func stepWorked(start Start, called []domain.ToolID) bool {
+	for _, tool := range called {
+		if tool.PlatformOwned() {
+			continue
+		}
+		if _, ok := stepOf(start.Steps, tool); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // stepOf reports which step first reaches a tool.

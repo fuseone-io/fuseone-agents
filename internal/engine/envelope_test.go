@@ -207,6 +207,24 @@ func TestSpendAt_pricesTheStepBeingEnteredNotTheOneJustFinished(t *testing.T) {
 	}
 }
 
+func TestSpendAt_aPlatformToolCall_doesNotAdvanceTheSpend(t *testing.T) {
+	t.Parallel()
+
+	// The engine's own initial memory lookup fills Called before any step
+	// work happens. Pricing that as "entering the second step" hands the
+	// strong model's rate to reasoning still sitting in the first — the same
+	// invariant StepAt guards, on the money side (#153 review).
+	start := Start{Steps: []Envelope{
+		{Name: "Triar", Reaches: []domain.ToolID{"crm.lookup"}, Model: "claude-haiku-4-5", Effort: "low"},
+		{Name: "Decidir", Reaches: []domain.ToolID{"crm.reply"}, Model: "claude-opus-5", Effort: "high"},
+	}}
+
+	model, effort := SpendAt(start, []domain.ToolID{domain.ToolMemoryFind})
+	if model != "claude-haiku-4-5" || effort != "low" {
+		t.Errorf("spends %q/%q, want the first step's: a memory lookup is not step work", model, effort)
+	}
+}
+
 func TestSpendAt_pastTheLastStep_staysOnIt(t *testing.T) {
 	t.Parallel()
 
