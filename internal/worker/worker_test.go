@@ -933,3 +933,52 @@ func TestTurn_successorClaimsWhileTheTurnPlans_theStaleWriteIsFenced(t *testing.
 		t.Error("a fenced turn parked the run — that is the successor's story")
 	}
 }
+
+func TestTurn_renewalCannotProveTheLease_turnIsCancelledBeforeExpiry(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	// Not a lost lease — a renewal that cannot answer at all: the database is
+	// away. A worker that keeps acting on a lease nobody can prove holds is
+	// the suspended-worker hole with a different mask.
+	q := &fencedQueue{Memory: store, renewed: make(chan struct{}, 1), renewErr: errors.New("database unreachable")}
+	p := newGatedPlanner() // only a cancel can end the plan
+	w := newFencedWorker(t, Config{Lease: 90 * time.Millisecond}, p, q, store)
+	openRun(t, store)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := w.turn(context.Background(), slog.New(slog.DiscardHandler))
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("turn = %v, want a quiet stand-down", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the turn kept running on a lease it could not prove")
+	}
+	select {
+	case <-p.sawCancel:
+	default:
+		t.Fatal("the planner was never cancelled")
+	}
+	if got := q.releases.Load(); got != 0 {
+		t.Errorf("releases = %d, want none: the lease may already be someone else's", got)
+	}
+}
+
+func TestTurn_tinyLease_doesNotPanicTheRenewTicker(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	q := &fencedQueue{Memory: store, renewed: make(chan struct{}, 1)}
+	w := newFencedWorker(t, Config{Lease: 2}, &flakyPlanner{}, q, store) // 2ns: Lease/3 truncates to zero
+	openRun(t, store)
+
+	if _, err := w.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+}

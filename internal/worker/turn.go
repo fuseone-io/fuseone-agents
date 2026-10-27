@@ -148,25 +148,44 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 
 // keepLease renews the claim for as long as the turn runs, at a third of the
 // lease so one missed beat is survivable. A renewal refused with ErrLeaseLost
-// cancels the returned context with that cause; any other failure waits for
-// the next tick — the lease may well still hold.
+// cancels the returned context with that cause. Any other failure is retried
+// once within the margin and then fails closed: two misses in a row put the
+// next tick at the lease's edge, and acting past a lease nobody can prove is
+// held is the suspended-worker hole with a different mask.
 func (w *Worker) keepLease(ctx context.Context, claim domain.Claim) (context.Context, func()) {
 	turnCtx, cancel := context.WithCancelCause(ctx)
 	done := make(chan struct{})
 
 	go func() {
 		defer close(done)
-		ticker := time.NewTicker(w.cfg.Lease / 3)
+		interval := w.cfg.Lease / 3
+		if interval < time.Millisecond {
+			// A lease under 3ns would hand NewTicker a zero interval, and a
+			// floor this small never outlives any real lease's margin.
+			interval = time.Millisecond
+		}
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
+
+		failures := 0
 		for {
 			select {
 			case <-turnCtx.Done():
 				return
 			case <-ticker.C:
 				err := w.queue.Renew(turnCtx, claim.RunID, claim.Epoch, w.cfg.Lease)
-				if errors.Is(err, domain.ErrLeaseLost) {
+				switch {
+				case err == nil:
+					failures = 0
+				case errors.Is(err, domain.ErrLeaseLost):
 					cancel(domain.ErrLeaseLost)
 					return
+				default:
+					failures++
+					if failures >= 2 {
+						cancel(domain.ErrLeaseLost)
+						return
+					}
 				}
 			}
 		}
