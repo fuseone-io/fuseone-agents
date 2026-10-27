@@ -47,14 +47,23 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	// provider is offered, and the identifier a proposal is read back as.
 	offered := namesFor(in)
 	guidance := prefixStablePlanningNote(in, o.tools, offered)
+	// This path has no volatile slot, so the note rides with the guidance;
+	// the cache it invalidates when the set changes is the automatic one.
+	if note := unavailableToolsNote(in); note != "" {
+		guidance += "\n\n" + note
+	}
 	prompt := promptInputBreakdown(in, o.cfg, o.tools, offered, guidance)
+	chatTools, err := o.chatTools(in, offered)
+	if err != nil {
+		return engine.Proposal{}, err
+	}
 	body := chatRequest{
 		// Not overridable here, unlike the Anthropic path: this client sends
 		// the planner's model and nothing reads in.Model, so cfg.Model is the
 		// effective one and every figure below belongs to it.
 		Model:     o.cfg.Model,
 		Messages:  o.chatMessages(in, offered, guidance),
-		Tools:     o.chatTools(in.Tools, offered),
+		Tools:     chatTools,
 		MaxTokens: o.cfg.MaxTokens,
 	}
 	// Only some providers accept a reasoning control, and an unknown field is
@@ -187,18 +196,24 @@ func (o *OpenAICompatible) chatMessages(
 	return msgs
 }
 
-func (o *OpenAICompatible) chatTools(ids []domain.ToolID, offered names) []chatTool {
-	out := make([]chatTool, 0, len(ids))
-	for _, id := range ids {
+func (o *OpenAICompatible) chatTools(in engine.PlanInput, offered names) ([]chatTool, error) {
+	declared := declaredUnavailable(in)
+	out := make([]chatTool, 0, len(in.Tools))
+	for _, id := range in.Tools {
 		if isContextReadTool(id) {
 			out = append(out, contextReadChatTool(offered))
 			continue
 		}
 		if o.tools == nil {
+			// A rig with no schema view at all; production always has one.
 			continue
 		}
 		_, desc, schema, ok := o.tools.Schema(id)
+		if err := staleDeclaration(id, declared[id], ok); err != nil {
+			return nil, err
+		}
 		if !ok {
+			// Declared by the engine and still absent: planned around.
 			continue
 		}
 		out = append(out, chatTool{
@@ -226,7 +241,7 @@ func (o *OpenAICompatible) chatTools(ids []domain.ToolID, offered names) []chatT
 			},
 		},
 	})
-	return out
+	return out, nil
 }
 
 func contextReadChatTool(offered names) chatTool {

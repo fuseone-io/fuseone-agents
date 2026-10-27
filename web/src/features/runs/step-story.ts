@@ -118,6 +118,10 @@ export function detailOf(step: Step): Line {
 
   switch (step.kind) {
     case "planned": {
+      // The absence outranks the routine composition: a prompt that could
+      // not offer part of the pack is the fact the reader is looking for.
+      const unavailable = unavailableLine(payload);
+      if (unavailable) return unavailable;
       const prompt = promptLine(payload);
       return prompt ?? NOTHING;
     }
@@ -322,6 +326,14 @@ function budgetLine(payload: Record<string, unknown>): Line | undefined {
       requested: dim.format(dim.read(estimate)),
     },
   };
+}
+
+function unavailableLine(payload: Record<string, unknown>): Line | undefined {
+  const raw = payload.unavailableTools;
+  if (!Array.isArray(raw)) return undefined;
+  const tools = raw.filter((tool): tool is string => typeof tool === "string");
+  if (tools.length === 0) return undefined;
+  return { key: "runs.storyUnavailableTools", values: { tools: tools.join(", ") } };
 }
 
 function promptLine(payload: Record<string, unknown>): Line | undefined {

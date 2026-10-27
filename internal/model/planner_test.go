@@ -29,6 +29,9 @@ func (schemas) Schema(id domain.ToolID) (string, string, map[string]any, bool) {
 	case "crm.lookup":
 		return "crm.lookup", "Look a customer up by email.",
 			map[string]any{"email": map[string]any{"type": "string"}}, true
+	case "crm.search":
+		return "crm.search", "Search customers by name.",
+			map[string]any{"name": map[string]any{"type": "string"}}, true
 	case domain.ToolMemoryFind:
 		return string(id), "Find governed structured memory assertions.",
 			map[string]any{"search": map[string]any{"type": "string"}}, true
@@ -1880,5 +1883,219 @@ func TestAnthropic_underDeclaredAuto_freeTextIsNudgedNotFinal(t *testing.T) {
 	raw, _ := json.Marshal(bodies[1])
 	if !strings.Contains(string(raw), "Memória carregada") {
 		t.Error("the nudged call does not carry the model's own text back to it")
+	}
+}
+
+// A pack tool the worker cannot describe is skipped from the offer; the model
+// must be told, or it improvises the explanation (#148).
+func TestAnthropic_unavailablePackTools_areNamedInTheVolatileNote(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, anthropicToolUse)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5"})
+	in := input()
+	in.Unavailable = []domain.ToolID{"grafana.query_loki_logs", "grafana.list_datasources"}
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	body := c.all()[0]
+	system, _ := json.Marshal(body["system"])
+	messages, _ := json.Marshal(body["messages"])
+	if !strings.Contains(string(messages), "grafana.query_loki_logs") ||
+		!strings.Contains(string(messages), "cannot be called") {
+		t.Errorf("messages carry no unavailable-tools note: %s", messages)
+	}
+	// Volatile, never in the cached stable prefix: the set changes as servers
+	// are removed or restored, and a frozen copy would lie.
+	if strings.Contains(string(system), "cannot be called") {
+		t.Errorf("the note leaked into the cached system prefix: %s", system)
+	}
+	// And it must not assert a cause it cannot know: the server may be gone,
+	// disabled, or live with the tool taken off the surface (#150 round 3).
+	for _, claim := range []string{"not registered", "removed", "disabled", "disconnected"} {
+		if strings.Contains(string(messages), claim) {
+			t.Errorf("the note claims %q, a cause it cannot know", claim)
+		}
+	}
+}
+
+func TestAnthropic_withEveryPackToolOffered_saysNothingAboutAvailability(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, anthropicToolUse)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5"})
+	if _, err := p.Plan(context.Background(), input()); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	whole, _ := json.Marshal(c.all()[0])
+	if strings.Contains(string(whole), "cannot be called") {
+		t.Errorf("an availability note appeared with nothing unavailable: %s", whole)
+	}
+}
+
+func TestOpenAICompatible_unavailablePackTools_areNamedInTheGuidance(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, openAIToolCall)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindOpenAICompatible, c.server.URL, model.Config{Model: "gpt-x"})
+	in := input()
+	in.Unavailable = []domain.ToolID{"grafana.query_loki_logs"}
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	whole, _ := json.Marshal(c.all()[0])
+	if !strings.Contains(string(whole), "grafana.query_loki_logs") ||
+		!strings.Contains(string(whole), "cannot be called") {
+		t.Errorf("request carries no unavailable-tools note: %s", whole)
+	}
+}
+
+// The reviewer's race on #150: the runner's preflight saw the schema, the
+// catalogue lost the server before request assembly, and the provider's own
+// lookup came back empty. Skipping would silently omit the tool — the exact
+// defect the preflight exists to end. A tool missing at assembly that the
+// engine did not declare unavailable is an error before any HTTP.
+func TestAnthropic_aSchemaLostBetweenPreflightAndAssembly_failsTheCall(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, anthropicToolUse)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5"})
+	in := input()
+	in.Tools = []domain.ToolID{"crm.lookup", "grafana.query_loki_logs"}
+
+	if _, err := p.Plan(context.Background(), in); err == nil {
+		t.Fatal("Plan succeeded with an undeclared, undescribable tool")
+	}
+	if got := len(c.all()); got != 0 {
+		t.Errorf("requests = %d, want none: the loss must be caught before HTTP", got)
+	}
+
+	// Declared by the engine, the same absence is deliberate and planned
+	// around rather than fatal.
+	in.Unavailable = []domain.ToolID{"grafana.query_loki_logs"}
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan with the absence declared: %v", err)
+	}
+}
+
+func TestOpenAICompatible_aSchemaLostBetweenPreflightAndAssembly_failsTheCall(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, openAIToolCall)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindOpenAICompatible, c.server.URL, model.Config{Model: "gpt-x"})
+	in := input()
+	in.Tools = []domain.ToolID{"crm.lookup", "grafana.query_loki_logs"}
+
+	if _, err := p.Plan(context.Background(), in); err == nil {
+		t.Fatal("Plan succeeded with an undeclared, undescribable tool")
+	}
+	if got := len(c.all()); got != 0 {
+		t.Errorf("requests = %d, want none: the loss must be caught before HTTP", got)
+	}
+
+	in.Unavailable = []domain.ToolID{"grafana.query_loki_logs"}
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan with the absence declared: %v", err)
+	}
+}
+
+// The inverse race (#150 round 3): the preflight declared a tool absent, the
+// server reconnected before assembly, and the provider's own lookup now
+// resolves it. Honouring the stale declaration would call the model without
+// a tool that is available again — and let it finish the run on that lie.
+func TestAnthropic_aDeclaredAbsenceThatReappeared_failsTheCall(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, anthropicToolUse)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5"})
+	in := input()
+	// crm.lookup is describable again, yet still declared unavailable.
+	in.Unavailable = []domain.ToolID{"crm.lookup"}
+
+	if _, err := p.Plan(context.Background(), in); err == nil {
+		t.Fatal("Plan honoured a stale absence of a tool that reappeared")
+	}
+	if got := len(c.all()); got != 0 {
+		t.Errorf("requests = %d, want none: the stale declaration aborts before HTTP", got)
+	}
+}
+
+func TestOpenAICompatible_aDeclaredAbsenceThatReappeared_failsTheCall(t *testing.T) {
+	t.Parallel()
+	c := &capture{}
+	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.record(body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, openAIToolCall)
+	}))
+	t.Cleanup(c.server.Close)
+
+	p := plannerFor(t, model.KindOpenAICompatible, c.server.URL, model.Config{Model: "gpt-x"})
+	in := input()
+	in.Unavailable = []domain.ToolID{"crm.lookup"}
+
+	if _, err := p.Plan(context.Background(), in); err == nil {
+		t.Fatal("Plan honoured a stale absence of a tool that reappeared")
+	}
+	if got := len(c.all()); got != 0 {
+		t.Errorf("requests = %d, want none: the stale declaration aborts before HTTP", got)
 	}
 }

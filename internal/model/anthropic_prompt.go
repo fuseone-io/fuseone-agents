@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
@@ -49,7 +50,13 @@ func (a *Anthropic) messages(
 }
 
 func volatilePlanningNote(in engine.PlanInput) string {
-	return budgetNote(in)
+	notes := make([]string, 0, 2)
+	for _, note := range []string{budgetNote(in), unavailableToolsNote(in)} {
+		if note != "" {
+			notes = append(notes, note)
+		}
+	}
+	return strings.Join(notes, "\n\n")
 }
 
 func cacheMessageTail(messages []anthropic.MessageParam) {

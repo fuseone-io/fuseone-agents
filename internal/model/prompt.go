@@ -192,6 +192,26 @@ func toolOffered(ids []domain.ToolID, schemas ToolSchemas, id domain.ToolID) boo
 	return false
 }
 
+// unavailableToolsNote names the pack tools the worker could not describe
+// for this call, so the model states a platform fact instead of improvising
+// one. It rides outside the cached stable prefix wherever a volatile slot
+// exists: the set changes as servers are removed or restored, and a frozen
+// copy would lie (#148).
+func unavailableToolsNote(in engine.PlanInput) string {
+	if len(in.Unavailable) == 0 {
+		return ""
+	}
+	names := make([]string, len(in.Unavailable))
+	for i, id := range in.Unavailable {
+		names[i] = string(id)
+	}
+	// No cause is stated, because this note cannot know it: the server may
+	// have been removed, disabled, or kept while a Curator took the tool off
+	// the surface. Naming the wrong one would send the model asserting it.
+	return "Unavailable in this run: " + strings.Join(names, ", ") +
+		". These tools are in this agent's pack but are not available to this run and cannot be called. If the task depends on them, say so plainly in your outcome rather than inferring their results."
+}
+
 func budgetNote(in engine.PlanInput) string {
 	if in.Budget.Micros <= 0 {
 		return ""

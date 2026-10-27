@@ -4,6 +4,8 @@ import (
 	"errors"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/fuseone/agents/internal/domain"
 )
 
 /*
@@ -32,6 +34,22 @@ func (c *Catalog) Connected(server string) bool {
 	defer c.mu.RUnlock()
 	_, ok := c.sessions[server]
 	return ok
+}
+
+// Session names the server a tool is registered under and whether this
+// worker holds a live session to it. Ownership comes from registration,
+// never from the ID's prefix: a native connector's "sql.app-x.run" must not
+// answer for an MCP server that happens to be called "sql", so anything
+// outside the catalogue is owned by nobody.
+func (c *Catalog) Session(id domain.ToolID) (server string, live, owned bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	entry, ok := c.entries[id]
+	if !ok {
+		return "", false, false
+	}
+	_, live = c.sessions[entry.Server]
+	return entry.Server, live, true
 }
 
 // retireIfDead drops a server's session when err says its connection is gone.

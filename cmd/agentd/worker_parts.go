@@ -310,6 +310,23 @@ func (p *workerParts) deps(gate engine.Gate, metrics *worker.MetricsRegistry) en
 	if p.configPool != nil {
 		deps.Standing = standingPort{store: standing.NewStore(p.configPool)}
 	}
+	// The planner's own schema view, so the runner notices — before spending
+	// a model call — a pack tool this worker cannot offer; the live-session
+	// view, because schema presence cannot answer reachability; and the
+	// configured set, so an outage is told from a removal (#148).
+	deps.Schemas = p.toolSchemas()
+	// The native layer when there is one, for the same reason it answers
+	// schemas: a native connector claims its IDs, and the raw MCP catalogue
+	// would let a dead spoofed server answer for a colliding name.
+	switch {
+	case p.native != nil:
+		deps.Connections = p.native
+	case p.catalog != nil:
+		deps.Connections = p.catalog
+	}
+	if p.integrations != nil {
+		deps.Servers = expectedServers{servers: p.integrations}
+	}
 	return deps
 }
 

@@ -108,3 +108,32 @@ func TestRemoveServer_afterItsSessionDied_dropsItsTools(t *testing.T) {
 		t.Error("a removed server's tools survived because its session had already died")
 	}
 }
+
+// Session answers by registration, never by prefix: it is what lets the
+// engine tell a dead session's tool (entry kept, session gone) from a
+// native connector's tool that merely shares a namespace with a server
+// (#150 round 3).
+func TestSession_ownershipComesFromRegistrationNotFromThePrefix(t *testing.T) {
+	t.Parallel()
+
+	srv := lookupServer()
+	c, _ := catalogWith(t, srv)
+
+	server, live, owned := c.Session("crm.lookup")
+	if server != "crm" || !live || !owned {
+		t.Errorf("Session(crm.lookup) = %q/%v/%v, want crm, live, owned", server, live, owned)
+	}
+	if _, _, owned := c.Session("crm.something-never-registered"); owned {
+		t.Error("an unregistered tool reads as owned because its prefix matches a server")
+	}
+
+	srv.err = closedErr
+	ctx := context.Background()
+	if _, err := c.Invoke(ctx, engine.Call{RunID: "run-1", Seq: 1, Tool: "crm.lookup"}); err == nil {
+		t.Fatal("Invoke succeeded on a closed connection")
+	}
+	server, live, owned = c.Session("crm.lookup")
+	if server != "crm" || live || !owned {
+		t.Errorf("Session after death = %q/%v/%v, want crm, not live, still owned", server, live, owned)
+	}
+}

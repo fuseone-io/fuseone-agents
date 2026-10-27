@@ -147,7 +147,10 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	// Built once for this request and used in both directions: the names the
 	// provider is offered, and the identifier a proposal is read back as.
 	offered := namesFor(in)
-	tools := a.toolParams(in.Tools, offered)
+	tools, err := a.toolParams(in, offered)
+	if err != nil {
+		return engine.Proposal{}, err
+	}
 	stableGuidance := prefixStablePlanningNote(in, a.tools, offered)
 	volatileGuidance := volatilePlanningNote(in)
 	promptGuidance := stableGuidance + volatileGuidance

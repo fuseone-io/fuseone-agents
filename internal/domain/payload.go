@@ -96,6 +96,11 @@ type PlannedPayload struct {
 	// provider tokenises it, so the unit is content bytes rather than tokens.
 	// Cost remains the provider-reported token and money record.
 	Prompt *PromptInputBreakdown `json:"prompt,omitempty"`
+	// UnavailableTools is the envelope tools the worker could not describe to
+	// the model for this call — their server was removed or disabled. The
+	// model was told the same thing, so a run that proceeded without part of
+	// its pack says so here rather than only in its own prose.
+	UnavailableTools []string `json:"unavailableTools,omitempty"`
 }
 
 const (

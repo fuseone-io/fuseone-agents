@@ -47,6 +47,11 @@ type PlanInput struct {
 	// cut off mid-thought.
 	Remaining domain.Consumption
 	Tools     []domain.ToolID
+	// Unavailable is the envelope tools this worker cannot describe because
+	// their server was removed or disabled. Told to the model so its account
+	// of the run is fact rather than inference. A server that is merely
+	// disconnected never reaches here — the turn refuses to run instead.
+	Unavailable []domain.ToolID
 	// MemoryLearning is the version-pinned policy that decides whether the
 	// platform-owned suggestion tool may record anything. The tool can appear in
 	// a legacy pack, but only this policy turns learning on.
@@ -96,6 +101,10 @@ type Proposal struct {
 	// Price is the rate provenance for this planning call. Cost is accounting;
 	// this is only the explanation for zero and precision.
 	Price domain.ModelPriceUse
+	// Unavailable is stamped by the runner from the same check that fed the
+	// planner, so the planned step records what could not be offered. A
+	// planner cannot author it.
+	Unavailable []domain.ToolID
 	// Done reports that the agent considers the run complete.
 	Done    bool
 	Outcome string
@@ -210,6 +219,38 @@ type ToolResult struct {
 type Catalog interface {
 	Effect(domain.ToolID) (domain.Effect, bool)
 	Dedupe(domain.ToolID) (domain.ToolDedupe, bool)
+}
+
+// Schemas resolves what a tool looks like to the model — the same resolution
+// the planner performs, which silently skips a tool it cannot describe. The
+// runner consults it so a pack tool missing from this worker's catalogue is
+// a recorded fact rather than a quiet omission (#148).
+type Schemas interface {
+	Schema(id domain.ToolID) (name, description string, input map[string]any, ok bool)
+}
+
+// Servers tells a missing tool's server apart from a removed one. A server
+// that is configured and enabled is expected to be connected, so its tools
+// being undescribable is an outage to back off from, not a decision to
+// respect.
+type Servers interface {
+	Expected(ctx context.Context, server string) (bool, error)
+}
+
+// Connections names the MCP server a tool is registered under on this
+// worker and whether that server holds a live session. Schema presence
+// cannot answer it: the catalogue deliberately keeps a dead session's
+// entries until the reconciler replaces them, and it hides a live server's
+// tools the Curator took off the surface. Ownership is declared by
+// registration, never inferred from the ID's prefix — a native connector's
+// "sql.app-x.run" must not answer for an MCP server that happens to be
+// called "sql" — so anything outside the MCP catalogue is owned by nobody.
+type Connections interface {
+	Session(id domain.ToolID) (server string, live, owned bool)
+	// Connected reports liveness by name, for a tool nobody owns any more:
+	// its prefix is the one signal left, and a live server that merely
+	// stopped offering the tool is a decision, not an outage.
+	Connected(server string) bool
 }
 
 // DedupeStore coordinates semantic effect idempotency across runs of the same
