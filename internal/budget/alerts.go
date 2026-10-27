@@ -133,11 +133,17 @@ func (w *Watcher) check(
 		Scope: ceiling.Scope, Threshold: reached, Since: since,
 		SpentMicros: spent.Micros, CeilingMicros: ceiling.Budget.Micros, At: now,
 	}
-	// Already said, unless the period rolled over or the scope climbed higher.
-	// The period is part of the comparison because a new month starts the
-	// warnings again, which is the only reading of a monthly budget that works.
+	// Already said, unless the period rolled over, the ceiling itself changed,
+	// or the scope climbed higher. The period is part of the comparison because
+	// a new month starts the warnings again; the ceiling is part of it because
+	// an operator who raises an exhausted budget in place must hear about the
+	// new amount from its first threshold — the old 100% mark is about money
+	// nobody configured any more, and the read path already refuses to show it
+	// (#146).
 	if said, ok := announced[mark.Key()]; ok &&
-		said.Since.Equal(since) && said.Threshold >= reached {
+		said.Since.Equal(since) &&
+		said.CeilingMicros == mark.CeilingMicros &&
+		said.Threshold >= reached {
 		return domain.BudgetMark{}, false, nil
 	}
 	return mark, true, nil

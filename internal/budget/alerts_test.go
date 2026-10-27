@@ -125,6 +125,28 @@ func TestSweep_aNewPeriod_warnsAgainFromTheStart(t *testing.T) {
 	}
 }
 
+func TestSweep_aRaisedCeilingInTheSameWindow_warnsAgainstTheNewAmount(t *testing.T) {
+	t.Parallel()
+
+	// The operator's reaction to an exhausted budget is to raise it in place.
+	// The old 100% mark is about money nobody configured any more; letting it
+	// outrank the new ceiling's 50% would silence every alert until the next
+	// window — exactly while the scope is spending hardest.
+	seen := marks{}
+	sweep(t, 1_000_000, seen) // 100% of the old ceiling, announced.
+
+	raised := budget.NewWatcher(monthly(10_000_000), spend(5_000_000), seen,
+		clock{t: time.Date(2026, 8, 13, 11, 0, 0, 0, time.UTC)}, nil)
+	got, err := raised.Sweep(context.Background())
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	if len(got) != 1 || got[0].Threshold != 50 || got[0].CeilingMicros != 10_000_000 {
+		t.Errorf("announced %+v, want the raised ceiling's 50%% crossing", got)
+	}
+}
+
 func TestSweep_aCeilingWithNoAmount_isNotWatched(t *testing.T) {
 	t.Parallel()
 

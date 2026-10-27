@@ -8046,7 +8046,7 @@ components:
 
     BudgetAlert:
       type: object
-      required: [scope, threshold, spentMicros, ceilingMicros, since]
+      required: [scope, threshold, spentMicros, ceilingMicros, since, period]
       properties:
         scope: { $ref: '#/components/schemas/Scope' }
         threshold:
@@ -8058,6 +8058,13 @@ components:
           type: string
           format: date-time
           description: The start of the period the spend is measured over.
+        period:
+          type: string
+          enum: [daily, monthly]
+          description: >-
+            The window of the budget this crossing is measured against, taken
+            from the configured ceiling. A daily banner must not read as a
+            monthly one.
 
     Health:
       type: object

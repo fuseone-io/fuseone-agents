@@ -38,6 +38,10 @@ function AlertRow({ alert }: { alert: BudgetAlert }) {
     ? Math.min(100, (alert.spentMicros / alert.ceilingMicros) * 100)
     : 0;
   const exhausted = alert.threshold >= 100;
+  // The window comes from the configured ceiling, not from a guess: a daily
+  // budget announcing itself as monthly sends the reader hunting for a
+  // monthly ceiling that does not exist (#146).
+  const window = alert.period === "daily" ? "Daily" : "Monthly";
 
   return (
     <Alert variant={exhausted ? "destructive" : "default"}>
@@ -47,10 +51,15 @@ function AlertRow({ alert }: { alert: BudgetAlert }) {
         <AlertTriangle aria-hidden className="size-4 text-warning" />
       )}
       <AlertTitle>
-        {t(exhausted ? "cost.alertExhausted" : "cost.alertApproaching", {
-          where: alert.scope.area || alert.scope.company,
-          threshold: alert.threshold,
-        })}
+        {t(
+          exhausted
+            ? `cost.alertExhausted${window}`
+            : `cost.alertApproaching${window}`,
+          {
+            where: alert.scope.area || alert.scope.company,
+            threshold: alert.threshold,
+          },
+        )}
       </AlertTitle>
       <AlertDescription className="flex flex-col gap-2">
         <span>

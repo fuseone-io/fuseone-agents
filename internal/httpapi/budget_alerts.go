@@ -21,9 +21,14 @@ ListBudgetAlerts is which scopes are running out of money.
 Narrowed to what the caller may see, like every other read: an author in one
 area has no business knowing another area is close to its ceiling, and the
 number is a fact about that area's work.
+
+A recorded mark is served only while it still describes the budget as
+configured. Marks are the sweeper's dedupe memory and are never erased, so
+without this check a ceiling raised after a crossing keeps its exhausted
+banner on the screen for ever (#146).
 */
 func (s *Server) ListBudgetAlerts(ctx context.Context, req openapi.ListBudgetAlertsRequestObject) (openapi.ListBudgetAlertsResponseObject, error) {
-	if s.marks == nil {
+	if s.marks == nil || s.ceilings == nil {
 		return openapi.ListBudgetAlerts200JSONResponse{Items: []openapi.BudgetAlert{}}, nil
 	}
 
@@ -40,10 +45,23 @@ func (s *Server) ListBudgetAlerts(ctx context.Context, req openapi.ListBudgetAle
 	if err != nil {
 		return nil, fmt.Errorf("list budget alerts: %w", err)
 	}
+	configured, err := s.ceilings.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list budget alerts: read ceilings: %w", err)
+	}
+	ceilings := make(map[string]domain.ScopeBudget, len(configured))
+	for _, c := range configured {
+		ceilings[c.Scope.String()] = c
+	}
 
+	now := clockOr(s.clock).Now()
 	visible := auth.VisibleScopes(ctx, domain.PermCostRead)
 	items := make([]openapi.BudgetAlert, 0, len(announced))
 	for _, mark := range announced {
+		ceiling := ceilings[mark.Scope.String()]
+		if !mark.Describes(ceiling, now) {
+			continue
+		}
 		if !readable(mark.Scope, visible) {
 			continue
 		}
@@ -58,6 +76,9 @@ func (s *Server) ListBudgetAlerts(ctx context.Context, req openapi.ListBudgetAle
 			SpentMicros:   mark.SpentMicros,
 			CeilingMicros: mark.CeilingMicros,
 			Since:         mark.Since,
+			// From the ceiling rather than the mark: the mark never stored
+			// it, and the match above makes the ceiling's word authoritative.
+			Period: openapi.BudgetAlertPeriod(ceiling.Period),
 		})
 	}
 	return openapi.ListBudgetAlerts200JSONResponse{Items: items}, nil

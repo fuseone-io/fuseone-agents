@@ -1114,8 +1114,10 @@
   },
   "cost": {
     "agent": "Agente",
-    "alertApproaching": "{{where}} passou de {{threshold}}% do orçamento do mês",
-    "alertExhausted": "{{where}} esgotou o orçamento do mês",
+    "alertApproachingDaily": "{{where}} passou de {{threshold}}% do orçamento de hoje",
+    "alertApproachingMonthly": "{{where}} passou de {{threshold}}% do orçamento do mês",
+    "alertExhaustedDaily": "{{where}} esgotou o orçamento de hoje",
+    "alertExhaustedMonthly": "{{where}} esgotou o orçamento do mês",
     "alertSpend": "{{spent}} de {{ceiling}}",
     "area": "Área",
     "average": "Médio",

@@ -95,3 +95,21 @@ type BudgetMark struct {
 func (m BudgetMark) Key() string {
 	return fmt.Sprintf("%s/%s", m.Scope.Company, m.Scope.Area)
 }
+
+// Describes reports whether this recorded crossing is still about the ceiling
+// as configured at now.
+//
+// A mark is the sweeper's memory of having spoken, and it is never erased.
+// What makes it servable as a live alert is that nothing it froze has moved:
+// a raised ceiling, a rolled-over window, a changed period or a disabled
+// budget each turn the banner into a claim about money that is no longer the
+// money on the screen (#146).
+func (m BudgetMark) Describes(ceiling ScopeBudget, now time.Time) bool {
+	if !ceiling.Enabled || ceiling.Budget.Micros <= 0 || !ceiling.Period.Valid() {
+		return false
+	}
+	if m.Scope != ceiling.Scope || m.CeilingMicros != ceiling.Budget.Micros {
+		return false
+	}
+	return m.Since.Equal(ceiling.Period.Since(now))
+}
