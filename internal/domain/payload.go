@@ -373,10 +373,22 @@ type AbandonedPayload struct {
 	Compensate bool `json:"compensate"`
 }
 
+// CompensationStartedPayload is the durable boundary before an undo leaves
+// the process. If there is no following CompensatedPayload, the remote outcome
+// is unknown and a generic tool must not be called again automatically.
+type CompensationStartedPayload struct {
+	Tool   ToolID `json:"tool"`
+	ForSeq int64  `json:"for_seq"`
+}
+
 type CompensatedPayload struct {
 	Tool      ToolID `json:"tool"`
 	ForSeq    int64  `json:"for_seq"`
 	Succeeded bool   `json:"succeeded"`
+	// BeforeInvoke is factual proof that no external effect left the process.
+	// It is omitted for historical records, whose failure must remain
+	// conservative because they cannot distinguish refusal from a lost reply.
+	BeforeInvoke bool `json:"before_invoke,omitempty"`
 }
 
 type FailedPayload struct {

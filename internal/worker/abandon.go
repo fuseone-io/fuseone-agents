@@ -54,24 +54,24 @@ func (w *Worker) undo(ctx context.Context, claim domain.Claim, start engine.Star
 	}
 
 	standing := 0
+	unknown := 0
 	for _, o := range outcomes {
 		if !o.Done {
 			standing++
 		}
+		if !o.Done && o.Act.Attempted && !o.Act.Failed {
+			unknown++
+		}
 	}
-	log.Info("compensated", "acts", len(outcomes), "standing", standing)
+	log.Info("compensated", "acts", len(outcomes), "standing", standing, "unknown", unknown)
 
-	return w.end(ctx, claim, standing)
+	return w.end(ctx, claim, standing, unknown)
 }
 
 // end closes an abandoned run, saying how much of the world it could not
 // return to how it found it.
-func (w *Worker) end(ctx context.Context, claim domain.Claim, standing int) error {
-	payload, err := json.Marshal(domain.FailedPayload{
-		Code: "abandoned",
-		Message: fmt.Sprintf(
-			"abandoned by a person; %d act(s) could not be undone", standing),
-	})
+func (w *Worker) end(ctx context.Context, claim domain.Claim, standing, unknown int) error {
+	payload, err := json.Marshal(abandonedFailure(standing, unknown))
 	if err != nil {
 		return fmt.Errorf("encode ending of %s: %w", claim.RunID, err)
 	}
@@ -90,6 +90,16 @@ func (w *Worker) end(ctx context.Context, claim domain.Claim, standing int) erro
 		return fmt.Errorf("end %s: %w", claim.RunID, err)
 	}
 	return w.release(ctx, claim, domain.ClaimOutcome{})
+}
+
+func abandonedFailure(standing, unknown int) domain.FailedPayload {
+	message := fmt.Sprintf(
+		"abandoned by a person; %d act(s) could not be undone", standing)
+	if unknown > 0 {
+		message += fmt.Sprintf(
+			"; %d compensation outcome(s) unknown — manual reconciliation required", unknown)
+	}
+	return domain.FailedPayload{Code: "abandoned", Message: message}
 }
 
 // compensators is the catalogue's view of what undoes what. An installation

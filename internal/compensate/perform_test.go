@@ -2,6 +2,7 @@ package compensate_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -28,14 +29,39 @@ func (e effects) Dedupe(domain.ToolID) (domain.ToolDedupe, bool) {
 }
 
 type recorder struct {
-	calls  []engine.Call
-	fail   map[domain.ToolID]bool
-	broken map[domain.ToolID]bool
+	calls      []engine.Call
+	fail       map[domain.ToolID]bool
+	broken     map[domain.ToolID]bool
+	reserveErr error
+	before     func(engine.Call)
 }
 
-func (r *recorder) Reserve(context.Context, engine.Call) error { return nil }
+type failCompensationResultLedger struct {
+	*ledger.Memory
+}
+
+func (l *failCompensationResultLedger) Append(ctx context.Context, s domain.Step) (domain.Step, error) {
+	if s.Kind == domain.StepCompensated {
+		return domain.Step{}, errors.New("crash before compensation result append")
+	}
+	return l.Memory.Append(ctx, s)
+}
+
+func (l *failCompensationResultLedger) AppendIfLeaseAndHead(
+	ctx context.Context, epoch int64, head domain.StepRef, s domain.Step,
+) (domain.Step, error) {
+	if s.Kind == domain.StepCompensated {
+		return domain.Step{}, errors.New("crash before compensation result append")
+	}
+	return l.Memory.AppendIfLeaseAndHead(ctx, epoch, head, s)
+}
+
+func (r *recorder) Reserve(context.Context, engine.Call) error { return r.reserveErr }
 
 func (r *recorder) Invoke(_ context.Context, c engine.Call) (engine.ToolResult, error) {
+	if r.before != nil {
+		r.before(c)
+	}
 	r.calls = append(r.calls, c)
 	if r.broken[c.Tool] {
 		return engine.ToolResult{}, errors.New("connection refused")
@@ -68,15 +94,38 @@ func harness(t *testing.T, tools *recorder) (compensate.Deps, engine.Start, []co
 	}
 
 	return compensate.Deps{
-			Ledger: store, Gate: gate.New(), Tools: tools, Clock: frozen{},
-			Catalog: effects{
-				"crm.charge.refund": domain.EffectFinancial,
-				"crm.order.cancel":  domain.EffectWrite,
-			},
-		}, start, []compensate.Act{
-			{Tool: "crm.charge", Seq: 4, Undo: "crm.charge.refund"},
-			{Tool: "crm.order", Seq: 2, Undo: "crm.order.cancel"},
-		}
+		Ledger: store, Gate: gate.New(), Tools: tools, Clock: frozen{},
+		Catalog: effects{
+			"crm.charge.refund": domain.EffectFinancial,
+			"crm.order.cancel":  domain.EffectWrite,
+		},
+	}, start, []compensate.Act{
+		{Tool: "crm.charge", Seq: 4, Undo: "crm.charge.refund"},
+		{Tool: "crm.order", Seq: 2, Undo: "crm.order.cancel"},
+	}
+}
+
+func recordSuccessfulOriginal(
+	t *testing.T, store *ledger.Memory, start engine.Start,
+	tool domain.ToolID, effect domain.Effect,
+) {
+	t.Helper()
+	calledPayload, _ := json.Marshal(domain.ToolCalledPayload{Tool: tool, Effect: effect})
+	if _, err := store.Append(context.Background(), domain.Step{
+		RunID: start.RunID, Kind: domain.StepToolCalled, Scope: start.Scope,
+		AgentID: start.AgentID, VersionID: start.VersionID, At: frozen{}.Now(),
+		Payload: calledPayload,
+	}); err != nil {
+		t.Fatalf("record original call: %v", err)
+	}
+	returnedPayload, _ := json.Marshal(domain.ToolReturnedPayload{Tool: tool})
+	if _, err := store.Append(context.Background(), domain.Step{
+		RunID: start.RunID, Kind: domain.StepToolReturned, Scope: start.Scope,
+		AgentID: start.AgentID, VersionID: start.VersionID, At: frozen{}.Now(),
+		Payload: returnedPayload,
+	}); err != nil {
+		t.Fatalf("record original result: %v", err)
+	}
 }
 
 func TestPerform_undoesEachActAndRecordsIt(t *testing.T) {
@@ -256,5 +305,148 @@ func TestPerform_gateRefusalUnderALostLease_recordsNothing(t *testing.T) {
 	}
 	if len(steps) != 1 {
 		t.Fatalf("ledger has %d steps, want the opening alone", len(steps))
+	}
+}
+
+func TestPerform_gateRefusalRecordsThatNoEffectLeftTheProcess(t *testing.T) {
+	t.Parallel()
+
+	tools := &recorder{}
+	deps, start, _ := harness(t, tools)
+	plan := []compensate.Act{{Tool: "crm.charge", Seq: 4, Undo: "crm.mystery"}}
+
+	if _, err := compensate.Perform(context.Background(), deps, start, plan); err != nil {
+		t.Fatalf("Perform: %v", err)
+	}
+	if len(tools.calls) != 0 {
+		t.Fatalf("remote calls = %d, want 0", len(tools.calls))
+	}
+	steps, err := deps.Ledger.Read(context.Background(), start.RunID, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	var payload domain.CompensatedPayload
+	if err := json.Unmarshal(steps[len(steps)-1].Payload, &payload); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if !payload.BeforeInvoke {
+		t.Fatalf("payload = %+v, want a proved pre-invoke failure", payload)
+	}
+}
+
+func TestPerform_preInvokeFailureCanRecoverWithoutDuplicatingAnEffect(t *testing.T) {
+	t.Parallel()
+
+	tools := &recorder{reserveErr: errors.New("tool pool unavailable")}
+	deps, start, _ := harness(t, tools)
+	store := deps.Ledger.(*ledger.Memory)
+	recordSuccessfulOriginal(t, store, start, "crm.charge", domain.EffectFinancial)
+
+	steps, err := store.Read(context.Background(), start.RunID, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("read first plan: %v", err)
+	}
+	plan := compensate.Plan(steps, catalogue{"crm.charge": "crm.charge.refund"})
+	if _, err := compensate.Perform(context.Background(), deps, start, plan); err != nil {
+		t.Fatalf("first Perform: %v", err)
+	}
+	if len(tools.calls) != 0 {
+		t.Fatalf("remote calls while reserve failed = %d, want 0", len(tools.calls))
+	}
+
+	steps, err = store.Read(context.Background(), start.RunID, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("read recovery plan: %v", err)
+	}
+	recovered := compensate.Plan(steps, catalogue{"crm.charge": "crm.charge.refund"})
+	if len(recovered) != 1 || recovered[0].Attempted || recovered[0].Failed {
+		t.Fatalf("recovered plan = %+v, want one safe retry", recovered)
+	}
+	tools.reserveErr = nil
+	if _, err := compensate.Perform(context.Background(), deps, start, recovered); err != nil {
+		t.Fatalf("recovered Perform: %v", err)
+	}
+	if len(tools.calls) != 1 {
+		t.Fatalf("remote calls after recovery = %d, want exactly 1", len(tools.calls))
+	}
+}
+
+func TestPerform_recordsTheAttemptBeforeTheUndoLeavesTheProcess(t *testing.T) {
+	t.Parallel()
+
+	tools := &recorder{}
+	deps, start, plan := harness(t, tools)
+	tools.before = func(call engine.Call) {
+		head, err := deps.Ledger.Head(context.Background(), start.RunID)
+		if err != nil {
+			t.Fatalf("Head during Invoke: %v", err)
+		}
+		if head.Kind != domain.StepCompensationStarted {
+			t.Fatalf("head during Invoke = %s, want %s", head.Kind, domain.StepCompensationStarted)
+		}
+		if call.Seq != head.Seq {
+			t.Fatalf("call seq = %d, intent seq = %d", call.Seq, head.Seq)
+		}
+		if call.IdemKey == "" || call.IdemKey != head.IdemKey {
+			t.Fatalf("call idem = %q, intent idem = %q", call.IdemKey, head.IdemKey)
+		}
+	}
+
+	if _, err := compensate.Perform(context.Background(), deps, start, plan[:1]); err != nil {
+		t.Fatalf("Perform: %v", err)
+	}
+}
+
+func TestPerform_remoteSuccessThenCrashBeforeResult_restartNeverSendsAgain(t *testing.T) {
+	t.Parallel()
+
+	tools := &recorder{}
+	deps, start, _ := harness(t, tools)
+	store := deps.Ledger.(*ledger.Memory)
+	recordSuccessfulOriginal(t, store, start, "crm.charge", domain.EffectFinancial)
+	steps, err := store.Read(context.Background(), start.RunID, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("read plan: %v", err)
+	}
+	plan := compensate.Plan(steps, catalogue{"crm.charge": "crm.charge.refund"})
+
+	deps.Ledger = &failCompensationResultLedger{Memory: store}
+	if _, err := compensate.Perform(context.Background(), deps, start, plan); err == nil {
+		t.Fatal("Perform = nil, want the simulated crash after remote success")
+	}
+	if len(tools.calls) != 1 {
+		t.Fatalf("remote calls before restart = %d, want 1", len(tools.calls))
+	}
+	steps, err = store.Read(context.Background(), start.RunID, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("read durable attempt: %v", err)
+	}
+	started, completed := 0, 0
+	for _, step := range steps {
+		switch step.Kind {
+		case domain.StepCompensationStarted:
+			started++
+		case domain.StepCompensated:
+			completed++
+		}
+	}
+	if started != 1 || completed != 0 {
+		t.Fatalf("started = %d, completed = %d; want one unresolved attempt", started, completed)
+	}
+
+	// Restart: rebuild the plan exclusively from the durable trail. The intent
+	// is present and its result is absent, so the world is unknown — never safe
+	// to call a generic MCP tool again.
+	recovered := compensate.Plan(steps, catalogue{"crm.charge": "crm.charge.refund"})
+	deps.Ledger = store
+	out, err := compensate.Perform(context.Background(), deps, start, recovered)
+	if err != nil {
+		t.Fatalf("Perform after restart: %v", err)
+	}
+	if len(tools.calls) != 1 {
+		t.Fatalf("remote calls after restart = %d, want still 1", len(tools.calls))
+	}
+	if len(out) != 1 || out[0].Done || out[0].Why == "" {
+		t.Fatalf("recovered outcomes = %+v, want one unknown result surfaced", out)
 	}
 }
