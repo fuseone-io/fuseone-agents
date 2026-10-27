@@ -68,6 +68,14 @@ func (w *Worker) park(ctx context.Context, claim domain.Claim, reason error, cod
 		}
 		return w.release(ctx, claim, outcome)
 	}
+	if head.Kind == domain.StepAbandoned {
+		// A person already ended this run; the head CAS would accept their
+		// abandonment as the head and seal the parking on top — turning the
+		// compensation they asked for into a parked run nothing can claim.
+		// Their decision stands; the lease goes back clean.
+		w.log.Warn("the run was abandoned before parking; standing down", "run", claim.RunID)
+		return w.release(ctx, claim, domain.ClaimOutcome{})
+	}
 
 	parked := domain.ParkedPayload{Reason: code, Attempts: claim.Attempts + 1}
 	if failure, ok := model.FailureSummaryOf(reason); ok {

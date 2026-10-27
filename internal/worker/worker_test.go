@@ -1126,3 +1126,38 @@ func TestPark_headAlreadyTerminal_releaseDoesNotRelabelTheRunParked(t *testing.T
 		t.Error("a terminal run was released as parked, overwriting its ending in the projection")
 	}
 }
+
+func TestPark_humanAlreadyAbandoned_parkStandsDownInsteadOfBuryingIt(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	q := &fencedQueue{Memory: store, renewed: make(chan struct{}, 1)}
+	w := newFencedWorker(t, Config{}, &flakyPlanner{}, q, store)
+	openRun(t, store)
+
+	claim, err := store.Claim(context.Background(), "w1", time.Minute)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	// The person ends the run while the worker's turn is failing — before the
+	// supervisor even looks. The abandonment IS the head the supervisor reads,
+	// so a head CAS alone accepts it and seals the parking on top.
+	if _, err := store.Append(context.Background(), domain.Step{
+		RunID: "run-1", Kind: domain.StepAbandoned,
+		Scope: domain.Scope{Company: "acme", Area: "cx"}, AgentID: "triage",
+		At:      time.Now(),
+		Payload: []byte(`{"by":"ana","reason":"over","compensate":true}`),
+	}); err != nil {
+		t.Fatalf("abandonment: %v", err)
+	}
+
+	if err := w.park(context.Background(), claim, errors.New("gave up"), "attempts_exhausted"); err != nil {
+		t.Fatalf("park = %v, want a quiet stand-down over the abandonment", err)
+	}
+	if got := phaseOf(t, store); got != engine.PhaseCompensating {
+		t.Fatalf("phase = %v, want compensating: the park buried the person's decision", got)
+	}
+	if _, err := store.Claim(context.Background(), "w2", time.Minute); err != nil {
+		t.Errorf("Claim for the compensation = %v, want the run claimable", err)
+	}
+}
