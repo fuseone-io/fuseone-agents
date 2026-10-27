@@ -107,10 +107,15 @@ export function ProviderForm({
           .split("\n")
           .map((one) => one.trim())
           .filter((one) => one !== ""),
-        autoToolChoiceModels: values.autoToolChoiceModels
-          .split("\n")
-          .map((one) => one.trim())
-          .filter((one) => one !== ""),
+        // Inert on the OpenAI-compatible path, so it is not stored there:
+        // the screen must not keep a promise the planner never reads.
+        autoToolChoiceModels:
+          values.kind === "anthropic"
+            ? values.autoToolChoiceModels
+                .split("\n")
+                .map((one) => one.trim())
+                .filter((one) => one !== "")
+            : [],
         apiKey: values.apiKey || undefined,
       });
       toast.success(t("integrations.saved", { name: values.name }));
@@ -273,26 +278,31 @@ export function ProviderForm({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="autoToolChoiceModels"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("integrations.autoToolChoiceModels")}</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      {...field}
-                      rows={2}
-                      className="font-mono text-xs"
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t("integrations.autoToolChoiceModelsHint")}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Only the Anthropic path sends tool_choice; on an
+                OpenAI-compatible provider this field would be a promise the
+                planner never keeps. */}
+            {form.watch("kind") === "anthropic" && (
+              <FormField
+                control={form.control}
+                name="autoToolChoiceModels"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("integrations.autoToolChoiceModels")}</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        rows={2}
+                        className="font-mono text-xs"
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t("integrations.autoToolChoiceModelsHint")}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
