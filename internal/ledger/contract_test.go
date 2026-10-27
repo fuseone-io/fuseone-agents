@@ -433,6 +433,32 @@ func TestQueueContract(t *testing.T) {
 		}
 	})
 
+	run(t, "a release lands once: repeating it with the same epoch is refused", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		held, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
+			t.Fatalf("Claim: %v", err)
+		}
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{Epoch: held.Epoch}); err != nil {
+			t.Fatalf("Release: %v", err)
+		}
+		// The lease ended with the first release. A repeat would count the same
+		// failure twice and overwrite whatever supervision wrote since.
+		again := domain.ClaimOutcome{Epoch: held.Epoch, Err: errors.New("stale retry")}
+		if err := s.Release(ctx, "run-1", again); !errors.Is(err, domain.ErrLeaseLost) {
+			t.Fatalf("second Release = %v, want %v", err, domain.ErrLeaseLost)
+		}
+		next, err := s.Claim(ctx, "w2", lease)
+		if err != nil {
+			t.Fatalf("Claim after release: %v", err)
+		}
+		if next.Attempts != 0 {
+			t.Errorf("attempts = %d, want 0: the refused repeat must not count a failure", next.Attempts)
+		}
+	})
+
 	run(t, "the claim carries what the worker needs to advance", func(t *testing.T, s Store) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")

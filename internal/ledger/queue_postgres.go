@@ -153,7 +153,7 @@ func (p *Postgres) Release(ctx context.Context, runID domain.RunID, outcome doma
 			failure_status     = $8,
 			failure_request_id = $9,
 			failure_retryable  = $10
-		where run_id = $1 and lease_epoch = $11`,
+		where run_id = $1 and lease_epoch = $11 and leased_until is not null`,
 		string(runID), nextAttempt, outcome.Failed(), outcomeReason(outcome), outcome.Parked,
 		outcomeFailureCode(outcome), outcomeFailureProvider(outcome), outcomeFailureStatus(outcome),
 		outcomeFailureRequestID(outcome), outcomeFailureRetryable(outcome), outcome.Epoch)

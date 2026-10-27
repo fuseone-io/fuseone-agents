@@ -134,8 +134,10 @@ func (m *Memory) Release(ctx context.Context, runID domain.RunID, outcome domain
 
 	st := m.leases[runID]
 	// A stale release has nowhere to go: the successor's turn owns the run's
-	// story now. Same fence as the lease_epoch predicate in Postgres.
-	if st.epoch != outcome.Epoch {
+	// story now — and a repeat of a release already landed would count the
+	// same outcome twice. Same fence as the lease_epoch + leased_until
+	// predicate in Postgres.
+	if st.epoch != outcome.Epoch || st.leasedUntil.IsZero() {
 		return domain.ErrLeaseLost
 	}
 	st.leasedUntil = time.Time{}
