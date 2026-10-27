@@ -128,3 +128,80 @@ func TestAdvance_leaseAlreadyLost_noStepLandsAndNoEffectLeaves(t *testing.T) {
 		t.Fatalf("external effects = %d, want 0", n)
 	}
 }
+
+func TestAdvance_plannedStepFencedByTheLease_theBilledSpendStillLands(t *testing.T) {
+	t.Parallel()
+
+	h, l := newFenceHarness(t, Proposal{
+		Done: true, Outcome: "completed",
+		Cost: domain.Cost{Micros: 12_345, InputTokens: 100, OutputTokens: 20},
+	})
+	// The successor claims while the model call is in flight: the opening step
+	// landed under this worker's lease, the planning record no longer can.
+	l.afterAppend = func(kind domain.StepKind) {
+		if kind == domain.StepRunStarted {
+			l.current.Store(2)
+		}
+	}
+
+	_, err := h.runner.Advance(context.Background(), h.fencedStart(t))
+	if !errors.Is(err, domain.ErrLeaseLost) {
+		t.Fatalf("Advance = %v, want %v", err, domain.ErrLeaseLost)
+	}
+
+	// The call was billed by the provider whatever the fence says. Prometheus
+	// saw it; the ledger — budget, FinOps, the trail — must see it too, and
+	// without the stale proposal riding along.
+	steps, err := l.Memory.Read(context.Background(), "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	var micros int64
+	for _, s := range steps {
+		micros += s.Cost.Micros
+		if s.Kind == domain.StepRunFinished {
+			t.Fatalf("the fenced turn still finished the run: %v", s)
+		}
+	}
+	if micros != 12_345 {
+		t.Fatalf("ledger micros = %d, want 12345: the billed call vanished from the record", micros)
+	}
+}
+
+func TestAdvance_plannedStepRefusedByAMovedHead_theBilledSpendStillLands(t *testing.T) {
+	t.Parallel()
+
+	h, l := newFenceHarness(t, Proposal{
+		Done: true, Outcome: "completed", Cost: domain.Cost{Micros: 12_345},
+	})
+	// An approval or an abandonment lands while the model call is in flight:
+	// same lease, different head.
+	l.afterAppend = func(kind domain.StepKind) {
+		if kind != domain.StepRunStarted {
+			return
+		}
+		if _, err := l.Memory.Append(context.Background(), domain.Step{
+			RunID: "run-1", Kind: domain.StepResumed,
+			Scope:   domain.Scope{Company: "acme", Area: "cx"},
+			AgentID: "triage", At: time.Now(), Payload: []byte(`{"by":"ana"}`),
+		}); err != nil {
+			t.Errorf("interloper append: %v", err)
+		}
+	}
+
+	_, err := h.runner.Advance(context.Background(), h.fencedStart(t))
+	if !errors.Is(err, domain.ErrHeadMoved) {
+		t.Fatalf("Advance = %v, want %v", err, domain.ErrHeadMoved)
+	}
+	steps, err := l.Memory.Read(context.Background(), "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	var micros int64
+	for _, s := range steps {
+		micros += s.Cost.Micros
+	}
+	if micros != 12_345 {
+		t.Fatalf("ledger micros = %d, want 12345: the billed call vanished from the record", micros)
+	}
+}
