@@ -39,6 +39,12 @@ type Provider struct {
 	APIKey  string
 	Headers map[string]string
 
+	// AutoToolChoiceModels names the models driven with tool_choice "auto"
+	// from the first call — the declared form of the downgrade the planner
+	// otherwise learns from a 400, which a gateway with fallback routing
+	// never lets it see.
+	AutoToolChoiceModels []string
+
 	// SupportsReasoningEffort gates the reasoning_effort field. Providers that
 	// reject unknown fields return a 400 when it is sent blindly, so it is
 	// opt-in per provider rather than always-on.

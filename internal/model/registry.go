@@ -210,7 +210,17 @@ func (r *Registry) Planner(providerName string, cfg Config, tools ToolSchemas) (
 		return nil, fmt.Errorf("model: provider %q is not configured; available: %v", providerName, r.Names())
 	}
 
-	return r.plannerFrom(p, withPrice(p, cfg), tools)
+	return r.plannerFrom(p, withAutoToolChoice(p, withPrice(p, cfg)), tools)
+}
+
+// withAutoToolChoice hands the provider's declared downgrades to the planner,
+// the same way withPrice hands it the rates: provider facts ride the config,
+// so the planner needs no second source to consult.
+func withAutoToolChoice(p Provider, cfg Config) Config {
+	if len(p.AutoToolChoiceModels) > 0 {
+		cfg.AutoToolChoice = append([]string(nil), p.AutoToolChoiceModels...)
+	}
+	return cfg
 }
 
 /*

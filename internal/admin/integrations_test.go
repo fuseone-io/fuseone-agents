@@ -2152,3 +2152,51 @@ func TestPutMCPServer_callTimeout_roundTripsAndSurvivesAnOmittingWrite(t *testin
 		t.Fatalf("read back = %+v, want the 120s ceiling kept", servers)
 	}
 }
+
+func TestPutProvider_declaredAutoModels_surviveBothReadPaths(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	if err := i.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+		Name: "litellm", Kind: "anthropic", BaseURL: "https://litellm.internal",
+		AutoToolChoiceModels: []string{" anthropic-claude-opus-5-5 ", "", "anthropic-claude-opus-5-5"},
+		Enabled:              true,
+	}, "sk-secret"); err != nil {
+		t.Fatalf("PutProvider: %v", err)
+	}
+
+	// The screen's read and the wiring's read are different queries; the
+	// declaration has to survive both, cleaned the way the model list is.
+	want := []string{"anthropic-claude-opus-5-5"}
+	listed, err := i.Providers(ctx)
+	if err != nil {
+		t.Fatalf("Providers: %v", err)
+	}
+	if len(listed) != 1 || !slices.Equal(listed[0].AutoToolChoiceModels, want) {
+		t.Fatalf("listed declaration = %+v, want %v cleaned of blanks and repeats",
+			listed, want)
+	}
+	wired, err := i.ProvidersWithCredentials(ctx)
+	if err != nil {
+		t.Fatalf("ProvidersWithCredentials: %v", err)
+	}
+	if len(wired) != 1 || !slices.Equal(wired[0].AutoToolChoiceModels, want) {
+		t.Fatalf("wired declaration = %+v, want %v", wired, want)
+	}
+}
+
+func TestPutProvider_aDeclarationPastTheModelBounds_isRefused(t *testing.T) {
+	i := newIntegrations(t)
+
+	over := make([]string, admin.MaxProviderModels+1)
+	for n := range over {
+		over[n] = fmt.Sprintf("model-%d", n)
+	}
+	err := i.PutProvider(context.Background(), "usr_ana", platform, domain.ModelProvider{
+		Name: "litellm", Kind: "anthropic",
+		AutoToolChoiceModels: over, Enabled: true,
+	}, "")
+	if !errors.Is(err, admin.ErrTooManyModels) {
+		t.Fatalf("PutProvider = %v, want the same bounds the model list has", err)
+	}
+}

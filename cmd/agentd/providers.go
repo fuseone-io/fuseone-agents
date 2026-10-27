@@ -191,6 +191,9 @@ func providerFrom(
 		provider.APIKey = p.APIKey
 	}
 	provider.Prices = priced
+	// After the preset block, which replaces the struct whole: a declared
+	// field assigned before it would be the preset silently un-declaring it.
+	provider.AutoToolChoiceModels = p.AutoToolChoiceModels
 	if provider.Kind == model.KindOpenAICompatible && provider.BaseURL == "" {
 		return model.Provider{}, fmt.Errorf("an OpenAI-compatible provider needs an address")
 	}

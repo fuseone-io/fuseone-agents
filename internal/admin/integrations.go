@@ -108,6 +108,9 @@ type storedProvider struct {
 	Kind    string   `json:"kind"`
 	BaseURL string   `json:"baseURL"`
 	Models  []string `json:"models,omitempty"`
+	// AutoToolChoiceModels is the declared tool_choice downgrade — see
+	// domain.ModelProvider. Absent in rows stored before it existed.
+	AutoToolChoiceModels []string `json:"autoToolChoiceModels,omitempty"`
 }
 
 type storedMCPUserCredential struct {

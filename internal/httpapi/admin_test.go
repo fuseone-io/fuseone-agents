@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -1286,5 +1287,39 @@ func TestListTools_aKnownServer_carriesTheSuggestionAndItsReason(t *testing.T) {
 	}
 	if got.Suggested.Why == "" {
 		t.Error("a suggestion with no reasoning is a number to click past")
+	}
+}
+
+func TestPutModelProvider_declaredAutoModels_reachTheStoreAndComeBack(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{}
+	declared := []string{"anthropic-claude-opus-5-5"}
+	if _, err := serverWith(t, admin).PutModelProvider(as(domain.RoleCurator), openapi.PutModelProviderRequestObject{
+		Name: "litellm",
+		Body: &openapi.PutModelProviderJSONRequestBody{
+			Kind: "anthropic", AutoToolChoiceModels: ptr(declared),
+		},
+	}); err != nil {
+		t.Fatalf("PutModelProvider: %v", err)
+	}
+	if !slices.Equal(admin.putProvider.AutoToolChoiceModels, declared) {
+		t.Fatalf("stored declaration = %v, want %v: the handler dropped the field",
+			admin.putProvider.AutoToolChoiceModels, declared)
+	}
+
+	admin.providers = []domain.ModelProvider{{
+		Name: "litellm", Kind: "anthropic", BaseURL: "https://litellm.internal",
+		AutoToolChoiceModels: declared, Enabled: true,
+	}}
+	resp, err := serverWith(t, admin).ListIntegrations(as(domain.RoleCurator), openapi.ListIntegrationsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListIntegrations: %v", err)
+	}
+	body := resp.(openapi.ListIntegrations200JSONResponse)
+	if len(body.Providers) != 1 || body.Providers[0].AutoToolChoiceModels == nil ||
+		!slices.Equal(*body.Providers[0].AutoToolChoiceModels, declared) {
+		t.Fatalf("listed declaration = %+v, want %v rendered back to the screen",
+			body.Providers, declared)
 	}
 }
