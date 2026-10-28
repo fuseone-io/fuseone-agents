@@ -412,13 +412,27 @@ The generator writes structures a forward-only envelope executes, and the old
 prompt told it nothing about that runtime (#157): it anchored fallbacks in the
 one step that mentioned them — dead letter the moment the run advances — and
 platform tools in steps of their own. Asserted through what the completer
-actually received, in every language this installation prompts in: a rule that
-is lost in one locale's file produces dirty steps for that locale's authors.
+actually received, with one distinctive phrase per rule per locale: two of the
+three rules have no mechanical fence, so this test is the only thing standing
+between them and a quiet regression, and a sentence lost in one locale's file
+produces dirty steps for that locale's authors.
 */
 func TestOrganise_theAnchoringRules_reachThePrompt(t *testing.T) {
 	t.Parallel()
 
-	for _, locale := range []string{"pt-BR", "en-US"} {
+	rules := map[string][]string{
+		"pt-BR": {
+			"Nunca as coloque em um passo",
+			"todos os passos que possam precisar",
+			"poucos passos largos",
+		},
+		"en-US": {
+			"Never put one in a step",
+			"goes in every step",
+			"few broad steps",
+		},
+	}
+	for locale, phrases := range rules {
 		fake := &fakeCompleter{reply: `{"tools":[],"steps":[]}`}
 		if _, err := authoring.Translate(t.Context(), authoring.Job{
 			Completer: fake,
@@ -432,12 +446,10 @@ func TestOrganise_theAnchoringRules_reachThePrompt(t *testing.T) {
 		if len(fake.prompts) == 0 {
 			t.Fatalf("%s: nothing was asked", locale)
 		}
-		prompt := fake.prompts[0]
-		if !strings.Contains(prompt, "$fuseone.") {
-			t.Errorf("%s: the prompt does not keep platform tools out of steps:\n%s", locale, prompt)
-		}
-		if !strings.Contains(prompt, "voltar é recusado") && !strings.Contains(prompt, "going back is refused") {
-			t.Errorf("%s: the prompt does not say the envelope is forward-only:\n%s", locale, prompt)
+		for _, phrase := range phrases {
+			if !strings.Contains(fake.prompts[0], phrase) {
+				t.Errorf("%s: the prompt lost the rule carrying %q", locale, phrase)
+			}
 		}
 	}
 }
