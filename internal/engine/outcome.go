@@ -20,6 +20,29 @@ An erased answer is an error rather than an empty string. "The agent finished
 and said nothing" and "what it said was erased" are different facts, and a
 screen that renders both as blank reports the first when the second happened.
 */
+// HeadlineOf resolves the one-line header the model declared at finish, or
+// "" when none was. Like the outcome, an erased headline is an error rather
+// than an empty string: "none declared" and "what was declared was erased"
+// must not read the same.
+func HeadlineOf(
+	ctx context.Context, store ContentStore, p domain.RunFinishedPayload,
+) (string, error) {
+	if p.HeadlineRef == "" {
+		return "", nil
+	}
+	if store == nil {
+		return "", fmt.Errorf("engine: no content store to read headline %s", p.HeadlineRef)
+	}
+	data, err := store.Get(ctx, p.HeadlineRef)
+	if err != nil {
+		if errors.Is(err, domain.ErrContentErased) {
+			return "", fmt.Errorf("engine: headline %s was erased: %w", p.HeadlineRef, err)
+		}
+		return "", fmt.Errorf("engine: read headline %s: %w", p.HeadlineRef, err)
+	}
+	return string(data), nil
+}
+
 func OutcomeOf(
 	ctx context.Context, store ContentStore, p domain.RunFinishedPayload,
 ) (string, error) {

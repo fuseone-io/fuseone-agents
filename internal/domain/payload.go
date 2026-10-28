@@ -481,4 +481,12 @@ type RunFinishedPayload struct {
 	// platform has no way to evaluate one. A trail that read as verified
 	// would be claiming more than was done.
 	StoppedBy string `json:"stopped_by,omitempty"`
+	// HeadlineRef and HeadlineDigest locate the one line a channel shows for
+	// this run's answer, when the model declared one through the finish tool;
+	// the reporter then carries the full answer in that line's thread. In the
+	// content store for the same reason the outcome moved there: it is
+	// model-authored text that may restate what the run read, and the chain
+	// is immutable — inline, an erasure request could never reach it (#165).
+	HeadlineRef    string `json:"headline_ref,omitempty"`
+	HeadlineDigest string `json:"headline_digest,omitempty"`
 }
