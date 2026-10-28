@@ -76,6 +76,10 @@ func TestFinishProposal_headlineSurvivesEverySeparatorAndTheCeiling(t *testing.T
 		{"unicode line separator", "primeira segunda", "primeira"},
 		{"unicode paragraph separator", "primeira segunda", "primeira"},
 		{"next line", "primeira\u0085segunda", "primeira"},
+		// A segment of spaces before the break is not the first line, it is
+		// padding: returning its trimmed emptiness would silently drop the
+		// headline and put the whole report back at the top of the channel.
+		{"blank segment first", "   \nheadline real", "headline real"},
 	}
 	for _, tc := range cases {
 		got := finishProposal([]byte(`{"headline":`+string(mustQuote(tc.in))+`}`), engine.Proposal{})

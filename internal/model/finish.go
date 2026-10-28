@@ -76,13 +76,18 @@ const maxHeadlineBytes = 240
 // multi-line headline posted at a channel's top level is the wallpaper the
 // field exists to end.
 func headlineLine(declared string) string {
-	line := strings.FieldsFunc(declared, func(r rune) bool {
+	segments := strings.FieldsFunc(declared, func(r rune) bool {
 		return r == '\n' || r == '\r' || r == '\u2028' || r == '\u2029' || r == '\u0085'
 	})
-	if len(line) == 0 {
-		return ""
+	// The first segment whose trimmed self says anything: a run of spaces
+	// before a break is padding, and returning its emptiness would silently
+	// drop the headline.
+	out := ""
+	for _, segment := range segments {
+		if out = strings.TrimSpace(segment); out != "" {
+			break
+		}
 	}
-	out := strings.TrimSpace(line[0])
 	if len(out) <= maxHeadlineBytes {
 		return out
 	}
