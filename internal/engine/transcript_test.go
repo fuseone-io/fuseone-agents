@@ -550,6 +550,83 @@ func TestBuildTranscript_manyMediumResults_haveABoundedPromptContribution(t *tes
 	}
 }
 
+/*
+A real run proved the age-based eviction blind (#163): eleven checks returned
+eleven small verdicts, two deep dives returned the bulk of the bytes, and when
+the budget crossed, the receipts ate the verdicts — oldest first — while the
+already-analysed bulk survived. The report then said "the platform cut the
+results before the analysis" about results of a kilobyte each. Eviction now
+takes the largest results first, so what survives to the final composition is
+what a verdict needs: the small answers, not the big evidence already read.
+*/
+func TestBuildTranscript_budgetEvictsTheLargestResults_smallVerdictsSurvive(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	steps := []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "cron"}),
+	}}
+
+	// Six small verdicts, two deep dives carrying the bulk (the size per-result
+	// compaction leaves them at), then small verdicts again — the shape of a
+	// checklist agent's hour.
+	sizes := []int{2 << 10, 2 << 10, 2 << 10, 2 << 10, 2 << 10, 2 << 10, 26 << 10, 26 << 10, 2 << 10, 2 << 10}
+	for i, size := range sizes {
+		calledSeq := int64(2 + i*2)
+		returnedSeq := calledSeq + 1
+		body := []byte(fmt.Sprintf("result-%d\n%s", i, strings.Repeat("x", size)))
+		ref, err := store.Put(ctx, "run_1", returnedSeq, body)
+		if err != nil {
+			t.Fatalf("Put result %d: %v", i, err)
+		}
+		steps = append(steps,
+			domain.Step{
+				RunID: "run_1", Seq: calledSeq, Kind: domain.StepToolCalled,
+				Payload: payload(t, domain.ToolCalledPayload{Tool: "crm.lookup"}),
+			},
+			domain.Step{
+				RunID: "run_1", Seq: returnedSeq, Kind: domain.StepToolReturned,
+				Payload: payload(t, domain.ToolReturnedPayload{Tool: "crm.lookup", ResultRef: ref}),
+			},
+		)
+	}
+
+	turns, err := BuildTranscript(ctx, store, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+
+	var sent int
+	whole := map[string]bool{}
+	for _, turn := range turns {
+		if turn.Kind != TurnToolResult {
+			continue
+		}
+		sent += len(turn.Content)
+		if !strings.Contains(string(turn.Content), "transcript result budget") {
+			whole[strings.SplitN(string(turn.Content), "\n", 2)[0]] = true
+		}
+	}
+	if sent > toolResultTranscriptBudget {
+		t.Fatalf("tool result bytes = %d, want at most %d", sent, toolResultTranscriptBudget)
+	}
+	for i := 0; i < 6; i++ {
+		if !whole[fmt.Sprintf("result-%d", i)] {
+			t.Errorf("small verdict result-%d was evicted while bulk remained", i)
+		}
+	}
+	// At least one bulk result pays for the crossing; one may legitimately
+	// survive while the bound holds — more evidence retained, not less. What
+	// is forbidden is a verdict paying in its place.
+	if whole["result-6"] && whole["result-7"] {
+		t.Error("no bulk result was evicted at the crossing")
+	}
+	if !whole["result-8"] || !whole["result-9"] {
+		t.Error("the verdicts after the bulk were not preserved")
+	}
+}
+
 func TestBuildTranscript_resultBudgetChangesInStableGenerations(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
