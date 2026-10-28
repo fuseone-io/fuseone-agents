@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/domain"
@@ -188,6 +189,38 @@ func TestSweep_aHeadlinedAnswer_postsTheHeadlineAndThreadsTheAnswer(t *testing.T
 	}
 	if body.conversation.Thread != "1786000000.000100" {
 		t.Errorf("body thread = %q, want the header's own timestamp", body.conversation.Thread)
+	}
+}
+
+// The reporter bounds the headline itself: the finish guard caps new runs,
+// but a line stored by anything older or other arrives here unbounded, and a
+// channel refusing an oversized block would leave the announcement owed and
+// retried for ever — the permanent loop this ceiling exists to prevent.
+func TestSweep_anOversizedStoredHeadline_isBoundedBeforeTheChannel(t *testing.T) {
+	t.Parallel()
+	posts := &recorder{}
+	finished := report("run-1", "acme", "ops", channel.EventFinished)
+	outcomes, content := outcomesWithHeadline(t, "run-1",
+		"o relatório", strings.Repeat("ã", 2000))
+
+	r := channel.NewReporter(
+		&fixedReports{reports: []channel.Report{finished}},
+		rooms(roomWanting("C07-ops", channel.EventFinished)),
+		posts, func() time.Time { return noon }, nil,
+	).WithDeliveries(&memoryDeliveries{}).WithOutcomes(outcomes, content)
+
+	if _, err := r.Sweep(t.Context(), 50); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if len(posts.sent) != 2 {
+		t.Fatalf("sent = %d posts, want the bounded headline and its thread", len(posts.sent))
+	}
+	header := posts.sent[0].message.Answer
+	if len(header) > channel.MaxAnnouncedHeadline {
+		t.Fatalf("header carried %d bytes, want at most %d", len(header), channel.MaxAnnouncedHeadline)
+	}
+	if !utf8.ValidString(header) {
+		t.Fatal("the bound cut through a rune")
 	}
 }
 

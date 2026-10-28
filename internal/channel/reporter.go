@@ -355,7 +355,26 @@ func (r *Reporter) answerFor(ctx context.Context, report Report) (answer, headli
 	if err != nil {
 		headline = ""
 	}
-	return truncateAnswer(text), headline
+	return truncateAnswer(text), truncateHeadline(headline)
+}
+
+// MaxAnnouncedHeadline bounds the one line an announcement opens with. The
+// finish guard caps what new runs store, but a line written by anything older
+// or other arrives here unbounded — and a channel refusing an oversized block
+// would leave the announcement owed and retried for ever.
+const MaxAnnouncedHeadline = 300
+
+func truncateHeadline(line string) string {
+	if len(line) <= MaxAnnouncedHeadline {
+		return line
+	}
+	cut := MaxAnnouncedHeadline
+	// Never split a rune: a cut through a multibyte character renders as
+	// garbage in the one place a person reads.
+	for cut > 0 && !utf8.RuneStart(line[cut]) {
+		cut--
+	}
+	return line[:cut]
 }
 
 // MaxAnnouncedAnswer bounds what an announcement carries. Slack refuses a
