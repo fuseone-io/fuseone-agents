@@ -685,6 +685,65 @@ func TestLoopContract_tellsTheModelToFinishWithTheFinishTool(t *testing.T) {
 	}
 }
 
+/*
+Three production runs and a rehearsal died the same way (#155): the model
+finished its first step's work, called finish believing it closed the step,
+and wrote "in the next steps…" into a summary nothing would ever follow. The
+contract never said finish ends the run, and inside "You are at the step
+called X" every step boundary reads as "nothing left to do". Asserted on both
+providers, in both step-note variants; the absence leg keeps the promise that
+an agent without steps sees today's prompt unchanged.
+*/
+func TestStepNote_saysFinishEndsTheRunNotTheStep(t *testing.T) {
+	t.Parallel()
+
+	providers := []struct {
+		name     string
+		kind     model.Kind
+		response string
+		system   func(map[string]any) string
+	}{
+		{name: "anthropic", kind: model.KindAnthropic, response: anthropicToolUse, system: anthropicPromptText},
+		{name: "openai-compatible", kind: model.KindOpenAICompatible, response: openAIToolCall, system: openAIPromptText},
+	}
+	shapes := []struct {
+		name      string
+		step      string
+		stopsWhen string
+		want      bool
+	}{
+		{name: "a step alone", step: "Investigate the alert", want: true},
+		{name: "a step with its exception", step: "Investigate the alert",
+			stopsWhen: "the cause is supported by evidence", want: true},
+		{name: "no steps at all", want: false},
+	}
+
+	for _, p := range providers {
+		for _, shape := range shapes {
+			t.Run(p.name+"/"+shape.name, func(t *testing.T) {
+				t.Parallel()
+				c := serve(t, p.response)
+				in := input()
+				in.Step, in.StopsWhen = shape.step, shape.stopsWhen
+				if _, err := plannerFor(t, p.kind, c.server.URL, model.Config{}).
+					Plan(context.Background(), in); err != nil {
+					t.Fatalf("Plan: %v", err)
+				}
+
+				system := strings.Join(strings.Fields(p.system(c.last())), " ")
+				for _, phrase := range []string{
+					"Finishing ends the whole run, not the step",
+					"calling a tool a later step reaches",
+				} {
+					if got := strings.Contains(system, phrase); got != shape.want {
+						t.Errorf("contains %q = %v, want %v:\n%s", phrase, got, shape.want, system)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestMemoryTools_areExplainedOnlyWhenOffered(t *testing.T) {
 	t.Parallel()
 
