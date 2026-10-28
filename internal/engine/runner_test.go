@@ -1677,6 +1677,42 @@ func TestAdvance_plannerReportsDone_finishesRun(t *testing.T) {
 	}
 }
 
+/*
+The headline travels from the finish call to the finished payload, where the
+channel reporter reads it (#165). Recorded like stopped_by: declared by the
+model, carried by the ledger, never inferred.
+*/
+func TestAdvance_aDeclaredHeadline_reachesTheFinishedPayload(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{
+		Done: true, Outcome: "the full report",
+		Headline: "2 findings · worst: CRITICAL",
+	})
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	var finished domain.RunFinishedPayload
+	if err := h.payloadOf(t, domain.StepRunFinished, &finished); err != nil {
+		t.Fatalf("payload: %v", err)
+	}
+	// By reference, like the outcome: the headline may restate what the run
+	// read, and inline on the immutable chain no erasure could reach it.
+	if finished.HeadlineRef == "" || finished.HeadlineDigest == "" {
+		t.Fatalf("payload = %+v, want a stored headline reference and digest", finished)
+	}
+	headline, err := HeadlineOf(ctx, h.content, finished)
+	if err != nil {
+		t.Fatalf("HeadlineOf: %v", err)
+	}
+	if headline != "2 findings · worst: CRITICAL" {
+		t.Errorf("headline = %q, want the declared line", headline)
+	}
+}
+
 func TestAdvance_finishStoresNamedContextArtifacts(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

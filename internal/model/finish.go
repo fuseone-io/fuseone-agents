@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -27,6 +28,10 @@ func finishToolSchema() map[string]any {
 			"type":        "string",
 			"description": "When the step's declared stopping condition happened, copy that condition exactly here.",
 		},
+		"headline": map[string]any{
+			"type":        "string",
+			"description": "Optional one-line header for the run's answer. When set, a channel shows this line and carries the full summary in its thread.",
+		},
 	}
 }
 
@@ -38,6 +43,7 @@ type finishArgs struct {
 	Summary   string            `json:"summary"`
 	Artifacts map[string]string `json:"artifacts"`
 	StoppedBy string            `json:"stopped_by"`
+	Headline  string            `json:"headline"`
 }
 
 func finishProposal(
@@ -54,7 +60,42 @@ func finishProposal(
 	base.Outcome = strings.TrimSpace(decoded.Summary)
 	base.Artifacts = cleanArtifacts(decoded.Artifacts)
 	base.StoppedBy = strings.TrimSpace(decoded.StoppedBy)
+	base.Headline = headlineLine(decoded.Headline)
 	return base
+}
+
+// maxHeadlineBytes bounds the one line a channel shows. Well under any
+// vendor's block limit on purpose: an unbounded headline refused by the
+// channel would leave the announcement owed and retried for ever, turning a
+// malformed model answer into a permanent operational loop.
+const maxHeadlineBytes = 240
+
+// headlineLine is the declared headline reduced to one bounded line: the
+// first non-empty line under every break a JSON string carries — \n, \r,
+// CRLF, U+2028, U+2029, U+0085 — trimmed, and capped on a rune boundary. A
+// multi-line headline posted at a channel's top level is the wallpaper the
+// field exists to end.
+func headlineLine(declared string) string {
+	segments := strings.FieldsFunc(declared, func(r rune) bool {
+		return r == '\n' || r == '\r' || r == '\u2028' || r == '\u2029' || r == '\u0085'
+	})
+	// The first segment whose trimmed self says anything: a run of spaces
+	// before a break is padding, and returning its emptiness would silently
+	// drop the headline.
+	out := ""
+	for _, segment := range segments {
+		if out = strings.TrimSpace(segment); out != "" {
+			break
+		}
+	}
+	if len(out) <= maxHeadlineBytes {
+		return out
+	}
+	cut := maxHeadlineBytes
+	for cut > 0 && !utf8.RuneStart(out[cut]) {
+		cut--
+	}
+	return strings.TrimSpace(out[:cut])
 }
 
 /*

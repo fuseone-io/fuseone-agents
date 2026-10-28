@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/domain"
@@ -152,6 +153,157 @@ func roomWanting(id string, ev channel.Event) channel.Conversation {
 
 // outcomesSaying answers one run's closing text through a real content store,
 // so the reference resolution is the production one rather than a shortcut.
+/*
+The agent declares, the reporter decides (#165): a finished answer carrying a
+headline posts as two messages — the headline at the channel's top level and
+the full answer threaded on it — so an hourly report is one scannable line,
+not wallpaper. The delivery stays the channel layer's: same bot, same rooms,
+same tracking; the agent only formatted.
+*/
+func TestSweep_aHeadlinedAnswer_postsTheHeadlineAndThreadsTheAnswer(t *testing.T) {
+	t.Parallel()
+	posts := &recorder{}
+	finished := report("run-1", "acme", "ops", channel.EventFinished)
+	outcomes, content := outcomesWithHeadline(t, "run-1",
+		"o relatório inteiro, achado por achado", "2 achados · pior: CRÍTICO")
+
+	r := channel.NewReporter(
+		&fixedReports{reports: []channel.Report{finished}},
+		rooms(roomWanting("C07-ops", channel.EventFinished)),
+		posts, func() time.Time { return noon }, nil,
+	).WithDeliveries(&memoryDeliveries{}).WithOutcomes(outcomes, content)
+
+	if _, err := r.Sweep(t.Context(), 50); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if len(posts.sent) != 2 {
+		t.Fatalf("sent = %d posts, want the headline and its threaded answer", len(posts.sent))
+	}
+	header, body := posts.sent[0], posts.sent[1]
+	if header.message.Answer != "2 achados · pior: CRÍTICO" || header.conversation.Thread != "" {
+		t.Errorf("header = %q in thread %q, want the headline at the top level",
+			header.message.Answer, header.conversation.Thread)
+	}
+	if body.message.Answer != "o relatório inteiro, achado por achado" {
+		t.Errorf("body answer = %q, want the full report", body.message.Answer)
+	}
+	if body.conversation.Thread != "1786000000.000100" {
+		t.Errorf("body thread = %q, want the header's own timestamp", body.conversation.Thread)
+	}
+}
+
+// The reporter bounds the headline itself: the finish guard caps new runs,
+// but a line stored by anything older or other arrives here unbounded, and a
+// channel refusing an oversized block would leave the announcement owed and
+// retried for ever — the permanent loop this ceiling exists to prevent.
+func TestSweep_anOversizedStoredHeadline_isBoundedBeforeTheChannel(t *testing.T) {
+	t.Parallel()
+	posts := &recorder{}
+	finished := report("run-1", "acme", "ops", channel.EventFinished)
+	// The leading ASCII byte misaligns the two-byte runes against the even
+	// ceiling, so a naive cut at the limit would land mid-rune and fail the
+	// validity assertion below.
+	outcomes, content := outcomesWithHeadline(t, "run-1",
+		"o relatório", "x"+strings.Repeat("ã", 2000))
+
+	r := channel.NewReporter(
+		&fixedReports{reports: []channel.Report{finished}},
+		rooms(roomWanting("C07-ops", channel.EventFinished)),
+		posts, func() time.Time { return noon }, nil,
+	).WithDeliveries(&memoryDeliveries{}).WithOutcomes(outcomes, content)
+
+	if _, err := r.Sweep(t.Context(), 50); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if len(posts.sent) != 2 {
+		t.Fatalf("sent = %d posts, want the bounded headline and its thread", len(posts.sent))
+	}
+	header := posts.sent[0].message.Answer
+	if len(header) > channel.MaxAnnouncedHeadline {
+		t.Fatalf("header carried %d bytes, want at most %d", len(header), channel.MaxAnnouncedHeadline)
+	}
+	if !utf8.ValidString(header) {
+		t.Fatal("the bound cut through a rune")
+	}
+}
+
+// A failure after the headline posted leaves the announcement unrecorded, so
+// the sweep retries it whole. A repeated one-liner is the chosen cost; a
+// report that never arrives is the one this path must not have.
+func TestSweep_aThreadReplyThatFails_leavesTheAnnouncementOwed(t *testing.T) {
+	t.Parallel()
+	posts := &recorder{failAfter: 1}
+	finished := report("run-1", "acme", "ops", channel.EventFinished)
+	outcomes, content := outcomesWithHeadline(t, "run-1", "o relatório", "1 achado")
+	deliveries := &memoryDeliveries{}
+
+	r := channel.NewReporter(
+		&fixedReports{reports: []channel.Report{finished}},
+		rooms(roomWanting("C07-ops", channel.EventFinished)),
+		posts, func() time.Time { return noon }, nil,
+	).WithDeliveries(deliveries).WithOutcomes(outcomes, content)
+
+	if _, err := r.Sweep(t.Context(), 50); err == nil {
+		t.Fatal("sweep: want the refused thread reply surfaced as an error")
+	}
+	if len(deliveries.recorded) != 0 {
+		t.Errorf("recorded = %+v, want the half-delivered announcement still owed", deliveries.recorded)
+	}
+	if len(deliveries.failures) == 0 {
+		t.Error("no delivery failure was recorded for the refused reply")
+	}
+
+	// The channel recovers, and the owed announcement goes out whole on the
+	// next sweep: the orphaned headline from the first attempt, then the new
+	// pair — the repeated one-liner is the chosen cost of never losing the
+	// report. Exactly one delivery is recorded, and a third sweep owes
+	// nothing and posts nothing.
+	posts.failAfter = 0
+	if _, err := r.Sweep(t.Context(), 50); err != nil {
+		t.Fatalf("second sweep: %v", err)
+	}
+	if len(posts.sent) != 3 {
+		t.Fatalf("sent = %d posts after the retry, want orphan + header + threaded body", len(posts.sent))
+	}
+	retriedHeader, body := posts.sent[1], posts.sent[2]
+	if retriedHeader.message.Answer != "1 achado" || retriedHeader.conversation.Thread != "" {
+		t.Errorf("retried header = %+v, want the headline at the top level", retriedHeader.message)
+	}
+	if body.message.Answer != "o relatório" || body.conversation.Thread == "" {
+		t.Errorf("body = %+v in thread %q, want the full report threaded",
+			body.message, body.conversation.Thread)
+	}
+	if len(deliveries.recorded) != 1 {
+		t.Fatalf("recorded = %d deliveries, want exactly one", len(deliveries.recorded))
+	}
+
+	if _, err := r.Sweep(t.Context(), 50); err != nil {
+		t.Fatalf("third sweep: %v", err)
+	}
+	if len(posts.sent) != 3 || len(deliveries.recorded) != 1 {
+		t.Errorf("after the third sweep: %d posts, %d deliveries — the delivered announcement was re-said",
+			len(posts.sent), len(deliveries.recorded))
+	}
+}
+
+func outcomesWithHeadline(
+	t *testing.T, run, text, headline string,
+) (fixedOutcomes, engine.ContentStore) {
+	t.Helper()
+	content := engine.NewMemoryContent()
+	ref, err := content.Put(t.Context(), domain.RunID(run), 1, []byte(text))
+	if err != nil {
+		t.Fatalf("put outcome: %v", err)
+	}
+	headlineRef, err := content.Put(t.Context(), domain.RunID(run), 1, []byte(headline))
+	if err != nil {
+		t.Fatalf("put headline: %v", err)
+	}
+	return fixedOutcomes{run: domain.RunID(run), payload: domain.RunFinishedPayload{
+		OutcomeRef: ref, HeadlineRef: headlineRef,
+	}}, content
+}
+
 func outcomesSaying(t *testing.T, run string, text string) (fixedOutcomes, engine.ContentStore) {
 	t.Helper()
 	content := engine.NewMemoryContent()

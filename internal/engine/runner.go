@@ -165,6 +165,13 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		if err != nil {
 			return Status{}, err
 		}
+		// The headline follows the outcome into the content store: it is
+		// model-authored text that may restate what the run read, and the
+		// immutable chain would put it beyond every erasure request (#165).
+		headlineRef, err := r.storeOutcome(ctx, start.RunID, finishSeq, proposal.Headline)
+		if err != nil {
+			return Status{}, err
+		}
 		artifacts, err := r.storeArtifacts(ctx, start, state, finishSeq, proposal.Artifacts)
 		if err != nil {
 			return Status{}, err
@@ -178,11 +185,13 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 			// remembered as trustworthy.
 			Labels: state.Labels.Clone(),
 			Payload: mustJSON(domain.RunFinishedPayload{
-				OutcomeRef:    ref,
-				OutcomeDigest: digest([]byte(proposal.Outcome)),
-				Artifacts:     artifacts,
-				Reason:        domain.RunFinishedByFinishTool,
-				StoppedBy:     proposal.StoppedBy,
+				OutcomeRef:     ref,
+				OutcomeDigest:  digest([]byte(proposal.Outcome)),
+				Artifacts:      artifacts,
+				Reason:         domain.RunFinishedByFinishTool,
+				StoppedBy:      proposal.StoppedBy,
+				HeadlineRef:    headlineRef,
+				HeadlineDigest: headlineDigest(proposal.Headline),
 			}),
 		})
 		return status(state), err
@@ -232,6 +241,15 @@ request cannot reach — the exact defect this exists to close.
 An empty answer stores nothing: there is no content to erase, and a reference
 to zero bytes would only be a reference that fails to resolve later.
 */
+// headlineDigest is the digest of a declared headline, or nothing: hashing
+// the empty string would stamp a digest for a line nobody wrote.
+func headlineDigest(headline string) string {
+	if headline == "" {
+		return ""
+	}
+	return digest([]byte(headline))
+}
+
 func (r *Runner) storeOutcome(
 	ctx context.Context, runID domain.RunID, seq int64, outcome string,
 ) (string, error) {

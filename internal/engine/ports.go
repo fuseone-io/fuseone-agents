@@ -118,6 +118,10 @@ type Proposal struct {
 	// stopping. Recorded verbatim: the trail says the model asserted it, and
 	// nobody should read it as having been verified.
 	StoppedBy string
+	// Headline is the one line a channel shows for this run's answer, when
+	// the model declared one through the finish tool; the full answer hangs
+	// in its thread. Empty announces exactly as before (#165).
+	Headline string
 }
 
 // Tools invokes a registered tool, normally an MCP server.
