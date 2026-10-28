@@ -81,6 +81,32 @@ describe("the agent draft", () => {
 });
 
 /*
+ * The reply locale pins the language of everything user-facing the agent
+ * writes. Publishing writes the draft whole, so a draft that drops it
+ * republishes the agent reporting in English on an edit made for another
+ * reason (#156).
+ */
+describe("a version's reply locale", () => {
+  it("survives an edit made for another reason", () => {
+    const pinned = {
+      ...cobranca,
+      agent: { ...cobranca.agent, replyLocale: "pt-BR" },
+    } as unknown as AgentDetail;
+
+    const { result } = renderHook(() => useAgentDraft(pinned));
+    expect(result.current.draft.replyLocale).toBe("pt-BR");
+
+    act(() => result.current.patch({ model: "outro-modelo" }));
+    expect(result.current.draft.replyLocale).toBe("pt-BR");
+  });
+
+  it("is absent for an agent that asked for nothing", () => {
+    const { result } = renderHook(() => useAgentDraft(cobranca));
+    expect(result.current.draft.replyLocale).toBeUndefined();
+  });
+});
+
+/*
  * The draft carries what no field on this screen shows.
  *
  * Publishing writes the draft whole, so a value the draft drops is a value

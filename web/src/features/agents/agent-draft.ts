@@ -76,6 +76,7 @@ export function toDefinition(
     model: agent.model,
     effort: agent.effort,
     cachePrefixTtl: agent.cachePrefixTtl,
+    replyLocale: agent.replyLocale,
     instructions: instructions ?? "",
     tools: agent.tools,
     budget: agent.budget,
@@ -139,6 +140,7 @@ export function changesBetween(
   );
   compare("agents.fieldEffort", before.effort, after.effort);
   compare("agents.fieldCacheTtl", before.cachePrefixTtl, after.cachePrefixTtl);
+  compare("agents.fieldReplyLocale", before.replyLocale, after.replyLocale);
   compare(
     "agents.fieldInstructions",
     size(before.instructions),

@@ -46,7 +46,7 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	// Built once for this request and used in both directions: the names the
 	// provider is offered, and the identifier a proposal is read back as.
 	offered := namesFor(in)
-	guidance := prefixStablePlanningNote(in, o.tools, offered)
+	guidance := prefixStablePlanningNote(in, o.cfg.ReplyLocale, o.tools, offered)
 	// This path has no volatile slot, so the note rides with the guidance;
 	// the cache it invalidates when the set changes is the automatic one.
 	if note := unavailableToolsNote(in); note != "" {

@@ -676,6 +676,25 @@ func TestPublishAgent_withoutAnApprovalPolicy_publishesNone(t *testing.T) {
 	}
 }
 
+func TestPublishAgent_replyLocaleSurvivesTheConsolePath(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher()
+
+	_, err := publishServer(t, pub).PublishAgent(
+		inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+			d.ReplyLocale = ptr("pt-BR")
+		})},
+	)
+	if err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+
+	if len(pub.published) != 1 || pub.published[0].ReplyLocale != "pt-BR" {
+		t.Fatalf("published locale = %+v, want the author's language to survive the form", pub.published)
+	}
+}
+
 func TestPublishAgent_cachePrefixTTLSurvivesTheConsolePath(t *testing.T) {
 	t.Parallel()
 	pub := newPublisher()

@@ -48,6 +48,13 @@ type Spec struct {
 	// read here.
 	CachePrefixTTL string
 
+	// ReplyLocale pins the language of everything user-facing the model
+	// writes, finish summary included. The platform's prompt scaffolding is
+	// English and outweighs a request written inside the instructions, so
+	// the engine injects this next to the generation instead (#156). Empty
+	// asks for nothing.
+	ReplyLocale string
+
 	// Tools is the capability pack, resolved to concrete tool ids. The author
 	// picks a pack; this is what the pack expanded to (PRD SE-03).
 	Tools          []domain.ToolID
@@ -102,6 +109,7 @@ type frontmatter struct {
 	Model    string    `yaml:"model"`
 	Effort   string    `yaml:"effort"`
 	CacheTTL string    `yaml:"cache_prefix_ttl,omitempty"`
+	Locale   string    `yaml:"reply_locale,omitempty"`
 	Tools    []string  `yaml:"tools"`
 	Triggers []Trigger `yaml:"triggers"`
 	Emits    Emits     `yaml:"emits,omitempty"`
@@ -150,6 +158,7 @@ func Parse(source string, data []byte) (Spec, error) {
 		Model:          fm.Model,
 		Effort:         fm.Effort,
 		CachePrefixTTL: fm.CacheTTL,
+		ReplyLocale:    fm.Locale,
 		Triggers:       fm.Triggers,
 		Emits:          fm.Emits,
 		Steps:          fm.Steps,

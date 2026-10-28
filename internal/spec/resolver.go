@@ -101,6 +101,7 @@ func (r *Resolver) planner(spec Spec) (engine.Planner, error) {
 			Model:          spec.Model,
 			Effort:         spec.Effort,
 			CachePrefixTTL: spec.CachePrefixTTL,
+			ReplyLocale:    spec.ReplyLocale,
 			// The agent's identity is its cache identity: every version of
 			// one agent shares a prefix far more than two agents do.
 			CacheKey: string(spec.ID),

@@ -65,6 +65,13 @@ type Config struct {
 	// Applied to the prefix breakpoint only — the conversation tail changes
 	// every run, and an hour of it is money for tokens never read again.
 	CachePrefixTTL string
+	// ReplyLocale pins the language of everything user-facing the model
+	// writes, finish summary included. The platform's scaffolding around the
+	// instructions is English, and a language request at the top of the
+	// specification sits hundreds of KiB from the generation — this rides
+	// with the stable guidance near the end instead (#156). Empty asks for
+	// nothing and leaves the prompt unchanged.
+	ReplyLocale string
 	// CacheKey names the cache this agent's requests should share — the
 	// agent's own id, set by the resolver. Only sent to providers that
 	// declare SupportsPromptCacheKey; the Anthropic path has no use for it,
@@ -150,7 +157,7 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	if err != nil {
 		return engine.Proposal{}, err
 	}
-	stableGuidance := prefixStablePlanningNote(in, a.tools, offered)
+	stableGuidance := prefixStablePlanningNote(in, a.cfg.ReplyLocale, a.tools, offered)
 	volatileGuidance := volatilePlanningNote(in)
 	promptGuidance := stableGuidance + volatileGuidance
 	prompt := promptInputBreakdown(in, a.cfg, a.tools, offered, promptGuidance)

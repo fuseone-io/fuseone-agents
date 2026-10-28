@@ -589,6 +589,37 @@ func TestParse_cachePrefixTTL_unknownWindowRefused(t *testing.T) {
 	}
 }
 
+func TestParse_replyLocale_reachesTheSpec(t *testing.T) {
+	t.Parallel()
+
+	s := parse(t, strings.Replace(valid, "effort: medium\n", "effort: medium\nreply_locale: pt-BR\n", 1))
+	if s.ReplyLocale != "pt-BR" {
+		t.Errorf("ReplyLocale = %q, want pt-BR", s.ReplyLocale)
+	}
+	if parse(t, valid).ReplyLocale != "" {
+		t.Error("an absent reply_locale invented a value")
+	}
+}
+
+func TestRender_replyLocale_survivesTheRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	// The console edits through Render→Parse; a renderer that drops the
+	// field publishes a version that silently reports in English again.
+	original := parse(t, strings.Replace(valid, "effort: medium\n", "effort: medium\nreply_locale: pt-BR\n", 1))
+	rendered, err := spec.Render(original)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	back, err := spec.Parse("round.agent.md", rendered)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if back.ReplyLocale != "pt-BR" {
+		t.Errorf("ReplyLocale = %q after the round trip, want pt-BR", back.ReplyLocale)
+	}
+}
+
 func TestRender_cachePrefixTTL_survivesTheRoundTrip(t *testing.T) {
 	t.Parallel()
 
