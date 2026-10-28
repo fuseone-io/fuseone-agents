@@ -683,6 +683,60 @@ func TestBuildTranscript_aResultBiggerThanTheBudget_paysForItself(t *testing.T) 
 }
 
 /*
+The accuser for the headroom guard, re-aimed after the budget raise unseated
+the original one (#164 review): after one bulk is demoted the total sits just
+above half the budget, and the only remaining victims are verdicts. With the
+guard, the drain stops there; without it, the verdicts are spent on slack —
+the exact drain the first cut of the eviction change performed.
+*/
+func TestBuildTranscript_headroomIsNeverBoughtWithVerdicts(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	steps := []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "cron"}),
+	}}
+
+	// Six verdicts, then two bulks whose second arrival crosses the ceiling.
+	// Demoting the first bulk lands just above half the budget — the guard's
+	// exact decision point.
+	sizes := []int{2 << 10, 2 << 10, 2 << 10, 2 << 10, 2 << 10, 2 << 10, 60 << 10, 60 << 10}
+	for i, size := range sizes {
+		calledSeq := int64(2 + i*2)
+		returnedSeq := calledSeq + 1
+		body := []byte(fmt.Sprintf("result-%d\n%s", i, strings.Repeat("x", size)))
+		ref, err := store.Put(ctx, "run_1", returnedSeq, body)
+		if err != nil {
+			t.Fatalf("Put result %d: %v", i, err)
+		}
+		steps = append(steps,
+			domain.Step{
+				RunID: "run_1", Seq: calledSeq, Kind: domain.StepToolCalled,
+				Payload: payload(t, domain.ToolCalledPayload{Tool: "crm.lookup"}),
+			},
+			domain.Step{
+				RunID: "run_1", Seq: returnedSeq, Kind: domain.StepToolReturned,
+				Payload: payload(t, domain.ToolReturnedPayload{Tool: "crm.lookup", ResultRef: ref}),
+			},
+		)
+	}
+
+	turns, err := BuildTranscript(ctx, store, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+	for _, turn := range turns {
+		if turn.Kind != TurnToolResult || turn.OriginalBytes >= 10<<10 {
+			continue
+		}
+		if strings.Contains(string(turn.Content), "transcript result budget") {
+			t.Errorf("a %d-byte verdict was spent on headroom", turn.OriginalBytes)
+		}
+	}
+}
+
+/*
 A checklist agent's whole hour, lean: every query disciplined, every result
 small — and the sum still crossed the old 64 KiB ceiling, so the final
 composition read receipts where its verdicts had been (#163). The ceiling was
