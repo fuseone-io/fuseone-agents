@@ -9,10 +9,15 @@ import (
 )
 
 const (
-	toolResultCompactAfter     = 32 << 10
-	toolResultHeadBytes        = 16 << 10
-	toolResultTailBytes        = 8 << 10
-	toolResultTranscriptBudget = 64 << 10
+	toolResultCompactAfter = 32 << 10
+	toolResultHeadBytes    = 16 << 10
+	toolResultTailBytes    = 8 << 10
+	// 128 KiB, sized so one disciplined checklist run — a dozen-plus small
+	// results and a few compacted deep dives — reaches its final composition
+	// whole. The old 64 KiB was sized when every turn repaid these bytes at
+	// full price; under the prefix cache the resend costs a tenth, and a
+	// report blind to results it already read buys the wrong economy (#163).
+	toolResultTranscriptBudget = 128 << 10
 	// receiptOmittedWidth makes every int64 rendering the same width. The
 	// receipt computes omitted bytes from a zero-valued probe; without a fixed
 	// width, writing the real number would change the receipt length and make

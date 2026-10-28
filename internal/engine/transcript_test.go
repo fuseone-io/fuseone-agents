@@ -571,7 +571,7 @@ func TestBuildTranscript_budgetEvictsTheLargestResults_smallVerdictsSurvive(t *t
 	// Six small verdicts, two deep dives carrying the bulk (the size per-result
 	// compaction leaves them at), then small verdicts again — the shape of a
 	// checklist agent's hour.
-	sizes := []int{2 << 10, 2 << 10, 2 << 10, 2 << 10, 2 << 10, 2 << 10, 26 << 10, 26 << 10, 2 << 10, 2 << 10}
+	sizes := []int{2 << 10, 2 << 10, 2 << 10, 2 << 10, 2 << 10, 2 << 10, 56 << 10, 56 << 10, 2 << 10, 2 << 10}
 	for i, size := range sizes {
 		calledSeq := int64(2 + i*2)
 		returnedSeq := calledSeq + 1
@@ -624,6 +624,57 @@ func TestBuildTranscript_budgetEvictsTheLargestResults_smallVerdictsSurvive(t *t
 	}
 	if !whole["result-8"] || !whole["result-9"] {
 		t.Error("the verdicts after the bulk were not preserved")
+	}
+}
+
+/*
+A checklist agent's whole hour, lean: every query disciplined, every result
+small — and the sum still crossed the old 64 KiB ceiling, so the final
+composition read receipts where its verdicts had been (#163). The ceiling was
+sized when a run resent every byte at full price; with the prefix cache the
+resend costs a tenth, and a budget that cannot hold one disciplined checklist
+buys the wrong economy.
+*/
+func TestBuildTranscript_aLeanChecklistRun_fitsTheBudgetWhole(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	steps := []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "cron"}),
+	}}
+
+	// Sixteen calls averaging ~6 KiB: the measured shape of a disciplined
+	// eleven-check hour with deep dives on line_format diets.
+	for i := 0; i < 16; i++ {
+		calledSeq := int64(2 + i*2)
+		returnedSeq := calledSeq + 1
+		body := []byte(fmt.Sprintf("result-%d\n%s", i, strings.Repeat("x", 6<<10)))
+		ref, err := store.Put(ctx, "run_1", returnedSeq, body)
+		if err != nil {
+			t.Fatalf("Put result %d: %v", i, err)
+		}
+		steps = append(steps,
+			domain.Step{
+				RunID: "run_1", Seq: calledSeq, Kind: domain.StepToolCalled,
+				Payload: payload(t, domain.ToolCalledPayload{Tool: "crm.lookup"}),
+			},
+			domain.Step{
+				RunID: "run_1", Seq: returnedSeq, Kind: domain.StepToolReturned,
+				Payload: payload(t, domain.ToolReturnedPayload{Tool: "crm.lookup", ResultRef: ref}),
+			},
+		)
+	}
+
+	turns, err := BuildTranscript(ctx, store, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+	for _, turn := range turns {
+		if turn.Kind == TurnToolResult &&
+			strings.Contains(string(turn.Content), "transcript result budget") {
+			t.Fatalf("a lean run's result became a receipt:\n%s", turn.Content)
+		}
 	}
 }
 
@@ -680,8 +731,11 @@ func TestBuildTranscript_resultBudgetChangesInStableGenerations(t *testing.T) {
 		previous = turns
 	}
 
-	if crossings != 2 {
-		t.Fatalf("cache-prefix crossings = %d, want two coarse generation changes", crossings)
+	// One coarse crossing for ten 15 KiB results under the 128 KiB budget:
+	// the crossing drains bulk down to half the budget at once, so growth
+	// between crossings stays free for the provider's prefix cache.
+	if crossings != 1 {
+		t.Fatalf("cache-prefix crossings = %d, want one coarse change", crossings)
 	}
 }
 
