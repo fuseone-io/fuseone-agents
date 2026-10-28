@@ -73,8 +73,8 @@ func TestFinishProposal_headlineSurvivesEverySeparatorAndTheCeiling(t *testing.T
 	cases := []struct{ name, in, want string }{
 		{"carriage return", "primeira\rsegunda", "primeira"},
 		{"crlf", "primeira\r\nsegunda", "primeira"},
-		{"unicode line separator", "primeira segunda", "primeira"},
-		{"unicode paragraph separator", "primeira segunda", "primeira"},
+		{"unicode line separator", "primeira\u2028segunda", "primeira"},
+		{"unicode paragraph separator", "primeira\u2029segunda", "primeira"},
 		{"next line", "primeira\u0085segunda", "primeira"},
 		// A segment of spaces before the break is not the first line, it is
 		// padding: returning its trimmed emptiness would silently drop the
@@ -88,7 +88,10 @@ func TestFinishProposal_headlineSurvivesEverySeparatorAndTheCeiling(t *testing.T
 		}
 	}
 
-	long := strings.Repeat("ã", 400)
+	// The leading ASCII byte misaligns every two-byte rune against the even
+	// ceiling, so a naive cut at the limit lands mid-rune: the validity
+	// assertion is only an anchor when the fixture makes naivety invalid.
+	long := "x" + strings.Repeat("ã", 400)
 	got := finishProposal([]byte(`{"headline":`+string(mustQuote(long))+`}`), engine.Proposal{})
 	if len(got.Headline) > maxHeadlineBytes {
 		t.Fatalf("headline kept %d bytes, want at most %d", len(got.Headline), maxHeadlineBytes)

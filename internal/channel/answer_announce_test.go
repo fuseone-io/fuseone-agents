@@ -200,8 +200,11 @@ func TestSweep_anOversizedStoredHeadline_isBoundedBeforeTheChannel(t *testing.T)
 	t.Parallel()
 	posts := &recorder{}
 	finished := report("run-1", "acme", "ops", channel.EventFinished)
+	// The leading ASCII byte misaligns the two-byte runes against the even
+	// ceiling, so a naive cut at the limit would land mid-rune and fail the
+	// validity assertion below.
 	outcomes, content := outcomesWithHeadline(t, "run-1",
-		"o relatório", strings.Repeat("ã", 2000))
+		"o relatório", "x"+strings.Repeat("ã", 2000))
 
 	r := channel.NewReporter(
 		&fixedReports{reports: []channel.Report{finished}},
