@@ -4506,6 +4506,13 @@ export interface components {
              *     an hourly agent reads its prefix back instead of re-writing it.
              */
             cachePrefixTtl?: string;
+            /**
+             * @description The language of everything user-facing the agent writes, finish
+             *     summary included. The engine injects it next to the generation,
+             *     where it outweighs the English prompt scaffolding. Empty asks
+             *     for nothing.
+             */
+            replyLocale?: string;
             /** @description The capability pack resolved to concrete tools. What is not here cannot be invoked. */
             tools: string[];
             budget: components["schemas"]["Budget"];
@@ -4555,6 +4562,13 @@ export interface components {
              *     an hourly agent reads its prefix back instead of re-writing it.
              */
             cachePrefixTtl?: string;
+            /**
+             * @description The language of everything user-facing the agent writes, finish
+             *     summary included. The engine injects it next to the generation,
+             *     where it outweighs the English prompt scaffolding. Empty asks
+             *     for nothing.
+             */
+            replyLocale?: string;
             /** @description What the agent is for, in the author's own words. */
             instructions: string;
             /** @description The capability pack. What is not here cannot be invoked. */

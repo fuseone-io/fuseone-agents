@@ -35,6 +35,9 @@ type AgentSummary struct {
 	// CachePrefixTTL is the stable-prefix cache window the definition chose;
 	// empty is the provider default.
 	CachePrefixTTL string
+	// ReplyLocale is the language the definition pinned for everything
+	// user-facing the agent writes; empty asks for nothing.
+	ReplyLocale string
 
 	Tools          []ToolID
 	Budget         Budget

@@ -45,6 +45,9 @@ func agentFrom(a domain.AgentSummary) openapi.Agent {
 	if a.CachePrefixTTL != "" {
 		agent.CachePrefixTtl = ptr(a.CachePrefixTTL)
 	}
+	if a.ReplyLocale != "" {
+		agent.ReplyLocale = ptr(a.ReplyLocale)
+	}
 	if a.PublishedBy != "" {
 		agent.PublishedBy = ptr(string(a.PublishedBy))
 	}

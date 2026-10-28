@@ -276,6 +276,7 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 		Company: domain.CompanyID(in.Company), Area: domain.AreaID(in.Area),
 		Provider: in.Provider, Model: in.Model, Effort: valueOr(in.Effort),
 		CachePrefixTTL: valueOr(in.CachePrefixTtl),
+		ReplyLocale:    valueOr(in.ReplyLocale),
 		Instructions:   in.Instructions,
 	}
 	for _, t := range valueOr(in.Tools) {
