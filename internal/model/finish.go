@@ -27,6 +27,10 @@ func finishToolSchema() map[string]any {
 			"type":        "string",
 			"description": "When the step's declared stopping condition happened, copy that condition exactly here.",
 		},
+		"headline": map[string]any{
+			"type":        "string",
+			"description": "Optional one-line header for the run's answer. When set, a channel shows this line and carries the full summary in its thread.",
+		},
 	}
 }
 
@@ -38,6 +42,7 @@ type finishArgs struct {
 	Summary   string            `json:"summary"`
 	Artifacts map[string]string `json:"artifacts"`
 	StoppedBy string            `json:"stopped_by"`
+	Headline  string            `json:"headline"`
 }
 
 func finishProposal(
@@ -54,6 +59,10 @@ func finishProposal(
 	base.Outcome = strings.TrimSpace(decoded.Summary)
 	base.Artifacts = cleanArtifacts(decoded.Artifacts)
 	base.StoppedBy = strings.TrimSpace(decoded.StoppedBy)
+	// First line only: a multi-line headline posted at a channel's top level
+	// is the wallpaper the field exists to end.
+	headline, _, _ := strings.Cut(decoded.Headline, "\n")
+	base.Headline = strings.TrimSpace(headline)
 	return base
 }
 

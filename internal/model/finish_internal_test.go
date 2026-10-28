@@ -37,6 +37,29 @@ func TestFinishProposal_keepsTheProviderAndModel(t *testing.T) {
 }
 
 /*
+The headline is the one line a channel shows for the run; the full answer
+hangs in its thread (#165). The model declares it through the finish tool —
+nothing is inferred from the response, on the stopped_by precedent — and the
+mechanical guard keeps only the first line: a multi-line headline posted at a
+channel's top level is the wallpaper the field exists to end.
+*/
+func TestFinishProposal_headlineKeepsItsFirstLineOnly(t *testing.T) {
+	t.Parallel()
+
+	got := finishProposal([]byte(`{
+		"summary":"the full report",
+		"headline":"  2 achados · pior: CRÍTICO \nsegunda linha que não sobe  "
+	}`), engine.Proposal{})
+
+	if got.Headline != "2 achados · pior: CRÍTICO" {
+		t.Errorf("Headline = %q, want the trimmed first line", got.Headline)
+	}
+	if without := finishProposal([]byte(`{"summary":"done"}`), engine.Proposal{}); without.Headline != "" {
+		t.Errorf("an absent headline invented %q", without.Headline)
+	}
+}
+
+/*
 A run cannot publish an artifact called final_answer.
 
 The name is already taken: it is what a citation calls the run's closing
