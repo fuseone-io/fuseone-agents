@@ -25,6 +25,20 @@ field" is a commit message.
 
 ---
 
+## [0.77.0] — 2026-10-28
+
+### Added
+
+- **A finished answer can declare a headline, and the channel threads the
+  rest.** An agent that reports hourly wallpapered its channel with the
+  full report. The finish tool now takes an optional one-line `headline`;
+  when a run declares one, the announcement posts that line at the top of
+  the channel and the full answer as a reply in its thread. Without it,
+  nothing changes. Delivery stays with the channel layer — same bot, same
+  rooms, same tracking, ceiling and erasure; the agent only formats. The
+  headline is bounded at both ends and stored beside the answer in the
+  content store, where retention and erasure reach it.
+
 ## [0.76.0] — 2026-10-28
 
 ### Fixed
