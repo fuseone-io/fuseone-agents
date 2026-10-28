@@ -234,7 +234,7 @@ func budgetNote(in engine.PlanInput) string {
 // prefix during normal transcript growth while a run remains in the same
 // authored step. The monetary ceiling is stable; putting the changing
 // remainder here would invalidate the automatic cache before every new result.
-func prefixStablePlanningNote(in engine.PlanInput, schemas ToolSchemas, offered names) string {
+func prefixStablePlanningNote(in engine.PlanInput, locale string, schemas ToolSchemas, offered names) string {
 	var notes []string
 	if in.Step != "" {
 		notes = append(notes, stepNote(in))
@@ -245,6 +245,11 @@ func prefixStablePlanningNote(in engine.PlanInput, schemas ToolSchemas, offered 
 	if in.Budget.Micros > 0 {
 		notes = append(notes, "Budget ceiling for this run: "+formatMicros(in.Budget.Micros)+
 			". Use bounded queries and finish cleanly before the platform enforces it.")
+	}
+	if locale != "" {
+		// Last on purpose: everything above and around this block is English,
+		// and the pin works by proximity to the generation (#156).
+		notes = append(notes, "Write every user-facing text, including the finish summary, in "+locale+".")
 	}
 	return strings.Join(notes, "\n\n")
 }

@@ -496,6 +496,85 @@ func TestAnthropic_refusal_isReportedNotParsedAsEmpty(t *testing.T) {
 	}
 }
 
+/*
+An agent authored in pt-BR reported in English (#156): the platform's own
+scaffolding — contract, notes, schemas — surrounds the specification with
+English, and a language request written at the top of the instructions sits
+hundreds of KiB from the generation. The pin rides with the stable guidance
+near the end of the prompt, and only when the definition asks for it: an
+agent without the field keeps today's prompt byte for byte.
+*/
+func TestReplyLocale_pinsTheAnswerLanguageNearTheGeneration(t *testing.T) {
+	t.Parallel()
+
+	providers := []struct {
+		name     string
+		kind     model.Kind
+		response string
+		system   func(map[string]any) string
+	}{
+		{name: "anthropic", kind: model.KindAnthropic, response: anthropicToolUse, system: anthropicPromptText},
+		{name: "openai-compatible", kind: model.KindOpenAICompatible, response: openAIToolCall, system: openAIPromptText},
+	}
+	const pin = "Write every user-facing text, including the finish summary, in pt-BR."
+
+	for _, p := range providers {
+		t.Run(p.name, func(t *testing.T) {
+			t.Parallel()
+			with := serve(t, p.response)
+			if _, err := plannerFor(t, p.kind, with.server.URL, model.Config{ReplyLocale: "pt-BR"}).
+				Plan(context.Background(), input()); err != nil {
+				t.Fatalf("Plan with locale: %v", err)
+			}
+			if system := strings.Join(strings.Fields(p.system(with.last())), " "); !strings.Contains(system, pin) {
+				t.Errorf("the pin is missing:\n%s", system)
+			}
+
+			without := serve(t, p.response)
+			if _, err := plannerFor(t, p.kind, without.server.URL, model.Config{}).
+				Plan(context.Background(), input()); err != nil {
+				t.Fatalf("Plan without locale: %v", err)
+			}
+			if system := p.system(without.last()); strings.Contains(system, "user-facing text") {
+				t.Errorf("an agent that asked for nothing got a language pin:\n%s", system)
+			}
+		})
+	}
+}
+
+func TestReplyLocale_sitsInsideTheCachedStablePrefix(t *testing.T) {
+	t.Parallel()
+	c := serve(t, anthropicToolUse)
+
+	in := input()
+	in.Budget = domain.Budget{Micros: 500_000}
+	if _, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{ReplyLocale: "pt-BR"}).
+		Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	// The pin is stable per version; outside the breakpoint it would be paid
+	// for on every turn without ever being read back from cache.
+	blocks, _ := c.last()["system"].([]any)
+	cachedAt := -1
+	for i, b := range blocks {
+		if m, _ := b.(map[string]any); m["cache_control"] != nil {
+			cachedAt = i
+		}
+	}
+	if cachedAt == -1 {
+		t.Fatal("no cache breakpoint on the system prompt")
+	}
+	var stable strings.Builder
+	for i := 0; i <= cachedAt; i++ {
+		m, _ := blocks[i].(map[string]any)
+		stable.WriteString(asString(m["text"]))
+	}
+	if !strings.Contains(stable.String(), "including the finish summary, in pt-BR") {
+		t.Errorf("the pin is not inside the cached prefix: %s", stable.String())
+	}
+}
+
 func TestAnthropic_systemPrompt_isCachedAndFreeOfVolatileText(t *testing.T) {
 	t.Parallel()
 	c := serve(t, anthropicToolUse)
