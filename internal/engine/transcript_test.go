@@ -737,6 +737,66 @@ func TestBuildTranscript_headroomIsNeverBoughtWithVerdicts(t *testing.T) {
 }
 
 /*
+Equal results tie, and the tie goes to the oldest (#164 review): among equal
+sizes the newest is the evidence most recently asked for, so the one that has
+been readable longest pays. Flipping the comparison to prefer the newest
+among ties survives every other test — this one pins which of the equals
+becomes the receipt.
+*/
+func TestBuildTranscript_tiedResults_theOldestPays(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	steps := []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "cron"}),
+	}}
+
+	// Thirty-two equal results just over the ceiling. Every victim saves less
+	// than the headroom minimum, so the crossing demotes exactly one — and
+	// which one is the whole question.
+	const results = 32
+	for i := 0; i < results; i++ {
+		calledSeq := int64(2 + i*2)
+		returnedSeq := calledSeq + 1
+		body := []byte(fmt.Sprintf("result-%02d\n%s", i, strings.Repeat("x", 4<<10)))
+		ref, err := store.Put(ctx, "run_1", returnedSeq, body)
+		if err != nil {
+			t.Fatalf("Put result %d: %v", i, err)
+		}
+		steps = append(steps,
+			domain.Step{
+				RunID: "run_1", Seq: calledSeq, Kind: domain.StepToolCalled,
+				Payload: payload(t, domain.ToolCalledPayload{Tool: "crm.lookup"}),
+			},
+			domain.Step{
+				RunID: "run_1", Seq: returnedSeq, Kind: domain.StepToolReturned,
+				Payload: payload(t, domain.ToolReturnedPayload{Tool: "crm.lookup", ResultRef: ref}),
+			},
+		)
+	}
+
+	turns, err := BuildTranscript(ctx, store, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+	var receipted []int
+	index := 0
+	for _, turn := range turns {
+		if turn.Kind != TurnToolResult {
+			continue
+		}
+		if strings.Contains(string(turn.Content), "transcript result budget") {
+			receipted = append(receipted, index)
+		}
+		index++
+	}
+	if len(receipted) != 1 || receipted[0] != 0 {
+		t.Fatalf("receipted = %v, want exactly the oldest of the equals", receipted)
+	}
+}
+
+/*
 A checklist agent's whole hour, lean: every query disciplined, every result
 small — and the sum still crossed the old 64 KiB ceiling, so the final
 composition read receipts where its verdicts had been (#163). The ceiling was
