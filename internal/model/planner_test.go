@@ -517,17 +517,38 @@ func TestReplyLocale_pinsTheAnswerLanguageNearTheGeneration(t *testing.T) {
 		{name: "openai-compatible", kind: model.KindOpenAICompatible, response: openAIToolCall, system: openAIPromptText},
 	}
 	const pin = "Write every user-facing text, including the finish summary, in pt-BR."
+	// The stable half of the prompt alone: the pin works by being the last
+	// stable text before the generation, so the whole prompt — which ends in
+	// transcript and volatile notes — cannot be the thing asserted on.
+	stableOf := map[string]func(map[string]any) string{
+		"anthropic": anthropicSystemText,
+		"openai-compatible": func(body map[string]any) string {
+			messages, _ := body["messages"].([]any)
+			if len(messages) == 0 {
+				return ""
+			}
+			first, _ := messages[0].(map[string]any)
+			return asString(first["content"])
+		},
+	}
 
 	for _, p := range providers {
 		t.Run(p.name, func(t *testing.T) {
 			t.Parallel()
 			with := serve(t, p.response)
+			// A step, memory and a budget, so every other stable note is
+			// present: a pin that merely appears could still sit before the
+			// English it exists to outweigh.
+			in := input()
+			in.Step = "Investigate the alert"
+			in.Tools = append(in.Tools, domain.ToolMemoryFind)
 			if _, err := plannerFor(t, p.kind, with.server.URL, model.Config{ReplyLocale: "pt-BR"}).
-				Plan(context.Background(), input()); err != nil {
+				Plan(context.Background(), in); err != nil {
 				t.Fatalf("Plan with locale: %v", err)
 			}
-			if system := strings.Join(strings.Fields(p.system(with.last())), " "); !strings.Contains(system, pin) {
-				t.Errorf("the pin is missing:\n%s", system)
+			stable := strings.Join(strings.Fields(stableOf[p.name](with.last())), " ")
+			if !strings.HasSuffix(stable, pin) {
+				t.Errorf("the pin is not the last stable text:\n%s", stable)
 			}
 
 			without := serve(t, p.response)
