@@ -818,6 +818,13 @@ func TestStepNote_saysFinishEndsTheRunNotTheStep(t *testing.T) {
 						t.Errorf("contains %q = %v, want %v:\n%s", phrase, got, shape.want, system)
 					}
 				}
+				// The exception's phrasing carries the same fact: it stops the
+				// run, not the step. Reverting it to "it stops when" reopens
+				// the ambiguity for exactly the runs that declared one.
+				if shape.stopsWhen != "" &&
+					!strings.Contains(system, "this step stops the run when") {
+					t.Errorf("the exception does not say it stops the run:\n%s", system)
+				}
 			})
 		}
 	}
