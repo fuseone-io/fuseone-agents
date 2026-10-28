@@ -89,14 +89,14 @@ func (r *Registry) Publish(ctx context.Context, s Spec, by domain.UserID, compan
 	_, err = r.pool.Exec(ctx, `
 		insert into agent_specs (
 			agent_id, version_id, company_id, area_id, name,
-			provider, model, effort, cache_prefix_ttl, tools, budget, triggers,
-			instructions, source, published_by, emits, steps, memory_learning,
-			approvals
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+			provider, model, effort, cache_prefix_ttl, reply_locale, tools, budget,
+			triggers, instructions, source, published_by, emits, steps,
+			memory_learning, approvals
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
 		on conflict (agent_id, version_id) do nothing`,
 		string(s.ID), string(s.Version), string(company), string(s.Area), s.Name,
-		s.Provider, s.Model, s.Effort, s.CachePrefixTTL, tools, budget, triggers,
-		s.Instructions, s.Source, string(by), encodedEmits, steps, learning,
+		s.Provider, s.Model, s.Effort, s.CachePrefixTTL, s.ReplyLocale, tools, budget,
+		triggers, s.Instructions, s.Source, string(by), encodedEmits, steps, learning,
 		approvals)
 	if err != nil {
 		return fmt.Errorf("spec: publish %s@%s: %w", s.ID, s.Version, err)
@@ -117,14 +117,14 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 	)
 	err := r.pool.QueryRow(ctx, `
 		select agent_id, version_id, company_id, area_id, name,
-		       provider, model, effort, cache_prefix_ttl, tools, budget,
-		       triggers, instructions, source, emits, steps, memory_learning,
-		       approvals
+		       provider, model, effort, cache_prefix_ttl, reply_locale, tools,
+		       budget, triggers, instructions, source, emits, steps,
+		       memory_learning, approvals
 		from agent_specs where agent_id = $1 and version_id = $2`,
 		string(agent), string(version),
 	).Scan(&s.ID, &s.Version, &company, &s.Area, &s.Name,
-		&s.Provider, &s.Model, &s.Effort, &s.CachePrefixTTL, &tools, &budget,
-		&triggers, &s.Instructions, &s.Source, &emits, &steps, &learning,
+		&s.Provider, &s.Model, &s.Effort, &s.CachePrefixTTL, &s.ReplyLocale, &tools,
+		&budget, &triggers, &s.Instructions, &s.Source, &emits, &steps, &learning,
 		&approvals)
 
 	if errors.Is(err, pgx.ErrNoRows) {

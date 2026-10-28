@@ -35,6 +35,7 @@ func Render(s Spec) ([]byte, error) {
 		Model:    s.Model,
 		Effort:   s.Effort,
 		CacheTTL: s.CachePrefixTTL,
+		Locale:   s.ReplyLocale,
 		Triggers: s.Triggers,
 		Emits:    s.Emits,
 		Steps:    s.Steps,
