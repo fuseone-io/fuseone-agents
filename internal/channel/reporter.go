@@ -270,6 +270,31 @@ func (r *Reporter) post(ctx context.Context, report Report, place Conversation, 
 		return false, nil
 	}
 
+	// The run declared a headline for its answer: the headline is the channel
+	// message and the answer hangs in its thread. Both land before the
+	// delivery is recorded — if the reply fails after the headline posted,
+	// the announcement stays owed and the retry may repeat the one-liner.
+	// Chosen deliberately: a repeated line is noise, a report that never
+	// arrives is a failure of the one promise this path makes (#165).
+	if msg.Headline != "" && msg.Answer != "" {
+		header := msg
+		header.Answer, header.Headline = msg.Headline, ""
+		at, err := placed(ctx, r.poster, place, header)
+		if err != nil {
+			return false, fmt.Errorf("channel: post to %s: %w", place.Label, err)
+		}
+		body := msg
+		body.Headline = ""
+		threaded := place
+		threaded.Thread = at.Ref
+		if _, err := placed(ctx, r.poster, threaded, body); err != nil {
+			return false, fmt.Errorf("channel: thread answer to %s: %w", place.Label, err)
+		}
+		return true, r.deliveries.Record(ctx, Delivery{
+			Announcement: owed, Ref: at.Ref, Placed: at.Conversation, PostedAt: r.clock(),
+		})
+	}
+
 	at, err := placed(ctx, r.poster, place, msg)
 	if err != nil {
 		// Named, because the ordinary cause is a bot removed from one channel
@@ -291,7 +316,7 @@ func (r *Reporter) message(ctx context.Context, report Report) Message {
 	if r.baseURL != "" {
 		m.Link = fmt.Sprintf("%s/runs/%s", r.baseURL, report.RunID)
 	}
-	m.Answer = r.answerFor(ctx, report)
+	m.Answer, m.Headline = r.answerFor(ctx, report)
 	return m
 }
 
@@ -309,22 +334,28 @@ leads to the whole answer. Erasure is the exception with words of its own —
 the sentence the ask path already uses — because "the platform removed this"
 and "nothing was said" must not read the same.
 */
-func (r *Reporter) answerFor(ctx context.Context, report Report) string {
+func (r *Reporter) answerFor(ctx context.Context, report Report) (answer, headline string) {
 	if report.Event != EventFinished || report.Asked || r.outcomes == nil {
-		return ""
+		return "", ""
 	}
 	payload, err := r.outcomes.FinishedOutcome(ctx, report.RunID)
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	text, err := engine.OutcomeOf(ctx, r.content, payload)
 	if err != nil {
 		if errors.Is(err, domain.ErrContentErased) {
-			return erasedAnswer
+			return erasedAnswer, ""
 		}
-		return ""
+		return "", ""
 	}
-	return truncateAnswer(text)
+	// A headline that cannot be read degrades to the single post, never to a
+	// lost answer: the line is presentation, the answer is the message.
+	headline, err = engine.HeadlineOf(ctx, r.content, payload)
+	if err != nil {
+		headline = ""
+	}
+	return truncateAnswer(text), headline
 }
 
 // MaxAnnouncedAnswer bounds what an announcement carries. Slack refuses a

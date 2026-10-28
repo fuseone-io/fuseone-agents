@@ -219,6 +219,11 @@ type Message struct {
 	// nobody asked for. With it set, the answer is the message and everything
 	// else is provenance; without it, the message is the card it always was.
 	Answer string
+	// Headline is the one line the run declared for its answer through the
+	// finish tool. With both set, the reporter posts the headline at the top
+	// level and the answer as a reply in its thread; the agent formatted,
+	// and where it posts stays the channel layer's decision (#165).
+	Headline string
 }
 
 /*

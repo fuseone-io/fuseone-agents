@@ -491,7 +491,10 @@ type recorder struct {
 	sent     []sent
 	attempts int
 	fail     error
-	failFor  string
+	// failAfter refuses every post past the first n, for the paths that make
+	// more than one post per announcement and must survive the second failing.
+	failAfter int
+	failFor   string
 	// failWith is what failFor refuses with, when the reason matters. The
 	// direct path treats a refusal nothing can fix differently from one
 	// another sweep could survive.
@@ -502,6 +505,9 @@ func (r *recorder) Post(_ context.Context, c channel.Conversation, m channel.Mes
 	r.attempts++
 	if r.fail != nil {
 		return "", r.fail
+	}
+	if r.failAfter > 0 && len(r.sent) >= r.failAfter {
+		return "", errors.New("refused past the first")
 	}
 	if r.failFor != "" && c.ID == r.failFor {
 		if r.failWith != nil {
