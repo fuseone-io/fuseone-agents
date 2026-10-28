@@ -1,7 +1,10 @@
 package model
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -57,6 +60,43 @@ func TestFinishProposal_headlineKeepsItsFirstLineOnly(t *testing.T) {
 	if without := finishProposal([]byte(`{"summary":"done"}`), engine.Proposal{}); without.Headline != "" {
 		t.Errorf("an absent headline invented %q", without.Headline)
 	}
+}
+
+// "First line" means first line in every alphabet a JSON string can carry:
+// a bare carriage return, CRLF and the Unicode separators survive strings.Cut
+// on "\n" and arrive at a channel as the multi-line wallpaper the guard
+// exists to end. And one line is also a bounded line: past the ceiling the
+// cut lands on a rune boundary, never through one.
+func TestFinishProposal_headlineSurvivesEverySeparatorAndTheCeiling(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct{ name, in, want string }{
+		{"carriage return", "primeira\rsegunda", "primeira"},
+		{"crlf", "primeira\r\nsegunda", "primeira"},
+		{"unicode line separator", "primeira segunda", "primeira"},
+		{"unicode paragraph separator", "primeira segunda", "primeira"},
+		{"next line", "primeira\u0085segunda", "primeira"},
+	}
+	for _, tc := range cases {
+		got := finishProposal([]byte(`{"headline":`+string(mustQuote(tc.in))+`}`), engine.Proposal{})
+		if got.Headline != tc.want {
+			t.Errorf("%s: Headline = %q, want %q", tc.name, got.Headline, tc.want)
+		}
+	}
+
+	long := strings.Repeat("ã", 400)
+	got := finishProposal([]byte(`{"headline":`+string(mustQuote(long))+`}`), engine.Proposal{})
+	if len(got.Headline) > maxHeadlineBytes {
+		t.Fatalf("headline kept %d bytes, want at most %d", len(got.Headline), maxHeadlineBytes)
+	}
+	if !utf8.ValidString(got.Headline) {
+		t.Fatal("the ceiling cut through a rune")
+	}
+}
+
+func mustQuote(s string) []byte {
+	b, _ := json.Marshal(s)
+	return b
 }
 
 /*
