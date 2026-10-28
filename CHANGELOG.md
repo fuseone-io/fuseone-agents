@@ -25,6 +25,38 @@ field" is a commit message.
 
 ---
 
+## [0.75.0] — 2026-10-28
+
+### Fixed
+
+- **A run with steps no longer finishes at the first step boundary.** The
+  prompt told the model which step it was at and that finishing was "the
+  only way to finish", and nothing said finish ends the whole run — so a
+  careful model, whichever provider served it, completed its first step's
+  work and finished there, with a summary promising later steps that
+  nothing would ever execute. The step note now states that finish ends
+  the run and that a completed step with steps remaining means moving
+  forward. Agents without steps keep their prompt byte for byte.
+- **Regenerating steps from the interview no longer produces envelope
+  traps.** The generator anchored platform tools in steps (the trap fixed
+  in 0.74.0) and anchored fallback tools only in the step that mentioned
+  them — unreachable the moment the forward-only run advances. Platform
+  tools are now stripped from generated steps whatever the model answers,
+  and the generator's instructions, in both languages, teach the
+  forward-only rules: platform tools are ambient, a tool a later step may
+  need goes in every step that may need it, and few broad steps beat many
+  narrow ones.
+
+### Added
+
+- **A definition can pin the language its agent answers in.** An agent
+  authored in one language could report in another: the platform's own
+  prompt scaffolding is English and sits closer to the generation than
+  anything the author writes. The new `reply_locale` field injects the
+  author's choice as the last stable text before the generation, where
+  position makes it hold. Absent, nothing changes. The Studio exposes it
+  beside the model and effort.
+
 ## [0.74.0] — 2026-10-27
 
 ### Fixed
