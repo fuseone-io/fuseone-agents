@@ -408,6 +408,41 @@ func TestTranslate_bothPasses_areChargedTogether(t *testing.T) {
 }
 
 /*
+The generator writes structures a forward-only envelope executes, and the old
+prompt told it nothing about that runtime (#157): it anchored fallbacks in the
+one step that mentioned them — dead letter the moment the run advances — and
+platform tools in steps of their own. Asserted through what the completer
+actually received, in every language this installation prompts in: a rule that
+is lost in one locale's file produces dirty steps for that locale's authors.
+*/
+func TestOrganise_theAnchoringRules_reachThePrompt(t *testing.T) {
+	t.Parallel()
+
+	for _, locale := range []string{"pt-BR", "en-US"} {
+		fake := &fakeCompleter{reply: `{"tools":[],"steps":[]}`}
+		if _, err := authoring.Translate(t.Context(), authoring.Job{
+			Completer: fake,
+			Choice:    authoring.Choice{DailyMicros: 1_000_000, Enabled: true},
+			Locale:    locale,
+			Catalogue: catalogue,
+			Answers:   authoring.Answers{Steps: "procuro nos logs e aviso"},
+		}); err != nil {
+			t.Fatalf("Translate(%s): %v", locale, err)
+		}
+		if len(fake.prompts) == 0 {
+			t.Fatalf("%s: nothing was asked", locale)
+		}
+		prompt := fake.prompts[0]
+		if !strings.Contains(prompt, "$fuseone.") {
+			t.Errorf("%s: the prompt does not keep platform tools out of steps:\n%s", locale, prompt)
+		}
+		if !strings.Contains(prompt, "voltar é recusado") && !strings.Contains(prompt, "going back is refused") {
+			t.Errorf("%s: the prompt does not say the envelope is forward-only:\n%s", locale, prompt)
+		}
+	}
+}
+
+/*
 A limit the author stated reaches the assistant.
 
 The screen asked what must never happen — the one question this audience
