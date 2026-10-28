@@ -54,6 +54,32 @@ func TestRead_aStepReachingAnUnknownTool_losesTheTool_notTheStep(t *testing.T) {
 	}
 }
 
+/*
+The trap the generator kept producing (#157): a platform tool anchored in a
+generated step. Platform tools are ambient — memory, context, the ticket
+answer — offered by the engine wherever the run is; anchored in a step they
+deny or delay what the feature already grants (#152). The catalogue
+deliberately lists the platform tool here: installations classify platform
+tools for the Gate, so catalogue membership is what let the dirt through —
+the fence must not depend on it.
+*/
+func TestRead_aStepAnchoringAPlatformTool_losesTheTool_notTheStep(t *testing.T) {
+	t.Parallel()
+
+	listing := append([]domain.ToolID{domain.ToolMemoryFind}, catalogue...)
+	got, err := authoring.Read([]byte(`{
+	  "tools": ["crm.lookup"],
+	  "steps": [{"name": "Verificar", "reaches": ["$fuseone.memory.find", "crm.lookup"]}]
+	}`), listing)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	if len(got.Steps) != 1 || len(got.Steps[0].Reaches) != 1 || got.Steps[0].Reaches[0] != "crm.lookup" {
+		t.Errorf("got %+v", got.Steps)
+	}
+}
+
 func TestRead_repliesThatAreNotJSON_areRefusedRatherThanGuessedAt(t *testing.T) {
 	t.Parallel()
 

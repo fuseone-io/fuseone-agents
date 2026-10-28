@@ -51,9 +51,25 @@ func Read(reply []byte, catalogue []domain.ToolID) (Translated, error) {
 		// that reaches nothing is the agent thinking, which is a real shape.
 		// Discarding the step instead would silently lose something the author
 		// described.
-		got.Steps[i].Reaches = known(got.Steps[i].Reaches, catalogue)
+		got.Steps[i].Reaches = ambientFree(known(got.Steps[i].Reaches, catalogue))
 	}
 	return got, nil
+}
+
+// ambientFree drops platform tools from a generated step's reaches. They are
+// ambient capabilities — memory, context, the ticket answer — that the engine
+// offers by feature wherever the run is; anchored in a step they deny or delay
+// what the feature already grants (#152). The catalogue cannot be the fence:
+// installations classify platform tools for the Gate, so they are in it (#157).
+func ambientFree(reaches []domain.ToolID) []domain.ToolID {
+	var out []domain.ToolID
+	for _, tool := range reaches {
+		if tool.PlatformOwned() {
+			continue
+		}
+		out = append(out, tool)
+	}
+	return out
 }
 
 // known keeps the tools an operator connected, in the order the model gave.
