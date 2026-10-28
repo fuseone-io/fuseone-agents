@@ -68,7 +68,10 @@ and whose contents the model has already mined; ties go to the oldest.
 The crossings stay coarse for the provider's prefix cache: a crossing demotes
 down to half the budget at once, so growth between crossings is free, and the
 decision for every prefix of results depends only on that prefix — rebuilding
-a longer transcript never revisits what an earlier build demoted.
+a longer transcript never revisits what an earlier build demoted. One shape
+gives that up deliberately: a long tail made only of results too small to buy
+headroom crosses almost per call once the ceiling is reached, because the
+alternative is spending verdicts on slack.
 
 The newest result is kept whole — it is the evidence the model just asked for
 — unless it alone breaks the hard bound. The stored copy remains subject to
@@ -104,6 +107,20 @@ func boundToolResultTranscript(turns []Turn) {
 			continue
 		}
 
+		// A result that alone breaks the ceiling can only ever be seen as a
+		// receipt; making the earlier verdicts pay first would spend them on
+		// a sacrifice that changes nothing — the blindness this function
+		// exists to remove, arriving from the other side.
+		newest := live[len(live)-1]
+		if len(turns[newest.index].Content) > toolResultTranscriptBudget &&
+			len(newest.receipt) < len(turns[newest.index].Content) {
+			sent = demote(newest, sent)
+			live = live[:len(live)-1]
+			if sent <= toolResultTranscriptBudget {
+				continue
+			}
+		}
+
 		for sent > toolResultTranscriptBudget/2 {
 			largest := -1
 			for j := 0; j < len(live)-1; j++ {
@@ -132,9 +149,10 @@ func boundToolResultTranscript(turns []Turn) {
 			live = append(live[:largest], live[largest+1:]...)
 		}
 
-		// One result alone can exceed the aggregate ceiling when its tool has
-		// no safe per-result compactor. A receipt is the only bounded form.
-		if sent > toolResultTranscriptBudget {
+		// Receipts alone can still exceed the ceiling only in theory, but the
+		// drain can exhaust every shrinkable elder while the sum of the rest
+		// plus the newest stays over it. A receipt is the only bounded form.
+		if sent > toolResultTranscriptBudget && len(live) > 0 {
 			newest := live[len(live)-1]
 			if len(newest.receipt) < len(turns[newest.index].Content) {
 				sent = demote(newest, sent)

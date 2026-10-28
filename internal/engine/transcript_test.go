@@ -628,6 +628,61 @@ func TestBuildTranscript_budgetEvictsTheLargestResults_smallVerdictsSurvive(t *t
 }
 
 /*
+The review's reproduction (#164): a result that alone breaks the ceiling
+arrives newest, and newest-protection made every earlier verdict pay first —
+all of them demoted before the giant finally became a receipt too, verdicts
+spent on a sacrifice that changed nothing. A result bigger than the whole
+budget can only ever be seen as a receipt; it pays for itself, immediately.
+*/
+func TestBuildTranscript_aResultBiggerThanTheBudget_paysForItself(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	steps := []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "cron"}),
+	}}
+
+	sizes := []int{2 << 10, 2 << 10, 2 << 10, 2 << 10, 200 << 10}
+	for i, size := range sizes {
+		calledSeq := int64(2 + i*2)
+		returnedSeq := calledSeq + 1
+		body := []byte(fmt.Sprintf("result-%d\n%s", i, strings.Repeat("x", size)))
+		ref, err := store.Put(ctx, "run_1", returnedSeq, body)
+		if err != nil {
+			t.Fatalf("Put result %d: %v", i, err)
+		}
+		steps = append(steps,
+			domain.Step{
+				RunID: "run_1", Seq: calledSeq, Kind: domain.StepToolCalled,
+				Payload: payload(t, domain.ToolCalledPayload{Tool: "crm.lookup"}),
+			},
+			domain.Step{
+				RunID: "run_1", Seq: returnedSeq, Kind: domain.StepToolReturned,
+				Payload: payload(t, domain.ToolReturnedPayload{Tool: "crm.lookup", ResultRef: ref}),
+			},
+		)
+	}
+
+	turns, err := BuildTranscript(ctx, store, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+	for _, turn := range turns {
+		if turn.Kind != TurnToolResult {
+			continue
+		}
+		receipted := strings.Contains(string(turn.Content), "transcript result budget")
+		if turn.OriginalBytes > 100<<10 && !receipted {
+			t.Error("the giant was not the one receipted")
+		}
+		if turn.OriginalBytes < 10<<10 && receipted {
+			t.Errorf("a %d-byte verdict paid for a giant whose receipt was inevitable", turn.OriginalBytes)
+		}
+	}
+}
+
+/*
 A checklist agent's whole hour, lean: every query disciplined, every result
 small — and the sum still crossed the old 64 KiB ceiling, so the final
 composition read receipts where its verdicts had been (#163). The ceiling was
