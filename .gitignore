@@ -31,3 +31,4 @@ node_modules/
 
 # Local tool state, not the project's
 .claude/settings.local.json
+/agentd
