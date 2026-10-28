@@ -24,6 +24,18 @@ Responda só com JSON:
 Um passo pode não alcançar ferramenta nenhuma: é a pessoa pensando.
 Não invente ferramenta fora da lista; nomes fora dela são descartados.
 
+Ferramentas $fuseone.* são da plataforma: ela as oferece sozinha, onde
+forem necessárias. Nunca as coloque em um passo.
+
+A execução só anda para a frente: voltar é recusado. Uma ferramenta que
+um passo adiante possa precisar — um diagnóstico, uma contingência —
+vai em todos os passos que possam precisar dela, não só onde o texto a
+citou.
+
+Prefira poucos passos largos a muitos passos estreitos. Um passo existe
+para mudar o que a execução pode alcançar; uma fase que não muda isso
+não é um passo, é a pessoa continuando.
+
 O campo stops_when é a exceção daquele passo, nas palavras da pessoa:
 a condição em que a execução para ali em vez de seguir. Coloque-a no
 passo onde ela acontece, não no agente inteiro — "não encontrar o

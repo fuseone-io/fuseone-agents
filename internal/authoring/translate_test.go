@@ -54,6 +54,32 @@ func TestRead_aStepReachingAnUnknownTool_losesTheTool_notTheStep(t *testing.T) {
 	}
 }
 
+/*
+The trap the generator kept producing (#157): a platform tool anchored in a
+generated step. Platform tools are ambient — memory, context, the ticket
+answer — offered by the engine wherever the run is; anchored in a step they
+deny or delay what the feature already grants (#152). The catalogue
+deliberately lists the platform tool here: installations classify platform
+tools for the Gate, so catalogue membership is what let the dirt through —
+the fence must not depend on it.
+*/
+func TestRead_aStepAnchoringAPlatformTool_losesTheTool_notTheStep(t *testing.T) {
+	t.Parallel()
+
+	listing := append([]domain.ToolID{domain.ToolMemoryFind}, catalogue...)
+	got, err := authoring.Read([]byte(`{
+	  "tools": ["crm.lookup"],
+	  "steps": [{"name": "Verificar", "reaches": ["$fuseone.memory.find", "crm.lookup"]}]
+	}`), listing)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	if len(got.Steps) != 1 || len(got.Steps[0].Reaches) != 1 || got.Steps[0].Reaches[0] != "crm.lookup" {
+		t.Errorf("got %+v", got.Steps)
+	}
+}
+
 func TestRead_repliesThatAreNotJSON_areRefusedRatherThanGuessedAt(t *testing.T) {
 	t.Parallel()
 
@@ -378,6 +404,53 @@ func TestTranslate_bothPasses_areChargedTogether(t *testing.T) {
 	// Two calls left the installation. Reporting one is how a ceiling drifts.
 	if got.Cost.Micros != 2_000 {
 		t.Errorf("got %d micros, want both calls", got.Cost.Micros)
+	}
+}
+
+/*
+The generator writes structures a forward-only envelope executes, and the old
+prompt told it nothing about that runtime (#157): it anchored fallbacks in the
+one step that mentioned them — dead letter the moment the run advances — and
+platform tools in steps of their own. Asserted through what the completer
+actually received, with one distinctive phrase per rule per locale: two of the
+three rules have no mechanical fence, so this test is the only thing standing
+between them and a quiet regression, and a sentence lost in one locale's file
+produces dirty steps for that locale's authors.
+*/
+func TestOrganise_theAnchoringRules_reachThePrompt(t *testing.T) {
+	t.Parallel()
+
+	rules := map[string][]string{
+		"pt-BR": {
+			"Nunca as coloque em um passo",
+			"todos os passos que possam precisar",
+			"poucos passos largos",
+		},
+		"en-US": {
+			"Never put one in a step",
+			"goes in every step",
+			"few broad steps",
+		},
+	}
+	for locale, phrases := range rules {
+		fake := &fakeCompleter{reply: `{"tools":[],"steps":[]}`}
+		if _, err := authoring.Translate(t.Context(), authoring.Job{
+			Completer: fake,
+			Choice:    authoring.Choice{DailyMicros: 1_000_000, Enabled: true},
+			Locale:    locale,
+			Catalogue: catalogue,
+			Answers:   authoring.Answers{Steps: "procuro nos logs e aviso"},
+		}); err != nil {
+			t.Fatalf("Translate(%s): %v", locale, err)
+		}
+		if len(fake.prompts) == 0 {
+			t.Fatalf("%s: nothing was asked", locale)
+		}
+		for _, phrase := range phrases {
+			if !strings.Contains(fake.prompts[0], phrase) {
+				t.Errorf("%s: the prompt lost the rule carrying %q", locale, phrase)
+			}
+		}
 	}
 }
 

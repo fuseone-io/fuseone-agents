@@ -24,6 +24,17 @@ Answer with JSON only:
 A step may reach no tool at all: that is the person thinking.
 Do not invent a tool outside the list; names outside it are discarded.
 
+$fuseone.* tools belong to the platform: it offers them on its own,
+wherever they are needed. Never put one in a step.
+
+The run only moves forward: going back is refused. A tool a later step
+might need — a diagnostic, a fallback — goes in every step that might
+need it, not only where the text mentioned it.
+
+Prefer few broad steps over many narrow ones. A step exists to change
+what the run can reach; a phase that does not change that is not a
+step, it is the person carrying on.
+
 The stops_when field is that step's exception, in the person's own words:
 the condition under which the run stops there rather than carrying on. Put
 it on the step where it happens, not on the agent as a whole — "the customer
