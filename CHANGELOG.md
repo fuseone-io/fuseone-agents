@@ -25,6 +25,30 @@ field" is a commit message.
 
 ---
 
+## [0.76.0] — 2026-10-28
+
+### Fixed
+
+- **A long run's final answer no longer goes blind to results it already
+  read.** The transcript's working memory for tool results evicted the
+  oldest first when it filled, which in a checklist run meant the small
+  verdicts paid while the large, already-analysed evidence survived — the
+  closing report then declared kilobyte results unreadable. Eviction now
+  takes the largest results first (ties to the oldest, the newest kept
+  whole), a result that alone exceeds the whole budget becomes a receipt
+  immediately instead of making every earlier result pay first, and a
+  small result is only ever evicted by the hard bound, never to buy
+  headroom.
+
+### Changed
+
+- **The transcript result budget doubles to 128 KiB.** The old 64 KiB was
+  sized when every planning turn repaid those bytes at full input price;
+  under provider prefix caching the resend costs a tenth, and the old
+  ceiling could not hold even one disciplined multi-check run. Agents
+  whose runs carry many results may see a modest input-token increase,
+  almost all of it at the cached rate.
+
 ## [0.75.0] — 2026-10-28
 
 ### Fixed
