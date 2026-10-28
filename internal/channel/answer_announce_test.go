@@ -249,6 +249,38 @@ func TestSweep_aThreadReplyThatFails_leavesTheAnnouncementOwed(t *testing.T) {
 	if len(deliveries.failures) == 0 {
 		t.Error("no delivery failure was recorded for the refused reply")
 	}
+
+	// The channel recovers, and the owed announcement goes out whole on the
+	// next sweep: the orphaned headline from the first attempt, then the new
+	// pair — the repeated one-liner is the chosen cost of never losing the
+	// report. Exactly one delivery is recorded, and a third sweep owes
+	// nothing and posts nothing.
+	posts.failAfter = 0
+	if _, err := r.Sweep(t.Context(), 50); err != nil {
+		t.Fatalf("second sweep: %v", err)
+	}
+	if len(posts.sent) != 3 {
+		t.Fatalf("sent = %d posts after the retry, want orphan + header + threaded body", len(posts.sent))
+	}
+	retriedHeader, body := posts.sent[1], posts.sent[2]
+	if retriedHeader.message.Answer != "1 achado" || retriedHeader.conversation.Thread != "" {
+		t.Errorf("retried header = %+v, want the headline at the top level", retriedHeader.message)
+	}
+	if body.message.Answer != "o relatório" || body.conversation.Thread == "" {
+		t.Errorf("body = %+v in thread %q, want the full report threaded",
+			body.message, body.conversation.Thread)
+	}
+	if len(deliveries.recorded) != 1 {
+		t.Fatalf("recorded = %d deliveries, want exactly one", len(deliveries.recorded))
+	}
+
+	if _, err := r.Sweep(t.Context(), 50); err != nil {
+		t.Fatalf("third sweep: %v", err)
+	}
+	if len(posts.sent) != 3 || len(deliveries.recorded) != 1 {
+		t.Errorf("after the third sweep: %d posts, %d deliveries — the delivered announcement was re-said",
+			len(posts.sent), len(deliveries.recorded))
+	}
 }
 
 func outcomesWithHeadline(
