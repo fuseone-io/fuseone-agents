@@ -550,6 +550,303 @@ func TestBuildTranscript_manyMediumResults_haveABoundedPromptContribution(t *tes
 	}
 }
 
+/*
+A real run proved the age-based eviction blind (#163): eleven checks returned
+eleven small verdicts, two deep dives returned the bulk of the bytes, and when
+the budget crossed, the receipts ate the verdicts — oldest first — while the
+already-analysed bulk survived. The report then said "the platform cut the
+results before the analysis" about results of a kilobyte each. Eviction now
+takes the largest results first, so what survives to the final composition is
+what a verdict needs: the small answers, not the big evidence already read.
+*/
+func TestBuildTranscript_budgetEvictsTheLargestResults_smallVerdictsSurvive(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	steps := []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "cron"}),
+	}}
+
+	// Six small verdicts, two deep dives carrying the bulk (the size per-result
+	// compaction leaves them at), then small verdicts again — the shape of a
+	// checklist agent's hour.
+	sizes := []int{2 << 10, 2 << 10, 2 << 10, 2 << 10, 2 << 10, 2 << 10, 56 << 10, 56 << 10, 2 << 10, 2 << 10}
+	for i, size := range sizes {
+		calledSeq := int64(2 + i*2)
+		returnedSeq := calledSeq + 1
+		body := []byte(fmt.Sprintf("result-%d\n%s", i, strings.Repeat("x", size)))
+		ref, err := store.Put(ctx, "run_1", returnedSeq, body)
+		if err != nil {
+			t.Fatalf("Put result %d: %v", i, err)
+		}
+		steps = append(steps,
+			domain.Step{
+				RunID: "run_1", Seq: calledSeq, Kind: domain.StepToolCalled,
+				Payload: payload(t, domain.ToolCalledPayload{Tool: "crm.lookup"}),
+			},
+			domain.Step{
+				RunID: "run_1", Seq: returnedSeq, Kind: domain.StepToolReturned,
+				Payload: payload(t, domain.ToolReturnedPayload{Tool: "crm.lookup", ResultRef: ref}),
+			},
+		)
+	}
+
+	turns, err := BuildTranscript(ctx, store, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+
+	var sent int
+	whole := map[string]bool{}
+	for _, turn := range turns {
+		if turn.Kind != TurnToolResult {
+			continue
+		}
+		sent += len(turn.Content)
+		if !strings.Contains(string(turn.Content), "transcript result budget") {
+			whole[strings.SplitN(string(turn.Content), "\n", 2)[0]] = true
+		}
+	}
+	if sent > toolResultTranscriptBudget {
+		t.Fatalf("tool result bytes = %d, want at most %d", sent, toolResultTranscriptBudget)
+	}
+	for i := 0; i < 6; i++ {
+		if !whole[fmt.Sprintf("result-%d", i)] {
+			t.Errorf("small verdict result-%d was evicted while bulk remained", i)
+		}
+	}
+	// At least one bulk result pays for the crossing; one may legitimately
+	// survive while the bound holds — more evidence retained, not less. What
+	// is forbidden is a verdict paying in its place.
+	if whole["result-6"] && whole["result-7"] {
+		t.Error("no bulk result was evicted at the crossing")
+	}
+	if !whole["result-8"] || !whole["result-9"] {
+		t.Error("the verdicts after the bulk were not preserved")
+	}
+}
+
+/*
+The review's reproduction (#164): a result that alone breaks the ceiling
+arrives newest, and newest-protection made every earlier verdict pay first —
+all of them demoted before the giant finally became a receipt too, verdicts
+spent on a sacrifice that changed nothing. A result bigger than the whole
+budget can only ever be seen as a receipt; it pays for itself, immediately.
+*/
+func TestBuildTranscript_aResultBiggerThanTheBudget_paysForItself(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	steps := []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "cron"}),
+	}}
+
+	sizes := []int{2 << 10, 2 << 10, 2 << 10, 2 << 10, 200 << 10}
+	for i, size := range sizes {
+		calledSeq := int64(2 + i*2)
+		returnedSeq := calledSeq + 1
+		body := []byte(fmt.Sprintf("result-%d\n%s", i, strings.Repeat("x", size)))
+		ref, err := store.Put(ctx, "run_1", returnedSeq, body)
+		if err != nil {
+			t.Fatalf("Put result %d: %v", i, err)
+		}
+		steps = append(steps,
+			domain.Step{
+				RunID: "run_1", Seq: calledSeq, Kind: domain.StepToolCalled,
+				Payload: payload(t, domain.ToolCalledPayload{Tool: "crm.lookup"}),
+			},
+			domain.Step{
+				RunID: "run_1", Seq: returnedSeq, Kind: domain.StepToolReturned,
+				Payload: payload(t, domain.ToolReturnedPayload{Tool: "crm.lookup", ResultRef: ref}),
+			},
+		)
+	}
+
+	turns, err := BuildTranscript(ctx, store, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+	for _, turn := range turns {
+		if turn.Kind != TurnToolResult {
+			continue
+		}
+		receipted := strings.Contains(string(turn.Content), "transcript result budget")
+		if turn.OriginalBytes > 100<<10 && !receipted {
+			t.Error("the giant was not the one receipted")
+		}
+		if turn.OriginalBytes < 10<<10 && receipted {
+			t.Errorf("a %d-byte verdict paid for a giant whose receipt was inevitable", turn.OriginalBytes)
+		}
+	}
+}
+
+/*
+The accuser for the headroom guard, re-aimed after the budget raise unseated
+the original one (#164 review): after one bulk is demoted the total sits just
+above half the budget, and the only remaining victims are verdicts. With the
+guard, the drain stops there; without it, the verdicts are spent on slack —
+the exact drain the first cut of the eviction change performed.
+*/
+func TestBuildTranscript_headroomIsNeverBoughtWithVerdicts(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	steps := []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "cron"}),
+	}}
+
+	// Six verdicts, then two bulks whose second arrival crosses the ceiling.
+	// Demoting the first bulk lands just above half the budget — the guard's
+	// exact decision point.
+	sizes := []int{2 << 10, 2 << 10, 2 << 10, 2 << 10, 2 << 10, 2 << 10, 60 << 10, 60 << 10}
+	for i, size := range sizes {
+		calledSeq := int64(2 + i*2)
+		returnedSeq := calledSeq + 1
+		body := []byte(fmt.Sprintf("result-%d\n%s", i, strings.Repeat("x", size)))
+		ref, err := store.Put(ctx, "run_1", returnedSeq, body)
+		if err != nil {
+			t.Fatalf("Put result %d: %v", i, err)
+		}
+		steps = append(steps,
+			domain.Step{
+				RunID: "run_1", Seq: calledSeq, Kind: domain.StepToolCalled,
+				Payload: payload(t, domain.ToolCalledPayload{Tool: "crm.lookup"}),
+			},
+			domain.Step{
+				RunID: "run_1", Seq: returnedSeq, Kind: domain.StepToolReturned,
+				Payload: payload(t, domain.ToolReturnedPayload{Tool: "crm.lookup", ResultRef: ref}),
+			},
+		)
+	}
+
+	turns, err := BuildTranscript(ctx, store, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+	for _, turn := range turns {
+		if turn.Kind != TurnToolResult || turn.OriginalBytes >= 10<<10 {
+			continue
+		}
+		if strings.Contains(string(turn.Content), "transcript result budget") {
+			t.Errorf("a %d-byte verdict was spent on headroom", turn.OriginalBytes)
+		}
+	}
+}
+
+/*
+Equal results tie, and the tie goes to the oldest (#164 review): among equal
+sizes the newest is the evidence most recently asked for, so the one that has
+been readable longest pays. Flipping the comparison to prefer the newest
+among ties survives every other test — this one pins which of the equals
+becomes the receipt.
+*/
+func TestBuildTranscript_tiedResults_theOldestPays(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	steps := []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "cron"}),
+	}}
+
+	// Thirty-two equal results just over the ceiling. Every victim saves less
+	// than the headroom minimum, so the crossing demotes exactly one — and
+	// which one is the whole question.
+	const results = 32
+	for i := 0; i < results; i++ {
+		calledSeq := int64(2 + i*2)
+		returnedSeq := calledSeq + 1
+		body := []byte(fmt.Sprintf("result-%02d\n%s", i, strings.Repeat("x", 4<<10)))
+		ref, err := store.Put(ctx, "run_1", returnedSeq, body)
+		if err != nil {
+			t.Fatalf("Put result %d: %v", i, err)
+		}
+		steps = append(steps,
+			domain.Step{
+				RunID: "run_1", Seq: calledSeq, Kind: domain.StepToolCalled,
+				Payload: payload(t, domain.ToolCalledPayload{Tool: "crm.lookup"}),
+			},
+			domain.Step{
+				RunID: "run_1", Seq: returnedSeq, Kind: domain.StepToolReturned,
+				Payload: payload(t, domain.ToolReturnedPayload{Tool: "crm.lookup", ResultRef: ref}),
+			},
+		)
+	}
+
+	turns, err := BuildTranscript(ctx, store, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+	var receipted []int
+	index := 0
+	for _, turn := range turns {
+		if turn.Kind != TurnToolResult {
+			continue
+		}
+		if strings.Contains(string(turn.Content), "transcript result budget") {
+			receipted = append(receipted, index)
+		}
+		index++
+	}
+	if len(receipted) != 1 || receipted[0] != 0 {
+		t.Fatalf("receipted = %v, want exactly the oldest of the equals", receipted)
+	}
+}
+
+/*
+A checklist agent's whole hour, lean: every query disciplined, every result
+small — and the sum still crossed the old 64 KiB ceiling, so the final
+composition read receipts where its verdicts had been (#163). The ceiling was
+sized when a run resent every byte at full price; with the prefix cache the
+resend costs a tenth, and a budget that cannot hold one disciplined checklist
+buys the wrong economy.
+*/
+func TestBuildTranscript_aLeanChecklistRun_fitsTheBudgetWhole(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	steps := []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "cron"}),
+	}}
+
+	// Sixteen calls averaging ~6 KiB: the measured shape of a disciplined
+	// eleven-check hour with deep dives on line_format diets.
+	for i := 0; i < 16; i++ {
+		calledSeq := int64(2 + i*2)
+		returnedSeq := calledSeq + 1
+		body := []byte(fmt.Sprintf("result-%d\n%s", i, strings.Repeat("x", 6<<10)))
+		ref, err := store.Put(ctx, "run_1", returnedSeq, body)
+		if err != nil {
+			t.Fatalf("Put result %d: %v", i, err)
+		}
+		steps = append(steps,
+			domain.Step{
+				RunID: "run_1", Seq: calledSeq, Kind: domain.StepToolCalled,
+				Payload: payload(t, domain.ToolCalledPayload{Tool: "crm.lookup"}),
+			},
+			domain.Step{
+				RunID: "run_1", Seq: returnedSeq, Kind: domain.StepToolReturned,
+				Payload: payload(t, domain.ToolReturnedPayload{Tool: "crm.lookup", ResultRef: ref}),
+			},
+		)
+	}
+
+	turns, err := BuildTranscript(ctx, store, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+	for _, turn := range turns {
+		if turn.Kind == TurnToolResult &&
+			strings.Contains(string(turn.Content), "transcript result budget") {
+			t.Fatalf("a lean run's result became a receipt:\n%s", turn.Content)
+		}
+	}
+}
+
 func TestBuildTranscript_resultBudgetChangesInStableGenerations(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -603,8 +900,11 @@ func TestBuildTranscript_resultBudgetChangesInStableGenerations(t *testing.T) {
 		previous = turns
 	}
 
-	if crossings != 2 {
-		t.Fatalf("cache-prefix crossings = %d, want two coarse generation changes", crossings)
+	// One coarse crossing for ten 15 KiB results under the 128 KiB budget:
+	// the crossing drains bulk down to half the budget at once, so growth
+	// between crossings stays free for the provider's prefix cache.
+	if crossings != 1 {
+		t.Fatalf("cache-prefix crossings = %d, want one coarse change", crossings)
 	}
 }
 

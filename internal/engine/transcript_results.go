@@ -9,15 +9,26 @@ import (
 )
 
 const (
-	toolResultCompactAfter     = 32 << 10
-	toolResultHeadBytes        = 16 << 10
-	toolResultTailBytes        = 8 << 10
-	toolResultTranscriptBudget = 64 << 10
+	toolResultCompactAfter = 32 << 10
+	toolResultHeadBytes    = 16 << 10
+	toolResultTailBytes    = 8 << 10
+	// 128 KiB, sized so one disciplined checklist run — a dozen-plus small
+	// results and a few compacted deep dives — reaches its final composition
+	// whole. The old 64 KiB was sized when every turn repaid these bytes at
+	// full price; under the prefix cache the resend costs a tenth, and a
+	// report blind to results it already read buys the wrong economy (#163).
+	toolResultTranscriptBudget = 128 << 10
 	// receiptOmittedWidth makes every int64 rendering the same width. The
 	// receipt computes omitted bytes from a zero-valued probe; without a fixed
 	// width, writing the real number would change the receipt length and make
 	// that count wrong.
 	receiptOmittedWidth = 20
+	// headroomVictimMin is the smallest saving worth demoting a result for
+	// beyond the hard bound. Draining deeper at a crossing is free for the
+	// prefix cache — the crossing already invalidated it — but a small result
+	// is a verdict the final composition needs, so headroom is only bought
+	// with bulk.
+	headroomVictimMin = 4 << 10
 )
 
 func compactToolResultForTranscript(tool domain.ToolID, content []byte) []byte {
@@ -43,23 +54,45 @@ func compactToolResult(tool domain.ToolID, content []byte, elided *int64) []byte
 	return []byte(b.String())
 }
 
-// boundToolResultTranscript keeps result bytes bounded in stable generations.
-// A generation remains byte-for-byte unchanged while new results fit. When it
-// crosses the budget, the whole generation becomes receipts at once; rebuilding
-// a later turn therefore does not move the receipt boundary one result at a
-// time and invalidate the provider's prefix cache on every call.
-//
-// The stored copy remains subject to the installation content limit, and
-// Elided is set from the original result so run-spend diagnostics attribute
-// the saving to the tool that produced it.
+/*
+boundToolResultTranscript keeps result bytes bounded, evicting the largest
+results first.
+
+Age-based eviction was blind in exactly the case the budget exists for: a
+checklist run returns many small verdicts early and a few large deep dives
+late, and demoting the oldest ate the verdicts while the already-analysed
+bulk survived — the final report then called kilobyte results unreadable
+(#163). The largest result is the one whose eviction buys the most headroom
+and whose contents the model has already mined; ties go to the oldest.
+
+The crossings stay coarse for the provider's prefix cache: a crossing demotes
+down to half the budget at once, so growth between crossings is free, and the
+decision for every prefix of results depends only on that prefix — rebuilding
+a longer transcript never revisits what an earlier build demoted. One shape
+gives that up deliberately: a long tail made only of results too small to buy
+headroom crosses almost per call once the ceiling is reached, because the
+alternative is spending verdicts on slack.
+
+The newest result is kept whole — it is the evidence the model just asked for
+— unless it alone breaks the hard bound. The stored copy remains subject to
+the installation content limit, and Elided is set from the original result so
+run-spend diagnostics attribute the saving to the tool that produced it.
+*/
 func boundToolResultTranscript(turns []Turn) {
 	type candidate struct {
 		index   int
 		receipt []byte
 	}
-	var candidates []candidate
+	demote := func(c candidate, sent int) int {
+		turn := &turns[c.index]
+		sent -= len(turn.Content)
+		turn.Content = c.receipt
+		turn.Elided = max(int64(0), turn.OriginalBytes-int64(len(c.receipt)))
+		return sent + len(c.receipt)
+	}
+
+	var live []candidate
 	sent := 0
-	generationStart := 0
 	for i := range turns {
 		if turns[i].Kind != TurnToolResult || len(turns[i].Content) == 0 {
 			continue
@@ -68,41 +101,63 @@ func boundToolResultTranscript(turns []Turn) {
 		if len(receipt) >= len(turns[i].Content) {
 			receipt = turns[i].Content
 		}
-		candidates = append(candidates, candidate{index: i, receipt: receipt})
+		live = append(live, candidate{index: i, receipt: receipt})
 		sent += len(turns[i].Content)
 		if sent <= toolResultTranscriptBudget {
 			continue
 		}
 
-		// Compact the completed generation but keep the newest result whole: it
-		// is the evidence the model just asked for. This leaves headroom for
-		// later turns while making each earlier generation immutable.
-		generationEnd := len(candidates) - 1
-		if generationStart == generationEnd {
-			// One result alone can exceed the aggregate ceiling when its tool has
-			// no safe per-result compactor. A receipt is the only bounded form.
-			generationEnd++
+		// A result that alone breaks the ceiling can only ever be seen as a
+		// receipt; making the earlier verdicts pay first would spend them on
+		// a sacrifice that changes nothing — the blindness this function
+		// exists to remove, arriving from the other side.
+		newest := live[len(live)-1]
+		if len(turns[newest.index].Content) > toolResultTranscriptBudget &&
+			len(newest.receipt) < len(turns[newest.index].Content) {
+			sent = demote(newest, sent)
+			live = live[:len(live)-1]
+			if sent <= toolResultTranscriptBudget {
+				continue
+			}
 		}
-		for j := generationStart; j < generationEnd; j++ {
-			candidate := candidates[j]
-			turn := &turns[candidate.index]
-			sent -= len(turn.Content)
-			turn.Content = candidate.receipt
-			turn.Elided = max(int64(0), turn.OriginalBytes-int64(len(candidate.receipt)))
-			sent += len(candidate.receipt)
-		}
-		generationStart = generationEnd
 
-		// A large receipt population can eventually leave less than one result
-		// of headroom. Keep the hard bound even then.
-		if sent > toolResultTranscriptBudget && generationStart < len(candidates) {
-			candidate := candidates[generationStart]
-			turn := &turns[candidate.index]
-			sent -= len(turn.Content)
-			turn.Content = candidate.receipt
-			turn.Elided = max(int64(0), turn.OriginalBytes-int64(len(candidate.receipt)))
-			sent += len(candidate.receipt)
-			generationStart++
+		for sent > toolResultTranscriptBudget/2 {
+			largest := -1
+			for j := 0; j < len(live)-1; j++ {
+				// Only a result whose receipt is smaller than it can buy
+				// headroom; a tiny result's receipt is itself.
+				if len(live[j].receipt) >= len(turns[live[j].index].Content) {
+					continue
+				}
+				if largest == -1 ||
+					len(turns[live[j].index].Content) > len(turns[live[largest].index].Content) {
+					largest = j
+				}
+			}
+			if largest == -1 {
+				break
+			}
+			// A small result is only demoted when the hard bound demands it,
+			// never for headroom: the small answers are what the final
+			// composition needs, and buying future slack with them is the
+			// age-based blindness again, one size class down (#163).
+			saving := len(turns[live[largest].index].Content) - len(live[largest].receipt)
+			if sent <= toolResultTranscriptBudget && saving < headroomVictimMin {
+				break
+			}
+			sent = demote(live[largest], sent)
+			live = append(live[:largest], live[largest+1:]...)
+		}
+
+		// Receipts alone can still exceed the ceiling only in theory, but the
+		// drain can exhaust every shrinkable elder while the sum of the rest
+		// plus the newest stays over it. A receipt is the only bounded form.
+		if sent > toolResultTranscriptBudget && len(live) > 0 {
+			newest := live[len(live)-1]
+			if len(newest.receipt) < len(turns[newest.index].Content) {
+				sent = demote(newest, sent)
+				live = live[:len(live)-1]
+			}
 		}
 	}
 }
