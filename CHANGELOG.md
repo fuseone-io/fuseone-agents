@@ -25,6 +25,19 @@ field" is a commit message.
 
 ---
 
+## [0.77.1] — 2026-10-29
+
+### Fixed
+
+- **The serving form's selects stay inside their columns.** In the agent
+  Identity form, choosing a long option — the one-hour prefix cache, a
+  long model id — grew the select over its neighbour instead of
+  truncating. Every serving select now fills its own column and clips its
+  label; the full text remains readable in the open list. A custom model
+  id absent from the provider's suggestions now appears in that list too,
+  wrapped rather than cut off, so a value the button truncates can always
+  be read in full by opening the field.
+
 ## [0.77.0] — 2026-10-28
 
 ### Added
