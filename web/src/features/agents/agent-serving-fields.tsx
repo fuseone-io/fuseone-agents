@@ -45,7 +45,7 @@ export function AgentServingFields({
         >
           <SelectTrigger
             id="agent-provider"
-            className="font-mono"
+            className="w-full font-mono"
             aria-required={agentRequirementMarked("provider")}
           >
             <SelectValue placeholder={t("agents.pickProvider")} />
@@ -79,10 +79,11 @@ export function AgentServingFields({
             patch({ effort: effort === "none" ? "" : effort })
           }
         >
-          <SelectTrigger id="agent-effort" className="min-w-0 font-mono">
-            {/* Truncating rather than pushing: a select cannot shrink its
-                own text, and the one long option here was breaking the card
-                it sits in. */}
+          {/* w-full is the other half of min-w-0: the primitive's trigger is
+              w-fit, so a long selected label grows it past its grid track and
+              over the neighbouring select, and the primitive's line-clamp
+              only truncates a trigger whose width is bounded (#167). */}
+          <SelectTrigger id="agent-effort" className="w-full min-w-0 font-mono">
             <SelectValue className="truncate" />
           </SelectTrigger>
           <SelectContent>
@@ -101,7 +102,7 @@ export function AgentServingFields({
             patch({ cachePrefixTtl: ttl === "none" ? "" : ttl })
           }
         >
-          <SelectTrigger id="agent-cache-ttl" className="min-w-0 font-mono">
+          <SelectTrigger id="agent-cache-ttl" className="w-full min-w-0 font-mono">
             <SelectValue className="truncate" />
           </SelectTrigger>
           <SelectContent>
@@ -121,7 +122,7 @@ export function AgentServingFields({
             patch({ replyLocale: locale === "none" ? "" : locale })
           }
         >
-          <SelectTrigger id="agent-reply-locale" className="min-w-0 font-mono">
+          <SelectTrigger id="agent-reply-locale" className="w-full min-w-0 font-mono">
             <SelectValue className="truncate" />
           </SelectTrigger>
           <SelectContent>

@@ -47,6 +47,12 @@ export function ModelField({
   // Controlled, so what was typed is a value this component holds rather than
   // something it reads back out of the DOM at render time.
   const [typed, setTyped] = useState("");
+  // The trigger clamps a long id so it cannot overflow its grid track, which
+  // is only honest if the full id stays readable somewhere. A custom model is
+  // not among the suggestions, so it is folded into the list: opening the
+  // field is how the whole value is read (#168 review).
+  const listed =
+    value && !options.includes(value) ? [value, ...options] : options;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -58,9 +64,9 @@ export function ModelField({
           role="combobox"
           aria-expanded={open}
           aria-required={required}
-          className="justify-between font-mono font-normal"
+          className="w-full min-w-0 justify-between font-mono font-normal"
         >
-          <span className={cn(!value && "text-muted-foreground")}>
+          <span className={cn("truncate", !value && "text-muted-foreground")}>
             {value || t("agents.pickModel")}
           </span>
           <ChevronsUpDown className="size-3.5 opacity-50" />
@@ -100,7 +106,7 @@ export function ModelField({
               )}
             </CommandEmpty>
             <CommandGroup>
-              {options.map((model) => (
+              {listed.map((model) => (
                 <CommandItem
                   key={model}
                   value={model}
@@ -116,7 +122,11 @@ export function ModelField({
                       model === value ? "opacity-100" : "opacity-0",
                     )}
                   />
-                  {model}
+                  {/* break-all, because this list is where a clamped id is
+                      read in full: the item is flex under an overflow-hidden
+                      list, and an id with no natural break would keep its
+                      min-content width and be clipped (#168 review). */}
+                  <span className="min-w-0 break-all">{model}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

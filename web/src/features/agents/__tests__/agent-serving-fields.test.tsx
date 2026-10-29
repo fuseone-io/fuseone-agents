@@ -89,3 +89,28 @@ describe("the reply-language select", () => {
     expect(patch).toHaveBeenCalledWith({ replyLocale: "" });
   });
 });
+
+/*
+ * A regression guard on the class, stated as what it is. The defect is
+ * layout: the primitive's trigger is w-fit, so a long selected label — the
+ * one-hour cache line — grows the trigger past its grid track and over the
+ * neighbouring select, and the primitive's own line-clamp only truncates a
+ * trigger whose width is bounded. jsdom lays nothing out, so the overflow
+ * itself cannot be measured here; the class that bounds the trigger to its
+ * track is the mechanism, and its absence is the bug.
+ */
+describe("the serving selects", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    setLocale("en-US");
+    stubIntegrations();
+  });
+
+  it("every trigger fills its grid track instead of sizing to its label", () => {
+    renderFields({ cachePrefixTtl: "1h" });
+
+    for (const trigger of screen.getAllByRole("combobox")) {
+      expect(trigger.className).toContain("w-full");
+    }
+  });
+});
