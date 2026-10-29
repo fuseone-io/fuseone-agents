@@ -58,9 +58,9 @@ export function ModelField({
           role="combobox"
           aria-expanded={open}
           aria-required={required}
-          className="justify-between font-mono font-normal"
+          className="w-full min-w-0 justify-between font-mono font-normal"
         >
-          <span className={cn(!value && "text-muted-foreground")}>
+          <span className={cn("truncate", !value && "text-muted-foreground")}>
             {value || t("agents.pickModel")}
           </span>
           <ChevronsUpDown className="size-3.5 opacity-50" />
