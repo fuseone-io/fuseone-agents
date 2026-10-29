@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { ModelField } from "@/features/agents/model-field";
@@ -20,8 +20,10 @@ describe("the model combobox", () => {
 
   it("shows a custom model absent from the suggestions in full when opened", async () => {
     const user = userEvent.setup();
-    const custom =
-      "litellm/anthropic/claude-sonnet-5-custom-deployment-us-central1";
+    // No space, hyphen or other natural break opportunity: the worst case
+    // for a flex item under an overflow-hidden list, which would hold its
+    // min-content width and be clipped without a forced break.
+    const custom = "litellmanthropicclaudesonnet5deployment" + "x".repeat(40);
     render(
       <ModelField
         id="agent-model"
@@ -33,6 +35,10 @@ describe("the model combobox", () => {
 
     await user.click(screen.getByRole("combobox"));
 
-    expect(await screen.findByRole("option", { name: custom })).toBeTruthy();
+    // The option is in the list, and its text is allowed to wrap: jsdom lays
+    // nothing out, so the breaking class is the measurable mechanism.
+    const option = await screen.findByRole("option", { name: custom });
+    const label = within(option).getByText(custom);
+    expect(label.className).toContain("break-all");
   });
 });

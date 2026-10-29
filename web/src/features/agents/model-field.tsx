@@ -122,7 +122,11 @@ export function ModelField({
                       model === value ? "opacity-100" : "opacity-0",
                     )}
                   />
-                  {model}
+                  {/* break-all, because this list is where a clamped id is
+                      read in full: the item is flex under an overflow-hidden
+                      list, and an id with no natural break would keep its
+                      min-content width and be clipped (#168 review). */}
+                  <span className="min-w-0 break-all">{model}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
