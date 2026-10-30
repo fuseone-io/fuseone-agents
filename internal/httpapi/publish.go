@@ -93,6 +93,17 @@ func (s *Server) PublishAgent(
 		}, nil
 	}
 
+	unknown, err := s.unknownTools(ctx, published)
+	if err != nil {
+		return nil, err
+	}
+	if len(unknown) > 0 {
+		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				invalid(unknownToolsDetail(unknown))),
+		}, nil
+	}
+
 	blocked, err := s.blockingStaticFlows(ctx, published)
 	if err != nil {
 		return nil, err
