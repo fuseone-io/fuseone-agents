@@ -151,6 +151,10 @@ type PromptInputBreakdown struct {
 	ToolResultsElidedByTool map[ToolID]int64 `json:"tool_results_elided_by_tool,omitempty"`
 
 	Total int64 `json:"total,omitempty"`
+
+	// Digests fingerprint the tools and stable system blocks as they went on
+	// the wire.
+	Digests *PromptDigests `json:"digests,omitempty"`
 }
 
 type GateDecidedPayload struct {
