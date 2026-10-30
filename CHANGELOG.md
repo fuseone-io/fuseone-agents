@@ -25,6 +25,43 @@ field" is a commit message.
 
 ---
 
+## [0.78.0] — 2026-10-30
+
+### Added
+
+- **A scheduled run knows the moment it was fired for.** A cron run used
+  to open with no input, so an agent asked to sweep "the window this
+  firing is about" derived it from the wall clock — and a run that
+  started late or was resumed computed a different window than the
+  moment that named it. The run's input is now
+  `{"trigger":"cron","moment":"…","schedule":"…"}`, the same instant its
+  idempotency key comes from. A prompt can say "end the window at the
+  `moment` in the input" instead of guessing.
+- **The manual shows the screens it describes.** Twelve screenshots,
+  cited under the sections they illustrate in both languages, render on
+  GitHub, in the docs site and inside the console. The console serves
+  them from its own embedded copy and renders no image from anywhere
+  else, so an air-gapped installation never reaches out to draw a page.
+
+### Fixed
+
+- **A refusal's cost is counted.** A provider bills a refusal — it read
+  the whole prompt before declining — but the run dropped the figure, so
+  it never reached the trail, the budget or FinOps. It is now recorded
+  like any other planning call, on Anthropic and on OpenAI-compatible
+  providers and gateways alike. Where the run goes after a refusal is
+  unchanged.
+- **A duplicate-effect check no longer fails under contention.** When two
+  workers raced to reserve the same effect, the one that waited could get
+  an error instead of the other's reservation, failing its turn and
+  retrying for nothing. It now receives the existing reservation, which
+  is the answer the check exists to give.
+- **The in-memory demo starts and can be browsed.** `serve --demo`
+  without a database panicked before serving. It now seeds and serves,
+  and — having nobody to sign in as — acts every request as a named
+  installation administrator, so runs list and their answers open. An
+  installation with a database is unaffected and always authenticates.
+
 ## [0.77.1] — 2026-10-29
 
 ### Fixed
