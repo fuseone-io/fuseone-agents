@@ -221,6 +221,7 @@ func (s Spec) validate() error {
 	}
 	problems = append(problems, triggerProblems(s.Triggers)...)
 	problems = append(problems, emitProblems(s.Emits)...)
+	problems = append(problems, stepProblems(s.Steps, s.Tools)...)
 	if err := s.Approvals.Validate(); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
