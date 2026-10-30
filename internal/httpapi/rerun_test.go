@@ -350,6 +350,62 @@ func TestRunFromInput_sameKeyTwice_answersWithTheRunItAlreadyOpened(t *testing.T
 	}
 }
 
+func TestRunFromInput_retryAfterTheSourceInputWasErased_answersWithTheRunAlreadyOpened(t *testing.T) {
+	t.Parallel()
+	f := recordedFromChannel(t)
+	ctx := inArea("cx", domain.RoleAuthor)
+
+	first, err := f.server.RunFromInput(ctx, rerunOf(f.source, "again-0013"))
+	if err != nil {
+		t.Fatalf("RunFromInput: %v", err)
+	}
+	opened, _ := f.opened(t, first)
+	// The answer was lost, and retention ran before the caller retried. The
+	// intention was already fulfilled; the retry must reach that run rather
+	// than be judged again against content that is now gone.
+	if _, err := f.content.Erase(context.Background(), "run", string(f.source), "retention"); err != nil {
+		t.Fatalf("Erase: %v", err)
+	}
+
+	second, err := f.server.RunFromInput(ctx, rerunOf(f.source, "again-0013"))
+	if err != nil {
+		t.Fatalf("RunFromInput again: %v", err)
+	}
+	again, ok := second.(openapi.RunFromInput200JSONResponse)
+	if !ok || again.RunId != opened.RunId {
+		t.Fatalf("retry answer = %#v, want the run %q", second, opened.RunId)
+	}
+}
+
+func TestRunFromInput_readerWhoCannotStartRuns_learnsNothingAboutVersions(t *testing.T) {
+	t.Parallel()
+	f := recordedFromChannel(t)
+	want := forbidden(domain.PermRunTrigger, domain.Scope{Company: "acme", Area: "cx"})
+
+	// Published, never published, and none at all must read the same to a
+	// caller who may not start runs: a 400 for one and a 403 for another
+	// would let an auditor enumerate the agent's version history.
+	for _, asked := range []*string{ptr("v1"), ptr("v9"), nil} {
+		req := rerunOf(f.source, "again-0014")
+		req.Body.VersionId = asked
+
+		resp, err := f.server.RunFromInput(inArea("cx", domain.RoleAuditor), req)
+		if err != nil {
+			t.Fatalf("RunFromInput: %v", err)
+		}
+		refused, ok := resp.(openapi.RunFromInput403ApplicationProblemPlusJSONResponse)
+		if !ok {
+			t.Fatalf("version %q: response = %T, want 403", deref(asked), resp)
+		}
+		if *refused.Detail != *want.Detail {
+			t.Errorf("version %q: detail %q, want %q", deref(asked), *refused.Detail, *want.Detail)
+		}
+	}
+	if n := f.runs(t); n != 1 {
+		t.Errorf("the ledger holds %d runs, want only the source", n)
+	}
+}
+
 func (f rerunFixture) sourceSteps(t *testing.T) []domain.Step {
 	t.Helper()
 	steps, err := f.store.Read(context.Background(), f.source, domain.FirstSeq)

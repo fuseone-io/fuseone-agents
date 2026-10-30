@@ -32,13 +32,30 @@ the console did not choose to answer in somebody's thread.
 // rerunRefusal is an answer that ends the request before anything is opened.
 type rerunRefusal = openapi.RunFromInputResponseObject
 
-// RunFromInput opens a new run seeded with a recorded run's input.
+/*
+RunFromInput opens a new run seeded with a recorded run's input.
+
+The order is the point. Who may ask is settled first — reading the source,
+then starting runs in its scope — so a caller without that authority learns
+nothing about the agent's versions or the input's state. Then the key: an
+intention that already opened a run is answered with that run, before the
+version or the content is judged again, because a retry after a lost answer
+must not be refused for something that changed since (retention erasing the
+input, a new version published).
+*/
 func (s *Server) RunFromInput(
 	ctx context.Context, req openapi.RunFromInputRequestObject,
 ) (openapi.RunFromInputResponseObject, error) {
 	source, refused, err := s.recordedSource(ctx, domain.RunID(req.RunId))
 	if refused != nil || err != nil {
 		return refused, err
+	}
+	if refused := mayTriggerFrom(ctx, source); refused != nil {
+		return refused, nil
+	}
+	key := trigger.RerunKey(source.RunID, req.Params.IdempotencyKey)
+	if existing, err := s.store.RunByIdemKey(ctx, key); req.Params.IdempotencyKey != "" && err == nil {
+		return s.rerunAnswer(ctx, trigger.Result{RunID: existing})
 	}
 	target, refused, err := s.rerunTarget(ctx, source, versionAsked(req.Body))
 	if refused != nil || err != nil {
@@ -48,18 +65,35 @@ func (s *Server) RunFromInput(
 	if refused != nil || err != nil {
 		return refused, err
 	}
+	return s.openRerun(ctx, source, target, trigger.Request{IdemKey: key, Input: input})
+}
 
+// mayTriggerFrom is the authority to start runs where the source ran. The
+// target is pinned to that scope, so it is the scope that is asked about.
+func mayTriggerFrom(ctx context.Context, source domain.Step) rerunRefusal {
+	if err := auth.Require(ctx, domain.PermRunTrigger, source.Scope); err != nil {
+		return openapi.RunFromInput403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermRunTrigger, source.Scope),
+		}
+	}
+	return nil
+}
+
+// openRerun opens the run: the key and input from the caller's side, every
+// other fact from the source's opening step.
+func (s *Server) openRerun(
+	ctx context.Context, source domain.Step, target domain.AgentSummary, req trigger.Request,
+) (openapi.RunFromInputResponseObject, error) {
 	var payload domain.RunStartedPayload
 	decodePayload(source.Payload, &payload)
-	opened, err := s.opener().Open(ctx, trigger.Request{
-		Agent: target.ID, Version: target.VersionID,
-		IdemKey: trigger.RerunKey(source.RunID, req.Params.IdempotencyKey),
-		// The trigger is what the input is: the transcript reads a channel
-		// ask through a projection that keeps its routing envelope from the
-		// model, and relabelling it would hand the model that envelope.
-		Trigger: payload.Trigger, By: callerOf(ctx), Input: input,
-		Labels: source.Labels.Clone(), SourceRun: source.RunID,
-	})
+	req.Agent, req.Version = target.ID, target.VersionID
+	// The trigger is what the input is: the transcript reads a channel ask
+	// through a projection that keeps its routing envelope from the model,
+	// and relabelling it would hand the model that envelope.
+	req.Trigger, req.By = payload.Trigger, callerOf(ctx)
+	req.Labels, req.SourceRun = source.Labels.Clone(), source.RunID
+
+	opened, err := s.opener().Open(ctx, req)
 	if refused := openRefusal(err); refused != nil {
 		return refused, nil
 	}
@@ -98,8 +132,9 @@ func (s *Server) recordedSource(ctx context.Context, id domain.RunID) (domain.St
 }
 
 /*
-rerunTarget is the version the new run is pinned to, once the caller may start
-runs there.
+rerunTarget is the version the new run is pinned to. Asked only after the
+caller may start runs in the source's scope, so the version history is not
+something a reader can probe.
 
 The scope must be the source's own. An agent is not supposed to move, and if
 one did, the recorded input carries the data of the scope it was asked in —
@@ -124,11 +159,6 @@ func (s *Server) rerunTarget(
 	if target.Scope != source.Scope {
 		return domain.AgentSummary{}, openapi.RunFromInput409ApplicationProblemPlusJSONResponse(
 			conflicted("the agent no longer runs in the scope this run was recorded in")), nil
-	}
-	if err := auth.Require(ctx, domain.PermRunTrigger, target.Scope); err != nil {
-		return domain.AgentSummary{}, openapi.RunFromInput403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermRunTrigger, target.Scope),
-		}, nil
 	}
 	return target, nil, nil
 }
