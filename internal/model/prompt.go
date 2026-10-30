@@ -217,8 +217,10 @@ func prefixStablePlanningNote(in engine.PlanInput, locale string, schemas ToolSc
 		notes = append(notes, note)
 	}
 	if in.Ceiling.Micros > 0 {
-		notes = append(notes, "Budget ceiling for this run: "+formatMicros(in.Ceiling.Micros)+
-			". Use bounded queries and finish cleanly before the platform enforces it.")
+		// The agent's ceiling, not the run's limit: a scope may bind lower,
+		// and only that figure, which moves every call, is the real one.
+		notes = append(notes, "Agent-configured budget ceiling: "+formatMicros(in.Ceiling.Micros)+
+			". Scope limits may enforce a lower amount. Use bounded queries and finish cleanly before the platform enforces a limit.")
 	}
 	if locale != "" {
 		// Last on purpose: everything above and around this block is English,

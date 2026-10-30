@@ -44,7 +44,7 @@ func TestTurn_scopeSpendMovingBetweenTurns_sendsTheSameSystemPrompt(t *testing.T
 	if before != after {
 		t.Errorf("the scope's spend moved the system prompt:\n%s\n---\n%s", before, after)
 	}
-	if !strings.Contains(before, "Budget ceiling for this run: 1.000000") {
+	if !strings.Contains(before, "Agent-configured budget ceiling: 1.000000") {
 		t.Errorf("system does not show the agent's own ceiling:\n%s", before)
 	}
 }
