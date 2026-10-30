@@ -3,13 +3,16 @@ import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { precompressPlugin } from "./build/precompress";
 
 // The build emits plain static assets. They are embedded into the Go binary
 // via go:embed behind the `embedui` build tag, so the installation ships as a
 // single artefact (PRD DE-01). Nothing here assumes a Node runtime in
 // production.
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  // precompress writes .br and .gz copies the Go handler serves by
+  // Accept-Encoding; see internal/web/spa.go.
+  plugins: [react(), tailwindcss(), precompressPlugin()],
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
   },
