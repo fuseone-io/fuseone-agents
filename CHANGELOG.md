@@ -25,6 +25,43 @@ field" is a commit message.
 
 ---
 
+## [0.82.0] — 2026-10-30
+
+### Upgrade notes
+
+- **Migration 0086 adds `branding_assets`.** Uploaded logos and icons live
+  in the database, so a database backup now includes them.
+
+### Added
+
+- **Logo and icon can be uploaded to the installation.** An air-gapped
+  installation no longer depends on an external URL. Images are stored by
+  content hash (PNG, JPEG or WebP, detected from the bytes, up to 512 KiB;
+  SVG is refused), served from the installation — the sign-in screen
+  included — and a replaced image is removed once no brand references it.
+  The trail records which image, never its bytes. External URLs still work,
+  with the same warning.
+- **The brand colour can be picked visually**, beside the hex field it
+  stays in step with.
+- **A run can be opened again from another run's recorded input.** "Run
+  from this input" opens a new run, with its own id and chain, seeded with
+  the source run's trigger input; the source is never written. Labels such
+  as untrusted survive, nothing else carries over — no approvals,
+  reservations or reply thread — and the trail names the source run. It is
+  not Replay, which still only re-checks recorded decisions. Context
+  artifacts and a version picker in the console follow in #188.
+
+### Changed
+
+- **The console loads each screen on demand and is served precompressed.**
+  The sign-in screen downloaded 2.1 MB of uncompressed JavaScript; it now
+  gets about 238 KB, brotli or gzip by what the browser accepts.
+
+### Fixed
+
+- **Postgres test packages no longer interfere when run in parallel.** Each
+  gets a database of its own, so the full suite runs in parallel and green.
+
 ## [0.81.0] — 2026-10-30
 
 ### Changed
