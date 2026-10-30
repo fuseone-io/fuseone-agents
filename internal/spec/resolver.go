@@ -43,7 +43,16 @@ type Resolver struct {
 	// the version is immutable, but the price table is live administration
 	// state.
 	mu       sync.RWMutex
-	planners map[domain.VersionID]cachedPlanner
+	planners map[plannerKey]cachedPlanner
+}
+
+// plannerKey is a version and the pair asked under it. The version alone was
+// the key while a version had one pair; a declared fallback is a second
+// planner of the same version, and keyed by version it resolved to whichever
+// pair was built first.
+type plannerKey struct {
+	version domain.VersionID
+	pair    domain.ModelPair
 }
 
 func NewResolver(specs Definitions, providers *model.Registry, tools model.ToolSchemas) *Resolver {
@@ -51,7 +60,7 @@ func NewResolver(specs Definitions, providers *model.Registry, tools model.ToolS
 		specs:     specs,
 		providers: providers,
 		tools:     tools,
-		planners:  make(map[domain.VersionID]cachedPlanner),
+		planners:  make(map[plannerKey]cachedPlanner),
 	}
 }
 
@@ -68,7 +77,7 @@ func (r *Resolver) Resolve(ctx context.Context, agent domain.AgentID, version do
 		return worker.Resolution{}, err
 	}
 
-	planner, err := r.planner(spec)
+	planner, err := r.planner(spec, declaredPair(spec))
 	if err != nil {
 		return worker.Resolution{}, err
 	}
@@ -83,22 +92,24 @@ func (r *Resolver) Resolve(ctx context.Context, agent domain.AgentID, version do
 			Trigger:        "worker",
 			MemoryLearning: spec.MemoryLearning.Normalize(),
 		},
-		Planner: planner,
+		Planner:  planner,
+		Fallback: r.fallback(spec),
 	}, nil
 }
 
-func (r *Resolver) planner(spec Spec) (engine.Planner, error) {
+func (r *Resolver) planner(spec Spec, pair domain.ModelPair) (engine.Planner, error) {
+	key := plannerKey{version: spec.Version, pair: pair}
 	for {
 		priceRevision := r.providers.Revision()
 		r.mu.RLock()
-		cached, ok := r.planners[spec.Version]
+		cached, ok := r.planners[key]
 		r.mu.RUnlock()
 		if ok && cached.priceRevision == priceRevision {
 			return cached.planner, nil
 		}
 
-		planner, err := r.providers.Planner(spec.Provider, model.Config{
-			Model:          spec.Model,
+		planner, err := r.providers.Planner(pair.Provider, model.Config{
+			Model:          pair.Model,
 			Effort:         spec.Effort,
 			CachePrefixTTL: spec.CachePrefixTTL,
 			ReplyLocale:    spec.ReplyLocale,
@@ -117,7 +128,7 @@ func (r *Resolver) planner(spec Spec) (engine.Planner, error) {
 		}
 
 		r.mu.Lock()
-		r.planners[spec.Version] = cachedPlanner{
+		r.planners[key] = cachedPlanner{
 			planner:       planner,
 			priceRevision: priceRevision,
 		}

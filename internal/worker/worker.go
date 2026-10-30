@@ -67,6 +67,8 @@ var errNoPlanner = errors.New("worker: the resolved agent version has no planner
 type Resolution struct {
 	Start   engine.Start
 	Planner engine.Planner
+	// Fallback is the version's declared fallback, nil when it declares none.
+	Fallback *Fallback
 }
 
 // Config tunes one worker pool.
