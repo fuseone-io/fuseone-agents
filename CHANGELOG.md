@@ -25,6 +25,25 @@ field" is a commit message.
 
 ---
 
+## [0.81.0] — 2026-10-30
+
+### Changed
+
+- **An agent's per-run cost ceiling is typed as money.** The field asked
+  for micros — 500000000 for 500 — so a zero too many or too few changed
+  the ceiling tenfold. It now reads "Cost per run" in the installation's
+  currency and takes `500` or `0,25`. Definitions still carry integer
+  micros.
+
+### Fixed
+
+- **The authoring assistant's daily ceiling accepts a fraction.** Typing
+  `1,` turned into `1` and the separator vanished.
+- **Money fields show only what they save.** Text that is not an amount is
+  refused rather than displayed beside a different saved value; an amount
+  finer than a micro or too large to hold exactly is refused rather than
+  rounded, and a price rate with seven decimals is no longer saved as zero.
+
 ## [0.80.0] — 2026-10-30
 
 ### Upgrade notes
