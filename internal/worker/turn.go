@@ -72,6 +72,7 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	}
 
 	start := resolved.Start
+	start.Ceiling = resolved.Start.Budget
 	start.Budget = budget
 	start.RunID = claim.RunID
 	start.Scope = claim.Scope

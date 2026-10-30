@@ -216,8 +216,8 @@ func prefixStablePlanningNote(in engine.PlanInput, locale string, schemas ToolSc
 	if note := memoryToolsNote(in, schemas, offered); note != "" {
 		notes = append(notes, note)
 	}
-	if in.Budget.Micros > 0 {
-		notes = append(notes, "Budget ceiling for this run: "+formatMicros(in.Budget.Micros)+
+	if in.Ceiling.Micros > 0 {
+		notes = append(notes, "Budget ceiling for this run: "+formatMicros(in.Ceiling.Micros)+
 			". Use bounded queries and finish cleanly before the platform enforces it.")
 	}
 	if locale != "" {

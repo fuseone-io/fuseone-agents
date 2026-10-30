@@ -204,8 +204,9 @@ func input() engine.PlanInput {
 		Transcript: []engine.Turn{
 			{Kind: engine.TurnInput, Text: "O cliente reclama de cobrança duplicada."},
 		},
-		Tools:  []domain.ToolID{"crm.lookup"},
-		Budget: domain.Budget{Micros: 500_000},
+		Tools:   []domain.ToolID{"crm.lookup"},
+		Budget:  domain.Budget{Micros: 500_000},
+		Ceiling: domain.Budget{Micros: 500_000},
 	}
 }
 
