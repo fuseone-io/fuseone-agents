@@ -25,6 +25,37 @@ field" is a commit message.
 
 ---
 
+## [0.83.0] — 2026-10-30
+
+### Upgrade notes
+
+- **Migrations 0087 and 0088.** 0087 adds the fallback columns to
+  `agent_specs`. 0088 creates a partial index on `run_steps` for the
+  fallback marker. It is built on the partitioned parent, inside the
+  migration's transaction, not concurrently: it reads the ledger once and
+  can hold appends while it builds. On a large ledger, plan the deploy for
+  that window.
+
+### Added
+
+- **An agent can declare a fallback model for when its provider stays
+  down.** A version may name `fallback: {provider, model}`. When the
+  declared provider keeps failing in a way a retry is meant to outlast —
+  overloaded, rate limited, unavailable — a draft or copilot run switches
+  to the fallback after the normal attempts and stays on it for the rest of
+  the run. Authentication and bad-request failures still stop the run. The
+  trail records the switch with the failure that caused it, the run page
+  shows it, and cost lands on the pair that answered. Without a declared
+  fallback nothing changes.
+- **An autonomous run never uses an unrehearsed fallback.** It was promoted
+  on evidence gathered against its declared model; it parks instead, with
+  the reason `fallback_unrehearsed` beside the provider's own failure —
+  including a run promoted after it had already switched.
+- **Runs that fell back do not count as promotion evidence.** Agreement,
+  gate blocks and promotion suggestions leave them out, so a copilot is not
+  promoted on decisions another model made. Activity and cost still count
+  them.
+
 ## [0.82.0] — 2026-10-30
 
 ### Upgrade notes
