@@ -8,6 +8,8 @@ order: 2
 
 ## Toda ferramenta chega sem classificação
 
+![Ferramentas aguardando: recusadas pelo Gate até alguém decidir o que cada uma faz](images/tools-waiting.png)
+
 Quando um servidor MCP é conectado, a plataforma descobre as ferramentas que
 ele oferece e **não deixa nenhuma delas ser usada**. Ela não adivinha o que
 `create_ticket` faz a partir do nome.

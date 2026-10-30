@@ -8,6 +8,8 @@ order: 11
 
 ## The trail is the record, not a summary
 
+![A finished run: the trail sealed step by step, the Gate's verdict on every call and the integrity panel](images/run-trail.png)
+
 Each step is sealed against the one before it. Nothing is edited afterwards — a correction is a new step.
 
 Which means the trail is not a simplified version of what happened. **It is what happened**, and it is the same reading an auditor does.

@@ -8,6 +8,8 @@ order: 10
 
 ## What stopped, and why
 
+![The human queue: the support agent held by the taint rule, waiting on Approve or Deny](images/human-queue.png)
+
 When a run stops it appears in the **human queue**. The screen shows three things, and the first is the one that matters:
 
 **The exact arguments** that will be sent. Not a description of what the agent intends to do — the real content of the call.

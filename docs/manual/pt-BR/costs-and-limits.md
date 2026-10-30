@@ -8,6 +8,8 @@ order: 6
 
 ## O custo é calculado por tarifa configurada
 
+![Custo e limites: gasto por área, tetos e tarifas configuradas](images/cost-and-limits.png)
+
 A plataforma conta tokens em cada run. Para transformar tokens em dinheiro, a
 instalação precisa ter uma tarifa configurada para o par provedor/modelo usado.
 

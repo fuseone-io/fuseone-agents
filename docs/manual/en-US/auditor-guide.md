@@ -8,6 +8,8 @@ order: 15
 
 ## The ledger is the source of truth
 
+![The administrative trail: who decided what, and when](images/audit-trail.png)
+
 Every run is a chain of steps. Each step points to the previous one, so a
 changed step breaks verification. The console view, exports and verification
 all read the same chain.

@@ -14,6 +14,8 @@ Vamos montar um agente que **responde dúvidas de infraestrutura no Slack**: alg
 
 ## 1. Conecte as ferramentas
 
+![Integrações: os servidores do exemplo conectados e respondendo](images/integrations.png)
+
 Em **Integrações**, conecte o servidor MCP que dá acesso a métricas e logs.
 
 Ao conectar, a plataforma descobre as ferramentas que ele oferece — e **nenhuma delas funciona ainda**. Isso é deliberado, não é falha.
@@ -21,6 +23,8 @@ Ao conectar, a plataforma descobre as ferramentas que ele oferece — e **nenhum
 Detalhe em [MCPs e credenciais](mcp-and-credentials.md).
 
 ## 2. Classifique o que cada ferramenta faz
+
+![A classificação que destrava a ferramenta: efeito, dado de fora e o que a desfaz](images/classify-dialog.png)
 
 Ainda em Integrações, diga o que cada ferramenta faz ao mundo: **ler, escrever, destrutivo ou financeiro**.
 

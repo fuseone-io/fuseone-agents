@@ -8,6 +8,8 @@ order: 11
 
 ## A trilha é o registro, não um resumo
 
+![Uma execução terminada: a trilha selada passo a passo, o veredito do Gate em cada chamada e o painel de integridade](images/run-trail.png)
+
 Cada passo é selado contra o anterior. Nada é editado depois — uma correção é um passo novo.
 
 Isso significa que a trilha não é uma versão simplificada do que aconteceu. **É o que aconteceu**, e é a mesma leitura que um auditor faz.

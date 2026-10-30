@@ -54,6 +54,11 @@ func TestManual_everyInternalLinkNamesAPageTheManualHas(t *testing.T) {
 					if isExternal(target) {
 						continue
 					}
+					if strings.HasPrefix(target, "images/") {
+						// A citation, not a cross-reference: the image
+						// accusers below hold it to what the locale ships.
+						continue
+					}
 					slug, _, _ := strings.Cut(strings.TrimSuffix(target, ".md"), "#")
 					if slug == "" {
 						continue // an anchor within the same page
@@ -180,6 +185,64 @@ func TestImage_aPathThatTriesToEscapeTheImages_findsNothing(t *testing.T) {
 	for _, name := range []string{"../approving.md", "../../manual.go", "images/../../manual.go"} {
 		if _, err := docs.Image("pt-BR", name); !errors.Is(err, docs.ErrNoImage) {
 			t.Fatalf("Image(%q) = %v, want ErrNoImage: a name is matched, never joined", name, err)
+		}
+	}
+}
+
+var imageCitations = regexp.MustCompile(`!\[[^\]]*\]\(images/([^)]+)\)`)
+
+func TestManual_everyCitedImageShips_andEveryShippedImageIsCited(t *testing.T) {
+	t.Parallel()
+	for _, locale := range locales {
+		pages, err := docs.Manual(locale)
+		if err != nil {
+			t.Fatalf("%s: %v", locale, err)
+		}
+		cited := map[string]bool{}
+		for _, page := range pages {
+			for _, match := range imageCitations.FindAllStringSubmatch(page.Body, -1) {
+				cited[match[1]] = true
+				if _, err := docs.Image(locale, match[1]); err != nil {
+					t.Errorf("%s/%s cites images/%s, which the locale does not ship", locale, page.Slug, match[1])
+				}
+			}
+		}
+		shipped, err := os.ReadDir("manual/" + locale + "/images")
+		if err != nil {
+			t.Fatalf("%s images: %v", locale, err)
+		}
+		for _, entry := range shipped {
+			if !cited[entry.Name()] {
+				t.Errorf("%s ships images/%s, which no page cites — dead weight in every binary", locale, entry.Name())
+			}
+		}
+	}
+}
+
+func TestManual_bothLocalesCiteTheSameImages(t *testing.T) {
+	t.Parallel()
+	byLocale := map[string]map[string]bool{}
+	for _, locale := range locales {
+		pages, err := docs.Manual(locale)
+		if err != nil {
+			t.Fatalf("%s: %v", locale, err)
+		}
+		cited := map[string]bool{}
+		for _, page := range pages {
+			for _, match := range imageCitations.FindAllStringSubmatch(page.Body, -1) {
+				cited[match[1]] = true
+			}
+		}
+		byLocale[locale] = cited
+	}
+	for name := range byLocale["pt-BR"] {
+		if !byLocale["en-US"][name] {
+			t.Errorf("pt-BR cites %s and en-US does not: the locales hold parity", name)
+		}
+	}
+	for name := range byLocale["en-US"] {
+		if !byLocale["pt-BR"][name] {
+			t.Errorf("en-US cites %s and pt-BR does not: the locales hold parity", name)
 		}
 	}
 }
