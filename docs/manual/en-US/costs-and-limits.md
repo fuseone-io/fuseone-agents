@@ -8,6 +8,8 @@ order: 6
 
 ## Cost is calculated from configured rates
 
+![Cost and limits: spend by area, ceilings and the configured rates](images/cost-and-limits.png)
+
 The platform counts tokens in each run. To turn tokens into money, the
 installation needs a configured rate for the provider/model pair the run used.
 

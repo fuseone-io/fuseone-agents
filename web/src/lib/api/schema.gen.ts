@@ -96,6 +96,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/manual/images/{file}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One screenshot a manual page cites
+         * @description The image bytes, exactly as the pull request shipped them. Pages cite
+         *     images by bare file name, so the console can resolve a reference
+         *     without knowing how the manual is stored; the name is matched against
+         *     what the locale ships, never joined onto a path.
+         */
+        get: operations["getManualImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/approvers": {
         parameters: {
             query?: never;
@@ -5401,6 +5424,44 @@ export interface operations {
                 };
             };
             /** @description No page by that slug in this locale. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getManualImage: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Which translation to read. An unknown locale falls back rather than
+                 *     failing: a reader whose browser asks for something the manual does not
+                 *     have should get the manual, not an error.
+                 */
+                locale?: components["parameters"]["ManualLocale"];
+            };
+            header?: never;
+            path: {
+                file: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image, byte for byte. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description No image by that name in this locale. */
             404: {
                 headers: {
                     [name: string]: unknown;

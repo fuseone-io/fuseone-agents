@@ -14,6 +14,8 @@ It is a good first case because it only reads. You get to see the platform worki
 
 ## 1. Connect the tools
 
+![Integrations: the example's servers connected and answering](images/integrations.png)
+
 In **Integrations**, connect the MCP server that reaches your metrics and logs.
 
 On connecting, the platform discovers the tools it offers — and **none of them work yet**. That is deliberate, not a failure.
@@ -21,6 +23,8 @@ On connecting, the platform discovers the tools it offers — and **none of them
 Details in [MCP servers and credentials](mcp-and-credentials.md).
 
 ## 2. Classify what each tool does
+
+![The classification that unlocks the tool: effect, outside data, and what undoes it](images/classify-dialog.png)
 
 Still in Integrations, say what each tool does to the world: **read, write, destructive or financial**.
 

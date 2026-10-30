@@ -8,6 +8,8 @@ order: 10
 
 ## O que parou e por quê
 
+![A Fila humana: o agente suporte parado pela regra de taint, esperando Aprovar ou Negar](images/human-queue.png)
+
 Quando uma execução para, ela aparece na **Fila humana**. A tela mostra três coisas, e a primeira é a que importa:
 
 **Os argumentos exatos** que serão enviados. Não uma descrição do que o agente pretende fazer — o conteúdo real da chamada.

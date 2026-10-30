@@ -122,6 +122,34 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /manual/images/{file}:
+    get:
+      tags: [system]
+      operationId: getManualImage
+      summary: One screenshot a manual page cites
+      description: |
+        The image bytes, exactly as the pull request shipped them. Pages cite
+        images by bare file name, so the console can resolve a reference
+        without knowing how the manual is stored; the name is matched against
+        what the locale ships, never joined onto a path.
+      parameters:
+        - name: file
+          in: path
+          required: true
+          schema: { type: string, maxLength: 120 }
+        - $ref: '#/components/parameters/ManualLocale'
+      responses:
+        '200':
+          description: The image, byte for byte.
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '404':
+          description: No image by that name in this locale.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /agents/approvers:
     get:
       tags: [agents]

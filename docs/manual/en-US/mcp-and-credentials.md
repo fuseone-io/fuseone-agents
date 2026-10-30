@@ -8,6 +8,8 @@ order: 5
 
 ## The catalogue is a recipe, not a connector
 
+![Integrations: the connected MCP servers and whether each is answering](images/integrations.png)
+
 A recipe says how a server is usually reached, which credentials it expects
 and which tools its documentation publishes. It is not endorsement and it does
 not apply trust by itself.
@@ -37,6 +39,8 @@ A new tool on a server with a chosen surface starts outside the surface. That
 is the safe behaviour: novelty does not enter reach by accident.
 
 ## Classification
+
+![Classifying a tool: the effect, whether it brings outside data, what undoes it, and why](images/classify-dialog.png)
 
 Each tool needs a Curator decision:
 

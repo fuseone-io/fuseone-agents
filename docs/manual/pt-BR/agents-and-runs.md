@@ -8,6 +8,8 @@ order: 1
 
 ## Um agente é um texto, não um programa
 
+![A tela de agentes: a frota inteira, cada agente com estado, execuções e custo por run](images/agents.png)
+
 Um agente é escrito em português, em blocos: o objetivo, o que ele pode usar,
 o que ele nunca faz. Não há código dentro dele e não há caixa de arrastar e
 soltar. O que está escrito é o que a plataforma lê.
@@ -16,6 +18,8 @@ Isso é uma escolha, e ela tem uma consequência que aparece no dia a dia: quem
 escreve o agente é quem entende do processo, não quem entende de programação.
 
 ## Uma versão é um congelamento
+
+![Um agente aberto: a versão publicada, as execuções recentes e o pacote de capacidades](images/agent-detail.png)
 
 Toda vez que uma instrução é publicada, a plataforma guarda o texto inteiro e
 calcula uma versão a partir dele. Publicar duas vezes o mesmo texto não cria
@@ -27,6 +31,8 @@ estão guardadas.
 
 ## Uma execução é fixada à versão em que começou
 
+![A lista de execuções, cada uma presa à versão em que abriu](images/runs-list.png)
+
 Uma execução carrega a versão que valia quando ela abriu, e a mantém até
 terminar. Publicar uma correção no meio do expediente não muda o que já está
 rodando.
@@ -36,6 +42,8 @@ executada é outra. O que foi aprovado e o que foi executado são a mesma coisa,
 sempre.
 
 ## Tudo é lido de um registro só
+
+![A visão geral do dia — runs, gasto, decisões do Gate e a frota — tudo derivado do ledger](images/overview.png)
 
 A plataforma não guarda "o estado do agente" em lugar nenhum. Ela guarda os
 passos, em ordem, cada um selado contra o anterior. O estado é o que se obtém

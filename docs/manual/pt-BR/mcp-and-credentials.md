@@ -8,6 +8,8 @@ order: 5
 
 ## O catálogo é receita, não conector
 
+![Integrações: os servidores MCP conectados e se cada um está respondendo](images/integrations.png)
+
 Uma receita diz como um servidor costuma ser alcançado, quais credenciais ele
 espera e quais ferramentas a documentação publica. Ela não é homologação e não
 aplica confiança sozinha.
@@ -37,6 +39,8 @@ Uma ferramenta nova em servidor com superfície escolhida nasce fora. Isso é o
 comportamento seguro: novidade não entra no alcance por acidente.
 
 ## Classificação
+
+![Classificando uma ferramenta: o efeito, se traz dado de fora, o que a desfaz e o porquê](images/classify-dialog.png)
 
 Cada ferramenta precisa de uma decisão do Curador:
 

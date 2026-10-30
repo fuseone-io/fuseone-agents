@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -91,5 +92,44 @@ func TestGetManualPage_returnsMarkdownRatherThanMarkup(t *testing.T) {
 	// into markup would be asking the console to trust it about what it put in.
 	if page.Body[0] == '<' {
 		t.Error("the body opens as markup, not as Markdown")
+	}
+}
+
+func TestGetManualImage_aCitedScreenshot_comesBackAsPNGBytes(t *testing.T) {
+	t.Parallel()
+
+	got, err := manualServer().GetManualImage(context.Background(), openapi.GetManualImageRequestObject{
+		File: "human-queue.png",
+	})
+	if err != nil {
+		t.Fatalf("image: %v", err)
+	}
+	img, ok := got.(openapi.GetManualImage200ImagepngResponse)
+	if !ok {
+		t.Fatalf("got %T, want the image", got)
+	}
+	raw, err := io.ReadAll(img.Body)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(raw) == 0 || img.ContentLength != int64(len(raw)) {
+		t.Fatalf("served %d bytes with ContentLength %d; a reader sizes by the header", len(raw), img.ContentLength)
+	}
+	if string(raw[1:4]) != "PNG" {
+		t.Fatalf("payload does not open as a PNG")
+	}
+}
+
+func TestGetManualImage_aNameTheManualDoesNotShip_is404(t *testing.T) {
+	t.Parallel()
+
+	got, err := manualServer().GetManualImage(context.Background(), openapi.GetManualImageRequestObject{
+		File: "../approving.md",
+	})
+	if err != nil {
+		t.Fatalf("image: %v", err)
+	}
+	if _, ok := got.(openapi.GetManualImage404ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("got %T, want a 404: a name is matched, never joined", got)
 	}
 }

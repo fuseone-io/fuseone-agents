@@ -8,6 +8,8 @@ order: 15
 
 ## O ledger é a fonte da verdade
 
+![A trilha administrativa: quem decidiu o quê, e quando](images/audit-trail.png)
+
 Toda run é uma cadeia de passos. Cada passo aponta para o anterior, então um
 passo alterado quebra a verificação. A tela do console, os exports e a
 verificação leem a mesma cadeia.

@@ -8,6 +8,8 @@ order: 2
 
 ## Every tool arrives unclassified
 
+![Tools waiting: refused by the Gate until somebody rules on what each one does](images/tools-waiting.png)
+
 When an MCP server is connected, the platform discovers the tools it offers and
 **lets none of them run**. It does not guess what `create_ticket` does from its
 name.

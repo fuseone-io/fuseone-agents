@@ -8,6 +8,8 @@ order: 1
 
 ## An agent is a text, not a program
 
+![The agents screen: the whole fleet, each agent with its state, runs and cost per run](images/agents.png)
+
 An agent is written in plain language, in blocks: the objective, what it may
 use, what it never does. There is no code inside it and no drag-and-drop
 canvas. What is written is what the platform reads.
@@ -18,6 +20,8 @@ understands programming.
 
 ## A version is a freeze
 
+![An agent opened: the published version, recent runs and the capability pack](images/agent-detail.png)
+
 Every time an instruction is published, the platform stores the whole text and
 derives a version from it. Publishing the same text twice does not create two
 versions — the version *is* the content.
@@ -26,6 +30,8 @@ This answers the question that arrives months later: **which instructions did
 that run under?** Not today's. That day's, which are still stored.
 
 ## A run is pinned to the version it opened on
+
+![The runs list, each one pinned to the version it opened on](images/runs-list.png)
 
 A run carries the version that was current when it opened, and keeps it until
 it ends. Publishing a correction mid-afternoon does not change what is already
@@ -36,6 +42,8 @@ changes, and a different action executes. What was approved and what ran are
 the same thing, always.
 
 ## Everything is read from one record
+
+![The day at a glance — runs, spend, Gate decisions and the fleet — all derived from the ledger](images/overview.png)
 
 The platform stores no "agent state" anywhere. It stores steps, in order, each
 sealed against the one before it. State is what you get by reading the steps

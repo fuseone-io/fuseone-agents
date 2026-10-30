@@ -8,6 +8,8 @@ order: 7
 
 ## What a policy is
 
+![The policies screen: rules with a code, a reason and a mode](images/policies.png)
+
 A rule evaluated on **every agent step**, before any effect happens. It has three parts: what it reaches, when it applies, and what happens when it matches.
 
 It is not an agent instruction. An instruction guides the model and the model may not follow it; a policy is decided by the platform and does not depend on anybody complying.

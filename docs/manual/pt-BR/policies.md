@@ -8,6 +8,8 @@ order: 7
 
 ## O que uma política é
 
+![A tela de políticas: regras com código, motivo e modo](images/policies.png)
+
 Uma regra avaliada em **todo passo de agente**, antes de qualquer efeito acontecer. Ela tem três partes: o que ela alcança, quando ela vale, e o que acontece quando bate.
 
 Ela não é instrução do agente. Instrução orienta o modelo e o modelo pode não seguir; política é decidida pela plataforma e não depende de ninguém obedecer.

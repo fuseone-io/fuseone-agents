@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -77,6 +77,19 @@ async function writeManualDocs() {
     const source = path.join(docsRoot, "manual", locale.source);
     const target = path.join(manualOut, locale.route);
     await mkdir(target, { recursive: true });
+
+    // The screenshots the pages cite, copied beside them so the same
+    // relative reference that renders on GitHub resolves in the built site.
+    const images = await readdir(path.join(source, "images")).catch(() => []);
+    if (images.length > 0) {
+      await mkdir(path.join(target, "images"), { recursive: true });
+      for (const image of images) {
+        await copyFile(
+          path.join(source, "images", image),
+          path.join(target, "images", image)
+        );
+      }
+    }
 
     const pages = [];
     for (const file of await sortedMarkdownFiles(source)) {

@@ -16,6 +16,7 @@ package docs
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"sort"
@@ -79,6 +80,35 @@ func Manual(locale string) ([]Page, error) {
 
 	sort.Slice(pages, func(i, j int) bool { return pages[i].Order < pages[j].Order })
 	return pages, nil
+}
+
+// ErrNoImage means the manual ships no image by that name in that locale.
+var ErrNoImage = errors.New("docs: the manual has no image by that name")
+
+/*
+Image returns one screenshot a manual page cites, byte for byte.
+
+The name is matched against the images the locale ships rather than joined
+onto a path — the same property the page lookup has: a name that is looked up
+cannot escape the directory it is looked up in, whatever it spells.
+*/
+func Image(locale, file string) ([]byte, error) {
+	dir := "manual/" + locale + "/images"
+	entries, err := fs.ReadDir(manual, dir)
+	if err != nil {
+		// A locale that ships no images is an absence, not a failure.
+		return nil, ErrNoImage
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && entry.Name() == file {
+			raw, err := fs.ReadFile(manual, dir+"/"+entry.Name())
+			if err != nil {
+				return nil, fmt.Errorf("manual image %s: %w", file, err)
+			}
+			return raw, nil
+		}
+	}
+	return nil, ErrNoImage
 }
 
 // front is the fence a page opens with. Deliberately not YAML: three keys do

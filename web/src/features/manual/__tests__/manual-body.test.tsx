@@ -48,3 +48,26 @@ describe("a page of the manual", () => {
     expect(screen.getByRole("cell", { name: "Passa direto" })).toBeInTheDocument();
   });
 });
+
+describe("a screenshot the page cites", () => {
+  it("resolves to the console's own endpoint, in the reader's locale", async () => {
+    const { setLocale } = await import("@/i18n");
+    setLocale("pt-BR");
+    show("![Fila humana](images/human-queue.png)");
+
+    expect(screen.getByRole("img", { name: "Fila humana" })).toHaveAttribute(
+      "src",
+      "/api/v1/manual/images/human-queue.png?locale=pt-BR",
+    );
+  });
+
+  it("renders nothing for an address that is not the manual's own", () => {
+    // The manual never hotlinks: an installation can be air-gapped, and an
+    // image fetched from outside would report every reader to a third party.
+    const { container } = show(
+      "![fora](https://example.com/x.png) e ![escape](images/../../secret.png)",
+    );
+
+    expect(container.querySelector("img")).toBeNull();
+  });
+});
