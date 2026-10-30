@@ -4530,6 +4530,33 @@ components:
         - failed
         - parked
         - run_finished
+        - model_fallback
+
+    ModelPair:
+      type: object
+      required: [provider, model]
+      description: A configured model provider and one of its models.
+      properties:
+        provider: { type: string }
+        model: { type: string }
+
+    RunFallback:
+      type: object
+      required: [from, to, code, atSeq]
+      description: >
+        The run stopped asking its declared pair and asked its fallback from
+        here on. Evidence gathered by such a run is about a pair the agent was
+        not promoted on, so it is weighed apart.
+      properties:
+        from: { $ref: '#/components/schemas/ModelPair' }
+        to: { $ref: '#/components/schemas/ModelPair' }
+        code:
+          type: string
+          description: Stable code of the provider failure that caused the switch.
+        atSeq:
+          type: integer
+          format: int64
+          description: The step that recorded the switch.
 
     Scope:
       type: object
@@ -5288,6 +5315,9 @@ components:
         failure:
           allOf: [{ $ref: '#/components/schemas/RunFailure' }]
           nullable: true
+        fallback:
+          allOf: [{ $ref: '#/components/schemas/RunFallback' }]
+          description: Present when the run switched to its declared fallback pair.
 
     RunFailure:
       type: object
@@ -7345,6 +7375,12 @@ components:
         provider: { type: string }
         model: { type: string }
         effort: { type: string }
+        fallback:
+          allOf: [{ $ref: '#/components/schemas/ModelPair' }]
+          description: |
+            The pair a draft or copilot run switches to when the declared one
+            keeps failing as overloaded, rate limited or unavailable. Absent
+            declares none. An autonomous run never switches in this version.
         cachePrefixTtl:
           type: string
           description: |
@@ -7414,6 +7450,12 @@ components:
         provider: { type: string }
         model: { type: string }
         effort: { type: string }
+        fallback:
+          allOf: [{ $ref: '#/components/schemas/ModelPair' }]
+          description: |
+            The pair a draft or copilot run switches to when the declared one
+            keeps failing as overloaded, rate limited or unavailable. Absent
+            declares none. An autonomous run never switches in this version.
         cachePrefixTtl:
           type: string
           description: |

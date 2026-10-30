@@ -23,6 +23,7 @@ func toRun(runID domain.RunID, s engine.State, steps []domain.Step) openapi.Run 
 		Seq:            s.Seq,
 		Cost:           runCost(s.Spent, steps),
 		ReservedMicros: ptr(s.Reserved.Micros),
+		Fallback:       runFallback(steps),
 	}
 	if s.OnBehalfOf != "" {
 		out.OnBehalfOf = ptr(string(s.OnBehalfOf))
