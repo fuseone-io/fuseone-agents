@@ -182,3 +182,27 @@ func TestAdvance_fellBackWithNoFallbackPlanner_failsRatherThanAskingThePrimary(t
 		t.Error("asked the declared provider after the run had switched away from it")
 	}
 }
+
+func TestAdvance_fellBackAndNowAutonomous_refusesToPlanWithTheFallback(t *testing.T) {
+	t.Parallel()
+
+	// Checked where the planner is chosen, on every turn: the stage can change
+	// between the switch and any later claim.
+	h := newHarness(t)
+	primary, fallback := withPlanners(h)
+	seedFallenBack(t, h, fellBack(t))
+	start := h.start(t, generousBudget())
+	start.Stage = domain.StageAutonomous
+
+	_, err := h.runner.Advance(context.Background(), start)
+	var unrehearsed FallbackUnrehearsedError
+	if !errors.As(err, &unrehearsed) {
+		t.Fatalf("Advance = %v, want FallbackUnrehearsedError", err)
+	}
+	if got := unrehearsed.Summary(); got.Code != domain.ParkFallbackUnrehearsed || got.Retryable {
+		t.Errorf("summary = %+v, want a non-retryable %s", got, domain.ParkFallbackUnrehearsed)
+	}
+	if fallback.calls != 0 || primary.calls != 0 {
+		t.Errorf("calls = primary %d / fallback %d, want neither asked", primary.calls, fallback.calls)
+	}
+}

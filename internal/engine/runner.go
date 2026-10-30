@@ -286,7 +286,7 @@ func (r *Runner) plan(ctx context.Context, state State, start Start) (Proposal, 
 	// one that decides what to do about it are the same run and not the same
 	// expense (PRD FO-10, FO-11).
 	model, effort := SpendAt(start, state.Called)
-	planner, model, err := r.plannerFor(state, model)
+	planner, model, err := r.plannerFor(state, start, model)
 	if err != nil {
 		return Proposal{}, err
 	}

@@ -291,3 +291,26 @@ func TestTurn_theFallbackFailingToo_parksWithoutSwitchingAgain(t *testing.T) {
 		t.Errorf("reason = %q, want the fallback's failure", p.Reason)
 	}
 }
+
+func TestTurn_promotedToAutonomousAfterTheSwitch_parksAndNeverAsksTheFallback(t *testing.T) {
+	t.Parallel()
+
+	// The guard at the moment of the switch is not enough: the switch is
+	// sticky and the stage is not. An agent promoted after its run fell back
+	// would otherwise act alone on a pair nobody rehearsed it against.
+	r := newFallbackRig(t, domain.StageCopilot, overloaded(), true)
+	r.turns(t, r.worker(r.specs), 3)
+	if len(r.switches(t)) != 1 {
+		t.Fatalf("setup: the copilot run did not switch")
+	}
+
+	r.stage = domain.StageAutonomous
+	r.turns(t, r.worker(r.specs), 1)
+
+	if r.backup.calls != 0 {
+		t.Errorf("fallback asked %d times after the agent became autonomous", r.backup.calls)
+	}
+	if p := parkPayload(t, r.store); p.Reason != domain.ParkFallbackUnrehearsed {
+		t.Errorf("reason = %q, want %q", p.Reason, domain.ParkFallbackUnrehearsed)
+	}
+}

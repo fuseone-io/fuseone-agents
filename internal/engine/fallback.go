@@ -11,6 +11,19 @@ import (
 // and this worker was handed nothing to plan with on that side.
 var ErrNoFallbackPlanner = errors.New("engine: the run fell back and no fallback planner is wired")
 
+// FallbackUnrehearsedError means an autonomous run's ledger records a switch
+// to a fallback pair it was never rehearsed against.
+type FallbackUnrehearsedError struct{}
+
+func (FallbackUnrehearsedError) Error() string {
+	return "engine: an autonomous run does not plan with an unrehearsed fallback"
+}
+
+// Summary parks the run at once: no number of retries rehearses the pair.
+func (FallbackUnrehearsedError) Summary() domain.FailureSummary {
+	return domain.FailureSummary{Code: domain.ParkFallbackUnrehearsed}
+}
+
 /*
 applyFallback folds a switch away from the declared pair.
 
@@ -39,9 +52,15 @@ After that the fallback, with no model override: a step's model names a model
 of the declared provider, and the fallback pair is the whole of what the
 author reviewed for this case.
 */
-func (r *Runner) plannerFor(state State, stepModel string) (Planner, string, error) {
+func (r *Runner) plannerFor(state State, start Start, stepModel string) (Planner, string, error) {
 	if state.Fallback == nil {
 		return r.deps.Planner, stepModel, nil
+	}
+	// Here and not only where the switch is made: the switch is sticky and
+	// the stage is not. An agent promoted after its run fell back would
+	// otherwise act alone on a pair nobody rehearsed it against.
+	if start.Stage == domain.StageAutonomous {
+		return nil, "", FallbackUnrehearsedError{}
 	}
 	if r.deps.Fallback == nil {
 		return nil, "", ErrNoFallbackPlanner
