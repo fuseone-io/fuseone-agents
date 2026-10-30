@@ -93,22 +93,20 @@ func (s *Server) PublishAgent(
 		}, nil
 	}
 
-	unknown, err := s.unknownTools(ctx, published)
+	// One read of the catalogue for both checks, so a classification landing
+	// mid-publish cannot leave them judging different catalogues.
+	catalogue, err := s.rulingsFor(ctx, specScope(published))
 	if err != nil {
 		return nil, err
 	}
-	if len(unknown) > 0 {
+	if unoffered := s.unofferedTools(published, catalogue); len(unoffered) > 0 {
 		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				invalid(unknownToolsDetail(unknown))),
+				invalid(unofferedToolsDetail(unoffered))),
 		}, nil
 	}
 
-	blocked, err := s.blockingStaticFlows(ctx, published)
-	if err != nil {
-		return nil, err
-	}
-	if len(blocked) > 0 {
+	if blocked := blockingStaticFlows(published, catalogue); len(blocked) > 0 {
 		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				invalid(staticFlowBlockDetail(blocked))),
@@ -230,11 +228,7 @@ func publishScope(
 	return target, false
 }
 
-func (s *Server) blockingStaticFlows(ctx context.Context, draft spec.Spec) ([]flow.Path, error) {
-	catalogue, err := s.rulingsFor(ctx, specScope(draft))
-	if err != nil {
-		return nil, err
-	}
+func blockingStaticFlows(draft spec.Spec, catalogue ruled) []flow.Path {
 	finding := flow.Check(draft.Tools, envelopesOf(draft), catalogue)
 	var out []flow.Path
 	for _, path := range finding.Paths {
@@ -242,7 +236,7 @@ func (s *Server) blockingStaticFlows(ctx context.Context, draft spec.Spec) ([]fl
 			out = append(out, path)
 		}
 	}
-	return out, nil
+	return out
 }
 
 func staticFlowBlockDetail(paths []flow.Path) string {

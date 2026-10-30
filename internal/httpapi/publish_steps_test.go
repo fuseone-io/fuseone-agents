@@ -63,9 +63,11 @@ func TestPublishAgent_stepReaches_mustStayInsideThePack(t *testing.T) {
 // Keeping steps inside the pack does not catch a typo duplicated into the pack
 // itself: `tools: [crm.lokup]` reaching crm.lokup published, and the agent
 // stopped at its first call because the Gate never allows a tool nobody
-// provides. A tool the catalogue does not know is refused at publish. One the
-// catalogue knows but the Curator has not ruled on still publishes — that is
-// a server just connected — and platform tools are not the catalogue's.
+// provides. A tool the catalogue does not know is refused at publish, and so
+// is one discovered but kept off the installation's surface: it is never
+// described to a model nor invoked. One on the surface the Curator has not
+// ruled on still publishes — that is a server just connected — and platform
+// tools are not the catalogue's.
 func TestPublishAgent_toolTheCatalogueDoesNotKnow_isRefused(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -77,13 +79,16 @@ func TestPublishAgent_toolTheCatalogueDoesNotKnow_isRefused(t *testing.T) {
 		{name: "a misspelt tool", tools: []string{"crm.lokup"}, refuse: "crm.lokup"},
 		{name: "a platform tool", tools: []string{"crm.lookup", string(domain.ToolMemoryFind)}},
 		{name: "a known tool not yet ruled on", tools: []string{"crm.lookup", "crm.archive"}},
+		{name: "a known tool kept off the surface", tools: []string{"crm.purge"}, refuse: "crm.purge"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			pub := newPublisher()
 			catalogue := publishFlowTools()
-			catalogue.entries = append(catalogue.entries, domain.ToolEntry{ID: "crm.archive", OnSurface: true})
+			catalogue.entries = append(catalogue.entries,
+				domain.ToolEntry{ID: "crm.archive", OnSurface: true},
+				domain.ToolEntry{ID: "crm.purge", OnSurface: false})
 			resp, err := publishServer(t, pub).WithAdministration(nil, catalogue, nil).PublishAgent(
 				inArea("cx", domain.RoleAuthor),
 				openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {

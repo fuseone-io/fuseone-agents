@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -9,39 +8,37 @@ import (
 	"github.com/fuseone/agents/internal/spec"
 )
 
-// unknownTools is every tool in a draft's pack the catalogue has never heard
-// of, for the area it publishes into.
+// unofferedTools is every tool in a draft's pack this installation does not
+// offer, for the area it publishes into: unknown to the catalogue, or
+// discovered and kept off the surface.
 //
-// The Gate never allows such a tool, so an agent published holding one stops
-// at its first call — and a typo copied into both `tools` and a step's reaches
-// passes every check that only compares the two. A tool the catalogue knows
-// but the Curator has not ruled on is not here: that is a server just
-// connected, and publishing before its classification is legitimate. Platform
-// tools are served by the platform, not listed by any server. With no
-// catalogue wired there is nothing to compare against, and nothing is named.
-func (s *Server) unknownTools(ctx context.Context, draft spec.Spec) ([]domain.ToolID, error) {
+// Either way the tool is never described to a model nor invoked, so an agent
+// published holding one stops at its first call — and a typo copied into both
+// `tools` and a step's reaches passes every check that only compares the two.
+// A tool on the surface the Curator has not ruled on is not here: that is a
+// server just connected, and publishing before its classification is
+// legitimate. Platform tools are served by the platform, not listed by any
+// server. With no catalogue wired there is nothing to compare against.
+func (s *Server) unofferedTools(draft spec.Spec, catalogue ruled) []domain.ToolID {
 	if s.tools == nil {
-		return nil, nil
+		return nil
 	}
-	catalogue, err := s.rulingsFor(ctx, specScope(draft))
-	if err != nil {
-		return nil, err
-	}
-	var unknown []domain.ToolID
+	var unoffered []domain.ToolID
 	for _, tool := range draft.Tools {
-		if _, known := catalogue[tool]; !known && !tool.PlatformOwned() {
-			unknown = append(unknown, tool)
+		if entry, known := catalogue[tool]; (!known || !entry.OnSurface) && !tool.PlatformOwned() {
+			unoffered = append(unoffered, tool)
 		}
 	}
-	return unknown, nil
+	return unoffered
 }
 
-func unknownToolsDetail(tools []domain.ToolID) string {
+func unofferedToolsDetail(tools []domain.ToolID) string {
 	names := make([]string, len(tools))
 	for i, tool := range tools {
 		names[i] = string(tool)
 	}
 	return fmt.Sprintf(
-		"no connected server provides %s: correct the name, or connect the server that offers it before publishing",
+		"this installation does not offer %s: correct the name, or connect the server that "+
+			"provides it and bring the tool onto the surface before publishing",
 		strings.Join(names, ", "))
 }
