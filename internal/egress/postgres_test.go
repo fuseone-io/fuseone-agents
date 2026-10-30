@@ -1,7 +1,6 @@
 package egress_test
 
 import (
-	"os"
 	"testing"
 	"time"
 
@@ -76,21 +75,7 @@ func TestRecordDenial_feedsRuntimeHealthWithBoundedCodes(t *testing.T) {
 
 func egressStore(t *testing.T) (*egress.Postgres, *pgxpool.Pool) {
 	t.Helper()
-	dsn := testdb.DSN(t)
-	if dsn == "" {
-		if os.Getenv("REQUIRE_DATABASE") != "" {
-			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
-		}
-		t.Skip("TEST_DATABASE_URL is unset; stdio egress projection is a Postgres fact")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(), `truncate mcp_egress_denials, run_steps, runs`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}

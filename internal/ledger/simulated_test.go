@@ -4,8 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/testdb"
@@ -16,18 +14,7 @@ import (
 // simulated run counted as production is a wrong number somebody acts on.
 
 func TestList_excludesSimulatedRuns(t *testing.T) {
-	dsn := testdb.DSN(t)
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL is unset")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(), `delete from runs where run_id like 'sim_%'`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
@@ -53,18 +40,7 @@ func TestList_excludesSimulatedRuns(t *testing.T) {
 }
 
 func TestClaim_neverPicksUpASimulatedRun(t *testing.T) {
-	dsn := testdb.DSN(t)
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL is unset")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(), `delete from runs where run_id like 'sim_%'`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
@@ -86,18 +62,7 @@ func TestClaim_neverPicksUpASimulatedRun(t *testing.T) {
 }
 
 func TestAppend_aSimulatedRunStart_marksTheProjection(t *testing.T) {
-	dsn := testdb.DSN(t)
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL is unset")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(), `delete from runs where run_id = 'sim_marked'`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}

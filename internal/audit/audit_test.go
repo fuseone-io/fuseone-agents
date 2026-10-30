@@ -1,7 +1,6 @@
 package audit_test
 
 import (
-	"os"
 	"testing"
 	"time"
 
@@ -22,22 +21,7 @@ var noon = time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
 
 func readerFor(t *testing.T) (*audit.Postgres, *pgxpool.Pool) {
 	t.Helper()
-	dsn := testdb.DSN(t)
-	if dsn == "" {
-		if os.Getenv("REQUIRE_DATABASE") != "" {
-			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
-		}
-		t.Skip("TEST_DATABASE_URL is unset; skipping the audit suite")
-	}
-
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(), `truncate run_steps, runs, admin_events`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}

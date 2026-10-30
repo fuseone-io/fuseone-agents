@@ -3,14 +3,12 @@ package connect
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/channel"
-	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/testdb"
 	"github.com/fuseone/agents/internal/vault"
@@ -62,21 +60,7 @@ func (s *spoke) OpenReview(
 
 func stored(t *testing.T) (*settings.Store, *pgxpool.Pool) {
 	t.Helper()
-	dsn := testdb.DSN(t)
-	if dsn == "" {
-		if os.Getenv("REQUIRE_DATABASE") != "" {
-			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
-		}
-		t.Skip("TEST_DATABASE_URL is unset; skipping the driver suite")
-	}
-	pool, err := pgxpool.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(context.Background(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(context.Background(),
 		`delete from settings where kind = 'channel'`); err != nil {
 		t.Fatalf("clean: %v", err)

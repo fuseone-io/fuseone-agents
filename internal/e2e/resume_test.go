@@ -1,10 +1,7 @@
 package e2e_test
 
 import (
-	"os"
 	"testing"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -18,22 +15,7 @@ import (
 // or a second pod — could not continue the run at all (PRD NF-02, DE-15).
 
 func TestResume_anotherProcessCanRebuildTheTranscript(t *testing.T) {
-	dsn := testdb.DSN(t)
-	if dsn == "" {
-		if os.Getenv("REQUIRE_DATABASE") != "" {
-			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
-		}
-		t.Skip("TEST_DATABASE_URL is unset; skipping the cross-process resume")
-	}
-
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(), `truncate run_steps, runs, run_content`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}

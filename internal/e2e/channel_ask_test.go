@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -119,21 +118,7 @@ func aConversation(t *testing.T) *conversing {
 	t.Helper()
 	ctx := context.Background()
 
-	dsn := testdb.DSN(t)
-	if dsn == "" {
-		if os.Getenv("REQUIRE_DATABASE") != "" {
-			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
-		}
-		t.Skip("TEST_DATABASE_URL is unset; skipping the channel path")
-	}
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(ctx, pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	/*
 		The runs go too, and that is not tidiness.
 

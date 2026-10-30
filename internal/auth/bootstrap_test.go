@@ -2,14 +2,12 @@ package auth_test
 
 import (
 	"errors"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/auth"
-	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/testdb"
 )
 
@@ -22,22 +20,7 @@ import (
 
 func bootstrapFor(t *testing.T) (*auth.Bootstrap, *pgxpool.Pool) {
 	t.Helper()
-	dsn := testdb.DSN(t)
-	if dsn == "" {
-		if os.Getenv("REQUIRE_DATABASE") != "" {
-			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
-		}
-		t.Skip("TEST_DATABASE_URL is unset; skipping the bootstrap suite")
-	}
-
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(),
 		`truncate role_grants, principals, sessions, settings, admin_events, scopes, companies cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)

@@ -2,14 +2,10 @@ package policy_test
 
 import (
 	"errors"
-	"os"
 	"reflect"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/policy"
 	"github.com/fuseone/agents/internal/testdb"
 )
@@ -19,22 +15,7 @@ import (
 
 func storeFor(t *testing.T) *policy.Store {
 	t.Helper()
-	dsn := testdb.DSN(t)
-	if dsn == "" {
-		if os.Getenv("REQUIRE_DATABASE") != "" {
-			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
-		}
-		t.Skip("TEST_DATABASE_URL is unset; skipping the policy suite")
-	}
-
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(), `truncate policies, policy_snapshots`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
