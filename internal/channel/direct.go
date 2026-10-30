@@ -2,11 +2,9 @@ package channel
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/ticket"
 )
 
 /*
@@ -59,76 +57,6 @@ type Approvers interface {
 	DecidersIn(ctx context.Context, scope domain.Scope) ([]domain.UserID, error)
 }
 
-// Accounts answers where people can be reached on one connection. Absence is
-// the ordinary answer: most of a workspace has never been bound.
-type Accounts interface {
-	AccountsOn(ctx context.Context, channelName string, who []domain.UserID) (map[domain.UserID]string, error)
-}
-
-/*
-fanout is one sweep's worth of private addressing.
-
-Both questions are asked once and remembered for the pass. Who may decide is a
-property of the run's scope; where they are reachable is configuration that
-changes by an administrative act. Re-reading either between recipients would let
-the set of people one announcement reaches change halfway through reaching them.
-*/
-/*
-answered is what a pass remembers, including a refusal.
-
-Remembering only the successes was an amplifier: during an outage a page of
-fifty runs asked fifty times, every thirty seconds, and could be told different
-things inside one sweep — the set of people one announcement reaches changing
-halfway through reaching them, which is the whole reason this pass exists.
-
-The error is the answer until the next sweep.
-*/
-type answered[T any] struct {
-	value T
-	err   error
-}
-
-type fanout struct {
-	approvers Approvers
-	accounts  Accounts
-	tickets   ticket.ApprovalRoutes
-	byScope   map[domain.Scope]answered[[]domain.UserID]
-	mayDecide map[domain.Scope]answered[[]domain.UserID]
-	byChannel map[string]map[domain.UserID]string
-	// Reading who is reachable fills in one person at a time, so a failure is
-	// remembered for the connection rather than for the people it was about.
-	failedChannel map[string]error
-	// The connection an agent's own approvals are sent from, and whether it has
-	// been asked for. Empty is an answer — no connection, or more than one —
-	// which is why the asking is tracked separately from the answer.
-	connection       string
-	askedConnections bool
-	connectionsErr   error
-	// What each version's owner asked for. Two runs of one agent in a page ask
-	// once, and every run of it asks once per sweep rather than per report.
-	byVersion map[versionOfAgent]answered[domain.ApprovalPolicy]
-	byTicket  map[domain.TicketRef]answered[ticket.ApprovalRoute]
-}
-
-// versionOfAgent is what an approval policy is stored against: a run is pinned
-// to a version, so two versions of one agent are two answers.
-type versionOfAgent struct {
-	agent   domain.AgentID
-	version domain.VersionID
-}
-
-func (r *Reporter) newFanout() *fanout {
-	return &fanout{
-		approvers: r.approvers, accounts: r.accounts, tickets: r.tickets,
-		byScope:       map[domain.Scope]answered[[]domain.UserID]{},
-		mayDecide:     map[domain.Scope]answered[[]domain.UserID]{},
-		byChannel:     map[string]map[domain.UserID]string{},
-		failedChannel: map[string]error{},
-		byVersion:     map[versionOfAgent]answered[domain.ApprovalPolicy]{},
-		byTicket:      map[domain.TicketRef]answered[ticket.ApprovalRoute]{},
-	}
-}
-
 // wanted reports whether this announcement is one to send privately.
 //
 // The same condition that draws the buttons. A private message about a run that
@@ -138,184 +66,6 @@ func (f *fanout) wanted(report Report, place Conversation) bool {
 	return f != nil && f.approvers != nil && f.accounts != nil &&
 		!report.Ticket.Valid() && place.DirectApprovals &&
 		report.AwaitingDecision && report.AtSeq > 0
-}
-
-/*
-recipients is the private conversations this announcement is owed.
-
-Empty when nobody may decide, when nobody who may is bound on this connection,
-or when there are more of them than one approval should ever reach. The cap is
-all or nothing, and the second return says whether it was hit — a caller has to
-record why nobody was told, or the silence is indistinguishable from there being
-nobody to tell.
-*/
-func (f *fanout) recipients(
-	ctx context.Context, report Report, place Conversation,
-) (to []Conversation, capped bool, err error) {
-	who, err := f.whoDecides(ctx, report.Scope)
-	if err != nil {
-		return nil, false, err
-	}
-	if len(who) == 0 {
-		return nil, false, nil
-	}
-
-	return f.reachable(ctx, place, who)
-}
-
-/*
-reachable turns the people who may decide into the private conversations to
-post in, or answers that there are too many.
-
-Split from recipients because the owner's path narrows *who* before asking
-*where*, and the cap has to be applied after both — counted in messages rather
-than in candidates.
-*/
-func (f *fanout) reachable(
-	ctx context.Context, place Conversation, who []domain.UserID,
-) (to []Conversation, capped bool, err error) {
-	where, err := f.whereReachable(ctx, place.Channel, who)
-	if err != nil {
-		return nil, false, err
-	}
-	for _, one := range who {
-		account := where[one]
-		// Nobody bound is skipped and not failed: no conversation was owed
-		// anything, and it is the ordinary state of most of a workspace. An
-		// empty account must never travel — it is the shape that means a run
-		// was said everywhere, which the store refuses to record.
-		if account == "" {
-			continue
-		}
-		to = append(to, Conversation{
-			Channel: place.Channel, ID: account, Label: account,
-			Wants: place.Wants, DirectApprovals: true,
-		})
-	}
-	// Counted in messages, not in candidates. Applied to the people who may
-	// decide, twenty-one approvers with one Slack account between them would
-	// send nothing — somebody nobody bound silencing the one person who could
-	// have been reached, which is the opposite of what the cap is for.
-	if len(to) > MaxDirectRecipients {
-		return nil, true, nil
-	}
-	return to, false, nil
-}
-
-func (f *fanout) whoDecides(ctx context.Context, scope domain.Scope) ([]domain.UserID, error) {
-	if before, asked := f.byScope[scope]; asked {
-		return before.value, before.err
-	}
-	who, err := f.approvers.ApproversIn(ctx, scope)
-	if err != nil {
-		err = WrapError(CodeConfigurationReadFailed,
-			fmt.Errorf("channel: who may approve in %s: %w", scope, err))
-	}
-	f.byScope[scope] = answered[[]domain.UserID]{value: who, err: err}
-	return who, err
-}
-
-// whoMayDecide is the wider question, asked once per scope for the same reason:
-// a set of people that changed halfway through a sweep would send a run's
-// approval to one list and its retry to another.
-func (f *fanout) whoMayDecide(ctx context.Context, scope domain.Scope) ([]domain.UserID, error) {
-	if before, asked := f.mayDecide[scope]; asked {
-		return before.value, before.err
-	}
-	who, err := f.approvers.DecidersIn(ctx, scope)
-	if err != nil {
-		err = WrapError(CodeConfigurationReadFailed,
-			fmt.Errorf("channel: who may decide in %s: %w", scope, err))
-	}
-	f.mayDecide[scope] = answered[[]domain.UserID]{value: who, err: err}
-	return who, err
-}
-
-func (f *fanout) whereReachable(
-	ctx context.Context, channelName string, who []domain.UserID,
-) (map[domain.UserID]string, error) {
-	known := f.byChannel[channelName]
-	missing := make([]domain.UserID, 0, len(who))
-	for _, one := range who {
-		if _, read := known[one]; !read {
-			missing = append(missing, one)
-		}
-	}
-	// Nothing to ask means nothing to fail. Checked after the question rather
-	// than before it, so a lookup that failed for one scope does not answer for
-	// another where there was nobody to look up at all.
-	if len(missing) == 0 {
-		return known, nil
-	}
-	if err := f.failedChannel[channelName]; err != nil {
-		return nil, err
-	}
-
-	found, err := f.accounts.AccountsOn(ctx, channelName, missing)
-	if err != nil {
-		err = WrapError(CodeConfigurationReadFailed,
-			fmt.Errorf("channel: where to reach people on %s: %w", channelName, err))
-		f.failedChannel[channelName] = err
-		return nil, err
-	}
-	if known == nil {
-		known = map[domain.UserID]string{}
-		f.byChannel[channelName] = known
-	}
-	for _, one := range missing {
-		// Remembered as looked-up whether or not they were found, so an
-		// unbound person is not asked about again on the next report.
-		known[one] = found[one]
-	}
-	return known, nil
-}
-
-/*
-terminal are the refusals that mean the same thing on the next sweep.
-
-Named one by one, and the list is the whole of it: anything not here keeps its
-run open. An app never granted permission to open a direct message, a person
-who cannot be messaged at all, a driver that cannot do it — none improves by
-being asked again, and treating one as temporary would hold every parked run
-unreported for a day while re-attempting every recipient every thirty seconds.
-
-The inversion is the point. Written as "anything that is not a rate limit is
-final", a reset connection, an answer nobody could read and an error with no
-code at all were all permanent — and a message lost to a network blip was
-recorded as delivered and never sent again. Being unable to name why something
-failed is a reason to try, not a reason to stop.
-*/
-var terminal = map[string]bool{
-	CodeMissingScope:            true,
-	CodeConversationUnavailable: true,
-	CodeUnsupportedCapability:   true,
-	CodeTooManyRecipients:       true,
-	// Both wait on somebody configuring something: a connection to send from,
-	// or people who may actually decide. Another sweep in thirty seconds reads
-	// the same answer.
-	CodeNoConnectionChosen:    true,
-	CodeNamedNobodyWhoDecides: true,
-}
-
-// degrades reports that another sweep would learn nothing new.
-func degrades(err error) bool {
-	var known *Error
-	if !errors.As(err, &known) {
-		return false
-	}
-	return terminal[known.Code]
-}
-
-// refusal is what a fan-out could not do: what is worth another sweep, and
-// what an operator should be able to read afterwards.
-//
-// Two lists rather than one, because they answer different people. Blocking
-// holds the run open for the next pass; recorded is the trail of conversations
-// that were owed something and did not get it, which is what somebody counts
-// when a channel goes quiet.
-type refusal struct {
-	blocking []error
-	recorded []DeliveryFailure
 }
 
 /*
@@ -366,13 +116,6 @@ func (r *Reporter) direct(
 		}
 	}
 	return sent, refused
-}
-
-// refuse records why nobody was told privately, without holding the run open.
-// Neither cause improves with another sweep: one is configuration nobody can
-// read, the other is a scope with more approvers than an approval should reach.
-func (r *Reporter) refuse(report Report, place Conversation, cause error) refusal {
-	return refusal{recorded: r.failuresFor(report, place, cause)}
 }
 
 /*
