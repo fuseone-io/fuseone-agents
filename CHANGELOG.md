@@ -25,6 +25,41 @@ field" is a commit message.
 
 ---
 
+## [0.80.0] — 2026-10-30
+
+### Upgrade notes
+
+- **Publishing refuses tools the agent cannot use.** A definition is now
+  refused when a step reaches a tool outside the agent's `tools`, when a
+  step anchors a platform tool, or when `tools` names something this
+  installation does not offer — unknown to the catalogue, or kept off the
+  surface. These used to publish and stop at the first call. Agents
+  already published keep running; an affected one meets the refusal at
+  its next publish, which names the step and the tool. A tool on the
+  surface the Curator has not classified yet still publishes.
+
+### Fixed
+
+- **A step could widen what an agent may call.** A run's envelope is built
+  from its steps, and a step reaching a tool outside `tools` extended it
+  past the list an author and a reviewer read. Refused at publish, above.
+- **The run page shows where the tokens went.** It put every token under
+  input and reported output and cache as zero, while the money, the run
+  list and the planning spend were right. It now carries the breakdown its
+  steps were billed for.
+- **A design note in `docs/` can no longer be missing from the
+  documentation site silently.** NT-007 on standing approvals was; the
+  build now names any note it was not told about.
+
+### Changed
+
+- **The policy editor's choices are radio groups.** Effect, enforcement and
+  reach can be chosen with the keyboard and are announced to screen
+  readers; the draft is validated by one schema rather than by the save
+  button.
+- **NT-002, the remaining-work ordering, is no longer on the documentation
+  site.** It stays in the repository, and links to it point there.
+
 ## [0.79.0] — 2026-10-30
 
 ### Fixed
