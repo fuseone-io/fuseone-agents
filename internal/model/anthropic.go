@@ -217,10 +217,14 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	cost := a.costAt(resp.Usage, use.Price).Add(extra)
 	price := priceUse(use.Price, use.Configured, cost)
 	if resp.StopReason == anthropic.StopReasonRefusal {
-		return engine.Proposal{
+		// Billed: the provider read the whole prompt before declining. A
+		// proposal returned beside an error is dropped by the runner, so the
+		// spend travels as the failure's own (#132).
+		return engine.Proposal{}, &engine.SpentPlanError{
 			Cost: cost, Prompt: prompt, Price: price, Provider: a.provider,
 			Model: model, ServedModel: use.Divergence,
-		}, providerRefused(a.provider)
+			Err: providerRefused(a.provider),
+		}
 	}
 
 	return a.proposalFrom(resp, offered, prompt, cost, price, model, use.Divergence), nil

@@ -2273,3 +2273,31 @@ func TestOpenAICompatible_aDeclaredAbsenceThatReappeared_failsTheCall(t *testing
 		t.Errorf("requests = %d, want none: the stale declaration aborts before HTTP", got)
 	}
 }
+
+// A refusal is billed: the provider read the whole prompt before declining.
+// The planner used to hand the priced proposal back beside the error, and the
+// runner drops a proposal whenever there is an error — so the refusal's tokens
+// never reached the ledger, the budget or FinOps (#132). It travels as the
+// spend a failed turn carries, and stays a refusal underneath.
+func TestAnthropic_refusal_carriesItsSpendWithTheFailure(t *testing.T) {
+	t.Parallel()
+	c := serve(t, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5",
+	  "content":[],"stop_reason":"refusal","usage":{"input_tokens":1200,"output_tokens":0}}`)
+
+	_, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{}).
+		Plan(context.Background(), input())
+
+	if !errors.Is(err, model.ErrRefused) {
+		t.Fatalf("Plan = %v, want a refusal underneath", err)
+	}
+	var spent *engine.SpentPlanError
+	if !errors.As(err, &spent) {
+		t.Fatalf("Plan = %T, want the spend carried with the failure", err)
+	}
+	if spent.Cost.InputTokens != 1200 {
+		t.Errorf("carried input tokens = %d, want the 1200 the provider billed", spent.Cost.InputTokens)
+	}
+	if spent.Provider == "" || spent.Model == "" {
+		t.Errorf("spend = %+v, want the provider and model the runner records it under", spent)
+	}
+}
