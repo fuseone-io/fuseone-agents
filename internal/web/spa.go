@@ -10,23 +10,17 @@ import (
 	"strings"
 )
 
+const appShell = "index.html"
+
 func spaHandler(fsys http.FileSystem) http.Handler {
-	files := http.FileServer(fsys)
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		name := path.Clean("/" + r.URL.Path)
+		name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
 
-		if f, err := fsys.Open(strings.TrimPrefix(name, "/")); err == nil {
-			defer f.Close()
-			if info, statErr := f.Stat(); statErr == nil && !info.IsDir() {
-				// Hashed asset filenames are immutable; index.html is not, and
-				// caching it is how a browser ends up on last month's console.
-				if strings.HasPrefix(name, "/assets/") {
-					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-				}
-				files.ServeHTTP(w, r)
-				return
-			}
+		if f, ok := openRegular(fsys, name); ok {
+			_ = f.Close()
+			setCachePolicy(w, name)
+			serveFile(w, r, fsys, name)
+			return
 		}
 
 		// The history fallback is for routes the browser router owns, not for
@@ -34,14 +28,55 @@ func spaHandler(fsys http.FileSystem) http.Handler {
 		// is a client asking for a build that no longer exists — answering with
 		// index.html makes the browser parse HTML as JavaScript and report a
 		// syntax error, hiding the real cause: a stale tab after a deploy.
-		if strings.HasPrefix(name, "/assets/") {
+		if strings.HasPrefix(name, "assets/") {
 			http.NotFound(w, r)
 			return
 		}
 
-		w.Header().Set("Cache-Control", "no-cache")
-		r2 := *r
-		r2.URL.Path = "/"
-		files.ServeHTTP(w, &r2)
+		setCachePolicy(w, appShell)
+		serveFile(w, r, fsys, appShell)
 	})
+}
+
+// setCachePolicy: hashed asset filenames are immutable; index.html is not, and
+// caching it is how a browser ends up on last month's console. Anything else
+// (the favicon, say) keeps the browser's own heuristics, as it always has.
+func setCachePolicy(w http.ResponseWriter, name string) {
+	switch {
+	case strings.HasPrefix(name, "assets/"):
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	case name == appShell:
+		w.Header().Set("Cache-Control", "no-cache")
+	}
+}
+
+// serveFile answers with name, or with the precompressed copy the build wrote
+// beside it when the client accepts that encoding. The console is ~0.9 MB of
+// JavaScript before its first screen, and the server has no compression of its
+// own; doing it once at build time costs nothing per request.
+//
+// Vary is set on every answer, compressed or not: the same URL now has several
+// representations, and a shared cache that stored the plain one must not hand
+// it to a client that asked for brotli, or the other way round.
+func serveFile(w http.ResponseWriter, r *http.Request, fsys http.FileSystem, name string) {
+	w.Header().Add("Vary", "Accept-Encoding")
+
+	f, coding, err := openEncoded(fsys, name, r.Header.Get("Accept-Encoding"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		http.Error(w, "unreadable file", http.StatusInternalServerError)
+		return
+	}
+	if coding != "" {
+		w.Header().Set("Content-Encoding", coding)
+	}
+	// ServeContent takes the Content-Type from the name it is given, so it is
+	// given the original name: the .br copy is still JavaScript.
+	http.ServeContent(w, r, name, info.ModTime(), f)
 }
