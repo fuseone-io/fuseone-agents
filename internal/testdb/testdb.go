@@ -29,14 +29,20 @@ const maxIdent = 63
 // and the package's path below internal/. The result holds only [a-z0-9_], so
 // it is an identifier whatever the inputs were called; it is still quoted
 // wherever it reaches SQL.
+//
+// The readable part is lossy: sanitising folds "channel/connect" and
+// "channel-connect" together, joining folds ("agents_test", "x") and
+// ("agents", "test_x"), and truncation folds long names. So every name ends in
+// a suffix hashed from the original pair, which keeps those apart; hashing the
+// sanitised text instead would inherit every collision it is meant to break.
 func Name(base, pkg string) string {
-	name := sanitize(base + "_" + pkg)
-	if len(name) <= maxIdent {
-		return name
-	}
-	sum := sha256.Sum256([]byte(name))
+	sum := sha256.Sum256([]byte(base + "\x00" + pkg))
 	suffix := "_" + hex.EncodeToString(sum[:4])
-	return name[:maxIdent-len(suffix)] + suffix
+	readable := sanitize(base + "_" + pkg)
+	if len(readable) > maxIdent-len(suffix) {
+		readable = readable[:maxIdent-len(suffix)]
+	}
+	return readable + suffix
 }
 
 func sanitize(s string) string {

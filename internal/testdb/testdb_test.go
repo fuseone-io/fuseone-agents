@@ -21,8 +21,8 @@ func TestName_twoPackages_getTwoDatabases(t *testing.T) {
 	if ledger == channel {
 		t.Fatalf("both packages share %q", ledger)
 	}
-	if ledger != "agents_test_ledger" {
-		t.Errorf("ledger database = %q, want agents_test_ledger", ledger)
+	if !strings.HasPrefix(ledger, "agents_test_ledger_") {
+		t.Errorf("ledger database = %q, want it to read agents_test_ledger_<suffix>", ledger)
 	}
 }
 
@@ -30,11 +30,41 @@ func TestName_twoPackages_getTwoDatabases(t *testing.T) {
 func TestName_nestedPackage_isDistinctFromItsParent(t *testing.T) {
 	t.Parallel()
 	nested := testdb.Name("agents_test", "channel/connect")
-	if nested != "agents_test_channel_connect" {
-		t.Errorf("nested database = %q, want agents_test_channel_connect", nested)
+	if !strings.HasPrefix(nested, "agents_test_channel_connect_") {
+		t.Errorf("nested database = %q, want it to read agents_test_channel_connect_<suffix>", nested)
 	}
 	if nested == testdb.Name("agents_test", "channel") {
 		t.Error("a nested package shares its parent's database")
+	}
+}
+
+// Sanitising folds characters together, and so does joining base and package
+// with an underscore. Pairs that fold to the same text must still get two
+// databases, or the suites meet again in one of them.
+func TestName_inputsThatSanitiseAlike_stayDistinct(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ a, b [2]string }{
+		{[2]string{"agents_test", "channel/connect"}, [2]string{"agents_test", "channel-connect"}},
+		{[2]string{"agents_test", "Ledger"}, [2]string{"agents_test", "ledger"}},
+		{[2]string{"agents_test", "x"}, [2]string{"agents", "test_x"}},
+	}
+	for _, c := range cases {
+		a, b := testdb.Name(c.a[0], c.a[1]), testdb.Name(c.b[0], c.b[1])
+		if a == b {
+			t.Errorf("Name%q and Name%q both give %q", c.a, c.b, a)
+		}
+	}
+}
+
+// The database is found again by name on the next run, so the same input has
+// to give the same name every time.
+func TestName_sameInput_givesTheSameNameEveryTime(t *testing.T) {
+	t.Parallel()
+	first := testdb.Name("agents_test", "ledger")
+	for range 3 {
+		if again := testdb.Name("agents_test", "ledger"); again != first {
+			t.Fatalf("Name changed between calls: %q then %q", first, again)
+		}
 	}
 }
 
