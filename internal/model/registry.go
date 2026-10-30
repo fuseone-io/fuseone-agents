@@ -140,6 +140,16 @@ func sameProvider(a, b Provider) bool {
 		maps.Equal(a.Prices, b.Prices)
 }
 
+// Configured reports whether name is a provider this installation configures:
+// registered here, or claimed by the administration area even when this
+// process could not build it.
+func (r *Registry) Configured(name string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, held := r.providers[name]
+	return held || r.configured[name]
+}
+
 func (r *Registry) Names() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
