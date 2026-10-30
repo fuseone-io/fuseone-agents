@@ -25,6 +25,41 @@ field" is a commit message.
 
 ---
 
+## [0.79.0] — 2026-10-30
+
+### Fixed
+
+- **An agent whose own ceiling did not bind re-wrote its whole prompt to
+  cache on every call.** The cached prefix stated the run's budget, which
+  is the agent's ceiling narrowed by its scope's headroom — and the
+  headroom falls with every call any agent in the scope makes. When the
+  agent's ceiling was at or above the scope's, no two calls shared a
+  prefix: every call paid the full prompt at the cache-write rate, about
+  ten times what a comparable agent paid. The prefix now shows the agent's
+  own ceiling, which only a new version changes; enforcement still uses
+  the narrowed budget.
+- **A step change no longer re-writes the agent's instructions to cache.**
+  Tools, instructions and the platform contract are now cached on their
+  own, ahead of the note that names the step, so moving to a new step pays
+  only for that note and the history.
+
+### Changed
+
+- **The ceiling line the model reads says whose ceiling it is.** It reads
+  "Agent-configured budget ceiling: X. Scope limits may enforce a lower
+  amount." instead of "Budget ceiling for this run": a scope can enforce
+  less, and an OpenAI-compatible provider has no other line to say so.
+
+### Added
+
+- **A planned step fingerprints the tools and stable system blocks it
+  sent.** `prompt.digests` on each planned step holds a short hash of the
+  tools and of every system block, exactly as they went on the wire.
+  Comparing two consecutive planned steps names the block that changed —
+  the question an agent that never reads its cache raises, and that equal
+  sizes could not answer. Diagnostic only; message history and request
+  parameters such as `tool_choice` or thinking are not covered.
+
 ## [0.78.0] — 2026-10-30
 
 ### Added
