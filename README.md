@@ -1,4 +1,28 @@
-# FuseOne Agents
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/src/assets/logo-wordmark-dark.svg">
+  <img src="web/src/assets/logo-wordmark-light.svg" alt="FuseOne Agents" width="360">
+</picture>
+
+<p><strong>Governed AI agents, installed in your environment.</strong><br>
+Every tool call clears a policy gate, every step seals into a hash-chained
+ledger,<br>and a person approves what matters — before it happens.</p>
+
+<p>
+  <a href="https://github.com/fuseone-io/fuseone-agents/actions/workflows/check.yml"><img src="https://github.com/fuseone-io/fuseone-agents/actions/workflows/check.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/fuseone-io/fuseone-agents/actions/workflows/docs.yml"><img src="https://github.com/fuseone-io/fuseone-agents/actions/workflows/docs.yml/badge.svg" alt="docs"></a>
+  <a href="https://github.com/fuseone-io/fuseone-agents/releases"><img src="https://img.shields.io/github/v/release/fuseone-io/fuseone-agents?label=release&color=0e9199" alt="latest release"></a>
+</p>
+
+<p>
+  <a href="https://fuseone-io.github.io/fuseone-agents/docs/">Documentation</a> ·
+  <a href="https://fuseone-io.github.io/fuseone-agents/docs/manual/pt-br/">Manual (pt-BR)</a> ·
+  <a href="deploy/helm/fuseone-agents/README.md">Helm chart</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
+
+</div>
 
 FuseOne Agents is a governed runtime and control plane for AI agents that work
 inside real business operations: reading systems, proposing actions, asking for
@@ -14,6 +38,16 @@ change the outside world.
 
 It installs into the customer's own environment. One binary, one PostgreSQL,
 one Helm chart.
+
+![The day at a glance — runs, spend, Gate decisions and the fleet, all derived from the ledger](docs/manual/en-US/images/overview.png)
+
+| The trail is the record | A person decides what matters |
+| --- | --- |
+| ![A finished run: the trail sealed step by step, the Gate's verdict on every call and the integrity panel](docs/manual/en-US/images/run-trail.png) | ![The human queue: a write held by the taint rule, waiting on Approve or Deny](docs/manual/en-US/images/human-queue.png) |
+| Every step append-only and hash-chained; verifying recomputes the whole chain. | A write whose arguments derive from outside data stops for a person, with the rule named. |
+
+More screens and the full product manual live in the
+[documentation](https://fuseone-io.github.io/fuseone-agents/docs/).
 
 ## The shape of it
 
