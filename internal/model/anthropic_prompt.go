@@ -9,15 +9,20 @@ import (
 	"github.com/fuseone/agents/internal/engine"
 )
 
-// system ends with a breakpoint covering tools and stable platform text. The
-// per-step note and fixed run ceiling are the same guidance sent to every
-// provider; only Anthropic's changing remaining budget stays outside it.
+// system carries two breakpoints. The first covers tools, instructions and the
+// loop contract, which change only with the definition. The second covers the
+// guidance, which names the step: an agent whose steps are one query each
+// changes it on most turns, and behind a single breakpoint every step change
+// re-wrote the whole instructions to cache. Only Anthropic's changing
+// remaining budget stays outside both.
 func (a *Anthropic) system(guidance string) []anthropic.TextBlockParam {
 	blocks := []anthropic.TextBlockParam{{Text: a.cfg.SystemPrompt}, {Text: loopContract}}
+	blocks[1].CacheControl = a.prefixCacheControl()
 	if guidance != "" {
-		blocks = append(blocks, anthropic.TextBlockParam{Text: guidance})
+		blocks = append(blocks, anthropic.TextBlockParam{
+			Text: guidance, CacheControl: a.prefixCacheControl(),
+		})
 	}
-	blocks[len(blocks)-1].CacheControl = a.prefixCacheControl()
 	return blocks
 }
 
