@@ -53,6 +53,9 @@ export default defineConfig({
       // they are browser redirects and cookies — but they are just as much
       // part of the server the console talks to.
       "/auth": { target: "http://127.0.0.1:8080", changeOrigin: true },
+      // Uploaded logos and icons, served by agentd itself so an air-gapped
+      // installation needs no outside host to show its brand.
+      "/branding/assets": { target: "http://127.0.0.1:8080", changeOrigin: true },
     },
   },
   test: {

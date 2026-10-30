@@ -788,9 +788,9 @@
     "whoActed": "Who acted — person or agent"
   },
   "branding": {
-    "auditHint": "Changing the installation brand is recorded in the administrative trail. Image content stays outside this setting; paste a URL or a small data image.",
+    "auditHint": "Changing the installation brand is recorded in the administrative trail, with the uploaded image's hash and never its content.",
     "displayName": "Display name",
-    "externalUrlWarning": "An external URL will not load in an air-gapped installation and tells that host whenever somebody opens the sign-in screen. Use a data image when that matters.",
+    "externalUrlWarning": "An external URL will not load in an air-gapped installation and tells that host whenever somebody opens the sign-in screen. Upload the image to the installation when that matters.",
     "iconHint": "Compact mark for the collapsed sidebar. Leave empty for the built-in mark.",
     "iconPlaceholder": "https://assets.example.com/icon.png",
     "iconUrl": "Icon URL",
@@ -802,11 +802,17 @@
     "primaryColor": "Primary colour",
     "primaryHint": "Hex colour used by primary actions and the built-in mark.",
     "primaryInvalid": "Use a hex colour like #2357C6.",
+    "primaryPicker": "Primary colour picker",
     "primaryPlaceholder": "#0E9199",
     "reset": "Reset to default",
     "saveFailed": "Could not change the brand",
     "saved": "Brand updated",
-    "title": "Installation appearance"
+    "title": "Installation appearance",
+    "uploadFailed": "Could not upload the image",
+    "uploadHint": "PNG, JPEG or WebP of at most 512 KiB, served by the installation itself. SVG is not accepted for now.",
+    "uploadIcon": "Upload icon",
+    "uploadLogo": "Upload logo",
+    "uploadTooLarge": "The image is over the limit: upload one of at most 512 KiB."
   },
   "channels": {
     "account": "Channel account",

@@ -34,6 +34,7 @@ func freshPool(t *testing.T) *pgxpool.Pool {
 	if _, err := pool.Exec(context.Background(),
 		`delete from settings where kind in ('tool_classification', 'stop',
 		           'channel', 'channel_conversation', 'channel_identity', 'branding');
+		 delete from branding_assets;
 		 delete from admin_events`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}

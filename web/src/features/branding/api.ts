@@ -26,6 +26,28 @@ export function useAdminBranding() {
   });
 }
 
+export type BrandAsset = components["schemas"]["BrandAsset"];
+
+/**
+ * Sends the file's bytes as they are. The server decides what the file is
+ * from its content; the name and the browser's guess at its type are not
+ * sent, because nothing should rely on them.
+ */
+export function useUploadBrandAsset() {
+  return useMutation({
+    mutationFn: async (file: File) =>
+      unwrap(
+        await api.POST("/admin/branding/assets", {
+          // The contract types a binary body as string; the request carries
+          // the File itself, untouched by any serializer.
+          body: file as unknown as string,
+          bodySerializer: (body) => body,
+          headers: { "Content-Type": "application/octet-stream" },
+        }),
+      ),
+  });
+}
+
 export function useSetAdminBranding() {
   const queryClient = useQueryClient();
   return useMutation({

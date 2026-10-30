@@ -125,6 +125,7 @@ type Server struct {
 	retention      Retention
 	money          Money
 	branding       Branding
+	brandAssets    BrandAssets
 	channels       ChannelAdmin
 	companies      CompanyAdmin
 	channelListing Lister

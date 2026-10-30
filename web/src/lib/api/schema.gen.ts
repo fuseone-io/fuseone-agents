@@ -1696,12 +1696,47 @@ export interface paths {
         get: operations["getAdminBranding"];
         /**
          * Change the installation brand
-         * @description Stores display name, image URLs and the primary colour. Image content is
-         *     referenced, not uploaded: binary asset storage is a separate concern and
-         *     a URL keeps this setting auditable like the rest of administration.
+         * @description Stores display name, image references and the primary colour. An image
+         *     is an external URL, a small data image, or `/branding/assets/{sha256}`
+         *     for one uploaded through `/admin/branding/assets`. The setting holds
+         *     the reference, never the uploaded bytes; naming a hash nobody uploaded
+         *     is a 400. Saving drops the uploaded images the previous brand used once
+         *     no branding setting references them.
          */
         put: operations["setAdminBranding"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/branding/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a logo or icon this installation serves itself
+         * @description The raw image as the request body, for installations that cannot reach
+         *     an external URL. Same authority as changing the brand.
+         *
+         *     The type is decided from the bytes, never from a file name or the
+         *     Content-Type sent: PNG, JPEG and WebP are accepted. SVG is refused for
+         *     now because it can carry script. At most 512 KiB.
+         *
+         *     Addressed by the SHA-256 of the content, so uploading the same image
+         *     twice returns the same hash. The `url` is served unauthenticated at
+         *     `/branding/assets/{sha256}` (outside `/api/v1`, because the sign-in
+         *     screen needs it) with a strong ETag and an immutable cache policy.
+         *     Uploading does not change the brand; `PUT /admin/branding` with the
+         *     returned `url` does.
+         */
+        post: operations["uploadBrandAsset"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2683,6 +2718,17 @@ export interface components {
             iconUrl?: string;
             /** @description Hex colour applied to primary actions and the built-in mark. Empty falls back to Fuse Aqua. */
             primaryColor?: string;
+        };
+        /** @description An uploaded branding image, named by its content. */
+        BrandAsset: {
+            sha256: string;
+            /**
+             * @description Where this installation serves it. Store this as logoUrl or iconUrl.
+             * @example /branding/assets/9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+             */
+            url: string;
+            /** @enum {string} */
+            contentType: "image/png" | "image/jpeg" | "image/webp";
         };
         /**
          * @description RFC 9457 problem detail.
@@ -7738,6 +7784,50 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    uploadBrandAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Stored, or already stored under the same hash. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandAsset"];
+                };
+            };
+            /** @description Not a PNG, JPEG or WebP image, or an SVG. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description Larger than 512 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     exportLedger: {

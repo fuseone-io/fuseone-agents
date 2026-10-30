@@ -3,6 +3,19 @@ import type { Branding } from "@/features/branding/api";
 
 export const defaultBranding: Branding = { displayName: "FuseOne Agents" };
 
+/**
+ * Fuse Aqua, as tokens/colors.css defines --fuse-500. Restated here only
+ * because a native colour picker needs a concrete starting value and cannot
+ * take a CSS variable; nothing paints with it.
+ */
+export const builtInPrimary = "#0e9199";
+
+/**
+ * The server's ceiling on an uploaded logo or icon, checked here first so a
+ * file that would be refused is never sent.
+ */
+export const maxBrandAssetBytes = 512 * 1024;
+
 export function normaliseBranding(branding: Branding | undefined): Branding {
   return {
     displayName: branding?.displayName?.trim() || defaultBranding.displayName,
