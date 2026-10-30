@@ -2,6 +2,7 @@ package dedupe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -71,6 +72,35 @@ func (p *Postgres) Reserve(
 	now = now.UTC()
 	pendingUntil := now.Add(pendingTTL)
 
+	/*
+		A loser that waited on the winner's insert in ON CONFLICT is excluded
+		from the update by its own predicate, and the fallback read runs on the
+		statement's snapshot — taken before the winner committed — so it cannot
+		see the row either. Zero rows is that race, not an absence: a fresh
+		statement takes a fresh snapshot and finds the winner's record, or takes
+		the row if it has expired since, which is the arbitration this exists
+		for (#145). Bounded, because each retry needs a new commit to lose to.
+	*/
+	for attempt := 1; ; attempt++ {
+		rec, err := p.reserveOnce(ctx, key, runID, now, pendingUntil)
+		if errors.Is(err, pgx.ErrNoRows) && attempt < reserveAttempts {
+			continue
+		}
+		if err != nil {
+			return Record{}, fmt.Errorf("dedupe: reserve: %w", err)
+		}
+		return rec, nil
+	}
+}
+
+// reserveAttempts bounds the re-reads a contended reservation may take.
+const reserveAttempts = 3
+
+// reserveOnce takes the reservation if it is free or expired, and otherwise
+// reads the record that holds it.
+func (p *Postgres) reserveOnce(
+	ctx context.Context, key Key, runID domain.RunID, now, pendingUntil time.Time,
+) (Record, error) {
 	var (
 		reserved bool
 		rec      Record
@@ -103,7 +133,7 @@ func (p *Postgres) Reserve(
 		  and not exists (select 1 from upsert)`,
 		key.Scope.Company, key.Scope.Area, key.AgentID, key.Tool, key.Fingerprint,
 		runID, now, pendingUntil).Scan(&reserved, &rec.State, &rec.RunID, &rec.Seq, &rec.ExpiresAt); err != nil {
-		return Record{}, fmt.Errorf("dedupe: reserve: %w", err)
+		return Record{}, err
 	}
 	if reserved {
 		rec.State = StateReserved
