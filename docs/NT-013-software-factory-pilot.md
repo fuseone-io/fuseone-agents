@@ -90,7 +90,13 @@ It records the card on the run in the ledger as a queryable work-item key. A
 claim is held only while its run is non-terminal — derived from the run's
 phase, not released by a separate write — so a crash cannot leave an orphan.
 It is a platform-owned tool: listed explicitly as one, never advancing a step,
-and outside the MCP availability checks.
+and outside the MCP availability checks. Platform-owned settles envelope and
+availability, not effect, so its passage through the Gate is stated rather
+than inferred: the claim is an **internal coordination operation**. It changes
+only the platform's own record of who works on what, so it passes without
+approval even in a tainted run — as a write it would park for a person before
+reserving and reopen the race — and it is never served from a read cache,
+because its answer depends on every other open run at that moment.
 
 The same key is what joins cost, approvals and outcomes to a card, including
 runs that fail before their first write.
@@ -166,11 +172,27 @@ the same commit — a review dismissed, a check returning to pending — between
 the wrapper's read and the merge. Only GitHub can check that atomically, at
 the merge itself, so the repository enforces the same conditions:
 
-**5a. A ruleset on `main`.** Today `main` has neither branch protection nor a
-ruleset. The pilot requires one: an approving review, the `factory/qa` status
-and the CI checks as required, with the Merger's credential **not** on the
-bypass list. The wrapper's own checks then fail fast and explain; the ruleset
-is what makes a stale read harmless.
+**5a. A ruleset on `main`, pinned to who produces each signal.** Today `main`
+has neither branch protection nor a ruleset. The pilot requires one, and a
+status name proves nothing — anyone with statuses write can publish
+`factory/qa` — so every required signal is pinned to its source:
+
+- `factory/qa` required **from the QA GitHub App** (its `integration_id`), which
+  is why QA's identity must be a GitHub App rather than a token;
+- every CI check required from GitHub Actions' app, and `build` included;
+- the required review restricted to the same reviewer set `merge_if_ready`
+  authorises (code owners or a named team), so a dismissed agent review cannot
+  be replaced by any other approval;
+- `strict_required_status_checks_policy`, so a head tested against an older
+  `main` must be brought up to date and tested again;
+- bypass only for a named maintainers team, in pull-request mode — manual
+  squash merges keep working and direct pushes do not — and never for the
+  Merger's credential.
+
+The wrapper's own checks then fail fast and explain; the ruleset is what makes
+a stale read harmless. The wrapper also refuses mechanically any repository
+other than this one and any base other than `main`, since the ruleset protects
+nothing else.
 
 **6. Policy, and no standing approvals in the pilot.** An authored policy
 escalates the merge to approval (a destructive call is blocked outright by
