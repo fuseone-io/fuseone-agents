@@ -89,10 +89,11 @@ check-pg: db sql-db
 ## Separate from check-pg because CI brings its own database and must not have
 ## its own copy of the list.
 test-pg:
-	@# -p 1: these suites truncate the same tables, and go test runs packages
-	@# concurrently by default. Serialising them is the honest fix while they
-	@# share one database; a schema per suite would be the next step.
-	$(GO) test $(PG_PKGS) -count=1 -race -p 1
+	@# Parallel, as go test runs packages by default. These suites truncate and
+	@# sweep whole tables, which once forced -p 1 here; internal/testdb now
+	@# gives each package its own database (agents_test_<pkg>), created on
+	@# demand from TEST_DATABASE_URL, so they no longer share the rows they count.
+	$(GO) test $(PG_PKGS) -count=1 -race
 
 ## smoke: prove the shipping artefact serves what it should and nothing else.
 ## The unit suites cannot see this: it is a property of the binary, not the code.
