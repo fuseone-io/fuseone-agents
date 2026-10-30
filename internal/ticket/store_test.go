@@ -13,6 +13,7 @@ import (
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 	"github.com/fuseone/agents/internal/ticket"
 )
 
@@ -585,7 +586,7 @@ func content(name string) ticket.ContentRef {
 func forEachStore(t *testing.T, test func(*testing.T, ticket.Store)) {
 	t.Helper()
 	t.Run("memory", func(t *testing.T) { test(t, ticket.NewMemory()) })
-	if dsn := os.Getenv("TEST_DATABASE_URL"); dsn != "" {
+	if dsn := testdb.DSN(t); dsn != "" {
 		t.Run("postgres", func(t *testing.T) {
 			pool, err := pgxpool.New(t.Context(), dsn)
 			if err != nil {

@@ -9,6 +9,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 // A run that has already called a tool has to be resumable by a process that
@@ -17,7 +18,7 @@ import (
 // or a second pod — could not continue the run at all (PRD NF-02, DE-15).
 
 func TestResume_anotherProcessCanRebuildTheTranscript(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		if os.Getenv("REQUIRE_DATABASE") != "" {
 			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")

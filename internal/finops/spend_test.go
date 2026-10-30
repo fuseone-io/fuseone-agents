@@ -11,11 +11,12 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/finops"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 func spendPoolFor(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		if os.Getenv("REQUIRE_DATABASE") != "" {
 			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")

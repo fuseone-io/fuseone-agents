@@ -18,6 +18,7 @@ import (
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/mcpmetrics"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 // One suite, both implementations.
@@ -72,7 +73,7 @@ func implementations(t *testing.T) []factory {
 		open: func(*testing.T) Store { return ledger.NewMemory() },
 	}}
 
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		// Skipped rather than silently absent: a suite that quietly halves
 		// itself on a laptop is how divergence gets to production.
@@ -1074,7 +1075,7 @@ func TestStatsContract(t *testing.T) {
 }
 
 func TestPostgresRelease_classifiedProviderFailureStoresOnlyStableCodeInLastError(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	requireDatabase(t, dsn)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset; skipping the Postgres implementation")
@@ -2696,7 +2697,7 @@ func TestAppend_hourWriteSubset_survivesTheRoundTrip(t *testing.T) {
 }
 
 func TestPostgresAppend_claimCommittingMidAppend_staleWriteIsFenced(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	requireDatabase(t, dsn)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset; skipping the Postgres implementation")
@@ -2771,7 +2772,7 @@ func TestPostgresAppend_claimCommittingMidAppend_staleWriteIsFenced(t *testing.T
 }
 
 func TestPostgresAppend_leaseExpiresWhileWaitingForTheLock_staleWriteIsFenced(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	requireDatabase(t, dsn)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset; skipping the Postgres implementation")
@@ -2839,7 +2840,7 @@ func TestPostgresAppend_leaseExpiresWhileWaitingForTheLock_staleWriteIsFenced(t 
 // behind when a claim, renewal or release is in flight.
 func rowLockHarness(t *testing.T) (*pgxpool.Pool, *ledger.Postgres, domain.Claim, pgx.Tx) {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	requireDatabase(t, dsn)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset; skipping the Postgres implementation")

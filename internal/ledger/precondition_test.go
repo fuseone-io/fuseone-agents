@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 /*
@@ -37,7 +37,7 @@ placements answer differently:
     seals, which is the bug.
 */
 func TestAppendIfHead_decidersReleasedTogether_sealExactlyOne(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		requireDatabase(t, dsn)
 		t.Skip("TEST_DATABASE_URL is unset; the lock is a Postgres fact")

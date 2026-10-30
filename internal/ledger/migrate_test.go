@@ -2,7 +2,6 @@ package ledger_test
 
 import (
 	"context"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 // Every process migrates on the way up. A deployment starts them together, so
@@ -17,7 +17,7 @@ import (
 // than the unlucky one.
 
 func TestMigrate_twoProcessesStartingTogether_bothSucceed(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset; skipping the migration race")
 	}
@@ -74,7 +74,7 @@ func TestMigrate_twoProcessesStartingTogether_bothSucceed(t *testing.T) {
 }
 
 func TestMigrate_legacyRowsReceiveCanonicalBaseline(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset; skipping the migration baseline")
 	}
@@ -121,7 +121,7 @@ post-0076 boundary and leaves both historical versions recorded, so only 0077
 can supply the new columns and the versioned constraint name.
 */
 func TestMigrate_ticketWaitingNotice_upgradesAnAlreadyMigratedInbox(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset; skipping the migration")
 	}
@@ -193,7 +193,7 @@ func TestMigrate_ticketWaitingNotice_upgradesAnAlreadyMigratedInbox(t *testing.T
 // converges that shape too; otherwise fixing frozen history repairs an older
 // preview and breaks a newer one with duplicate-column errors.
 func TestMigrate_ticketWaitingNotice_convergesTheInterimPreviewSchema(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset; skipping the migration")
 	}
@@ -246,7 +246,7 @@ Four things the statement has to get right, each of which was got wrong on the
 way here, and each of which is a case below.
 */
 func TestMigrate_conversationsUnderTheIdAlone_takeTheirConnection(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset; skipping the migration")
 	}
@@ -369,7 +369,7 @@ for it. The lock is asked of Postgres by the name the administration uses, so
 this also says the two agree about what that name is.
 */
 func TestMigrate_conversationsUnderTheIdAlone_waitForTheConnectionsLock(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset; skipping the migration")
 	}

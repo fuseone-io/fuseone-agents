@@ -12,6 +12,7 @@ import (
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/settings"
+	"github.com/fuseone/agents/internal/testdb"
 	"github.com/fuseone/agents/internal/vault"
 )
 
@@ -61,7 +62,7 @@ func (s *spoke) OpenReview(
 
 func stored(t *testing.T) (*settings.Store, *pgxpool.Pool) {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		if os.Getenv("REQUIRE_DATABASE") != "" {
 			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")

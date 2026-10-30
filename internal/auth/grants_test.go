@@ -2,7 +2,6 @@ package auth_test
 
 import (
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -10,6 +9,7 @@ import (
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 // Two things write grants: an identity provider, on every sign-in, and an
@@ -19,7 +19,7 @@ import (
 
 func directoryFor(t *testing.T) (*auth.Postgres, *pgxpool.Pool) {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset; skipping the grants suite")
 	}

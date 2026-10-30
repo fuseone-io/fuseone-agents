@@ -21,6 +21,7 @@ import (
 	"github.com/fuseone/agents/internal/gate"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/memory"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 var (
@@ -1268,7 +1269,7 @@ func postgresStore(t *testing.T) (context.Context, *memory.Postgres) {
 
 func postgresPool(t *testing.T) (context.Context, *pgxpool.Pool) {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		if os.Getenv("REQUIRE_DATABASE") != "" {
 			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")

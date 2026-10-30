@@ -1,7 +1,6 @@
 package ledger_test
 
 import (
-	"os"
 	"testing"
 	"time"
 
@@ -9,6 +8,7 @@ import (
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 // A simulation is a real run in the ledger, so the trail and the diagram read
@@ -16,7 +16,7 @@ import (
 // simulated run counted as production is a wrong number somebody acts on.
 
 func TestList_excludesSimulatedRuns(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset")
 	}
@@ -53,7 +53,7 @@ func TestList_excludesSimulatedRuns(t *testing.T) {
 }
 
 func TestClaim_neverPicksUpASimulatedRun(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset")
 	}
@@ -86,7 +86,7 @@ func TestClaim_neverPicksUpASimulatedRun(t *testing.T) {
 }
 
 func TestAppend_aSimulatedRunStart_marksTheProjection(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset")
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/policy"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 // The hash on every step promises that the rules a decision was made under can
@@ -18,7 +19,7 @@ import (
 
 func storeFor(t *testing.T) *policy.Store {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		if os.Getenv("REQUIRE_DATABASE") != "" {
 			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")

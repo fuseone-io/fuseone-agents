@@ -11,6 +11,7 @@ import (
 	"github.com/fuseone/agents/internal/egress"
 	"github.com/fuseone/agents/internal/egressmetrics"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 func TestRecordDenial_feedsRuntimeHealthWithBoundedCodes(t *testing.T) {
@@ -75,7 +76,7 @@ func TestRecordDenial_feedsRuntimeHealthWithBoundedCodes(t *testing.T) {
 
 func egressStore(t *testing.T) (*egress.Postgres, *pgxpool.Pool) {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		if os.Getenv("REQUIRE_DATABASE") != "" {
 			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")

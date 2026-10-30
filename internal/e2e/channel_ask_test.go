@@ -30,6 +30,7 @@ import (
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/testdb"
 	"github.com/fuseone/agents/internal/ticket"
 	"github.com/fuseone/agents/internal/trigger"
 	"github.com/fuseone/agents/internal/vault"
@@ -118,7 +119,7 @@ func aConversation(t *testing.T) *conversing {
 	t.Helper()
 	ctx := context.Background()
 
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		if os.Getenv("REQUIRE_DATABASE") != "" {
 			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")

@@ -12,6 +12,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 const definition = `---
@@ -35,7 +36,7 @@ Read the ticket and classify it.
 func openSpecPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		if os.Getenv("REQUIRE_DATABASE") != "" {
 			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
@@ -203,7 +204,7 @@ func TestPublishedVersion_cannotBeChangedInPlace(t *testing.T) {
 
 	// The database enforces it, not the code that happens to be in front of
 	// it: a run pinned to a version has to mean something years later.
-	pool, _ := pgxpool.New(ctx, os.Getenv("TEST_DATABASE_URL"))
+	pool, _ := pgxpool.New(ctx, testdb.DSN(t))
 	defer pool.Close()
 	if _, err := pool.Exec(ctx,
 		`update agent_specs set instructions = 'rewritten' where agent_id = 'triage'`); err == nil {
