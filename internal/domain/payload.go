@@ -152,7 +152,8 @@ type PromptInputBreakdown struct {
 
 	Total int64 `json:"total,omitempty"`
 
-	// Digests fingerprint the cacheable prefix as it went on the wire.
+	// Digests fingerprint the tools and stable system blocks as they went on
+	// the wire.
 	Digests *PromptDigests `json:"digests,omitempty"`
 }
 
