@@ -21,7 +21,7 @@ func toRun(runID domain.RunID, s engine.State, steps []domain.Step) openapi.Run 
 		VersionId:      string(s.VersionID),
 		Phase:          openapi.Phase(s.Phase.String()),
 		Seq:            s.Seq,
-		Cost:           toCostFromConsumption(s.Spent),
+		Cost:           runCost(s.Spent, steps),
 		ReservedMicros: ptr(s.Reserved.Micros),
 	}
 	if s.OnBehalfOf != "" {
@@ -120,8 +120,17 @@ func toCost(c domain.Cost) openapi.Cost {
 	}
 }
 
-func toCostFromConsumption(c domain.Consumption) openapi.Cost {
-	return openapi.Cost{Micros: c.Micros, InputTokens: ptr(c.Tokens)}
+// runCost is what a run's steps were billed for, class by class. The folded
+// spend keeps one token total, and costing from it put the whole prompt under
+// input and nothing under output or cache (#120); the money stays the fold's.
+func runCost(spent domain.Consumption, steps []domain.Step) openapi.Cost {
+	var billed domain.Cost
+	for _, step := range steps {
+		billed = billed.Add(step.Cost)
+	}
+	out := toCost(billed)
+	out.Micros = spent.Micros
+	return out
 }
 
 func mustJSON(v any) []byte {
