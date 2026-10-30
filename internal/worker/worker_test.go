@@ -1299,3 +1299,50 @@ func TestTurn_continuousBlackhole_orphanRenewalsAreBoundedAcrossTurns(t *testing
 		t.Fatalf("renewals started = %d, want at most 2: every one is a goroutine pinned for ever", got)
 	}
 }
+
+// A refusal now arrives as a spend carried with the failure (#132). The turn
+// records the billed call, and the run then takes exactly the path a refusal
+// took before — the spend is new information, not a new outcome.
+func TestTurn_refusalWithItsSpend_recordsItAndTakesTheRefusalPath(t *testing.T) {
+	t.Parallel()
+
+	refused := func() error {
+		return &model.ProviderError{Provider: "anthropic", Code: model.CodeRefused, Err: model.ErrRefused}
+	}
+	phaseAfter := func(err error) (engine.Phase, []domain.Step) {
+		s := newSetup(t, Config{MaxAttempts: 3, BaseBackoff: time.Second}, &flakyPlanner{failures: 1, err: err}, nil)
+		openRun(t, s.store)
+		if _, terr := s.worker.turn(context.Background(), slog.New(slog.DiscardHandler)); terr != nil {
+			t.Fatalf("turn: %v", terr)
+		}
+		runs, rerr := s.store.Runs(context.Background())
+		if rerr != nil || len(runs) != 1 {
+			t.Fatalf("Runs = %v, %v", runs, rerr)
+		}
+		steps, rerr := s.store.Read(context.Background(), runs[0], domain.FirstSeq)
+		if rerr != nil {
+			t.Fatalf("Read: %v", rerr)
+		}
+		return phaseOf(t, s.store), steps
+	}
+
+	before, _ := phaseAfter(refused())
+	after, steps := phaseAfter(&engine.SpentPlanError{
+		Cost:     domain.Cost{InputTokens: 1200, Micros: 42},
+		Provider: "anthropic", Model: "claude-opus-5-5",
+		Err: refused(),
+	})
+
+	if after != before {
+		t.Errorf("phase = %v, want %v: carrying the spend must not change where a refusal leads", after, before)
+	}
+	recorded := 0
+	for _, step := range steps {
+		if step.Kind == domain.StepPlanned && step.Cost.Micros == 42 {
+			recorded++
+		}
+	}
+	if recorded != 1 {
+		t.Errorf("spend steps = %d, want the refusal's billed call recorded exactly once", recorded)
+	}
+}
