@@ -77,6 +77,9 @@ export function toDefinition(
     effort: agent.effort,
     cachePrefixTtl: agent.cachePrefixTtl,
     replyLocale: agent.replyLocale,
+    // The pair a run switches to when the declared one is down. Carried here
+    // like everything else, because publishing writes the draft whole.
+    fallback: agent.fallback,
     instructions: instructions ?? "",
     tools: agent.tools,
     budget: agent.budget,
@@ -141,6 +144,11 @@ export function changesBetween(
   compare("agents.fieldEffort", before.effort, after.effort);
   compare("agents.fieldCacheTtl", before.cachePrefixTtl, after.cachePrefixTtl);
   compare("agents.fieldReplyLocale", before.replyLocale, after.replyLocale);
+  compare(
+    "agents.fieldFallback",
+    before.fallback ? `${before.fallback.provider}/${before.fallback.model}` : "",
+    after.fallback ? `${after.fallback.provider}/${after.fallback.model}` : "",
+  );
   compare(
     "agents.fieldInstructions",
     size(before.instructions),
