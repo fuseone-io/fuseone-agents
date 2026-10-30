@@ -30,6 +30,7 @@ func toRun(runID domain.RunID, s engine.State, steps []domain.Step) openapi.Run 
 	if len(s.Labels) > 0 {
 		out.Labels = ptr([]string(s.Labels))
 	}
+	out.SourceRunId = sourceRunOf(steps)
 	if len(steps) > 0 {
 		out.StartedAt = steps[0].At
 		// The state's notion of ended, not the step kind's: a run somebody

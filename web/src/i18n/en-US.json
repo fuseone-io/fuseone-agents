@@ -2236,7 +2236,8 @@
     "upstream-busy": "The system on the other side is busy: {{detail}} — try again in a moment.",
     "upstream-refused": "The system on the other side refused: {{detail}}",
     "memory-secret": "That text contains a private key or a complete access token. Memory is quoted back to agents and kept for years, so it cannot hold one.",
-    "memory-secret-warned": "Part of that text is long and random enough to be a credential. Check it, then confirm if it is not one."
+    "memory-secret-warned": "Part of that text is long and random enough to be a credential. Check it, then confirm if it is not one.",
+    "source-input-erased": "The input this run was recorded with was erased or has expired, so no run was opened. It cannot be brought back."
   },
   "retention": {
     "byDefault": "default, nobody chose it",
@@ -2520,7 +2521,13 @@
     "savedCache": "{{count}} call served from cache",
     "savedCache_other": "{{count}} calls served from cache",
     "savedCacheHelp": "The cache avoids going to the other side's system. It does not reduce tokens: the result goes into the prompt whole.",
-    "savedNone": "Nothing was compacted or served from cache in this run."
+    "savedNone": "Nothing was compacted or served from cache in this run.",
+    "runFromInput": "Run from this input",
+    "runFromInputTitle": "Open a new run from this input",
+    "runFromInputHelp": "A new run, with its own id and its own trail, opened with the input this run was recorded with and pinned to the version published now. This run is not touched. Nothing it was granted carries over: approvals, reservations and budget start fresh, and an input that arrived from outside stays untrusted. This is not Replay, which only re-checks recorded decisions.",
+    "runFromInputConfirm": "Open new run",
+    "runFromInputOpened": "New run opened from this input",
+    "openedFrom": "Opened from run"
   },
   "runtime": {
     "attentionChannelDetail": "{{count}} delivery attempt(s), {{secondary}} run(s).",

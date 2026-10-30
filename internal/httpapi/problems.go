@@ -47,6 +47,11 @@ const (
 	// rather than a sentence: an agent leaves Draft by being simulated, and
 	// the useful reply is the way to do that.
 	CodeNotSimulated Code = "fuseone:not-simulated"
+	// CodeSourceInputErased is a run that cannot be opened from a recorded
+	// one because the recorded input was erased or aged out (#16). Its own
+	// code because the console says something specific: the content is gone
+	// on purpose, and nothing will bring it back.
+	CodeSourceInputErased Code = "fuseone:source-input-erased"
 	// The two the memory form answers when what somebody typed looks like a
 	// credential. Separate codes because the console does different things: one
 	// is a refusal to explain, the other a question to ask. Neither carries the

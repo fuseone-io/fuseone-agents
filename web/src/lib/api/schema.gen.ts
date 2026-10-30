@@ -1012,6 +1012,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{runId}/rerun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open a new run from this run's recorded input
+         * @description Not a replay. Replay re-derives the recorded decisions and executes
+         *     nothing; this opens a **new** run, with a new id and a new chain, whose
+         *     input is the input this run was opened with. The recorded run is not
+         *     touched.
+         *
+         *     The input is read on the server from what this run recorded. The
+         *     caller never names content: it names a run it can read, and the
+         *     platform decides what of that run may seed another. The source's
+         *     labels travel with the input, so an ask that arrived from a channel
+         *     or a webhook is still untrusted in the new run. Context artifacts are
+         *     not carried in this version, and neither is the reply address of a
+         *     conversation: the new run does not answer in somebody's thread.
+         *
+         *     Nothing else is inherited. Approvals, reservations, leases, stage
+         *     outcome and idempotency keys all belong to the source run, and the new
+         *     run meets the Gate, policy, budget, autonomy and taint exactly as any
+         *     run does. Its opening step names the source run by id, and nothing
+         *     more.
+         *
+         *     Requires reading the source run and starting runs in its scope. A run
+         *     the caller cannot read answers as absent. When the recorded input was
+         *     erased or has expired, nothing is opened and the answer is a 409 with
+         *     type `fuseone:source-input-erased`: an empty input in its place would
+         *     be a different run under the same name.
+         */
+        post: operations["runFromInput"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{runId}/compensation": {
         parameters: {
             query?: never;
@@ -3143,6 +3186,12 @@ export interface components {
             reservedMicros?: number;
             /** @description Accumulated data-flow labels of the run context. */
             labels?: string[];
+            /**
+             * @description The recorded run whose input this run was opened from, when an
+             *     operator opened it that way. Present on a single run read; the
+             *     list does not carry it.
+             */
+            sourceRunId?: string;
             pendingApproval?: components["schemas"]["PendingApproval"] | null;
             failure?: components["schemas"]["RunFailure"] | null;
         };
@@ -6623,6 +6672,78 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    runFromInput: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Unique per intention, not per attempt. Never the source run's: an
+                 *     intention to run again is a new one.
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description One of the agent's published versions. Omitted, the run
+                     *     is pinned to the version published now.
+                     */
+                    versionId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description This key already opened a run from this source, and here it is. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description The new run was opened. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description The agent never published the version asked for. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description Nothing was opened: the recorded input is gone
+             *     (`fuseone:source-input-erased`), the agent no longer runs in the
+             *     source's scope, or the agent is paused, stopped or a draft.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     getCompensation: {

@@ -47,6 +47,11 @@ type RunStartedPayload struct {
 	// $fuseone.context.read; it is not content and not an invitation to fetch
 	// arbitrary source-run bytes.
 	ContextArtifacts []ContextArtifact `json:"context_artifacts,omitempty"`
+	// SourceRun names the recorded run whose input seeded this one, when an
+	// operator opened it from that run (#16). By id only: the source's
+	// approvals, reservations and outcome are its own, and nothing of them
+	// travels here.
+	SourceRun RunID `json:"source_run,omitempty"`
 }
 
 /*

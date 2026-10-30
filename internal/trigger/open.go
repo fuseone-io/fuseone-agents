@@ -78,6 +78,13 @@ type Request struct {
 	Simulation string
 	// Case names the regression case being replayed, when one is.
 	Case string
+	// Version pins the run to one published version of the agent. Empty is
+	// the version published now, which is what every trigger but one wants.
+	Version domain.VersionID
+	// SourceRun is the recorded run whose input seeds this one, when an
+	// operator asked to run from it (#16). An id and nothing else: the trail
+	// points at the source, it does not copy it.
+	SourceRun domain.RunID
 }
 
 // ErrUnknownAgent means nothing is published under that id.
@@ -158,7 +165,10 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 	if len(versions) == 0 {
 		return Result{}, fmt.Errorf("%w: %s", ErrUnknownAgent, req.Agent)
 	}
-	published := versions[0]
+	published, err := Pin(versions, req.Version)
+	if err != nil {
+		return Result{}, err
+	}
 	if violation, blocked := req.Labels.ScopeBoundaryViolation(published.Scope); blocked {
 		return Result{}, fmt.Errorf("trigger: %w", violation)
 	}
@@ -191,6 +201,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 			Simulated: req.Simulation != "", Simulation: req.Simulation,
 			Case: req.Case, Origin: req.Origin, Ticket: ticket,
 			ContextArtifacts: cloneContextArtifacts(req.ContextArtifacts),
+			SourceRun:        req.SourceRun,
 		}),
 	})
 	if err != nil {
