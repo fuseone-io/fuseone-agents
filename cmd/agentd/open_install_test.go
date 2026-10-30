@@ -48,8 +48,10 @@ func TestOpenInstallation_theSeededDemo_isListedAndItsAnswerOpens(t *testing.T) 
 
 	guarded := httptest.NewServer(api)
 	t.Cleanup(guarded.Close)
-	if got := get(t, guarded.URL+"/api/v1/runs"); got.status == http.StatusOK {
-		t.Fatalf("the API without the open mount answered %d: the handlers stopped checking", got.status)
+	got := get(t, guarded.URL+"/api/v1/runs")
+	if got.status != http.StatusForbidden || !strings.Contains(got.body, "fuseone:forbidden") {
+		t.Fatalf("the API without the open mount = %d %s, want the 403 fuseone:forbidden a principal-less request gets",
+			got.status, got.body)
 	}
 }
 
