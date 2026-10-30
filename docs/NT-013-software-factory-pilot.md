@@ -30,7 +30,7 @@ its work good — the harness, below.
 | **Developer** | lane *Doing* | implements, opens the PR, answers review findings | branch, commits, PR | copilot (Level 1 only) |
 | **Reviewer** | PRs labelled `factory:needs-review` | reviews the diff; findings ranked P1–P3, each with a reproduction | PR review comments, labels | copilot |
 | **QA** | PRs labelled `factory:needs-qa` | checks every acceptance criterion against the PR and its CI | PR comment, labels | copilot |
-| **Merger** | PRs labelled `factory:ready-to-merge` | verifies approvals and green checks, merges | merge, card status | copilot, merge always human-approved |
+| **Merger** | PRs labelled `factory:ready-to-merge` | proposes `merge_if_ready` for the PR's current head; the wrapper re-checks review, QA and checks on that SHA when it runs | merge (through the wrapper), card status | copilot, merge always human-approved |
 | **Release** (later) | merged work since the last tag | cuts the changelog, tags, bumps the platform repo | changelog commit, tag | not in the pilot |
 
 Reviewer and QA are separate on purpose. In this repository's history the
@@ -56,18 +56,35 @@ Sub-states inside *Doing* are labels, not lanes, so the board stays the five
 lanes people read: `factory:needs-review`, `factory:changes-requested`,
 `factory:needs-qa`, `factory:ready-to-merge`.
 
-The board is the work item. The platform has no case spanning several runs and
-agents today — tickets exist only for Slack support, and event dispatch does
-not carry them — so in the pilot every run reads the card's state from the
-board and the issue, acts once, and writes the outcome back. A run holds no
-memory of the card that the board does not.
+The board holds the card's state. The platform has no case spanning several
+runs and agents today — tickets exist only for Slack support, and event
+dispatch does not carry them — so in the pilot every run reads the card's
+state from the board and the issue, acts once, and writes the outcome back.
+What the platform must hold is narrower: which card each run is working on,
+recorded in the ledger, as below.
 
 ## How a role is woken
 
-Pilot: **cron, one card per run.** Each role is a scheduled agent that lists
-the cards in its lane, takes the oldest one it has not already acted on, and
-works only that card. Cron triggers exist, and a scheduled run already carries
-the moment it was fired for.
+Pilot: **cron, one card per run, claimed before any work.** Each role is a
+scheduled agent that lists the cards in its lane and picks the oldest one it
+has not already acted on. Cron triggers exist, and a scheduled run carries the
+moment it was fired for.
+
+Picking is not owning. Each firing gets a fresh idempotency key, and the
+engine's idempotency is scoped to a run, so nothing stops two runs of one role
+choosing the same card: while the first waits for a person to approve its
+comment, the board has not changed and the next firing picks the same card,
+duplicating cost and, if both are approved, comments, branches or PRs.
+Writing to the board afterwards does not close that race. So a run's **first
+act is a platform claim** — `work_item.claim(<card id>)` — which:
+
+- records the card on the run, in the ledger, as a queryable work-item key;
+- refuses when another **open** run of the same agent already holds that card
+  (parked for approval counts as open), so the role picks the next card;
+- is a platform tool with no effect outside the platform, classified as such.
+
+The same key is what joins cost, approvals and outcomes to a card, including
+runs that fail before their first write.
 
 Not webhooks, yet. The platform's webhook route authenticates with an
 `X-FuseOne-Secret` header and requires an `Idempotency-Key`; GitHub sends
@@ -109,19 +126,43 @@ consequences shape the design:
 
 - Every write in the pilot is approved by a person. That is the measurement:
   how many proposals were right, how many were edited, how many refused.
-- **The Merger must not read free text.** It decides from structured signals
-  only — check conclusions, review states, labels, the base branch — through
-  tools classified as trusted reads. If it read a comment, it could not merge.
+- **The Merger must not read free text.** If it read a comment, it could not
+  merge.
 
-**5. Policy.** An authored policy escalates `merge_pull_request` to approval
-(by default a destructive call is blocked outright). A standing approval must
-never cover it.
+**5. A merge bound to the head that was reviewed.** Structured is not the same
+as trustworthy, and a decision is not the same as its execution. A label, a
+review and a check can each belong to a different commit — a label survives a
+new push — and an approval can wait while the PR changes underneath it: on
+resume, the engine executes the arguments frozen at proposal time without
+reading GitHub again. So the Merger does not call `merge_pull_request`
+directly. It proposes **`merge_if_ready(pr, head_sha)`**, a deterministic
+wrapper that, **when it executes** (after the person approved), re-reads
+GitHub and fails closed unless all of these hold for that exact `head_sha`,
+which must still be the PR's head:
 
-**6. Budget.** A per-run ceiling per role, and a scope budget for the factory's
+- an approving review by an authorised reviewer identity on that SHA;
+- the QA verdict on that SHA, recorded by the QA role's identity;
+- the expected set of checks, completed successfully, emitted by the
+  authorised apps, on that SHA;
+
+and then merges with `expectedHeadSha`, so a push between the check and the
+merge refuses rather than merging unreviewed code. Every signal is validated by
+its actor or app, not only by the absence of free text.
+
+**6. Policy, and no standing approvals in the pilot.** An authored policy
+escalates the merge to approval (a destructive call is blocked outright by
+default). Every approval request first tries to consume a standing grant, so
+a grant for any factory tool would release that write without a person and
+corrupt the measurement. **During the pilot no standing approval may cover
+any factory write** — comments, labels, commits, PRs, board changes and the
+merge — enforced, not merely avoided.
+
+**7. Budget.** A per-run ceiling per role, and a scope budget for the factory's
 area, so a looping role parks instead of spending.
 
-**7. The ledger.** Every card's history is reconstructible: which role read
-what, proposed what, who approved, what it cost.
+**8. The ledger.** Every card's history is reconstructible through the
+work-item key the claim records: which role read what, proposed what, who
+approved, what it cost.
 
 ## The harness
 
@@ -140,7 +181,8 @@ pull request like any change, and published from there.
   the red and the sabotage evidence.
 - **Definitions of done per lane**, checked by the role that moves the card:
   Preparado needs type, size, plan and acceptance criteria; ready-to-merge
-  needs an approving review, QA passed and every check green.
+  needs an approving review, QA passed and every expected check green — all on
+  the PR's current head, which the merge wrapper re-checks rather than trusts.
 - **Evaluation before promotion.** Each role gets a regression corpus built
   from this repository's real history — issues that were triaged, reviews that
   found real defects — and stays at copilot until its agreement with people is
@@ -152,19 +194,20 @@ pull request like any change, and published from there.
 |---|---|---|
 | GitHub Project board and labels | the lanes and sub-states above | everything |
 | GitHub MCP per role, classified | layers 1 and 3 | every role |
-| Merge policy, and a way to forbid standing approval for a tool | layer 5 | Merger |
-| Trusted structured reads for the Merger | layer 4 | Merger |
+| A durable work-item claim, recorded in the ledger | no two runs of a role on one card; cost per card | every role |
+| Merge policy, and standing approvals refused for every factory write | layer 6 | every role |
+| `merge_if_ready`: a merge bound to the reviewed head, signals validated by actor | layer 5 | Merger |
 | Role specs and the rulebook under `factory/`, published from the repository | the harness | every role |
 | A Level 1 developer: GitHub-API commits for small changes | #154 Level 1 | Developer |
 | A coding runtime behind one MCP tool | #154 Level 2: build and test before a PR | Developer and QA beyond chores |
 | A GitHub webhook adapter (signature, delivery id, event filter) | event-driven roles instead of polling | after the pilot |
 | A hop limit on event chains | agent-to-agent handoff | after the pilot |
-| A case spanning runs | the card as a first-class work item | after the pilot |
+| A case spanning runs and agents | the card carried across event-opened runs, beyond the claim's key | after the pilot |
 
 ## Measured during the pilot
 
-Per role: proposals made, approved as-is, edited, refused; cost per card; time
-in each lane; review findings that a later stage or a person caught and the
+Per role: proposals made, approved as-is, edited, refused; cost per card,
+joined through the work-item key the claim records; time in each lane; review findings that a later stage or a person caught and the
 role missed. The pilot's question is whether each role, at copilot, is right
 often enough to be worth its approvals — answered per role, not for the
 factory as a whole.
