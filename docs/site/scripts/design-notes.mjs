@@ -22,4 +22,7 @@ export const designDocs = [
 // Design notes left off the site on purpose. Leaving one out is a decision,
 // so it is written here rather than inferred from the list above. A note
 // listed here stays in the repository, and links to it point there.
-export const unpublishedDesignDocs = new Set([]);
+//
+// NT-002 is an ordering of remaining work written at a point in time; on an
+// indexed site it reads as a current roadmap and a product commitment.
+export const unpublishedDesignDocs = new Set(["NT-002-remaining-work.md"]);
