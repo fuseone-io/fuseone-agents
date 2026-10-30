@@ -254,7 +254,7 @@
     "clearTemplate": "Clear and start blank",
     "configureNow": "Configure the calling system now. This is the only time it is shown — the platform keeps only its digest.",
     "connectIntegration": "Connect an integration",
-    "costMicros": "Cost (micros)",
+    "costPerRun": "Cost per run ({{currency}})",
     "averageCostPerRun": "Average cost per run",
     "createPaused": "Create the agent paused",
     "current": "Current",
