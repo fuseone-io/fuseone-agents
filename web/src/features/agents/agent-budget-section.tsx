@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Section, Labelled } from "@/features/policies/section";
 import { agentRequirementMarked } from "@/features/agents/agent-required";
-import { currentCurrency } from "@/lib/format";
+import { useInstallationCurrency } from "@/features/money/api";
 import { MoneyInput } from "@/components/shared/money-input";
 import type { AgentDefinition } from "@/lib/api/client";
 
@@ -21,6 +21,7 @@ export function AgentBudgetSection({
   patch: (over: Partial<AgentDefinition>) => void;
 }) {
   const { t } = useTranslation();
+  const currency = useInstallationCurrency();
   const budget = draft.budget ?? {};
   const set = (over: Partial<typeof budget>) =>
     patch({ budget: { ...budget, ...over } });
@@ -34,7 +35,7 @@ export function AgentBudgetSection({
     >
       <div className="grid gap-3 sm:grid-cols-4">
         <Labelled
-          label={t("agents.costPerRun", { currency: currentCurrency() })}
+          label={t("agents.costPerRun", { currency })}
           htmlFor="budget-micros"
         >
           <MoneyInput

@@ -5,7 +5,8 @@ import { microsFromText, textFromMicros } from "@/lib/money";
 /**
  * An amount of money typed as money and handed back as micros.
  *
- * It keeps what the person typed. Deriving the text from micros on every
+ * It keeps what the person typed — as long as it is an amount, including the
+ * halfway states "" and "1,". Deriving the text from micros on every
  * keystroke turned "1," into "1" and ate the separator, so nobody could type
  * a fraction. The text follows the value only when the value moves from
  * outside — a draft reloaded, a form reset — never while it is being typed.
@@ -34,12 +35,14 @@ export function MoneyInput({
       inputMode="decimal"
       value={text}
       onChange={(e) => {
-        setText(e.target.value);
+        // An edit that is not an amount is refused, not shown: text the
+        // field displayed but never saved would let a person publish one
+        // ceiling while reading another.
         const next = microsFromText(e.target.value);
-        if (next !== null) {
-          setShown(next);
-          onChange(next);
-        }
+        if (next === null) return;
+        setText(e.target.value);
+        setShown(next);
+        onChange(next);
       }}
       className="font-mono"
       placeholder={placeholder}
