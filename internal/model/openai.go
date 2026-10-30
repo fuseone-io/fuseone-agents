@@ -93,10 +93,14 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	cost := o.costAt(out.Usage, use.Price)
 	price := priceUse(use.Price, use.Configured, cost)
 	if choice.FinishReason == "content_filter" {
-		return engine.Proposal{
+		// Billed, as on every provider: a proposal returned beside an error is
+		// dropped by the runner, so the spend travels as the failure's own
+		// (#132).
+		return engine.Proposal{}, &engine.SpentPlanError{
 			Cost: cost, Prompt: prompt, Price: price, Provider: o.provider.Name,
 			Model: o.cfg.Model, ServedModel: use.Divergence,
-		}, providerRefused(o.provider.Name)
+			Err: providerRefused(o.provider.Name),
+		}
 	}
 
 	return o.proposalFrom(choice, offered, prompt, cost, price, use.Divergence), nil

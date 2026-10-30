@@ -30,10 +30,16 @@ type flakyPlanner struct {
 	// A run that finishes on its first turn never reaches the Gate, which is
 	// where a ceiling is enforced.
 	proposal *engine.Proposal
+	// delegate, when set, answers the failing calls: a real provider planner
+	// behind a fake server, so a test crosses planner, runner and ledger.
+	delegate engine.Planner
 }
 
-func (p *flakyPlanner) Plan(context.Context, engine.PlanInput) (engine.Proposal, error) {
+func (p *flakyPlanner) Plan(ctx context.Context, in engine.PlanInput) (engine.Proposal, error) {
 	p.calls++
+	if p.calls <= p.failures && p.delegate != nil {
+		return p.delegate.Plan(ctx, in)
+	}
 	if p.calls <= p.failures {
 		if p.err != nil {
 			return engine.Proposal{}, p.err
