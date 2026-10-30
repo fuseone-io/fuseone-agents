@@ -28,8 +28,8 @@ its work good — the harness, below.
 | **Triage** | lane *Triagem* | classifies type and size, finds duplicates, asks what is missing | issue comment, labels, card status | copilot |
 | **Architect** | *Triagem* items marked `factory:needs-design` | writes the plan and acceptance criteria, splits large items | issue comment, sub-issues, card status | copilot |
 | **Developer** | lane *Doing* | implements, opens the PR, answers review findings | branch, commits, PR | copilot (Level 1 only) |
-| **Reviewer** | PRs labelled `factory:needs-review` | reviews the diff; findings ranked P1–P3, each with a reproduction | PR review comments, labels | copilot |
-| **QA** | PRs labelled `factory:needs-qa` | checks every acceptance criterion against the PR and its CI | PR comment, labels | copilot |
+| **Reviewer** | PRs labelled `factory:needs-review` | reviews the diff; findings ranked P1–P3, each with a reproduction | a pull-request review — APPROVE or REQUEST_CHANGES — on the head SHA it read; labels | copilot |
+| **QA** | PRs labelled `factory:needs-qa` | checks every acceptance criterion against the PR and its CI | its verdict as a commit status `factory/qa` on the head SHA, under its own identity; labels | copilot |
 | **Merger** | PRs labelled `factory:ready-to-merge` | proposes `merge_if_ready` for the PR's current head; the wrapper re-checks review, QA and checks on that SHA when it runs | merge (through the wrapper), card status | copilot, merge always human-approved |
 | **Release** (later) | merged work since the last tag | cuts the changelog, tags, bumps the platform repo | changelog commit, tag | not in the pilot |
 
@@ -76,12 +76,21 @@ choosing the same card: while the first waits for a person to approve its
 comment, the board has not changed and the next firing picks the same card,
 duplicating cost and, if both are approved, comments, branches or PRs.
 Writing to the board afterwards does not close that race. So a run's **first
-act is a platform claim** — `work_item.claim(<card id>)` — which:
+act is a platform claim** — `$fuseone.work_item.claim(<card id>)` — which
+holds two uniquenesses, atomically:
 
-- records the card on the run, in the ledger, as a queryable work-item key;
-- refuses when another **open** run of the same agent already holds that card
-  (parked for approval counts as open), so the role picks the next card;
-- is a platform tool with no effect outside the platform, classified as such.
+- **one card per run**: the same run claiming the same card again is an
+  idempotent retry; the same run claiming a *different* card is refused, so a
+  run talked into grabbing the queue cannot hold more than one card;
+- **one run per card per agent**: another **open** run of the same agent
+  holding that card refuses the claim (parked for approval counts as open), so
+  the role picks the next card.
+
+It records the card on the run in the ledger as a queryable work-item key. A
+claim is held only while its run is non-terminal — derived from the run's
+phase, not released by a separate write — so a crash cannot leave an orphan.
+It is a platform-owned tool: listed explicitly as one, never advancing a step,
+and outside the MCP availability checks.
 
 The same key is what joins cost, approvals and outcomes to a card, including
 runs that fail before their first write.
@@ -140,14 +149,28 @@ wrapper that, **when it executes** (after the person approved), re-reads
 GitHub and fails closed unless all of these hold for that exact `head_sha`,
 which must still be the PR's head:
 
-- an approving review by an authorised reviewer identity on that SHA;
-- the QA verdict on that SHA, recorded by the QA role's identity;
+- an approving review by an authorised reviewer identity on that SHA — the
+  Reviewer submits it as a pull-request review with `commitID` set to the head
+  it read;
+- the QA verdict on that SHA: a `factory/qa` commit status set by the QA
+  role's identity, which only that identity can write;
 - the expected set of checks, completed successfully, emitted by the
   authorised apps, on that SHA;
 
 and then merges with `expectedHeadSha`, so a push between the check and the
 merge refuses rather than merging unreviewed code. Every signal is validated by
 its actor or app, not only by the absence of free text.
+
+`expectedHeadSha` closes a new push; it does not close a signal that changes on
+the same commit — a review dismissed, a check returning to pending — between
+the wrapper's read and the merge. Only GitHub can check that atomically, at
+the merge itself, so the repository enforces the same conditions:
+
+**5a. A ruleset on `main`.** Today `main` has neither branch protection nor a
+ruleset. The pilot requires one: an approving review, the `factory/qa` status
+and the CI checks as required, with the Merger's credential **not** on the
+bypass list. The wrapper's own checks then fail fast and explain; the ruleset
+is what makes a stale read harmless.
 
 **6. Policy, and no standing approvals in the pilot.** An authored policy
 escalates the merge to approval (a destructive call is blocked outright by
@@ -197,6 +220,8 @@ pull request like any change, and published from there.
 | A durable work-item claim, recorded in the ledger | no two runs of a role on one card; cost per card | every role |
 | Merge policy, and standing approvals refused for every factory write | layer 6 | every role |
 | `merge_if_ready`: a merge bound to the reviewed head, signals validated by actor | layer 5 | Merger |
+| A ruleset on `main` requiring review, `factory/qa` and CI, no bypass for the Merger | layer 5a | Merger |
+| A trusted way for QA to set `factory/qa` under its own identity | the evidence `merge_if_ready` requires | QA, Merger |
 | Role specs and the rulebook under `factory/`, published from the repository | the harness | every role |
 | A Level 1 developer: GitHub-API commits for small changes | #154 Level 1 | Developer |
 | A coding runtime behind one MCP tool | #154 Level 2: build and test before a PR | Developer and QA beyond chores |
