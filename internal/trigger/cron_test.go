@@ -2,12 +2,14 @@ package trigger_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/trigger"
 )
@@ -196,5 +198,59 @@ func TestValidSchedule_refusesASecondsField(t *testing.T) {
 	}
 	if err := trigger.ValidSchedule("@hourly"); err != nil {
 		t.Errorf("@hourly was refused: %v", err)
+	}
+}
+
+// A scheduled run used to open with no input, so an agent asked to sweep "the
+// window this firing is about" derived it from the wall clock — and a run that
+// started late, or was resumed, computed a different window than the moment
+// that named it (#149). The moment is the run's input now: a fact, not an
+// inference.
+func TestTick_scheduledRun_carriesTheMomentItWasFiredFor(t *testing.T) {
+	t.Parallel()
+	late := noon.Add(90 * time.Second)
+	store := ledger.NewMemory()
+	content := engine.NewMemoryContent()
+	clock := fixedClock{t: late}
+	opener := trigger.NewOpener(store, registry{versions: []domain.AgentSummary{{
+		ID: "triage", VersionID: "v2", Scope: domain.Scope{Company: "acme", Area: "cx"}, Latest: true,
+	}}}, clock).WithContent(content)
+	s := trigger.NewScheduler(&schedules{due: []trigger.Due{
+		{Agent: "triage", Schedule: "0 * * * *", At: noon},
+	}}, opener, clock, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	if _, err := s.Tick(t.Context()); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	runs, _ := store.Runs(context.Background())
+	if len(runs) != 1 {
+		t.Fatalf("the ledger holds %d runs, want 1", len(runs))
+	}
+	steps, err := store.Read(t.Context(), runs[0], 0)
+	if err != nil || len(steps) == 0 {
+		t.Fatalf("read the run: %v", err)
+	}
+	var started domain.RunStartedPayload
+	if err := json.Unmarshal(steps[0].Payload, &started); err != nil {
+		t.Fatalf("decode run_started: %v", err)
+	}
+	raw, err := content.Get(t.Context(), started.InputRef)
+	if err != nil {
+		t.Fatalf("the scheduled run has no input to read: %v", err)
+	}
+	var input struct {
+		Trigger  string    `json:"trigger"`
+		Moment   time.Time `json:"moment"`
+		Schedule string    `json:"schedule"`
+	}
+	if err := json.Unmarshal(raw, &input); err != nil {
+		t.Fatalf("decode the input: %v", err)
+	}
+	if !input.Moment.Equal(noon) {
+		t.Errorf("moment = %v, want %v: the moment that named the run, not when it was handled", input.Moment, noon)
+	}
+	if input.Trigger != "cron" || input.Schedule != "0 * * * *" {
+		t.Errorf("input = %+v, want the trigger and its schedule beside the moment", input)
 	}
 }
