@@ -11,13 +11,10 @@ import { ScopeSection } from "@/features/policies/scope-section";
 import { ConditionSection } from "@/features/policies/condition-section";
 import { EffectSection } from "@/features/policies/effect-section";
 import { PolicySideRail } from "@/features/policies/policy-side-rail";
-import {
-  usePolicyDraft,
-  reachNamesNobody,
-} from "@/features/policies/policy-form";
+import { usePolicyDraft } from "@/features/policies/policy-form";
 import { usePolicies, usePutPolicy } from "@/features/policies/api";
 import { useCode } from "@/features/policies/use-code";
-import type { Policy } from "@/lib/api/client";
+import type { Policy, PolicyInput } from "@/lib/api/client";
 
 /**
  * One rule, written or rewritten.
@@ -68,17 +65,17 @@ function PolicyForm({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { code, setCode } = useCode(creating, policies, routeCode);
-  const { draft, patch, changes } = usePolicyDraft(loaded);
+  const { form, draft, patch, valid, changes } = usePolicyDraft(loaded);
   const save = usePutPolicy();
 
-  const submit = () => {
+  const submit = (policy: PolicyInput) => {
     save.mutate(
-      { code, policy: draft },
+      { code, policy },
       {
         onSuccess: () => {
           toast.success(creating ? `${code} criada` : `${code} salva`, {
             description:
-              draft.mode === "monitor"
+              policy.mode === "monitor"
                 ? t("policies.monitorMode")
                 : t("policies.enforcingNextStep"),
           });
@@ -114,10 +111,8 @@ function PolicyForm({
           {t("common.cancel")}
         </Button>
         <Button
-          onClick={submit}
-          disabled={
-            save.isPending || !draft.name || !code || reachNamesNobody(draft)
-          }
+          onClick={form.handleSubmit(submit)}
+          disabled={save.isPending || !code || !valid}
         >
           {draft.mode === "monitor"
             ? t("policies.saveMonitoring")

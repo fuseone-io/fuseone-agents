@@ -1,5 +1,9 @@
-import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, useWatch } from "react-hook-form";
+import { policyDraftSchema } from "@/features/policies/policy-form-schema";
 import type { Policy, PolicyInput } from "@/lib/api/client";
+
+export { reachNamesNobody } from "@/features/policies/policy-form-schema";
 
 /** A new rule starts watching, never enforcing. Two-step adoption is the
  *  product's position, and the default is where a position is actually made. */
@@ -16,28 +20,36 @@ export const BLANK: PolicyInput = {
   enabled: true,
 };
 
-/** Everything the form edits, and whether it differs from what was loaded. */
+/**
+ * Everything the form edits, whether it can be saved, and whether it differs
+ * from what was loaded.
+ *
+ * The draft lives in react-hook-form and `policyDraftSchema` is the only rule
+ * on it. The sections still take `draft` and `patch`: they edit whole values
+ * (a condition list, a reach set), and `patch` is how a section writes one
+ * back into the form.
+ */
 export function usePolicyDraft(loaded?: Policy) {
-  const [draft, setDraft] = useState<PolicyInput>(
-    () => toInput(loaded) ?? BLANK,
-  );
-  const patch = (over: Partial<PolicyInput>) =>
-    setDraft((d) => ({ ...d, ...over }));
+  const form = useForm<PolicyInput>({
+    resolver: zodResolver(policyDraftSchema),
+    defaultValues: toInput(loaded) ?? BLANK,
+  });
+  // A whole-form watch is typed deep-partial, but every field has a default,
+  // so what it holds is a complete draft.
+  const draft = useWatch({ control: form.control }) as PolicyInput;
+  const patch = (over: Partial<PolicyInput>) => {
+    for (const key of Object.keys(over) as (keyof PolicyInput)[]) {
+      form.setValue(key, over[key], { shouldDirty: true });
+    }
+  };
+  // Parsed synchronously so the button is right on the first render; the
+  // resolver's async pass would leave it wrong for a tick.
+  const valid = policyDraftSchema.safeParse(draft).success;
 
   const original = toInput(loaded);
   const changes = original ? changesBetween(original, draft) : [];
 
-  return { draft, patch, changes };
-}
-
-/**
- * A reach that names nobody governs nothing, and the server refuses it. Saying
- * so at the button keeps the refusal from arriving minutes later as a toast.
- */
-export function reachNamesNobody(draft: PolicyInput): boolean {
-  if (draft.reach === "agents") return (draft.agents ?? []).length === 0;
-  if (draft.reach === "scopes") return (draft.scopes ?? []).length === 0;
-  return false;
+  return { form, draft, patch, valid, changes };
 }
 
 /** Strips a stored policy back to what the form owns. */
