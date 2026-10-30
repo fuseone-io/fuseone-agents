@@ -65,6 +65,10 @@ func (b *Branding) Current(ctx context.Context) (BrandingConfig, error) {
 }
 
 // Set records what this installation calls and paints itself.
+//
+// The stored brand is read inside the write so the images it used can be
+// dropped once nothing refers to them; read before, two saves racing would
+// each delete what the other just pointed at.
 func (b *Branding) Set(
 	ctx context.Context, by domain.UserID, scope domain.Scope, config BrandingConfig,
 ) error {
@@ -77,18 +81,32 @@ func (b *Branding) Set(
 		return fmt.Errorf("admin: encode branding: %w", err)
 	}
 
-	return writeSetting(ctx, b.pool, b.settings, by, scope, settings.Setting{
+	set := settings.Setting{
 		ScopeKind: settings.ScopeInstallation,
 		Kind:      settings.KindBranding,
 		Name:      brandingName,
 		Value:     value,
 		Enabled:   true,
 		UpdatedBy: string(by),
-	}, "branding.changed", brandingName, map[string]any{
-		"displayName":  normalized.DisplayName,
-		"hasLogo":      normalized.LogoURL != "",
-		"hasIcon":      normalized.IconURL != "",
-		"primaryColor": normalized.PrimaryColor,
+	}
+	var previous BrandingConfig
+	return writeFolded(ctx, b.pool, b.settings, folded{
+		by: by, scope: scope, action: "branding.changed", target: brandingName, set: set,
+		fold: func(stored settings.Setting) (settings.Setting, any, error) {
+			previous = BrandingConfig{}
+			if len(stored.Value) > 0 {
+				if err := json.Unmarshal(stored.Value, &previous); err != nil {
+					return settings.Setting{}, nil, fmt.Errorf("admin: decode branding: %w", err)
+				}
+			}
+			return set, brandingDetail(normalized), nil
+		},
+		then: func(ctx context.Context, conn settings.DB) error {
+			if err := requireAssets(ctx, conn, normalized); err != nil {
+				return err
+			}
+			return dropReplaced(ctx, conn, b.settings, previous)
+		},
 	})
 }
 
@@ -124,7 +142,7 @@ func checkImageURL(raw, field string) error {
 	if len(raw) > 4096 {
 		return fmt.Errorf("%w: %s URL is too long", ErrBrandingInvalid, field)
 	}
-	if dataImage.MatchString(raw) {
+	if dataImage.MatchString(raw) || brandAssetHash(raw) != "" {
 		return nil
 	}
 	u, err := url.Parse(raw)
@@ -132,7 +150,7 @@ func checkImageURL(raw, field string) error {
 		return fmt.Errorf("%w: %s URL is not a URL", ErrBrandingInvalid, field)
 	}
 	if u.Scheme != "https" && u.Scheme != "http" {
-		return fmt.Errorf("%w: %s URL must be http, https or a data image", ErrBrandingInvalid, field)
+		return fmt.Errorf("%w: %s URL must be http, https, a data image or an uploaded image", ErrBrandingInvalid, field)
 	}
 	return nil
 }
