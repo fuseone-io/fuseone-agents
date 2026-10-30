@@ -176,6 +176,7 @@ func serve(args []string) error {
 				os.Getenv("FUSEONE_STDIO_EGRESS_NETWORK_POLICY_DECLARED") == "true",
 			).
 			WithBranding(admin.NewBranding(identity.pool, store)).
+			WithBrandAssets(admin.NewBrandAssets(identity.pool)).
 			WithRetention(
 				admin.NewRetention(identity.pool, store),
 				admin.NewErasures(identity.pool, ledger.NewContent(identity.pool),
@@ -255,6 +256,9 @@ func serve(args []string) error {
 		root.Handle("GET /api/v1/healthz", apiProblems(apiHandler))
 		root.Handle("GET /api/v1/readyz", apiProblems(apiHandler))
 		identity.routes.Mount(root)
+		// Uploaded logos and icons, outside the session middleware for the
+		// same reason as branding itself: the sign-in screen shows them.
+		httpapi.NewBrandAssetRoute(admin.NewBrandAssets(identity.pool)).Mount(root)
 
 		// What a conversation says back (NT-005 stage 2). Outside /api/v1 and
 		// outside the session middleware on purpose: it is a vendor's webhook,
