@@ -26,7 +26,8 @@ const SystemWorker UserID = "system:worker"
 // a tool disappears silently.
 func (t ToolID) PlatformOwned() bool {
 	switch t {
-	case ToolContextRead, ToolTicketAnswer, ToolMemoryFind, ToolMemorySuggest:
+	case ToolContextRead, ToolTicketAnswer, ToolMemoryFind, ToolMemorySuggest,
+		ToolWorkItemClaim:
 		return true
 	}
 	return false
