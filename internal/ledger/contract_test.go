@@ -58,6 +58,7 @@ type Store interface {
 	LastBatteryAt(ctx context.Context, agent domain.AgentID, version domain.VersionID) (time.Time, bool, error)
 	Agreement(ctx context.Context, since time.Time) ([]domain.Agreement, error)
 	Simulations() ledger.SimulationQueue
+	WorkItemCost(ctx context.Context, ref domain.WorkItemRef) (domain.WorkItemCost, error)
 }
 
 type factory struct {
@@ -103,7 +104,7 @@ func openPostgres(t *testing.T, dsn string) Store {
 		t.Fatalf("migrate: %v", err)
 	}
 	// Each test gets a clean ledger; these tables are the whole state.
-	if _, err := pool.Exec(ctx, `truncate run_steps, runs`); err != nil {
+	if _, err := pool.Exec(ctx, `truncate run_steps, runs, run_work_items`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return ledger.NewPostgres(pool)

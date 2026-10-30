@@ -114,6 +114,11 @@ func appendTx(
 	if err := upsertRun(ctx, tx, sealed); err != nil {
 		return domain.Step{}, err
 	}
+	// A claim is judged and projected inside the same transaction, so a
+	// refused claim takes its step with it.
+	if err := recordWorkItemClaim(ctx, tx, sealed); err != nil {
+		return domain.Step{}, err
+	}
 	return sealed, nil
 }
 

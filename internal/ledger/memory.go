@@ -165,6 +165,9 @@ func (m *Memory) append(
 			return domain.Step{}, ErrIdemConflict
 		}
 	}
+	if err := m.judgeWorkItem(s); err != nil {
+		return domain.Step{}, err
+	}
 
 	sealed, err := domain.NewStep(prev, s)
 	if err != nil {
