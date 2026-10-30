@@ -16,7 +16,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { RadioGroup } from "@/components/ui/radio-group";
 import { useAgents } from "@/features/agents/api";
+import { ChoiceCard } from "@/features/policies/choice-card";
 import { Section } from "@/features/policies/section";
 import { useScopes } from "@/features/scope/api";
 import type { PolicyInput } from "@/lib/api/client";
@@ -64,33 +66,22 @@ export function ReachSection({
 
   return (
     <Section title={t("policies.reach")} hint={t("policies.reachHint")}>
-      <fieldset>
-        <legend className="sr-only">{t("policies.reach")}</legend>
-        <div className="grid min-w-0 gap-2 sm:grid-cols-[repeat(3,minmax(0,1fr))]">
-          {REACHES.map((choice) => (
-            <button
-              key={choice.value}
-              type="button"
-              role="radio"
-              aria-checked={reach === choice.value}
-              onClick={() => patch({ reach: choice.value })}
-              className={cn(
-                "flex min-w-0 flex-col gap-0.5 rounded-lg border p-3 text-left",
-                reach === choice.value
-                  ? "border-primary bg-surface-accent"
-                  : "border-border",
-              )}
-            >
-              <span className="break-words text-sm font-medium">
-                {t(choice.label)}
-              </span>
-              <span className="break-words text-xs text-muted-foreground">
-                {t(choice.note)}
-              </span>
-            </button>
-          ))}
-        </div>
-      </fieldset>
+      <RadioGroup
+        aria-label={t("policies.reach")}
+        value={reach}
+        onValueChange={(next) => patch({ reach: next as PolicyInput["reach"] })}
+        className="grid min-w-0 gap-2 sm:grid-cols-[repeat(3,minmax(0,1fr))]"
+      >
+        {REACHES.map((choice) => (
+          <ChoiceCard
+            key={choice.value}
+            value={choice.value}
+            label={t(choice.label)}
+            note={t(choice.note)}
+            className="p-3 has-data-[state=checked]:border-primary has-data-[state=checked]:bg-surface-accent"
+          />
+        ))}
+      </RadioGroup>
 
       {reach === "agents" && (
         <AgentSet

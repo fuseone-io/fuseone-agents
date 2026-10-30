@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PolicyEditorPage } from "@/features/policies/policy-editor-page";
@@ -33,6 +34,7 @@ describe("the policy editor", () => {
     hooks.policies.data = undefined;
     hooks.policies.isLoading = true;
     hooks.policies.error = null;
+    hooks.put.mockClear();
   });
 
   it("seeds the edit draft after the first policy request finishes", () => {
@@ -57,7 +59,61 @@ describe("the policy editor", () => {
       "Keep customer data inside the installation",
     );
   });
+
+  // The draft is the form's state; what is sent is what was chosen on screen.
+  it("saves what was edited, under the record's code", async () => {
+    const user = userEvent.setup();
+    loadPolicy(policy({ code: "POL-200", name: "Guard", mode: "monitor" }));
+    renderEditor("POL-200");
+
+    await user.click(screen.getByRole("radio", { name: /Allow/ }));
+    await user.click(screen.getByRole("radio", { name: /Enforce/ }));
+    await user.click(screen.getByRole("button", { name: "Save and enforce" }));
+
+    await waitFor(() =>
+      expect(hooks.put).toHaveBeenCalledWith(
+        {
+          code: "POL-200",
+          policy: expect.objectContaining({
+            name: "Guard",
+            effect: "allow",
+            mode: "enforce",
+          }),
+        },
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("cannot be saved while the reach names no agent", async () => {
+    const user = userEvent.setup();
+    loadPolicy(policy({ code: "POL-200", name: "Guard" }));
+    renderEditor("POL-200");
+    const save = screen.getByRole("button", { name: "Save and enforce" });
+    expect(save).toBeEnabled();
+
+    await user.click(screen.getByRole("radio", { name: /^Agents/ }));
+
+    expect(save).toBeDisabled();
+  });
+
+  it("cannot be saved without a name", async () => {
+    const user = userEvent.setup();
+    loadPolicy(policy({ code: "POL-200", name: "Guard" }));
+    renderEditor("POL-200");
+    const save = screen.getByRole("button", { name: "Save and enforce" });
+    expect(save).toBeEnabled();
+
+    await user.clear(screen.getByLabelText("Name"));
+
+    expect(save).toBeDisabled();
+  });
 });
+
+function loadPolicy(loaded: Policy) {
+  hooks.policies.data = { items: [loaded] };
+  hooks.policies.isLoading = false;
+}
 
 function renderEditor(code: string) {
   return render(editor(code));
