@@ -25,7 +25,17 @@ export function microsFromText(text: string): number | null {
   return Number(micros);
 }
 
-/** Stored micros as the amount a person would type; zero is left empty. */
+/**
+ * Stored micros as the amount a person would type; zero is left empty.
+ *
+ * Built from the integer quotient and remainder, not a float division, which
+ * showed the largest exact amount one micro high — text this module's own
+ * reader then refused.
+ */
 export function textFromMicros(micros: number | undefined): string {
-  return micros ? String(micros / MICROS_PER_UNIT) : "";
+  if (!micros) return "";
+  const remainder = micros % MICROS_PER_UNIT;
+  const whole = (micros - remainder) / MICROS_PER_UNIT;
+  const fraction = String(remainder).padStart(6, "0").replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : String(whole);
 }

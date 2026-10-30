@@ -31,6 +31,17 @@ describe("money typed by a person, stored as micros", () => {
     expect(microsFromText("9007199254.740991")).toBe(Number.MAX_SAFE_INTEGER);
   });
 
+  it.each([Number.MAX_SAFE_INTEGER, 1, 999_999, 1_000_001, 123_456_789])(
+    "shows %i micros as text that reads back to the same micros",
+    (micros) => {
+      expect(microsFromText(textFromMicros(micros))).toBe(micros);
+    },
+  );
+
+  it("shows the largest exact amount to the micro", () => {
+    expect(textFromMicros(Number.MAX_SAFE_INTEGER)).toBe("9007199254.740991");
+  });
+
   it("shows stored micros as the amount a person would type", () => {
     expect(textFromMicros(1_000_000_000)).toBe("1000");
     expect(textFromMicros(250_000)).toBe("0.25");
