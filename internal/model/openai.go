@@ -77,6 +77,7 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	if o.provider.SupportsPromptCacheKey {
 		body.PromptCacheKey = o.cfg.CacheKey
 	}
+	prompt.Digests = openAIPrefixDigests(body)
 
 	var out chatResponse
 	if err := o.post(ctx, "/chat/completions", body, &out); err != nil {

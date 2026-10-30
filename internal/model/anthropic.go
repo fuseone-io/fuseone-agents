@@ -188,6 +188,7 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 			Effort: anthropic.OutputConfigEffort(or(in.Effort, a.cfg.Effort)),
 		},
 	}
+	prompt.Digests = anthropicPrefixDigests(params)
 	resp, err := a.client.Messages.New(ctx, params)
 	if err != nil && a.learnAutoToolChoice(model, err) {
 		params.ToolChoice = a.toolChoiceFor(model)
