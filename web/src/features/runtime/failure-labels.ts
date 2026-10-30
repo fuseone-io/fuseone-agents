@@ -21,6 +21,7 @@ export const FAILURE_LABELS: Record<string, string> = {
   tool_server_unavailable: "runtime.failureToolServerUnavailable",
   unknown_tool: "runtime.failureMCPUnknownTool",
   attempts_exhausted: "runtime.failureAttemptsExhausted",
+  fallback_unrehearsed: "runtime.failureFallbackUnrehearsed",
   channel_configuration_read_failed: "runtime.failureChannelConfigurationRead",
   channel_connection_disabled: "runtime.failureChannelConnectionDisabled",
   channel_invalid_configuration: "runtime.failureChannelInvalidConfiguration",

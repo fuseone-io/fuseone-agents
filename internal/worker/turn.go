@@ -15,7 +15,6 @@ import (
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
-	"github.com/fuseone/agents/internal/model"
 )
 
 /*
@@ -106,6 +105,9 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	// turn costs nothing and keeps each run on its own agent's planner.
 	deps := w.deps
 	deps.Planner = resolved.Planner
+	if resolved.Fallback != nil {
+		deps.Fallback = resolved.Fallback.Planner
+	}
 	deps.Metrics = w.metrics
 	status, advErr := engine.NewRunner(deps).Advance(ctx, start)
 	if errors.Is(context.Cause(ctx), domain.ErrLeaseLost) {
@@ -132,14 +134,7 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 		return true, nil
 	}
 	if advErr != nil {
-		outcome := w.failure(claim, advErr)
-		w.metrics.AdvanceFailure(failureReasonFor(advErr), outcome.Parked)
-		log.Warn("advance failed",
-			"attempt", claim.Attempts+1, "parked", outcome.Parked, "err", advErr)
-		if outcome.Parked {
-			return true, w.park(ctx, claim, advErr, parkedReasonFor(advErr))
-		}
-		return true, w.release(ctx, claim, outcome)
+		return true, w.failed(ctx, claim, start, resolved.Fallback, advErr, log)
 	}
 
 	w.metrics.Advance(status.Phase.String())
@@ -255,20 +250,6 @@ func (w *Worker) keepLease(ctx context.Context, claim domain.Claim) (context.Con
 	}()
 
 	return turnCtx, func() { cancel(nil); <-done }
-}
-
-func failureReasonFor(err error) string {
-	if failure, ok := model.FailureSummaryOf(err); ok {
-		return failure.Code
-	}
-	return "unclassified"
-}
-
-func parkedReasonFor(err error) string {
-	if failure, ok := model.FailureSummaryOf(err); ok {
-		return failure.Code
-	}
-	return "attempts_exhausted"
 }
 
 // scopedBudget narrows a run's ceiling by what its scope has left.

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Section, Labelled } from "@/features/policies/section";
 import { AgentAreaField } from "@/features/agents/agent-area-field";
+import { AgentFallbackFields } from "@/features/agents/agent-fallback-fields";
 import { AgentServingFields } from "@/features/agents/agent-serving-fields";
 import { agentRequirementMarked } from "@/features/agents/agent-required";
 import type { AgentDefinition } from "@/lib/api/client";
@@ -69,6 +70,7 @@ export function AgentBasicsSection({
       </div>
 
       <AgentServingFields draft={draft} patch={patch} />
+      <AgentFallbackFields draft={draft} patch={patch} />
     </Section>
   );
 }

@@ -19,6 +19,11 @@ type RunFilter struct {
 	//
 	// A scope with no area covers its whole company, matching Scope.Contains.
 	Scopes []Scope
+	// DeclaredPairOnly leaves out runs whose ledger records a switch to the
+	// version's fallback pair. Set when the figures are evidence for trusting
+	// the version, which was promoted on its declared pair (#27); a listing
+	// of what the agent did and spent leaves it off.
+	DeclaredPairOnly bool
 	// Since and Until bound the window; a zero time means no bound on that
 	// side. Cost asks for both because a rollup without an upper bound is a
 	// figure that changes while you read it.

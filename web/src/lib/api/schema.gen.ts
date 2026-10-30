@@ -2803,7 +2803,24 @@ export interface components {
          */
         ToolEffect: "unknown" | "read" | "write" | "destructive" | "financial";
         /** @enum {string} */
-        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "effect_reconciled" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensation_started" | "compensated" | "failed" | "parked" | "run_finished";
+        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "effect_reconciled" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensation_started" | "compensated" | "failed" | "parked" | "run_finished" | "model_fallback";
+        /** @description A configured model provider and one of its models. */
+        ModelPair: {
+            provider: string;
+            model: string;
+        };
+        /** @description The run stopped asking its declared pair and asked its fallback from here on. Evidence gathered by such a run is about a pair the agent was not promoted on, so it is weighed apart. */
+        RunFallback: {
+            from: components["schemas"]["ModelPair"];
+            to: components["schemas"]["ModelPair"];
+            /** @description Stable code of the provider failure that caused the switch. */
+            code: string;
+            /**
+             * Format: int64
+             * @description The step that recorded the switch.
+             */
+            atSeq: number;
+        };
         Scope: {
             company: string;
             area: string;
@@ -3240,6 +3257,8 @@ export interface components {
             sourceRunId?: string;
             pendingApproval?: components["schemas"]["PendingApproval"] | null;
             failure?: components["schemas"]["RunFailure"] | null;
+            /** @description Present when the run switched to its declared fallback pair. */
+            fallback?: components["schemas"]["RunFallback"];
         };
         /** @description Stable, low-cardinality failure detail for a run parked by the supervisor. The raw provider text is not part of this object. */
         RunFailure: {
@@ -3253,6 +3272,8 @@ export interface components {
             requestId?: string;
             /** @description Whether trying later is expected to help. */
             retryable?: boolean;
+            /** @description Why the supervisor parked the run, when that is not the provider's own code: fallback_unrehearsed for an autonomous run whose declared fallback was withheld. */
+            reason?: string;
         };
         Tool: {
             /** @description Namespaced by server, because two servers naming a tool "search" must not collide into one capability. */
@@ -4619,6 +4640,12 @@ export interface components {
             model: string;
             effort?: string;
             /**
+             * @description The pair a draft or copilot run switches to when the declared one
+             *     keeps failing as overloaded, rate limited or unavailable. Absent
+             *     declares none. An autonomous run never switches in this version.
+             */
+            fallback?: components["schemas"]["ModelPair"];
+            /**
              * @description How long the provider may keep the agent's stable prefix cached.
              *     Empty or 5m is the provider default; 1h pays the longer write so
              *     an hourly agent reads its prefix back instead of re-writing it.
@@ -4674,6 +4701,12 @@ export interface components {
             provider: string;
             model: string;
             effort?: string;
+            /**
+             * @description The pair a draft or copilot run switches to when the declared one
+             *     keeps failing as overloaded, rate limited or unavailable. Absent
+             *     declares none. An autonomous run never switches in this version.
+             */
+            fallback?: components["schemas"]["ModelPair"];
             /**
              * @description How long the provider may keep the agent's stable prefix cached.
              *     Empty or 5m is the provider default; 1h pays the longer write so

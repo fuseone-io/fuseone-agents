@@ -92,6 +92,12 @@ func (s *Server) PublishAgent(
 				invalid(fmt.Sprintf("the schedule %q is not one this platform can read", bad))),
 		}, nil
 	}
+	if detail := s.unconfiguredFallback(published); detail != "" {
+		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				invalid(detail)),
+		}, nil
+	}
 
 	// One read of the catalogue for both checks, so a classification landing
 	// mid-publish cannot leave them judging different catalogues.
@@ -280,6 +286,7 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 		ID: domain.AgentID(id), Name: in.Name,
 		Company: domain.CompanyID(in.Company), Area: domain.AreaID(in.Area),
 		Provider: in.Provider, Model: in.Model, Effort: valueOr(in.Effort),
+		Fallback:       pairOf(in.Fallback),
 		CachePrefixTTL: valueOr(in.CachePrefixTtl),
 		ReplyLocale:    valueOr(in.ReplyLocale),
 		Instructions:   in.Instructions,

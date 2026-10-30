@@ -31,6 +31,7 @@ func agentFrom(a domain.AgentSummary) openapi.Agent {
 			WallClockMs: ptr(a.Budget.WallClockMS),
 		},
 		MemoryLearning: memoryLearningFrom(a.MemoryLearning),
+		Fallback:       pairFrom(a.Fallback),
 		PublishedAt:    a.PublishedAt,
 		Latest:         a.Latest,
 	}

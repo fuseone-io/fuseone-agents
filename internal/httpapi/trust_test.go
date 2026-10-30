@@ -167,6 +167,27 @@ func TestGetAgentTrust_oldRunEvidenceFallsOutsideTheTrustWindow(t *testing.T) {
 		openapi.AgentTrustEvidenceStatusGood, openapi.PolicyNoBlocks)
 }
 
+func TestGetAgentTrust_aRunThatFellBackIsNotEvidenceAboutTheVersion(t *testing.T) {
+	t.Parallel()
+
+	// The version was promoted on its declared pair. A run that finished on
+	// its fallback spent at another vendor's rate, and counting it would call
+	// the version dearer for a cost the declared pair never had (#27).
+	store := ledger.NewMemory()
+	finishedRun(t, store, "run-v1", "v1", 100_000)
+	finishedRun(t, store, "run-v2", "v2", 100_000)
+	finishedRun(t, store, "run-v2-fallback", "v2", 900_000)
+	appendTo(t, store, "run-v2-fallback", "v2", domain.StepModelFallback, domain.ModelFallbackPayload{
+		From:    domain.ModelPair{Provider: "anthropic", Model: "claude-opus-5"},
+		To:      domain.ModelPair{Provider: "openai", Model: "gpt-test"},
+		Failure: domain.FailureSummary{Code: "model_provider_overloaded", Retryable: true},
+	})
+
+	trust := readTrust(t, trustable(t, store), "triage", "")
+	assertEvidence(t, trust, openapi.AgentTrustEvidenceIdCost,
+		openapi.AgentTrustEvidenceStatusGood, openapi.CostStable)
+}
+
 func TestGetAgentTrust_inAnotherAreaReadsAsAbsent(t *testing.T) {
 	t.Parallel()
 

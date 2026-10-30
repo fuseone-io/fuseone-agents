@@ -198,6 +198,10 @@ func serve(args []string) error {
 			// What an instruction costs, asked of the model that will read
 			// it. Nothing on this side can compute it.
 			WithTokenisers(providers).
+			// Which providers a definition may name as its fallback. The
+			// same registry, so a name configured but sealed here — this
+			// process holds no vault — still counts as configured.
+			WithProviderNames(providers).
 			// What the platform ships about servers other people publish, so
 			// the Curator confirms a proposal instead of inventing one per
 			// tool name. It never becomes a classification on its own.

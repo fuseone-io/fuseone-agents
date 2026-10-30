@@ -30,6 +30,9 @@ func (m *Memory) AgentActivity(ctx context.Context, filter domain.RunFilter) ([]
 		if len(steps) == 0 || !matches(steps[0], filter) {
 			continue
 		}
+		if filter.DeclaredPairOnly && fellBack(steps) {
+			continue
+		}
 		summary := summarise(steps)
 
 		a := byAgent[summary.AgentID]
@@ -109,8 +112,9 @@ func (m *Memory) Agreement(ctx context.Context, since time.Time) ([]domain.Agree
 
 	counted := map[domain.AgentID]*domain.Agreement{}
 	for _, steps := range m.runs {
-		if isSimulated(steps) {
-			// Nobody was really asked in a simulation.
+		if isSimulated(steps) || fellBack(steps) {
+			// Nobody was really asked in a simulation, and a run that fell
+			// back was answered on a pair the agent is not promoted on.
 			continue
 		}
 		for _, step := range steps {
@@ -252,7 +256,8 @@ func (m *Memory) versionSteps(
 	runFilter.Until = time.Time{}
 	var out []domain.Step
 	for _, steps := range m.runs {
-		if len(steps) == 0 || isSimulated(steps) || !matches(steps[0], runFilter) {
+		if len(steps) == 0 || isSimulated(steps) || fellBack(steps) ||
+			!matches(steps[0], runFilter) {
 			continue
 		}
 		for _, step := range steps {

@@ -9,6 +9,7 @@ import { RunIdentity } from "@/features/runs/run-identity";
 import { RunKpis } from "@/features/runs/run-kpis";
 import { RunSpendPanel } from "@/features/runs/run-spend-panel";
 import { RunFailureNotice } from "@/features/runs/run-failure-notice";
+import { RunFallbackNotice } from "@/features/runs/run-fallback-notice";
 import { RunSideRail } from "@/features/runs/run-side-rail";
 import { TrailPanel } from "@/features/runs/trail-panel";
 import { useRun, useRunSteps } from "@/features/runs/api";
@@ -50,6 +51,7 @@ export function RunDetailPage() {
     >
       <RunIdentity run={data} trigger={triggerOf(items)} />
       <RunFailureNotice run={data} />
+      <RunFallbackNotice run={data} />
 
       {pending && (
         <PendingDecision

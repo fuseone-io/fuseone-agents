@@ -85,6 +85,9 @@ type Server struct {
 	// tokenisers answer how large an instruction is to the model that will
 	// read it, since nothing on this side can compute that.
 	tokenisers Tokenisers
+	// providerNames is which model providers this installation configures,
+	// asked when a definition names one as its fallback.
+	providerNames ProviderNames
 	// known is what the platform ships about servers other people publish:
 	// the first proposal a Curator confirms, never a classification.
 	known       Suggesters

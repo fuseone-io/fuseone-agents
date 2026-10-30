@@ -39,6 +39,10 @@ type Spec struct {
 	Provider string
 	Model    string
 	Effort   string
+	// Fallback is the pair a draft or copilot run switches to when the
+	// declared one keeps failing for reasons a retry is meant to outlast.
+	// Zero declares none, which is today's behaviour.
+	Fallback domain.ModelPair
 
 	// CachePrefixTTL is how long the provider may keep this agent's stable
 	// prefix cached: empty or 5m is the provider default, 1h pays the longer
@@ -101,19 +105,20 @@ type Trigger struct {
 
 // frontmatter is the wire shape of the YAML block.
 type frontmatter struct {
-	ID       string    `yaml:"id"`
-	Name     string    `yaml:"name"`
-	Company  string    `yaml:"company,omitempty"`
-	Area     string    `yaml:"area"`
-	Provider string    `yaml:"provider"`
-	Model    string    `yaml:"model"`
-	Effort   string    `yaml:"effort"`
-	CacheTTL string    `yaml:"cache_prefix_ttl,omitempty"`
-	Locale   string    `yaml:"reply_locale,omitempty"`
-	Tools    []string  `yaml:"tools"`
-	Triggers []Trigger `yaml:"triggers"`
-	Emits    Emits     `yaml:"emits,omitempty"`
-	Steps    []Step    `yaml:"steps,omitempty"`
+	ID       string            `yaml:"id"`
+	Name     string            `yaml:"name"`
+	Company  string            `yaml:"company,omitempty"`
+	Area     string            `yaml:"area"`
+	Provider string            `yaml:"provider"`
+	Model    string            `yaml:"model"`
+	Effort   string            `yaml:"effort"`
+	Fallback *domain.ModelPair `yaml:"fallback,omitempty"`
+	CacheTTL string            `yaml:"cache_prefix_ttl,omitempty"`
+	Locale   string            `yaml:"reply_locale,omitempty"`
+	Tools    []string          `yaml:"tools"`
+	Triggers []Trigger         `yaml:"triggers"`
+	Emits    Emits             `yaml:"emits,omitempty"`
+	Steps    []Step            `yaml:"steps,omitempty"`
 	Budget   struct {
 		Micros      int64 `yaml:"micros"`
 		Tokens      int64 `yaml:"tokens"`
@@ -157,6 +162,7 @@ func Parse(source string, data []byte) (Spec, error) {
 		Provider:       fm.Provider,
 		Model:          fm.Model,
 		Effort:         fm.Effort,
+		Fallback:       valueOf(fm.Fallback),
 		CachePrefixTTL: fm.CacheTTL,
 		ReplyLocale:    fm.Locale,
 		Triggers:       fm.Triggers,
@@ -219,6 +225,7 @@ func (s Spec) validate() error {
 	if s.CachePrefixTTL != "" && s.CachePrefixTTL != "5m" && s.CachePrefixTTL != "1h" {
 		problems = append(problems, "cache_prefix_ttl must be 5m or 1h; the provider sells no other window")
 	}
+	problems = append(problems, s.fallbackProblems()...)
 	problems = append(problems, triggerProblems(s.Triggers)...)
 	problems = append(problems, emitProblems(s.Emits)...)
 	problems = append(problems, stepProblems(s.Steps, s.Tools)...)

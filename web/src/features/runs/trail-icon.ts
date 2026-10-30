@@ -9,6 +9,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShieldX,
+  Shuffle,
   CircleSlash,
   Sparkles,
   TriangleAlert,
@@ -56,6 +57,7 @@ const ICONS: Record<StepKind, LucideIcon> = {
   failed: TriangleAlert,
   parked: ShieldAlert,
   run_finished: Flag,
+  model_fallback: Shuffle,
 };
 
 const VERDICT_TONE: Record<string, TileTone> = {
@@ -91,6 +93,7 @@ export function tileOf(
     case "approval_requested":
       return { icon, tone: "escalate" };
     case "compensation_started":
+    case "model_fallback":
       return { icon, tone: "escalate" };
     case "abandoned":
     case "failed":

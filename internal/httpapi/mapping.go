@@ -23,6 +23,7 @@ func toRun(runID domain.RunID, s engine.State, steps []domain.Step) openapi.Run 
 		Seq:            s.Seq,
 		Cost:           runCost(s.Spent, steps),
 		ReservedMicros: ptr(s.Reserved.Micros),
+		Fallback:       runFallback(steps),
 	}
 	if s.OnBehalfOf != "" {
 		out.OnBehalfOf = ptr(string(s.OnBehalfOf))
@@ -44,7 +45,8 @@ func toRun(runID domain.RunID, s engine.State, steps []domain.Step) openapi.Run 
 	if s.PendingApproval != nil {
 		out.PendingApproval = ptr(toPendingApproval(runID, s))
 	}
-	if failure := parkedFailure(steps); failure != nil {
+	if parked := parkedWith(steps); parked != nil && parked.Failure != nil {
+		failure := parked.Failure
 		out.Failure = &openapi.RunFailure{
 			Code:      failure.Code,
 			Provider:  stringPtr(failure.Provider),
@@ -52,11 +54,16 @@ func toRun(runID domain.RunID, s engine.State, steps []domain.Step) openapi.Run 
 			RequestId: stringPtr(failure.RequestID),
 			Retryable: ptr(failure.Retryable),
 		}
+		// Only when the supervisor's reason says something the provider's
+		// code does not: a withheld fallback, today.
+		if parked.Reason != failure.Code {
+			out.Failure.Reason = stringPtr(parked.Reason)
+		}
 	}
 	return out
 }
 
-func parkedFailure(steps []domain.Step) *domain.FailureSummary {
+func parkedWith(steps []domain.Step) *domain.ParkedPayload {
 	for i := len(steps) - 1; i >= 0; i-- {
 		if steps[i].Kind != domain.StepParked {
 			continue
@@ -65,7 +72,7 @@ func parkedFailure(steps []domain.Step) *domain.FailureSummary {
 		if err := json.Unmarshal(steps[i].Payload, &p); err != nil {
 			return nil
 		}
-		return p.Failure
+		return &p
 	}
 	return nil
 }

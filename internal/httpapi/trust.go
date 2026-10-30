@@ -229,6 +229,9 @@ func trustRunFilter(a domain.AgentSummary, window trustWindow) domain.RunFilter 
 	return domain.RunFilter{
 		Scope: a.Scope, AgentID: a.ID, VersionID: a.VersionID,
 		Since: window.from, Until: window.until,
+		// Evidence about the version is evidence about its declared pair: a
+		// run that fell back is weighed apart (#27).
+		DeclaredPairOnly: true,
 	}
 }
 

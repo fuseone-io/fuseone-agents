@@ -33,7 +33,8 @@ func (r *Registry) List(ctx context.Context, scope domain.Scope, allVersions boo
 	selection := `
 		select distinct on (s.agent_id)
 		       s.agent_id, s.version_id, s.company_id, s.area_id, s.name,
-		       s.provider, s.model, s.effort, s.cache_prefix_ttl, s.reply_locale, s.tools, s.budget, s.triggers,
+		       s.provider, s.model, s.effort, s.fallback_provider, s.fallback_model,
+		       s.cache_prefix_ttl, s.reply_locale, s.tools, s.budget, s.triggers,
 		       s.memory_learning, s.published_by, s.published_at, true
 		from agent_specs s
 		left join agent_state st on st.agent_id = s.agent_id %s
@@ -42,7 +43,8 @@ func (r *Registry) List(ctx context.Context, scope domain.Scope, allVersions boo
 	if allVersions {
 		selection = `
 			select s.agent_id, s.version_id, s.company_id, s.area_id, s.name,
-			       s.provider, s.model, s.effort, s.cache_prefix_ttl, s.reply_locale, s.tools, s.budget, s.triggers,
+			       s.provider, s.model, s.effort, s.fallback_provider, s.fallback_model,
+		       s.cache_prefix_ttl, s.reply_locale, s.tools, s.budget, s.triggers,
 			       s.memory_learning, s.published_by, s.published_at,
 			       coalesce(st.current_version = s.version_id,
 			                s.published_at = max(s.published_at) over (partition by s.agent_id))
@@ -113,7 +115,8 @@ func (r *Registry) Versions(ctx context.Context, agent domain.AgentID) ([]domain
 	// (PRD DE-08).
 	rows, err := r.pool.Query(ctx, `
 		select s.agent_id, s.version_id, s.company_id, s.area_id, s.name,
-		       s.provider, s.model, s.effort, s.cache_prefix_ttl, s.reply_locale, s.tools, s.budget, s.triggers,
+		       s.provider, s.model, s.effort, s.fallback_provider, s.fallback_model,
+		       s.cache_prefix_ttl, s.reply_locale, s.tools, s.budget, s.triggers,
 		       s.memory_learning, s.published_by, s.published_at, false
 		from agent_specs s
 		left join agent_state st on st.agent_id = s.agent_id
@@ -202,7 +205,8 @@ func scanAgent(row interface{ Scan(...any) error }) (domain.AgentSummary, error)
 		learning         []byte
 	)
 	if err := row.Scan(&agent, &version, &company, &area, &s.Name,
-		&s.Provider, &s.Model, &s.Effort, &s.CachePrefixTTL, &s.ReplyLocale, &tools, &budget, &triggers,
+		&s.Provider, &s.Model, &s.Effort, &s.Fallback.Provider, &s.Fallback.Model,
+		&s.CachePrefixTTL, &s.ReplyLocale, &tools, &budget, &triggers,
 		&learning, &by, &s.PublishedAt, &s.Latest); err != nil {
 		return domain.AgentSummary{}, err
 	}

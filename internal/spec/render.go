@@ -34,6 +34,11 @@ func Render(s Spec) ([]byte, error) {
 		Provider: s.Provider,
 		Model:    s.Model,
 		Effort:   s.Effort,
+		// Absent rather than an empty block when none is declared: written
+		// out, it would change the digest of every agent published before
+		// fallbacks existed, and republishing one unchanged would make a new
+		// version of identical intent.
+		Fallback: pairOrNil(s.Fallback),
 		CacheTTL: s.CachePrefixTTL,
 		Locale:   s.ReplyLocale,
 		Triggers: s.Triggers,
