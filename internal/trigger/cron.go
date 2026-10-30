@@ -2,6 +2,7 @@ package trigger
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -94,6 +95,7 @@ func (s *Scheduler) Tick(ctx context.Context) (opened int, err error) {
 			Agent:   d.Agent,
 			IdemKey: KeyFor(d.Agent, d.At),
 			Trigger: "cron",
+			Input:   momentInput(d),
 		})
 		if openErr != nil {
 			s.log.Error("could not open a scheduled run", "agent", d.Agent, "err", openErr)
@@ -105,6 +107,29 @@ func (s *Scheduler) Tick(ctx context.Context) (opened int, err error) {
 		}
 	}
 	return opened, nil
+}
+
+/*
+momentInput is what a scheduled run is about: the moment that came due.
+
+Without it an agent asked to sweep "the window this firing is about" derived
+the window from the wall clock, and a run that started late or was resumed
+computed a different window than the moment that named it (#149). The moment
+is the same one the key is derived from, so the input and the identity of the
+run cannot disagree.
+*/
+func momentInput(d Due) []byte {
+	raw, err := json.Marshal(struct {
+		Trigger  string    `json:"trigger"`
+		Moment   time.Time `json:"moment"`
+		Schedule string    `json:"schedule"`
+	}{Trigger: "cron", Moment: d.At.UTC(), Schedule: d.Schedule})
+	if err != nil {
+		// Three plain fields cannot fail to encode; an empty input is the
+		// run as it opened before this existed, not a run that fails.
+		return nil
+	}
+	return raw
 }
 
 // KeyFor names a due moment. Deterministic in the agent and the instant, so
