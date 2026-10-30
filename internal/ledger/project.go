@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -88,4 +89,107 @@ func strPtr(v string) *string {
 		return nil
 	}
 	return &v
+}
+
+func failureOf(s domain.Step) *domain.FailureSummary {
+	if s.Kind != domain.StepParked {
+		return nil
+	}
+	var p domain.ParkedPayload
+	if err := json.Unmarshal(s.Payload, &p); err != nil || p.Failure == nil {
+		return nil
+	}
+	return p.Failure
+}
+
+func failureCode(s domain.Step) *string {
+	if f := failureOf(s); f != nil && f.Code != "" {
+		return &f.Code
+	}
+	return nil
+}
+
+func failureProvider(s domain.Step) *string {
+	if f := failureOf(s); f != nil && f.Provider != "" {
+		return &f.Provider
+	}
+	return nil
+}
+
+func failureStatus(s domain.Step) *int {
+	if f := failureOf(s); f != nil && f.Status != 0 {
+		return &f.Status
+	}
+	return nil
+}
+
+func failureRequestID(s domain.Step) *string {
+	if f := failureOf(s); f != nil && f.RequestID != "" {
+		return &f.RequestID
+	}
+	return nil
+}
+
+func failureRetryable(s domain.Step) *bool {
+	if f := failureOf(s); f != nil {
+		return &f.Retryable
+	}
+	return nil
+}
+
+func projectPhase(s domain.Step) (phase *string, endedAt *time.Time) {
+	set := func(v string) *string { return &v }
+	switch s.Kind {
+	case domain.StepRunStarted:
+		return set("running"), nil
+	case domain.StepToolCalled:
+		return set("awaiting_tool"), nil
+	case domain.StepToolReturned, domain.StepApprovalDecided:
+		return set("running"), nil
+	case domain.StepApprovalRequested:
+		return set("awaiting_approval"), nil
+	case domain.StepParked:
+		return set("parked"), nil
+	case domain.StepResumed:
+		return set("running"), nil
+	case domain.StepAbandoned:
+		// A person ended the run. Whether it is over depends on whether
+		// anything still has to be taken back first.
+		var p domain.AbandonedPayload
+		if err := json.Unmarshal(s.Payload, &p); err == nil && p.Compensate {
+			return set("compensating"), nil
+		}
+		at := s.At
+		return set("failed"), &at
+	case domain.StepFailed:
+		at := s.At
+		return set("failed"), &at
+	case domain.StepRunFinished:
+		at := s.At
+		return set("finished"), &at
+	}
+	return nil, nil
+}
+
+func phaseOrRunning(p *string) string {
+	if p == nil {
+		return "running"
+	}
+	return *p
+}
+
+// labelsOrEmpty keeps a nil label set out of a not-null column. pgx encodes a
+// nil slice as SQL NULL, and "no labels" is an empty set, not an unknown one.
+func labelsOrEmpty(l domain.Labels) []string {
+	if len(l) == 0 {
+		return []string{}
+	}
+	return []string(l)
+}
+
+func nilIfEmpty(b []byte) []byte {
+	if len(b) == 0 {
+		return nil
+	}
+	return b
 }

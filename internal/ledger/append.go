@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -31,6 +30,20 @@ func (p *Postgres) appendOnce(
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	sealed, err := appendTx(ctx, tx, epoch, expect, s)
+	if err != nil {
+		return domain.Step{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Step{}, fmt.Errorf("commit: %w", err)
+	}
+	return sealed, nil
+}
+
+// appendTx is the append inside a transaction the caller commits.
+func appendTx(
+	ctx context.Context, tx pgx.Tx, epoch *int64, expect *domain.StepRef, s domain.Step,
+) (domain.Step, error) {
 	// Serialise appends to this run, and only this run.
 	//
 	// Locking the head row is not enough: it does not exist before the first
@@ -100,9 +113,6 @@ func (p *Postgres) appendOnce(
 	}
 	if err := upsertRun(ctx, tx, sealed); err != nil {
 		return domain.Step{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return domain.Step{}, fmt.Errorf("commit: %w", err)
 	}
 	return sealed, nil
 }
@@ -269,107 +279,4 @@ func upsertRun(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 		return fmt.Errorf("upsert run projection: %w", err)
 	}
 	return nil
-}
-
-func failureOf(s domain.Step) *domain.FailureSummary {
-	if s.Kind != domain.StepParked {
-		return nil
-	}
-	var p domain.ParkedPayload
-	if err := json.Unmarshal(s.Payload, &p); err != nil || p.Failure == nil {
-		return nil
-	}
-	return p.Failure
-}
-
-func failureCode(s domain.Step) *string {
-	if f := failureOf(s); f != nil && f.Code != "" {
-		return &f.Code
-	}
-	return nil
-}
-
-func failureProvider(s domain.Step) *string {
-	if f := failureOf(s); f != nil && f.Provider != "" {
-		return &f.Provider
-	}
-	return nil
-}
-
-func failureStatus(s domain.Step) *int {
-	if f := failureOf(s); f != nil && f.Status != 0 {
-		return &f.Status
-	}
-	return nil
-}
-
-func failureRequestID(s domain.Step) *string {
-	if f := failureOf(s); f != nil && f.RequestID != "" {
-		return &f.RequestID
-	}
-	return nil
-}
-
-func failureRetryable(s domain.Step) *bool {
-	if f := failureOf(s); f != nil {
-		return &f.Retryable
-	}
-	return nil
-}
-
-// labelsOrEmpty keeps a nil label set out of a not-null column. pgx encodes a
-// nil slice as SQL NULL, and "no labels" is an empty set, not an unknown one.
-func labelsOrEmpty(l domain.Labels) []string {
-	if len(l) == 0 {
-		return []string{}
-	}
-	return []string(l)
-}
-
-func nilIfEmpty(b []byte) []byte {
-	if len(b) == 0 {
-		return nil
-	}
-	return b
-}
-
-func projectPhase(s domain.Step) (phase *string, endedAt *time.Time) {
-	set := func(v string) *string { return &v }
-	switch s.Kind {
-	case domain.StepRunStarted:
-		return set("running"), nil
-	case domain.StepToolCalled:
-		return set("awaiting_tool"), nil
-	case domain.StepToolReturned, domain.StepApprovalDecided:
-		return set("running"), nil
-	case domain.StepApprovalRequested:
-		return set("awaiting_approval"), nil
-	case domain.StepParked:
-		return set("parked"), nil
-	case domain.StepResumed:
-		return set("running"), nil
-	case domain.StepAbandoned:
-		// A person ended the run. Whether it is over depends on whether
-		// anything still has to be taken back first.
-		var p domain.AbandonedPayload
-		if err := json.Unmarshal(s.Payload, &p); err == nil && p.Compensate {
-			return set("compensating"), nil
-		}
-		at := s.At
-		return set("failed"), &at
-	case domain.StepFailed:
-		at := s.At
-		return set("failed"), &at
-	case domain.StepRunFinished:
-		at := s.At
-		return set("finished"), &at
-	}
-	return nil, nil
-}
-
-func phaseOrRunning(p *string) string {
-	if p == nil {
-		return "running"
-	}
-	return *p
 }
