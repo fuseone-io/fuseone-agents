@@ -3,13 +3,16 @@ import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { precompressPlugin } from "./build/precompress";
 
 // The build emits plain static assets. They are embedded into the Go binary
 // via go:embed behind the `embedui` build tag, so the installation ships as a
 // single artefact (PRD DE-01). Nothing here assumes a Node runtime in
 // production.
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  // precompress writes .br and .gz copies the Go handler serves by
+  // Accept-Encoding; see internal/web/spa.go.
+  plugins: [react(), tailwindcss(), precompressPlugin()],
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
   },
@@ -25,6 +28,21 @@ export default defineConfig({
     // CSRF scheme and the bootstrap flow — free reconnaissance for anyone
     // probing an installation, and 2.5MB of the embedded bundle besides.
     sourcemap: "hidden",
+    rollupOptions: {
+      output: {
+        // Lazy screens make Rollup cut a chunk at every module two screens
+        // share — a lucide icon, a badge, a feature's api.ts — which left
+        // dozens of sub-kilobyte files, each its own request. Chunks below
+        // this size are folded into a neighbour instead; the screens
+        // themselves stay separate.
+        experimentalMinChunkSize: 20_000,
+        // Icons are the exception the size floor cannot fold: each lucide
+        // icon is its own module, shared by an arbitrary set of screens. They
+        // are a few kilobytes all together, so they travel as one file.
+        manualChunks: (id) =>
+          id.includes("/node_modules/lucide-react/") ? "icons" : undefined,
+      },
+    },
   },
   server: {
     port: 5173,
