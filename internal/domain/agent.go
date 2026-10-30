@@ -32,6 +32,9 @@ type AgentSummary struct {
 	Provider string
 	Model    string
 	Effort   string
+	// Fallback is the pair a draft or copilot run switches to when the
+	// declared one keeps failing; zero declares none.
+	Fallback ModelPair
 	// CachePrefixTTL is the stable-prefix cache window the definition chose;
 	// empty is the provider default.
 	CachePrefixTTL string
