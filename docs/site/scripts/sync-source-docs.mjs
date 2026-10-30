@@ -21,6 +21,7 @@ const designDocs = [
   ["NT-005-interaction-channels.md", "Channels and their product boundaries."],
   ["NT-006-evaluating-agents.md", "Evaluating agents and simulation strategy."],
   ["NT-007-drawing-a-process.md", "Process canvas and authored stages."],
+  ["NT-007-standing-approvals.md", "Standing approvals for agents that act on untrusted input."],
   ["NT-008-a-catalogue-by-shape.md", "Tool catalogue chosen by shape."],
   ["NT-009-governed-connectors.md", "Governed connector shapes and runtime boundary."],
   ["NT-010-the-shape-of-the-platform.md", "Topology, the run loop, layering and where data is written."],
@@ -45,6 +46,12 @@ const manualLocales = [
 
 const designSlugByFile = new Map(designDocs.map(([file]) => [file, slugFromFile(file)]));
 
+// Design notes left off the site on purpose. Leaving one out is a decision,
+// so it is written here rather than inferred from the list above.
+const unpublishedDesignDocs = new Set([]);
+
+await assertEveryDesignNoteListed();
+
 await rm(designOut, { recursive: true, force: true });
 await rm(manualOut, { recursive: true, force: true });
 await rm(helmOut, { force: true });
@@ -55,6 +62,22 @@ await writeManualIndex();
 await writeDesignDocs();
 await writeManualDocs();
 await writeHelmDoc();
+
+// The list above orders and describes the notes; the directory is what exists.
+// A note in docs/ that is in neither list used to be absent from the site with
+// no error anywhere (NT-007-standing-approvals was), so the build names it.
+async function assertEveryDesignNoteListed() {
+  const listed = new Set(designDocs.map(([file]) => file));
+  const unlisted = (await readdir(docsRoot))
+    .filter((file) => /^(PRD|DP|OP|NT)-\d{3}-.+\.md$/.test(file))
+    .filter((file) => !listed.has(file) && !unpublishedDesignDocs.has(file));
+  if (unlisted.length > 0) {
+    throw new Error(
+      `design notes missing from designDocs: ${unlisted.join(", ")} — ` +
+        "add each with a description, or to unpublishedDesignDocs if it stays off the site",
+    );
+  }
+}
 
 async function writeDesignDocs() {
   let order = 1;
