@@ -148,6 +148,20 @@ func (w *Worker) release(ctx context.Context, claim domain.Claim, outcome domain
 	return nil
 }
 
+func failureReasonFor(err error) string {
+	if failure, ok := model.FailureSummaryOf(err); ok {
+		return failure.Code
+	}
+	return "unclassified"
+}
+
+func parkedReasonFor(err error) string {
+	if failure, ok := model.FailureSummaryOf(err); ok {
+		return failure.Code
+	}
+	return "attempts_exhausted"
+}
+
 // backoff doubles per attempt and caps. Deterministic on purpose: jitter
 // belongs at the claim, where many workers contend, not here, where the delay
 // is already spread by each run's own failure time.
