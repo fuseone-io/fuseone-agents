@@ -199,8 +199,11 @@ func TestAdvance_fellBackAndNowAutonomous_refusesToPlanWithTheFallback(t *testin
 	if !errors.As(err, &unrehearsed) {
 		t.Fatalf("Advance = %v, want FallbackUnrehearsedError", err)
 	}
-	if got := unrehearsed.Summary(); got.Code != domain.ParkFallbackUnrehearsed || got.Retryable {
-		t.Errorf("summary = %+v, want a non-retryable %s", got, domain.ParkFallbackUnrehearsed)
+	if got := unrehearsed.ParkReason(); got != domain.ParkFallbackUnrehearsed {
+		t.Errorf("reason = %q, want %s", got, domain.ParkFallbackUnrehearsed)
+	}
+	if got := unrehearsed.Summary(); got.Code != "model_provider_overloaded" || got.Provider != "anthropic" {
+		t.Errorf("summary = %+v, want the failure the switch recorded", got)
 	}
 	if fallback.calls != 0 || primary.calls != 0 {
 		t.Errorf("calls = primary %d / fallback %d, want neither asked", primary.calls, fallback.calls)

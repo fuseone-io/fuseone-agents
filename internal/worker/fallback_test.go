@@ -310,7 +310,14 @@ func TestTurn_promotedToAutonomousAfterTheSwitch_parksAndNeverAsksTheFallback(t 
 	if r.backup.calls != 0 {
 		t.Errorf("fallback asked %d times after the agent became autonomous", r.backup.calls)
 	}
-	if p := parkPayload(t, r.store); p.Reason != domain.ParkFallbackUnrehearsed {
+	p := parkPayload(t, r.store)
+	if p.Reason != domain.ParkFallbackUnrehearsed {
 		t.Errorf("reason = %q, want %q", p.Reason, domain.ParkFallbackUnrehearsed)
+	}
+	// The reason says what the platform withheld; the failure still says what
+	// broke. Without it the run page names an unknown provider with no status.
+	if p.Failure == nil || p.Failure.Code != model.CodeProviderOverloaded ||
+		p.Failure.Provider != "anthropic" || p.Failure.Status != 529 {
+		t.Errorf("Failure = %+v, want the original provider failure beside the reason", p.Failure)
 	}
 }

@@ -12,16 +12,26 @@ import (
 var ErrNoFallbackPlanner = errors.New("engine: the run fell back and no fallback planner is wired")
 
 // FallbackUnrehearsedError means an autonomous run's ledger records a switch
-// to a fallback pair it was never rehearsed against.
-type FallbackUnrehearsedError struct{}
+// to a fallback pair it was never rehearsed against. Failure is the provider
+// failure that caused the switch, as the ledger recorded it.
+type FallbackUnrehearsedError struct {
+	Failure domain.FailureSummary
+}
 
 func (FallbackUnrehearsedError) Error() string {
 	return "engine: an autonomous run does not plan with an unrehearsed fallback"
 }
 
-// Summary parks the run at once: no number of retries rehearses the pair.
-func (FallbackUnrehearsedError) Summary() domain.FailureSummary {
-	return domain.FailureSummary{Code: domain.ParkFallbackUnrehearsed}
+// Summary is what broke: the provider, its status and request id. Kept so the
+// parking still names them — the reason alone reads as an unknown provider.
+func (e FallbackUnrehearsedError) Summary() domain.FailureSummary {
+	return e.Failure
+}
+
+// ParkReason is what the platform declined to do about it. A run with a
+// reason parks at once: no number of retries rehearses the pair.
+func (FallbackUnrehearsedError) ParkReason() string {
+	return domain.ParkFallbackUnrehearsed
 }
 
 /*
@@ -60,7 +70,7 @@ func (r *Runner) plannerFor(state State, start Start, stepModel string) (Planner
 	// the stage is not. An agent promoted after its run fell back would
 	// otherwise act alone on a pair nobody rehearsed it against.
 	if start.Stage == domain.StageAutonomous {
-		return nil, "", FallbackUnrehearsedError{}
+		return nil, "", FallbackUnrehearsedError{Failure: state.Fallback.Failure}
 	}
 	if r.deps.Fallback == nil {
 		return nil, "", ErrNoFallbackPlanner

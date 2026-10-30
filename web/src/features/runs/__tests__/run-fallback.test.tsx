@@ -83,6 +83,11 @@ describe("an autonomous run whose fallback was withheld", () => {
 
     expect(screen.getByText(/fallback não ensaiado/i)).toBeInTheDocument();
     expect(screen.getByText(/anthropic retornou 529/i)).toBeInTheDocument();
+    // The provider that broke is named, never stood in for: an unknown
+    // provider with no status is what the page said while the parking
+    // carried only the reason.
+    expect(screen.queryByText(/provedor desconhecido|unknown provider/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sem status/i)).not.toBeInTheDocument();
   });
 
   it("names the reason on the parking in the trail", () => {

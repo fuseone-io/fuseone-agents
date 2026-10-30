@@ -27,7 +27,7 @@ func (w *Worker) failure(claim domain.Claim, err error) domain.ClaimOutcome {
 			return outcome
 		}
 	}
-	if attempts >= w.cfg.MaxAttempts {
+	if _, ok := parkReasonOf(err); ok || attempts >= w.cfg.MaxAttempts {
 		outcome.Parked = true
 		return outcome
 	}
@@ -155,7 +155,28 @@ func failureReasonFor(err error) string {
 	return "unclassified"
 }
 
+/*
+parkReasoner is a failure that names why the platform stopped, apart from what
+broke — an unrehearsed fallback, today. Declared here by the consumer.
+
+Such a failure parks at once whatever its summary says about retrying: the
+summary describes the provider, and what stopped the run is a decision no
+retry changes.
+*/
+type parkReasoner interface{ ParkReason() string }
+
+func parkReasonOf(err error) (string, bool) {
+	var reasoned parkReasoner
+	if !errors.As(err, &reasoned) {
+		return "", false
+	}
+	return reasoned.ParkReason(), true
+}
+
 func parkedReasonFor(err error) string {
+	if reason, ok := parkReasonOf(err); ok {
+		return reason
+	}
 	if failure, ok := model.FailureSummaryOf(err); ok {
 		return failure.Code
 	}
