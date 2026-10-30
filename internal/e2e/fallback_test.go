@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -20,6 +18,7 @@ import (
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/model"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/testdb"
 	"github.com/fuseone/agents/internal/tools"
 	"github.com/fuseone/agents/internal/worker"
 )
@@ -37,26 +36,6 @@ type copilot struct{}
 
 func (copilot) StageOf(context.Context, domain.AgentID) (domain.Stage, error) {
 	return domain.StageCopilot, nil
-}
-
-func openSpecs(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		if os.Getenv("REQUIRE_DATABASE") != "" {
-			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
-		}
-		t.Skip("TEST_DATABASE_URL is unset; skipping the publish journey")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return pool
 }
 
 // publishThroughTheRoute sends the definition the way the console does: JSON
@@ -83,7 +62,7 @@ func publishThroughTheRoute(t *testing.T, server *httpapi.Server, agent, body st
 }
 
 func TestFallback_publishedFromTheConsole_reachesTheProviderItNames(t *testing.T) {
-	pool := openSpecs(t)
+	pool := testdb.Pool(t)
 
 	// Two providers, one of them down the way a real one is down.
 	primary := newModelServer(t, func(int) chatReply { return chatReply{Text: "primary answered"} })
