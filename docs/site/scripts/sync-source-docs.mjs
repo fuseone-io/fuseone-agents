@@ -1,6 +1,7 @@
 import { copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { designDocs, unpublishedDesignDocs } from "./design-notes.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const siteRoot = path.resolve(scriptDir, "..");
@@ -10,23 +11,6 @@ const designOut = path.join(contentRoot, "design");
 const manualOut = path.join(contentRoot, "manual");
 const helmOut = path.join(contentRoot, "reference", "helm-chart.md");
 
-const designDocs = [
-  ["PRD-001-fuseone-agents.md", "Product requirements and product vocabulary."],
-  ["DP-001-data-protection.md", "Stored data, retention, erasure and boundaries."],
-  ["OP-001-running-an-installation.md", "Installation and operation guide."],
-  ["NT-001-integration-boundary-and-execution-model.md", "Where MCP ends and integration begins."],
-  ["NT-002-remaining-work.md", "Remaining product work and ordering."],
-  ["NT-003-conversational-authoring.md", "Authoring an agent by conversation."],
-  ["NT-004-ledger-volume-and-paging.md", "Ledger volume, partitions and paging."],
-  ["NT-005-interaction-channels.md", "Channels and their product boundaries."],
-  ["NT-006-evaluating-agents.md", "Evaluating agents and simulation strategy."],
-  ["NT-007-drawing-a-process.md", "Process canvas and authored stages."],
-  ["NT-008-a-catalogue-by-shape.md", "Tool catalogue chosen by shape."],
-  ["NT-009-governed-connectors.md", "Governed connector shapes and runtime boundary."],
-  ["NT-010-the-shape-of-the-platform.md", "Topology, the run loop, layering and where data is written."],
-  ["NT-011-durable-agent-execution-and-workflow-engines.md", "Durable agent execution and the workflow-engine boundary."],
-  ["NT-012-governed-slack-tickets.md", "Governed Slack tickets and Gravitee subscription approval."],
-];
 
 const manualLocales = [
   {
@@ -43,7 +27,12 @@ const manualLocales = [
   },
 ];
 
-const designSlugByFile = new Map(designDocs.map(([file]) => [file, slugFromFile(file)]));
+// Only these become pages; the unpublished stay in the repository.
+const publicDesignDocs = designDocs.filter(([file]) => !unpublishedDesignDocs.has(file));
+const designSlugByFile = new Map(publicDesignDocs.map(([file]) => [file, slugFromFile(file)]));
+const repositoryDocs = "https://github.com/fuseone-io/fuseone-agents/blob/main/docs/";
+
+await assertEveryDesignNoteListed();
 
 await rm(designOut, { recursive: true, force: true });
 await rm(manualOut, { recursive: true, force: true });
@@ -56,9 +45,25 @@ await writeDesignDocs();
 await writeManualDocs();
 await writeHelmDoc();
 
+// The list above orders and describes the notes; the directory is what exists.
+// A note in docs/ that is in neither list used to be absent from the site with
+// no error anywhere (NT-007-standing-approvals was), so the build names it.
+async function assertEveryDesignNoteListed() {
+  const listed = new Set(designDocs.map(([file]) => file));
+  const unlisted = (await readdir(docsRoot))
+    .filter((file) => /^(PRD|DP|OP|NT)-\d{3}-.+\.md$/.test(file))
+    .filter((file) => !listed.has(file) && !unpublishedDesignDocs.has(file));
+  if (unlisted.length > 0) {
+    throw new Error(
+      `design notes missing from designDocs: ${unlisted.join(", ")} — ` +
+        "add each with a description, or to unpublishedDesignDocs if it stays off the site",
+    );
+  }
+}
+
 async function writeDesignDocs() {
   let order = 1;
-  for (const [file, description] of designDocs) {
+  for (const [file, description] of publicDesignDocs) {
     const raw = await readFile(path.join(docsRoot, file), "utf8");
     const { title, body } = stripFirstHeading(raw);
     const slug = designSlugByFile.get(file);
@@ -222,7 +227,9 @@ function transformManualLinks(body) {
 
 function transformDesignLinks(body, prefix) {
   return body.replace(/\]\(([^)\s]+\.md)(#[^)]+)?\)/g, (match, target, anchor = "") => {
-    const slug = designSlugByFile.get(path.basename(target));
+    const file = path.basename(target);
+    if (unpublishedDesignDocs.has(file)) return `](${repositoryDocs}${file}${anchor})`;
+    const slug = designSlugByFile.get(file);
     if (!slug) return match;
     return `](${prefix}${slug}/${anchor})`;
   });

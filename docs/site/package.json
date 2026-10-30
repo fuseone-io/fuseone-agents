@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node scripts/sync-source-docs.mjs && astro dev",
     "start": "node scripts/sync-source-docs.mjs && astro dev",
-    "build": "node scripts/sync-source-docs.mjs && astro build && node scripts/check-built-mermaid.mjs",
+    "build": "node scripts/sync-source-docs.mjs && node scripts/check-design-notes.mjs && astro build && node scripts/check-built-mermaid.mjs",
     "generate": "node scripts/sync-source-docs.mjs",
     "preview": "astro preview"
   },
