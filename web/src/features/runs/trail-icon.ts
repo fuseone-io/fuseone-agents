@@ -1,4 +1,5 @@
 import {
+  Bookmark,
   CircleDollarSign,
   Flag,
   Hand,
@@ -58,6 +59,7 @@ const ICONS: Record<StepKind, LucideIcon> = {
   parked: ShieldAlert,
   run_finished: Flag,
   model_fallback: Shuffle,
+  work_item_claimed: Bookmark,
 };
 
 const VERDICT_TONE: Record<string, TileTone> = {

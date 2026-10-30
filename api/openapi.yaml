@@ -4531,6 +4531,7 @@ components:
         - parked
         - run_finished
         - model_fallback
+        - work_item_claimed
 
     ModelPair:
       type: object

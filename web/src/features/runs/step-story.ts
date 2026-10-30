@@ -37,6 +37,7 @@ const TITLES: Record<StepKind, string> = {
   parked: "runs.storyParked",
   run_finished: "runs.storyFinished",
   model_fallback: "runs.storyFellBack",
+  work_item_claimed: "runs.storyWorkItemClaimed",
 };
 
 const VERDICT_CHIP: Record<string, { text: string; className: string }> = {
@@ -232,6 +233,12 @@ export function detailOf(step: Step): Line {
 
     case "model_fallback":
       return fallbackLine(payload);
+
+    case "work_item_claimed":
+      return {
+        key: "runs.storyWorkItemClaimedDetail",
+        values: { ref: typeof payload.ref === "string" ? payload.ref : "" },
+      };
 
     case "parked": {
       const reason = typeof payload.reason === "string" ? payload.reason : "";
