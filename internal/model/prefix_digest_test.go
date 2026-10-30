@@ -17,8 +17,8 @@ import (
 
 // An agent that never read its cache could not be diagnosed: the ledger kept
 // each prompt block's size, and two blocks of equal size with different bytes
-// read the same. A fingerprint of every cacheable block, as sent, names the
-// block that moved between two calls.
+// read the same. A fingerprint of the tools and stable system blocks, as sent,
+// names the block that moved between two calls.
 func TestPlan_prefixDigests_nameTheBlockThatChanged(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
