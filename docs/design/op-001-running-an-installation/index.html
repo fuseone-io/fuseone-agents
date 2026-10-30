@@ -364,7 +364,8 @@ at the worker’s log and the run’s last step.</p>
 <p>The ledger is the record: append-only, hash-chained, and every projection is a
 fold of it. <code dir="auto">agentd verify</code> checks a signed export.</p>
 <p><strong>Back up the database.</strong> Everything else — the catalogue, the classifications,
-the channels, the branding — lives in settings rows beside it. Credentials are
+the channels, the branding — lives in settings rows beside it, and an uploaded
+logo or icon in the <code dir="auto">branding_assets</code> table, not on a volume. Credentials are
 sealed with the master key, so <strong>a backup without that key restores an
 installation that cannot talk to anything.</strong> Keep them separately and keep both.</p>
 <p>Content a run read or wrote is held by reference with a digest. Erasing it
