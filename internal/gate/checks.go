@@ -23,7 +23,7 @@ adding another check is a line in the table, not a branch in a function.
 // checkAutonomy asks a person for anything an agent not yet trusted alone
 // would do to the world.
 func checkAutonomy(r Request) result {
-	if reviewQueueWrite(r) && r.Stage == domain.StageCopilot {
+	if (reviewQueueWrite(r) || coordinationWrite(r)) && r.Stage == domain.StageCopilot {
 		return pass()
 	}
 	if r.Stage.NeedsApproval(r.Effect) || (!r.Stage.Valid() && r.Effect != domain.EffectRead) {
@@ -58,6 +58,9 @@ func checkCapability(r Request) result {
 func checkContract(r Request) result {
 	if !r.Effect.Valid() {
 		return stop(fmt.Sprintf("tool %q has no effect classification", r.Tool))
+	}
+	if coordinationMisclassified(r) {
+		return stop(fmt.Sprintf("coordination tool %q must be classified as a write, not %s", r.Tool, r.Effect))
 	}
 	if len(r.Args) > 0 && !json.Valid(r.Args) {
 		return stop("arguments are not valid JSON")
@@ -96,7 +99,7 @@ func checkTaint(r Request) result {
 	if !r.ArgLabels.HasAny(domain.LabelUntrusted) {
 		return pass()
 	}
-	if reviewQueueWrite(r) {
+	if reviewQueueWrite(r) || coordinationWrite(r) {
 		return pass()
 	}
 	switch {
@@ -125,7 +128,7 @@ func checkPolicy(r Request) result {
 	if r.Compensating != "" {
 		return pass()
 	}
-	if reviewQueueWrite(r) {
+	if reviewQueueWrite(r) || coordinationWrite(r) {
 		return pass()
 	}
 
