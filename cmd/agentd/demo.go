@@ -8,7 +8,21 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/gate"
+	"github.com/fuseone/agents/internal/httpapi"
+	"github.com/fuseone/agents/internal/ledger"
 )
+
+// demoContent is where the demo's run contents live, and the console must read
+// from the same one: a closing answer goes behind a reference, and a demo
+// whose answers sit in a store the console cannot reach shows every finished
+// run with an answer nobody can open. Without a database there is no identity
+// to build the Postgres store from, so the demo keeps them in memory (#77).
+func demoContent(id *identity) httpapi.Content {
+	if id == nil {
+		return engine.NewMemoryContent()
+	}
+	return ledger.NewContent(id.pool)
+}
 
 // seedDemo drives the real loop against stub collaborators so the development
 // server has runs to serve. Nothing here is a fixture: every step goes through
