@@ -25,6 +25,21 @@ export default defineConfig({
     // CSRF scheme and the bootstrap flow — free reconnaissance for anyone
     // probing an installation, and 2.5MB of the embedded bundle besides.
     sourcemap: "hidden",
+    rollupOptions: {
+      output: {
+        // Lazy screens make Rollup cut a chunk at every module two screens
+        // share — a lucide icon, a badge, a feature's api.ts — which left
+        // dozens of sub-kilobyte files, each its own request. Chunks below
+        // this size are folded into a neighbour instead; the screens
+        // themselves stay separate.
+        experimentalMinChunkSize: 20_000,
+        // Icons are the exception the size floor cannot fold: each lucide
+        // icon is its own module, shared by an arbitrary set of screens. They
+        // are a few kilobytes all together, so they travel as one file.
+        manualChunks: (id) =>
+          id.includes("/node_modules/lucide-react/") ? "icons" : undefined,
+      },
+    },
   },
   server: {
     port: 5173,
