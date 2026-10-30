@@ -1,6 +1,7 @@
 package dedupe_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -244,4 +245,75 @@ func newStore(t *testing.T) (*dedupe.Postgres, *pgxpool.Pool) {
 		t.Fatalf("truncate: %v", err)
 	}
 	return dedupe.NewPostgres(pool), pool
+}
+
+// The loser of a reservation race must get the winner's record, never an
+// error. The race is staged rather than hoped for: the winner's row is held
+// uncommitted, the loser's Reserve is made to wait on it in ON CONFLICT, and
+// only then does the winner commit. The loser's upsert is then excluded by
+// its own predicate, and a fallback read on the statement's snapshot — taken
+// before the commit — cannot see the row either (#145).
+func TestReserve_aLoserThatWaitedOnTheWinnersCommit_getsTheWinnersRecord(t *testing.T) {
+	store, pool := newStore(t)
+	key := testKey()
+	now := time.Date(2026, 8, 25, 18, 20, 0, 0, time.UTC)
+
+	winner, err := pool.Begin(t.Context())
+	if err != nil {
+		t.Fatalf("begin the winner: %v", err)
+	}
+	defer func() { _ = winner.Rollback(context.Background()) }()
+	if _, err := winner.Exec(t.Context(), `
+		insert into tool_effect_dedupe (
+			company_id, area_id, agent_id, tool_id, fingerprint,
+			status, run_id, seq, reserved_at, confirmed_at, expires_at, updated_at
+		) values ($1, $2, $3, $4, $5, 'pending', 'run-winner', 0, $6, null, $7, $6)`,
+		key.Scope.Company, key.Scope.Area, key.AgentID, key.Tool, key.Fingerprint,
+		now, now.Add(time.Minute)); err != nil {
+		t.Fatalf("hold the winner's row: %v", err)
+	}
+
+	type outcome struct {
+		rec dedupe.Record
+		err error
+	}
+	lost := make(chan outcome, 1)
+	go func() {
+		rec, err := store.Reserve(t.Context(), key, "run-loser", time.Minute, now)
+		lost <- outcome{rec: rec, err: err}
+	}()
+
+	waitForLockWait(t, pool)
+	if err := winner.Commit(t.Context()); err != nil {
+		t.Fatalf("commit the winner: %v", err)
+	}
+
+	got := <-lost
+	if got.err != nil {
+		t.Fatalf("the loser's Reserve = %v, want the winner's record", got.err)
+	}
+	if got.rec.State != dedupe.StatePending || got.rec.RunID != "run-winner" {
+		t.Fatalf("the loser got %+v, want the winner's pending reservation", got.rec)
+	}
+}
+
+// waitForLockWait returns once some backend is blocked on a lock touching the
+// dedupe table — the loser parked behind the winner's uncommitted row.
+func waitForLockWait(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		var waiting int
+		if err := pool.QueryRow(t.Context(), `
+			select count(*) from pg_stat_activity
+			where wait_event_type = 'Lock' and query like '%tool_effect_dedupe%'
+			  and pid <> pg_backend_pid()`).Scan(&waiting); err != nil {
+			t.Fatalf("read lock waits: %v", err)
+		}
+		if waiting > 0 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the loser never waited on the winner's row; the race was not staged")
 }
