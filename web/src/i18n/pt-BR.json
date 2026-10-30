@@ -788,9 +788,9 @@
     "whoActed": "Quem agiu — pessoa ou agente"
   },
   "branding": {
-    "auditHint": "Trocar a marca da instalação fica registrado na trilha administrativa. O conteúdo da imagem fica fora desta configuração; cole uma URL ou uma data image pequena.",
+    "auditHint": "Trocar a marca da instalação fica registrado na trilha administrativa, com o hash da imagem enviada, nunca o conteúdo dela.",
     "displayName": "Nome exibido",
-    "externalUrlWarning": "Uma URL externa não carrega em instalação sem saída para a internet e avisa esse endereço sempre que alguém abre a tela de entrada. Use uma data image quando isso importar.",
+    "externalUrlWarning": "Uma URL externa não carrega em instalação sem saída para a internet e avisa esse endereço sempre que alguém abre a tela de entrada. Envie a imagem para a instalação quando isso importar.",
     "iconHint": "Marca compacta para a barra lateral recolhida. Deixe vazio para usar a marca padrão.",
     "iconPlaceholder": "https://assets.example.com/icone.png",
     "iconUrl": "URL do ícone",
@@ -802,11 +802,17 @@
     "primaryColor": "Cor primária",
     "primaryHint": "Cor em hex usada por ações primárias e pela marca padrão.",
     "primaryInvalid": "Use uma cor hex como #2357C6.",
+    "primaryPicker": "Seletor da cor primária",
     "primaryPlaceholder": "#0E9199",
     "reset": "Voltar ao padrão",
     "saveFailed": "Não foi possível alterar a marca",
     "saved": "Marca atualizada",
-    "title": "Aparência da instalação"
+    "title": "Aparência da instalação",
+    "uploadFailed": "Não foi possível enviar a imagem",
+    "uploadHint": "PNG, JPEG ou WebP de no máximo 512 KiB, servido pela própria instalação. SVG não é aceito por enquanto.",
+    "uploadIcon": "Enviar ícone",
+    "uploadLogo": "Enviar logo",
+    "uploadTooLarge": "A imagem passa do limite: envie uma de no máximo 512 KiB."
   },
   "channels": {
     "account": "Conta no canal",
