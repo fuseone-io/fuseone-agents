@@ -1,6 +1,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import type { ManualPage } from "@/features/manual/api";
 
 /**
@@ -48,7 +49,7 @@ export function ManualBody({
     <div className="min-w-0 max-w-[72ch] [&_h2]:mt-10 [&_h2]:border-t [&_h2]:border-border [&_h2]:pt-6 [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:tracking-tight [&_h2:first-child]:mt-0 [&_h2:first-child]:border-0 [&_h2:first-child]:pt-0 [&_h3]:mt-7 [&_h3]:text-lg [&_h3]:font-semibold [&_p]:my-3 [&_p]:break-words [&_li]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_strong]:font-medium">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        components={{ a: Anchor, table: Grid, h2: Heading, h3: Subheading }}
+        components={{ a: Anchor, table: Grid, h2: Heading, h3: Subheading, img: Picture }}
       >
         {body}
       </ReactMarkdown>
@@ -84,6 +85,31 @@ function Anchor({ href, children }: { href?: string; children?: React.ReactNode 
     >
       {children}
     </Link>
+  );
+}
+
+/**
+ * A screenshot the page cites, served by the console itself.
+ *
+ * Pages cite images as `images/<name>`, which renders relative on GitHub and
+ * resolves here to the manual's own endpoint, in the reader's locale. Nothing
+ * else renders: an installation can be air-gapped, and an image fetched from
+ * anywhere outside would report every reader to a third party.
+ */
+function Picture({ src, alt }: { src?: string; alt?: string }) {
+  const { i18n } = useTranslation();
+  const name = (src ?? "").replace(/^images\//, "");
+  if (!src?.startsWith("images/") || !name || /[/\\]/.test(name)) {
+    return null;
+  }
+  const locale = i18n.language.startsWith("en") ? "en-US" : "pt-BR";
+  return (
+    <img
+      src={`/api/v1/manual/images/${encodeURIComponent(name)}?locale=${locale}`}
+      alt={alt ?? ""}
+      loading="lazy"
+      className="my-4 w-full rounded-lg border border-border"
+    />
   );
 }
 
