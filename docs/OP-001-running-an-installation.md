@@ -306,7 +306,8 @@ The ledger is the record: append-only, hash-chained, and every projection is a
 fold of it. `agentd verify` checks a signed export.
 
 **Back up the database.** Everything else — the catalogue, the classifications,
-the channels, the branding — lives in settings rows beside it. Credentials are
+the channels, the branding — lives in settings rows beside it, and an uploaded
+logo or icon in the `branding_assets` table, not on a volume. Credentials are
 sealed with the master key, so **a backup without that key restores an
 installation that cannot talk to anything.** Keep them separately and keep both.
 
