@@ -23,6 +23,10 @@ const MaxBrandAssetBytes = 512 << 10
 
 const brandAssetPrefix = "/branding/assets/"
 
+// BrandingLock names the advisory lock every branding write takes before
+// judging which images exist or are still referenced.
+const BrandingLock = "branding:assets"
+
 var (
 	ErrBrandAssetRefused  = errors.New("admin: brand asset refused")
 	ErrBrandAssetTooLarge = errors.New("admin: brand asset too large")

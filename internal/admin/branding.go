@@ -82,16 +82,15 @@ func (b *Branding) Set(
 	}
 
 	set := settings.Setting{
-		ScopeKind: settings.ScopeInstallation,
-		Kind:      settings.KindBranding,
-		Name:      brandingName,
-		Value:     value,
-		Enabled:   true,
-		UpdatedBy: string(by),
+		ScopeKind: settings.ScopeInstallation, Kind: settings.KindBranding,
+		Name: brandingName, Value: value, Enabled: true, UpdatedBy: string(by),
 	}
 	var previous BrandingConfig
 	return writeFolded(ctx, b.pool, b.settings, folded{
 		by: by, scope: scope, action: "branding.changed", target: brandingName, set: set,
+		// Lock first, judge second: "exists" and "still referenced" are only
+		// true of what other saves have already committed.
+		guard: lockBranding,
 		fold: func(stored settings.Setting) (settings.Setting, any, error) {
 			previous = BrandingConfig{}
 			if len(stored.Value) > 0 {

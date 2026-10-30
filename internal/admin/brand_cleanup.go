@@ -19,6 +19,24 @@ func assetRefs(config BrandingConfig) []string {
 	return out
 }
 
+/*
+lockBranding serialises every branding write, and with it every delete from
+branding_assets, which only happens inside one.
+
+Without it, under READ COMMITTED, a save replacing image X judges X
+unreferenced while another save that names X is still uncommitted; that one
+finds X present, both commit, and its brand points at a deleted image. Taken
+before the stored brand is read, the second save judges only after the first
+has committed. Uploads stay outside it: an insert never removes a row.
+*/
+func lockBranding(ctx context.Context, conn settings.DB) error {
+	if _, err := conn.Exec(ctx,
+		`select pg_advisory_xact_lock(hashtextextended($1, 0))`, BrandingLock); err != nil {
+		return fmt.Errorf("admin: lock branding: %w", err)
+	}
+	return nil
+}
+
 // requireAssets refuses a brand that points at an image nobody uploaded,
 // inside the write's transaction: a broken image on the sign-in screen is
 // found by the person who cannot sign in, not by the one who saved it.
