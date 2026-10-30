@@ -2,7 +2,6 @@ package policy_test
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 	"time"
 
@@ -11,25 +10,12 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/policy"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 func refusalPoolFor(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		if os.Getenv("REQUIRE_DATABASE") != "" {
-			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
-		}
-		t.Skip("TEST_DATABASE_URL is unset; skipping the policy suite")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(), `
 		truncate run_steps, runs, gate_refusal_forms, gate_refusal_alert_cursor`); err != nil {
 		t.Fatalf("truncate: %v", err)

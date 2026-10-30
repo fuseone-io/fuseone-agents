@@ -8,6 +8,7 @@ import (
 
 	"github.com/fuseone/agents/internal/audit"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 /*
@@ -52,7 +53,7 @@ func TestRead_ledgerHoldsManySteps_answersWithoutScanningIt(t *testing.T) {
 // the count on another would report whatever happened to have arrived.
 func volumePool(t *testing.T, steps int) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		if os.Getenv("REQUIRE_DATABASE") != "" {
 			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")

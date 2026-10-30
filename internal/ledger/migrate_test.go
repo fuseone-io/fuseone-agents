@@ -2,7 +2,6 @@ package ledger_test
 
 import (
 	"context"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 // Every process migrates on the way up. A deployment starts them together, so
@@ -17,7 +17,7 @@ import (
 // than the unlucky one.
 
 func TestMigrate_twoProcessesStartingTogether_bothSucceed(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset; skipping the migration race")
 	}
@@ -74,18 +74,7 @@ func TestMigrate_twoProcessesStartingTogether_bothSucceed(t *testing.T) {
 }
 
 func TestMigrate_legacyRowsReceiveCanonicalBaseline(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL is unset; skipping the migration baseline")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(), `
 		update schema_migrations
 		set digest = null, digest_source = null
@@ -121,18 +110,7 @@ post-0076 boundary and leaves both historical versions recorded, so only 0077
 can supply the new columns and the versioned constraint name.
 */
 func TestMigrate_ticketWaitingNotice_upgradesAnAlreadyMigratedInbox(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL is unset; skipping the migration")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 
 	if _, err := pool.Exec(t.Context(), `
 		delete from schema_migrations
@@ -193,18 +171,7 @@ func TestMigrate_ticketWaitingNotice_upgradesAnAlreadyMigratedInbox(t *testing.T
 // converges that shape too; otherwise fixing frozen history repairs an older
 // preview and breaks a newer one with duplicate-column errors.
 func TestMigrate_ticketWaitingNotice_convergesTheInterimPreviewSchema(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL is unset; skipping the migration")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 
 	if _, err := pool.Exec(t.Context(), `
 		delete from schema_migrations
@@ -246,18 +213,7 @@ Four things the statement has to get right, each of which was got wrong on the
 way here, and each of which is a case below.
 */
 func TestMigrate_conversationsUnderTheIdAlone_takeTheirConnection(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL is unset; skipping the migration")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 
 	const version = "0072_conversations_by_connection"
 	rows := []struct {
@@ -369,18 +325,7 @@ for it. The lock is asked of Postgres by the name the administration uses, so
 this also says the two agree about what that name is.
 */
 func TestMigrate_conversationsUnderTheIdAlone_waitForTheConnectionsLock(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL is unset; skipping the migration")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 
 	if _, err := pool.Exec(t.Context(), `
 		insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by)

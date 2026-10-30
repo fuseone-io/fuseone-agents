@@ -2,14 +2,13 @@ package connectortools
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/settings"
+	"github.com/fuseone/agents/internal/testdb"
 	"github.com/fuseone/agents/internal/vault"
 )
 
@@ -50,21 +49,7 @@ func TestGraviteeAccessResolver_readsTheStoredBindingAsOneAuthority(t *testing.T
 
 func graviteeTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		if os.Getenv("REQUIRE_DATABASE") != "" {
-			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
-		}
-		t.Skip("TEST_DATABASE_URL is unset; the authority round trip needs Postgres")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(),
 		`delete from settings where kind = 'connector_instance' and company_id = 'gravitee-authority-test'`); err != nil {
 		t.Fatalf("clean connector settings: %v", err)

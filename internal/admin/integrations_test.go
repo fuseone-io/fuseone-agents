@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -16,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/fuseone/agents/internal/testdb"
 	"github.com/fuseone/agents/internal/vault"
 )
 
@@ -1940,7 +1940,7 @@ func (q *queryCounter) stop() int {
 // tracedPool is a pool that reports every query it is asked to run.
 func tracedPool(t *testing.T, tracer pgx.QueryTracer) *pgxpool.Pool {
 	t.Helper()
-	cfg, err := pgxpool.ParseConfig(os.Getenv("TEST_DATABASE_URL"))
+	cfg, err := pgxpool.ParseConfig(testdb.DSN(t))
 	if err != nil {
 		t.Fatalf("parse the database url: %v", err)
 	}

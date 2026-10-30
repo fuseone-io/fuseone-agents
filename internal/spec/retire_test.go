@@ -1,13 +1,13 @@
 package spec_test
 
 import (
-	"os"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 /*
@@ -98,7 +98,7 @@ func retirable(t *testing.T) (*spec.State, *spec.Registry) {
 	t.Helper()
 	registry := openRegistry(t)
 
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	pool, err := pgxpool.New(t.Context(), dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)

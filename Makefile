@@ -65,7 +65,11 @@ sql-test-certs:
 # customer's, with its own TLS, roles and schema. A suite that needed the second
 # and found the first would prove the executor's guarantees against the ledger
 # it must never touch.
-PG_PKGS = $(shell grep -rlE 'TEST_DATABASE_URL|TEST_SQL_DATABASE_URL' --include='*_test.go' internal \
+#
+# Most suites no longer name TEST_DATABASE_URL themselves: they reach it through
+# internal/testdb, so a call into that package counts as reading it. Matching the
+# variable alone would drop every one of them from this list without a word.
+PG_PKGS = $(shell grep -rlE 'TEST_DATABASE_URL|TEST_SQL_DATABASE_URL|testdb\.[A-Z]' --include='*_test.go' internal \
             | xargs -n1 dirname | sort -u | sed 's|^|./|')
 
 ## check-pg: the contract suite against a real database as well as the fake.
@@ -85,10 +89,11 @@ check-pg: db sql-db
 ## Separate from check-pg because CI brings its own database and must not have
 ## its own copy of the list.
 test-pg:
-	@# -p 1: these suites truncate the same tables, and go test runs packages
-	@# concurrently by default. Serialising them is the honest fix while they
-	@# share one database; a schema per suite would be the next step.
-	$(GO) test $(PG_PKGS) -count=1 -race -p 1
+	@# Parallel, as go test runs packages by default. These suites truncate and
+	@# sweep whole tables, which once forced -p 1 here; internal/testdb now
+	@# gives each package its own database (agents_test_<pkg>), created on
+	@# demand from TEST_DATABASE_URL, so they no longer share the rows they count.
+	$(GO) test $(PG_PKGS) -count=1 -race
 
 ## smoke: prove the shipping artefact serves what it should and nothing else.
 ## The unit suites cannot see this: it is a property of the binary, not the code.

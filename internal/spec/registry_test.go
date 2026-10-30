@@ -3,15 +3,14 @@ package spec_test
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 const definition = `---
@@ -35,23 +34,7 @@ Read the ticket and classify it.
 func openSpecPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		if os.Getenv("REQUIRE_DATABASE") != "" {
-			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
-		}
-		t.Skip("TEST_DATABASE_URL is unset; skipping the registry suite")
-	}
-
-	pool, err := pgxpool.New(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-
-	if err := ledger.Migrate(context.Background(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	// TRUNCATE, not DELETE: the table refuses row deletion, which is the
 	// point — a version a run is pinned to must not be removable. Truncation
 	// does not fire row triggers, and is how the ledger's own suite resets.
@@ -203,7 +186,7 @@ func TestPublishedVersion_cannotBeChangedInPlace(t *testing.T) {
 
 	// The database enforces it, not the code that happens to be in front of
 	// it: a run pinned to a version has to mean something years later.
-	pool, _ := pgxpool.New(ctx, os.Getenv("TEST_DATABASE_URL"))
+	pool, _ := pgxpool.New(ctx, testdb.DSN(t))
 	defer pool.Close()
 	if _, err := pool.Exec(ctx,
 		`update agent_specs set instructions = 'rewritten' where agent_id = 'triage'`); err == nil {

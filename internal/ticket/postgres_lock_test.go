@@ -14,6 +14,7 @@ import (
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 	"github.com/fuseone/agents/internal/ticket"
 )
 
@@ -131,7 +132,7 @@ func assertOneClaim(t *testing.T, results <-chan claimResult, want int) {
 
 func ticketPostgres(t *testing.T) (*pgxpool.Pool, ticket.Store) {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		if os.Getenv("REQUIRE_DATABASE") != "" {
 			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")

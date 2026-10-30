@@ -2,14 +2,13 @@ package auth_test
 
 import (
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 // Two things write grants: an identity provider, on every sign-in, and an
@@ -19,19 +18,7 @@ import (
 
 func directoryFor(t *testing.T) (*auth.Postgres, *pgxpool.Pool) {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL is unset; skipping the grants suite")
-	}
-
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(),
 		`truncate role_grants, principals, sessions cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)

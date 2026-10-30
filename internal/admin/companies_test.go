@@ -1,15 +1,14 @@
 package admin_test
 
 import (
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/scope"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 /*
@@ -115,22 +114,7 @@ func TestArchive_leavesTheCompanyReadable(t *testing.T) {
 
 func companiesFor(t *testing.T) (*admin.Companies, *pgxpool.Pool) {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		if os.Getenv("REQUIRE_DATABASE") != "" {
-			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
-		}
-		t.Skip("TEST_DATABASE_URL is unset; skipping the companies suite")
-	}
-
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(), `
 		delete from scopes where company_id = 'acme-two';
 		delete from role_grants where company_id = 'acme-two';

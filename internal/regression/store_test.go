@@ -2,14 +2,13 @@ package regression_test
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/regression"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 // The corpus is the only thing standing between "we corrected this once" and
@@ -27,19 +26,7 @@ func storeFor(t *testing.T) *regression.Store {
 
 func poolFor(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL is unset; skipping the regression suite")
-	}
-
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	return pool
 }
 

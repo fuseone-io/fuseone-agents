@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -13,7 +12,7 @@ import (
 
 	"github.com/fuseone/agents/internal/dedupe"
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 func TestReserve_confirmsOnlyAfterASuccessfulToolReturn(t *testing.T) {
@@ -226,21 +225,7 @@ func testKey() dedupe.Key {
 
 func newStore(t *testing.T) (*dedupe.Postgres, *pgxpool.Pool) {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		if os.Getenv("REQUIRE_DATABASE") != "" {
-			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
-		}
-		t.Skip("TEST_DATABASE_URL is unset; cross-run dedupe is a Postgres coordination fact")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := testdb.Pool(t)
 	if _, err := pool.Exec(t.Context(), `truncate tool_effect_dedupe, run_steps, runs`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}

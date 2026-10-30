@@ -16,6 +16,7 @@ import (
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/model"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/testdb"
 	"github.com/fuseone/agents/internal/tools"
 	"github.com/fuseone/agents/internal/worker"
 )
@@ -38,7 +39,7 @@ func eachLedger(t *testing.T, name string, fn func(t *testing.T, store Store)) {
 
 	t.Run("memory/"+name, func(t *testing.T) { fn(t, ledger.NewMemory()) })
 
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		if os.Getenv("REQUIRE_DATABASE") != "" {
 			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")

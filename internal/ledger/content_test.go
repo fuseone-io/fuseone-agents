@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 // ContentStore is what the engine needs of a claim check.
@@ -50,7 +50,7 @@ func boundedStores(t *testing.T, limit int) map[string]func(*testing.T) ContentS
 		},
 	}
 
-	dsn := os.Getenv("TEST_DATABASE_URL")
+	dsn := testdb.DSN(t)
 	if dsn == "" {
 		requireDatabase(t, dsn)
 		t.Log("TEST_DATABASE_URL is unset; skipping the Postgres content store")
