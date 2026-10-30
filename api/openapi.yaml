@@ -5341,6 +5341,12 @@ components:
         retryable:
           type: boolean
           description: Whether trying later is expected to help.
+        reason:
+          type: string
+          description: >
+            Why the supervisor parked the run, when that is not the provider's
+            own code: fallback_unrehearsed for an autonomous run whose declared
+            fallback was withheld.
 
     Tool:
       type: object

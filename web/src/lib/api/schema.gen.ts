@@ -3272,6 +3272,8 @@ export interface components {
             requestId?: string;
             /** @description Whether trying later is expected to help. */
             retryable?: boolean;
+            /** @description Why the supervisor parked the run, when that is not the provider's own code: fallback_unrehearsed for an autonomous run whose declared fallback was withheld. */
+            reason?: string;
         };
         Tool: {
             /** @description Namespaced by server, because two servers naming a tool "search" must not collide into one capability. */

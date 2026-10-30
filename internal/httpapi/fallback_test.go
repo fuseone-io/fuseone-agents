@@ -153,3 +153,39 @@ func TestGetRun_aRunThatNeverFellBack_carriesNoMark(t *testing.T) {
 		t.Errorf("Fallback = %+v, want none", *got)
 	}
 }
+
+func TestGetRun_parkedAsUnrehearsed_namesTheReasonBesideTheProvider(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := ledger.NewMemory()
+	at := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+
+	for i, step := range []domain.Step{
+		{Kind: domain.StepRunStarted},
+		{Kind: domain.StepParked, Payload: mustPayload(t, domain.ParkedPayload{
+			Reason: domain.ParkFallbackUnrehearsed, Attempts: 3,
+			Failure: &domain.FailureSummary{
+				Code: "model_provider_overloaded", Provider: "anthropic", Status: 529, Retryable: true,
+			},
+		})},
+	} {
+		step.RunID, step.Scope, step.AgentID, step.VersionID = "run-cx", domain.Scope{Company: "acme", Area: "cx"}, "triage", "v1"
+		step.At = at.Add(time.Duration(i) * time.Second)
+		if _, err := store.Append(ctx, step); err != nil {
+			t.Fatalf("seed %s: %v", step.Kind, err)
+		}
+	}
+
+	resp, err := NewServer(store, "test").
+		GetRun(inArea("cx", domain.RoleAuthor), openapi.GetRunRequestObject{RunId: "run-cx"})
+	if err != nil {
+		t.Fatalf("GetRun: %v", err)
+	}
+	// The provider says what broke; the reason says what the platform
+	// declined to do about it. A run page showing only the first reads like
+	// any overloaded provider, and nobody learns the fallback was withheld.
+	got := resp.(openapi.GetRun200JSONResponse).Failure
+	if got == nil || got.Code != "model_provider_overloaded" || valueOr(got.Reason) != domain.ParkFallbackUnrehearsed {
+		t.Fatalf("failure = %+v, want the provider's code and the unrehearsed reason", got)
+	}
+}
