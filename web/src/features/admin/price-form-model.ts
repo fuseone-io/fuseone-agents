@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ModelPrice } from "@/features/admin/prices-api";
+import { microsFromText, textFromMicros } from "@/lib/money";
 
 const ratePattern = /^\d+([,.]\d+)?$/;
 const rateField = z.string().refine((v) => {
@@ -98,13 +99,11 @@ function blankPrice(provider: string, model: string): PriceFormValues {
 }
 
 function rateText(micros: number | undefined): string {
-  return micros ? String(micros / 1_000_000) : "";
+  return textFromMicros(micros);
 }
 
 function rateMicros(value: string): number {
-  const trimmed = value.trim();
-  if (trimmed === "") return 0;
-  return Math.round(Number(trimmed.replace(",", ".")) * 1_000_000);
+  return microsFromText(value) ?? 0;
 }
 
 function sortedUnique(values: string[]): string[] {
