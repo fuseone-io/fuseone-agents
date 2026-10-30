@@ -16,6 +16,8 @@ import { ExportButton } from "@/features/runs/export-button";
 import { AbandonDialog } from "@/features/runs/abandon-dialog";
 import { ResumeButton } from "@/features/runs/resume-button";
 import { ReplayButton } from "@/features/runs/replay-button";
+import { RunFromInputButton } from "@/features/runs/run-from-input-button";
+import { RunSourceLine } from "@/features/runs/run-source-line";
 import { PHASE_LABELS } from "@/features/runs/phase-badge";
 import { stateOfPhase } from "@/lib/agent-state";
 import { formatInstant } from "@/lib/format";
@@ -64,6 +66,7 @@ export function RunIdentity({ run, trigger }: { run: Run; trigger?: string }) {
               components={{ v: <Mono dim /> }}
             />
           </span>
+          <RunSourceLine sourceRunId={run.sourceRunId} />
         </div>
       </div>
 
@@ -72,6 +75,9 @@ export function RunIdentity({ run, trigger }: { run: Run; trigger?: string }) {
             replay. Replaying would re-execute effects that already happened
             against systems that already changed. */}
         <RunNowDialog agentId={run.agentId} agentName={run.agentId} />
+        {/* The same agent again, but with this run's recorded input rather
+            than a fresh one. A new run; this one is not touched. */}
+        <RunFromInputButton runId={run.runId} />
         {/* Only while there is a run to end. Abandoning a finished one is a
             request the server refuses, and offering it is a button that
             teaches people the console does not know what it is showing. */}
