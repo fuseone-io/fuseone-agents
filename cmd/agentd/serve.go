@@ -30,7 +30,6 @@ import (
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/finops"
 	"github.com/fuseone/agents/internal/httpapi"
-	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/known"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/memory"
@@ -234,21 +233,7 @@ func serve(args []string) error {
 		registerProviders(ctx, identityStore, identity.oidc)
 	}
 
-	apiHandler := openapi.HandlerWithOptions(
-		openapi.NewStrictHandlerWithOptions(api, nil, openapi.StrictHTTPServerOptions{
-			RequestErrorHandlerFunc: requestProblem,
-			ResponseErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
-				writeProblem(w, http.StatusInternalServerError, "Internal error", err.Error())
-			},
-		}),
-		openapi.StdHTTPServerOptions{
-			BaseURL:    "/api/v1",
-			BaseRouter: http.NewServeMux(),
-			ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
-				writeProblem(w, http.StatusBadRequest, "Invalid request", err.Error())
-			},
-		},
-	)
+	apiHandler := apiHandlerFor(api)
 
 	// The API owns /api/; everything else is the console, which falls back to
 	// index.html so browser routing works on a hard refresh. Ordering matters:
@@ -313,13 +298,7 @@ func serve(args []string) error {
 			slog.Default(),
 		).Mount(root)
 	} else {
-		slog.Warn("running without authentication; every caller has full access")
-		root.Handle("/api/", apiProblems(apiHandler))
-		// The console asks who it should let in before it renders anything.
-		// Without this it gets the SPA's own index.html back, fails to read it
-		// as JSON, and shows an error instead of the console — an installation
-		// with nothing to protect would look broken rather than open.
-		root.Handle("GET /auth/providers", http.HandlerFunc(httpapi.OpenInstallation))
+		mountOpen(root, apiHandler)
 	}
 
 	root.Handle("/", web.Handler())
