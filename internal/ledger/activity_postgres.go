@@ -15,6 +15,9 @@ import (
 func (p *Postgres) AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error) {
 	where, args := runFilterSQL(filter)
 	where = whereAnd(where, realRuns)
+	if filter.DeclaredPairOnly {
+		where = whereAnd(where, declaredPairRuns)
+	}
 
 	rows, err := p.pool.Query(ctx, `
 		select agent_id,
@@ -91,6 +94,7 @@ func (p *Postgres) Agreement(ctx context.Context, since time.Time) ([]domain.Agr
 		where kind = 'approval_decided'
 		  and at >= $1
 		  and `+realSteps+`
+		  and `+declaredPairSteps+`
 		group by agent_id
 		order by agent_id`, since.UTC())
 	if err != nil {
@@ -121,6 +125,7 @@ func (p *Postgres) VersionAgreement(
 ) ([]domain.VersionAgreement, error) {
 	where, args := runFilterOn(filter, "at")
 	where = whereAnd(whereAnd(where, "kind = 'approval_decided'"), realSteps)
+	where = whereAnd(where, declaredPairSteps)
 
 	rows, err := p.pool.Query(ctx, `
 		select agent_id,
@@ -165,7 +170,7 @@ func (p *Postgres) VersionGateBlocks(
 	args = append(args, int(domain.VerdictBlock))
 	where = whereAnd(whereAnd(where, "kind = 'gate_decided'"),
 		fmt.Sprintf("coalesce((payload->>'verdict')::int, 0) = $%d", len(args)))
-	where = whereAnd(where, realSteps)
+	where = whereAnd(whereAnd(where, realSteps), declaredPairSteps)
 
 	rows, err := p.pool.Query(ctx, `
 		select agent_id, version_id, count(*), count(distinct run_id)

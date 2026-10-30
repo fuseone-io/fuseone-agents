@@ -2,11 +2,14 @@ package autonomy_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/fuseone/agents/internal/autonomy"
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/ledger"
 )
 
 type stub struct {
@@ -38,6 +41,63 @@ func (s *stub) Record(_ context.Context, a domain.AgentID, action string, _ any)
 }
 
 func watching(s *stub) *autonomy.Watch { return autonomy.New(s, s, s, nil) }
+
+// A copilot whose approvals all came from runs that fell back has shown
+// nothing about its declared pair, which is what promotion would let it act
+// alone on (#27). Read through the real store, so the exclusion is the one
+// production has.
+func TestSuggestions_approvalsFromRunsThatFellBack_promoteNothing(t *testing.T) {
+	t.Parallel()
+
+	// The control (false) proves the fixture can earn a suggestion at all.
+	for fell, want := range map[bool]int{false: 1, true: 0} {
+		store := ledger.NewMemory()
+		now := time.Now()
+		for i := range domain.PromoteAfter + 5 {
+			approvedRun(t, store, domain.RunID(fmt.Sprintf("run-%d", i)), now, fell)
+		}
+		s := &stub{stages: map[domain.AgentID]domain.Stage{"suporte": domain.StageCopilot}}
+		got, err := autonomy.New(store, s, s, nil).Suggestions(context.Background(), now)
+		if err != nil {
+			t.Fatalf("Suggestions: %v", err)
+		}
+		if len(got) != want {
+			t.Errorf("fell back = %v: suggestions = %+v, want %d", fell, got, want)
+		}
+	}
+}
+
+func approvedRun(t *testing.T, store *ledger.Memory, id domain.RunID, at time.Time, fell bool) {
+	t.Helper()
+	steps := []struct {
+		kind    domain.StepKind
+		payload any
+	}{{domain.StepRunStarted, domain.RunStartedPayload{Trigger: "manual"}}}
+	if fell {
+		steps = append(steps, struct {
+			kind    domain.StepKind
+			payload any
+		}{domain.StepModelFallback, domain.ModelFallbackPayload{
+			To: domain.ModelPair{Provider: "openai", Model: "gpt-test"},
+		}})
+	}
+	steps = append(steps, struct {
+		kind    domain.StepKind
+		payload any
+	}{domain.StepApprovalDecided, domain.ApprovalDecidedPayload{Approved: true, By: "ana"}})
+	for _, s := range steps {
+		raw, err := json.Marshal(s.payload)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if _, err := store.Append(context.Background(), domain.Step{
+			RunID: id, Kind: s.kind, Scope: domain.Scope{Company: "acme", Area: "cx"},
+			AgentID: "suporte", VersionID: "v1", At: at.Add(-time.Minute), Payload: raw,
+		}); err != nil {
+			t.Fatalf("append %s: %v", s.kind, err)
+		}
+	}
+}
 
 func TestSweep_demotesAnAutonomousAgentPeopleKeepOverruling(t *testing.T) {
 	t.Parallel()
