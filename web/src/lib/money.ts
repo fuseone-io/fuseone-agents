@@ -13,8 +13,16 @@ const MICROS_PER_UNIT = 1_000_000;
 export function microsFromText(text: string): number | null {
   const trimmed = text.trim();
   if (trimmed === "") return 0;
-  if (!/^\d+([.,]\d*)?$/.test(trimmed)) return null;
-  return Math.round(Number(trimmed.replace(",", ".")) * MICROS_PER_UNIT);
+  // A micro is the finest unit there is, so a seventh decimal is refused
+  // rather than rounded away. The digits are combined as integers: a float
+  // product loses the last micro long before the amount is large.
+  const parts = /^(\d+)(?:[.,](\d{0,6}))?$/.exec(trimmed);
+  if (!parts) return null;
+  const [, whole = "0", fraction = ""] = parts;
+  const micros =
+    BigInt(whole) * BigInt(MICROS_PER_UNIT) + BigInt(fraction.padEnd(6, "0"));
+  if (micros > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+  return Number(micros);
 }
 
 /** Stored micros as the amount a person would type; zero is left empty. */

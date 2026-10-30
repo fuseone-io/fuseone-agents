@@ -19,6 +19,18 @@ describe("money typed by a person, stored as micros", () => {
     },
   );
 
+  it.each([
+    ["past the largest exact integer", "9007199254.740992"],
+    ["hundreds of digits long", "9".repeat(400)],
+    ["finer than a micro", "1.1234567"],
+  ])("refuses an amount %s, which no integer of micros holds", (_, text) => {
+    expect(microsFromText(text)).toBeNull();
+  });
+
+  it("keeps the largest exact amount to the micro", () => {
+    expect(microsFromText("9007199254.740991")).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
   it("shows stored micros as the amount a person would type", () => {
     expect(textFromMicros(1_000_000_000)).toBe("1000");
     expect(textFromMicros(250_000)).toBe("0.25");
