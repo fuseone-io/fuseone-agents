@@ -30,6 +30,7 @@ import {
 import { usePutBudget, type ScopeBudget } from "@/features/admin/api";
 import { scopePath } from "@/features/admin/budget-scope";
 import { problemMessage } from "@/lib/api/problem-message";
+import { microsFromText, textFromMicros } from "@/lib/money";
 
 const schema = z.object({
   scope: z.string().min(1, "admin.sayScope"),
@@ -38,10 +39,7 @@ const schema = z.object({
   // a float.
   amount: z
     .string()
-    .refine(
-      (v) => v === "" || Number(v.replace(",", ".")) > 0,
-      "admin.aboveZero",
-    ),
+    .refine((v) => v === "" || (microsFromText(v) ?? 0) > 0, "admin.aboveZero"),
   steps: z.string(),
   enabled: z.boolean(),
 });
@@ -60,7 +58,7 @@ export function BudgetForm({
     defaultValues: {
       scope: budget ? scopePath(budget) : "",
       period: (budget?.period as "daily" | "monthly") ?? "monthly",
-      amount: budget?.micros ? String(budget.micros / 1_000_000) : "",
+      amount: textFromMicros(budget?.micros),
       steps: budget?.steps ? String(budget.steps) : "",
       enabled: budget?.enabled ?? true,
     },
@@ -72,7 +70,7 @@ export function BudgetForm({
         scope: values.scope.trim(),
         period: values.period,
         micros: values.amount
-          ? Math.round(Number(values.amount.replace(",", ".")) * 1_000_000)
+          ? (microsFromText(values.amount) ?? undefined)
           : undefined,
         steps: values.steps ? Number(values.steps) : undefined,
         enabled: values.enabled,

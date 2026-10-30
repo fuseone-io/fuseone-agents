@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   initialPriceFormValues,
   modelPriceFromForm,
+  priceFormSchema,
 } from "@/features/admin/price-form-model";
 import type { ModelPrice } from "@/features/admin/prices-api";
 
@@ -28,6 +29,22 @@ describe("price form model", () => {
 
   it("an empty hour rate stays zero, not invented", () => {
     const values = initialPriceFormValues(null);
-    expect(modelPriceFromForm({ ...values, provider: "p", model: "m" }).cacheWrite1hMicros).toBe(0);
+    expect(
+      modelPriceFromForm({ ...values, provider: "p", model: "m" })
+        .cacheWrite1hMicros,
+    ).toBe(0);
+  });
+
+  it("refuses a rate finer than a micro instead of saving it as zero", () => {
+    const values = {
+      ...initialPriceFormValues(null),
+      provider: "p",
+      model: "m",
+    };
+    const parsed = priceFormSchema.safeParse({
+      ...values,
+      inputMicros: "0.0000001",
+    });
+    expect(parsed.success).toBe(false);
   });
 });

@@ -1,11 +1,10 @@
 import { z } from "zod";
 import type { ModelPrice } from "@/features/admin/prices-api";
+import { microsFromText, textFromMicros } from "@/lib/money";
 
-const ratePattern = /^\d+([,.]\d+)?$/;
-const rateField = z.string().refine((v) => {
-  const trimmed = v.trim();
-  return trimmed === "" || ratePattern.test(trimmed);
-});
+// The same rule that converts it: a rate the helper cannot hold exactly in
+// micros would otherwise pass here and be saved as zero.
+const rateField = z.string().refine((v) => microsFromText(v) !== null);
 
 export const priceFormSchema = z.object({
   provider: z.string().trim().min(1),
@@ -98,13 +97,11 @@ function blankPrice(provider: string, model: string): PriceFormValues {
 }
 
 function rateText(micros: number | undefined): string {
-  return micros ? String(micros / 1_000_000) : "";
+  return textFromMicros(micros);
 }
 
 function rateMicros(value: string): number {
-  const trimmed = value.trim();
-  if (trimmed === "") return 0;
-  return Math.round(Number(trimmed.replace(",", ".")) * 1_000_000);
+  return microsFromText(value) ?? 0;
 }
 
 function sortedUnique(values: string[]): string[] {

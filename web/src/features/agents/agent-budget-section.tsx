@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Section, Labelled } from "@/features/policies/section";
 import { agentRequirementMarked } from "@/features/agents/agent-required";
-import { formatMicros } from "@/lib/format";
+import { useInstallationCurrency } from "@/features/money/api";
+import { MoneyInput } from "@/components/shared/money-input";
 import type { AgentDefinition } from "@/lib/api/client";
 
 /**
@@ -20,6 +21,7 @@ export function AgentBudgetSection({
   patch: (over: Partial<AgentDefinition>) => void;
 }) {
   const { t } = useTranslation();
+  const currency = useInstallationCurrency();
   const budget = draft.budget ?? {};
   const set = (over: Partial<typeof budget>) =>
     patch({ budget: { ...budget, ...over } });
@@ -32,17 +34,16 @@ export function AgentBudgetSection({
       required={agentRequirementMarked("budget")}
     >
       <div className="grid gap-3 sm:grid-cols-4">
-        <Labelled label={t("agents.costMicros")} htmlFor="budget-micros">
-          <Input
+        <Labelled
+          label={t("agents.costPerRun", { currency })}
+          htmlFor="budget-micros"
+        >
+          <MoneyInput
             id="budget-micros"
-            type="number"
-            value={budget.micros ?? 0}
-            onChange={(e) => set({ micros: Number(e.target.value) })}
-            className="font-mono"
+            micros={budget.micros}
+            onChange={(micros) => set({ micros })}
+            placeholder="0"
           />
-          <span className="text-2xs text-muted-foreground">
-            {formatMicros(budget.micros ?? 0)}
-          </span>
         </Labelled>
         <Labelled label={t("runs.columnSteps")} htmlFor="budget-steps">
           <Input

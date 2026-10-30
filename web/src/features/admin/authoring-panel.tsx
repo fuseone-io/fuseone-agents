@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { MoneyInput } from "@/components/shared/money-input";
 import { Panel } from "@/components/shared/panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -163,24 +164,12 @@ export function AuthoringPanel() {
             />
 
             <Labelled label={t("admin.dailyCeiling")} htmlFor="authoring-cap">
-              <Input
+              <MoneyInput
                 id="authoring-cap"
-                inputMode="decimal"
-                value={
-                  current.dailyMicros
-                    ? String(current.dailyMicros / 1_000_000)
-                    : ""
+                micros={current.dailyMicros}
+                onChange={(dailyMicros) =>
+                  setDraft({ ...current, dailyMicros })
                 }
-                onChange={(e) =>
-                  setDraft({
-                    ...current,
-                    dailyMicros:
-                      Math.round(
-                        Number(e.target.value.replace(",", ".")) * 1_000_000,
-                      ) || 0,
-                  })
-                }
-                className="font-mono"
                 placeholder="5"
               />
             </Labelled>
