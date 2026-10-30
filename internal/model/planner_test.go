@@ -204,8 +204,9 @@ func input() engine.PlanInput {
 		Transcript: []engine.Turn{
 			{Kind: engine.TurnInput, Text: "O cliente reclama de cobrança duplicada."},
 		},
-		Tools:  []domain.ToolID{"crm.lookup"},
-		Budget: domain.Budget{Micros: 500_000},
+		Tools:   []domain.ToolID{"crm.lookup"},
+		Budget:  domain.Budget{Micros: 500_000},
+		Ceiling: domain.Budget{Micros: 500_000},
 	}
 }
 
@@ -633,7 +634,7 @@ func TestAnthropic_systemPrompt_isCachedAndFreeOfVolatileText(t *testing.T) {
 			t.Error("the per-turn budget note sits inside the cached prefix; it invalidates the cache every turn")
 		}
 	}
-	if !strings.Contains(stable.String(), "Budget ceiling for this run") {
+	if !strings.Contains(stable.String(), "Agent-configured budget ceiling") {
 		t.Fatalf("cached system prompt has no provider-independent budget ceiling: %s", stable.String())
 	}
 }
@@ -677,7 +678,7 @@ func TestAnthropic_previousTranscriptPrefixIsCachedBeforeVolatileNotes(t *testin
 	}
 	stable := anthropicSystemText(c.last())
 	for _, want := range []string{
-		"Investigate the alert", "Governed memory lookup is available", "Budget ceiling",
+		"Investigate the alert", "Governed memory lookup is available", "Agent-configured budget ceiling",
 	} {
 		if !strings.Contains(stable, want) {
 			t.Errorf("stable system guidance does not contain %q:\n%s", want, stable)
@@ -721,7 +722,7 @@ func TestOpenAICompatible_transcriptGrowthWithinBudgetPreservesThePreviousReques
 	}
 	system, _ := firstMessages[0].(map[string]any)
 	text := asString(system["content"])
-	if !strings.Contains(text, "Budget ceiling for this run") || strings.Contains(text, "Budget remaining") {
+	if !strings.Contains(text, "Agent-configured budget ceiling") || strings.Contains(text, "Budget remaining") {
 		t.Fatalf("system guidance is not stable across spend: %s", text)
 	}
 }

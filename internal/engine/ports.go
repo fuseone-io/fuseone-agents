@@ -38,6 +38,11 @@ type PlanInput struct {
 	// what its predecessor saw.
 	Transcript []Turn
 	Budget     domain.Budget
+	// Ceiling is the agent's own per-run ceiling, before the scope narrowed it
+	// into Budget. It is what the prompt's stable prefix shows: the narrowed
+	// figure falls with every call any agent in the scope makes, and written
+	// into the prefix it made every call a cache miss.
+	Ceiling domain.Budget
 	// Model and Effort are the step's, when it named its own. A planner that
 	// ignores them runs the agent's, which is the correct reading of a
 	// provider that cannot switch model per call.
@@ -302,6 +307,10 @@ type Start struct {
 	// holding the whole pack.
 	Steps  []Envelope
 	Budget domain.Budget
+	// Ceiling is the agent's own per-run ceiling, kept beside Budget when the
+	// scope narrows it: Budget is what is enforced, Ceiling what the prompt's
+	// stable prefix may show. Zero shows no ceiling.
+	Ceiling domain.Budget
 	// Stage is how far this agent is trusted to act alone. It is state beside
 	// the specification rather than in it — promotion is not a new version —
 	// so it arrives with the run rather than with the definition.
