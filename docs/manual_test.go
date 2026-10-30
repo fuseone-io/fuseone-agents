@@ -1,6 +1,9 @@
 package docs_test
 
 import (
+	"bytes"
+	"errors"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -148,4 +151,35 @@ func read(t *testing.T, locale string) []docs.Page {
 		t.Fatalf("%s is empty, so the console would serve an index of nothing", locale)
 	}
 	return pages
+}
+
+func TestImage_aCitedScreenshot_isServedByteForByte(t *testing.T) {
+	t.Parallel()
+	want, err := os.ReadFile("manual/pt-BR/images/human-queue.png")
+	if err != nil {
+		t.Fatalf("fixture: %v", err)
+	}
+	got, err := docs.Image("pt-BR", "human-queue.png")
+	if err != nil {
+		t.Fatalf("Image = %v, want the embedded bytes", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("Image returned %d bytes, want the %d on disk, byte for byte", len(got), len(want))
+	}
+}
+
+func TestImage_aNameNobodyShipped_isRefused(t *testing.T) {
+	t.Parallel()
+	if _, err := docs.Image("pt-BR", "no-such-screen.png"); !errors.Is(err, docs.ErrNoImage) {
+		t.Fatalf("Image = %v, want ErrNoImage", err)
+	}
+}
+
+func TestImage_aPathThatTriesToEscapeTheImages_findsNothing(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"../approving.md", "../../manual.go", "images/../../manual.go"} {
+		if _, err := docs.Image("pt-BR", name); !errors.Is(err, docs.ErrNoImage) {
+			t.Fatalf("Image(%q) = %v, want ErrNoImage: a name is matched, never joined", name, err)
+		}
+	}
 }

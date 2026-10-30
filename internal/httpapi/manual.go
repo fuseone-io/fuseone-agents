@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -71,6 +73,31 @@ func (s *Server) GetManualPage(
 		refusal(http.StatusNotFound, CodeNotFound, "Not found",
 			fmt.Sprintf("the manual has no page %q in %s", req.Slug, locale)),
 	), nil
+}
+
+/*
+GetManualImage returns one screenshot a manual page cites.
+
+The name is matched by the docs package against what the locale ships, never
+joined onto a path — the same property the page lookup has, stated there.
+*/
+func (s *Server) GetManualImage(
+	_ context.Context, req openapi.GetManualImageRequestObject,
+) (openapi.GetManualImageResponseObject, error) {
+	locale := localeOf(string(deref(req.Params.Locale)))
+	raw, err := docs.Image(locale, req.File)
+	if errors.Is(err, docs.ErrNoImage) {
+		return openapi.GetManualImage404ApplicationProblemPlusJSONResponse(
+			refusal(http.StatusNotFound, CodeNotFound, "Not found",
+				fmt.Sprintf("the manual has no image %q in %s", req.File, locale)),
+		), nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("manual image %s: %w", req.File, err)
+	}
+	return openapi.GetManualImage200ImagepngResponse{
+		Body: bytes.NewReader(raw), ContentLength: int64(len(raw)),
+	}, nil
 }
 
 // localeOf keeps the served locale to the ones that exist. Falling back rather
