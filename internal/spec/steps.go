@@ -1,6 +1,10 @@
 package spec
 
-import "github.com/fuseone/agents/internal/domain"
+import (
+	"fmt"
+
+	"github.com/fuseone/agents/internal/domain"
+)
 
 // Step is a stage of the process: an envelope with a gate at its exit.
 //
@@ -51,3 +55,33 @@ and wrote down that the Gate ignored steps entirely. Two statements of one
 rule, in the package an author looks in first, with the one that runs living
 somewhere else. See engine.EnvelopeFor.
 */
+
+// stepProblems reports every step that reaches past the agent's pack.
+//
+// The engine builds a run's envelope from the steps rather than intersecting
+// it with the pack, so a reach outside `tools` would widen the run beyond the
+// list an author and a reviewer read — and a misspelt tool would anchor
+// silently until a run parked on it (#158). A platform tool is ambient: the
+// platform offers it whatever the step, so anchoring one is never meant.
+func stepProblems(steps []Step, tools []domain.ToolID) []string {
+	pack := make(map[domain.ToolID]bool, len(tools))
+	for _, tool := range tools {
+		pack[tool] = true
+	}
+	var problems []string
+	for _, step := range steps {
+		for _, tool := range step.Reaches {
+			switch {
+			case tool.PlatformOwned():
+				problems = append(problems, fmt.Sprintf(
+					"step %q reaches %s, a platform tool: the platform offers it whatever the step, so no step anchors it",
+					step.Name, tool))
+			case !pack[tool]:
+				problems = append(problems, fmt.Sprintf(
+					"step %q reaches %s, which is not in tools: a step narrows the pack and cannot extend it",
+					step.Name, tool))
+			}
+		}
+	}
+	return problems
+}

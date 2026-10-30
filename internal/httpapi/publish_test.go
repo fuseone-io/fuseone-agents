@@ -351,7 +351,9 @@ func TestPublishAgent_withDeclaredSteps_keepsThem(t *testing.T) {
 	t.Parallel()
 	pub := newPublisher()
 
-	body := definition(nil)
+	body := definition(func(d *openapi.AgentDefinition) {
+		d.Tools = &[]string{"crm.lookup", "crm.reply"}
+	})
 	body.Steps = &[]openapi.AgentStep{
 		{Name: "Encontrar o cliente", Reaches: ptr([]string{"crm.lookup"}),
 			StopsWhen: ptr("não encontrar o cliente")},
