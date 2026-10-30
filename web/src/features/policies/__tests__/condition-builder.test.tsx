@@ -87,9 +87,10 @@ describe("the policy condition builder", () => {
 
     render(<EffectSection draft={draft} patch={vi.fn()} />);
 
-    const allow = screen.getByRole("radio", { name: /Allow/ });
-    expect(allow.className).toContain("min-w-0");
-    expect(allow.parentElement?.className).toContain("minmax(0,1fr)");
+    // The card is the radio's label now, not the radio itself.
+    const allow = screen.getByRole("radio", { name: /Allow/ }).closest("label");
+    expect(allow?.className).toContain("min-w-0");
+    expect(allow?.parentElement?.className).toContain("minmax(0,1fr)");
   });
 
   it("lets the policy identity grid shrink around long codes", () => {
