@@ -165,7 +165,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 	if len(versions) == 0 {
 		return Result{}, fmt.Errorf("%w: %s", ErrUnknownAgent, req.Agent)
 	}
-	published, err := pin(versions, req.Version)
+	published, err := Pin(versions, req.Version)
 	if err != nil {
 		return Result{}, err
 	}

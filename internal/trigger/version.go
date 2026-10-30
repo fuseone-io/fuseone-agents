@@ -12,14 +12,17 @@ import (
 var ErrUnknownVersion = errors.New("trigger: the agent never published that version")
 
 /*
-pin chooses the version a run is opened under.
+Pin chooses the version a run is opened under.
 
 No choice is the version published now, which the registry answers first.
 A choice must be one of the agent's own published versions: a version id
 is a string a caller typed, and a run pinned to a version nobody published
 would be a run no specification explains.
 */
-func pin(versions []domain.AgentSummary, asked domain.VersionID) (domain.AgentSummary, error) {
+func Pin(versions []domain.AgentSummary, asked domain.VersionID) (domain.AgentSummary, error) {
+	if len(versions) == 0 {
+		return domain.AgentSummary{}, ErrUnknownAgent
+	}
 	if asked == "" {
 		return versions[0], nil
 	}
