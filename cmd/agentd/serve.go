@@ -72,18 +72,20 @@ func serve(args []string) error {
 	if err != nil {
 		return err
 	}
+	content := demoContent(identity)
 	if *demo {
-		// The real content store, not an in-memory one: a run's closing answer
-		// goes behind a reference, and a demo whose answers lived in a store
-		// that dies with the seeding would show every finished run as an
-		// answer that cannot be resolved.
-		if err := seedDemo(ctx, store, ledger.NewContent(identity.pool)); err != nil {
+		if err := seedDemo(ctx, store, content); err != nil {
 			return fmt.Errorf("seed demo: %w", err)
 		}
 		slog.Info("seeded demo ledger")
 	}
 
 	api := httpapi.NewServer(store, version)
+	if identity == nil {
+		// The database branch below wires its own Postgres store; without
+		// one, the console reads the store the demo was seeded into.
+		api = api.WithContent(content)
+	}
 	// Held outside the block that builds it, because the channel hook is
 	// mounted with the routes rather than with the administration area.
 	var channels *admin.Channels
