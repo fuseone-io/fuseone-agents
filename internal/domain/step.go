@@ -30,6 +30,9 @@ const (
 	StepFailed              StepKind = "failed"
 	StepParked              StepKind = "parked"
 	StepRunFinished         StepKind = "run_finished"
+	// StepModelFallback records the run switching to its declared fallback
+	// pair; every later planning call uses that pair.
+	StepModelFallback StepKind = "model_fallback"
 )
 
 var stepKinds = map[StepKind]bool{
@@ -39,7 +42,7 @@ var stepKinds = map[StepKind]bool{
 	StepBudgetReconciled: true, StepApprovalRequested: true,
 	StepApprovalDecided: true, StepResumed: true, StepAbandoned: true,
 	StepCompensationStarted: true, StepCompensated: true, StepFailed: true,
-	StepParked: true, StepRunFinished: true,
+	StepParked: true, StepRunFinished: true, StepModelFallback: true,
 }
 
 func (k StepKind) Valid() bool { return stepKinds[k] }

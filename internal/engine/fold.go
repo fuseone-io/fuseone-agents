@@ -248,6 +248,9 @@ func (s *State) applyKind(step domain.Step) error {
 	case domain.StepPlanned:
 		s.Planned = true
 
+	case domain.StepModelFallback:
+		return s.applyFallback(step)
+
 	case domain.StepCompensationStarted, domain.StepCompensated:
 		// Recorded for the trail; they carry no state transition of their own.
 

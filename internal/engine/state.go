@@ -140,6 +140,10 @@ type State struct {
 	// that point; once a plan exists they must not reappear just because the
 	// helper itself was skipped.
 	Planned bool
+	// Fallback is the switch this run made away from its declared pair, nil
+	// while it has made none. Once set, every later planning call uses the
+	// fallback: no alternating mid-reasoning, no paying the cache twice.
+	Fallback *domain.ModelFallbackPayload
 
 	PendingApproval *PendingApproval
 	// Approved is a call a person cleared and the loop has not made yet.

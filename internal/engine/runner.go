@@ -15,10 +15,13 @@ type Deps struct {
 	Ledger  Ledger
 	Gate    Gate
 	Planner Planner
-	Tools   Tools
-	Catalog Catalog
-	Clock   Clock
-	Dedupe  DedupeStore
+	// Fallback plans for a run whose ledger records a switch away from the
+	// declared pair. Nil when the version declares none.
+	Fallback Planner
+	Tools    Tools
+	Catalog  Catalog
+	Clock    Clock
+	Dedupe   DedupeStore
 	// DedupePendingTTL is how long a reservation may sit pending before
 	// another run may take it. DedupePendingWait is how long this worker waits
 	// for another run's pending reservation to become confirmed before it
@@ -283,6 +286,10 @@ func (r *Runner) plan(ctx context.Context, state State, start Start) (Proposal, 
 	// one that decides what to do about it are the same run and not the same
 	// expense (PRD FO-10, FO-11).
 	model, effort := SpendAt(start, state.Called)
+	planner, model, err := r.plannerFor(state, model)
+	if err != nil {
+		return Proposal{}, err
+	}
 
 	// The envelope rather than the pack, which is what this input has always
 	// said it carries: a tool the step forbids should not be proposable at
@@ -294,7 +301,7 @@ func (r *Runner) plan(ctx context.Context, state State, start Start) (Proposal, 
 	if err != nil {
 		return Proposal{}, err
 	}
-	p, err := r.deps.Planner.Plan(ctx, PlanInput{
+	p, err := planner.Plan(ctx, PlanInput{
 		State:          state,
 		Transcript:     transcript,
 		Budget:         start.Budget,
