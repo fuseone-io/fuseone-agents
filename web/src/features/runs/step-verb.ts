@@ -27,6 +27,7 @@ const VERBS: Record<StepKind, { verb: string; tone: Tone }> = {
   failed: { verb: "runs.verbFailed", tone: "bad" },
   parked: { verb: "runs.verbParked", tone: "warn" },
   run_finished: { verb: "runs.verbFinished", tone: "good" },
+  model_fallback: { verb: "runs.verbFellBack", tone: "warn" },
 };
 
 const VERDICTS: Record<string, { verb: string; tone: Tone }> = {

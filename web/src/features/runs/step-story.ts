@@ -36,6 +36,7 @@ const TITLES: Record<StepKind, string> = {
   failed: "runs.storyFailed",
   parked: "runs.storyParked",
   run_finished: "runs.storyFinished",
+  model_fallback: "runs.storyFellBack",
 };
 
 const VERDICT_CHIP: Record<string, { text: string; className: string }> = {
@@ -58,6 +59,7 @@ const VERDICT_CHIP: Record<string, { text: string; className: string }> = {
 const PARKED: Record<string, string> = {
   budget_exhausted: "runs.ceilingHit",
   no_progress: "runs.storyInsisted",
+  fallback_unrehearsed: "runs.storyFallbackUnrehearsed",
   no_finish_action: "runs.storyNoFinishAction",
 };
 
@@ -228,6 +230,9 @@ export function detailOf(step: Step): Line {
         values: { who: payload.by ?? "—" },
       };
 
+    case "model_fallback":
+      return fallbackLine(payload);
+
     case "parked": {
       const reason = typeof payload.reason === "string" ? payload.reason : "";
       const investigation = payload.investigation;
@@ -306,6 +311,23 @@ export function detailOf(step: Step): Line {
     default:
       return NOTHING;
   }
+}
+
+// The switch, both pairs and the failure that caused it: the record the
+// Trust Center weighs this run's evidence apart by.
+function fallbackLine(payload: Record<string, unknown>): Line {
+  const pair = (value: unknown) => {
+    const p = record(value);
+    return `${p.provider ?? ""}/${p.model ?? ""}`;
+  };
+  return {
+    key: "runs.storyFellBackDetail",
+    values: {
+      from: pair(payload.from),
+      to: pair(payload.to),
+      code: record(payload.failure).code ?? "",
+    },
+  };
 }
 
 function budgetLine(payload: Record<string, unknown>): Line | undefined {

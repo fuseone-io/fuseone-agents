@@ -18,9 +18,11 @@ export function RunFailureNotice({ run }: { run: Run }) {
       <div className="flex min-w-0 items-start gap-3">
         <AlertTriangle className="mt-0.5 size-5 shrink-0" />
         <div className="min-w-0 flex-1">
-          <h2 className="font-medium">{t(failureLabel(failure.code))}</h2>
+          <h2 className="font-medium">
+            {t(failureLabel(failure.reason ?? failure.code))}
+          </h2>
           <p className="mt-1 text-sm text-warning">
-            {t(runFailureDetail(failure.code), {
+            {t(runFailureDetail(failure.reason ?? failure.code), {
               provider: failure.provider || t("runtime.providerUnknown"),
               status: failure.status || t("runtime.noStatus"),
             })}
@@ -44,6 +46,10 @@ export function RunFailureNotice({ run }: { run: Run }) {
 }
 
 function runFailureDetail(code: string): string {
+  // The provider broke and the platform withheld the declared fallback:
+  // both halves, or the page reads like any overloaded provider.
+  if (code === "fallback_unrehearsed")
+    return "runtime.runFailureFallbackUnrehearsedDetail";
   if (code === "dedupe_in_flight") return "runtime.runFailureDedupeInFlightDetail";
   // The provider field carries the tool server's name on this code; the
   // generic "returned {{status}}" sentence would claim an HTTP exchange that
