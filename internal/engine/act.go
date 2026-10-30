@@ -115,7 +115,7 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 		Tool: p.Tool, Args: p.Args, OnBehalfOf: start.OnBehalfOf,
 		Ticket: state.Ticket,
 	})
-	effect, _ := r.deps.Catalog.Effect(p.Tool)
+	effect := r.effectOf(p.Tool)
 	baseIdemKey := idempotencyKey(start.RunID, p.Tool, p.Args)
 	idemKey := executionIdempotencyKey(state, effect, p.Tool, baseIdemKey)
 	perRunDuplicate := duplicateWithinRun(state, effect, p.Tool, idemKey)
@@ -386,7 +386,9 @@ func (r *Runner) park(ctx context.Context, state State, start Start, reason stri
 }
 
 func (r *Runner) semanticDedupe(ctx context.Context, start Start, p Proposal) (semanticDedupe, error) {
-	if r.deps.Dedupe == nil || r.deps.Catalog == nil {
+	// A coordination call is judged by the ledger on every attempt; a
+	// semantic dedupe would answer it from an earlier run's record.
+	if r.deps.Dedupe == nil || r.deps.Catalog == nil || p.Tool.Coordination() {
 		return semanticDedupe{}, nil
 	}
 	decl, ok := r.deps.Catalog.Dedupe(p.Tool)
@@ -548,7 +550,7 @@ func (r *Runner) invoke(
 		Labels:           state.Labels.Clone(),
 		MemoryLearning:   start.MemoryLearning.Normalize(),
 	}
-	if err := r.deps.Tools.Reserve(ctx, call); err != nil {
+	if err := r.reserve(ctx, call); err != nil {
 		return Status{}, err
 	}
 
@@ -583,16 +585,10 @@ func (r *Runner) invoke(
 	}
 
 	call.Seq = state.Seq
-	// The last answer before the effect leaves the process. The call record
-	// above was fenced, but a worker can be suspended between that write and
-	// this line — and renewal only notices at its next tick, after the effect
-	// would already be out in the world.
-	if start.LeaseEpoch != 0 {
-		if err := r.deps.Ledger.Fence(ctx, start.RunID, start.LeaseEpoch, state.Head); err != nil {
-			return Status{}, fmt.Errorf("engine: fence before %s: %w", p.Tool, err)
-		}
+	state, result, err := r.execute(ctx, state, start, call)
+	if err != nil {
+		return Status{}, err
 	}
-	result, invokeErr := r.deps.Tools.Invoke(ctx, call)
 	returned := domain.ToolReturnedPayload{
 		Tool: p.Tool, ResultRef: result.ResultRef,
 		ResultDigest: result.ResultDigest, ResultBytes: result.ResultBytes,
@@ -609,10 +605,6 @@ func (r *Runner) invoke(
 	if result.Failed {
 		returned.Failed = true
 		returned.ErrorCode = firstNonEmpty(result.ErrorCode, "tool_error")
-	}
-	if invokeErr != nil {
-		returned.Failed = true
-		returned.ErrorCode = firstNonEmpty(result.ErrorCode, "invoke_error")
 	}
 
 	if state, err = r.append(ctx, state, start, domain.Step{

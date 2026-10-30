@@ -31,6 +31,9 @@ func idempotencyKey(runID domain.RunID, tool domain.ToolID, args []byte) string 
 func executionIdempotencyKey(
 	state State, effect domain.Effect, tool domain.ToolID, base string,
 ) string {
+	if tool.Coordination() {
+		return coordinationIdempotencyKey(state, base)
+	}
 	if effect != domain.EffectRead || tool == domain.ToolMemoryFind {
 		return base
 	}
