@@ -4,7 +4,23 @@ One file per role: `<role>.agent.md`, in the platform's own agent format
 (frontmatter for the contract, Markdown body for the instructions, the format
 `spec.Parse` reads in `internal/spec/spec.go`). Each role's reference is added
 by that role's issue (#195, #196, #197, #198, #200), in a pull request reviewed
-like any other change. [`triage.agent.md`](triage.agent.md) is the first.
+like any other change:
+
+| Role | Reference | Its card |
+|---|---|---|
+| Triage | [`triage.agent.md`](triage.agent.md) | the issue, in Triagem |
+| Reviewer | [`reviewer.agent.md`](reviewer.agent.md) | the pull request labelled `factory:needs-review` |
+| QA | [`qa.agent.md`](qa.agent.md) | the pull request labelled `factory:needs-qa` |
+
+Triage works the board's cards. The Reviewer and QA work pull requests, so
+their claim reference is the pull request's own number
+(`github:fuseone-io/fuseone-agents#<PR number>`): it is in the listing they
+choose from, while the issue a pull request closes is only known after reading
+its text, which the claim has to come before. Their search asks for the
+`number` and `created_at` fields only (`search_pull_requests` takes a `fields`
+list), so the listing carries no title or body. That is an instruction to the
+model, not something the platform enforces: the tool's output is still
+classified as untrusted text.
 
 ## How a role is created in v1
 
@@ -92,15 +108,44 @@ credential:
 | Role | `X-MCP-Toolsets` |
 |---|---|
 | Triage | `issues,projects` |
-| Reviewer | `pull_requests,repos` |
-| QA | `pull_requests,repos` |
+| Reviewer | `pull_requests,repos,issues,projects` |
+| QA | `pull_requests,repos,issues,projects` |
 
-Without the header, Triage's server has no `projects_*` tools in its catalogue,
-and the console refuses to publish the Triage reference, because it names
-tools the server does not offer. The hosted server silently ignores an unknown
-set name, so a typo shows up the same way: as a publish refusal that names the
-missing tools. A configuration header never carries `Authorization`, because
-the GitHub App credential supplies it.
+The Reviewer and QA need more than `pull_requests,repos`: a label on a pull
+request is set with `issue_write` and a comment with `add_issue_comment`, both
+in `issues`; and any role may move a card to Travado (LANES.md), which takes
+the `projects` tools.
+
+**The GitHub App's permissions.** The App is what makes a tool call succeed;
+the toolset only offers it. Each role's App needs:
+
+| Role | Repository permissions | Organization permissions |
+|---|---|---|
+| Triage | Issues: write, Pull requests: read, Metadata: read | Projects: write |
+| Reviewer | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
+| QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
+
+Submitting a review needs Pull requests: **write**, for QA as much as for the
+Reviewer: in v1 QA's verdict is a review, not a commit status, so QA needs no
+Commit statuses: write.
+
+Without the header from the start, Triage's server never discovers its
+`projects_*` tools, and the console refuses to publish the Triage reference,
+because it names tools the installation's catalogue does not have. The hosted
+server silently ignores an unknown set name, so a typo on a new registration
+shows up the same way: as a publish refusal that names the missing tools.
+
+That check only covers a catalogue that never had the tools. The catalogue
+only grows: a discovery records what it finds and never removes a tool it no
+longer sees (`Curator.Publish` in `internal/admin/curator.go` upserts). A
+registration that discovered `projects_*` once and later loses the toolset
+(the header removed, or a typo edited in) keeps the old entries, so the
+publish passes, and the role fails at its first call to a tool the server no
+longer offers. After changing a role's `X-MCP-Toolsets`, check its discovered
+tools in the console before trusting a publish.
+
+A configuration header never carries `Authorization`, because the GitHub App
+credential supplies it.
 
 **Moving a card.** Cards move with the server's projects tool
 (`projects_write`). It is classified as a **write**, so a copilot run proposes

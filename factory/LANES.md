@@ -18,8 +18,10 @@ These hold before any lane rule applies.
    the board to choose one. Before reading the issue's text, and before any
    write, the run calls `$fuseone.work_item.claim` with the card's reference
    (`github:fuseone-io/fuseone-agents#<number>`, or
-   `ghproject:<item node id>`). The evidence is the run's ledger: the only
-   calls ahead of the `work_item_claimed` step are board listings.
+   `ghproject:<item node id>`). For the Reviewer and QA the card is the pull
+   request, and the reference is its number. The evidence is the run's
+   ledger: the only calls ahead of the `work_item_claimed` step are listings,
+   of the board or, for the Reviewer and QA, of the labelled pull requests.
    - A refusal with `work_item_held` means another open run of this role holds
      the card. Pick the next card and claim that one instead.
    - A refusal with `work_item_run_holds_another` means this run already holds
@@ -153,9 +155,16 @@ A label is not a verdict. In v1 there is no `factory/qa` commit status and no
 Moved by **a person**, by merging. No role merges in v1. Before merging, the
 person checks on the PR's current head:
 
-- [ ] an approving review by the Reviewer's GitHub App on that SHA;
-- [ ] an approving review by QA's GitHub App on that SHA;
+- [ ] the Reviewer's GitHub App's **latest decision** is an approval of that
+      SHA;
+- [ ] QA's GitHub App's latest decision is an approval of that SHA;
 - [ ] every expected check completed successfully on that SHA.
+
+A role's latest decision is its most recent review in state `APPROVED`,
+`CHANGES_REQUESTED` or `DISMISSED`, across every page of the PR's reviews;
+`COMMENTED` reviews decide nothing. An approval followed by a request for
+changes, or a dismissed one, is not an approval, however many earlier
+approvals the PR carries.
 
 A label is not enough: it survives a new push. If the head moved after either
 review, the PR goes back to `factory:needs-review`. Moving the card to Done
