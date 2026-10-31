@@ -350,7 +350,7 @@ func (a *credentialAuth) RoundTrip(r *http.Request) (*http.Response, error) {
 		return a.oauthRoundTrip(r, owner, *creds.OAuth)
 	}
 	if creds.GitHubApp != nil && !creds.GitHubApp.Empty() {
-		return a.githubAppRoundTrip(r, *creds.GitHubApp)
+		return a.githubAppRoundTrip(r, *creds.GitHubApp, creds.Headers)
 	}
 	if len(creds.Headers) > 0 {
 		return headerAuth{headers: creds.Headers, base: a.base}.RoundTrip(r)

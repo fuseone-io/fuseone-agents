@@ -195,6 +195,33 @@ func TestPutMCPPersonalCredential_onAGitHubAppServer_isRefused(t *testing.T) {
 	}
 }
 
+// Configuration headers ride beside the App, but none of them may name the
+// credential itself: an Authorization header would be a second identity on a
+// server that acts as the App, and the App's bearer is the only one it sends.
+func TestPutMCPServer_aGitHubAppWithAnAuthorizationHeader_isRefused(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	app := domain.MCPGitHubApp{AppID: 5550600, InstallationID: 91, PrivateKey: appKey(t)}
+
+	for _, name := range []string{"Authorization", "authorization", "Proxy-Authorization"} {
+		err := i.PutMCPServer(ctx, "usr_ana", platform, githubServer(), domain.MCPCredentialPatch{
+			GitHubApp: &app, Headers: map[string]string{name: "Bearer ghp_personal"},
+		})
+		if !errors.Is(err, admin.ErrBadGitHubApp) {
+			t.Fatalf("%s: err = %v, want ErrBadGitHubApp", name, err)
+		}
+	}
+	toolsets := map[string]string{"X-MCP-Toolsets": "issues,projects"}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, githubServer(),
+		domain.MCPCredentialPatch{GitHubApp: &app, Headers: toolsets}); err != nil {
+		t.Fatalf("App with a toolsets header: %v", err)
+	}
+	creds, err := i.MCPCredentials(ctx, "github")
+	if err != nil || creds.GitHubApp == nil || creds.Headers["X-MCP-Toolsets"] != "issues,projects" {
+		t.Fatalf("stored = %+v, %v; want the App and its toolsets header", creds, err)
+	}
+}
+
 // Clearing the App removes the credential, so the listing stops naming it.
 func TestPutMCPServer_clearingTheGitHubApp_removesIt(t *testing.T) {
 	i := newIntegrations(t)

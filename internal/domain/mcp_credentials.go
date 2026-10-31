@@ -199,6 +199,8 @@ func (p MCPCredentialPatch) Apply(stored MCPCredentials) MCPCredentials {
 	}
 	if p.Headers != nil {
 		out.Headers = maps.Clone(p.Headers)
+		// Written alone, headers are a mode of their own and replace the
+		// App. Written with one, the App branch below puts it back.
 		if len(out.Headers) > 0 {
 			out.Token = ""
 			out.OAuth = nil
@@ -214,11 +216,20 @@ func (p MCPCredentialPatch) Apply(stored MCPCredentials) MCPCredentials {
 		}
 	}
 	if p.GitHubApp != nil {
+		/*
+			Headers beside an App are its configuration — the hosted GitHub
+			MCP reads X-MCP-Toolsets — so they survive an edit of the App
+			that does not name them. Switching *into* the App from another
+			mode is different: those headers were a credential, and they go.
+		*/
+		switching := stored.GitHubApp == nil || stored.GitHubApp.Empty()
 		out.GitHubApp = mergeGitHubApp(stored.GitHubApp, p.GitHubApp)
 		if out.GitHubApp != nil {
 			out.Token = ""
-			out.Headers = nil
 			out.OAuth = nil
+			if switching && p.Headers == nil {
+				out.Headers = nil
+			}
 		}
 	}
 	if p.Env != nil {

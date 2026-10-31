@@ -30,9 +30,9 @@ func TestReadMCPCredentials_aGitHubApp_roundTripsThroughTheSealedDocument(t *tes
 	}
 }
 
-// One remote credential is active at a time. An App replaces a bearer, headers
-// and an OAuth grant, and each of those replaces an App, so switching mode
-// never leaves live material nobody sees.
+// Switching to an App replaces a bearer, headers and an OAuth grant, and
+// switching to any of those replaces an App, so a mode change never leaves
+// live material nobody sees.
 func TestMCPCredentialPatch_aGitHubApp_isTheOnlyRemoteCredentialLeft(t *testing.T) {
 	t.Parallel()
 
@@ -64,6 +64,35 @@ func TestMCPCredentialPatch_anotherRemoteCredential_replacesTheGitHubApp(t *test
 				t.Fatalf("the App survived a %s write", name)
 			}
 		})
+	}
+}
+
+// Headers written with the App are its configuration, not a rival
+// credential: the hosted GitHub MCP picks toolsets from X-MCP-Toolsets, and a
+// role that moves cards needs "projects", which is not in the default set.
+func TestMCPCredentialPatch_headersWrittenWithTheApp_areKeptBesideIt(t *testing.T) {
+	t.Parallel()
+
+	toolsets := map[string]string{"X-MCP-Toolsets": "issues,projects"}
+	got := domain.MCPCredentialPatch{GitHubApp: app(), Headers: toolsets}.Apply(
+		domain.MCPCredentials{Token: "ghp_old"})
+
+	if got.GitHubApp == nil || got.Headers["X-MCP-Toolsets"] != "issues,projects" || got.Token != "" {
+		t.Fatalf("after App+headers = %+v, want the App and its headers, no bearer", got)
+	}
+}
+
+// Correcting the App — a keyless edit — does not wipe the headers stored
+// beside it: the form never has their values to send back.
+func TestMCPCredentialPatch_aKeylessAppEdit_keepsTheHeadersBesideIt(t *testing.T) {
+	t.Parallel()
+
+	stored := domain.MCPCredentials{GitHubApp: app(), Headers: map[string]string{"X-MCP-Toolsets": "projects"}}
+	edit := domain.MCPGitHubApp{AppID: 5550564, InstallationID: 78}
+	got := domain.MCPCredentialPatch{GitHubApp: &edit}.Apply(stored)
+
+	if got.GitHubApp == nil || got.Headers["X-MCP-Toolsets"] != "projects" {
+		t.Fatalf("after a keyless edit = %+v, want the stored headers kept", got)
 	}
 }
 

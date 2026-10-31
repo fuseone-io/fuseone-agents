@@ -305,6 +305,26 @@ func TestRequireTLS_plainHTTPOnlyToLoopback(t *testing.T) {
 	}
 }
 
+// Credential headers are dropped in any letter case, whatever stored them;
+// configuration headers pass untouched.
+func TestConfigHeaders_dropsCredentialHeadersInAnyCase(t *testing.T) {
+	t.Parallel()
+	given := map[string]string{
+		"authorization":       "Bearer personal",
+		"PROXY-AUTHORIZATION": "Basic cHJveHk=",
+		"X-MCP-Toolsets":      "issues,projects",
+	}
+
+	got := githubapp.ConfigHeaders(given)
+
+	if len(got) != 1 || got["X-MCP-Toolsets"] != "issues,projects" {
+		t.Fatalf("ConfigHeaders = %v, want only X-MCP-Toolsets", got)
+	}
+	if !errors.Is(githubapp.CheckConfigHeaders(given), githubapp.ErrCredentialHeader) {
+		t.Fatal("CheckConfigHeaders accepted a credential header")
+	}
+}
+
 // countingTransport records requests and answers none of them.
 type countingTransport struct{ requests atomic.Int32 }
 

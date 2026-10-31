@@ -31,8 +31,11 @@ type githubAppAuth struct {
 	err error
 }
 
+// githubAppRoundTrip sends r as the App. headers are the App's configuration
+// — X-MCP-Toolsets on the hosted GitHub MCP — and are set before the bearer,
+// so the installation token is always the Authorization that leaves.
 func (a *credentialAuth) githubAppRoundTrip(
-	r *http.Request, app domain.MCPGitHubApp,
+	r *http.Request, app domain.MCPGitHubApp, headers map[string]string,
 ) (*http.Response, error) {
 	// Checked per request, not at connect: a redirect or an edited URL is
 	// still a request the token would ride on.
@@ -47,7 +50,10 @@ func (a *credentialAuth) githubAppRoundTrip(
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", a.server, err)
 	}
-	return bearer{token: token, base: a.base}.RoundTrip(r)
+	return headerAuth{
+		headers: githubapp.ConfigHeaders(headers),
+		base:    bearer{token: token, base: a.base},
+	}.RoundTrip(r)
 }
 
 /*
