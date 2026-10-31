@@ -11,6 +11,7 @@ export type RemoteAuthPlan = {
   multiHeaders: AuthMode | null;
   dsn: AuthMode | null;
   oauth: AuthMode | null;
+  githubApp: AuthMode | null;
   noAuth: AuthMode | null;
   unsupported: AuthMode[];
 };
@@ -36,6 +37,7 @@ export function remoteAuthPlan(
       multiHeaders: null,
       dsn: null,
       oauth: { type: "oauth2", principal: "user" },
+      githubApp: null,
       noAuth: null,
       unsupported: [],
     };
@@ -48,6 +50,7 @@ export function remoteAuthPlan(
   const multiHeaders = all.find(isMultiHeaderCredential) ?? null;
   const dsn = all.find((mode) => mode.type === "dsn") ?? null;
   const oauth = all.find((mode) => mode.type === "oauth2") ?? null;
+  const githubApp = all.find((mode) => mode.type === "github_app") ?? null;
   const noAuth = all.find((mode) => mode.type === "none") ?? null;
   return {
     known: true,
@@ -58,11 +61,13 @@ export function remoteAuthPlan(
     multiHeaders,
     dsn,
     oauth,
+    githubApp,
     noAuth,
     unsupported: all.filter(
       (mode) =>
         mode.type !== "none" &&
         mode.type !== "oauth2" &&
+        mode.type !== "github_app" &&
         !isPlainBearer(mode) &&
         !isSingleHeaderCredential(mode) &&
         !isMultiHeaderCredential(mode),

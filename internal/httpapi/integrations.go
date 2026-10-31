@@ -82,6 +82,9 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 		Token:   req.Body.Token,
 		Headers: stringMapOrNil(req.Body.Headers),
 		OAuth:   oauthGrantFromRequest(req.Body.Oauth),
+		// The key reaches the store and goes no further: it is sealed there,
+		// and nothing on the way logs or echoes it.
+		GitHubApp: githubAppFromRequest(req.Body.GithubApp),
 	}
 	if req.Body.Env != nil {
 		creds.Env = *req.Body.Env

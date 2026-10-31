@@ -78,6 +78,7 @@ const (
 	AuthConfigFile AuthType = "config_file"
 	AuthPath       AuthType = "path"
 	AuthDSN        AuthType = "dsn"
+	AuthGitHubApp  AuthType = "github_app"
 )
 
 // AuthPrincipal says whose authority the credential carries.
@@ -326,7 +327,8 @@ func check(path string, entry Entry) error {
 func checkAuthModes(path string, entry Entry) error {
 	for _, one := range entry.AuthModes {
 		switch one.Type {
-		case AuthNone, AuthOAuth2, AuthBearer, AuthBasic, AuthHeaders, AuthEnv, AuthConfigFile, AuthPath, AuthDSN:
+		case AuthNone, AuthOAuth2, AuthBearer, AuthBasic, AuthHeaders, AuthEnv, AuthConfigFile, AuthPath, AuthDSN,
+			AuthGitHubApp:
 		default:
 			return fmt.Errorf("known: %s names unknown auth type %q", path, one.Type)
 		}
