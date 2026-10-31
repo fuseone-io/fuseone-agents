@@ -44,6 +44,9 @@ func Render(s Spec) ([]byte, error) {
 		Triggers: s.Triggers,
 		Emits:    s.Emits,
 		Steps:    s.Steps,
+		// Omitted when allowed, so every version published before the setting
+		// existed keeps its digest.
+		Standing: s.StandingApprovals,
 	}
 	if learning := s.MemoryLearning.Normalize(); learning.Enabled() {
 		fm.MemoryLearning = &learning

@@ -70,6 +70,10 @@ type Spec struct {
 	// are asked, and the console answers whatever it says.
 	Approvals domain.ApprovalPolicy
 
+	// StandingApprovals is whether a grant given ahead of time may release a
+	// call of this agent. Absent allows it, which is today's behaviour.
+	StandingApprovals domain.StandingPolicy
+
 	Triggers []Trigger
 
 	// Emits are the events this agent publishes when a run of it finishes
@@ -128,6 +132,7 @@ type frontmatter struct {
 	} `yaml:"budget"`
 	MemoryLearning *domain.MemoryLearningPolicy `yaml:"memory_learning,omitempty"`
 	Approvals      *domain.ApprovalPolicy       `yaml:"approvals,omitempty"`
+	Standing       domain.StandingPolicy        `yaml:"standing_approvals,omitempty"`
 }
 
 // Parse reads one agent definition.
@@ -172,6 +177,8 @@ func Parse(source string, data []byte) (Spec, error) {
 		MemoryLearning: learning,
 		Approvals:      approvals,
 		Source:         source,
+
+		StandingApprovals: fm.Standing,
 		Budget: domain.Budget{
 			Micros:      fm.Budget.Micros,
 			Tokens:      fm.Budget.Tokens,
@@ -233,6 +240,9 @@ func (s Spec) validate() error {
 		return fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
 	if err := s.MemoryLearning.Validate(); err != nil {
+		problems = append(problems, err.Error())
+	}
+	if err := s.StandingApprovals.Validate(); err != nil {
 		problems = append(problems, err.Error())
 	}
 
