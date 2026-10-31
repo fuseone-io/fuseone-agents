@@ -51,6 +51,8 @@ var (
 	ErrMCPServerDisabled          = errors.New("admin: the MCP server is disabled")
 	ErrMCPPersonalCredentialLocal = errors.New(
 		"admin: personal MCP credentials only apply to remote HTTP servers")
+	ErrMCPPersonalCredentialApp = errors.New(
+		"admin: this MCP server acts as a GitHub App for everyone, so a personal credential would never be used")
 	ErrNoMCPCredential              = errors.New("admin: no MCP credential was supplied")
 	ErrMCPPersonalCredentialCorrupt = errors.New("admin: personal MCP credential metadata is corrupted")
 )
@@ -681,6 +683,9 @@ func (i *Integrations) personalCredentialTarget(ctx context.Context, name string
 	}
 	if transport != domain.TransportHTTP {
 		return ErrMCPPersonalCredentialLocal
+	}
+	if stored.GitHubApp != nil {
+		return ErrMCPPersonalCredentialApp
 	}
 	return nil
 }

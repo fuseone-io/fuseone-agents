@@ -362,6 +362,9 @@ func (a *credentialAuth) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func (a *credentialAuth) credentials(ctx context.Context) (domain.MCPCredentials, domain.UserID, error) {
+	if a.shared.GitHubApp != nil && !a.shared.GitHubApp.Empty() {
+		return a.appCredentials(ctx)
+	}
 	principal, hasCaller := tools.CallerFrom(ctx)
 	if hasCaller && a.personal != nil {
 		creds, found, err := a.personal.MCPPersonalCredential(ctx, a.server, principal)
