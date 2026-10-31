@@ -12,7 +12,9 @@ type pullRequest struct {
 	State     string `json:"state"`
 	Merged    bool   `json:"merged"`
 	Mergeable *bool  `json:"mergeable"`
-	Head      struct {
+	// MergeCommitSHA is passed on only after validSHA accepts it.
+	MergeCommitSHA string `json:"merge_commit_sha"`
+	Head           struct {
 		SHA string `json:"sha"`
 	} `json:"head"`
 	Base struct {

@@ -41,6 +41,15 @@ dismissed, a check gone back to pending), the tool reports `merge_refused` with
 the HTTP status. It does not retry: only a fresh proposal may judge the PR
 again.
 
+If the merge request was sent but its response was lost (a cut body, a reset
+connection, a timeout), GitHub may have merged. The tool never reports that as
+a bare error and never merges again. It re-reads the PR: merged with exactly
+`head_sha` is `merged` with the merge commit; anything else, including a
+re-read that fails, is `outcome_unknown`, which means a person must look. A
+call for a PR already merged with exactly `head_sha` (a retry after a result
+that never reached the run) answers `merged`, not `pr_not_open`; a PR merged
+with any other head is not claimed.
+
 Labels are never read. A QA verdict recorded as a label counts for nothing.
 
 ## Structured state only

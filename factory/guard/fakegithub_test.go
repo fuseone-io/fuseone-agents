@@ -41,6 +41,7 @@ var (
 type fakePR struct {
 	Head, BaseRef, BaseRepo, State string
 	Merged                         bool
+	MergeCommit                    string
 	Mergeable                      *bool
 	Labels                         []string
 }
@@ -100,6 +101,8 @@ type fakeGitHub struct {
 	posted      []fakeStatus
 	beforeMerge func(f *fakeGitHub) // runs as the merge call arrives, after every read
 	mergeError  int                 // forces a status on the merge call
+	mergeFault  string              // loses the response of a merge that happened
+	readsDown   bool                // every read fails once a merge was attempted
 }
 
 func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
@@ -144,6 +147,10 @@ func (f *fakeGitHub) handle(next fakeHandler) http.HandlerFunc {
 			http.Redirect(w, r, "/repos/elsewhere/other"+strings.SplitN(r.URL.Path, f.repo, 2)[1], http.StatusMovedPermanently)
 			return
 		}
+		if f.readsDown && len(f.attempts) > 0 && r.Method == http.MethodGet {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"message": canary})
+			return
+		}
 		if r.URL.Query().Get("page") > "1" {
 			writeJSON(w, http.StatusOK, []any{})
 			return
@@ -175,7 +182,8 @@ func (f *fakeGitHub) getPR(w http.ResponseWriter, r *http.Request, _ ghUser) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"number": n, "title": canary, "body": canary, "state": pr.State, "merged": pr.Merged,
-		"mergeable": pr.Mergeable, "mergeable_state": canary, "labels": labels,
+		"merge_commit_sha": nullable(pr.MergeCommit),
+		"mergeable":        pr.Mergeable, "mergeable_state": canary, "labels": labels,
 		"html_url": "https://github.com/" + f.repo + "/pull/" + strconv.Itoa(n),
 		"user":     map[string]any{"login": canary},
 		"head":     map[string]any{"sha": pr.Head, "ref": canary, "label": canary},

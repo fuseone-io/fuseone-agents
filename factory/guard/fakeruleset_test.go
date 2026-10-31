@@ -23,6 +23,10 @@ func (f *fakeGitHub) merge(w http.ResponseWriter, r *http.Request, _ ghUser) {
 	_ = json.NewDecoder(r.Body).Decode(&in)
 	f.attempts = append(f.attempts, mergeCall{PR: n, SHA: in.SHA, Method: in.Method})
 	refuse := func(code int) { writeJSON(w, code, map[string]string{"message": canary}) }
+	if f.mergeFault == faultDropUnmerged {
+		f.dropConnection(w)
+		return
+	}
 
 	switch {
 	case f.mergeError != 0:
@@ -34,7 +38,38 @@ func (f *fakeGitHub) merge(w http.ResponseWriter, r *http.Request, _ ghUser) {
 	case !f.rulesetAllows(n, pr.Head):
 		refuse(http.StatusMethodNotAllowed)
 	default:
-		pr.State, pr.Merged = "closed", true
+		pr.State, pr.Merged, pr.MergeCommit = "closed", true, mergeSHA
+		f.answerMerged(w)
+	}
+}
+
+// Faults the merge response can suffer after GitHub merged.
+const (
+	faultTruncate = "truncate" // a 200 whose body is cut short
+	faultDrop     = "drop"     // the connection closes before any response
+	// faultDropUnmerged closes the connection without merging at all.
+	faultDropUnmerged = "drop-unmerged"
+)
+
+func (f *fakeGitHub) dropConnection(w http.ResponseWriter) {
+	conn, _, err := http.NewResponseController(w).Hijack()
+	if err != nil {
+		f.t.Errorf("hijack: %v", err)
+		return
+	}
+	_ = conn.Close()
+}
+
+// answerMerged reports a merge that already happened, or loses the report.
+func (f *fakeGitHub) answerMerged(w http.ResponseWriter) {
+	switch f.mergeFault {
+	case faultTruncate:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"sha":"` + mergeSHA[:12]))
+	case faultDrop:
+		f.dropConnection(w)
+	default:
 		writeJSON(w, http.StatusOK, map[string]any{"sha": mergeSHA, "merged": true, "message": canary})
 	}
 }

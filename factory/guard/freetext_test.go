@@ -24,6 +24,8 @@ func TestTools_noResultCarriesFreeTextFromGitHub(t *testing.T) {
 		"merge refused":         func(f *fakeGitHub) { f.mergeError = 405 },
 		"push before the merge": func(f *fakeGitHub) { f.beforeMerge = func(f *fakeGitHub) { f.prs[testPR].Head = headB } },
 		"pr unknown":            func(f *fakeGitHub) { delete(f.prs, testPR) },
+		"merge response cut":    func(f *fakeGitHub) { f.mergeFault = faultTruncate },
+		"merge outcome unknown": func(f *fakeGitHub) { f.mergeFault, f.readsDown = faultDrop, true },
 		"repository redirects":  func(f *fakeGitHub) { f.renamed = true },
 	}
 	calls := map[string]struct {

@@ -66,6 +66,10 @@ func (m *Merger) MergeIfReady(ctx context.Context, in MergeInput) (MergeResult, 
 	if err != nil {
 		return res, fmt.Errorf("merge_if_ready: %w", err)
 	}
+	if alreadyMerged(m.target, pr, in.HeadSHA) {
+		// A retry after a merge whose result never reached the run.
+		return mergedResult(res, pr.MergeCommitSHA), nil
+	}
 	if res.Reason = checkPullRequest(m.target, pr, in.HeadSHA); res.Reason != "" {
 		return res, nil
 	}
@@ -107,14 +111,13 @@ func (m *Merger) merge(ctx context.Context, res MergeResult) (MergeResult, error
 		Method: http.MethodPut, Path: m.gh.repoPath("/pulls/%d/merge", res.PR), Body: body, Out: &out,
 	})
 	if err != nil {
-		return res, fmt.Errorf("merge_if_ready: %w", err)
+		// The request may have reached GitHub and merged: settle it by
+		// reading, never by reporting a bare error or merging again.
+		return m.reconcile(ctx, res)
 	}
 	switch {
 	case code == http.StatusOK && out.Merged:
-		res.Merged, res.Reason = true, ReasonMerged
-		if validSHA(out.SHA) {
-			res.MergeSHA = out.SHA
-		}
+		return mergedResult(res, out.SHA), nil
 	case code == http.StatusConflict:
 		res.Reason, res.HTTPStatus = ReasonHeadMoved, code
 	default:
