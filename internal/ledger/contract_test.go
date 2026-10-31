@@ -58,7 +58,7 @@ type Store interface {
 	LastBatteryAt(ctx context.Context, agent domain.AgentID, version domain.VersionID) (time.Time, bool, error)
 	Agreement(ctx context.Context, since time.Time) ([]domain.Agreement, error)
 	Simulations() ledger.SimulationQueue
-	WorkItemCost(ctx context.Context, ref domain.WorkItemRef) (domain.WorkItemCost, error)
+	WorkItemCost(ctx context.Context, filter domain.RunFilter, ref domain.WorkItemRef) (domain.WorkItemCost, error)
 }
 
 type factory struct {

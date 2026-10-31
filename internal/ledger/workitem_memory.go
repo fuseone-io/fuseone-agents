@@ -81,9 +81,10 @@ func phaseOfRun(steps []domain.Step) string {
 }
 
 // WorkItemCost is what every run that claimed the card cost, whatever became
-// of it — the sum of every step's cost, as the runs projection keeps it.
+// of it — the sum of every step's cost, as the runs projection keeps it —
+// narrowed by the same filter, matched the same way, as every other aggregate.
 func (m *Memory) WorkItemCost(
-	ctx context.Context, ref domain.WorkItemRef,
+	ctx context.Context, filter domain.RunFilter, ref domain.WorkItemRef,
 ) (domain.WorkItemCost, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.WorkItemCost{}, err
@@ -94,6 +95,9 @@ func (m *Memory) WorkItemCost(
 	out := domain.WorkItemCost{Ref: ref}
 	for _, steps := range m.runs {
 		if held, _, ok := claimOfRun(steps); !ok || held != ref || simulatedRun(steps) {
+			continue
+		}
+		if !matches(steps[0], filter) {
 			continue
 		}
 		out.Runs++

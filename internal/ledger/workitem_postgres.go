@@ -93,14 +93,23 @@ func claimHolders(
 // WorkItemCost is what every run that claimed the card cost, whatever became
 // of it. The runs projection carries each run's whole spend, planning
 // included, so a run that failed before its first write still counts.
+//
+// It is a financial aggregate and narrows like every other: the caller's
+// visible scopes go through runFilterSQL against the runs projection, so a
+// caller limited to one area never counts another area's runs that name the
+// same card. The card is matched in a subquery so the filter's columns stay
+// those of runs alone.
 func (p *Postgres) WorkItemCost(
-	ctx context.Context, ref domain.WorkItemRef,
+	ctx context.Context, filter domain.RunFilter, ref domain.WorkItemRef,
 ) (domain.WorkItemCost, error) {
 	out := domain.WorkItemCost{Ref: ref}
+	where, args := runFilterSQL(filter)
+	args = append(args, string(ref))
+	where = whereAnd(where, fmt.Sprintf(
+		"not simulated and run_id in (select run_id from run_work_items where ref = $%d)", len(args)))
 	if err := p.pool.QueryRow(ctx, `
-		select count(*), coalesce(sum(r.cost_micros), 0)::bigint
-		from run_work_items c join runs r on r.run_id = c.run_id
-		where c.ref = $1`, string(ref),
+		select count(*), coalesce(sum(cost_micros), 0)::bigint
+		from runs `+where, args...,
 	).Scan(&out.Runs, &out.Micros); err != nil {
 		return domain.WorkItemCost{}, fmt.Errorf("work item cost: %w", err)
 	}

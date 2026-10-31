@@ -228,7 +228,7 @@ func TestWorkItemCost_includesARunThatFailedBeforeAnyWrite(t *testing.T) {
 		unrelated.Cost = domain.Cost{Micros: 5_000, InputTokens: 10}
 		mustAppend(t, s, unrelated)
 
-		got, err := s.WorkItemCost(context.Background(), card)
+		got, err := s.WorkItemCost(context.Background(), domain.RunFilter{}, card)
 		if err != nil {
 			t.Fatalf("WorkItemCost: %v", err)
 		}
@@ -405,7 +405,7 @@ func TestWorkItemClaim_simulatedRun_holdsNothingAndCountsNothing(t *testing.T) {
 		if err := claim(t, s, "run-real", "triage", card); err != nil {
 			t.Fatalf("real claim beside an open simulation = %v, want success", err)
 		}
-		got, err := s.WorkItemCost(context.Background(), card)
+		got, err := s.WorkItemCost(context.Background(), domain.RunFilter{}, card)
 		if err != nil {
 			t.Fatalf("WorkItemCost: %v", err)
 		}
@@ -429,4 +429,55 @@ func TestWorkItemClaim_simulatedRun_leavesNoProjectionRow(t *testing.T) {
 	if rows != 0 {
 		t.Fatalf("run_work_items rows for a simulated run = %d, want none", rows)
 	}
+}
+
+// Cost per card is a financial aggregate, narrowed like every other: a caller
+// limited to one area sees the runs of that area, never another area's or
+// another company's runs that happen to name the same card.
+func TestWorkItemCost_narrowsToTheCallersScopes(t *testing.T) {
+	run(t, "cost by work item respects scope", func(t *testing.T, s Store) {
+		// An agent lives in one area, so each scope has its own.
+		for _, one := range []struct {
+			run    domain.RunID
+			agent  domain.AgentID
+			scope  domain.Scope
+			micros int64
+		}{
+			{"run-cx", "triage-cx", domain.Scope{Company: "acme", Area: "cx"}, 100},
+			{"run-ops", "triage-ops", domain.Scope{Company: "acme", Area: "ops"}, 20},
+			{"run-other", "triage-globex", domain.Scope{Company: "globex", Area: "cx"}, 3},
+		} {
+			started := step(one.run, domain.StepRunStarted)
+			started.Scope, started.AgentID = one.scope, one.agent
+			mustAppend(t, s, started)
+			claimed := claimStep(t, one.run, one.agent, card)
+			claimed.Scope = one.scope
+			mustAppend(t, s, claimed)
+			planned := step(one.run, domain.StepPlanned)
+			planned.Scope, planned.AgentID = one.scope, one.agent
+			planned.Cost = domain.Cost{Micros: one.micros, InputTokens: 1}
+			mustAppend(t, s, planned)
+		}
+
+		cases := map[string]struct {
+			filter domain.RunFilter
+			want   domain.WorkItemCost
+		}{
+			"one area": {domain.RunFilter{Scopes: []domain.Scope{{Company: "acme", Area: "cx"}}},
+				domain.WorkItemCost{Ref: card, Runs: 1, Micros: 100}},
+			"a whole company": {domain.RunFilter{Scopes: []domain.Scope{{Company: "acme"}}},
+				domain.WorkItemCost{Ref: card, Runs: 2, Micros: 120}},
+			"the installation": {domain.RunFilter{Scopes: []domain.Scope{{Company: domain.Installation}}},
+				domain.WorkItemCost{Ref: card, Runs: 3, Micros: 123}},
+		}
+		for name, tc := range cases {
+			got, err := s.WorkItemCost(context.Background(), tc.filter, card)
+			if err != nil {
+				t.Fatalf("%s: WorkItemCost: %v", name, err)
+			}
+			if got != tc.want {
+				t.Errorf("%s: WorkItemCost = %+v, want %+v", name, got, tc.want)
+			}
+		}
+	})
 }
