@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -757,24 +758,8 @@ func (r *reconciler) reconcile(ctx context.Context) {
 		}
 	}
 
-	for name, mark := range r.connected {
-		if mark == "flag" {
-			continue
-		}
-		if server, still := wanted[name]; still && fingerprint(r.withProtocol(server)) == mark &&
-			r.catalog.Connected(name) {
-			continue
-		}
-		// Gone, switched off, pointing somewhere else, or a session that died
-		// under an unchanged configuration. All four mean the session in hand
-		// is not a working one for what is configured.
-		if err := r.catalog.RemoveServer(name); err != nil {
-			slog.Error("could not disconnect a tool server", "server", name, "err", err)
-		}
-		delete(r.connected, name)
-	}
-
-	changed := false
+	withdrawn := r.disconnectStale(wanted)
+	changed := len(withdrawn) > 0
 	for name, server := range wanted {
 		if _, already := r.connected[name]; already {
 			continue
@@ -793,10 +778,42 @@ func (r *reconciler) reconcile(ctx context.Context) {
 	// appeared on no screen, so the one place an operator goes to classify a
 	// new tool would not list it.
 	if changed && r.publisher != nil {
-		if err := r.publisher.Publish(ctx, r.catalog.Publication()); err != nil {
+		pub := r.catalog.Publication()
+		pub.Withdrawn = withdrawn
+		if err := r.publisher.Publish(ctx, pub); err != nil {
 			slog.Error("could not publish the tool catalogue", "err", err)
 		}
 	}
+}
+
+// disconnectStale drops every session that is not a working one for what is
+// configured, and returns the servers the configuration no longer wants.
+//
+// Gone, switched off, pointing somewhere else, or a session that died under
+// an unchanged configuration all end the session in hand. Only the first two
+// are withdrawn: the configuration says those offer nothing now. The other
+// two are reconnected, and a reconnect that fails says only that this worker
+// cannot reach the server, not that it stopped offering its tools.
+func (r *reconciler) disconnectStale(wanted map[string]domain.MCPServer) []string {
+	var withdrawn []string
+	for name, mark := range r.connected {
+		if mark == "flag" {
+			continue
+		}
+		server, still := wanted[name]
+		if still && fingerprint(r.withProtocol(server)) == mark && r.catalog.Connected(name) {
+			continue
+		}
+		if err := r.catalog.RemoveServer(name); err != nil {
+			slog.Error("could not disconnect a tool server", "server", name, "err", err)
+		}
+		delete(r.connected, name)
+		if !still {
+			withdrawn = append(withdrawn, name)
+		}
+	}
+	slices.Sort(withdrawn)
+	return withdrawn
 }
 
 // refreshHealth restates what is connected right now.

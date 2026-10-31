@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/settings"
 )
 
 // toolKind is the settings row a discovered tool is published as.
@@ -32,7 +33,7 @@ const toolKind = "tool"
 // tool that comes back finds the decision already made. A server it does not
 // name is left alone; see domain.ToolPublication.
 func (c *Curator) Publish(ctx context.Context, pub domain.ToolPublication) error {
-	if len(pub.Entries) == 0 && len(pub.Servers) == 0 {
+	if len(pub.Entries) == 0 && len(pub.Servers) == 0 && len(pub.Withdrawn) == 0 {
 		return nil
 	}
 
@@ -48,6 +49,9 @@ func (c *Curator) Publish(ctx context.Context, pub domain.ToolPublication) error
 		return err
 	}
 	if err := dropUnoffered(ctx, tx, pub); err != nil {
+		return err
+	}
+	if err := dropWithdrawn(ctx, tx, pub.Withdrawn); err != nil {
 		return err
 	}
 	batch := &pgx.Batch{}
@@ -99,6 +103,27 @@ func dropServerTools(ctx context.Context, tx pgx.Tx, server string) (int64, erro
 		return 0, fmt.Errorf("admin: drop the tools of %s: %w", server, err)
 	}
 	return tag.RowsAffected(), nil
+}
+
+// dropWithdrawn removes the tools of servers a worker found the configuration
+// no longer wants — judged now, under the lock, not when the worker read the
+// configuration: a server registered or switched on again in between is
+// wanted, and keeps its tools.
+func dropWithdrawn(ctx context.Context, tx pgx.Tx, servers []string) error {
+	for _, server := range servers {
+		if _, err := tx.Exec(ctx, `
+			delete from settings
+			where scope_kind = 'installation' and company_id = '' and area_id = ''
+			  and kind = $1 and value->>'server' = $2
+			  and not exists (
+			      select 1 from settings
+			      where scope_kind = 'installation' and company_id = '' and area_id = ''
+			        and kind = $3 and name = $2 and enabled)`,
+			toolKind, server, string(settings.KindMCPServer)); err != nil {
+			return fmt.Errorf("admin: drop the tools of withdrawn %s: %w", server, err)
+		}
+	}
+	return nil
 }
 
 // dropUnoffered removes, for each server the publication names, the tools it

@@ -140,6 +140,71 @@ func TestCatalogue_aServerRegisteredAgainAfterRemoval_findsItsRulings(t *testing
 	}
 }
 
+/*
+A worker that read the configuration just before the removal still held
+the server, and published its tools just after: the rows the removal
+dropped are back. Its next pass no longer wants the server and says so, and
+that withdrawal is what takes them off the screen for good — the worker that
+brought them back is the one that clears them.
+*/
+func TestCatalogue_toolsPublishedByAWorkerThatMissedTheRemoval_goOnItsNextPass(t *testing.T) {
+	j := newFactoryJourney(t, triageToolsets)
+	j.discover(t)
+	j.remove(t)
+	if err := j.curator.Publish(t.Context(), j.catalog.Publication()); err != nil {
+		t.Fatalf("the late publish: %v", err)
+	}
+	if len(ofServer(j.listed(t), "github-triage")) == 0 {
+		t.Fatal("the late publish did not bring the tools back; the pass below would prove nothing")
+	}
+
+	j.worker.reconcile(t.Context())
+
+	if left := ofServer(j.listed(t), "github-triage"); len(left) != 0 {
+		t.Fatalf("the deleted server still offers %v after the worker's next pass", left)
+	}
+}
+
+// A withdrawal is judged when it is recorded, not when it was decided: a
+// server registered again in between is wanted, and keeps its tools.
+func TestCatalogue_aWithdrawalOfAServerThatIsConfiguredAgain_keepsItsTools(t *testing.T) {
+	j := newFactoryJourney(t, triageToolsets)
+	j.discover(t)
+
+	if err := j.curator.Publish(t.Context(), domain.ToolPublication{Withdrawn: []string{"github-triage"}}); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	if len(ofServer(j.listed(t), "github-triage")) == 0 {
+		t.Fatal("a stale withdrawal took the tools of a configured, enabled server")
+	}
+}
+
+// Switched off, a server offers nothing to any run, and the catalogue says
+// so; switched on again, discovery brings its tools back with their rulings.
+func TestCatalogue_aDisabledServer_stopsOfferingItsTools(t *testing.T) {
+	j := newFactoryJourney(t, triageToolsets)
+	j.discover(t)
+	resp, err := j.api.PutMCPServer(installer(t), openapi.PutMCPServerRequestObject{
+		Name: "github-triage", Body: &openapi.PutMCPServerJSONRequestBody{
+			Transport: ptrTo(openapi.TransportHttp), Url: &j.remote, Enabled: ptrTo(false),
+		},
+	})
+	if _, ok := resp.(openapi.PutMCPServer204Response); err != nil || !ok {
+		detail := ""
+		if refused, was := resp.(openapi.PutMCPServer400ApplicationProblemPlusJSONResponse); was && refused.Detail != nil {
+			detail = *refused.Detail
+		}
+		t.Fatalf("disable github-triage = %#v (%s), %v; want 204", resp, detail, err)
+	}
+
+	j.worker.reconcile(t.Context())
+
+	if left := ofServer(j.listed(t), "github-triage"); len(left) != 0 {
+		t.Fatalf("a disabled server still offers %v", left)
+	}
+}
+
 // A second worker that cannot reach the server — not yet connected, or the
 // server down from where it stands — publishes too, and must not take the
 // tools another worker discovered off the screen.
