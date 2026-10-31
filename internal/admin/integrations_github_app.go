@@ -31,8 +31,9 @@ type storedGitHubApp struct {
 
 // validGitHubApp checks what minting needs, with reasons that never quote the
 // key: the key errors are fixed sentences, and nothing here formats input.
-// serverURL is where the installation token goes, so it is held to TLS too.
-func validGitHubApp(app *domain.MCPGitHubApp, serverURL string) error {
+// serverURL is where the installation token goes, so it is held to TLS too;
+// headers ride beside the App and may configure it, never re-identify it.
+func validGitHubApp(app *domain.MCPGitHubApp, serverURL string, headers map[string]string) error {
 	switch {
 	case app == nil:
 		return nil
@@ -42,6 +43,9 @@ func validGitHubApp(app *domain.MCPGitHubApp, serverURL string) error {
 		return fmt.Errorf("%w: the installation id is required", ErrBadGitHubApp)
 	}
 	if _, err := githubapp.ParsePrivateKey(app.PrivateKey); err != nil {
+		return fmt.Errorf("%w: %w", ErrBadGitHubApp, err)
+	}
+	if err := githubapp.CheckConfigHeaders(headers); err != nil {
 		return fmt.Errorf("%w: %w", ErrBadGitHubApp, err)
 	}
 	if err := githubapp.RequireTLS(serverURL); err != nil {

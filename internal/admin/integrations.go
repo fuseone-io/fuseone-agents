@@ -296,7 +296,7 @@ func (i *Integrations) PutMCPServer(
 			// Judged on what will be stored, not on what was sent: an edit
 			// that only moves the URL still decides where the token goes.
 			if merged.GitHubApp != nil && !merged.GitHubApp.Empty() {
-				if err := validGitHubApp(merged.GitHubApp, server.URL); err != nil {
+				if err := validGitHubApp(merged.GitHubApp, server.URL, merged.Headers); err != nil {
 					return settings.Setting{}, nil, err
 				}
 			}

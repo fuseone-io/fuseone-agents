@@ -328,3 +328,57 @@ func TestAuthenticatedClient_aGitHubAppServerUnderAPersonalPolicy_refusesToolCal
 		t.Fatalf("requests reached the server with %v; want none", wire.seen)
 	}
 }
+
+// hostedGitHubMCP is the hosted GitHub MCP as far as toolsets go: the default
+// set has no Projects tools, and X-MCP-Toolsets is how a client asks for more.
+func hostedGitHubMCP(t *testing.T, github *githubapptest.Fake) (*recordingAuth, string) {
+	t.Helper()
+	noop := func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{}, nil, nil
+	}
+	serverFor := func(r *http.Request) *mcp.Server {
+		server := mcp.NewServer(&mcp.Implementation{Name: "github", Version: "test"}, nil)
+		mcp.AddTool(server, &mcp.Tool{Name: "issue_read"}, noop)
+		if strings.Contains(r.Header.Get("X-MCP-Toolsets"), "projects") {
+			mcp.AddTool(server, &mcp.Tool{Name: "projects_write"}, noop)
+		}
+		return server
+	}
+	wire := &recordingAuth{next: &installationGuard{
+		github: github, next: mcp.NewStreamableHTTPHandler(serverFor, nil),
+	}}
+	remote := httptest.NewServer(wire)
+	t.Cleanup(remote.Close)
+	return wire, remote.URL
+}
+
+// The journey the Triage role needs: an App server with a toolsets header
+// discovers the Projects tools the default set omits, and every request still
+// goes as the App — a header can configure the server, never re-identify it.
+func TestConnectServer_aGitHubAppWithAToolsetsHeader_discoversProjectsAsTheApp(t *testing.T) {
+	t.Parallel()
+	github := githubapptest.New(t, 5550564, 77)
+	wire, url := hostedGitHubMCP(t, github)
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	t.Cleanup(func() { _ = catalog.Close() })
+	server := domain.MCPServer{Name: "github", Transport: domain.TransportHTTP, URL: url, Enabled: true}
+	creds := githubAppCreds(github)
+	creds.Headers = map[string]string{
+		"X-MCP-Toolsets": "issues,projects",
+		"Authorization":  "Bearer personal-token",
+	}
+
+	if err := connectServer(t.Context(), catalog, server, creds, nil, nil, credentialPolicy{}, nil); err != nil {
+		t.Fatalf("connectServer: %v", err)
+	}
+
+	if _, ok := catalog.Lookup("github.projects_write"); !ok {
+		t.Fatal("github.projects_write was not discovered; the toolsets header did not reach the server")
+	}
+	for _, auth := range wire.seen {
+		token, _ := strings.CutPrefix(auth, "Bearer ")
+		if !github.Valid(token) {
+			t.Fatalf("a request carried %q, want the installation token on every one", auth)
+		}
+	}
+}
