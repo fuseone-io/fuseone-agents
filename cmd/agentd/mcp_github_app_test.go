@@ -246,3 +246,85 @@ func TestAuthenticatedClient_aGitHubAppOverPlainHTTP_isRefusedBeforeMinting(t *t
 			err, len(github.JWTs()))
 	}
 }
+
+// recordingAuth notes every Authorization header before the guard judges it.
+type recordingAuth struct {
+	mu   sync.Mutex
+	seen []string
+	next http.Handler
+}
+
+func (h *recordingAuth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.mu.Lock()
+	h.seen = append(h.seen, r.Header.Get("Authorization"))
+	h.mu.Unlock()
+	h.next.ServeHTTP(w, r)
+}
+
+// A server configured as a GitHub App acts as the App for everyone. A person
+// who also holds a personal credential for it does not replace the App's
+// identity: their token would widen what the call can do and break the
+// Reviewer or QA identity a manual run is supposed to carry.
+func TestAuthenticatedClient_aGitHubAppServer_ignoresTheCallersPersonalCredential(t *testing.T) {
+	t.Parallel()
+	github := githubapptest.New(t, 5550600, 91)
+	guard := &installationGuard{github: github, next: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})}
+	wire := &recordingAuth{next: guard}
+	remote := httptest.NewServer(wire)
+	t.Cleanup(remote.Close)
+	client, err := authenticatedClient("github", githubAppCreds(github), nil,
+		personalCreds{"usr_ana": domain.MCPCredentials{Token: "personal-token"}})
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	ctx := tools.WithInvocation(tools.WithCaller(t.Context(), "usr_ana"))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, remote.URL, nil)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("call as usr_ana: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if len(wire.seen) != 1 || wire.seen[0] == "Bearer personal-token" || guard.served.Load() != 1 {
+		t.Fatalf("Authorization sent = %v, served %d; want the installation token, never the personal one",
+			wire.seen, guard.served.Load())
+	}
+}
+
+// A policy that demands each tool call carry a person's own credential cannot
+// be met by a server that only acts as an App. The call fails closed with the
+// reason, rather than quietly going out as the App or as the person.
+func TestAuthenticatedClient_aGitHubAppServerUnderAPersonalPolicy_refusesToolCalls(t *testing.T) {
+	t.Parallel()
+	github := githubapptest.New(t, 5550600, 91)
+	wire := &recordingAuth{next: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})}
+	remote := httptest.NewServer(wire)
+	t.Cleanup(remote.Close)
+	client, err := authenticatedClientWithPolicy("github", githubAppCreds(github), nil,
+		personalCreds{"usr_ana": domain.MCPCredentials{Token: "personal-token"}},
+		credentialPolicy{requirePersonal: true})
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	ctx := tools.WithInvocation(tools.WithCaller(t.Context(), "usr_ana"))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, remote.URL, nil)
+
+	resp, err := client.Do(req)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+
+	var refused *mcpCredentialError
+	if !errors.As(err, &refused) || refused.code != tools.CodeMCPPersonalCredentialMissing ||
+		!strings.Contains(refused.message, "GitHub App") {
+		t.Fatalf("err = %v, want a personal-credential refusal naming the GitHub App", err)
+	}
+	if len(wire.seen) != 0 {
+		t.Fatalf("requests reached the server with %v; want none", wire.seen)
+	}
+}

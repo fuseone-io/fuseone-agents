@@ -174,6 +174,27 @@ func TestPutMCPServer_aGitHubAppOnAPlainHTTPServer_isRefused(t *testing.T) {
 	}
 }
 
+// A personal credential for a server that acts as a GitHub App would never be
+// sent — the App is the server's identity for everyone — so saving one is
+// refused rather than stored to mislead whoever reads the list.
+func TestPutMCPPersonalCredential_onAGitHubAppServer_isRefused(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	app := domain.MCPGitHubApp{AppID: 5550600, InstallationID: 91, PrivateKey: appKey(t)}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, githubServer(),
+		domain.MCPCredentialPatch{GitHubApp: &app}); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	token := "personal-token"
+
+	err := i.PutMCPPersonalCredential(ctx, "usr_ana", platform, "github",
+		domain.MCPCredentialPatch{Token: &token})
+
+	if !errors.Is(err, admin.ErrMCPPersonalCredentialApp) {
+		t.Fatalf("err = %v, want ErrMCPPersonalCredentialApp", err)
+	}
+}
+
 // Clearing the App removes the credential, so the listing stops naming it.
 func TestPutMCPServer_clearingTheGitHubApp_removesIt(t *testing.T) {
 	i := newIntegrations(t)

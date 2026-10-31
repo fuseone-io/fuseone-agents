@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/githubapp"
+	"github.com/fuseone/agents/internal/tools"
 )
 
 /*
@@ -46,6 +48,25 @@ func (a *credentialAuth) githubAppRoundTrip(
 		return nil, fmt.Errorf("%s: %w", a.server, err)
 	}
 	return bearer{token: token, base: a.base}.RoundTrip(r)
+}
+
+/*
+appCredentials is the credential of a server that acts as a GitHub App.
+
+The App is the server's identity, for everyone: no personal credential is
+looked up, because a person's token would replace the App's on the wire —
+widening what the call may do and breaking the role identity a manual run of
+the Reviewer or QA is supposed to carry. A policy that demands a personal
+credential on every tool call is the opposite promise, and the App cannot keep
+it; the call is refused with that reason rather than sent as either one.
+*/
+func (a *credentialAuth) appCredentials(ctx context.Context) (domain.MCPCredentials, domain.UserID, error) {
+	if a.policy.requirePersonal && tools.IsInvocation(ctx) {
+		return domain.MCPCredentials{}, "", credentialFailure(
+			tools.CodeMCPPersonalCredentialMissing, a.server,
+			"this MCP server acts as a GitHub App, so the policy requiring a personal credential for its tool calls cannot be met", nil)
+	}
+	return a.shared, "", nil
 }
 
 func (a *credentialAuth) githubApp(app domain.MCPGitHubApp) *githubAppAuth {
