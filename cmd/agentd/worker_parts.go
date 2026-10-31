@@ -27,6 +27,7 @@ import (
 	"github.com/fuseone/agents/internal/ticket"
 	"github.com/fuseone/agents/internal/tools"
 	"github.com/fuseone/agents/internal/worker"
+	"github.com/fuseone/agents/internal/workitem"
 )
 
 /*
@@ -298,11 +299,14 @@ func (p *workerParts) deps(gate engine.Gate, metrics *worker.MetricsRegistry) en
 	}
 	contextTools := contextshare.New(tools, catalog, p.content)
 	memoryTools := memory.NewLayer(contextTools, contextTools, p.content, p.memory).WithMetrics(metrics)
+	// Outermost, so no layer below — and no server — is ever asked to run
+	// the claim the engine executes itself.
+	claimTools := workitem.NewLayer(memoryTools, memoryTools)
 	deps := engine.Deps{
 		Ledger:  p.store,
 		Gate:    gate,
-		Tools:   memoryTools,
-		Catalog: memoryTools,
+		Tools:   claimTools,
+		Catalog: claimTools,
 		Content: p.content,
 		Clock:   engine.SystemClock{},
 		Dedupe:  p.dedupe,
@@ -335,7 +339,7 @@ func (p *workerParts) toolSchemas() toolSchemas {
 	if p.native != nil {
 		schemas = p.native
 	}
-	return memory.NewLayer(nil, schemaCatalog{schemas: schemas}, p.content, p.memory)
+	return workitem.NewLayer(nil, memory.NewLayer(nil, schemaCatalog{schemas: schemas}, p.content, p.memory))
 }
 
 type schemaCatalog struct{ schemas toolSchemas }

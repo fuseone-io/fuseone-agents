@@ -165,6 +165,9 @@ func (m *Memory) append(
 			return domain.Step{}, ErrIdemConflict
 		}
 	}
+	if err := m.judgeWorkItem(s); err != nil {
+		return domain.Step{}, err
+	}
 
 	sealed, err := domain.NewStep(prev, s)
 	if err != nil {
@@ -280,22 +283,4 @@ func (m *Memory) Verify(ctx context.Context, runID domain.RunID) error {
 		return err
 	}
 	return domain.VerifyChain(steps)
-}
-
-// headIs checks a caller's precondition against the head it actually found.
-//
-// One comparison, written once, so the fake and the store cannot answer the
-// question differently — which is the whole reason the fake exists.
-func headIs(expect *domain.StepRef, head *domain.Step) error {
-	if expect == nil {
-		return nil
-	}
-	if head == nil {
-		return fmt.Errorf("%w: the run has no steps", domain.ErrHeadMoved)
-	}
-	if head.Seq != expect.Seq || head.Kind != expect.Kind {
-		return fmt.Errorf("%w: head is %s at %d, expected %s at %d",
-			domain.ErrHeadMoved, head.Kind, head.Seq, expect.Kind, expect.Seq)
-	}
-	return nil
 }

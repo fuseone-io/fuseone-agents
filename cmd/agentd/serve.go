@@ -41,6 +41,7 @@ import (
 	"github.com/fuseone/agents/internal/ticket"
 	"github.com/fuseone/agents/internal/trigger"
 	"github.com/fuseone/agents/internal/web"
+	"github.com/fuseone/agents/internal/workitem"
 )
 
 // The serve command: the HTTP API and the console, and everything they read.
@@ -141,7 +142,7 @@ func serve(args []string) error {
 			WithChannelListing(drivers).
 			WithCompanies(admin.NewCompanies(identity.pool)).
 			WithAdministration(curator,
-				memory.NewToolList(connectortools.NewToolList(curator, connectorSettings)),
+				workitem.NewToolList(memory.NewToolList(connectortools.NewToolList(curator, connectorSettings))),
 				integrations).
 			WithConnectorInstances(connectorInstances).
 			WithAgents(spec.NewRegistry(identity.pool)).

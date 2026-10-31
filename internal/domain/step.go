@@ -33,6 +33,10 @@ const (
 	// StepModelFallback records the run switching to its declared fallback
 	// pair; every later planning call uses that pair.
 	StepModelFallback StepKind = "model_fallback"
+	// StepWorkItemClaimed records the card a run claimed. The ledger judges
+	// it under a lock when it is appended, and projects it into
+	// run_work_items, so a refused claim never becomes a step.
+	StepWorkItemClaimed StepKind = "work_item_claimed"
 )
 
 var stepKinds = map[StepKind]bool{
@@ -43,6 +47,7 @@ var stepKinds = map[StepKind]bool{
 	StepApprovalDecided: true, StepResumed: true, StepAbandoned: true,
 	StepCompensationStarted: true, StepCompensated: true, StepFailed: true,
 	StepParked: true, StepRunFinished: true, StepModelFallback: true,
+	StepWorkItemClaimed: true,
 }
 
 func (k StepKind) Valid() bool { return stepKinds[k] }
