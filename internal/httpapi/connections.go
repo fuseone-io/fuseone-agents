@@ -109,6 +109,7 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 			Cache:              resultCacheToResponse(srv.Cache),
 			HasSecret:          ptr(srv.HasSecret),
 			HasOAuth:           ptr(srv.HasOAuth),
+			GithubApp:          githubAppToResponse(srv.GitHubApp),
 			HasVariables:       ptr(srv.HasVariables),
 			HasConfigFile:      ptr(srv.HasConfigFile),
 			Managed:            ptr(true),

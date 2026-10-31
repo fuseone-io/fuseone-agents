@@ -26,15 +26,18 @@ type fakeAdmin struct {
 	putToken    string
 	putHeaders  map[string]string
 	putOAuth    *domain.MCPOAuthGrant
-	putEnv      map[string]string
-	token       string
-	personalFor domain.UserID
-	putProvider domain.ModelProvider
-	putKey      string
-	putBy       domain.UserID
-	deleted     string
-	probed      string
-	err         error
+	// putGitHubApp is what the handler passed, key included: the store is
+	// where it is sealed, so the handler must hand it over intact.
+	putGitHubApp *domain.MCPGitHubApp
+	putEnv       map[string]string
+	token        string
+	personalFor  domain.UserID
+	putProvider  domain.ModelProvider
+	putKey       string
+	putBy        domain.UserID
+	deleted      string
+	probed       string
+	err          error
 }
 
 func (f *fakeAdmin) MCPServers(context.Context) ([]domain.MCPServer, error) {
@@ -92,6 +95,10 @@ func (f *fakeAdmin) PutMCPServer(
 	if creds.OAuth != nil {
 		copy := *creds.OAuth
 		f.putOAuth = &copy
+	}
+	if creds.GitHubApp != nil {
+		copy := *creds.GitHubApp
+		f.putGitHubApp = &copy
 	}
 	return f.err
 }
