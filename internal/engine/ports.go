@@ -325,6 +325,10 @@ type Start struct {
 	// older version does not begin learning because somebody published a later
 	// toggle.
 	MemoryLearning domain.MemoryLearningPolicy
+	// StandingApprovals is versioned with the definition too. Forbidden means
+	// no grant given ahead of time may release a call of this run: every park
+	// waits for a person (#192).
+	StandingApprovals domain.StandingPolicy
 }
 
 // Status is the outcome of one Advance.

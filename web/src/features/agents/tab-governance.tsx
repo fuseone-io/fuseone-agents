@@ -1,6 +1,7 @@
 import { AgentApprovalsSection } from "@/features/agents/agent-approvals-section";
 import { AgentBudgetSection } from "@/features/agents/agent-budget-section";
 import { AgentMemoryLearningSection } from "@/features/agents/agent-memory-learning-section";
+import { AgentStandingToggle } from "@/features/agents/agent-standing-toggle";
 import { AgentTriggersSection } from "@/features/agents/agent-triggers-section";
 import { NarrativeCard } from "@/features/agents/narrative-card";
 import type { AgentDefinition } from "@/lib/api/client";
@@ -29,6 +30,7 @@ export function TabGovernance({
       <AgentBudgetSection draft={draft} patch={patch} />
       <AgentMemoryLearningSection draft={draft} patch={patch} />
       <AgentApprovalsSection draft={draft} patch={patch} />
+      <AgentStandingToggle draft={draft} patch={patch} />
       <NarrativeCard draft={draft} />
     </>
   );

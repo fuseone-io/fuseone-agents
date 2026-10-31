@@ -91,13 +91,13 @@ func (r *Registry) Publish(ctx context.Context, s Spec, by domain.UserID, compan
 			agent_id, version_id, company_id, area_id, name,
 			provider, model, effort, cache_prefix_ttl, reply_locale, tools, budget,
 			triggers, instructions, source, published_by, emits, steps,
-			memory_learning, approvals, fallback_provider, fallback_model
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+			memory_learning, approvals, fallback_provider, fallback_model, standing_approvals
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
 		on conflict (agent_id, version_id) do nothing`,
 		string(s.ID), string(s.Version), string(company), string(s.Area), s.Name,
 		s.Provider, s.Model, s.Effort, s.CachePrefixTTL, s.ReplyLocale, tools, budget,
 		triggers, s.Instructions, s.Source, string(by), encodedEmits, steps, learning,
-		approvals, s.Fallback.Provider, s.Fallback.Model)
+		approvals, s.Fallback.Provider, s.Fallback.Model, string(s.StandingApprovals))
 	if err != nil {
 		return fmt.Errorf("spec: publish %s@%s: %w", s.ID, s.Version, err)
 	}
@@ -119,13 +119,14 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 		select agent_id, version_id, company_id, area_id, name,
 		       provider, model, effort, cache_prefix_ttl, reply_locale, tools,
 		       budget, triggers, instructions, source, emits, steps,
-		       memory_learning, approvals, fallback_provider, fallback_model
+		       memory_learning, approvals, fallback_provider, fallback_model,
+		       standing_approvals
 		from agent_specs where agent_id = $1 and version_id = $2`,
 		string(agent), string(version),
 	).Scan(&s.ID, &s.Version, &company, &s.Area, &s.Name,
 		&s.Provider, &s.Model, &s.Effort, &s.CachePrefixTTL, &s.ReplyLocale, &tools,
 		&budget, &triggers, &s.Instructions, &s.Source, &emits, &steps, &learning,
-		&approvals, &s.Fallback.Provider, &s.Fallback.Model)
+		&approvals, &s.Fallback.Provider, &s.Fallback.Model, &s.StandingApprovals)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Spec{}, fmt.Errorf("%w: %s@%s", ErrNotPublished, agent, version)

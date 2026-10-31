@@ -256,11 +256,15 @@ produces, with the grant owner's name on the second. Everything downstream
 run. Claim consumes one of the grant's daily uses atomically before the
 decision is written; an error anywhere leaves the park standing for a
 human, because a grant that cannot be read is a grant that does not cover.
+
+A version that forbids standing approvals is never offered to the store at
+all: asking first would spend a daily use on a run the grant may not release,
+and a grant created before the version forbade them would still cover (#192).
 */
 func (r *Runner) standingDecide(
 	ctx context.Context, state State, start Start, p Proposal,
 ) (Status, error) {
-	if r.deps.Standing == nil {
+	if r.deps.Standing == nil || start.StandingApprovals.Forbidden() {
 		return status(state), nil
 	}
 	grant, covers, err := r.deps.Standing.Claim(

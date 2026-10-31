@@ -32,8 +32,11 @@ func agentFrom(a domain.AgentSummary) openapi.Agent {
 		},
 		MemoryLearning: memoryLearningFrom(a.MemoryLearning),
 		Fallback:       pairFrom(a.Fallback),
-		PublishedAt:    a.PublishedAt,
-		Latest:         a.Latest,
+		// What a read omits an editor cannot put back: a republish from the
+		// console would allow grants again on an edit made for another reason.
+		StandingApprovals: standingFrom(a.StandingApprovals),
+		PublishedAt:       a.PublishedAt,
+		Latest:            a.Latest,
 	}
 	agent.Stage = ptr(openapi.Stage(domain.StageOf(string(a.Stage))))
 	agent.Paused = ptr(!a.Started)

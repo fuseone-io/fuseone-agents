@@ -94,6 +94,9 @@ export function toDefinition(
     // now; it travels here because publishing writes the draft whole, so a tab
     // somebody never opened must not delete what it holds.
     approvals,
+    // Whether a standing approval may answer for it. Carried for the same
+    // reason: dropped here, the next publish allows grants again.
+    standingApprovals: agent.standingApprovals,
   };
 }
 
@@ -172,6 +175,11 @@ export function changesBetween(
   // has to say so — and until then, a difference appearing here means the draft
   // dropped something it was carrying.
   compare("agents.fieldApprovals", before.approvals, after.approvals);
+  compare(
+    "agents.fieldStandingApprovals",
+    before.standingApprovals,
+    after.standingApprovals,
+  );
   return changes;
 }
 

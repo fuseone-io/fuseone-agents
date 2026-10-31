@@ -72,6 +72,41 @@ func TestAdvance_aStandingGrantCoversTheParkedWrite_decidesWithTheOwnersName(t *
 	}
 }
 
+/*
+An agent whose version forbids standing approvals parks for a person even
+when a grant covers the call — and the grant is never asked, so none of its
+daily uses is spent on a run it may not release (#192). A grant created
+before the version forbade them is covered by the same check: the claim is
+never made.
+*/
+func TestAdvance_versionForbidsStandingApprovals_parksWithoutClaimingTheGrant(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.note", Args: []byte(`{"text":"hi"}`)})
+	port := &fakeStanding{
+		grant:  StandingGrant{ID: "SG-7", By: "usr_ana", Reason: "night shift"},
+		covers: true,
+	}
+	h.runner.deps.Standing = port
+	start := h.start(t, generousBudget())
+	start.StandingApprovals = domain.StandingForbidden
+
+	st, err := h.runner.Advance(ctx, start)
+	if err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if st.Phase != PhaseAwaitingApproval {
+		t.Fatalf("Phase = %v, want awaiting a person", st.Phase)
+	}
+	if _, err := h.stepOf(t, domain.StepApprovalDecided); err == nil {
+		t.Fatal("a standing grant decided for an agent that forbids them")
+	}
+	if port.claims != 0 {
+		t.Fatalf("claims = %d, want the grant never asked", port.claims)
+	}
+}
+
 // No coverage, port error, or no port at all: the park stands and a human
 // decides. The grant path fails closed in every direction.
 func TestAdvance_withoutACoveringGrant_theParkStands(t *testing.T) {

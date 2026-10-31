@@ -304,6 +304,7 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 	}
 	draft.MemoryLearning = memoryLearningOf(in.MemoryLearning)
 	draft.Approvals = approvalsOf(in.Approvals)
+	draft.StandingApprovals = standingOf(in.StandingApprovals)
 	for _, t := range valueOr(in.Triggers) {
 		draft.Triggers = append(draft.Triggers, spec.Trigger{
 			Type: string(t.Type), Schedule: valueOr(t.Schedule),

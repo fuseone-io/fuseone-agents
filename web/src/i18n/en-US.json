@@ -305,6 +305,11 @@
     "fieldFallback": "fallback",
     "fieldEmits": "Events published",
     "fieldApprovals": "Approvals",
+    "fieldStandingApprovals": "standing approvals",
+    "standingTitle": "Standing approvals",
+    "standingHint": "A standing approval is a person's yes given ahead of time. Here the agent says whether one may ever answer for it.",
+    "standingForbid": "Only a person releases its approvals",
+    "standingForbidHint": "No standing approval can be granted for this agent, and one granted earlier is never used: every approval it asks for waits for somebody to decide.",
     "approvals": "Human approval",
     "approvalsHint": "Where the people who may decide are asked. The Gate decides whether somebody must answer; this decides where. The console always has the request.",
     "approvalsDirect": "Also send it as a direct message from the bot",
@@ -2248,6 +2253,7 @@
     "upstream-refused": "The system on the other side refused: {{detail}}",
     "memory-secret": "That text contains a private key or a complete access token. Memory is quoted back to agents and kept for years, so it cannot hold one.",
     "memory-secret-warned": "Part of that text is long and random enough to be a credential. Check it, then confirm if it is not one.",
+    "standing-forbidden": "{{detail}}'s definition forbids standing approvals: every approval it asks for waits for a person. Change that on the agent, not here.",
     "source-input-erased": "The input this run was recorded with was erased or has expired, so no run was opened. It cannot be brought back."
   },
   "retention": {
