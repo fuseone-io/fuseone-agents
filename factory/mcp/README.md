@@ -100,7 +100,7 @@ stops the server at start and names the variable.
 | `FACTORY_BASE_BRANCH` | both | yes | The only base it accepts: `main`. |
 | `FACTORY_QA_BOT_ID` | both | yes | Numeric **user id of the QA App's bot account** (see below). The Merger accepts `factory/qa` only from it; the QA instance checks it created the status under it. |
 | `FACTORY_REVIEWERS` | merger | yes | Comma-separated GitHub logins whose approval counts. **The same list the ruleset requires (#207).** Compared case-insensitively. |
-| `FACTORY_CHECKS` | merger | yes | Comma-separated check-run names required on the head, e.g. `go,postgres,console,chart,artifact` (add `build` once it exists). |
+| `FACTORY_CHECKS` | merger | yes | Comma-separated check-run names required on the head, `go,postgres,console,chart,artifact`. **Not `build`**: see below. |
 | `FACTORY_CHECKS_APP_ID` | merger | yes | The app that must have emitted them: GitHub Actions, `15368`. |
 | `FACTORY_MERGE_METHOD` | merger | no | `squash` (default), `merge` or `rebase`. |
 | `GITHUB_APP_ID` | both | yes | This instance's GitHub App id. |
@@ -114,6 +114,16 @@ stops the server at start and names the variable.
 | `FACTORY_MCP_TLS_CERT` | both | for a non-loopback address | PEM certificate (chain) the server presents. |
 | `FACTORY_MCP_TLS_KEY` | both | with `FACTORY_MCP_TLS_CERT` | Its PEM private key. |
 | `FACTORY_MCP_CLIENT_CA` | both | no | PEM CA bundle; when set, clients must present a certificate it signed (mTLS). |
+
+### Why `build` is not an expected check
+
+`build` is the job in `.github/workflows/docs.yml`, which runs only on pull
+requests that touch `docs/**` or that workflow. On every other PR it never
+runs, so requiring it would refuse every non-docs PR with `check_missing`, and
+the ruleset would block them the same way. The expected set is the jobs that
+run on every PR, from `check.yml`: `go`, `postgres`, `console`, `chart`,
+`artifact`. #207 was corrected the same way. Keep `FACTORY_CHECKS` and the
+ruleset's required checks the same list.
 
 ### Why App credentials, not a token
 
