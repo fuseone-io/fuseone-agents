@@ -289,7 +289,12 @@ type headerAuth struct {
 	base    http.RoundTripper
 }
 
+// RoundTrip fails closed on a map that names one header twice: sent, its
+// value would depend on map order, request by request.
 func (h headerAuth) RoundTrip(r *http.Request) (*http.Response, error) {
+	if err := domain.CheckHeaderNames(h.headers); err != nil {
+		return nil, err
+	}
 	out := r.Clone(r.Context())
 	for name, value := range h.headers {
 		out.Header.Set(name, value)

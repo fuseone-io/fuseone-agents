@@ -420,6 +420,27 @@ func TestPutMCPServer_remote_sealsHeadersAndNeverListsThem(t *testing.T) {
 	}
 }
 
+// A personal credential goes through the same header transport, so one header
+// spelled twice is refused there too.
+func TestPutMCPPersonalCredential_aHeaderNameSpelledTwice_isRefused(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	if err := i.PutMCPServer(ctx, "usr_curator", platform, domain.MCPServer{
+		Name: "newrelic", Transport: domain.TransportHTTP,
+		URL: "https://mcp.newrelic.com/mcp/", Enabled: true,
+	}, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	err := i.PutMCPPersonalCredential(ctx, "usr_ana", platform, "newrelic", domain.MCPCredentialPatch{
+		Headers: map[string]string{"Api-Key": "a", "api-key": "b"},
+	})
+
+	if !errors.Is(err, domain.ErrHeaderCollision) {
+		t.Fatalf("err = %v, want ErrHeaderCollision", err)
+	}
+}
+
 func TestPutMCPPersonalCredential_sealsOneUsersRemoteCredential(t *testing.T) {
 	i := newIntegrations(t)
 	pool := openPool(t)

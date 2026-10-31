@@ -293,6 +293,9 @@ func (i *Integrations) PutMCPServer(
 			}
 
 			merged := given.Apply(domain.ReadMCPCredentials(stored.Secret)).ForTransport(transport)
+			if err := domain.CheckHeaderNames(merged.Headers); err != nil {
+				return settings.Setting{}, nil, err
+			}
 			// Judged on what will be stored, not on what was sent: an edit
 			// that only moves the URL still decides where the token goes.
 			if merged.GitHubApp != nil && !merged.GitHubApp.Empty() {
@@ -601,6 +604,9 @@ func (i *Integrations) PutMCPPersonalCredential(
 				ForTransport(domain.TransportHTTP)
 			if merged.Empty() {
 				return settings.Setting{}, nil, ErrNoMCPCredential
+			}
+			if err := domain.CheckHeaderNames(merged.Headers); err != nil {
+				return settings.Setting{}, nil, err
 			}
 			value, err := json.Marshal(storedMCPUserCredential{
 				Server: name, Principal: string(by),

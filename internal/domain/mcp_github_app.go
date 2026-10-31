@@ -101,6 +101,33 @@ func cloneGitHubApp(g *MCPGitHubApp) *MCPGitHubApp {
 // mergeGitHubApp folds a write onto the stored App. A write without a key
 // keeps the stored one: correcting a repository list must not demand pasting
 // a private key again.
+/*
+applyGitHubApp folds the App half of a patch onto out.
+
+Headers beside an App are its configuration — the hosted GitHub MCP reads
+X-MCP-Toolsets — so they survive an edit of the App that does not name them.
+Switching *into* the App from another mode is different: those headers were a
+credential, and they go. And removing the App takes its headers along: they
+were accepted as configuration, never as a credential, and left behind they
+would turn into header-mode authentication. Headers written in the same patch
+are a mode of their own and stay.
+*/
+func (p MCPCredentialPatch) applyGitHubApp(stored, out MCPCredentials) MCPCredentials {
+	hadApp := stored.GitHubApp != nil && !stored.GitHubApp.Empty()
+	out.GitHubApp = mergeGitHubApp(stored.GitHubApp, p.GitHubApp)
+	switch {
+	case out.GitHubApp != nil:
+		out.Token = ""
+		out.OAuth = nil
+		if !hadApp && p.Headers == nil {
+			out.Headers = nil
+		}
+	case hadApp && p.Headers == nil:
+		out.Headers = nil
+	}
+	return out
+}
+
 func mergeGitHubApp(stored, given *MCPGitHubApp) *MCPGitHubApp {
 	out := cloneGitHubApp(given)
 	if out != nil && out.PrivateKey == "" && stored != nil {

@@ -203,7 +203,7 @@ func TestPutMCPServer_aGitHubAppWithAnAuthorizationHeader_isRefused(t *testing.T
 	ctx := context.Background()
 	app := domain.MCPGitHubApp{AppID: 5550600, InstallationID: 91, PrivateKey: appKey(t)}
 
-	for _, name := range []string{"Authorization", "authorization", "Proxy-Authorization"} {
+	for _, name := range []string{"Authorization", "authorization", "Proxy-Authorization", "X-API-Key"} {
 		err := i.PutMCPServer(ctx, "usr_ana", platform, githubServer(), domain.MCPCredentialPatch{
 			GitHubApp: &app, Headers: map[string]string{name: "Bearer ghp_personal"},
 		})
@@ -219,6 +219,26 @@ func TestPutMCPServer_aGitHubAppWithAnAuthorizationHeader_isRefused(t *testing.T
 	creds, err := i.MCPCredentials(ctx, "github")
 	if err != nil || creds.GitHubApp == nil || creds.Headers["X-MCP-Toolsets"] != "issues,projects" {
 		t.Fatalf("stored = %+v, %v; want the App and its toolsets header", creds, err)
+	}
+}
+
+// Two spellings of one header name are one header with two values, sent in
+// map order. Refused at save in either mode: beside an App and on its own.
+func TestPutMCPServer_aHeaderNameSpelledTwice_isRefusedInEitherMode(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	pair := map[string]string{"X-MCP-Readonly": "true", "x-mcp-readonly": "false"}
+	app := domain.MCPGitHubApp{AppID: 5550600, InstallationID: 91, PrivateKey: appKey(t)}
+
+	cases := map[string]domain.MCPCredentialPatch{
+		"beside an App": {GitHubApp: &app, Headers: pair},
+		"headers alone": {Headers: pair},
+	}
+	for name, patch := range cases {
+		err := i.PutMCPServer(ctx, "usr_ana", platform, githubServer(), patch)
+		if !errors.Is(err, domain.ErrHeaderCollision) {
+			t.Errorf("%s: err = %v, want ErrHeaderCollision", name, err)
+		}
 	}
 }
 

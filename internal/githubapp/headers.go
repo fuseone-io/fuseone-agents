@@ -4,44 +4,54 @@ import (
 	"errors"
 	"maps"
 	"net/http"
+	"slices"
 )
 
-// ErrCredentialHeader is a header beside an App that would carry a second
-// credential. It names no value; the caller knows which header it sent.
-var ErrCredentialHeader = errors.New(
-	"github app: headers beside a GitHub App configure the server and cannot carry a credential " +
-		"— Authorization and Proxy-Authorization are the App's to set")
+/*
+configHeaders are the only headers that may ride beside an App: the optional
+headers the hosted GitHub MCP server documents, each the equivalent of a local
+server flag (github/github-mcp-server, docs/remote-server.md, "Optional
+Headers"). Canonicalised the way net/http compares them.
 
-// credentialHeaders are the names a header map beside an App may not use,
-// canonicalised the way net/http compares them.
-var credentialHeaders = []string{"Authorization", "Proxy-Authorization"}
+An allowlist, not a ban on Authorization: any other name — X-API-Key, Cookie, a
+vendor's own — can carry a second secret beside the App's bearer, and a
+server that acts as the App must send its identity and nothing else.
+*/
+var configHeaders = []string{
+	"X-Mcp-Insiders",
+	"X-Mcp-Lockdown",
+	"X-Mcp-Readonly",
+	"X-Mcp-Tools",
+	"X-Mcp-Toolsets",
+}
 
-// CheckConfigHeaders refuses a header map that names a credential header, in
-// any letter case.
+// ErrHeaderNotAllowed is a header beside an App outside the configuration
+// headers. It names no header and no value; the caller knows what it sent.
+var ErrHeaderNotAllowed = errors.New(
+	"github app: beside a GitHub App only the hosted GitHub MCP server's configuration headers are accepted " +
+		"— X-MCP-Toolsets, X-MCP-Tools, X-MCP-Readonly, X-MCP-Lockdown and X-MCP-Insiders; " +
+		"the App supplies the credential")
+
+// CheckConfigHeaders refuses a header map that names anything but a
+// configuration header, in any letter case.
 func CheckConfigHeaders(headers map[string]string) error {
 	for name := range headers {
-		if isCredentialHeader(name) {
-			return ErrCredentialHeader
+		if !isConfigHeader(name) {
+			return ErrHeaderNotAllowed
 		}
 	}
 	return nil
 }
 
-// ConfigHeaders is headers without any credential header: the runtime's own
-// filter, so a row stored before the check, or by a path that skipped it,
-// still cannot re-identify an App's request.
+// ConfigHeaders is headers with only the configuration headers kept: the
+// runtime's own filter, so a row stored before the check, or by a path that
+// skipped it, still sends nothing beside the App's identity.
 func ConfigHeaders(headers map[string]string) map[string]string {
 	out := maps.Clone(headers)
-	maps.DeleteFunc(out, func(name, _ string) bool { return isCredentialHeader(name) })
+	maps.DeleteFunc(out, func(name, _ string) bool { return !isConfigHeader(name) })
 	return out
 }
 
-func isCredentialHeader(name string) bool {
-	canonical := http.CanonicalHeaderKey(name)
-	for _, banned := range credentialHeaders {
-		if canonical == banned {
-			return true
-		}
-	}
-	return false
+func isConfigHeader(name string) bool {
+	return slices.Contains(configHeaders, http.CanonicalHeaderKey(name))
 }

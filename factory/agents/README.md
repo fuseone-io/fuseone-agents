@@ -144,8 +144,11 @@ publish passes, and the role fails at its first call to a tool the server no
 longer offers. After changing a role's `X-MCP-Toolsets`, check its discovered
 tools in the console before trusting a publish.
 
-A configuration header never carries `Authorization`, because the GitHub App
-credential supplies it.
+Beside a GitHub App the registration accepts only the hosted server's
+documented configuration headers (`X-MCP-Toolsets`, `X-MCP-Tools`,
+`X-MCP-Readonly`, `X-MCP-Lockdown`, `X-MCP-Insiders`); any other header,
+`Authorization` included, is refused, because the App credential is the only
+identity the server may see.
 
 **Moving a card.** Cards move with the server's projects tool
 (`projects_write`). It is classified as a **write**, so a copilot run proposes

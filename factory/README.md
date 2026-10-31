@@ -48,8 +48,8 @@ factory/
 |---|---|---|
 | Triage | #195 | [agents/triage.agent.md](agents/triage.agent.md) |
 | Architect | #196 | added by #196 |
-| Reviewer | #197 | added by #197 |
-| QA | #198 | added by #198 |
+| Reviewer | #197 | [agents/reviewer.agent.md](agents/reviewer.agent.md) |
+| QA | #198 | [agents/qa.agent.md](agents/qa.agent.md) |
 | Developer | #200 | added by #200 |
 
 There is no Merger in v1 (#199): a person merges a pull request once it is
