@@ -195,7 +195,7 @@ func TestWorkItemClaim_withNoAgentOrAMalformedRef_refused(t *testing.T) {
 			// around ParseWorkItemRef cannot put a second spelling, an
 			// invisible character or free text into the append-only record.
 			"uncanonical case": claimStep(t, "run-a", "triage", "github:FuseOne-IO/fuseone-agents#123"),
-			"zero-width space": claimStep(t, "run-a", "triage", card+"​"),
+			"zero-width space": claimStep(t, "run-a", "triage", card+"\u200B"),
 			"free text":        claimStep(t, "run-a", "triage", "ana.souza@example.com"),
 		} {
 			if _, err := s.Append(context.Background(), st); !errors.Is(err, domain.ErrWorkItemInvalid) {

@@ -70,9 +70,9 @@ func TestParseWorkItemRef(t *testing.T) {
 		// Everything else is not an identifier.
 		{"empty", "", "", false},
 		{"only space", "   ", "", false},
-		{"zero-width space inside", "github:fuseone-io/fuseone-agents#12​3", "", false},
-		{"near duplicate with an invisible character", "github:fuseone-io⁠/fuseone-agents#123", "", false},
-		{"bidi override", "github:fuseone-io/‮fuseone-agents#123", "", false},
+		{"zero-width space inside", "github:fuseone-io/fuseone-agents#12\u200B3", "", false},
+		{"near duplicate with an invisible character", "github:fuseone-io\u2060/fuseone-agents#123", "", false},
+		{"bidi override", "github:fuseone-io/\u202Efuseone-agents#123", "", false},
 		{"email address", "ana.souza@example.com", "", false},
 		{"free text", "fix the login page", "", false},
 		{"bare board id without its prefix", "PVTI_lADOBx", "", false},
