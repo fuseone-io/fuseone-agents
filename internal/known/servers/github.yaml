@@ -21,6 +21,13 @@ authModes:
     header: Authorization
     prefix: Bearer
     note: PAT for the repositories and toolsets the agent should reach.
+  - type: github_app
+    principal: installation
+    label: GitHub App
+    note: >
+      Acts as the App, not as a person. The worker mints installation tokens
+      from the App's private key and refreshes them before they expire; the
+      App's own permissions and repository access are the first guardrail.
 provenance: documentation
 status: published
 note: >
