@@ -25,9 +25,13 @@ authModes:
     principal: installation
     label: GitHub App
     note: >
-      Acts as the App, not as a person. The worker mints installation tokens
+      Acts as the App, not as a person — for every caller, so no personal
+      credential applies to this server. The worker mints installation tokens
       from the App's private key and refreshes them before they expire; the
       App's own permissions and repository access are the first guardrail.
+      The hosted server's default toolsets leave out Projects: to move board
+      cards, set the toolsets field, sent as the X-MCP-Toolsets header (for
+      example "issues,projects"). The API base and server URLs must be https.
 provenance: documentation
 status: published
 note: >

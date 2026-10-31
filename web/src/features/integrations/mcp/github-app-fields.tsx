@@ -77,6 +77,12 @@ export function GitHubAppFields({
           onChange={(githubAPIBaseURL) => set({ githubAPIBaseURL })} />
         <p className="text-xs text-muted-foreground">{t("mcp.githubAPIBaseURLHint")}</p>
       </div>
+      <div className="space-y-1.5">
+        <TextInput id="github-toolsets" label={t("mcp.githubToolsets")}
+          value={value.githubToolsets}
+          onChange={(githubToolsets) => set({ githubToolsets })} />
+        <p className="text-xs text-muted-foreground">{t("mcp.githubToolsetsHint")}</p>
+      </div>
     </div>
   );
 }

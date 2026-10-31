@@ -41,6 +41,7 @@ export const serverSchema = z
     githubPrivateKey: z.string(),
     githubRepositories: z.string(),
     githubAPIBaseURL: z.string(),
+    githubToolsets: z.string(),
     configFile: z.string(),
     configFileEnv: z
       .string()
