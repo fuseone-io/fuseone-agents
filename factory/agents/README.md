@@ -129,12 +129,23 @@ Submitting a review needs Pull requests: **write**, for QA as much as for the
 Reviewer: in v1 QA's verdict is a review, not a commit status, so QA needs no
 Commit statuses: write.
 
-Without the header, Triage's server has no `projects_*` tools in its catalogue,
-and the console refuses to publish the Triage reference, because it names
-tools the server does not offer. The hosted server silently ignores an unknown
-set name, so a typo shows up the same way: as a publish refusal that names the
-missing tools. A configuration header never carries `Authorization`, because
-the GitHub App credential supplies it.
+Without the header from the start, Triage's server never discovers its
+`projects_*` tools, and the console refuses to publish the Triage reference,
+because it names tools the installation's catalogue does not have. The hosted
+server silently ignores an unknown set name, so a typo on a new registration
+shows up the same way: as a publish refusal that names the missing tools.
+
+That check only covers a catalogue that never had the tools. The catalogue
+only grows: a discovery records what it finds and never removes a tool it no
+longer sees (`Curator.Publish` in `internal/admin/curator.go` upserts). A
+registration that discovered `projects_*` once and later loses the toolset
+(the header removed, or a typo edited in) keeps the old entries, so the
+publish passes, and the role fails at its first call to a tool the server no
+longer offers. After changing a role's `X-MCP-Toolsets`, check its discovered
+tools in the console before trusting a publish.
+
+A configuration header never carries `Authorization`, because the GitHub App
+credential supplies it.
 
 **Moving a card.** Cards move with the server's projects tool
 (`projects_write`). It is classified as a **write**, so a copilot run proposes
