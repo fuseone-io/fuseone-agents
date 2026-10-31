@@ -123,11 +123,16 @@ Rules that hold while the App is set:
   up for the server, and the screen refuses to save one. If a policy requires a
   personal credential for this server's tool calls, those calls are refused,
   because the App cannot satisfy it; discovery still runs as the App.
-- **Headers configure, they do not authenticate.** Configuration headers can
-  sit beside the App — the hosted GitHub server needs `X-MCP-Toolsets` to offer
-  more than its default sets, and `projects` is not in them. `Authorization`
-  and `Proxy-Authorization` are refused, in any letter case, and the runtime
-  strips them before setting the App's token.
+- **Headers configure, they do not authenticate.** Beside the App, only the
+  hosted GitHub server's documented configuration headers are accepted, in any
+  letter case: `X-MCP-Toolsets`, `X-MCP-Tools`, `X-MCP-Readonly`,
+  `X-MCP-Lockdown` and `X-MCP-Insiders`. The hosted server needs
+  `X-MCP-Toolsets` to offer more than its default sets, and `projects` is not
+  in them. Any other header — `Authorization`, an API key, a cookie — is
+  refused when saved, and the runtime drops it from a row stored earlier, so
+  nothing but the App's token identifies the request.
+- **Removing the App removes its headers.** The headers that sat beside it go
+  with it; they never turn into a header credential of their own.
 
 ## Authentication shapes
 

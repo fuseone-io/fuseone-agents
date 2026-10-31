@@ -31,7 +31,10 @@ authModes:
       App's own permissions and repository access are the first guardrail.
       The hosted server's default toolsets leave out Projects: to move board
       cards, set the toolsets field, sent as the X-MCP-Toolsets header (for
-      example "issues,projects"). The API base and server URLs must be https.
+      example "issues,projects"). Beside the App only the hosted server's
+      configuration headers are accepted (X-MCP-Toolsets, X-MCP-Tools,
+      X-MCP-Readonly, X-MCP-Lockdown, X-MCP-Insiders). The API base and server
+      URLs must be https.
 provenance: documentation
 status: published
 note: >

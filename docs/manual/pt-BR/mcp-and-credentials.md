@@ -125,12 +125,17 @@ Regras que valem enquanto o App estiver configurado:
   credencial pessoal nas chamadas de ferramenta desse servidor, essas chamadas
   são recusadas, porque o App não tem como atender; a descoberta continua
   rodando como o App.
-- **Cabeçalhos configuram, não autenticam.** Cabeçalhos de configuração podem
-  ficar ao lado do App — o GitHub MCP hospedado precisa de `X-MCP-Toolsets`
-  para oferecer mais do que os conjuntos padrão, e `projects` não está entre
-  eles. `Authorization` e `Proxy-Authorization` são recusados, com qualquer
-  combinação de maiúsculas e minúsculas, e o runtime os remove antes de pôr o
-  token do App.
+- **Cabeçalhos configuram, não autenticam.** Ao lado do App, só são aceitos os
+  cabeçalhos de configuração documentados do GitHub MCP hospedado, com
+  qualquer combinação de maiúsculas e minúsculas: `X-MCP-Toolsets`,
+  `X-MCP-Tools`, `X-MCP-Readonly`, `X-MCP-Lockdown` e `X-MCP-Insiders`. O
+  servidor hospedado precisa de `X-MCP-Toolsets` para oferecer mais do que os
+  conjuntos padrão, e `projects` não está entre eles. Qualquer outro
+  cabeçalho — `Authorization`, uma chave de API, um cookie — é recusado ao
+  salvar, e o runtime o descarta de um registro salvo antes, então só o token
+  do App identifica a requisição.
+- **Remover o App remove os cabeçalhos dele.** Os cabeçalhos que estavam ao
+  lado saem junto; nunca viram uma credencial de cabeçalho própria.
 
 ## Formas de autenticação
 
