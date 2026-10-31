@@ -66,10 +66,27 @@ Each role runs **its own instance**, with its own GitHub App and its own
 `FACTORY_ROLE`. The QA instance exposes only `record_qa_verdict`; the Merger
 instance exposes only `merge_if_ready`.
 
-- **stdio** (default): `FACTORY_ROLE=qa ... bin/factory-mcp`.
-- **Streamable HTTP**: set `FACTORY_MCP_ADDR=:8080` and `FACTORY_MCP_TOKEN`.
-  Every request must carry `Authorization: Bearer $FACTORY_MCP_TOKEN`. The
-  server refuses to start over HTTP without a token.
+- **stdio** is the default and the preferred transport:
+  `FACTORY_ROLE=qa ... bin/factory-mcp`. No port, no bearer, nothing on the
+  network to intercept.
+- **Streamable HTTP**, when the instance must run apart from the worker: set
+  `FACTORY_MCP_ADDR` and `FACTORY_MCP_TOKEN`. Every request must carry
+  `Authorization: Bearer $FACTORY_MCP_TOKEN`, so the bearer must never cross a
+  network in clear: whoever reads it can call `record_qa_verdict` (the QA App
+  signs the status) or `merge_if_ready` directly, skipping the platform's
+  approval. The server therefore refuses to start unless one of these holds:
+  - **HTTPS**: `FACTORY_MCP_TLS_CERT` and `FACTORY_MCP_TLS_KEY` are set; the
+    address may then be any, e.g. `FACTORY_MCP_ADDR=:8443`. Add
+    `FACTORY_MCP_CLIENT_CA` for **mTLS**: every client must then present a
+    certificate signed by that CA. mTLS is optional, not mandatory, because
+    FuseOne's MCP client authenticates with a bearer and does not present a
+    client certificate; require it where a proxy in front of the server can.
+  - **Loopback**: the address is a literal loopback IP (`127.0.0.1:8080`,
+    `[::1]:8080`), for a sidecar behind a TLS-terminating proxy in the same pod.
+    A hostname, even `localhost`, does not count.
+
+  A non-loopback address without TLS, a certificate without its key, or no
+  token is a startup error naming the fix.
 
 ## Environment
 
@@ -92,8 +109,11 @@ stops the server at start and names the variable.
 | `GITHUB_APP_PRIVATE_KEY` | both | one of | The PEM itself, when a file is not possible. |
 | `GITHUB_API_URL` | both | no | REST base URL. Default `https://api.github.com`. |
 | `GITHUB_WEB_URL` | both | no | Web base URL for the status's link. Default `https://github.com`. |
-| `FACTORY_MCP_ADDR` | both | no | Serve streamable HTTP at this address instead of stdio. |
+| `FACTORY_MCP_ADDR` | both | no | Serve streamable HTTP at this address instead of stdio. Without TLS, only a literal loopback IP is accepted. |
 | `FACTORY_MCP_TOKEN` | both | with `FACTORY_MCP_ADDR` | Bearer token HTTP clients must present. |
+| `FACTORY_MCP_TLS_CERT` | both | for a non-loopback address | PEM certificate (chain) the server presents. |
+| `FACTORY_MCP_TLS_KEY` | both | with `FACTORY_MCP_TLS_CERT` | Its PEM private key. |
+| `FACTORY_MCP_CLIENT_CA` | both | no | PEM CA bundle; when set, clients must present a certificate it signed (mTLS). |
 
 ### Why App credentials, not a token
 
@@ -141,16 +161,23 @@ Register two MCP servers in **Integrations**, one per role. A tool is addressed
 as `<server name>.<tool>`, so with these names the tool ids are
 `factory-qa.record_qa_verdict` and `factory-merger.merge_if_ready`.
 
-| Server name | Instance | Transport | Credential | Surface |
-|---|---|---|---|---|
-| `factory-qa` | `FACTORY_ROLE=qa`, QA App | Remote HTTP (preferred) to the QA instance's `FACTORY_MCP_ADDR` | Bearer: that instance's `FACTORY_MCP_TOKEN` | `record_qa_verdict` |
-| `factory-merger` | `FACTORY_ROLE=merger`, Merger App | Remote HTTP to the Merger instance | Bearer: that instance's `FACTORY_MCP_TOKEN` | `merge_if_ready` |
+| Server name | Instance | Surface |
+|---|---|---|
+| `factory-qa` | `FACTORY_ROLE=qa`, QA App | `record_qa_verdict` |
+| `factory-merger` | `FACTORY_ROLE=merger`, Merger App | `merge_if_ready` |
 
-Remote HTTP keeps the App private keys in the server's own process, not in the
-worker. Over stdio instead, the command is `factory-mcp` with the variables
-above set through the **Env** shape, and the private key through the **Config
-file** shape with its variable set to `GITHUB_APP_PRIVATE_KEY_FILE`; a local
-server also needs an administrator to accept local execution.
+**stdio (preferred).** The command is `factory-mcp`, with the variables above
+set through the **Env** shape and the private key through the **Config file**
+shape, its variable set to `GITHUB_APP_PRIVATE_KEY_FILE`. A local server needs
+an administrator to accept local execution, and runs as the worker; nothing
+listens on a port.
+
+**Remote HTTP**, when the instance must keep its App key outside the worker:
+the URL is the instance's `https://` address (TLS on the server, or a
+TLS-terminating proxy in front of a loopback-bound sidecar), and the credential
+is the **Bearer** shape with that instance's `FACTORY_MCP_TOKEN`. Never an
+`http://` URL across a network: the server refuses to listen that way, and a
+proxy must not undo it.
 
 The Curator classifies:
 

@@ -7,14 +7,10 @@ package main
 
 import (
 	"context"
-	"crypto/subtle"
-	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/fuseone/agents/factory/guard"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -49,48 +45,11 @@ func run(ctx context.Context) error {
 	if addr == "" {
 		return server.Run(ctx, &mcp.StdioTransport{})
 	}
-	return serveHTTP(ctx, server, addr, os.Getenv("FACTORY_MCP_TOKEN"))
-}
-
-// serveHTTP serves the streamable HTTP transport behind a bearer token. A
-// merge tool reachable without one is refused outright, not warned about.
-func serveHTTP(ctx context.Context, server *mcp.Server, addr, token string) error {
-	if token == "" {
-		return fmt.Errorf("%w: FACTORY_MCP_TOKEN is required when FACTORY_MCP_ADDR is set", guard.ErrConfig)
-	}
-	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
-	srv := &http.Server{
-		Addr:              addr,
-		Handler:           requireBearer(token, handler),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-	errs := make(chan error, 1)
-	go func() { errs <- srv.ListenAndServe() }()
-	fmt.Fprintf(os.Stderr, "factory-mcp listening on %s\n", addr)
-
-	select {
-	case err := <-errs:
-		return err
-	case <-ctx.Done():
-		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(shutdown); err != nil {
-			return fmt.Errorf("shutdown: %w", err)
-		}
-		if err := <-errs; !errors.Is(err, http.ErrServerClosed) {
-			return err
-		}
-		return nil
-	}
-}
-
-func requireBearer(want string, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got := []byte(r.Header.Get("Authorization"))
-		if subtle.ConstantTimeCompare(got, []byte("Bearer "+want)) != 1 {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		next.ServeHTTP(w, r)
+	return serveHTTP(ctx, server, httpOptions{
+		Addr:         addr,
+		Token:        os.Getenv("FACTORY_MCP_TOKEN"),
+		CertFile:     os.Getenv("FACTORY_MCP_TLS_CERT"),
+		KeyFile:      os.Getenv("FACTORY_MCP_TLS_KEY"),
+		ClientCAFile: os.Getenv("FACTORY_MCP_CLIENT_CA"),
 	})
 }
