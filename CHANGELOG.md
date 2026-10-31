@@ -25,6 +25,38 @@ field" is a commit message.
 
 ---
 
+## [0.85.0] — 2026-10-31
+
+### Upgrade notes
+
+- **Headers saved beside a GitHub App are now an allowlist.** Only the
+  hosted GitHub MCP server's configuration headers are accepted —
+  `X-MCP-Toolsets`, `X-MCP-Tools`, `X-MCP-Readonly`, `X-MCP-Lockdown` and
+  `X-MCP-Insiders`. Saving any other header next to an App is refused, and a
+  registration stored with one keeps working but stops sending it.
+- **A header name given twice is refused.** Two spellings of the same name
+  (`X-MCP-Readonly` and `x-mcp-readonly`) are refused at save, in every mode.
+  A registration already stored that way fails its calls without sending
+  anything until somebody saves it again with the name given once.
+
+### Added
+
+- **Reference definitions for a Reviewer and a QA role**, beside the Triage
+  one in `factory/agents/`. The definitions declare the toolsets and the
+  GitHub App permissions each role needs. QA only proceeds on the Reviewer's
+  most recent decisive review, and it must be on the pull request's current
+  head. A test keeps all three references parseable and keeps each one at
+  `standing_approvals: forbidden` with its claim line.
+- **The manual documents the GitHub App credential and the software
+  factory.** "MCP and credentials" covers the App mode and the header rules.
+  A new "Software factory" page walks an operator from creating the Apps to
+  the roles running at copilot.
+
+### Security
+
+- **Removing a GitHub App also removes the headers stored beside it.** They
+  can no longer turn into the server's credential once the App is gone.
+
 ## [0.84.0] — 2026-10-31
 
 ### Upgrade notes
