@@ -25,6 +25,56 @@ field" is a commit message.
 
 ---
 
+## [0.84.0] — 2026-10-31
+
+### Upgrade notes
+
+- **Migrations 0089 and 0090.** 0089 creates `run_work_items`, a new
+  append-only table, empty on upgrade. 0090 adds `standing_approvals` to
+  `agent_specs` with a default of empty, which is how every version
+  published before it behaves: standing approvals keep releasing writes
+  exactly as they did.
+
+### Added
+
+- **MCP servers can authenticate as a GitHub App.** A registration takes an
+  App id, an installation id, the App's private key (pasted or uploaded as a
+  `.pem`) and optionally a list of repositories. The worker mints
+  installation tokens and keeps them only in memory. It refreshes them before
+  they expire, and after a failed refresh it waits briefly before asking
+  GitHub again. A server set up this way always acts as the App, never as
+  the person who started the run, and no personal credential is looked up for
+  it. The key is sealed. The console only ever shows that a key is
+  configured, and the admin trail records that the credential changed,
+  without the key. Configuration headers can sit beside the App: the hosted
+  GitHub server needs `X-MCP-Toolsets` to offer more than its default sets.
+- **An agent can claim the work item it is working on.** An agent that
+  declares `$fuseone.work_item.claim` records which card a run took, as a
+  step in the trail. One card per run; while a run is open, no other run of
+  the same agent can take the same card. Nothing has to release a claim: a
+  run stops holding its card when it finishes or fails, however that
+  happens. The run page names the card.
+- **An agent definition can forbid standing approvals.** A version that
+  declares `standing_approvals: forbidden` never has a write released by a
+  standing approval, and no new grant can be created for that agent. Every
+  write needs a person, every time.
+- **Publishing can refuse to replace an autonomous agent's version.** A
+  publish may ask to be refused if the agent is at a given stage. The stage
+  is judged under the same lock that writes the version, so a promotion
+  cannot slip in between.
+- **Reference material for running a software factory on the platform**, in
+  `factory/` and design note NT-013: roles configured in the console, one
+  GitHub App per role, every role at copilot and a person merging.
+
+### Security
+
+- **A GitHub App secret never travels without TLS or to another origin.**
+  With the App mode on, the API and server URLs must be HTTPS (plain HTTP
+  only to loopback). Minting does not follow redirects, and a redirect that
+  changes scheme, host or port is refused before a token is attached. The
+  admin refuses an `Authorization` header beside the App, and the transport
+  strips any such header before setting the App's token.
+
 ## [0.83.0] — 2026-10-30
 
 ### Upgrade notes
