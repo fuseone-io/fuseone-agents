@@ -155,9 +155,16 @@ A label is not a verdict. In v1 there is no `factory/qa` commit status and no
 Moved by **a person**, by merging. No role merges in v1. Before merging, the
 person checks on the PR's current head:
 
-- [ ] an approving review by the Reviewer's GitHub App on that SHA;
-- [ ] an approving review by QA's GitHub App on that SHA;
+- [ ] the Reviewer's GitHub App's **latest decision** is an approval of that
+      SHA;
+- [ ] QA's GitHub App's latest decision is an approval of that SHA;
 - [ ] every expected check completed successfully on that SHA.
+
+A role's latest decision is its most recent review in state `APPROVED`,
+`CHANGES_REQUESTED` or `DISMISSED`, across every page of the PR's reviews;
+`COMMENTED` reviews decide nothing. An approval followed by a request for
+changes, or a dismissed one, is not an approval, however many earlier
+approvals the PR carries.
 
 A label is not enough: it survives a new push. If the head moved after either
 review, the PR goes back to `factory:needs-review`. Moving the card to Done

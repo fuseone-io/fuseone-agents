@@ -82,11 +82,21 @@ issue's.
 
 Check that the Reviewer's approval is on this head
 Read the pull request and write down its head commit SHA, all 40 characters.
-Read its reviews. There must be an APPROVE review by
-fuseone-factory-reviewer[bot] whose commit is that head SHA. If there is not
-(the head moved after the review, or the label was set by hand), the pull
-request is not ready for you: relabel it from factory:needs-qa to
-factory:needs-review, comment that the Reviewer's approval is not on the head
+Then read every one of its reviews: ask for 100 per page and keep reading the
+next page until a page comes back with fewer than 100. A review on a page you
+did not read can be the one that decides.
+
+What stands is the Reviewer's latest decision, not any approval it ever gave.
+Of the reviews by fuseone-factory-reviewer[bot], ignore those in state
+COMMENTED or PENDING: they decide nothing. Of the rest (APPROVED,
+CHANGES_REQUESTED, DISMISSED), take the most recently submitted. It must be in
+state APPROVED, and its commit must be the head SHA. A DISMISSED review counts
+as the latest decision and voids it: a person took that verdict back.
+
+If it is not (no decision, a later request for changes, a dismissal, an
+approval of an older commit, or a label set by hand), the pull request is not
+ready for you: relabel it from factory:needs-qa to factory:needs-review,
+comment that the Reviewer's latest decision is not an approval of the head
 SHA, and stop. Submit no review.
 
 Check it

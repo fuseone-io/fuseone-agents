@@ -119,7 +119,9 @@ method `create`), event
 
 - **Not a comment, not a label.** The person who merges reads two approving
   reviews on the PR's current head, the Reviewer's and QA's, each from that
-  role's own GitHub App. A comment that says "approved" proves nothing, and a
+  role's own GitHub App, and each that role's latest decision (LANES.md §
+  `factory:ready-to-merge` → Done): an earlier approval does not survive a
+  later request for changes or a dismissal. A comment that says "approved" proves nothing, and a
   label survives a new push. A review carries the SHA it was written against,
   so a review of an older commit is visibly stale.
 - **If the head moved while reviewing**, the review is about a commit that is no
