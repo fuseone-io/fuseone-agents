@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/githubapp"
 	"github.com/fuseone/agents/internal/githubapp/githubapptest"
 	"github.com/fuseone/agents/internal/tools"
 )
@@ -221,5 +223,26 @@ func assertNoAppSecret(t *testing.T, text, key string, jwts []string) {
 		if len(parts) == 3 && (strings.Contains(text, jwt) || strings.Contains(text, parts[2])) {
 			t.Fatalf("leaked the App JWT: %s", text)
 		}
+	}
+}
+
+// The installation token never travels in clear: an App server whose MCP URL
+// is plain HTTP to another host is refused before a token is even minted.
+func TestAuthenticatedClient_aGitHubAppOverPlainHTTP_isRefusedBeforeMinting(t *testing.T) {
+	t.Parallel()
+	github := githubapptest.New(t, 5550600, 91)
+	client, err := authenticatedClient("github", githubAppCreds(github), nil, nil)
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+
+	resp, err := client.Get("http://mcp.internal.example/mcp/")
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+
+	if !errors.Is(err, githubapp.ErrPlainHTTP) || len(github.JWTs()) != 0 {
+		t.Fatalf("err = %v with %d JWTs presented; want ErrPlainHTTP and no mint",
+			err, len(github.JWTs()))
 	}
 }

@@ -47,6 +47,9 @@ type minter struct {
 
 // mint exchanges a fresh App JWT for an installation access token.
 func (m minter) mint(ctx context.Context, now time.Time) (token, error) {
+	if err := RequireTLS(m.app.APIBase()); err != nil {
+		return token{}, err
+	}
 	jwt, err := appJWT(m.key, m.app.AppID, now)
 	if err != nil {
 		return token{}, err

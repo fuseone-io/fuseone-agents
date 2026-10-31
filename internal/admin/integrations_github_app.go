@@ -31,7 +31,8 @@ type storedGitHubApp struct {
 
 // validGitHubApp checks what minting needs, with reasons that never quote the
 // key: the key errors are fixed sentences, and nothing here formats input.
-func validGitHubApp(app *domain.MCPGitHubApp) error {
+// serverURL is where the installation token goes, so it is held to TLS too.
+func validGitHubApp(app *domain.MCPGitHubApp, serverURL string) error {
 	switch {
 	case app == nil:
 		return nil
@@ -43,10 +44,16 @@ func validGitHubApp(app *domain.MCPGitHubApp) error {
 	if _, err := githubapp.ParsePrivateKey(app.PrivateKey); err != nil {
 		return fmt.Errorf("%w: %w", ErrBadGitHubApp, err)
 	}
+	if err := githubapp.RequireTLS(serverURL); err != nil {
+		return fmt.Errorf("%w: server URL: %w", ErrBadGitHubApp, err)
+	}
 	if app.APIBaseURL == "" {
 		return nil
 	}
 	if err := netguard.ValidateHTTPURL(app.APIBaseURL); err != nil {
+		return fmt.Errorf("%w: API base URL: %w", ErrBadGitHubApp, err)
+	}
+	if err := githubapp.RequireTLS(app.APIBaseURL); err != nil {
 		return fmt.Errorf("%w: API base URL: %w", ErrBadGitHubApp, err)
 	}
 	return nil

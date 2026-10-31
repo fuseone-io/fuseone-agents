@@ -32,6 +32,11 @@ type githubAppAuth struct {
 func (a *credentialAuth) githubAppRoundTrip(
 	r *http.Request, app domain.MCPGitHubApp,
 ) (*http.Response, error) {
+	// Checked per request, not at connect: a redirect or an edited URL is
+	// still a request the token would ride on.
+	if err := githubapp.RequireTLS(r.URL.String()); err != nil {
+		return nil, fmt.Errorf("%s: %w", a.server, err)
+	}
 	current := a.githubApp(app)
 	if current.err != nil {
 		return nil, fmt.Errorf("%s: %w", a.server, current.err)
