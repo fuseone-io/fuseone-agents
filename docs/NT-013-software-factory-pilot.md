@@ -16,6 +16,35 @@ review returns findings with reproductions, the author answers them, and a
 merge happens only on a pasted approval. The factory encodes that process; it
 does not invent one.
 
+## v1: the pilot without factory code
+
+Amended 2026-10-31. The first version of the pilot runs entirely inside the
+platform, with no code written for the factory:
+
+- **Roles are configured in the platform.** Each role is an agent created in
+  the console or the Studio, from the reference text under `factory/` (the
+  rulebook, the review format, the lane definitions of done, and one reference
+  specification per role). The repository holds what is reviewed; the console
+  holds what runs.
+- **The official GitHub MCP server is the only tool server**, registered once
+  per role, each registration with its own GitHub App installed only on this
+  repository. The App's identity is what signs a role's comments and reviews.
+- **Copilot everywhere, and a person merges.** Every role runs at copilot with
+  `standing_approvals: forbidden`, and its first act is the work-item claim.
+  The Reviewer's and QA's verdicts are both pull-request reviews on the head
+  SHA they read (APPROVE or REQUEST_CHANGES), under their own Apps. A person
+  merges once both approve the current head and its checks are green. Cards
+  move with the GitHub MCP server's projects tool, classified as a write, so
+  every move is a proposal a person approves.
+
+**Deferred** until the pilot's data justifies automating the merge: the merge
+wrapper (`merge_if_ready`) and the Merger role, the `factory/qa` commit status
+(`record_qa_verdict`), the ruleset pinning each signal to its producer, a
+narrow `move_card` tool, and publishing role specifications from the
+repository. The sections below that describe them are kept, marked
+*deferred in v1*, as the design to return to. The factory's own MCP server
+(`factory/mcp`, #211) exists in the repository and is not used in v1.
+
 ## Roles
 
 Each role is one agent specification, versioned in this repository and
@@ -29,8 +58,8 @@ its work good — the harness, below.
 | **Architect** | *Triagem* items marked `factory:needs-design` | writes the plan and acceptance criteria, splits large items | issue comment, sub-issues, card status | copilot |
 | **Developer** | lane *Doing* | implements, opens the PR, answers review findings | branch, commits, PR | copilot (Level 1 only) |
 | **Reviewer** | PRs labelled `factory:needs-review` | reviews the diff; findings ranked P1–P3, each with a reproduction | a pull-request review — APPROVE or REQUEST_CHANGES — on the head SHA it read; labels | copilot |
-| **QA** | PRs labelled `factory:needs-qa` | checks every acceptance criterion against the PR and its CI | its verdict as a commit status `factory/qa` on the head SHA, under its own identity; labels | copilot |
-| **Merger** | PRs labelled `factory:ready-to-merge` | proposes `merge_if_ready` for the PR's current head; the wrapper re-checks review, QA and checks on that SHA when it runs | merge (through the wrapper), card status | copilot, merge always human-approved |
+| **QA** | PRs labelled `factory:needs-qa` | checks every acceptance criterion against the PR and its CI | its verdict as a commit status `factory/qa` on the head SHA, under its own identity; labels. *In v1: a pull-request review on the head SHA, like the Reviewer's* | copilot |
+| **Merger** (*deferred in v1: a person merges*) | PRs labelled `factory:ready-to-merge` | proposes `merge_if_ready` for the PR's current head; the wrapper re-checks review, QA and checks on that SHA when it runs | merge (through the wrapper), card status | copilot, merge always human-approved |
 | **Release** (later) | merged work since the last tag | cuts the changelog, tags, bumps the platform repo | changelog commit, tag | not in the pilot |
 
 Reviewer and QA are separate on purpose. In this repository's history the
@@ -144,6 +173,9 @@ consequences shape the design:
 - **The Merger must not read free text.** If it read a comment, it could not
   merge.
 
+*Layers 5 and 5a, and the merge policy in layer 6, are deferred in v1: a person
+merges, reading the two approving reviews and the checks on the current head.*
+
 **5. A merge bound to the head that was reviewed.** Structured is not the same
 as trustworthy, and a decision is not the same as its execution. A label, a
 review and a check can each belong to a different commit — a label survives a
@@ -213,7 +245,9 @@ approved, what it cost.
 
 What makes a role do its job *well* rather than merely within bounds. It is
 code: role instructions live in this repository under `factory/`, reviewed by
-pull request like any change, and published from there.
+pull request like any change, and published from there. *In v1 they are
+reference text, copied into the console; publishing from the repository is
+deferred.*
 
 - **A shared rulebook.** The engineering rules every role follows are the ones
   `CLAUDE.md` and `web/CLAUDE.md` already state: test first and show it fail,
@@ -240,11 +274,13 @@ pull request like any change, and published from there.
 | GitHub Project board and labels | the lanes and sub-states above | everything |
 | GitHub MCP per role, classified | layers 1 and 3 | every role |
 | A durable work-item claim, recorded in the ledger | no two runs of a role on one card; cost per card | every role |
-| Merge policy, and standing approvals refused for every factory write | layer 6 | every role |
-| `merge_if_ready`: a merge bound to the reviewed head, signals validated by actor | layer 5 | Merger |
-| A ruleset on `main` requiring review, `factory/qa` and CI, no bypass for the Merger | layer 5a | Merger |
-| A trusted way for QA to set `factory/qa` under its own identity | the evidence `merge_if_ready` requires | QA, Merger |
-| Role specs and the rulebook under `factory/`, published from the repository | the harness | every role |
+| Standing approvals refused for every factory write | layer 6 | every role |
+| Merge policy (*deferred in v1*) | layer 6 | Merger |
+| `merge_if_ready`: a merge bound to the reviewed head, signals validated by actor (*deferred in v1*) | layer 5 | Merger |
+| A ruleset on `main` requiring review, `factory/qa` and CI, no bypass for the Merger (*deferred in v1*) | layer 5a | Merger |
+| A trusted way for QA to set `factory/qa` under its own identity (*deferred in v1*) | the evidence `merge_if_ready` requires | QA, Merger |
+| Role references and the rulebook under `factory/` | the harness | every role |
+| Role specs published from the repository (*deferred in v1*) | the registry never drifts from what was reviewed | — |
 | A Level 1 developer: GitHub-API commits for small changes | #154 Level 1 | Developer |
 | A coding runtime behind one MCP tool | #154 Level 2: build and test before a PR | Developer and QA beyond chores |
 | A GitHub webhook adapter (signature, delivery id, event filter) | event-driven roles instead of polling | after the pilot |
