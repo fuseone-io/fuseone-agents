@@ -2,6 +2,7 @@ package guard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 )
@@ -110,6 +111,11 @@ func (m *Merger) merge(ctx context.Context, res MergeResult) (MergeResult, error
 	code, err := m.gh.send(ctx, apiRequest{
 		Method: http.MethodPut, Path: m.gh.repoPath("/pulls/%d/merge", res.PR), Body: body, Out: &out,
 	})
+	if errors.Is(err, ErrNotSent) {
+		// Nothing left the process: known not merged, safe to retry.
+		res.Reason = ReasonMergeNotSent
+		return res, nil
+	}
 	if err != nil {
 		// The request may have reached GitHub and merged: settle it by
 		// reading, never by reporting a bare error or merging again.

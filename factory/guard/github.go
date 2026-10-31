@@ -16,6 +16,11 @@ import (
 // response body: a body is free text, and the Merger must not read any.
 var ErrGitHub = errors.New("github")
 
+// ErrNotSent marks a request that failed before it left the process: no
+// token, or no request could be built. For a write, it means the write is
+// known not to have happened.
+var ErrNotSent = errors.New("github request not sent")
+
 // TokenSource supplies the bearer for each request.
 type TokenSource interface {
 	Token(ctx context.Context) (string, error)
@@ -63,29 +68,46 @@ type apiRequest struct {
 	Body, Out    any
 }
 
-// send performs one request and returns the status code. Out is decoded only
-// on a 2xx; any other status is left to the caller to interpret.
-func (c *Client) send(ctx context.Context, r apiRequest) (int, error) {
-	method, path, body, out := r.Method, r.Path, r.Body, r.Out
+// build prepares a request without sending it. Every failure here is
+// ErrNotSent: nothing has left the process.
+func (c *Client) build(ctx context.Context, r apiRequest) (*http.Request, error) {
 	token, err := c.opts.Tokens.Token(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("github token: %w", err)
+		return nil, fmt.Errorf("%w: github token: %w", ErrNotSent, err)
 	}
 	var reader io.Reader
-	if body != nil {
-		raw, err := json.Marshal(body)
+	if r.Body != nil {
+		raw, err := json.Marshal(r.Body)
 		if err != nil {
-			return 0, fmt.Errorf("github %s %s: encode: %w", method, path, err)
+			return nil, fmt.Errorf("%w: github %s %s: encode: %w", ErrNotSent, r.Method, r.Path, err)
 		}
 		reader = bytes.NewReader(raw)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.opts.APIURL+path, reader)
+	req, err := http.NewRequestWithContext(ctx, r.Method, c.opts.APIURL+r.Path, reader)
 	if err != nil {
-		return 0, fmt.Errorf("github %s %s: %w", method, path, err)
+		return nil, fmt.Errorf("%w: github %s %s: %w", ErrNotSent, r.Method, r.Path, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("%w: github %s %s: %w", ErrNotSent, r.Method, r.Path, err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	return req, nil
+}
+
+// send performs one request and returns the status code. Out is decoded only
+// on a 2xx; any other status is left to the caller to interpret. A failure
+// before the request was handed to the transport wraps ErrNotSent; any later
+// one (transport error, timeout, an undecodable 2xx) does not, because the
+// request may have reached GitHub.
+func (c *Client) send(ctx context.Context, r apiRequest) (int, error) {
+	method, path, out := r.Method, r.Path, r.Out
+	req, err := c.build(ctx, r)
+	if err != nil {
+		return 0, err
+	}
+	// From here the request may reach GitHub: any failure is not ErrNotSent.
 	resp, err := c.opts.HTTP.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("github %s %s: %w", method, path, err)

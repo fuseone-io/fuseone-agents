@@ -41,7 +41,10 @@ dismissed, a check gone back to pending), the tool reports `merge_refused` with
 the HTTP status. It does not retry: only a fresh proposal may judge the PR
 again.
 
-If the merge request was sent but its response was lost (a cut body, a reset
+If the merge request never left the process (the token could not be
+obtained, or the request could not be built), the answer is `merge_not_sent`:
+known not merged, safe to retry, no reconciliation. If it was sent but its
+response was lost (a cut body, a reset
 connection, a timeout), GitHub may have merged. The tool never reports that as
 a bare error and never merges again. It re-reads the PR: merged with exactly
 `head_sha` is `merged` with the merge commit; anything else, including a

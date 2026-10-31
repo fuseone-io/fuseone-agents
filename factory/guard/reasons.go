@@ -38,6 +38,9 @@ const (
 	// and re-reading the PR could not show it merged at the proposed head.
 	// Not a refusal: the merge may have happened. A person must look.
 	ReasonOutcomeUnknown Reason = "outcome_unknown"
+	// ReasonMergeNotSent: the merge request failed before it left the process
+	// (no token, no request). Known not to have merged; safe to retry.
+	ReasonMergeNotSent Reason = "merge_not_sent"
 
 	ReasonStatusRefused Reason = "status_refused"
 	ReasonWrongIdentity Reason = "wrong_identity"

@@ -103,6 +103,7 @@ type fakeGitHub struct {
 	mergeError  int                 // forces a status on the merge call
 	mergeFault  string              // loses the response of a merge that happened
 	readsDown   bool                // every read fails once a merge was attempted
+	compared    bool                // the base comparison, the guard's last read, was served
 }
 
 func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
@@ -240,6 +241,7 @@ func nullable(s string) any {
 
 func (f *fakeGitHub) compare(w http.ResponseWriter, r *http.Request, _ ghUser) {
 	_, head, _ := strings.Cut(r.PathValue("spec"), "...")
+	f.compared = true
 	writeJSON(w, http.StatusOK, map[string]any{"status": canary, "behind_by": f.behind[head], "ahead_by": 1})
 }
 
