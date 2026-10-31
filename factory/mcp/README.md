@@ -87,7 +87,8 @@ instance exposes only `merge_if_ready`.
   network in clear: whoever reads it can call `record_qa_verdict` (the QA App
   signs the status) or `merge_if_ready` directly, skipping the platform's
   approval. The server therefore refuses to start unless one of these holds:
-  - **HTTPS**: `FACTORY_MCP_TLS_CERT` and `FACTORY_MCP_TLS_KEY` are set; the
+  - **HTTPS**: `FACTORY_MCP_TLS_CERT` and `FACTORY_MCP_TLS_KEY` name the paths
+    of the certificate and key PEM files; the
     address may then be any, e.g. `FACTORY_MCP_ADDR=:8443`. Add
     `FACTORY_MCP_CLIENT_CA` for **mTLS**: every client must then present a
     certificate signed by that CA. mTLS is optional, not mandatory, because
@@ -123,9 +124,9 @@ stops the server at start and names the variable.
 | `GITHUB_WEB_URL` | both | no | Web base URL for the status's link. Default `https://github.com`. |
 | `FACTORY_MCP_ADDR` | both | no | Serve streamable HTTP at this address instead of stdio. Without TLS, only a literal loopback IP is accepted. |
 | `FACTORY_MCP_TOKEN` | both | with `FACTORY_MCP_ADDR` | Bearer token HTTP clients must present. |
-| `FACTORY_MCP_TLS_CERT` | both | for a non-loopback address | PEM certificate (chain) the server presents. |
-| `FACTORY_MCP_TLS_KEY` | both | with `FACTORY_MCP_TLS_CERT` | Its PEM private key. |
-| `FACTORY_MCP_CLIENT_CA` | both | no | PEM CA bundle; when set, clients must present a certificate it signed (mTLS). |
+| `FACTORY_MCP_TLS_CERT` | both | for a non-loopback address | **Path to a PEM file** holding the certificate (chain) the server presents. Not the PEM content. |
+| `FACTORY_MCP_TLS_KEY` | both | with `FACTORY_MCP_TLS_CERT` | **Path to a PEM file** holding its private key. Not the PEM content. |
+| `FACTORY_MCP_CLIENT_CA` | both | no | **Path to a PEM file** holding the CA bundle; when set, clients must present a certificate it signed (mTLS). Not the PEM content. |
 
 ### Why `build` is not an expected check
 
