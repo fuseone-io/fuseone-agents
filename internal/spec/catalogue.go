@@ -182,7 +182,11 @@ The row is created if the agent has none, paused, because an agent nobody has
 decided about does not start (PRD DE-07).
 */
 func (r *Registry) MakeCurrent(ctx context.Context, agent domain.AgentID, version domain.VersionID) error {
-	_, err := r.pool.Exec(ctx, `
+	return makeCurrentOn(ctx, r.pool, agent, version)
+}
+
+func makeCurrentOn(ctx context.Context, q execer, agent domain.AgentID, version domain.VersionID) error {
+	_, err := q.Exec(ctx, `
 		insert into agent_state (agent_id, paused, current_version, changed_at)
 		values ($1, true, $2, now())
 		on conflict (agent_id) do update set

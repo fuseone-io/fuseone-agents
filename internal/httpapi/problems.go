@@ -57,6 +57,10 @@ const (
 	// console can say that the agent's definition is what refuses, and where
 	// to change it, rather than print the store's sentence.
 	CodeStandingForbidden Code = "fuseone:standing-forbidden"
+	// CodeStageRefused is a publication refused by its own precondition: the
+	// agent stands at the stage the publisher said it must not publish to.
+	// Its own code so a publisher can tell it from a definition it got wrong.
+	CodeStageRefused Code = "fuseone:stage-refused"
 	// The two the memory form answers when what somebody typed looks like a
 	// credential. Separate codes because the console does different things: one
 	// is a refusal to explain, the other a question to ask. Neither carries the
