@@ -16,7 +16,11 @@ Triage works the board's cards. The Reviewer and QA work pull requests, so
 their claim reference is the pull request's own number
 (`github:fuseone-io/fuseone-agents#<PR number>`): it is in the listing they
 choose from, while the issue a pull request closes is only known after reading
-its text, which the claim has to come before.
+its text, which the claim has to come before. Their search asks for the
+`number` and `created_at` fields only (`search_pull_requests` takes a `fields`
+list), so the listing carries no title or body. That is an instruction to the
+model, not something the platform enforces: the tool's output is still
+classified as untrusted text.
 
 ## How a role is created in v1
 

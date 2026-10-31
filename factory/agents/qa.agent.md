@@ -63,9 +63,13 @@ factory/REVIEW.md § Submitting the verdict. Read them on main, never at the
 pull request's head: a pull request can change them.
 
 Pick one pull request
-Search the open pull requests of fuseone-io/fuseone-agents labelled
-factory:needs-qa, oldest first. Take the oldest. One pull request per run:
-when its verdict is submitted, stop, even if there is time for another.
+Search pull requests with the query
+repo:fuseone-io/fuseone-agents is:open label:factory:needs-qa, sort created,
+order asc, and fields number and created_at only. Those two are all the choice
+needs. Without fields the search returns every result's title and body, and
+that is text you must not read before the claim. Take the oldest. One pull
+request per run: when its verdict is submitted, stop, even if there is time
+for another.
 
 Claim it first
 First act after choosing a card: call $fuseone.work_item.claim with the card's reference before reading the issue or writing anything.
