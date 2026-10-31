@@ -664,7 +664,7 @@ type OAuthGrantStore interface {
 // area shows the tools of a server that connected after start-up. Optional: a
 // worker with no database still connects, it just has nowhere to publish to.
 type Publisher interface {
-	Publish(ctx context.Context, entries []domain.ToolEntry) error
+	Publish(ctx context.Context, pub domain.ToolPublication) error
 }
 
 type connector func(
@@ -793,7 +793,7 @@ func (r *reconciler) reconcile(ctx context.Context) {
 	// appeared on no screen, so the one place an operator goes to classify a
 	// new tool would not list it.
 	if changed && r.publisher != nil {
-		if err := r.publisher.Publish(ctx, r.catalog.Entries()); err != nil {
+		if err := r.publisher.Publish(ctx, r.catalog.Publication()); err != nil {
 			slog.Error("could not publish the tool catalogue", "err", err)
 		}
 	}

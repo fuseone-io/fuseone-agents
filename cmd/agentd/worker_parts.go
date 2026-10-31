@@ -261,7 +261,7 @@ func (p *workerParts) connectTools(
 	if p.curator == nil {
 		return nil
 	}
-	if err := p.curator.Publish(ctx, p.catalog.Entries()); err != nil {
+	if err := p.curator.Publish(ctx, p.catalog.Publication()); err != nil {
 		return err
 	}
 	if err := syncRulings(ctx, p.catalog, p.curator); err != nil {
