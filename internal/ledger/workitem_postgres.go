@@ -34,6 +34,13 @@ func recordWorkItemClaim(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 	if err != nil {
 		return err
 	}
+	simulated, err := runSimulated(ctx, tx, s.RunID)
+	if err != nil {
+		return err
+	}
+	if simulated {
+		return judgeSimulatedClaim(ctx, tx, s, ref)
+	}
 	if _, err := tx.Exec(ctx,
 		`select pg_advisory_xact_lock(hashtextextended('work_item:' || $1::text || chr(31) || $2::text, 0))`,
 		string(s.AgentID), string(ref),
@@ -98,4 +105,42 @@ func (p *Postgres) WorkItemCost(
 		return domain.WorkItemCost{}, fmt.Errorf("work item cost: %w", err)
 	}
 	return out, nil
+}
+
+/*
+A simulation rehearses the claim and never takes one.
+
+A simulated run is a real run in this ledger with its tool layer replaced, and
+the claim never reaches a tool layer — the engine executes it — so the dry
+boundary is drawn here, on the run's own durable mark (runs.simulated, set from
+its run_started step), where no wiring can forget it. Left durable, a simulated
+run parked for approval would hold the card against the real run of the same
+agent for as long as nobody answered, and its spend would land on the card.
+
+Inside its own run the claim still behaves, judged from its own trail: the
+first claim succeeds, a retry of it succeeds, a second card is refused. Nothing
+is projected and no other run is consulted or blocked.
+*/
+func runSimulated(ctx context.Context, tx pgx.Tx, runID domain.RunID) (bool, error) {
+	var simulated bool
+	if err := tx.QueryRow(ctx,
+		`select simulated from runs where run_id = $1`, string(runID),
+	).Scan(&simulated); err != nil {
+		return false, fmt.Errorf("read whether the run is simulated: %w", err)
+	}
+	return simulated, nil
+}
+
+func judgeSimulatedClaim(ctx context.Context, tx pgx.Tx, s domain.Step, ref domain.WorkItemRef) error {
+	var own string
+	if err := tx.QueryRow(ctx, `
+		select coalesce((
+			select payload->>'ref' from run_steps
+			where run_id = $1 and kind = 'work_item_claimed' and seq < $2
+			order by seq limit 1), '')`,
+		string(s.RunID), s.Seq,
+	).Scan(&own); err != nil {
+		return fmt.Errorf("judge simulated work item claim: %w", err)
+	}
+	return judgeClaim(ref, domain.WorkItemRef(own), false)
 }

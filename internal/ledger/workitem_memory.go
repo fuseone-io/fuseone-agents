@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -23,9 +24,14 @@ func (m *Memory) judgeWorkItem(s domain.Step) error {
 		return err
 	}
 	own, _, _ := claimOfRun(m.runs[s.RunID])
+	// A simulation rehearses the claim against its own trail only; see
+	// judgeSimulatedClaim for why it may neither hold nor be blocked.
+	if simulatedRun(m.runs[s.RunID]) {
+		return judgeClaim(ref, own, false)
+	}
 	heldElsewhere := false
 	for id, steps := range m.runs {
-		if id == s.RunID {
+		if id == s.RunID || simulatedRun(steps) {
 			continue
 		}
 		held, agent, ok := claimOfRun(steps)
@@ -48,6 +54,19 @@ func claimOfRun(steps []domain.Step) (domain.WorkItemRef, domain.AgentID, bool) 
 		}
 	}
 	return "", "", false
+}
+
+// simulatedRun reads the mark the run_started step carries — the same one the
+// Postgres store projects into runs.simulated.
+func simulatedRun(steps []domain.Step) bool {
+	if len(steps) == 0 || steps[0].Kind != domain.StepRunStarted {
+		return false
+	}
+	var started domain.RunStartedPayload
+	if err := json.Unmarshal(steps[0].Payload, &started); err != nil {
+		return false
+	}
+	return started.Simulated
 }
 
 // phaseOfRun folds a run's steps into the phase the runs projection holds.
@@ -74,7 +93,7 @@ func (m *Memory) WorkItemCost(
 
 	out := domain.WorkItemCost{Ref: ref}
 	for _, steps := range m.runs {
-		if held, _, ok := claimOfRun(steps); !ok || held != ref {
+		if held, _, ok := claimOfRun(steps); !ok || held != ref || simulatedRun(steps) {
 			continue
 		}
 		out.Runs++

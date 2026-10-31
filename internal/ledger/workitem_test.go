@@ -22,7 +22,10 @@ read at that moment, so nothing ever writes a release — a run that ends, howev
 it ends, simply stops holding.
 */
 
-const card = domain.WorkItemRef("github:fuseone-io/fuseone-agents#123")
+const (
+	card      = domain.WorkItemRef("github:fuseone-io/fuseone-agents#123")
+	otherCard = domain.WorkItemRef("github:fuseone-io/fuseone-agents#124")
+)
 
 func openRunOf(t *testing.T, s Store, runID domain.RunID, agent domain.AgentID) {
 	t.Helper()
@@ -358,5 +361,72 @@ func TestWorkItemClaim_releaseLeavesTheClaimRowAndTheRowCannotBeChanged(t *testi
 	}
 	if _, err := pool.Exec(ctx, `delete from run_work_items where run_id = 'run-a'`); err == nil {
 		t.Fatal("run_work_items accepted a delete; a claim is released by the run's phase, not by a write")
+	}
+}
+
+// --- simulations ------------------------------------------------------------
+
+func openSimulatedRun(t *testing.T, s Store, runID domain.RunID, agent domain.AgentID) {
+	t.Helper()
+	started := step(runID, domain.StepRunStarted)
+	started.AgentID = agent
+	started.Payload = mustJSON(t, domain.RunStartedPayload{
+		Trigger: "simulation", Simulated: true, Simulation: "sim-1",
+	})
+	mustAppend(t, s, started)
+}
+
+/*
+A simulation rehearses the claim; it never takes one.
+
+Left durable, a simulated run waiting on an approval would hold the card
+against the real run of the same agent indefinitely, and its spend would be
+counted against the card. Inside its own run the claim still behaves — success,
+an idempotent retry, a second card refused — so the rehearsal stays faithful.
+*/
+func TestWorkItemClaim_simulatedRun_holdsNothingAndCountsNothing(t *testing.T) {
+	run(t, "a simulated claim is inert outside its own run", func(t *testing.T, s Store) {
+		openSimulatedRun(t, s, "run-sim", "triage")
+		if err := claim(t, s, "run-sim", "triage", card); err != nil {
+			t.Fatalf("simulated claim = %v, want the rehearsal to succeed", err)
+		}
+		if err := claim(t, s, "run-sim", "triage", card); err != nil {
+			t.Fatalf("simulated retry = %v, want success", err)
+		}
+		if err := claim(t, s, "run-sim", "triage", otherCard); !errors.Is(err, domain.ErrWorkItemRunHoldsAnother) {
+			t.Fatalf("simulated second card = %v, want ErrWorkItemRunHoldsAnother", err)
+		}
+		spent := step("run-sim", domain.StepPlanned)
+		spent.Cost = domain.Cost{Micros: 900, InputTokens: 10}
+		mustAppend(t, s, spent)
+		mustAppend(t, s, step("run-sim", domain.StepApprovalRequested))
+
+		openRunOf(t, s, "run-real", "triage")
+		if err := claim(t, s, "run-real", "triage", card); err != nil {
+			t.Fatalf("real claim beside an open simulation = %v, want success", err)
+		}
+		got, err := s.WorkItemCost(context.Background(), card)
+		if err != nil {
+			t.Fatalf("WorkItemCost: %v", err)
+		}
+		if got.Runs != 1 || got.Micros != 0 {
+			t.Fatalf("WorkItemCost = %+v, want only the real run", got)
+		}
+	})
+}
+
+func TestWorkItemClaim_simulatedRun_leavesNoProjectionRow(t *testing.T) {
+	store, pool := openWorkItemPostgres(t)
+	openSimulatedRun(t, store, "run-sim", "triage")
+	if err := claim(t, store, "run-sim", "triage", card); err != nil {
+		t.Fatalf("simulated claim: %v", err)
+	}
+	var rows int
+	if err := pool.QueryRow(t.Context(),
+		`select count(*) from run_work_items where run_id = 'run-sim'`).Scan(&rows); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if rows != 0 {
+		t.Fatalf("run_work_items rows for a simulated run = %d, want none", rows)
 	}
 }
