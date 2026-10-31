@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "@/lib/api/client";
 import { problemMessage } from "@/lib/api/problem-message";
+import { i18next, setLocale } from "@/i18n";
 
 // Stands in for i18next with every key translated: what matters here is
 // which key the refusal was turned into, not the words behind it.
@@ -25,6 +26,21 @@ describe("problemMessage", () => {
       detail: "triage: 1 correction(s) no longer hold — caso-estorno.",
     });
     expect(problemMessage(error, t)).toBe("problem.conflict");
+  });
+
+  // The agent is what refuses, not the form: the sentence names it and says
+  // where the setting lives, in the reader's language.
+  it("names the agent whose definition forbids standing approvals", () => {
+    const error = new ApiError(400, {
+      type: "fuseone:standing-forbidden",
+      title: "Standing approvals forbidden",
+      status: 400,
+      detail: "factory-developer",
+    });
+    setLocale("en-US");
+    expect(problemMessage(error, i18next.t)).toBe(
+      "factory-developer's definition forbids standing approvals: every approval it asks for waits for a person. Change that on the agent, not here.",
+    );
   });
 
   it("keeps a busy upstream distinct from a refusal", () => {

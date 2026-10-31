@@ -305,6 +305,11 @@
     "fieldFallback": "fallback",
     "fieldEmits": "Eventos publicados",
     "fieldApprovals": "Aprovações",
+    "fieldStandingApprovals": "aprovações permanentes",
+    "standingTitle": "Aprovações permanentes",
+    "standingHint": "Uma aprovação permanente é o sim de uma pessoa dado de antemão. Aqui o agente diz se alguma pode responder por ele.",
+    "standingForbid": "Só uma pessoa libera as aprovações dele",
+    "standingForbidHint": "Nenhuma aprovação permanente pode ser concedida para este agente, e uma concedida antes nunca é usada: toda aprovação que ele pedir espera alguém decidir.",
     "approvals": "Aprovação humana",
     "approvalsHint": "Onde quem pode decidir é perguntado. O Gate decide se alguém precisa responder; isto decide onde. O console sempre tem o pedido.",
     "approvalsDirect": "Também mandar por mensagem direta do bot",
@@ -2248,6 +2253,7 @@
     "upstream-refused": "O sistema do outro lado recusou: {{detail}}",
     "memory-secret": "Esse texto contém uma chave privada ou um token de acesso completo. A memória é citada de volta para os agentes e guardada por anos, então não pode conter um.",
     "memory-secret-warned": "Parte desse texto é longa e aleatória o bastante para ser uma credencial. Confira e, se não for, confirme.",
+    "standing-forbidden": "A definição de {{detail}} proíbe aprovações permanentes: toda aprovação que ele pedir espera uma pessoa. Mude isso no agente, não aqui.",
     "source-input-erased": "A entrada que esta execução registrou foi apagada ou expirou, então nenhuma execução foi aberta. Ela não pode ser recuperada."
   },
   "retention": {
