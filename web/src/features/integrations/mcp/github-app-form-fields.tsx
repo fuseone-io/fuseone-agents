@@ -10,6 +10,7 @@ const FIELDS = [
   "githubPrivateKey",
   "githubRepositories",
   "githubAPIBaseURL",
+  "githubToolsets",
 ] as const;
 
 /**

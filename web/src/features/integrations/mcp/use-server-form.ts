@@ -25,6 +25,7 @@ import {
   blankGitHubApp,
   githubAppFromValue,
   githubAppHasValue,
+  githubAppHeaders,
 } from "@/features/integrations/mcp/github-app-credential";
 import { problemMessage } from "@/lib/api/problem-message";
 
@@ -81,6 +82,11 @@ export function useServerForm(
           values.transport === "http" && githubAppHasValue(values)
             ? githubAppFromValue(values)
             : undefined,
+        // An App leaves no secret header to send (the schema refuses the
+        // pair), so the only headers beside it are its configuration.
+        ...(values.transport === "http" && githubAppHasValue(values)
+          ? { headers: githubAppHeaders(values) }
+          : {}),
         configFile: values.configFile || undefined,
         configFileEnv: values.configFileEnv,
         rateLimit: rateLimitFromValues(values),

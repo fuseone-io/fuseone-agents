@@ -12,10 +12,17 @@ export type GitHubAppInput = {
   githubPrivateKey: string;
   githubRepositories: string;
   githubAPIBaseURL: string;
+  githubToolsets: string;
 };
 
-/** Saves an App credential and says whether it was stored. */
-export type WriteGitHubApp = (credential: { githubApp: MCPGitHubApp }) => Promise<boolean>;
+/** Saves an App credential, with its headers, and says whether it was stored. */
+export type WriteGitHubApp = (credential: {
+  githubApp: MCPGitHubApp;
+  headers?: Record<string, string>;
+}) => Promise<boolean>;
+
+/** The header the hosted GitHub MCP reads to choose its toolsets. */
+export const TOOLSETS_HEADER = "X-MCP-Toolsets";
 
 export function blankGitHubApp(): GitHubAppInput {
   return {
@@ -24,6 +31,7 @@ export function blankGitHubApp(): GitHubAppInput {
     githubPrivateKey: "",
     githubRepositories: "",
     githubAPIBaseURL: "",
+    githubToolsets: "",
   };
 }
 
@@ -70,6 +78,19 @@ export function githubAppFromValue(value: GitHubAppInput): MCPGitHubApp {
     repositories: repositories.length === 0 ? undefined : repositories,
     apiBaseURL: base === "" ? undefined : base,
   };
+}
+
+/**
+ * The App's configuration headers. Blank sends nothing, which keeps what is
+ * stored — the form never has a stored value to show back.
+ */
+export function githubAppHeaders(value: GitHubAppInput): Record<string, string> | undefined {
+  const toolsets = value.githubToolsets
+    .split(/[\s,]+/)
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .join(",");
+  return toolsets === "" ? undefined : { [TOOLSETS_HEADER]: toolsets };
 }
 
 /**

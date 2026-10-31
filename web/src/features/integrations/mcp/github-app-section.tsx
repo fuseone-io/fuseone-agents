@@ -9,6 +9,7 @@ import {
   blankGitHubApp,
   githubAppComplete,
   githubAppFromValue,
+  githubAppHeaders,
   type WriteGitHubApp,
 } from "@/features/integrations/mcp/github-app-credential";
 
@@ -33,8 +34,8 @@ export function GitHubAppSection({
   const [value, setValue] = useState(blankGitHubApp);
   const stored = server.githubApp ?? null;
 
-  async function save(githubApp: MCPGitHubApp) {
-    if (await write({ githubApp })) setValue(blankGitHubApp());
+  async function save(githubApp: MCPGitHubApp, headers?: Record<string, string>) {
+    if (await write({ githubApp, headers })) setValue(blankGitHubApp());
   }
 
   return (
@@ -48,7 +49,7 @@ export function GitHubAppSection({
           variant="outline"
           size="sm"
           disabled={pending || !githubAppComplete(value, stored?.hasPrivateKey === true)}
-          onClick={() => void save(githubAppFromValue(value))}
+          onClick={() => void save(githubAppFromValue(value), githubAppHeaders(value))}
         >
           {t("mcp.saveGitHubApp")}
         </Button>
@@ -59,7 +60,7 @@ export function GitHubAppSection({
             size="sm"
             className="text-danger"
             disabled={pending}
-            onClick={() => void save({})}
+            onClick={() => void save({}, {})}
           >
             <Trash2 className="size-3.5" />
             {t("mcp.revokeGitHubApp")}

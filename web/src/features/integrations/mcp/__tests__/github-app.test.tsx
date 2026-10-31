@@ -119,6 +119,33 @@ describe("the GitHub App credential", () => {
     await user.click(screen.getByRole("button", { name: "Remover o GitHub App" }));
 
     expect(sent().githubApp).toEqual({});
+    expect(sent().headers).toEqual({});
+  });
+
+  it("sends the toolsets as the X-MCP-Toolsets header beside the App", async () => {
+    const user = userEvent.setup();
+    const stored = { appId: 5550564, installationId: 77, hasPrivateKey: true };
+    render(<ConnectionPanel server={server({ hasSecret: true, githubApp: stored })} recipe={github} />);
+
+    await user.type(screen.getByLabelText("ID do App"), "5550564");
+    await user.type(screen.getByLabelText("ID da instalação"), "77");
+    await user.type(screen.getByLabelText("Toolsets (opcional)"), "issues, projects");
+    await user.click(screen.getByRole("button", { name: "Salvar o GitHub App" }));
+
+    expect(sent().githubApp).toMatchObject({ appId: 5550564, installationId: 77 });
+    expect(sent().headers).toEqual({ "X-MCP-Toolsets": "issues,projects" });
+  });
+
+  it("leaves the stored toolsets alone when the field is blank", async () => {
+    const user = userEvent.setup();
+    const stored = { appId: 5550564, installationId: 77, hasPrivateKey: true };
+    render(<ConnectionPanel server={server({ hasSecret: true, githubApp: stored })} recipe={github} />);
+
+    await user.type(screen.getByLabelText("ID do App"), "5550564");
+    await user.type(screen.getByLabelText("ID da instalação"), "78");
+    await user.click(screen.getByRole("button", { name: "Salvar o GitHub App" }));
+
+    expect(sent().headers).toBeUndefined();
   });
 
   it("does not save a new App without its key or with a non-numeric id", async () => {
@@ -141,10 +168,12 @@ describe("the GitHub App credential", () => {
     await user.type(screen.getByLabelText("ID da instalação"), "91");
     await user.click(screen.getByLabelText("Chave privada (PEM)"));
     await user.paste(KEY);
+    await user.type(screen.getByLabelText("Toolsets (opcional)"), "issues,projects");
     await user.click(screen.getByRole("button", { name: "Conectar sistema" }));
 
     expect(sent()).toMatchObject({
       githubApp: { appId: 5550600, installationId: 91, privateKey: KEY },
+      headers: { "X-MCP-Toolsets": "issues,projects" },
     });
     expect(sent().token).toBeUndefined();
   });

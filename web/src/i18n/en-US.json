@@ -1821,6 +1821,8 @@
     "githubRepositoriesHint": "Names separated by commas or lines. The token is narrowed to them; blank means everything the installation was granted.",
     "githubAPIBaseURL": "API base URL (optional)",
     "githubAPIBaseURLHint": "Blank for github.com. GitHub Enterprise Server: https://HOST/api/v3.",
+    "githubToolsets": "Toolsets (optional)",
+    "githubToolsetsHint": "Hosted GitHub MCP only: sent as X-MCP-Toolsets. Projects is not in the default set — for example, issues,projects. Blank keeps what is stored.",
     "githubAppStored": "Acts as App {{app}}, installation {{installation}}.",
     "saveGitHubApp": "Save GitHub App",
     "revokeGitHubApp": "Remove GitHub App",

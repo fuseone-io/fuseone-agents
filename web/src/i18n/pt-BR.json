@@ -1821,6 +1821,8 @@
     "githubRepositoriesHint": "Nomes separados por vírgula ou linha. O token fica restrito a eles; em branco vale tudo o que a instalação recebeu.",
     "githubAPIBaseURL": "URL base da API (opcional)",
     "githubAPIBaseURLHint": "Em branco para github.com. No GitHub Enterprise Server: https://HOST/api/v3.",
+    "githubToolsets": "Toolsets (opcional)",
+    "githubToolsetsHint": "Só no GitHub MCP hospedado: enviado como X-MCP-Toolsets. Projects não está no conjunto padrão — por exemplo, issues,projects. Em branco mantém o que está salvo.",
     "githubAppStored": "Age como App {{app}}, instalação {{installation}}.",
     "saveGitHubApp": "Salvar o GitHub App",
     "revokeGitHubApp": "Remover o GitHub App",
