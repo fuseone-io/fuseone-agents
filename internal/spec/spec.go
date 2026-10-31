@@ -271,30 +271,3 @@ func versionOf(data []byte) domain.VersionID {
 	sum := sha256.Sum256(data)
 	return domain.VersionID("v" + hex.EncodeToString(sum[:])[:12])
 }
-
-// triggerProblems reports every trigger this platform would not act on.
-//
-// Reported at parse rather than discovered at run time, because the failure
-// mode of an unserved trigger is silence: it publishes, the screen prints it
-// back as configured, and nothing ever fires it.
-func triggerProblems(triggers []Trigger) []string {
-	var problems []string
-	for _, t := range triggers {
-		switch t.Type {
-		case TriggerCron, TriggerWebhook, TriggerEvent:
-		case TriggerChannel:
-			// A channel trigger names nothing. A field here would be the
-			// author choosing which conversation may start their agent, and
-			// which conversations belong to which scope is administrative.
-			if t.Schedule != "" || t.Path != "" || t.Event != "" {
-				problems = append(problems,
-					"a channel trigger names no conversation: which conversations may "+
-						"start an agent is decided in the administration area, not in a definition")
-			}
-		default:
-			problems = append(problems, fmt.Sprintf(
-				"trigger type %q is not one this platform serves: cron, webhook, event or channel", t.Type))
-		}
-	}
-	return problems
-}
