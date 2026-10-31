@@ -122,9 +122,10 @@ type factoryJourney struct {
 func newFactoryJourney(t *testing.T, toolsets string) *factoryJourney {
 	t.Helper()
 	pool := testdb.Pool(t)
-	// The published catalogue never shrinks, by design (ListTools), so a
-	// journey starts from an installation that has never discovered a tool,
-	// whatever an earlier run or the other journey left behind.
+	// The catalogue and its rulings are installation-wide and outlive a
+	// journey — a ruling is kept on purpose when its tool leaves — so a
+	// journey starts from an installation that has never discovered or ruled
+	// on a tool, whatever an earlier run or another journey left behind.
 	if _, err := pool.Exec(t.Context(),
 		`delete from settings where kind in ('tool', 'tool_classification')`); err != nil {
 		t.Fatalf("reset the catalogue: %v", err)
@@ -388,11 +389,8 @@ func TestFactoryTriage_referenceRegisteredAsDocumented_publishesFromTheStudio(t 
 // tools, and the publish says which ones it is missing — the failure the
 // README warns of, so a person setting the factory up can tell it apart.
 //
-// That holds for a catalogue that never discovered the projects tools. The
-// published catalogue only upserts (admin.Curator.Publish), so narrowing a
-// registration after a broader discovery leaves them known and on the
-// surface, and the publish passes. Which is why each journey starts by
-// clearing the catalogue.
+// The same refusal after narrowing a registration that once had projects is
+// TestCatalogue_toolsetsNarrowedAfterADiscovery_stopOfferingTheDroppedTools.
 func TestFactoryTriage_toolsetsWithoutProjects_publishNamesTheMissingProjectTools(t *testing.T) {
 	j := newFactoryJourney(t, "issues")
 	j.discover(t)
