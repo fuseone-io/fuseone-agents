@@ -1,6 +1,7 @@
 package githubapp_test
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -195,6 +196,83 @@ func TestSource_aFailedRefresh_keepsAStillValidToken(t *testing.T) {
 
 	if err != nil || got != first {
 		t.Fatalf("Token = %q, %v; want the still-valid token kept", got, err)
+	}
+}
+
+// Eight calls landing in the refresh window while GitHub is failing try the
+// mint once between them: the rest keep the still-valid token without asking
+// GitHub again, so an outage is not multiplied by the worker's concurrency.
+func TestSource_concurrentCallsAfterAFailedRefresh_mintOnceAndKeepTheToken(t *testing.T) {
+	t.Parallel()
+	fake := githubapptest.New(t, appID, installationID)
+	clock := newClock()
+	fake.UseClock(clock.Now)
+	src := source(t, appFor(fake), clock)
+
+	first, _ := src.Token(t.Context())
+	clock.advance(57 * time.Minute)
+	fake.Refuse(http.StatusBadGateway)
+	var wg sync.WaitGroup
+	got := make([]string, 8)
+	for i := range got {
+		wg.Go(func() { got[i], _ = src.Token(t.Context()) })
+	}
+	wg.Wait()
+
+	if attempts := len(fake.JWTs()); attempts != 2 {
+		t.Fatalf("GitHub was asked %d times, want 2: the first mint and one failed refresh", attempts)
+	}
+	for i, tok := range got {
+		if tok != first {
+			t.Fatalf("call %d got %q, want the still-valid token %q", i, tok, first)
+		}
+	}
+}
+
+// With no token in hand, a failure is remembered for the backoff and returned
+// without a new mint; once the backoff passes, the next call asks again.
+func TestSource_aFailedMint_isRememberedForTheBackoffThenRetried(t *testing.T) {
+	t.Parallel()
+	fake := githubapptest.New(t, appID, installationID)
+	clock := newClock()
+	fake.UseClock(clock.Now)
+	fake.Refuse(http.StatusUnauthorized)
+	src := source(t, appFor(fake), clock)
+
+	_, first := src.Token(t.Context())
+	_, again := src.Token(t.Context())
+	asked := len(fake.JWTs())
+	clock.advance(githubapp.RetryAfter)
+	fake.Refuse(0)
+	tok, err := src.Token(t.Context())
+
+	if !errors.Is(first, githubapp.ErrAppRefused) || !errors.Is(again, githubapp.ErrAppRefused) {
+		t.Fatalf("errors %v / %v, want the refusal both times", first, again)
+	}
+	if asked != 1 {
+		t.Fatalf("GitHub was asked %d times inside the backoff, want 1", asked)
+	}
+	if err != nil || !fake.Valid(tok) {
+		t.Fatalf("after the backoff Token = %q, %v; want a fresh token", tok, err)
+	}
+}
+
+// A caller that gave up is not GitHub failing: its cancelled context must not
+// be remembered and handed to the next caller for the whole backoff.
+func TestSource_aCancelledCaller_isNotRememberedAsAFailedMint(t *testing.T) {
+	t.Parallel()
+	fake := githubapptest.New(t, appID, installationID)
+	clock := newClock()
+	fake.UseClock(clock.Now)
+	src := source(t, appFor(fake), clock)
+
+	gone, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, _ = src.Token(gone)
+	tok, err := src.Token(t.Context())
+
+	if err != nil || !fake.Valid(tok) {
+		t.Fatalf("Token after a cancelled caller = %q, %v; want a fresh token", tok, err)
 	}
 }
 
