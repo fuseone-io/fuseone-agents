@@ -958,6 +958,12 @@ func (i *Integrations) DeleteMCPServer(ctx context.Context, by domain.UserID, sc
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Its tools go with it, in the same transaction: a worker may not be
+	// running to notice, and the console would go on offering them.
+	tools, err := dropServerTools(ctx, tx, name)
+	if err != nil {
+		return err
+	}
 	if err := i.settings.DeleteTx(ctx, tx,
 		settings.ScopeInstallation, domain.Scope{},
 		settings.KindMCPServer, name); err != nil {
@@ -974,6 +980,7 @@ func (i *Integrations) DeleteMCPServer(ctx context.Context, by domain.UserID, sc
 	}
 	detail, err := json.Marshal(map[string]any{
 		"personalCredentialsRemoved": tag.RowsAffected(),
+		"toolsRemoved":               tools,
 	})
 	if err != nil {
 		return fmt.Errorf("admin: encode MCP server removal: %w", err)

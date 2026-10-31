@@ -89,6 +89,57 @@ func TestCatalogue_toolsetsWidenedAgain_bringBackTheRulingsTheToolsHad(t *testin
 	}
 }
 
+// remove deletes the registration through the console's route.
+func (j *factoryJourney) remove(t *testing.T) {
+	t.Helper()
+	resp, err := j.api.DeleteMCPServer(installer(t), openapi.DeleteMCPServerRequestObject{Name: "github-triage"})
+	if _, ok := resp.(openapi.DeleteMCPServer204Response); err != nil || !ok {
+		t.Fatalf("DeleteMCPServer = %#v, %v; want 204", resp, err)
+	}
+}
+
+// ofServer is the listed tools the server offered.
+func ofServer(listed map[string]openapi.Tool, server string) []string {
+	var out []string
+	for id := range listed {
+		if strings.HasPrefix(id, server+".") {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// Removed is removed on the screen at once, whether or not a worker is
+// running to notice.
+func TestCatalogue_aDeletedServer_stopsOfferingItsTools(t *testing.T) {
+	j := newFactoryJourney(t, triageToolsets)
+	j.discover(t)
+
+	j.remove(t)
+
+	if left := ofServer(j.listed(t), "github-triage"); len(left) != 0 {
+		t.Fatalf("a deleted server still offers %v", left)
+	}
+}
+
+// Removing a server is not revoking the Curator's rulings on its tools. The
+// same server registered again offers the tools somebody already ruled on.
+func TestCatalogue_aServerRegisteredAgainAfterRemoval_findsItsRulings(t *testing.T) {
+	j := newFactoryJourney(t, triageToolsets)
+	j.discover(t)
+	j.classify(t)
+	j.remove(t)
+	j.worker.reconcile(t.Context())
+
+	j.register(t, j.remote, triageToolsets)
+	j.discover(t)
+
+	tool, back := j.listed(t)["github-triage.projects_write"]
+	if !back || tool.Effect != openapi.ToolEffect(domain.EffectWrite.String()) {
+		t.Fatalf("projects_write reads %+v (listed %v); want the write ruling it had", tool, back)
+	}
+}
+
 // A second worker that cannot reach the server — not yet connected, or the
 // server down from where it stands — publishes too, and must not take the
 // tools another worker discovered off the screen.

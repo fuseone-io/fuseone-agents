@@ -85,6 +85,22 @@ func lockToolCatalogue(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
+// dropServerTools removes every catalogue row of one server, under the
+// catalogue's lock, and reports how many went. Rulings stay.
+func dropServerTools(ctx context.Context, tx pgx.Tx, server string) (int64, error) {
+	if err := lockToolCatalogue(ctx, tx); err != nil {
+		return 0, err
+	}
+	tag, err := tx.Exec(ctx, `
+		delete from settings
+		where scope_kind = 'installation' and company_id = '' and area_id = ''
+		  and kind = $1 and value->>'server' = $2`, toolKind, server)
+	if err != nil {
+		return 0, fmt.Errorf("admin: drop the tools of %s: %w", server, err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // dropUnoffered removes, for each server the publication names, the tools it
 // no longer lists.
 func dropUnoffered(ctx context.Context, tx pgx.Tx, pub domain.ToolPublication) error {
