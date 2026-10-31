@@ -56,9 +56,17 @@ func (c *Client) repoPath(format string, args ...any) string {
 	return fmt.Sprintf("/repos/%s/%s", c.opts.Repo.Owner, c.opts.Repo.Name) + fmt.Sprintf(format, args...)
 }
 
-// send performs one request and returns the status code. out is decoded only
+// apiRequest is one REST call. Body and Out are `any` because they are what
+// encoding/json takes: a request struct to encode, a pointer to decode into.
+type apiRequest struct {
+	Method, Path string
+	Body, Out    any
+}
+
+// send performs one request and returns the status code. Out is decoded only
 // on a 2xx; any other status is left to the caller to interpret.
-func (c *Client) send(ctx context.Context, method, path string, body, out any) (int, error) {
+func (c *Client) send(ctx context.Context, r apiRequest) (int, error) {
+	method, path, body, out := r.Method, r.Path, r.Body, r.Out
 	token, err := c.opts.Tokens.Token(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("github token: %w", err)
@@ -94,8 +102,9 @@ func (c *Client) send(ctx context.Context, method, path string, body, out any) (
 }
 
 // get reads one resource and treats anything but 200 as a failure.
+// out is `any`: a pointer for encoding/json to decode into.
 func (c *Client) get(ctx context.Context, path string, out any) error {
-	code, err := c.send(ctx, http.MethodGet, path, nil, out)
+	code, err := c.send(ctx, apiRequest{Method: http.MethodGet, Path: path, Out: out})
 	if err != nil {
 		return err
 	}

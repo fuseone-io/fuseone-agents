@@ -84,3 +84,63 @@ func TestRecordQAVerdictTool_refused_isAnErrorWithStructuredReason(t *testing.T)
 		t.Fatalf("isError %v, result %+v, want an error carrying head_moved", res.IsError, got)
 	}
 }
+
+// Each role's registration exposes only its own tool (#193, #208): QA can
+// never merge, and the Merger can never vouch for QA.
+func TestNewServer_eachRole_exposesOnlyItsOwnTool(t *testing.T) {
+	t.Parallel()
+
+	for role, want := range map[Role]string{RoleQA: ToolRecordQAVerdict, RoleMerger: ToolMergeIfReady} {
+		t.Run(string(role), func(t *testing.T) {
+			t.Parallel()
+			h := newHarness(t)
+			listed, err := h.session(role, "merger-token").ListTools(t.Context(), nil)
+			if err != nil {
+				t.Fatalf("list tools: %v", err)
+			}
+			if len(listed.Tools) != 1 || listed.Tools[0].Name != want {
+				names := []string{}
+				for _, tool := range listed.Tools {
+					names = append(names, tool.Name)
+				}
+				t.Fatalf("%s exposes %v, want only %s", role, names, want)
+			}
+		})
+	}
+}
+
+func TestNewServer_unknownRole_refused(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	cfg := h.cfg
+	cfg.Role = "reviewer"
+	if _, err := NewServer(cfg, h.client("merger-token")); err == nil {
+		t.Fatal("a server was built for an unknown role")
+	}
+}
+
+func TestMergeIfReadyTool_merged_returnsStructuredSuccess(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	res := h.call(h.session(RoleMerger, "merger-token"), ToolMergeIfReady,
+		map[string]any{"pr": testPR, "head_sha": headA})
+	got := structured[MergeResult](t, res)
+	if res.IsError || !got.Merged || got.MergeSHA != mergeSHA {
+		t.Fatalf("isError %v, result %+v", res.IsError, got)
+	}
+}
+
+func TestMergeIfReadyTool_refused_isAnErrorWithStructuredReason(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	h.edit(func(f *fakeGitHub) { f.behind[headA] = 1 })
+	res := h.call(h.session(RoleMerger, "merger-token"), ToolMergeIfReady,
+		map[string]any{"pr": testPR, "head_sha": headA})
+	got := structured[MergeResult](t, res)
+	if !res.IsError || got.Merged || got.Reason != ReasonBaseBehind {
+		t.Fatalf("isError %v, result %+v, want an error carrying base_behind", res.IsError, got)
+	}
+}

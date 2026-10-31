@@ -11,6 +11,10 @@ import (
 // head with 409 and anything the ruleset does not allow with 405, judged at
 // this moment rather than when the guard read.
 func (f *fakeGitHub) merge(w http.ResponseWriter, r *http.Request, _ ghUser) {
+	if hook := f.beforeMerge; hook != nil {
+		f.beforeMerge = nil
+		hook(f)
+	}
 	n, pr := f.pr(r)
 	var in struct {
 		SHA    string `json:"sha"`
@@ -45,7 +49,9 @@ func (f *fakeGitHub) rulesetAllows(n int, head string) bool {
 func (f *fakeGitHub) rulesetReviewed(n int, head string) bool {
 	last := map[string]fakeReview{}
 	for _, rv := range f.reviews[n] {
-		last[strings.ToLower(rv.Login)] = rv
+		if rv.State != "COMMENTED" { // a comment leaves a reviewer's standing as it was
+			last[strings.ToLower(rv.Login)] = rv
+		}
 	}
 	for _, login := range f.ruleset.Reviewers {
 		rv, ok := last[strings.ToLower(login)]

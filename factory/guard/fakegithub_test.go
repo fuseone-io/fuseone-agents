@@ -85,21 +85,21 @@ type mergeCall struct {
 type fakeGitHub struct {
 	t *testing.T
 
-	mu         sync.Mutex
-	repo       string
-	renamed    bool // the configured repository answers with a redirect
-	prs        map[int]*fakePR
-	reviews    map[int][]fakeReview
-	statuses   map[string][]fakeStatus
-	checks     map[string][]fakeCheck
-	behind     map[string]int
-	ruleset    fakeRuleset
-	nextID     int64
-	requests   int
-	attempts   []mergeCall
-	posted     []fakeStatus
-	afterReads func(f *fakeGitHub) // runs at the last read, under the lock
-	mergeError int                 // forces a status on the merge call
+	mu          sync.Mutex
+	repo        string
+	renamed     bool // the configured repository answers with a redirect
+	prs         map[int]*fakePR
+	reviews     map[int][]fakeReview
+	statuses    map[string][]fakeStatus
+	checks      map[string][]fakeCheck
+	behind      map[string]int
+	ruleset     fakeRuleset
+	nextID      int64
+	requests    int
+	attempts    []mergeCall
+	posted      []fakeStatus
+	beforeMerge func(f *fakeGitHub) // runs as the merge call arrives, after every read
+	mergeError  int                 // forces a status on the merge call
 }
 
 func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
@@ -232,11 +232,6 @@ func nullable(s string) any {
 
 func (f *fakeGitHub) compare(w http.ResponseWriter, r *http.Request, _ ghUser) {
 	_, head, _ := strings.Cut(r.PathValue("spec"), "...")
-	if f.afterReads != nil {
-		hook := f.afterReads
-		f.afterReads = nil
-		defer hook(f)
-	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": canary, "behind_by": f.behind[head], "ahead_by": 1})
 }
 

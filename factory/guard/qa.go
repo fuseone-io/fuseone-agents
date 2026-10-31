@@ -142,6 +142,6 @@ func (c *Client) createStatus(ctx context.Context, sha string, req statusRequest
 	var out struct {
 		Creator statusCreator `json:"creator"`
 	}
-	code, err := c.send(ctx, http.MethodPost, c.repoPath("/statuses/%s", sha), req, &out)
+	code, err := c.send(ctx, apiRequest{Method: http.MethodPost, Path: c.repoPath("/statuses/%s", sha), Body: req, Out: &out})
 	return out.Creator, code, err
 }

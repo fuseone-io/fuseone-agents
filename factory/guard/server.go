@@ -25,10 +25,26 @@ func NewServer(cfg Config, gh *Client) (*mcp.Server, error) {
 	case RoleQA:
 		registerQA(server, NewQA(cfg, gh))
 	case RoleMerger:
+		registerMerger(server, NewMerger(cfg, gh))
 	default:
 		return nil, fmt.Errorf("%w: unknown role %q", ErrConfig, cfg.Role)
 	}
 	return server, nil
+}
+
+func registerMerger(server *mcp.Server, merger *Merger) {
+	mcp.AddTool(server, &mcp.Tool{
+		Name: ToolMergeIfReady,
+		Description: "Merge a pull request only if, re-read now, the given head SHA is still its head " +
+			"and carries an authorised approval, a passing factory/qa from the QA App and every " +
+			"expected check green, with the base up to date. Returns structured state only.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in MergeInput) (*mcp.CallToolResult, MergeResult, error) {
+		res, err := merger.MergeIfReady(ctx, in)
+		if err != nil {
+			return nil, MergeResult{}, err
+		}
+		return &mcp.CallToolResult{IsError: !res.Merged}, res, nil
+	})
 }
 
 func registerQA(server *mcp.Server, qa *QA) {
