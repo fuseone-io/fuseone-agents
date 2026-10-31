@@ -26,11 +26,30 @@ const toolKind = "tool"
 // copy of the catalogue would apply rulings by name while the in-process one
 // applied them by definition, and the two would disagree about the row a
 // Curator is looking at.
+//
+// A server the publication names is judged whole: what it no longer offers is
+// dropped, and only those catalogue rows — a ruling is kept by tool name, so a
+// tool that comes back finds the decision already made. A server it does not
+// name is left alone; see domain.ToolPublication.
 func (c *Curator) Publish(ctx context.Context, pub domain.ToolPublication) error {
-	if len(pub.Entries) == 0 {
+	if len(pub.Entries) == 0 && len(pub.Servers) == 0 {
 		return nil
 	}
 
+	tx, err := c.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("admin: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Two workers publishing the same server would each keep its own list and
+	// drop the other's: serialised, the later discovery is the one that holds.
+	if err := lockToolCatalogue(ctx, tx); err != nil {
+		return err
+	}
+	if err := dropUnoffered(ctx, tx, pub); err != nil {
+		return err
+	}
 	batch := &pgx.Batch{}
 	for _, e := range pub.Entries {
 		value, err := encodeTool(e)
@@ -45,8 +64,42 @@ func (c *Curator) Publish(ctx context.Context, pub domain.ToolPublication) error
 			toolKind, string(e.ID), value)
 	}
 
-	if err := c.pool.SendBatch(ctx, batch).Close(); err != nil {
+	if err := tx.SendBatch(ctx, batch).Close(); err != nil {
 		return fmt.Errorf("admin: publish tools: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("admin: commit the tool catalogue: %w", err)
+	}
+	return nil
+}
+
+// toolCatalogueLock serialises every write that judges which tools a server
+// offers.
+const toolCatalogueLock = "tool-catalogue"
+
+func lockToolCatalogue(ctx context.Context, tx pgx.Tx) error {
+	if _, err := tx.Exec(ctx,
+		`select pg_advisory_xact_lock(hashtextextended($1, 0))`, toolCatalogueLock); err != nil {
+		return fmt.Errorf("admin: lock the tool catalogue: %w", err)
+	}
+	return nil
+}
+
+// dropUnoffered removes, for each server the publication names, the tools it
+// no longer lists.
+func dropUnoffered(ctx context.Context, tx pgx.Tx, pub domain.ToolPublication) error {
+	kept := make(map[string][]string, len(pub.Servers))
+	for _, e := range pub.Entries {
+		kept[e.Server] = append(kept[e.Server], string(e.ID))
+	}
+	for _, server := range pub.Servers {
+		if _, err := tx.Exec(ctx, `
+			delete from settings
+			where scope_kind = 'installation' and company_id = '' and area_id = ''
+			  and kind = $1 and value->>'server' = $2 and not (name = any($3))`,
+			toolKind, server, append([]string{}, kept[server]...)); err != nil {
+			return fmt.Errorf("admin: drop the tools %s no longer offers: %w", server, err)
+		}
 	}
 	return nil
 }

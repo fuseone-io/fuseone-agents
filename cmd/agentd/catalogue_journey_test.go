@@ -1,0 +1,118 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/tools"
+)
+
+/*
+The published catalogue follows what the servers offer (#219).
+
+It used to only grow. A discovery recorded what it found and never removed
+what it no longer saw, so a registration narrowed after a broader discovery
+kept offering — on the console and to the publish check — tools the runtime
+could no longer call, and a deleted server's tools stayed forever.
+
+These start where the operator does: the registration route, a worker's
+reconcile pass, and the console's tool list and publish route.
+*/
+
+// listed is the console's tool list, by ID.
+func (j *factoryJourney) listed(t *testing.T) map[string]openapi.Tool {
+	t.Helper()
+	resp, err := j.api.ListTools(installer(t), openapi.ListToolsRequestObject{})
+	page, ok := resp.(openapi.ListTools200JSONResponse)
+	if err != nil || !ok {
+		t.Fatalf("ListTools = %#v, %v", resp, err)
+	}
+	out := make(map[string]openapi.Tool, len(page.Items))
+	for _, tool := range page.Items {
+		out[tool.ToolId] = tool
+	}
+	return out
+}
+
+var projectTools = []string{"projects_list", "projects_get", "projects_write"}
+
+// narrow saves the registration again with other toolsets, as an operator
+// correcting the header would, and lets the worker rediscover.
+func (j *factoryJourney) narrow(t *testing.T, toolsets string) {
+	t.Helper()
+	// The fingerprint a reconnect is judged by carries the save's time; two
+	// saves inside one clock tick would read as one.
+	time.Sleep(10 * time.Millisecond)
+	j.register(t, j.remote, toolsets)
+	j.discover(t)
+}
+
+func TestCatalogue_toolsetsNarrowedAfterADiscovery_stopOfferingTheDroppedTools(t *testing.T) {
+	j := newFactoryJourney(t, triageToolsets)
+	j.discover(t)
+	j.classify(t)
+
+	j.narrow(t, "issues")
+
+	listed := j.listed(t)
+	for _, name := range projectTools {
+		if _, still := listed["github-triage."+name]; still {
+			t.Errorf("github-triage.%s is still offered after the toolsets dropped projects", name)
+		}
+	}
+	if _, kept := listed["github-triage.issue_read"]; !kept {
+		t.Error("github-triage.issue_read disappeared, though the narrowed toolsets still offer it")
+	}
+	refused, ok := j.publish(t, readTriageReference(t)).(openapi.PublishAgent400ApplicationProblemPlusJSONResponse)
+	if !ok || refused.Detail == nil || !strings.Contains(*refused.Detail, "github-triage.projects_write") {
+		t.Fatalf("publishing the Triage reference answered %#v; want it refused for the dropped tools", refused)
+	}
+}
+
+func TestCatalogue_toolsetsWidenedAgain_bringBackTheRulingsTheToolsHad(t *testing.T) {
+	j := newFactoryJourney(t, triageToolsets)
+	j.discover(t)
+	j.classify(t)
+	j.narrow(t, "issues")
+
+	j.narrow(t, triageToolsets)
+
+	tool, back := j.listed(t)["github-triage.projects_write"]
+	if !back || tool.Effect != openapi.ToolEffect(domain.EffectWrite.String()) {
+		t.Fatalf("projects_write reads %+v (listed %v); want it back with the write ruling it had", tool, back)
+	}
+}
+
+// A second worker that cannot reach the server — not yet connected, or the
+// server down from where it stands — publishes too, and must not take the
+// tools another worker discovered off the screen.
+func TestCatalogue_aWorkerThatCannotReachTheServer_leavesItsToolsPublished(t *testing.T) {
+	j := newFactoryJourney(t, triageToolsets)
+	j.discover(t)
+	second := tools.NewCatalog(engine.NewMemoryContent())
+	t.Cleanup(func() { _ = second.Close() })
+	unreachable := newReconciler(second, j.integrations, healthOf(j.pool)).
+		publishingTo(j.curator).classifyingWith(j.curator)
+	unreachable.connectTo = func(
+		context.Context, *tools.Catalog, domain.MCPServer,
+		domain.MCPCredentials, OAuthGrantStore, MCPUserCredentialStore, credentialPolicy,
+		stdioEgressObserver,
+	) error {
+		return errors.New("dial tcp: connection refused")
+	}
+
+	unreachable.reconcile(t.Context())
+
+	listed := j.listed(t)
+	for _, name := range append([]string{"issue_read"}, projectTools...) {
+		if _, kept := listed["github-triage."+name]; !kept {
+			t.Errorf("github-triage.%s vanished after a worker that never reached the server published", name)
+		}
+	}
+}

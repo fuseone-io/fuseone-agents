@@ -109,11 +109,14 @@ func toolsetServer(header string) *mcp.Server {
 // factoryJourney is one installation: the console's server and the worker's
 // reconciler over the same database, as serve and worker are deployed.
 type factoryJourney struct {
-	pool    *pgxpool.Pool
-	api     *httpapi.Server
-	worker  *reconciler
-	catalog *tools.Catalog
-	hosted  *hostedGitHub
+	pool         *pgxpool.Pool
+	api          *httpapi.Server
+	worker       *reconciler
+	catalog      *tools.Catalog
+	hosted       *hostedGitHub
+	curator      *admin.Curator
+	integrations *admin.Integrations
+	remote       string
 }
 
 func newFactoryJourney(t *testing.T, toolsets string) *factoryJourney {
@@ -159,8 +162,11 @@ func newFactoryJourney(t *testing.T, toolsets string) *factoryJourney {
 	remote := httptest.NewServer(hosted)
 	t.Cleanup(remote.Close)
 
-	j := &factoryJourney{pool: pool, api: api, worker: worker, catalog: catalog, hosted: hosted}
-	j.register(t, remote.URL+"/mcp/", toolsets)
+	j := &factoryJourney{
+		pool: pool, api: api, worker: worker, catalog: catalog, hosted: hosted,
+		curator: curator, integrations: integrations, remote: remote.URL + "/mcp/",
+	}
+	j.register(t, j.remote, toolsets)
 	return j
 }
 
