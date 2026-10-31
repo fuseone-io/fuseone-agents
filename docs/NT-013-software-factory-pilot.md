@@ -146,8 +146,11 @@ Defence in depth: each layer assumes the one above it failed.
 
 **1. GitHub's own permissions, per role.** Each role registers its own GitHub
 MCP server with its own credential — a fine-grained token or GitHub App scoped
-to this repository — and its own toolset (`GITHUB_TOOLSETS`, `--read-only`
-where the role only reads). Triage cannot push; only the Merger's credential
+to this repository — and its own toolsets. On the hosted server those are
+chosen with the `X-MCP-Toolsets` header (`issues,projects` for Triage),
+because the default set leaves `projects` out and a `/x/{toolset}` URL serves
+a single set; `factory/agents/README.md` § Setting up a role's GitHub server
+has the per-role table. Triage cannot push; only the Merger's credential
 can merge. A prompt injection that talks a role into an action meets a token
 that cannot perform it.
 

@@ -73,10 +73,34 @@ per role, in the installation's administration:
   only the permissions the role's tools need. Its identity is what signs the
   role's comments and reviews: the Reviewer's and QA's approvals are told apart
   by it;
-- its own toolset (`GITHUB_TOOLSETS`), read-only where the role only reads;
+- its own toolsets, chosen by an `X-MCP-Toolsets` header on the registration
+  (below);
 - every tool classified by the Curator before the role can call it (NT-013 §
   Guardrails, layer 3). Reading issue, PR and comment text is a read marked
   untrusted; comments, labels, reviews and card moves are writes.
+
+**Choosing the toolsets.** The roles use the hosted server
+(`https://api.githubcopilot.com/mcp/`), not the local one, so
+`GITHUB_TOOLSETS` does not apply: that is the local server's variable. The
+hosted server's `default` set does not include `projects`, and a
+`/x/{toolset}` URL serves exactly one set. Sets are combined with the
+`X-MCP-Toolsets` header ([remote server
+reference](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md#headers)),
+set as a configuration header on the registration next to the GitHub App
+credential:
+
+| Role | `X-MCP-Toolsets` |
+|---|---|
+| Triage | `issues,projects` |
+| Reviewer | `pull_requests,repos` |
+| QA | `pull_requests,repos` |
+
+Without the header, Triage's server has no `projects_*` tools in its catalogue,
+and the console refuses to publish the Triage reference, because it names
+tools the server does not offer. The hosted server silently ignores an unknown
+set name, so a typo shows up the same way: as a publish refusal that names the
+missing tools. A configuration header never carries `Authorization`, because
+the GitHub App credential supplies it.
 
 **Moving a card.** Cards move with the server's projects tool
 (`projects_write`). It is classified as a **write**, so a copilot run proposes
