@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -35,6 +36,18 @@ func NewRegistry(pool *pgxpool.Pool) *Registry {
 // published what was already published, which is not an error and must not
 // overwrite the original's authorship or date.
 func (r *Registry) Publish(ctx context.Context, s Spec, by domain.UserID, company domain.CompanyID) error {
+	return publishOn(ctx, r.pool, s, by, company)
+}
+
+// execer is what a write needs, so the same write can run on the pool or
+// inside a caller's transaction.
+type execer interface {
+	// args is any because this is pgx's own signature, which both the pool
+	// and a transaction satisfy.
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func publishOn(ctx context.Context, q execer, s Spec, by domain.UserID, company domain.CompanyID) error {
 	if company == "" || company == domain.Installation {
 		return fmt.Errorf("spec: publish %s@%s: company %q is not a publishable company", s.ID, s.Version, company)
 	}
@@ -86,7 +99,7 @@ func (r *Registry) Publish(ctx context.Context, s Spec, by domain.UserID, compan
 		return fmt.Errorf("spec: encode approvals: %w", err)
 	}
 
-	_, err = r.pool.Exec(ctx, `
+	_, err = q.Exec(ctx, `
 		insert into agent_specs (
 			agent_id, version_id, company_id, area_id, name,
 			provider, model, effort, cache_prefix_ttl, reply_locale, tools, budget,

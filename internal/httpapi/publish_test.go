@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -22,16 +23,26 @@ type publisher struct {
 	current   []domain.VersionID
 	paused    map[domain.AgentID]bool
 	ensured   []domain.AgentID
+	refused   [][]domain.Stage
+	// stage, when set, is the stage the agent stands at: a publication
+	// refusing it is refused, as spec.Publisher does under its lock.
+	stage domain.Stage
 }
 
 func newPublisher() *publisher {
 	return &publisher{paused: map[domain.AgentID]bool{}}
 }
 
-func (p *publisher) Publish(_ context.Context, s spec.Spec, _ domain.UserID, company domain.CompanyID) error {
-	p.published = append(p.published, s)
-	p.companies = append(p.companies, company)
-	p.current = append(p.current, s.Version)
+func (p *publisher) Publish(_ context.Context, pub spec.Publication) error {
+	p.refused = append(p.refused, pub.RefuseStages)
+	for _, refused := range pub.RefuseStages {
+		if refused == p.stage {
+			return fmt.Errorf("%w: %s is %s", spec.ErrStageRefused, pub.Spec.ID, p.stage)
+		}
+	}
+	p.published = append(p.published, pub.Spec)
+	p.companies = append(p.companies, pub.Company)
+	p.current = append(p.current, pub.Spec.Version)
 	return nil
 }
 
@@ -102,6 +113,46 @@ func TestPublishAgent_writesTheVersionAndRecordsItPaused(t *testing.T) {
 	}
 	if len(pub.current) != 1 || pub.current[0] != pub.published[0].Version {
 		t.Errorf("current = %+v, want the version that was just published", pub.current)
+	}
+}
+
+func TestPublishAgent_refuseIfStage_reachesThePublicationUnderItsLock(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher()
+	refuse := openapi.Stage(domain.StageAutonomous)
+
+	if _, err := publishServer(t, pub).PublishAgent(inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{
+			AgentId: "triage", Body: definition(nil),
+			Params: openapi.PublishAgentParams{RefuseIfStage: &refuse},
+		}); err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+	if len(pub.refused) != 1 || len(pub.refused[0]) != 1 || pub.refused[0][0] != domain.StageAutonomous {
+		t.Fatalf("publication refused %v, want [autonomous]", pub.refused)
+	}
+}
+
+func TestPublishAgent_agentStandsAtTheRefusedStage_answersStageRefusedAndRecordsNothing(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher()
+	pub.stage = domain.StageAutonomous
+	refuse := openapi.Stage(domain.StageAutonomous)
+
+	resp, err := publishServer(t, pub).PublishAgent(inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{
+			AgentId: "triage", Body: definition(nil),
+			Params: openapi.PublishAgentParams{RefuseIfStage: &refuse},
+		})
+	if err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+	got, ok := resp.(openapi.PublishAgent409ApplicationProblemPlusJSONResponse)
+	if !ok || got.Type == nil || *got.Type != string(CodeStageRefused) {
+		t.Fatalf("response = %#v, want 409 %s", resp, CodeStageRefused)
+	}
+	if len(pub.published) != 0 || len(pub.ensured) != 0 {
+		t.Fatalf("published %v, ensured %v: a refused publication must leave nothing", pub.published, pub.ensured)
 	}
 }
 
