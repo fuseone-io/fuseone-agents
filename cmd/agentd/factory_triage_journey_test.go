@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -310,6 +311,20 @@ func studioForm(s spec.Spec) *openapi.AgentDefinition {
 
 func ptrTo[T any](v T) *T { return &v }
 
+// differingFields names each Spec field that differs, with both values, so a
+// failure says which line of the file the copy lost.
+func differingFields(got, want spec.Spec) []string {
+	g, w := reflect.ValueOf(got), reflect.ValueOf(want)
+	var out []string
+	for i := range g.NumField() {
+		if !reflect.DeepEqual(g.Field(i).Interface(), w.Field(i).Interface()) {
+			out = append(out, fmt.Sprintf("%s: got %#v, want %#v",
+				g.Type().Field(i).Name, g.Field(i).Interface(), w.Field(i).Interface()))
+		}
+	}
+	return out
+}
+
 // The reference publishes, against a server registered as the README says.
 //
 // Neither journey is parallel: the catalogue is installation-wide, and two in
@@ -334,10 +349,19 @@ func TestFactoryTriage_referenceRegisteredAsDocumented_publishesFromTheStudio(t 
 	if err != nil {
 		t.Fatalf("read the published version: %v", err)
 	}
-	if !reflect.DeepEqual(got.Tools, reference.Tools) || !reflect.DeepEqual(got.Steps, reference.Steps) ||
-		!reflect.DeepEqual(got.Triggers, reference.Triggers) || got.Budget != reference.Budget ||
-		got.StandingApprovals != reference.StandingApprovals || got.Instructions != reference.Instructions {
-		t.Fatalf("published %+v\nwant the reference %+v", got, reference)
+	// Only what publishing assigns differs, each for a reason that is not the
+	// file's: the company is chosen in the console (the file has none by
+	// design), the version is the digest of the text the route renders, not
+	// of the file's bytes, and the source names where each copy was read.
+	want := reference
+	want.Company, want.Version, want.Source = got.Company, got.Version, got.Source
+	// No events declared reads back as an empty value where the parse left
+	// nil. Both say "emits nothing"; anything declared is still compared.
+	if len(got.Emits) == 0 && len(want.Emits) == 0 {
+		want.Emits = got.Emits
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("published version differs from the reference in %v", differingFields(got, want))
 	}
 	// And the server it was judged against was reached as the App, with the
 	// role's toolsets.
@@ -357,6 +381,12 @@ func TestFactoryTriage_referenceRegisteredAsDocumented_publishesFromTheStudio(t 
 // Without projects in the header the hosted server offers no projects_*
 // tools, and the publish says which ones it is missing — the failure the
 // README warns of, so a person setting the factory up can tell it apart.
+//
+// That holds for a catalogue that never discovered the projects tools. The
+// published catalogue only upserts (admin.Curator.Publish), so narrowing a
+// registration after a broader discovery leaves them known and on the
+// surface, and the publish passes. Which is why each journey starts by
+// clearing the catalogue.
 func TestFactoryTriage_toolsetsWithoutProjects_publishNamesTheMissingProjectTools(t *testing.T) {
 	j := newFactoryJourney(t, "issues")
 	j.discover(t)
