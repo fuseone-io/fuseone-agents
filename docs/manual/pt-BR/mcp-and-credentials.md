@@ -157,6 +157,12 @@ pessoa configure uma coisa e o runtime envie outra. A única combinação
 permitida é um GitHub App com cabeçalhos de configuração ao lado, e só porque
 esses cabeçalhos não podem levar credencial.
 
+Informe cada cabeçalho uma vez só. Nomes de cabeçalho HTTP não diferenciam
+maiúsculas de minúsculas, então `X-MCP-Readonly` e `x-mcp-readonly` são o
+mesmo cabeçalho: a tela recusa as duas grafias juntas, e um servidor cujos
+cabeçalhos salvos as tenham não envia requisição nenhuma, em vez de mandar um
+valor que muda de uma requisição para outra.
+
 ## Cache de resultado
 
 Um servidor pode cachear resultados de leitura bem-sucedidos por um TTL curto.

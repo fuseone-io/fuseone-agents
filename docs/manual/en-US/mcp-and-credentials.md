@@ -155,6 +155,11 @@ does not configure one thing while the runtime sends another. The one
 combination allowed is a GitHub App with configuration headers beside it, and
 only because those headers cannot carry a credential.
 
+Give each header once. HTTP header names ignore letter case, so
+`X-MCP-Readonly` and `x-mcp-readonly` are the same header: the screen refuses
+both spellings together, and a server whose stored headers have them sends no
+request at all rather than a value that changes from one request to the next.
+
 ## Result cache
 
 A server can cache successful read-only results for a short TTL. Use it for

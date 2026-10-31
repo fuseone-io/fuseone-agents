@@ -247,6 +247,34 @@ func TestAuthenticatedClient_aGitHubAppOverPlainHTTP_isRefusedBeforeMinting(t *t
 	}
 }
 
+// Beside an App the same legacy collision fails closed: no request reaches the
+// MCP server, whichever spelling map order would have picked.
+func TestAuthenticatedClient_aGitHubAppWithAHeaderSpelledTwice_sendsNothing(t *testing.T) {
+	t.Parallel()
+	github := githubapptest.New(t, 5550600, 91)
+	var reached atomic.Int32
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(remote.Close)
+	creds := githubAppCreds(github)
+	creds.Headers = map[string]string{"X-MCP-Readonly": "true", "x-mcp-readonly": "false"}
+	client, err := authenticatedClient("github", creds, nil, nil)
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+
+	resp, err := client.Get(remote.URL)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+
+	if !errors.Is(err, domain.ErrHeaderCollision) || reached.Load() != 0 {
+		t.Fatalf("err = %v, server reached %d times; want ErrHeaderCollision and nothing sent", err, reached.Load())
+	}
+}
+
 // recordingAuth notes every Authorization header before the guard judges it,
 // and every X-API-Key, which no App request may carry.
 type recordingAuth struct {

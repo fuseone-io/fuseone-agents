@@ -364,6 +364,34 @@ func TestAuthenticatedClient_sendsConfiguredHeaderCredentialsToRemoteServers(t *
 	_ = resp.Body.Close()
 }
 
+// A row stored before names were checked can hold one header twice under two
+// spellings. Sent, its value would depend on map order per request; it fails
+// closed instead, and the server hears nothing.
+func TestAuthenticatedClient_aStoredHeaderSpelledTwice_sendsNothing(t *testing.T) {
+	t.Parallel()
+	var reached atomic.Int32
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(remote.Close)
+	client, err := authenticatedClient("newrelic", domain.MCPCredentials{
+		Headers: map[string]string{"X-MCP-Readonly": "true", "x-mcp-readonly": "false"},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+
+	resp, err := client.Get(remote.URL)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+
+	if !errors.Is(err, domain.ErrHeaderCollision) || reached.Load() != 0 {
+		t.Fatalf("err = %v, server reached %d times; want ErrHeaderCollision and nothing sent", err, reached.Load())
+	}
+}
+
 func TestAuthenticatedClient_oauthWinsOverABearerLeftBehind(t *testing.T) {
 	t.Parallel()
 

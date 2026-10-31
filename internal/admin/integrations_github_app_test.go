@@ -222,6 +222,26 @@ func TestPutMCPServer_aGitHubAppWithAnAuthorizationHeader_isRefused(t *testing.T
 	}
 }
 
+// Two spellings of one header name are one header with two values, sent in
+// map order. Refused at save in either mode: beside an App and on its own.
+func TestPutMCPServer_aHeaderNameSpelledTwice_isRefusedInEitherMode(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	pair := map[string]string{"X-MCP-Readonly": "true", "x-mcp-readonly": "false"}
+	app := domain.MCPGitHubApp{AppID: 5550600, InstallationID: 91, PrivateKey: appKey(t)}
+
+	cases := map[string]domain.MCPCredentialPatch{
+		"beside an App": {GitHubApp: &app, Headers: pair},
+		"headers alone": {Headers: pair},
+	}
+	for name, patch := range cases {
+		err := i.PutMCPServer(ctx, "usr_ana", platform, githubServer(), patch)
+		if !errors.Is(err, domain.ErrHeaderCollision) {
+			t.Errorf("%s: err = %v, want ErrHeaderCollision", name, err)
+		}
+	}
+}
+
 // Clearing the App removes the credential, so the listing stops naming it.
 func TestPutMCPServer_clearingTheGitHubApp_removesIt(t *testing.T) {
 	i := newIntegrations(t)
