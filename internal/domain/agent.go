@@ -46,6 +46,9 @@ type AgentSummary struct {
 	Budget         Budget
 	MemoryLearning MemoryLearningPolicy
 	Triggers       []AgentTrigger
+	// StandingApprovals is whether a grant given ahead of time may release a
+	// call of this version; the editor reads it back so a republish keeps it.
+	StandingApprovals StandingPolicy
 
 	PublishedBy UserID
 	PublishedAt time.Time
