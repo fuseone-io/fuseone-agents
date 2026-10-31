@@ -85,7 +85,7 @@ per role, in the installation's administration:
 hosted server's `default` set does not include `projects`, and a
 `/x/{toolset}` URL serves exactly one set. Sets are combined with the
 `X-MCP-Toolsets` header ([remote server
-reference](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md#headers)),
+reference](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md#optional-headers)),
 set as a configuration header on the registration next to the GitHub App
 credential:
 

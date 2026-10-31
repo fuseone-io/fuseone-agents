@@ -12,8 +12,8 @@ const claimed = {
 } as Step;
 
 /*
- * A factory run's first act is claiming its card. The trail has to name the
- * card, or "which run worked on #123" cannot be read from the screen.
+ * A factory run claims its card first, once it has chosen one. The trail
+ * has to name the card, or "which run worked on #123" cannot be read from the screen.
  */
 describe("a run that claimed a work item", () => {
   it("names the card it claimed", () => {

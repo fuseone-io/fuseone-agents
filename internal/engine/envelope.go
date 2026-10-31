@@ -53,8 +53,9 @@ func envelopeForState(start Start, state State) gate.Pack {
 	if state.Ticket.Ref.Valid() {
 		pack = gate.NewPack(append(pack.Tools(), domain.ToolTicketAnswer)...)
 	}
-	// The work-item claim is ambient once declared: a run's first act, and
-	// its retry, whatever step it is at. Declared means in the frozen pack —
+	// The work-item claim is ambient once declared: the first act after a
+	// run chooses its card, and its retry, whatever step it is at. Declared
+	// means in the frozen pack —
 	// an agent that never listed it is never offered it (#206).
 	if start.Pack.Allows(domain.ToolWorkItemClaim) {
 		pack = gate.NewPack(append(pack.Tools(), domain.ToolWorkItemClaim)...)
