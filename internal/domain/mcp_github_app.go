@@ -35,6 +35,15 @@ type MCPGitHubApp struct {
 	APIBaseURL string `json:"apiBaseURL,omitempty"`
 }
 
+// MCPGitHubAppSummary is what a listing may say about a server's GitHub App:
+// everything but the key, which a reader learns only is configured.
+type MCPGitHubAppSummary struct {
+	AppID          int64
+	InstallationID int64
+	Repositories   []string
+	APIBaseURL     string
+}
+
 func (g MCPGitHubApp) Empty() bool {
 	return g.AppID == 0 && g.InstallationID == 0 && g.PrivateKey == "" &&
 		len(g.Repositories) == 0 && g.APIBaseURL == ""

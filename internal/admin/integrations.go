@@ -77,6 +77,8 @@ type storedServer struct {
 	HasVariables bool `json:"hasVariables,omitempty"`
 	// HasOAuth is the same read-model hint for a remote OAuth grant.
 	HasOAuth bool `json:"hasOAuth,omitempty"`
+	// GitHubApp is the non-secret half of a GitHub App credential.
+	GitHubApp *storedGitHubApp `json:"githubApp,omitempty"`
 	/*
 		Surface is which of the server's tools this installation brought in.
 
@@ -168,6 +170,7 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 			AcceptsLocalExecution: stored.AcceptsLocalExecution,
 			HasSecret:             row.HasSecret,
 			HasOAuth:              stored.HasOAuth,
+			GitHubApp:             stored.GitHubApp.summary(),
 			HasVariables:          hasVariables,
 			HasConfigFile:         stored.HasConfigFile,
 			ConfigFileEnv:         configFileEnv(stored.ConfigFileEnv),
@@ -288,6 +291,11 @@ func (i *Integrations) PutMCPServer(
 			}
 
 			merged := given.Apply(domain.ReadMCPCredentials(stored.Secret)).ForTransport(transport)
+			if given.GitHubApp != nil {
+				if err := validGitHubApp(merged.GitHubApp); err != nil {
+					return settings.Setting{}, nil, err
+				}
+			}
 			if transport != domain.TransportStdio {
 				configEnv = ""
 				stdioEgress = nil
@@ -304,6 +312,7 @@ func (i *Integrations) PutMCPServer(
 				ConfigFileEnv:         configEnv,
 				HasVariables:          len(merged.Env) > 0,
 				HasOAuth:              merged.OAuth != nil && !merged.OAuth.Empty(),
+				GitHubApp:             storedGitHubAppOf(merged.GitHubApp),
 				HasConfigFile:         merged.ConfigFile != "",
 				AcceptsLocalExecution: server.AcceptsLocalExecution,
 			})
@@ -336,6 +345,8 @@ func (i *Integrations) PutMCPServer(
 					"acceptsLocalExecution": server.AcceptsLocalExecution,
 					"variables":             len(merged.Env),
 					"hasOAuth":              merged.OAuth != nil && !merged.OAuth.Empty(),
+					"githubAppChanged":      given.GitHubApp != nil,
+					"hasGitHubApp":          merged.GitHubApp != nil,
 					"configFileChanged":     given.ConfigFile != nil,
 					"hasConfigFile":         merged.ConfigFile != "",
 					"configFileEnv":         configEnv,
