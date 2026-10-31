@@ -26,6 +26,7 @@ import {
   type RemoteAuthPlan,
 } from "@/features/integrations/mcp/auth-plan";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
+import { GitHubAppFormFields } from "@/features/integrations/mcp/github-app-form-fields";
 
 /**
  * The half of the form that depends on how the server is reached.
@@ -76,6 +77,7 @@ export function ServerFields({
           <HeaderFields form={form} headers={headers} hasSecret={hasSecret} />
         )}
         {auth.oauth !== null && <OAuthFormFields form={form} />}
+        {auth.githubApp !== null && <GitHubAppFormFields form={form} />}
         <RateLimitFields form={form} />
         <ResultCacheFields form={form} />
       </>

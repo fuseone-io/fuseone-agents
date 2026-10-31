@@ -21,6 +21,11 @@ import {
   oauthFromValue,
   oauthHasValue,
 } from "@/features/integrations/mcp/oauth-credential";
+import {
+  blankGitHubApp,
+  githubAppFromValue,
+  githubAppHasValue,
+} from "@/features/integrations/mcp/github-app-credential";
 import { problemMessage } from "@/lib/api/problem-message";
 
 /**
@@ -72,6 +77,10 @@ export function useServerForm(
         ...remoteCredential(values, remotePlan, remoteHeaders),
         env: localEnv(values, dsnMode),
         oauth: oauthHasValue(values) ? oauthFromValue(values) : undefined,
+        githubApp:
+          values.transport === "http" && githubAppHasValue(values)
+            ? githubAppFromValue(values)
+            : undefined,
         configFile: values.configFile || undefined,
         configFileEnv: values.configFileEnv,
         rateLimit: rateLimitFromValues(values),
@@ -121,6 +130,7 @@ function defaultServerValues(
     oauthTokenType: "",
     oauthExpiresAtUnix: "",
     oauthScopes: "",
+    ...blankGitHubApp(),
     configFile: "",
     configFileEnv: server?.configFileEnv ?? "",
     callTimeoutSeconds: server?.callTimeoutSeconds?.toString() ?? "",

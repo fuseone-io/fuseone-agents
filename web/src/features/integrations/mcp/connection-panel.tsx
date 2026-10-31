@@ -28,6 +28,7 @@ import {
   OAuthFields,
   StoredOAuthOnly,
 } from "@/features/integrations/mcp/oauth-fields";
+import { GitHubAppSection } from "@/features/integrations/mcp/github-app-section";
 import { CallAuthNote } from "@/features/integrations/mcp/call-auth-note";
 import { EgressNote } from "@/features/integrations/mcp/egress-note";
 import { MCPHealthNote } from "@/features/integrations/mcp/health-note";
@@ -38,6 +39,7 @@ import {
 import {
   usePutMCPServer,
   useProbeMCPServer,
+  type MCPGitHubApp,
   type MCPOAuthGrant,
   type MCPServer,
 } from "@/features/integrations/api";
@@ -89,10 +91,11 @@ export function ConnectionPanel({
     token?: string;
     headers?: Record<string, string>;
     oauth?: MCPOAuthGrant;
+    githubApp?: MCPGitHubApp;
     env?: Record<string, string>;
     configFile?: string;
     configFileEnv?: string;
-  }) {
+  }): Promise<boolean> {
     // Passed through exactly as given. An undefined token means this write is
     // not about the token, and an empty one means somebody is removing it —
     // collapsing the two is how a revoke button stops revoking.
@@ -109,14 +112,17 @@ export function ConnectionPanel({
         token: credential.token,
         headers: credential.headers,
         oauth: credential.oauth,
+        githubApp: credential.githubApp,
         env: credential.env,
         configFile: credential.configFile,
         configFileEnv: credential.configFileEnv,
       });
       setValue(blankCredential(credential.configFileEnv ?? storedConfigEnv));
       toast.success(t("mcp.credentialSaved"));
+      return true;
     } catch (problem) {
       toast.error(problemMessage(problem, t));
+      return false;
     }
   }
 
@@ -148,7 +154,7 @@ export function ConnectionPanel({
 
         <CredentialFields
           local={local}
-          hasSecret={local ? server.hasVariables === true : server.hasSecret === true && server.hasOAuth !== true}
+          hasSecret={local ? server.hasVariables === true : server.hasSecret === true && server.hasOAuth !== true && !server.githubApp}
           hasConfigFile={server.hasConfigFile === true}
           showRemoteToken={remotePlan.secret !== null}
           remoteTokenLabel={remoteTokenLabel(remotePlan.secret, t)}
@@ -182,6 +188,9 @@ export function ConnectionPanel({
         )}
         {remoteSecretConflict && (
           <p className="text-xs text-danger">{t("mcp.remoteCredentialConflict")}</p>
+        )}
+        {!local && (remotePlan.githubApp !== null || server.githubApp) && (
+          <GitHubAppSection server={server} pending={put.isPending} write={write} />
         )}
         {!local && remotePlan.oauth === null && server.hasOAuth === true && (
           <StoredOAuthOnly onRevoke={() => void write({ oauth: {} })} />
