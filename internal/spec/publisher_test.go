@@ -22,7 +22,7 @@ func TestPublisher_publishMakesTheNewVersionCurrentWithoutPausingTheAgent(t *tes
 	registry := spec.NewRegistry(pool)
 
 	first := published(t, definition)
-	if err := publisher.Publish(ctx, first, "usr_ana", "acme"); err != nil {
+	if err := publisher.Publish(ctx, spec.Publication{Spec: first, By: "usr_ana", Company: "acme"}); err != nil {
 		t.Fatalf("Publish(first): %v", err)
 	}
 	if err := publisher.SetPaused(ctx, first.ID, false, "usr_ops"); err != nil {
@@ -38,7 +38,7 @@ func TestPublisher_publishMakesTheNewVersionCurrentWithoutPausingTheAgent(t *tes
 	if second.Version == first.Version {
 		t.Fatal("test setup did not change the version")
 	}
-	if err := publisher.Publish(ctx, second, "usr_ana", "acme"); err != nil {
+	if err := publisher.Publish(ctx, spec.Publication{Spec: second, By: "usr_ana", Company: "acme"}); err != nil {
 		t.Fatalf("Publish(second): %v", err)
 	}
 

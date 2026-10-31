@@ -540,6 +540,21 @@ paths:
           in: path
           required: true
           schema: { type: string }
+        - name: refuseIfStage
+          in: query
+          required: false
+          description: |
+            Refuse the publication while the agent stands at this stage. The
+            stage is judged under the agent's row lock, in the same
+            transaction that writes the version and makes it current, so a
+            promotion committed while the publication waits is seen and
+            refused (409, `fuseone:stage-refused`) rather than raced.
+
+            For a publisher that must never hand a new version to an agent
+            running unsupervised: an autonomous agent runs whatever version is
+            current, so a check made by an earlier read would leave a window
+            between the read and the write.
+          schema: { $ref: '#/components/schemas/Stage' }
       requestBody:
         required: true
         content:
@@ -554,6 +569,14 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            The agent stands at the stage `refuseIfStage` named, so nothing was
+            written: no version, and the current version unchanged. Problem
+            type `fuseone:stage-refused`.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /agents/templates:
     get:

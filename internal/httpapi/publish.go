@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/fuseone/agents/internal/auth"
@@ -40,7 +41,7 @@ func (s *Server) WithSchedules(schedules Schedules) *Server {
 // authorship and pausing is operations, and an interface that made them one
 // call would invite a screen that starts an agent by saving it.
 type Publisher interface {
-	Publish(ctx context.Context, s spec.Spec, by domain.UserID, company domain.CompanyID) error
+	Publish(ctx context.Context, p spec.Publication) error
 	EnsurePaused(ctx context.Context, agent domain.AgentID, by domain.UserID) error
 	SetPaused(ctx context.Context, agent domain.AgentID, paused bool, by domain.UserID) error
 	IsPaused(ctx context.Context, agent domain.AgentID) (bool, error)
@@ -124,7 +125,15 @@ func (s *Server) PublishAgent(
 		return nil, err
 	}
 
-	if err := s.publisher.Publish(ctx, published, callerOf(ctx), scope.Company); err != nil {
+	err = s.publisher.Publish(ctx, spec.Publication{
+		Spec: published, By: callerOf(ctx), Company: scope.Company,
+		RefuseStages: refusedStages(req.Params.RefuseIfStage),
+	})
+	if errors.Is(err, spec.ErrStageRefused) {
+		return openapi.PublishAgent409ApplicationProblemPlusJSONResponse(
+			refusal(http.StatusConflict, CodeStageRefused, "Stage refused", err.Error())), nil
+	}
+	if err != nil {
 		return nil, fmt.Errorf("publish %s: %w", req.AgentId, err)
 	}
 	// Recorded as paused only if nobody has decided: republishing an agent
@@ -210,6 +219,14 @@ func (s *Server) SetAgentPaused(
 		return nil, fmt.Errorf("set %s paused: %w", req.AgentId, err)
 	}
 	return openapi.SetAgentPaused204Response{}, nil
+}
+
+// refusedStages is the publication's precondition: absent refuses nothing.
+func refusedStages(in *openapi.Stage) []domain.Stage {
+	if in == nil {
+		return nil
+	}
+	return []domain.Stage{domain.StageOf(string(*in))}
 }
 
 // publishScope checks the exact scope the caller asked to publish into.
