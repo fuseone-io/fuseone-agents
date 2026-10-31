@@ -91,6 +91,9 @@ func (r *Resolver) Resolve(ctx context.Context, agent domain.AgentID, version do
 			Budget:         spec.Budget,
 			Trigger:        "worker",
 			MemoryLearning: spec.MemoryLearning.Normalize(),
+			// The engine reads it here and nowhere else: dropped, the
+			// registry keeps the line and every grant still releases.
+			StandingApprovals: spec.StandingApprovals,
 		},
 		Planner:  planner,
 		Fallback: r.fallback(spec),

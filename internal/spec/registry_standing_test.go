@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/model"
+	"github.com/fuseone/agents/internal/spec"
 )
 
 func withRegistryStanding(t *testing.T) string {
@@ -55,6 +57,33 @@ func TestList_standingApprovalsForbidden_isHandedBackToTheEditor(t *testing.T) {
 	}
 	if len(versions) != 1 || versions[0].StandingApprovals != domain.StandingForbidden {
 		t.Fatalf("versions = %+v, want standing approvals forbidden", versions)
+	}
+}
+
+func TestResolve_standingApprovalsForbidden_reachesTheRunsStart(t *testing.T) {
+	registry := openRegistry(t)
+	ctx := context.Background()
+	forbidding := published(t, withRegistryStanding(t))
+	if err := registry.Publish(ctx, forbidding, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	providers := model.NewRegistry(nil)
+	if err := providers.Register(model.Provider{
+		Name: "openai", Kind: model.KindOpenAICompatible,
+		BaseURL: "http://127.0.0.1:1", APIKey: "test",
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	// The engine reads the setting from Start and nowhere else: dropped here,
+	// the registry keeps it and every grant still releases the run's writes.
+	resolved, err := spec.NewResolver(registry, providers, nil).
+		Resolve(ctx, forbidding.ID, forbidding.Version)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if resolved.Start.StandingApprovals != domain.StandingForbidden {
+		t.Errorf("Start.StandingApprovals = %q, want forbidden", resolved.Start.StandingApprovals)
 	}
 }
 
