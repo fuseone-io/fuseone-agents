@@ -4,7 +4,19 @@ One file per role: `<role>.agent.md`, in the platform's own agent format
 (frontmatter for the contract, Markdown body for the instructions, the format
 `spec.Parse` reads in `internal/spec/spec.go`). Each role's reference is added
 by that role's issue (#195, #196, #197, #198, #200), in a pull request reviewed
-like any other change. [`triage.agent.md`](triage.agent.md) is the first.
+like any other change:
+
+| Role | Reference | Its card |
+|---|---|---|
+| Triage | [`triage.agent.md`](triage.agent.md) | the issue, in Triagem |
+| Reviewer | [`reviewer.agent.md`](reviewer.agent.md) | the pull request labelled `factory:needs-review` |
+| QA | [`qa.agent.md`](qa.agent.md) | the pull request labelled `factory:needs-qa` |
+
+Triage works the board's cards. The Reviewer and QA work pull requests, so
+their claim reference is the pull request's own number
+(`github:fuseone-io/fuseone-agents#<PR number>`): it is in the listing they
+choose from, while the issue a pull request closes is only known after reading
+its text, which the claim has to come before.
 
 ## How a role is created in v1
 
@@ -92,8 +104,26 @@ credential:
 | Role | `X-MCP-Toolsets` |
 |---|---|
 | Triage | `issues,projects` |
-| Reviewer | `pull_requests,repos` |
-| QA | `pull_requests,repos` |
+| Reviewer | `pull_requests,repos,issues,projects` |
+| QA | `pull_requests,repos,issues,projects` |
+
+The Reviewer and QA need more than `pull_requests,repos`: a label on a pull
+request is set with `issue_write` and a comment with `add_issue_comment`, both
+in `issues`; and any role may move a card to Travado (LANES.md), which takes
+the `projects` tools.
+
+**The GitHub App's permissions.** The App is what makes a tool call succeed;
+the toolset only offers it. Each role's App needs:
+
+| Role | Repository permissions | Organization permissions |
+|---|---|---|
+| Triage | Issues: write, Pull requests: read, Metadata: read | Projects: write |
+| Reviewer | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
+| QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
+
+Submitting a review needs Pull requests: **write**, for QA as much as for the
+Reviewer: in v1 QA's verdict is a review, not a commit status, so QA needs no
+Commit statuses: write.
 
 Without the header, Triage's server has no `projects_*` tools in its catalogue,
 and the console refuses to publish the Triage reference, because it names

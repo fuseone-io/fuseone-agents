@@ -113,7 +113,8 @@ depends on a promise to fix it later.
 ## Submitting the verdict
 
 The verdict is a **pull-request review**, submitted with `commitID` set to the
-head SHA the review was written against (`create_pull_request_review`), event
+head SHA the review was written against (`pull_request_review_write` with
+method `create`), event
 `APPROVE` or `REQUEST_CHANGES`, with the whole review above as its body.
 
 - **Not a comment, not a label.** The person who merges reads two approving
