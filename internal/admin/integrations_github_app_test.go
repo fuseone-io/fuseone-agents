@@ -134,6 +134,10 @@ func TestPutMCPServer_anUnusableGitHubApp_isRefusedWithoutEchoingIt(t *testing.T
 			AppID: 1, InstallationID: 2, PrivateKey: appKey(t),
 			APIBaseURL: "http://169.254.169.254/latest",
 		},
+		"plain http base": {
+			AppID: 1, InstallationID: 2, PrivateKey: appKey(t),
+			APIBaseURL: "http://ghe.internal.example/api/v3",
+		},
 	}
 	for name, app := range cases {
 		err := i.PutMCPServer(ctx, "usr_ana", platform, githubServer(),
@@ -145,6 +149,28 @@ func TestPutMCPServer_anUnusableGitHubApp_isRefusedWithoutEchoingIt(t *testing.T
 			t.Fatalf("%s: the refusal echoed the paste: %v", name, err)
 		}
 		assertNoKey(t, name, err.Error(), app.PrivateKey)
+	}
+}
+
+// The installation token goes to the MCP URL on every call, so a server that
+// authenticates as an App must be reached over TLS — refused when the App is
+// added to a plain-HTTP server, and when an App server's URL is edited to one.
+func TestPutMCPServer_aGitHubAppOnAPlainHTTPServer_isRefused(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	app := domain.MCPGitHubApp{AppID: 5550600, InstallationID: 91, PrivateKey: appKey(t)}
+	plain := githubServer()
+	plain.URL = "http://mcp.internal.example/mcp/"
+
+	added := i.PutMCPServer(ctx, "usr_ana", platform, plain, domain.MCPCredentialPatch{GitHubApp: &app})
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, githubServer(),
+		domain.MCPCredentialPatch{GitHubApp: &app}); err != nil {
+		t.Fatalf("https write: %v", err)
+	}
+	edited := i.PutMCPServer(ctx, "usr_ana", platform, plain, domain.MCPCredentialPatch{})
+
+	if !errors.Is(added, admin.ErrBadGitHubApp) || !errors.Is(edited, admin.ErrBadGitHubApp) {
+		t.Fatalf("added = %v, edited = %v; want both refused as ErrBadGitHubApp", added, edited)
 	}
 }
 

@@ -291,8 +291,10 @@ func (i *Integrations) PutMCPServer(
 			}
 
 			merged := given.Apply(domain.ReadMCPCredentials(stored.Secret)).ForTransport(transport)
-			if given.GitHubApp != nil {
-				if err := validGitHubApp(merged.GitHubApp); err != nil {
+			// Judged on what will be stored, not on what was sent: an edit
+			// that only moves the URL still decides where the token goes.
+			if merged.GitHubApp != nil && !merged.GitHubApp.Empty() {
+				if err := validGitHubApp(merged.GitHubApp, server.URL); err != nil {
 					return settings.Setting{}, nil, err
 				}
 			}

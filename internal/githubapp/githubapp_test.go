@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -273,6 +274,63 @@ func TestSource_aCancelledCaller_isNotRememberedAsAFailedMint(t *testing.T) {
 
 	if err != nil || !fake.Valid(tok) {
 		t.Fatalf("Token after a cancelled caller = %q, %v; want a fresh token", tok, err)
+	}
+}
+
+// Every request a GitHub App makes carries a secret — the App JWT to the API,
+// the installation token to the MCP server — so plain HTTP is refused unless
+// the host is this machine, where nothing crosses a wire.
+func TestRequireTLS_plainHTTPOnlyToLoopback(t *testing.T) {
+	t.Parallel()
+	cases := map[string]bool{
+		"https://ghe.internal.example/api/v3": true,
+		"http://127.0.0.1:8080/api/v3":        true,
+		"http://127.9.9.9/":                   true,
+		"http://[::1]:9000/":                  true,
+		"http://localhost:3000/":              true,
+		"http://ghe.internal.example/api/v3":  false,
+		"http://10.0.0.5/":                    false,
+		"http://127.0.0.1.attacker.example/":  false,
+		"http://localhost.attacker.example/":  false,
+		"ftp://ghe.internal.example/":         false,
+	}
+	for raw, ok := range cases {
+		err := githubapp.RequireTLS(raw)
+		if (err == nil) != ok {
+			t.Errorf("RequireTLS(%q) = %v, want allowed=%v", raw, err, ok)
+		}
+		if err != nil && !errors.Is(err, githubapp.ErrPlainHTTP) {
+			t.Errorf("RequireTLS(%q) = %v, want ErrPlainHTTP", raw, err)
+		}
+	}
+}
+
+// countingTransport records requests and answers none of them.
+type countingTransport struct{ requests atomic.Int32 }
+
+func (c *countingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	c.requests.Add(1)
+	return nil, errors.New("no network in this test")
+}
+
+// A stored base URL that is plain HTTP to another host never receives the
+// JWT: the mint refuses before a request is built, whatever admin accepted.
+func TestSource_plainHTTPAPIBase_refusesBeforeTheJWTLeaves(t *testing.T) {
+	t.Parallel()
+	fake := githubapptest.New(t, appID, installationID)
+	app := appFor(fake)
+	app.APIBaseURL = "http://ghe.internal.example/api/v3"
+	wire := &countingTransport{}
+	src, err := githubapp.NewSource(app, &http.Client{Transport: wire}, newClock())
+	if err != nil {
+		t.Fatalf("NewSource: %v", err)
+	}
+
+	_, err = src.Token(t.Context())
+
+	if !errors.Is(err, githubapp.ErrPlainHTTP) || wire.requests.Load() != 0 {
+		t.Fatalf("Token err = %v after %d requests; want ErrPlainHTTP and none sent",
+			err, wire.requests.Load())
 	}
 }
 
