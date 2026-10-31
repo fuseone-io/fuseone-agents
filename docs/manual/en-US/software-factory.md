@@ -82,10 +82,20 @@ shows up later, as a publish refused for missing tools.
 
 ## 3. Classify the tools
 
-Once each server is answering, classify every tool the roles use (see
-[What the platform stops before it happens](what-the-gate-stops.md)). Reading issue, pull request
-and comment text is a read whose result is **untrusted**. Comments, labels,
-reviews and card moves are **writes**.
+Once each server is answering, classify every tool the roles declare (see
+[What the platform stops before it happens](what-the-gate-stops.md)).
+
+**Every read tool is untrusted** — not only the ones that read an issue's
+body. A listing returns text people wrote: `projects_list` returns the titles
+of the board's issues and pull requests even when asked for no fields (#220).
+
+| Classify as | Tools |
+|---|---|
+| read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `get_commit` |
+| write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `projects_write` |
+
+Classify each tool on every role's server: `github-triage.projects_list` and
+`github-reviewer.projects_list` are separate entries.
 
 `projects_write` moves cards and can also remove an item. Classify it as a
 **write**, not destructive: a removed card can be added back, and a person

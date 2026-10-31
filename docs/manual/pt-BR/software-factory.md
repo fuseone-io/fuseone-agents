@@ -87,9 +87,21 @@ falta de ferramentas.
 ## 3. Classifique as ferramentas
 
 Com cada servidor respondendo, classifique todas as ferramentas que os papéis
-usam (veja [O que a plataforma para antes de acontecer](what-the-gate-stops.md)). Ler texto de issue,
-pull request e comentário é uma leitura com resultado **não confiável**
-(untrusted). Comentários, rótulos, revisões e cards movidos são **escritas**.
+declaram (veja [O que a plataforma para antes de acontecer](what-the-gate-stops.md)).
+
+**Toda ferramenta de leitura é não confiável (untrusted)** — não só as que
+leem o corpo de uma issue. Uma listagem devolve texto escrito por pessoas: o
+`projects_list` devolve os títulos das issues e pull requests do board mesmo
+quando não se pede nenhum campo (#220).
+
+| Classifique como | Ferramentas |
+|---|---|
+| read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `get_commit` |
+| write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `projects_write` |
+
+Classifique cada ferramenta no servidor de cada papel:
+`github-triage.projects_list` e `github-reviewer.projects_list` são entradas
+separadas.
 
 O `projects_write` move cards e também pode remover um item. Classifique como
 **write**, não como destructive: um card removido pode ser adicionado de novo,
