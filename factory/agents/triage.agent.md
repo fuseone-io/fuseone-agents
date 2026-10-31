@@ -59,7 +59,7 @@ oldest card left. One card per run: when you are done with it, stop, even if
 there is time for another.
 
 Claim it first
-First act: call $fuseone.work_item.claim with the card's reference before reading the card or writing anything.
+First act after choosing a card: call $fuseone.work_item.claim with the card's reference before reading the issue or writing anything.
 The reference is the card's issue, in the form
 github:fuseone-io/fuseone-agents#<issue number>.
 - If the claim is refused with work_item_held, another run of this role is

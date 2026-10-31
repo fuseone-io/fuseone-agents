@@ -30,7 +30,8 @@ platform, with no code written for the factory:
   per role, each registration with its own GitHub App installed only on this
   repository. The App's identity is what signs a role's comments and reviews.
 - **Copilot everywhere, and a person merges.** Every role runs at copilot with
-  `standing_approvals: forbidden`, and its first act is the work-item claim.
+  `standing_approvals: forbidden`, and once it has chosen a card from the board
+  its first act is the work-item claim, before it reads the issue or writes.
   The Reviewer's and QA's verdicts are both pull-request reviews on the head
   SHA they read (APPROVE or REQUEST_CHANGES), under their own Apps. A person
   merges once both approve the current head and its checks are green. Cards

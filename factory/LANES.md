@@ -13,11 +13,13 @@ These hold before any lane rule applies.
 1. **One card per run.** A run takes one card: the oldest in its lane it has
    not already acted on. It never works a second card, even when the first is
    finished quickly.
-2. **The claim is the run's first act.** Before reading the card's text,
-   before any write, the run calls `$fuseone.work_item.claim` with the card's
-   reference (`github:fuseone-io/fuseone-agents#<number>`, or
-   `ghproject:<item node id>`). The evidence is the run's ledger: its first
-   tool call is the claim, sealed as a `work_item_claimed` step.
+2. **The claim is the run's first act after choosing a card.** A role is
+   woken by its schedule, not handed a card, so it may first list its lane on
+   the board to choose one. Before reading the issue's text, and before any
+   write, the run calls `$fuseone.work_item.claim` with the card's reference
+   (`github:fuseone-io/fuseone-agents#<number>`, or
+   `ghproject:<item node id>`). The evidence is the run's ledger: the only
+   calls ahead of the `work_item_claimed` step are board listings.
    - A refusal with `work_item_held` means another open run of this role holds
      the card. Pick the next card and claim that one instead.
    - A refusal with `work_item_run_holds_another` means this run already holds

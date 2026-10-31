@@ -31,7 +31,7 @@ instructions are reviewed. When the two disagree, the console has drifted.
 | `area: factory` | cost, budget and grants of the factory, apart from every other agent (NT-013 § Guardrails, layer 7) |
 | no `company:` | the company is the installation's, chosen in the console |
 | `triggers: [{ type: cron, schedule: "…" }]`, and no other trigger | a role is woken by its schedule; nothing else starts it (NT-013 § How a role is woken) |
-| `$fuseone.work_item.claim` in `tools`, and the claim line in the body | a run's first act is claiming its card (#206); see below |
+| `$fuseone.work_item.claim` in `tools`, and the claim line in the body | once it has chosen a card from the board, a run's first act is claiming it (#206); see below |
 | `budget.micros`, `budget.steps` and `budget.tool_calls` | a per-run ceiling, so a looping role parks instead of spending |
 | every MCP tool on `github-<role>` | each role reaches GitHub only through its own registration, with its own GitHub App (NT-013 § Guardrails, layer 1) |
 | `standing_approvals: forbidden` | a grant given ahead of time would release a factory write without a person, and count as an approval nobody gave (#192) |
@@ -43,7 +43,7 @@ instructions are reviewed. When the two disagree, the console has drifted.
 Every role's instructions contain this line, exactly, on a line of its own:
 
 ```
-First act: call $fuseone.work_item.claim with the card's reference before reading the card or writing anything.
+First act after choosing a card: call $fuseone.work_item.claim with the card's reference before reading the issue or writing anything.
 ```
 
 A fixed sentence rather than "mentions the tool somewhere": "Never call
