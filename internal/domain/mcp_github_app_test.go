@@ -82,6 +82,30 @@ func TestMCPCredentialPatch_headersWrittenWithTheApp_areKeptBesideIt(t *testing.
 	}
 }
 
+// Headers beside an App were judged as its configuration, never as a
+// credential. Removing the App must not leave them behind to become header-mode
+// authentication: a legacy row with X-API-Key beside the App would start sending
+// it the moment the App went. Headers written in the same patch are a mode of
+// their own, judged as one.
+func TestMCPCredentialPatch_removingTheApp_takesTheHeadersBesideItAlong(t *testing.T) {
+	t.Parallel()
+	stored := domain.MCPCredentials{GitHubApp: app(), Headers: map[string]string{
+		"X-MCP-Toolsets": "issues,projects", "X-API-Key": "second-secret",
+	}}
+
+	removed := domain.MCPCredentialPatch{GitHubApp: &domain.MCPGitHubApp{}}.Apply(stored)
+	if removed.GitHubApp != nil || len(removed.Headers) != 0 {
+		t.Fatalf("after removing the App = %+v, want no App and no headers", removed)
+	}
+
+	replaced := domain.MCPCredentialPatch{
+		GitHubApp: &domain.MCPGitHubApp{}, Headers: map[string]string{"Api-Key": "nr_secret"},
+	}.Apply(stored)
+	if replaced.GitHubApp != nil || len(replaced.Headers) != 1 || replaced.Headers["Api-Key"] != "nr_secret" {
+		t.Fatalf("after removing the App with new headers = %+v, want only the new headers", replaced)
+	}
+}
+
 // Correcting the App — a keyless edit — does not wipe the headers stored
 // beside it: the form never has their values to send back.
 func TestMCPCredentialPatch_aKeylessAppEdit_keepsTheHeadersBesideIt(t *testing.T) {
