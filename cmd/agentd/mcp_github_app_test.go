@@ -382,3 +382,49 @@ func TestConnectServer_aGitHubAppWithAToolsetsHeader_discoversProjectsAsTheApp(t
 		}
 	}
 }
+
+// The transport sets the installation token on every hop itself, so Go's own
+// header stripping on redirect does not protect it. A redirect to another
+// origin is refused before the token rides along; one within the origin is
+// still followed.
+func TestAuthenticatedClient_aGitHubAppRedirectedToAnotherOrigin_isRefused(t *testing.T) {
+	t.Parallel()
+	github := githubapptest.New(t, 5550600, 91)
+	elsewhere := &recordingAuth{next: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})}
+	other := httptest.NewServer(elsewhere)
+	t.Cleanup(other.Close)
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/moved":
+			http.Redirect(w, r, "/mcp", http.StatusTemporaryRedirect)
+		case "/mcp":
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.Redirect(w, r, other.URL+"/mcp", http.StatusTemporaryRedirect)
+		}
+	}))
+	t.Cleanup(origin.Close)
+	client, err := authenticatedClient("github", githubAppCreds(github), nil, nil)
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+
+	same, sameErr := client.Get(origin.URL + "/moved")
+	if same != nil {
+		_ = same.Body.Close()
+	}
+	away, awayErr := client.Get(origin.URL + "/away")
+	if away != nil {
+		_ = away.Body.Close()
+	}
+
+	if sameErr != nil || same.StatusCode != http.StatusNoContent {
+		t.Fatalf("same-origin redirect = %v, %v; want it followed", same, sameErr)
+	}
+	if !errors.Is(awayErr, errCrossOriginRedirect) || len(elsewhere.seen) != 0 {
+		t.Fatalf("cross-origin redirect err = %v, other origin saw %v; want refused and nothing sent",
+			awayErr, elsewhere.seen)
+	}
+}

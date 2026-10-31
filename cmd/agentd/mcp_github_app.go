@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -23,6 +24,11 @@ stays in this worker's memory, and the only thing to detect is the credential
 itself changing: a different App, installation, key or repository list builds
 a new source rather than reusing tokens minted for the old one.
 */
+// errCrossOriginRedirect is a redirect that would carry the installation token
+// to an origin the server was not configured with.
+var errCrossOriginRedirect = errors.New(
+	"github app: refused a redirect to another origin; the installation token goes only where the server is configured")
+
 type githubAppAuth struct {
 	from   domain.MCPGitHubApp
 	source *githubapp.Source
@@ -41,6 +47,9 @@ func (a *credentialAuth) githubAppRoundTrip(
 	// still a request the token would ride on.
 	if err := githubapp.RequireTLS(r.URL.String()); err != nil {
 		return nil, fmt.Errorf("%s: %w", a.server, err)
+	}
+	if crossOriginHop(r) {
+		return nil, fmt.Errorf("%s: %w", a.server, errCrossOriginRedirect)
 	}
 	current := a.githubApp(app)
 	if current.err != nil {
@@ -92,4 +101,20 @@ func (a *credentialAuth) githubApp(app domain.MCPGitHubApp) *githubAppAuth {
 	source, err := githubapp.NewSource(app, mint, clock)
 	a.app = &githubAppAuth{from: app, source: source, err: err}
 	return a.app
+}
+
+/*
+crossOriginHop reports a redirect that leaves the origin it came from.
+
+The token is set here, on every hop, so Go's rule of dropping Authorization
+on a redirect to another host never applies to it. A hop that stays on its
+scheme, host and port is the same server and is followed; one that leaves is
+refused before a token is minted for it.
+*/
+func crossOriginHop(r *http.Request) bool {
+	if r.Response == nil || r.Response.Request == nil {
+		return false
+	}
+	from := r.Response.Request.URL
+	return from.Scheme != r.URL.Scheme || from.Host != r.URL.Host
 }

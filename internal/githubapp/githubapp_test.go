@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
@@ -352,6 +353,42 @@ func TestSource_plainHTTPAPIBase_refusesBeforeTheJWTLeaves(t *testing.T) {
 		t.Fatalf("Token err = %v after %d requests; want ErrPlainHTTP and none sent",
 			err, wire.requests.Load())
 	}
+}
+
+// A redirect from the API base is never followed: Go resends Authorization to
+// the same host on another scheme, so an https base that answers 302 to
+// http:// would hand the App JWT over in clear. The mint fails instead.
+func TestSource_aRedirectFromTheAPIBase_isNotFollowed(t *testing.T) {
+	t.Parallel()
+	fake := githubapptest.New(t, appID, installationID)
+	var plain atomic.Int32
+	cleartext := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		plain.Add(1)
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	t.Cleanup(cleartext.Close)
+	secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, cleartext.URL+r.URL.Path, http.StatusFound)
+	}))
+	t.Cleanup(secure.Close)
+	app := appFor(fake)
+	app.APIBaseURL = secure.URL
+	client := secure.Client()
+	src, err := githubapp.NewSource(app, client, newClock())
+	if err != nil {
+		t.Fatalf("NewSource: %v", err)
+	}
+
+	_, err = src.Token(t.Context())
+
+	if !errors.Is(err, githubapp.ErrMintFailed) || plain.Load() != 0 {
+		t.Fatalf("Token err = %v, cleartext listener hit %d times; want a mint failure and no hop",
+			err, plain.Load())
+	}
+	if client.CheckRedirect != nil {
+		t.Fatal("the caller's client was changed; the mint must use its own copy")
+	}
+	assertNoSecret(t, err.Error(), app.PrivateKey, nil)
 }
 
 // A revoked key and a removed installation are different fixes, so they get

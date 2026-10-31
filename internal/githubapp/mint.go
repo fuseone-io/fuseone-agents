@@ -58,7 +58,7 @@ func (m minter) mint(ctx context.Context, now time.Time) (token, error) {
 	if err != nil {
 		return token{}, err
 	}
-	resp, err := m.client.Do(req)
+	resp, err := noRedirects(m.client).Do(req)
 	if err != nil {
 		return token{}, fmt.Errorf("%w: %w", ErrMintFailed, err)
 	}
@@ -67,6 +67,23 @@ func (m minter) mint(ctx context.Context, now time.Time) (token, error) {
 		return token{}, err
 	}
 	return readToken(resp.Body)
+}
+
+/*
+noRedirects is a copy of client that answers a redirect with the redirect.
+
+The mint request carries the App JWT, and Go resends Authorization on a
+redirect to the same host — on any scheme. An https base answering 302 to
+http:// would put the JWT on the wire in clear. GitHub's token endpoint does
+not redirect, so a 3xx is a misconfiguration or an attack, and it fails as a
+status like any other. A copy, because the client is the caller's to share.
+*/
+func noRedirects(client *http.Client) *http.Client {
+	out := *client
+	out.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	return &out
 }
 
 func (m minter) request(ctx context.Context, jwt string) (*http.Request, error) {
