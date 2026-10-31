@@ -247,16 +247,21 @@ func TestAuthenticatedClient_aGitHubAppOverPlainHTTP_isRefusedBeforeMinting(t *t
 	}
 }
 
-// recordingAuth notes every Authorization header before the guard judges it.
+// recordingAuth notes every Authorization header before the guard judges it,
+// and every X-API-Key, which no App request may carry.
 type recordingAuth struct {
-	mu   sync.Mutex
-	seen []string
-	next http.Handler
+	mu      sync.Mutex
+	seen    []string
+	apiKeys []string
+	next    http.Handler
 }
 
 func (h *recordingAuth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.mu.Lock()
 	h.seen = append(h.seen, r.Header.Get("Authorization"))
+	if key := r.Header.Get("X-API-Key"); key != "" {
+		h.apiKeys = append(h.apiKeys, key)
+	}
 	h.mu.Unlock()
 	h.next.ServeHTTP(w, r)
 }
@@ -366,6 +371,7 @@ func TestConnectServer_aGitHubAppWithAToolsetsHeader_discoversProjectsAsTheApp(t
 	creds.Headers = map[string]string{
 		"X-MCP-Toolsets": "issues,projects",
 		"Authorization":  "Bearer personal-token",
+		"X-API-Key":      "second-secret",
 	}
 
 	if err := connectServer(t.Context(), catalog, server, creds, nil, nil, credentialPolicy{}, nil); err != nil {
@@ -380,6 +386,9 @@ func TestConnectServer_aGitHubAppWithAToolsetsHeader_discoversProjectsAsTheApp(t
 		if !github.Valid(token) {
 			t.Fatalf("a request carried %q, want the installation token on every one", auth)
 		}
+	}
+	if len(wire.apiKeys) > 0 {
+		t.Fatalf("X-API-Key reached the server %d times beside the App; only configuration headers may", len(wire.apiKeys))
 	}
 }
 

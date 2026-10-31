@@ -203,7 +203,7 @@ func TestPutMCPServer_aGitHubAppWithAnAuthorizationHeader_isRefused(t *testing.T
 	ctx := context.Background()
 	app := domain.MCPGitHubApp{AppID: 5550600, InstallationID: 91, PrivateKey: appKey(t)}
 
-	for _, name := range []string{"Authorization", "authorization", "Proxy-Authorization"} {
+	for _, name := range []string{"Authorization", "authorization", "Proxy-Authorization", "X-API-Key"} {
 		err := i.PutMCPServer(ctx, "usr_ana", platform, githubServer(), domain.MCPCredentialPatch{
 			GitHubApp: &app, Headers: map[string]string{name: "Bearer ghp_personal"},
 		})

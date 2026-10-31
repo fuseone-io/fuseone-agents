@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -306,23 +307,45 @@ func TestRequireTLS_plainHTTPOnlyToLoopback(t *testing.T) {
 	}
 }
 
-// Credential headers are dropped in any letter case, whatever stored them;
-// configuration headers pass untouched.
-func TestConfigHeaders_dropsCredentialHeadersInAnyCase(t *testing.T) {
+// Only the hosted server's documented configuration headers ride beside an
+// App, in any letter case. Anything else — the credential headers, and any
+// other header that could carry a second secret — is dropped at the runtime
+// and refused at the admin.
+func TestConfigHeaders_keepsOnlyTheHostedServersConfigurationHeaders(t *testing.T) {
 	t.Parallel()
-	given := map[string]string{
-		"authorization":       "Bearer personal",
-		"PROXY-AUTHORIZATION": "Basic cHJveHk=",
-		"X-MCP-Toolsets":      "issues,projects",
+	allowed := map[string]string{
+		"X-MCP-Toolsets": "issues,projects",
+		"x-mcp-tools":    "issue_read",
+		"X-MCP-READONLY": "true",
+		"X-MCP-Lockdown": "true",
+		"X-MCP-Insiders": "false",
 	}
+	for _, name := range []string{"authorization", "PROXY-AUTHORIZATION", "X-API-Key", "Cookie", "X-MCP-Toolset"} {
+		given := maps.Clone(allowed)
+		given[name] = "second-secret"
 
-	got := githubapp.ConfigHeaders(given)
+		got := githubapp.ConfigHeaders(given)
 
-	if len(got) != 1 || got["X-MCP-Toolsets"] != "issues,projects" {
-		t.Fatalf("ConfigHeaders = %v, want only X-MCP-Toolsets", got)
+		if !maps.Equal(got, allowed) {
+			t.Errorf("%s: ConfigHeaders = %v, want only the five configuration headers", name, got)
+		}
+		if !errors.Is(githubapp.CheckConfigHeaders(given), githubapp.ErrHeaderNotAllowed) {
+			t.Errorf("%s: CheckConfigHeaders accepted it", name)
+		}
 	}
-	if !errors.Is(githubapp.CheckConfigHeaders(given), githubapp.ErrCredentialHeader) {
-		t.Fatal("CheckConfigHeaders accepted a credential header")
+	if err := githubapp.CheckConfigHeaders(allowed); err != nil {
+		t.Fatalf("CheckConfigHeaders refused the configuration headers: %v", err)
+	}
+}
+
+// The refusal names the allowed set, never what was sent.
+func TestCheckConfigHeaders_refusalNeverQuotesTheHeader(t *testing.T) {
+	t.Parallel()
+
+	err := githubapp.CheckConfigHeaders(map[string]string{"X-Secret-Name": "second-secret"})
+
+	if err == nil || strings.Contains(err.Error(), "second-secret") || strings.Contains(err.Error(), "X-Secret-Name") {
+		t.Fatalf("err = %v, want a fixed refusal", err)
 	}
 }
 
