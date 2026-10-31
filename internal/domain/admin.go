@@ -174,6 +174,9 @@ type MCPServer struct {
 	// ConfigFileEnv is the environment variable that receives the managed
 	// configuration file path. Nil means the default variable.
 	ConfigFileEnv *string
+	// GitHubApp is which GitHub App and installation a remote server acts
+	// as. Nil when its credential is not an App. The key is never here.
+	GitHubApp *MCPGitHubAppSummary
 
 	/*
 		Surface is which of the server's tools this installation brought in.

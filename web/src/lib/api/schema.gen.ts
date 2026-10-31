@@ -3512,6 +3512,35 @@ export interface components {
             expiresAtUnix?: number;
             scopes?: string[];
         };
+        MCPGitHubApp: {
+            /**
+             * Format: int64
+             * @description The GitHub App's id.
+             */
+            appId?: number;
+            /**
+             * Format: int64
+             * @description The installation of the App whose token is minted.
+             */
+            installationId?: number;
+            /** @description The App's private key, PEM, PKCS#1 or PKCS#8. Never returned by any read. Omit on an edit to keep the stored key. */
+            privateKey?: string;
+            /** @description Repository names the installation token is narrowed to. Empty means everything the installation was granted. */
+            repositories?: string[];
+            /** @description GitHub REST API root. Omit for github.com; GitHub Enterprise Server uses https://HOST/api/v3. */
+            apiBaseURL?: string;
+        };
+        /** @description Which GitHub App and installation a server acts as. Everything but the private key, which a reader only learns is configured. */
+        MCPGitHubAppSummary: {
+            /** Format: int64 */
+            appId: number;
+            /** Format: int64 */
+            installationId: number;
+            repositories?: string[];
+            apiBaseURL?: string;
+            /** @description Always true for a stored App; the key itself never comes back. */
+            hasPrivateKey: boolean;
+        };
         MCPUserCredentialInput: {
             /** @description Bearer token for this signed-in user. Omit to keep the stored one. A non-empty token replaces stored headers or OAuth material. */
             token?: string;
@@ -3865,6 +3894,8 @@ export interface components {
             hasSecret?: boolean;
             /** @description The sealed credential document includes an OAuth grant for a remote server. The grant never comes back through this API. */
             hasOAuth?: boolean;
+            /** @description Present when the credential is a GitHub App. The private key never comes back through this API. */
+            githubApp?: components["schemas"]["MCPGitHubAppSummary"];
             /** @description The sealed credential document includes environment variables for a local process. The values never come back through this API. */
             hasVariables?: boolean;
             /** @description The sealed credential document includes a platform-managed configuration file. The content never comes back through this API. */
@@ -4020,7 +4051,7 @@ export interface components {
              * @description How the credential is presented to the MCP server.
              * @enum {string}
              */
-            type: "none" | "oauth2" | "bearer" | "basic" | "headers" | "env" | "config_file" | "path" | "dsn";
+            type: "none" | "oauth2" | "bearer" | "basic" | "headers" | "env" | "config_file" | "path" | "dsn" | "github_app";
             /**
              * @description Whose authority this credential carries.
              * @enum {string}
@@ -8244,6 +8275,8 @@ export interface operations {
                     };
                     /** @description OAuth grant for a remote server. Omit to keep the stored grant. Send an empty object to clear it. A non-empty grant becomes the active HTTP credential and replaces a stored bearer token. */
                     oauth?: components["schemas"]["MCPOAuthGrant"];
+                    /** @description GitHub App a remote server is reached as. The worker mints short-lived installation tokens from the App's private key and refreshes them before expiry. Omit to keep the stored App. Send an empty object to clear it. A non-empty App becomes the active HTTP credential and replaces stored bearer, header or OAuth material; one without a private key keeps the stored key. */
+                    githubApp?: components["schemas"]["MCPGitHubApp"];
                     /**
                      * @description Variables handed to a local server, and only to one. A program started inside the worker no longer inherits the worker's environment, so this is how it receives the credential it needs — explicitly, per server, from the vault.
                      *     Sealed like the token, because the reason a server needs a variable is nearly always that the variable is a key, and a field that is sometimes a secret is stored as one always.

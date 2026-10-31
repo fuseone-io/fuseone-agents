@@ -437,3 +437,19 @@ func hasAuthMode(modes []known.AuthMode, typ known.AuthType) bool {
 	}
 	return false
 }
+
+// A GitHub App acts as itself rather than as a person, so the factory roles
+// can each be their own App with GitHub's permissions as the first guardrail.
+func TestGitHubRecipe_listsTheGitHubAppMode(t *testing.T) {
+	t.Parallel()
+	entry, ok := load(t).For("github")
+	if !ok {
+		t.Fatal("github recipe missing")
+	}
+	for _, mode := range entry.AuthModes {
+		if mode.Type == known.AuthGitHubApp && mode.Principal == known.AuthPrincipalInstallation {
+			return
+		}
+	}
+	t.Fatalf("github auth modes = %+v, want github_app as the installation", entry.AuthModes)
+}

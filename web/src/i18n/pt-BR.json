@@ -1620,7 +1620,8 @@
       "env": "auth por env",
       "config_file": "arquivo de config",
       "path": "acesso por caminho",
-      "dsn": "DSN"
+      "dsn": "DSN",
+      "github_app": "GitHub App"
     },
     "archivedRecipeWarning": "A fonte desta receita marcou este servidor como arquivado ou não atual. Use como referência, não como caminho recomendado.",
     "configFileWarning": "Esta receita espera um arquivo de configuração. Cole o conteúdo no campo próprio; o worker cria um arquivo temporário e passa o caminho pela variável configurada.",
@@ -1805,7 +1806,27 @@
     "connectedFooter": "Alterações de superfície e julgamento ficam na página do servidor.",
     "connectFooter": "Conectar não habilita ferramenta para agente nenhum.",
     "offering_one": "{{count}} ferramenta",
-    "offering_other": "{{count}} ferramentas"
+    "offering_other": "{{count}} ferramentas",
+    "githubApp": "GitHub App",
+    "githubAppHint": "Age como o App, não como uma pessoa. O worker gera tokens de instalação a partir da chave privada do App e os renova antes de expirarem; as permissões do App no GitHub são a primeira barreira.",
+    "githubAppId": "ID do App",
+    "githubInstallationId": "ID da instalação",
+    "githubAppIdsInvalid": "O ID do App e o ID da instalação são números inteiros.",
+    "githubPrivateKey": "Chave privada (PEM)",
+    "githubPrivateKeyUpload": "Enviar arquivo da chave",
+    "githubPrivateKeyHint": "Cole ou envie o arquivo .pem gerado nas configurações do App. Guardada no cofre e nunca exibida de novo.",
+    "githubPrivateKeyKept": "Deixe em branco para manter a chave guardada.",
+    "githubPrivateKeyConfigured": "Chave privada configurada.",
+    "githubRepositories": "Repositórios (opcional)",
+    "githubRepositoriesHint": "Nomes separados por vírgula ou linha. O token fica restrito a eles; em branco vale tudo o que a instalação recebeu.",
+    "githubAPIBaseURL": "URL base da API (opcional)",
+    "githubAPIBaseURLHint": "Em branco para github.com. No GitHub Enterprise Server: https://HOST/api/v3.",
+    "githubToolsets": "Toolsets (opcional)",
+    "githubToolsetsHint": "Só no GitHub MCP hospedado: enviado como X-MCP-Toolsets. Projects não está no conjunto padrão — por exemplo, issues,projects. Em branco mantém o que está salvo.",
+    "githubAppStored": "Age como App {{app}}, instalação {{installation}}.",
+    "saveGitHubApp": "Salvar o GitHub App",
+    "revokeGitHubApp": "Remover o GitHub App",
+    "githubAppConflict": "Um GitHub App substitui o token e o grant OAuth. Preencha só um deles."
   },
   "narrative": {
     "asks": "Para e espera uma pessoa antes de {{tools}}.",

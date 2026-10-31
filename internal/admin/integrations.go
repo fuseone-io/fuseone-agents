@@ -51,6 +51,8 @@ var (
 	ErrMCPServerDisabled          = errors.New("admin: the MCP server is disabled")
 	ErrMCPPersonalCredentialLocal = errors.New(
 		"admin: personal MCP credentials only apply to remote HTTP servers")
+	ErrMCPPersonalCredentialApp = errors.New(
+		"admin: this MCP server acts as a GitHub App for everyone, so a personal credential would never be used")
 	ErrNoMCPCredential              = errors.New("admin: no MCP credential was supplied")
 	ErrMCPPersonalCredentialCorrupt = errors.New("admin: personal MCP credential metadata is corrupted")
 )
@@ -77,6 +79,8 @@ type storedServer struct {
 	HasVariables bool `json:"hasVariables,omitempty"`
 	// HasOAuth is the same read-model hint for a remote OAuth grant.
 	HasOAuth bool `json:"hasOAuth,omitempty"`
+	// GitHubApp is the non-secret half of a GitHub App credential.
+	GitHubApp *storedGitHubApp `json:"githubApp,omitempty"`
 	/*
 		Surface is which of the server's tools this installation brought in.
 
@@ -168,6 +172,7 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 			AcceptsLocalExecution: stored.AcceptsLocalExecution,
 			HasSecret:             row.HasSecret,
 			HasOAuth:              stored.HasOAuth,
+			GitHubApp:             stored.GitHubApp.summary(),
 			HasVariables:          hasVariables,
 			HasConfigFile:         stored.HasConfigFile,
 			ConfigFileEnv:         configFileEnv(stored.ConfigFileEnv),
@@ -288,6 +293,13 @@ func (i *Integrations) PutMCPServer(
 			}
 
 			merged := given.Apply(domain.ReadMCPCredentials(stored.Secret)).ForTransport(transport)
+			// Judged on what will be stored, not on what was sent: an edit
+			// that only moves the URL still decides where the token goes.
+			if merged.GitHubApp != nil && !merged.GitHubApp.Empty() {
+				if err := validGitHubApp(merged.GitHubApp, server.URL, merged.Headers); err != nil {
+					return settings.Setting{}, nil, err
+				}
+			}
 			if transport != domain.TransportStdio {
 				configEnv = ""
 				stdioEgress = nil
@@ -304,6 +316,7 @@ func (i *Integrations) PutMCPServer(
 				ConfigFileEnv:         configEnv,
 				HasVariables:          len(merged.Env) > 0,
 				HasOAuth:              merged.OAuth != nil && !merged.OAuth.Empty(),
+				GitHubApp:             storedGitHubAppOf(merged.GitHubApp),
 				HasConfigFile:         merged.ConfigFile != "",
 				AcceptsLocalExecution: server.AcceptsLocalExecution,
 			})
@@ -336,6 +349,8 @@ func (i *Integrations) PutMCPServer(
 					"acceptsLocalExecution": server.AcceptsLocalExecution,
 					"variables":             len(merged.Env),
 					"hasOAuth":              merged.OAuth != nil && !merged.OAuth.Empty(),
+					"githubAppChanged":      given.GitHubApp != nil,
+					"hasGitHubApp":          merged.GitHubApp != nil,
 					"configFileChanged":     given.ConfigFile != nil,
 					"hasConfigFile":         merged.ConfigFile != "",
 					"configFileEnv":         configEnv,
@@ -668,6 +683,9 @@ func (i *Integrations) personalCredentialTarget(ctx context.Context, name string
 	}
 	if transport != domain.TransportHTTP {
 		return ErrMCPPersonalCredentialLocal
+	}
+	if stored.GitHubApp != nil {
+		return ErrMCPPersonalCredentialApp
 	}
 	return nil
 }

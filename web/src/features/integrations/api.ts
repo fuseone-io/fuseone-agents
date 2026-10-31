@@ -5,6 +5,7 @@ import type { components } from "@/lib/api/schema.gen";
 export type MCPServer = components["schemas"]["MCPServer"];
 export type MCPUserCredential = components["schemas"]["MCPUserCredential"];
 export type MCPOAuthGrant = components["schemas"]["MCPOAuthGrant"];
+export type MCPGitHubApp = components["schemas"]["MCPGitHubApp"];
 export type ModelProvider = components["schemas"]["ModelProvider"];
 export type IntegrationHealth = components["schemas"]["IntegrationHealth"];
 export type GovernedConnector = components["schemas"]["GovernedConnector"];
@@ -73,6 +74,11 @@ export function usePutMCPServer() {
        */
       oauth?: MCPOAuthGrant;
       /**
+       * Absent leaves the stored GitHub App; an empty object removes it. One
+       * without a private key keeps the stored key.
+       */
+      githubApp?: MCPGitHubApp;
+      /**
        * Variables a local server is given. Omitted when the field was left
        * alone, because an empty object means "clear them" and an absent one
        * means "leave what is stored" — an edit to a command must not silently
@@ -110,6 +116,7 @@ export function usePutMCPServer() {
             token: input.token,
             headers: input.headers,
             oauth: input.oauth,
+            githubApp: input.githubApp,
             env: input.env,
             configFile: input.configFile,
             configFileEnv: input.configFileEnv,
