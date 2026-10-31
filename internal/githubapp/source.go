@@ -80,6 +80,10 @@ func (s *Source) Token(ctx context.Context) (string, error) {
 	}
 	next, err := s.minter.mint(ctx, now)
 	if err != nil {
+		// Read again: a mint can take as long as its timeout, and both the
+		// backoff and the old token's remaining life count from when it
+		// returned, not from when it began.
+		now = s.clock.Now()
 		// A caller that gave up says nothing about GitHub; only a mint
 		// that ran its course is remembered.
 		if ctx.Err() == nil {

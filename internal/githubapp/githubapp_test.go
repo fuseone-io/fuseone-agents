@@ -391,6 +391,73 @@ func TestSource_aRedirectFromTheAPIBase_isNotFollowed(t *testing.T) {
 	assertNoSecret(t, err.Error(), app.PrivateKey, nil)
 }
 
+// slowGitHub advances the clock while a mint is in flight, the way a slow
+// GitHub does: the call returns later than it started.
+type slowGitHub struct {
+	clock *stepClock
+	delay atomic.Int64
+	next  http.RoundTripper
+}
+
+func (s *slowGitHub) RoundTrip(r *http.Request) (*http.Response, error) {
+	s.clock.advance(time.Duration(s.delay.Load()))
+	return s.next.RoundTrip(r)
+}
+
+func slowSource(t *testing.T, fake *githubapptest.Fake, clock *stepClock) (*githubapp.Source, *slowGitHub) {
+	t.Helper()
+	slow := &slowGitHub{clock: clock, next: http.DefaultTransport}
+	src, err := githubapp.NewSource(appFor(fake), &http.Client{Transport: slow}, clock)
+	if err != nil {
+		t.Fatalf("NewSource: %v", err)
+	}
+	return src, slow
+}
+
+// The backoff starts when the failed mint returned, not when it began: a mint
+// that takes longer than RetryAfter must not have used the backoff up already.
+func TestSource_aSlowFailedMint_startsTheBackoffWhenItReturns(t *testing.T) {
+	t.Parallel()
+	fake := githubapptest.New(t, appID, installationID)
+	clock := newClock()
+	fake.UseClock(clock.Now)
+	src, slow := slowSource(t, fake, clock)
+
+	first, _ := src.Token(t.Context())
+	clock.advance(57 * time.Minute)
+	fake.Refuse(http.StatusBadGateway)
+	slow.delay.Store(int64(20 * time.Second))
+	_, _ = src.Token(t.Context())
+	got, err := src.Token(t.Context())
+
+	if attempts := len(fake.JWTs()); attempts != 2 {
+		t.Fatalf("GitHub was asked %d times, want 2: the first mint and one slow failed refresh", attempts)
+	}
+	if err != nil || got != first {
+		t.Fatalf("Token = %q, %v; want the still-valid token", got, err)
+	}
+}
+
+// Whether the old token is still worth sending is judged when the failed mint
+// returns: with 45s left at the start and 25s left at the end, it is not.
+func TestSource_aSlowFailedMint_judgesTheOldTokenWhenItReturns(t *testing.T) {
+	t.Parallel()
+	fake := githubapptest.New(t, appID, installationID)
+	clock := newClock()
+	fake.UseClock(clock.Now)
+	src, slow := slowSource(t, fake, clock)
+
+	_, _ = src.Token(t.Context())
+	clock.advance(59*time.Minute + 15*time.Second)
+	fake.Refuse(http.StatusBadGateway)
+	slow.delay.Store(int64(20 * time.Second))
+	got, err := src.Token(t.Context())
+
+	if !errors.Is(err, githubapp.ErrMintFailed) {
+		t.Fatalf("Token = %q, %v; want the failure, the old token having under 30s left", got, err)
+	}
+}
+
 // A revoked key and a removed installation are different fixes, so they get
 // different reasons — and neither reason carries the key or the JWT.
 func TestSource_revokedKeyOrInstallation_failsWithAReasonFreeOfSecrets(t *testing.T) {
