@@ -61,6 +61,7 @@ const AUTH_MODE_TONE: Record<AuthMode["type"], string> = {
   config_file: "bg-muted text-muted-foreground",
   path: "bg-muted text-muted-foreground",
   dsn: "bg-warning-surface text-warning",
+  github_app: "bg-primary/10 text-primary",
 };
 
 export function AuthModeBadges({ modes }: { modes: AuthMode[] }) {

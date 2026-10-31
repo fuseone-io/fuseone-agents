@@ -1620,7 +1620,8 @@
       "env": "env auth",
       "config_file": "config file",
       "path": "path access",
-      "dsn": "DSN"
+      "dsn": "DSN",
+      "github_app": "GitHub App"
     },
     "archivedRecipeWarning": "This recipe's source marks this server as archived or not current. Treat it as a reference, not the recommended path.",
     "configFileWarning": "This recipe expects a configuration file. Paste the content into the dedicated field; the worker creates a temporary file and passes its path through the configured variable.",
@@ -1805,7 +1806,25 @@
     "connectedFooter": "Surface changes and rulings live on the server page.",
     "connectFooter": "Connecting does not enable a tool for any agent.",
     "offering_one": "{{count}} tool",
-    "offering_other": "{{count}} tools"
+    "offering_other": "{{count}} tools",
+    "githubApp": "GitHub App",
+    "githubAppHint": "Acts as the App, not as a person. The worker mints installation tokens from the App's private key and refreshes them before they expire; the App's own GitHub permissions are the first guardrail.",
+    "githubAppId": "App ID",
+    "githubInstallationId": "Installation ID",
+    "githubAppIdsInvalid": "The App ID and the installation ID are whole numbers.",
+    "githubPrivateKey": "Private key (PEM)",
+    "githubPrivateKeyUpload": "Upload key file",
+    "githubPrivateKeyHint": "Paste or upload the .pem generated in the App's settings. Kept in the vault and never shown again.",
+    "githubPrivateKeyKept": "Leave blank to keep the stored key.",
+    "githubPrivateKeyConfigured": "Private key configured.",
+    "githubRepositories": "Repositories (optional)",
+    "githubRepositoriesHint": "Names separated by commas or lines. The token is narrowed to them; blank means everything the installation was granted.",
+    "githubAPIBaseURL": "API base URL (optional)",
+    "githubAPIBaseURLHint": "Blank for github.com. GitHub Enterprise Server: https://HOST/api/v3.",
+    "githubAppStored": "Acts as App {{app}}, installation {{installation}}.",
+    "saveGitHubApp": "Save GitHub App",
+    "revokeGitHubApp": "Remove GitHub App",
+    "githubAppConflict": "A GitHub App replaces the token and the OAuth grant. Fill in only one."
   },
   "narrative": {
     "asks": "It stops and waits for a person before {{tools}}.",

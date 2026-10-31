@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  githubAppHasValue,
+  githubAppIdsValid,
+} from "@/features/integrations/mcp/github-app-credential";
+import { oauthHasValue } from "@/features/integrations/mcp/oauth-credential";
 
 /**
  * What a tool server needs depends on how it is reached.
@@ -31,6 +36,11 @@ export const serverSchema = z
     oauthTokenType: z.string(),
     oauthExpiresAtUnix: z.string(),
     oauthScopes: z.string(),
+    githubAppId: z.string(),
+    githubInstallationId: z.string(),
+    githubPrivateKey: z.string(),
+    githubRepositories: z.string(),
+    githubAPIBaseURL: z.string(),
     configFile: z.string(),
     configFileEnv: z
       .string()
@@ -104,6 +114,19 @@ export const serverSchema = z
       path: ["token"],
       message: "mcp.oauthBearerConflict",
     },
+  )
+  .refine((v) => v.transport !== "http" || githubAppIdsValid(v), {
+    path: ["githubAppId"],
+    message: "mcp.githubAppIdsInvalid",
+  })
+  .refine(
+    (v) =>
+      v.transport !== "http" ||
+      !githubAppHasValue(v) ||
+      (v.token.trim() === "" &&
+        Object.values(v.headers).every((part) => part.trim() === "") &&
+        !oauthHasValue(v)),
+    { path: ["githubAppId"], message: "mcp.githubAppConflict" },
   )
   .refine((v) => rateLimitComplete(v), {
     path: ["rateLimitPerSecond"],
