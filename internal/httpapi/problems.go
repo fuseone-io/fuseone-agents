@@ -52,6 +52,11 @@ const (
 	// code because the console says something specific: the content is gone
 	// on purpose, and nothing will bring it back.
 	CodeSourceInputErased Code = "fuseone:source-input-erased"
+	// CodeStandingForbidden is a standing approval refused because the
+	// agent's current version forbids them (#192). Its own code so the
+	// console can say that the agent's definition is what refuses, and where
+	// to change it, rather than print the store's sentence.
+	CodeStandingForbidden Code = "fuseone:standing-forbidden"
 	// The two the memory form answers when what somebody typed looks like a
 	// credential. Separate codes because the console does different things: one
 	// is a refusal to explain, the other a question to ask. Neither carries the

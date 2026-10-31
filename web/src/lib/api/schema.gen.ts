@@ -1413,6 +1413,10 @@ export interface paths {
          * @description The grant names one exact tool — never a pattern — one agent, one
          *     scope, a daily ceiling and an expiry of at most 90 days. The
          *     creator's name travels onto every release the grant produces.
+         *
+         *     Refused with type `fuseone:standing-forbidden`, the agent's id as
+         *     the detail, when the agent's current version forbids standing
+         *     approvals.
          */
         post: operations["createStandingApproval"];
         delete?: never;
@@ -2804,6 +2808,15 @@ export interface components {
         ToolEffect: "unknown" | "read" | "write" | "destructive" | "financial";
         /** @enum {string} */
         StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "effect_reconciled" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensation_started" | "compensated" | "failed" | "parked" | "run_finished" | "model_fallback" | "work_item_claimed";
+        /**
+         * @description Whether a grant given ahead of time may release a call of this agent
+         *     (#192). Forbidden refuses a new grant for an agent whose current
+         *     version declares it, and a run of such a version never consumes a
+         *     grant: every approval its Gate asks for waits for a person. Declared
+         *     on the version, so it is reviewed and frozen like the rest of it.
+         * @enum {string}
+         */
+        StandingPolicy: "allowed" | "forbidden";
         /** @description A configured model provider and one of its models. */
         ModelPair: {
             provider: string;
@@ -4664,6 +4677,12 @@ export interface components {
             triggers?: components["schemas"]["AgentTrigger"][];
             /** @description Versioned policy that decides whether the platform-owned memory suggestion tool is available to this agent. Absent means off. */
             memoryLearning?: components["schemas"]["MemoryLearningPolicy"];
+            /**
+             * @description Whether a standing approval may release a call of this agent.
+             *     Absent is allowed, which is how every agent behaved before the
+             *     setting existed.
+             */
+            standingApprovals?: components["schemas"]["StandingPolicy"];
             publishedBy?: string;
             /** Format: date-time */
             publishedAt: string;
@@ -4730,6 +4749,13 @@ export interface components {
             memoryLearning?: components["schemas"]["MemoryLearningPolicy"];
             /** @description Optional. The console alone by default. Sent back on a definition unchanged: what a client does not return, publishing deletes. */
             approvals?: components["schemas"]["ApprovalPolicy"];
+            /**
+             * @description Whether a standing approval may release a call of this agent.
+             *     Absent is allowed, which is how every agent behaved before the
+             *     setting existed.
+             *     Sent back on a definition unchanged, like approvals.
+             */
+            standingApprovals?: components["schemas"]["StandingPolicy"];
             /**
              * @description Events a finished run of this agent publishes (PRD SE-10). Declared
              *     rather than called: an agent that chose when to emit would make the

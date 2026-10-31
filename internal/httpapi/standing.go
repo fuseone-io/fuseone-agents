@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -91,11 +92,22 @@ func (s *Server) CreateStandingApproval(
 	if err := s.standing.Create(ctx, grant); err != nil {
 		return openapi.CreateStandingApproval400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				invalid(err.Error())),
+				grantRefusal(err, grant.Agent)),
 		}, nil
 	}
 	s.recordStanding(ctx, "standing_approval.created", grant.ID, grant.CreatedBy, grant.Scope)
 	return openapi.CreateStandingApproval204Response{}, nil
+}
+
+// grantRefusal names why the store would not write a grant. An agent whose
+// definition forbids standing approvals gets its own code and its id as the
+// detail: the fix is on the agent, not in the form (#192).
+func grantRefusal(err error, agent domain.AgentID) openapi.Problem {
+	if errors.Is(err, standing.ErrStandingForbidden) {
+		return refusal(http.StatusBadRequest, CodeStandingForbidden,
+			"Standing approvals forbidden", string(agent))
+	}
+	return invalid(err.Error())
 }
 
 func (s *Server) RevokeStandingApproval(

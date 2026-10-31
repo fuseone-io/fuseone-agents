@@ -2034,6 +2034,10 @@ paths:
         The grant names one exact tool — never a pattern — one agent, one
         scope, a daily ceiling and an expiry of at most 90 days. The
         creator's name travels onto every release the grant produces.
+
+        Refused with type `fuseone:standing-forbidden`, the agent's id as
+        the detail, when the agent's current version forbids standing
+        approvals.
       requestBody:
         required: true
         content:
@@ -4532,6 +4536,16 @@ components:
         - run_finished
         - model_fallback
         - work_item_claimed
+
+    StandingPolicy:
+      type: string
+      enum: [allowed, forbidden]
+      description: |
+        Whether a grant given ahead of time may release a call of this agent
+        (#192). Forbidden refuses a new grant for an agent whose current
+        version declares it, and a run of such a version never consumes a
+        grant: every approval its Gate asks for waits for a person. Declared
+        on the version, so it is reviewed and frozen like the rest of it.
 
     ModelPair:
       type: object
@@ -7414,6 +7428,12 @@ components:
           description: >
             Versioned policy that decides whether the platform-owned memory
             suggestion tool is available to this agent. Absent means off.
+        standingApprovals:
+          allOf: [{ $ref: '#/components/schemas/StandingPolicy' }]
+          description: |
+            Whether a standing approval may release a call of this agent.
+            Absent is allowed, which is how every agent behaved before the
+            setting existed.
         publishedBy: { type: string }
         publishedAt: { type: string, format: date-time }
         latest:
@@ -7498,6 +7518,13 @@ components:
           description: >
             Optional. The console alone by default. Sent back on a definition
             unchanged: what a client does not return, publishing deletes.
+        standingApprovals:
+          allOf: [{ $ref: '#/components/schemas/StandingPolicy' }]
+          description: |
+            Whether a standing approval may release a call of this agent.
+            Absent is allowed, which is how every agent behaved before the
+            setting existed.
+            Sent back on a definition unchanged, like approvals.
         emits:
           type: array
           description: |
