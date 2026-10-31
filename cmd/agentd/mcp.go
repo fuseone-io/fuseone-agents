@@ -23,6 +23,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/githubapp"
 	"github.com/fuseone/agents/internal/netguard"
 	"github.com/fuseone/agents/internal/tools"
 )
@@ -305,6 +306,10 @@ type credentialAuth struct {
 	oauth    OAuthGrantStore
 	base     http.RoundTripper
 	grants   map[domain.UserID]*oauthTransport
+	// clock is where GitHub App tokens read the time. Nil is the system
+	// clock; tests drive it to cross a token's expiry.
+	clock githubapp.Clock
+	app   *githubAppAuth
 }
 
 type mcpCredentialError struct {
@@ -343,6 +348,9 @@ func (a *credentialAuth) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 	if creds.OAuth != nil && !creds.OAuth.Empty() {
 		return a.oauthRoundTrip(r, owner, *creds.OAuth)
+	}
+	if creds.GitHubApp != nil && !creds.GitHubApp.Empty() {
+		return a.githubAppRoundTrip(r, *creds.GitHubApp)
 	}
 	if len(creds.Headers) > 0 {
 		return headerAuth{headers: creds.Headers, base: a.base}.RoundTrip(r)
