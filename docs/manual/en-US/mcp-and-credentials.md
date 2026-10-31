@@ -2,7 +2,7 @@
 title: MCPs and credentials
 summary: How to connect servers, choose a surface, classify tools and decide who supplies the credential.
 section: integrations
-tags: mcp, credential, surface, classification, oauth, stdio, local
+tags: mcp, credential, surface, classification, oauth, github app, stdio, local
 order: 5
 ---
 
@@ -52,6 +52,13 @@ The decision carries the digest of the definition that was judged. If the
 server changes a tool's schema or description, the old decision becomes stale
 and the Gate refuses until a fresh review.
 
+The catalogue only grows. Discovery records the tools it finds and never
+removes one it no longer sees, and deleting a server leaves its tools listed
+(#219). After narrowing what a server offers — a smaller toolset, a different
+account — check its discovered tools before trusting a publish: the publish
+check accepts a tool the catalogue still remembers even if the server stopped
+offering it.
+
 ## Installation credential
 
 Use an installation credential when the server acts as a service account:
@@ -72,6 +79,56 @@ it carries `OnBehalfOf` for that principal. Scheduled runs have no person; if
 the recipe says the credential is personal, they stop instead of falling back
 to the installation credential.
 
+## GitHub App
+
+A GitHub server can authenticate as a **GitHub App** instead of with a token.
+The server then acts as the App, not as a person: what it may do is the App's
+permissions and the repositories its installation was given, and comments and
+reviews it writes are signed by the App.
+
+What to configure, in the server's credential panel or when connecting from
+the catalogue:
+
+| Field | What it is |
+|---|---|
+| App id | The number on the App's settings page |
+| Installation id | The installation of that App on the organisation or account |
+| Private key | The `.pem` generated in the App's settings, pasted or uploaded |
+| Repositories (optional) | Narrows each token to these repositories; blank means everything the installation was given |
+| API base URL (optional) | Blank for github.com; `https://HOST/api/v3` for GitHub Enterprise Server |
+| Toolsets (optional) | Sent as `X-MCP-Toolsets`, for the hosted GitHub MCP server |
+
+The key is sealed in the vault. Once saved, the screen only says that a key
+is configured, and leaving the field blank keeps it. The administration trail
+records that the App credential changed, never the key.
+
+The worker turns the key into installation tokens: it signs a short-lived JWT,
+exchanges it with GitHub for a token, keeps that token in memory only and
+replaces it five minutes before it expires. When minting fails, the worker
+keeps a token that is still valid, and waits 15 seconds before asking GitHub
+again, so a GitHub outage does not become a flood of requests. A failure shows
+the server as unavailable with a fixed reason — key refused, installation not
+found, repository outside the installation — that never carries the key or the
+token.
+
+Rules that hold while the App is set:
+
+- **HTTPS only.** The server URL and the API base URL must be `https://`;
+  plain `http://` is accepted only to loopback (`localhost`, `127.0.0.1`,
+  `::1`). Every request carries the App's JWT or its token.
+- **No redirect carries a secret.** Minting does not follow redirects, and an
+  MCP redirect to another scheme, host or port is refused before a token is
+  attached.
+- **The App is the identity for everyone.** No personal credential is looked
+  up for the server, and the screen refuses to save one. If a policy requires a
+  personal credential for this server's tool calls, those calls are refused,
+  because the App cannot satisfy it; discovery still runs as the App.
+- **Headers configure, they do not authenticate.** Configuration headers can
+  sit beside the App — the hosted GitHub server needs `X-MCP-Toolsets` to offer
+  more than its default sets, and `projects` is not in them. `Authorization`
+  and `Proxy-Authorization` are refused, in any letter case, and the runtime
+  strips them before setting the App's token.
+
 ## Authentication shapes
 
 The catalogue declares the shape, but the runtime sends only what was
@@ -82,13 +139,16 @@ configured.
 | Bearer | Simple token |
 | Header | One or more exact headers required by the server |
 | OAuth | Access token, refresh token, token URL, client id and secret |
+| GitHub App | App id, installation id and private key (above) |
 | Basic | Ready-made header, when the server expects Basic |
 | DSN | Connection string |
 | Env | Variables for stdio |
 | Config file | Sealed document materialised in the worker |
 
 Do not fill two shapes at the same time. The screen refuses that so a person
-does not configure one thing while the runtime sends another.
+does not configure one thing while the runtime sends another. The one
+combination allowed is a GitHub App with configuration headers beside it, and
+only because those headers cannot carry a credential.
 
 ## Result cache
 
