@@ -50,6 +50,9 @@ type MCPCredentials struct {
 		instead of leaving live material nobody sees.
 	*/
 	OAuth *MCPOAuthGrant `json:"oauth,omitempty"`
+	// GitHubApp is a GitHub App the worker authenticates as, minting
+	// short-lived installation tokens from the App's private key.
+	GitHubApp *MCPGitHubApp `json:"githubApp,omitempty"`
 	/*
 		Env is what a local server is given, and nothing else is.
 
@@ -157,6 +160,7 @@ func ReadMCPCredentials(sealed string) MCPCredentials {
 		return MCPCredentials{Token: sealed}
 	}
 	c.OAuth = cloneOAuth(c.OAuth)
+	c.GitHubApp = cloneGitHubApp(c.GitHubApp)
 	return c
 }
 
@@ -177,6 +181,7 @@ type MCPCredentialPatch struct {
 	Token      *string
 	Headers    map[string]string
 	OAuth      *MCPOAuthGrant
+	GitHubApp  *MCPGitHubApp
 	Env        map[string]string
 	ConfigFile *string
 }
@@ -189,6 +194,7 @@ func (p MCPCredentialPatch) Apply(stored MCPCredentials) MCPCredentials {
 		if *p.Token != "" {
 			out.OAuth = nil
 			out.Headers = nil
+			out.GitHubApp = nil
 		}
 	}
 	if p.Headers != nil {
@@ -196,6 +202,7 @@ func (p MCPCredentialPatch) Apply(stored MCPCredentials) MCPCredentials {
 		if len(out.Headers) > 0 {
 			out.Token = ""
 			out.OAuth = nil
+			out.GitHubApp = nil
 		}
 	}
 	if p.OAuth != nil {
@@ -203,6 +210,15 @@ func (p MCPCredentialPatch) Apply(stored MCPCredentials) MCPCredentials {
 		if out.OAuth != nil {
 			out.Token = ""
 			out.Headers = nil
+			out.GitHubApp = nil
+		}
+	}
+	if p.GitHubApp != nil {
+		out.GitHubApp = mergeGitHubApp(stored.GitHubApp, p.GitHubApp)
+		if out.GitHubApp != nil {
+			out.Token = ""
+			out.Headers = nil
+			out.OAuth = nil
 		}
 	}
 	if p.Env != nil {
@@ -218,6 +234,7 @@ func (p MCPCredentialPatch) Apply(stored MCPCredentials) MCPCredentials {
 // carried out, not a write to be skipped.
 func (c MCPCredentials) Empty() bool {
 	return c.Token == "" && (c.OAuth == nil || c.OAuth.Empty()) &&
+		(c.GitHubApp == nil || c.GitHubApp.Empty()) &&
 		len(c.Headers) == 0 && len(c.Env) == 0 && c.ConfigFile == ""
 }
 
@@ -238,7 +255,10 @@ func (c MCPCredentials) ForTransport(transport string) MCPCredentials {
 	if transport == TransportStdio {
 		return MCPCredentials{Env: maps.Clone(c.Env), ConfigFile: c.ConfigFile}
 	}
-	return MCPCredentials{Token: c.Token, Headers: maps.Clone(c.Headers), OAuth: cloneOAuth(c.OAuth)}
+	return MCPCredentials{
+		Token: c.Token, Headers: maps.Clone(c.Headers), OAuth: cloneOAuth(c.OAuth),
+		GitHubApp: cloneGitHubApp(c.GitHubApp),
+	}
 }
 
 /*
