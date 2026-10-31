@@ -117,7 +117,7 @@ func (r *Runner) claimWorkItem(
 	ref, ok := domain.ParseWorkItemRef(args.Ref)
 	if !ok {
 		return r.answerClaim(ctx, state, call, claimAnswer{Reason: CodeWorkItemRefInvalid,
-			Message: "name the card to claim in ref, e.g. github:owner/repo#123"})
+			Message: "ref must be github:owner/repo#123 or ghproject:<node id>"})
 	}
 	next, err := r.append(ctx, state, start, domain.Step{
 		Kind:    domain.StepWorkItemClaimed,

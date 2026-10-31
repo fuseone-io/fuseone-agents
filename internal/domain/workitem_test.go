@@ -61,15 +61,31 @@ func TestParseWorkItemRef(t *testing.T) {
 		want string
 		ok   bool
 	}{
+		// The canonical forms the factory uses.
 		{"github issue", "github:fuseone-io/fuseone-agents#123", "github:fuseone-io/fuseone-agents#123", true},
-		{"board item id", "PVTI_lADOBx", "PVTI_lADOBx", true},
-		{"surrounding space is not part of the card", "  card-7 \n", "card-7", true},
+		{"github repo with dots and underscores", "github:a/b.c_d-e#7", "github:a/b.c_d-e#7", true},
+		{"github owner and repo fold case", "github:FuseOne-IO/Fuseone-Agents#123", "github:fuseone-io/fuseone-agents#123", true},
+		{"board item id", "ghproject:PVTI_lADOBx-9", "ghproject:PVTI_lADOBx-9", true},
+		{"surrounding space is not part of the card", "  github:a/b#1 \n", "github:a/b#1", true},
+		// Everything else is not an identifier.
 		{"empty", "", "", false},
 		{"only space", "   ", "", false},
-		{"control character inside", "card\x1f7", "", false},
-		{"newline inside", "card\n7", "", false},
-		{"too long", strings.Repeat("x", domain.MaxWorkItemRefBytes+1), "", false},
-		{"at the limit", strings.Repeat("x", domain.MaxWorkItemRefBytes), strings.Repeat("x", domain.MaxWorkItemRefBytes), true},
+		{"zero-width space inside", "github:fuseone-io/fuseone-agents#12​3", "", false},
+		{"near duplicate with an invisible character", "github:fuseone-io⁠/fuseone-agents#123", "", false},
+		{"bidi override", "github:fuseone-io/‮fuseone-agents#123", "", false},
+		{"email address", "ana.souza@example.com", "", false},
+		{"free text", "fix the login page", "", false},
+		{"bare board id without its prefix", "PVTI_lADOBx", "", false},
+		{"unknown scheme", "jira:ABC-12", "", false},
+		{"github without a number", "github:fuseone-io/fuseone-agents", "", false},
+		{"github number with letters", "github:fuseone-io/fuseone-agents#12a", "", false},
+		{"github number zero", "github:fuseone-io/fuseone-agents#0", "", false},
+		{"github owner with a dot", "github:fuse.one/agents#1", "", false},
+		{"github owner starting with a hyphen", "github:-fuse/agents#1", "", false},
+		{"github repo that is a dot path", "github:fuse/..#1", "", false},
+		{"github with a path", "github:fuse/agents/issues#1", "", false},
+		{"board id with a space", "ghproject:PVTI lADOBx", "", false},
+		{"board id too long", "ghproject:" + strings.Repeat("x", domain.MaxWorkItemRefBytes), "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

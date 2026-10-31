@@ -38,7 +38,7 @@ func schema() map[string]any {
 				"type":      "string",
 				"maxLength": domain.MaxWorkItemRefBytes,
 				"description": "The card's reference, exactly as the board names it: " +
-					"github:owner/repo#123 for an issue, or the board item id.",
+					"github:owner/repo#123 for an issue or pull request, or ghproject:<node id> for a board item. An identifier only, never a description.",
 			},
 		},
 		"required": []string{"ref"},

@@ -190,7 +190,13 @@ func TestWorkItemClaim_withNoAgentOrAMalformedRef_refused(t *testing.T) {
 		for name, st := range map[string]domain.Step{
 			"no agent":      claimStep(t, "run-a", "", card),
 			"empty ref":     claimStep(t, "run-a", "triage", ""),
-			"untrimmed ref": claimStep(t, "run-a", "triage", " card-7"),
+			"untrimmed ref": claimStep(t, "run-a", "triage", " "+card),
+			// The ledger seals only the canonical form, so a payload written
+			// around ParseWorkItemRef cannot put a second spelling, an
+			// invisible character or free text into the append-only record.
+			"uncanonical case": claimStep(t, "run-a", "triage", "github:FuseOne-IO/fuseone-agents#123"),
+			"zero-width space": claimStep(t, "run-a", "triage", card+"​"),
+			"free text":        claimStep(t, "run-a", "triage", "ana.souza@example.com"),
 		} {
 			if _, err := s.Append(context.Background(), st); !errors.Is(err, domain.ErrWorkItemInvalid) {
 				t.Errorf("%s: Append = %v, want ErrWorkItemInvalid", name, err)
@@ -221,7 +227,7 @@ func TestWorkItemCost_includesARunThatFailedBeforeAnyWrite(t *testing.T) {
 		mustAppend(t, s, other)
 
 		openRunOf(t, s, "run-c", "triage")
-		if err := claim(t, s, "run-c", "triage", "card-elsewhere"); err != nil {
+		if err := claim(t, s, "run-c", "triage", otherCard); err != nil {
 			t.Fatalf("claim: %v", err)
 		}
 		unrelated := step("run-c", domain.StepPlanned)

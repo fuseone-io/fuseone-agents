@@ -2,8 +2,8 @@ package domain
 
 import (
 	"errors"
+	"regexp"
 	"strings"
-	"unicode"
 )
 
 /*
@@ -22,28 +22,51 @@ anything on it.
 // is what the note, the role specifications and the tests name.
 const ToolWorkItemClaim ToolID = "$fuseone.work_item.claim"
 
-// MaxWorkItemRefBytes bounds a reference. A card id or an issue URL fits many
-// times over; a model pasting a whole card body into the key does not.
+// MaxWorkItemRefBytes bounds a reference. Every canonical form fits well
+// inside it; the bound is the backstop the grammar sits behind.
 const MaxWorkItemRefBytes = 512
 
-// WorkItemRef is a card reference as the role names it — an issue
-// ("github:owner/repo#123") or a board item id. The platform does not
-// interpret it beyond identity: two runs hold the same card when their
-// references are byte-equal after trimming.
+/*
+WorkItemRef is a card's identifier, in one of the canonical forms the factory
+uses — never a description of the card:
+
+  - github:<owner>/<repo>#<number> — an issue or pull request. Owner and repo
+    are limited to the characters GitHub allows and folded to lower case,
+    because GitHub treats them case-insensitively and two spellings of one
+    repository must be one card. The number is digits, never zero.
+  - ghproject:<node id> — an opaque board item id, in the node-id charset.
+
+A grammar rather than a blacklist, because the reference comes from model
+output, possibly steered by untrusted content, and lands in an append-only
+step and table for good. Free text would carry personal data there for ever,
+and invisible or bidi characters would let two references that read the same
+on a screen hold the same card twice. Anything a person should read about the
+card belongs beside the reference, never in it.
+*/
 type WorkItemRef string
 
-// ParseWorkItemRef trims a reference and refuses one that cannot be a key:
-// empty, oversized, or carrying control characters that would make two
-// renderings of one card look different on a screen and equal in the store.
+var (
+	githubWorkItem = regexp.MustCompile(
+		`^github:([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)/([A-Za-z0-9._-]{1,100})#([1-9][0-9]{0,9})$`)
+	projectWorkItem = regexp.MustCompile(`^ghproject:[A-Za-z0-9_-]{1,128}$`)
+)
+
+// ParseWorkItemRef trims a reference and returns its canonical form, or
+// refuses it when it is in none of the forms above.
 func ParseWorkItemRef(raw string) (WorkItemRef, bool) {
 	ref := strings.TrimSpace(raw)
-	if ref == "" || len(ref) > MaxWorkItemRefBytes {
+	if len(ref) > MaxWorkItemRefBytes {
 		return "", false
 	}
-	if strings.IndexFunc(ref, unicode.IsControl) >= 0 {
+	if projectWorkItem.MatchString(ref) {
+		return WorkItemRef(ref), true
+	}
+	m := githubWorkItem.FindStringSubmatch(ref)
+	if m == nil || m[2] == "." || m[2] == ".." {
 		return "", false
 	}
-	return WorkItemRef(ref), true
+	owner, repo := strings.ToLower(m[1]), strings.ToLower(m[2])
+	return WorkItemRef("github:" + owner + "/" + repo + "#" + m[3]), true
 }
 
 // Coordination reports whether a tool is an internal coordination operation:
