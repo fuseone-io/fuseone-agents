@@ -39,6 +39,10 @@ const (
 // ErrGrantNotFound means no active grant carries that id.
 var ErrGrantNotFound = errors.New("standing: no active grant with that id")
 
+// ErrStandingForbidden means the agent's current version declares
+// standing_approvals: forbidden, so no grant may be given for it (#192).
+var ErrStandingForbidden = errors.New("standing: this agent's current version forbids standing approvals")
+
 type Status string
 
 const (
@@ -91,24 +95,6 @@ func Validate(g Grant, now time.Time) error {
 		return fmt.Errorf("standing: the grant must expire in the future")
 	case g.ExpiresAt.After(now.Add(MaxTTLDays * 24 * time.Hour)):
 		return fmt.Errorf("standing: the grant cannot live past %d days; renewing is a re-decision", MaxTTLDays)
-	}
-	return nil
-}
-
-func (s *Store) Create(ctx context.Context, g Grant) error {
-	if err := Validate(g, g.CreatedAt); err != nil {
-		return err
-	}
-	if _, err := s.pool.Exec(ctx, `
-		insert into standing_approvals
-			(grant_id, tool, agent_id, company_id, area_id, daily_cap,
-			 reason, status, created_by, created_at, expires_at)
-		values ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9, $10)`,
-		g.ID, string(g.Tool), string(g.Agent),
-		string(g.Scope.Company), string(g.Scope.Area),
-		g.DailyCap, g.Reason, string(g.CreatedBy), g.CreatedAt, g.ExpiresAt,
-	); err != nil {
-		return fmt.Errorf("standing: create: %w", err)
 	}
 	return nil
 }
