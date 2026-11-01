@@ -54,6 +54,28 @@ instructions are reviewed. When the two disagree, the console has drifted.
 | `reply_locale: en-US` | everything a role writes in this repository is in English (RULEBOOK § 7) |
 | no `merge_pull_request` | a person merges in v1 |
 
+### Waking on GitHub instead of a schedule
+
+The references stay on cron in v1. The platform can also start a role when
+GitHub sends an event (#202): a webhook trigger with `from: github` verifies
+GitHub's signature, takes `X-GitHub-Delivery` as the delivery id and starts a
+run only for the events it lists. A role switched to it would declare, for
+example:
+
+```yaml
+triggers:
+  - type: webhook
+    path: factory/reviewer
+    from: github
+    events: [pull_request.opened, pull_request.synchronize, pull_request.labeled]
+```
+
+with the GitHub webhook pointing at `/hooks/factory/reviewer` and the key the
+console generates in its Secret field (manual: "GitHub webhooks"). The run's
+input is the delivery, untrusted like every issue and pull request text.
+Switching is a separate decision: until one role can wake another without a
+cycle (#203), a webhook and a role's own writes can feed each other.
+
 ### The claim line
 
 Every role's instructions contain this line, exactly, on a line of its own:
