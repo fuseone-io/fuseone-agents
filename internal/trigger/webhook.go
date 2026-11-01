@@ -32,6 +32,10 @@ type Hook struct {
 	Armed   bool
 	Rotated time.Time
 	By      domain.UserID
+	// From and Events are the published source and the deliveries that start
+	// a run; see domain.WebhookTrigger.
+	From   string
+	Events []string
 }
 
 // Webhooks is where paths and their secrets are kept.
@@ -39,11 +43,15 @@ type Webhooks interface {
 	// Find returns the hook at a path, or ErrNoHook.
 	Find(ctx context.Context, path string) (Hook, error)
 	// Verify reports whether the secret matches the one stored for the path.
+	// A GitHub hook's secret is never accepted this way: it signs, it is not
+	// sent.
 	Verify(ctx context.Context, path, secret string) (bool, error)
+	// SigningSecret opens a GitHub hook's secret, to check a signature with.
+	SigningSecret(ctx context.Context, path string) ([]byte, error)
 	// Rotate replaces the secret and returns the new one, once.
 	Rotate(ctx context.Context, path string, by domain.UserID, at time.Time) (string, error)
-	// Sync reconciles an agent's declared paths.
-	Sync(ctx context.Context, agent domain.AgentID, scope domain.Scope, paths []string) error
+	// Sync reconciles an agent's declared webhooks.
+	Sync(ctx context.Context, agent domain.AgentID, scope domain.Scope, hooks []domain.WebhookTrigger) error
 	// ForAgent lists what an agent declares, for the console.
 	ForAgent(ctx context.Context, agent domain.AgentID) ([]Hook, error)
 }
@@ -53,6 +61,15 @@ var ErrNoHook = errors.New("trigger: no webhook at that path")
 
 // ErrNotArmed means the path exists but nobody has generated its secret.
 var ErrNotArmed = errors.New("trigger: the webhook has no secret yet")
+
+// ErrNoVault means a GitHub hook's secret cannot be kept: it has to be read
+// back to check signatures, and without the master key it could only be
+// stored in the clear.
+var ErrNoVault = errors.New("trigger: a GitHub webhook's secret needs the master key to be stored")
+
+// ErrNotGitHub means the path is an ordinary hook, which keeps no signing
+// secret.
+var ErrNotGitHub = errors.New("trigger: the webhook does not come from GitHub")
 
 // ErrPathTaken means another agent already answers on that path.
 //

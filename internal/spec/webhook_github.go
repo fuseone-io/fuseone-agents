@@ -87,12 +87,3 @@ func githubEventProblems(events []string) []string {
 	}
 	return problems
 }
-
-// WebhookPaths is every path this version declares, without its leading slash.
-func WebhookPaths(s Spec) []string {
-	out := []string{}
-	for _, w := range Webhooks(s) {
-		out = append(out, w.Path)
-	}
-	return out
-}

@@ -20,30 +20,43 @@ type spyHooks struct {
 	path  string
 	agent domain.AgentID
 	armed bool
+	// from makes the path a GitHub hook; with noVault its rotation is refused
+	// the way the store refuses it without a master key.
+	from    string
+	noVault bool
 }
 
 func (s *spyHooks) Find(_ context.Context, path string) (trigger.Hook, error) {
 	if path != s.path {
 		return trigger.Hook{}, trigger.ErrNoHook
 	}
-	return trigger.Hook{Path: s.path, Agent: s.agent, Armed: s.armed}, nil
+	return trigger.Hook{Path: s.path, Agent: s.agent, Armed: s.armed, From: s.from}, nil
 }
 
 func (s *spyHooks) Verify(context.Context, string, string) (bool, error) { return false, nil }
 
+func (s *spyHooks) SigningSecret(context.Context, string) ([]byte, error) {
+	return nil, trigger.ErrNotGitHub
+}
+
 func (s *spyHooks) Rotate(_ context.Context, path string, _ domain.UserID, _ time.Time) (string, error) {
 	if path != s.path {
 		return "", trigger.ErrNoHook
+	}
+	if s.from == domain.WebhookFromGitHub && s.noVault {
+		return "", trigger.ErrNoVault
 	}
 	s.armed = true
 	secret, _, err := trigger.NewSecret()
 	return secret, err
 }
 
-func (s *spyHooks) Sync(context.Context, domain.AgentID, domain.Scope, []string) error { return nil }
+func (s *spyHooks) Sync(context.Context, domain.AgentID, domain.Scope, []domain.WebhookTrigger) error {
+	return nil
+}
 
 func (s *spyHooks) ForAgent(context.Context, domain.AgentID) ([]trigger.Hook, error) {
-	return []trigger.Hook{{Path: s.path, Agent: s.agent, Armed: s.armed}}, nil
+	return []trigger.Hook{{Path: s.path, Agent: s.agent, Armed: s.armed, From: s.from}}, nil
 }
 
 func webhookServer(t *testing.T) *Server {

@@ -74,7 +74,7 @@ func syncWebhooks(ctx context.Context, pool *pgxpool.Pool, specDir *string) erro
 			return fmt.Errorf("sync webhooks: %w", err)
 		}
 		scope := domain.Scope{Area: domain.AreaID(published.Area)}
-		if err := hooks.Sync(ctx, agent, scope, spec.WebhookPaths(published)); err != nil {
+		if err := hooks.Sync(ctx, agent, scope, spec.Webhooks(published)); err != nil {
 			// A path two agents both declare is a configuration error, and one
 			// of them keeps it. Loud but not fatal: refusing to start would
 			// take the whole installation down over one file, and the path

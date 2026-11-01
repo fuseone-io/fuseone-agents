@@ -24,7 +24,7 @@ var cx = domain.Scope{Company: "acme", Area: "cx"}
 func TestWebhook_declaredButNeverRotated_isClosed(t *testing.T) {
 	hooks := webhooksFor(t)
 
-	if err := hooks.Sync(t.Context(), "triage", cx, []string{"crm/ticket"}); err != nil {
+	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
 
@@ -44,7 +44,7 @@ func TestWebhook_declaredButNeverRotated_isClosed(t *testing.T) {
 
 func TestWebhook_afterRotating_acceptsOnlyThatSecret(t *testing.T) {
 	hooks := webhooksFor(t)
-	if err := hooks.Sync(t.Context(), "triage", cx, []string{"crm/ticket"}); err != nil {
+	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
 
@@ -64,7 +64,7 @@ func TestWebhook_afterRotating_acceptsOnlyThatSecret(t *testing.T) {
 
 func TestWebhook_rotating_retiresThePreviousSecret(t *testing.T) {
 	hooks := webhooksFor(t)
-	if err := hooks.Sync(t.Context(), "triage", cx, []string{"crm/ticket"}); err != nil {
+	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
 
@@ -83,14 +83,14 @@ func TestWebhook_rotating_retiresThePreviousSecret(t *testing.T) {
 
 func TestWebhook_republishing_keepsTheSecret(t *testing.T) {
 	hooks := webhooksFor(t)
-	if err := hooks.Sync(t.Context(), "triage", cx, []string{"crm/ticket"}); err != nil {
+	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
 	secret, _ := hooks.Rotate(t.Context(), "crm/ticket", "usr_ana", time.Now())
 
 	// Publishing a new version must not break every sender configured against
 	// this path. Editing a prompt is not a security event.
-	if err := hooks.Sync(t.Context(), "triage", cx, []string{"crm/ticket"}); err != nil {
+	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
 		t.Fatalf("Sync again: %v", err)
 	}
 	if ok, _ := hooks.Verify(t.Context(), "crm/ticket", secret); !ok {
@@ -100,7 +100,7 @@ func TestWebhook_republishing_keepsTheSecret(t *testing.T) {
 
 func TestWebhook_pathNoLongerDeclared_stopsAnswering(t *testing.T) {
 	hooks := webhooksFor(t)
-	if err := hooks.Sync(t.Context(), "triage", cx, []string{"crm/ticket"}); err != nil {
+	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
 	if _, err := hooks.Rotate(t.Context(), "crm/ticket", "usr_ana", time.Now()); err != nil {
@@ -126,7 +126,7 @@ func TestRotate_pathNobodyDeclared_isRefused(t *testing.T) {
 func TestSync_pathAnotherAgentAlreadyOwns_isRefusedRatherThanTransferred(t *testing.T) {
 	hooks := webhooksFor(t)
 
-	if err := hooks.Sync(t.Context(), "triage", cx, []string{"crm/ticket"}); err != nil {
+	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
 	secret, err := hooks.Rotate(t.Context(), "crm/ticket", "usr_ana", time.Now())
@@ -138,7 +138,7 @@ func TestSync_pathAnotherAgentAlreadyOwns_isRefusedRatherThanTransferred(t *test
 	// existing secret to a different agent — the ERP configured to file
 	// tickets would start triggering whatever this one does, using the key it
 	// already has.
-	err = hooks.Sync(t.Context(), "billing", cx, []string{"crm/ticket"})
+	err = hooks.Sync(t.Context(), "billing", cx, ordinary("crm/ticket"))
 	if err == nil {
 		t.Fatal("a second agent took a path that was already owned")
 	}
@@ -161,11 +161,11 @@ func TestSync_pathAnotherAgentAlreadyOwns_isRefusedRatherThanTransferred(t *test
 func TestSync_agentKeepingItsOwnPath_isNotAConflict(t *testing.T) {
 	hooks := webhooksFor(t)
 
-	if err := hooks.Sync(t.Context(), "triage", cx, []string{"crm/ticket"}); err != nil {
+	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
 	// Republishing must not look like a collision with itself.
-	if err := hooks.Sync(t.Context(), "triage", cx, []string{"crm/ticket"}); err != nil {
+	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
 		t.Fatalf("Sync again: %v", err)
 	}
 }

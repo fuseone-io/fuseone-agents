@@ -152,7 +152,7 @@ func (s *Server) PublishAgent(
 		}
 	}
 	if s.webhooks != nil {
-		if err := s.webhooks.Sync(ctx, published.ID, scope, spec.WebhookPaths(published)); err != nil {
+		if err := s.webhooks.Sync(ctx, published.ID, scope, spec.Webhooks(published)); err != nil {
 			return nil, fmt.Errorf("reconcile the webhooks of %s: %w", published.ID, err)
 		}
 	}

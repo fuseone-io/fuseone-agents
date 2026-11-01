@@ -23,9 +23,16 @@ import (
 type fakeHooks struct {
 	armed  map[string]string
 	agents map[string]domain.AgentID
+	// signing and events make a path a GitHub hook, as the real store does:
+	// its secret signs, so Verify never accepts it.
+	signing map[string]string
+	events  map[string][]string
 }
 
 func (f *fakeHooks) Verify(_ context.Context, path, secret string) (bool, error) {
+	if _, github := f.signing[path]; github {
+		return false, nil
+	}
 	want, declared := f.armed[path]
 	if !declared {
 		return false, trigger.ErrNoHook
@@ -36,10 +43,28 @@ func (f *fakeHooks) Verify(_ context.Context, path, secret string) (bool, error)
 	return want == secret, nil
 }
 
+func (f *fakeHooks) SigningSecret(_ context.Context, path string) ([]byte, error) {
+	secret, github := f.signing[path]
+	switch {
+	case !github:
+		if _, declared := f.agents[path]; declared {
+			return nil, trigger.ErrNotGitHub
+		}
+		return nil, trigger.ErrNoHook
+	case secret == "":
+		return nil, trigger.ErrNotArmed
+	}
+	return []byte(secret), nil
+}
+
 func (f *fakeHooks) Find(_ context.Context, path string) (trigger.Hook, error) {
 	agent, ok := f.agents[path]
 	if !ok {
 		return trigger.Hook{}, trigger.ErrNoHook
+	}
+	if secret, github := f.signing[path]; github {
+		return trigger.Hook{Path: path, Agent: agent, Armed: secret != "",
+			From: domain.WebhookFromGitHub, Events: f.events[path]}, nil
 	}
 	return trigger.Hook{Path: path, Agent: agent, Armed: f.armed[path] != ""}, nil
 }
@@ -47,7 +72,9 @@ func (f *fakeHooks) Find(_ context.Context, path string) (trigger.Hook, error) {
 func (f *fakeHooks) Rotate(context.Context, string, domain.UserID, time.Time) (string, error) {
 	return "", nil
 }
-func (f *fakeHooks) Sync(context.Context, domain.AgentID, domain.Scope, []string) error { return nil }
+func (f *fakeHooks) Sync(context.Context, domain.AgentID, domain.Scope, []domain.WebhookTrigger) error {
+	return nil
+}
 func (f *fakeHooks) ForAgent(context.Context, domain.AgentID) ([]trigger.Hook, error) {
 	return nil, nil
 }

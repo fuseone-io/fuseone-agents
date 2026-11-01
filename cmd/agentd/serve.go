@@ -90,6 +90,9 @@ func serve(args []string) error {
 	// mounted with the routes rather than with the administration area.
 	var channels *admin.Channels
 	var settingsStore *settings.Store
+	// The master key, when set: GitHub webhooks seal their secret with it, and
+	// the hook route mounted below opens it again.
+	var masterVault *vault.Vault
 	if identity != nil {
 		// The administration area needs a database: it is where rulings and
 		// their trail live. An installation on the in-memory ledger serves
@@ -116,6 +119,7 @@ func serve(args []string) error {
 		// The ledger, held under its own name: `store` below is the settings
 		// store and shadows it, and the battery gate needs the ledger.
 		runs := store
+		masterVault = v
 		settingsStore = settings.NewStore(identity.pool, v)
 		store := settingsStore
 		// Forgetting health on removal, because this is the process that serves
@@ -183,7 +187,7 @@ func serve(args []string) error {
 				admin.NewErasures(identity.pool, ledger.NewContent(identity.pool),
 					admin.NewRetention(identity.pool, store)),
 			).
-			WithWebhooks(trigger.NewPostgresWebhooks(identity.pool)).
+			WithWebhooks(webhooksWith(identity.pool, masterVault)).
 			// Where a published cron trigger becomes a moment the worker
 			// reaches. Reconciled from files at start-up as well, which is
 			// the path an installation keeping its agents in git takes.
@@ -295,7 +299,7 @@ func serve(args []string) error {
 		// authenticated by a secret an operator generated, and a path with no
 		// secret answers exactly like a path that does not exist.
 		httpapi.NewHooks(
-			trigger.NewPostgresWebhooks(identity.pool),
+			webhooksWith(identity.pool, masterVault),
 			trigger.NewOpener(store, spec.NewRegistry(identity.pool), engine.SystemClock{}).
 				WithContent(ledger.NewContent(identity.pool)).
 				WithPauses(spec.NewState(identity.pool)).

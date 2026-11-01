@@ -74,6 +74,39 @@ func TestRender_anOrdinaryWebhook_writesNoSourceAndNoEvents(t *testing.T) {
 }
 
 /*
+Published and read back, a GitHub webhook keeps its source and events on both
+of the registry's readers: Get, which the worker and the door's sync read, and
+Versions, which the console's form is filled from. Either one dropping them
+turns the hook ordinary at the next sync or the next save.
+*/
+func TestRegistry_aGitHubWebhook_readsBackWithItsSourceAndEvents(t *testing.T) {
+	r := openRegistry(t)
+	ctx := t.Context()
+	s := published(t, strings.Replace(definition,
+		`  - { type: cron, schedule: "*/15 * * * *" }`,
+		`  - { type: webhook, path: gh/triage, from: github, events: [issues.labeled] }`, 1))
+	if err := r.Publish(ctx, s, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	got, err := r.Get(ctx, "triage", s.Version)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !reflect.DeepEqual(got.Triggers, s.Triggers) {
+		t.Errorf("Get triggers = %+v, want %+v", got.Triggers, s.Triggers)
+	}
+	versions, err := r.Versions(ctx, "triage")
+	if err != nil || len(versions) == 0 {
+		t.Fatalf("Versions = %v (%v)", versions, err)
+	}
+	if tr := versions[0].Triggers; len(tr) != 1 || tr[0].From != domain.WebhookFromGitHub ||
+		!reflect.DeepEqual(tr[0].Events, []string{"issues.labeled"}) {
+		t.Errorf("Versions triggers = %+v, want the source and events", tr)
+	}
+}
+
+/*
 What the door could not act on is refused at parse.
 
 Each of these publishes cleanly if let through and then fires nothing, or fires
