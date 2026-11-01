@@ -1,3 +1,5 @@
+-- fuseone:no-transaction
+--
 -- The event feed's index holds only what the feed can ever offer (#228).
 --
 -- 0092 indexed every run with a finished_xid. Simulations get one too — the
@@ -12,19 +14,30 @@
 -- feed page (FinishedSince) and the backlog reading are covered by it, and
 -- the limit counts real finished runs and nothing else.
 --
--- Not concurrently: migrations run in one transaction with their record in
--- schema_migrations, and create index concurrently refuses a transaction.
--- The build scans runs once under a share lock that holds writes to runs
--- for its duration; the index itself holds only real finished runs since
--- 0092, so it is small.
+-- Built concurrently, outside a transaction (the marker on the first line):
+-- this runs while the previous release keeps appending runs, and a plain
+-- create index would hold every write to runs for the length of a scan of
+-- the whole table. Concurrently, writes carry on. The runner records the file
+-- only after both statements succeed, so each is idempotent: a crash after
+-- the build and before the record runs the file again harmlessly.
 --
--- The 0092 index goes: nothing reads finished_xid but these two statements,
--- and a binary rolled back to 0.86 sends the same predicate, which this index
--- covers. Keeping both would only double the writes on every finish.
+-- The 0092 index stays. It goes in a later migration, once nothing can roll
+-- back to 0.86 — whose feed ordered by the text form of the position, so it
+-- could use neither index for its order and would not miss either.
 --
 -- Numbered 0094 because #231 takes 0093. The runner applies whatever is
 -- unapplied in filename order, so either may reach an installation first.
-create index runs_feed_idx on runs (finished_xid, run_id)
-    where finished_xid is not null and phase = 'finished' and not simulated;
 
-drop index runs_finished_xid_idx;
+-- A concurrent build that died leaves an INVALID index under this name, which
+-- "if not exists" would accept as built. Drop it, concurrently, so the next
+-- statement builds it again. The select generates the drop only when needed.
+select format('drop index concurrently %I.%I', n.nspname, c.relname)
+  from pg_index i
+  join pg_class c on c.oid = i.indexrelid
+  join pg_namespace n on n.oid = c.relnamespace
+ where c.relname = 'runs_feed_idx'
+   and n.nspname = current_schema()
+   and not i.indisvalid;
+
+create index concurrently if not exists runs_feed_idx on runs (finished_xid, run_id)
+    where finished_xid is not null and phase = 'finished' and not simulated;
