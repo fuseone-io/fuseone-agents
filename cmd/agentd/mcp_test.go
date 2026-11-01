@@ -1445,10 +1445,14 @@ func (r recordingHealth) RecordToolCall(_ context.Context, _ domain.IntegrationT
 
 type recordingPublisher struct {
 	entries []domain.ToolEntry
+	last    domain.ToolPublication
+	calls   int
 }
 
-func (r *recordingPublisher) Publish(_ context.Context, entries []domain.ToolEntry) error {
-	r.entries = append([]domain.ToolEntry(nil), entries...)
+func (r *recordingPublisher) Publish(_ context.Context, pub domain.ToolPublication) error {
+	r.entries = append([]domain.ToolEntry(nil), pub.Entries...)
+	r.last = pub
+	r.calls++
 	return nil
 }
 

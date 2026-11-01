@@ -52,12 +52,16 @@ The decision carries the digest of the definition that was judged. If the
 server changes a tool's schema or description, the old decision becomes stale
 and the Gate refuses until a fresh review.
 
-The catalogue only grows. Discovery records the tools it finds and never
-removes one it no longer sees, and deleting a server leaves its tools listed
-(#219). After narrowing what a server offers — a smaller toolset, a different
-account — check its discovered tools before trusting a publish: the publish
-check accepts a tool the catalogue still remembers even if the server stopped
-offering it.
+The catalogue follows what the servers offer. Each successful discovery is
+the whole answer for its server: a tool the server no longer lists leaves the
+catalogue, and the publish check stops accepting it. Deleting or switching
+off a server removes its tools too. A decision is kept when its tool leaves,
+so a tool that comes back with the same definition needs no fresh review.
+
+A server that cannot be reached keeps the tools its last successful discovery
+recorded: unreachable is not evidence it stopped offering them. After
+narrowing what a server offers — a smaller toolset, a different account —
+check that it shows as reachable before trusting a publish.
 
 ## Installation credential
 

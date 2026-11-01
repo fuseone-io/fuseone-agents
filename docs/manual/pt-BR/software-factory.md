@@ -162,8 +162,10 @@ Uma mudança num papel é feita primeiro na referência, revisada por pull
 request, e depois copiada para o console. Quando o console e a referência
 discordam, foi o console que se desviou.
 
-Depois de mudar os toolsets de um registro, confira as ferramentas descobertas
-do servidor antes de confiar numa publicação. O catálogo de ferramentas só
-cresce: uma ferramenta que o servidor deixou de oferecer continua na lista, e
-a checagem da publicação ainda a aceita, então o papel falharia na primeira
-chamada (#219).
+Depois de mudar os toolsets de um registro, confira se o servidor aparece como
+alcançável antes de confiar numa publicação. A próxima descoberta substitui as
+ferramentas dele: uma ferramenta que os toolsets novos não oferecem sai do
+catálogo, e a checagem da publicação recusa um papel que ainda a cita. Um
+servidor que não pode ser alcançado mantém as ferramentas da última descoberta
+bem-sucedida, então, até ser alcançado de novo, o catálogo ainda mostra o
+conjunto antigo.

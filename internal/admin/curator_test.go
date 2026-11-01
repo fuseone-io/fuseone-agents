@@ -213,9 +213,9 @@ func TestTools_carryTheUndoTheCuratorDeclared(t *testing.T) {
 	ctx := context.Background()
 	curator := admin.NewCurator(pool)
 
-	if err := curator.Publish(ctx, []domain.ToolEntry{
+	if err := curator.Publish(ctx, standalone([]domain.ToolEntry{
 		{ID: "crm.note", Server: "crm", Description: "escreve nota"},
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if err := curator.Classify(ctx, platform, domain.ToolClassification{
@@ -271,9 +271,9 @@ func TestTools_withNoRuling_readAsUnclassifiedRatherThanRead(t *testing.T) {
 	ctx := context.Background()
 	curator := admin.NewCurator(pool)
 
-	if err := curator.Publish(ctx, []domain.ToolEntry{
+	if err := curator.Publish(ctx, standalone([]domain.ToolEntry{
 		{ID: "github.delete_repository", Server: "github", Description: "remove um repositório"},
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 
@@ -301,10 +301,10 @@ func TestTools_aRulingOvertakenByANewDefinition_readsAsUnclassified(t *testing.T
 	ctx := context.Background()
 
 	// Discovered, judged, and then the server changes what the tool is.
-	if err := curator.Publish(ctx, []domain.ToolEntry{{
+	if err := curator.Publish(ctx, standalone([]domain.ToolEntry{{
 		ID: "crm.lookup", Server: "crm", Description: "Look a customer up",
 		Digest: "sha-of-the-old-one",
-	}}); err != nil {
+	}})); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if err := curator.Classify(ctx, domain.Scope{}, domain.ToolClassification{
@@ -313,10 +313,10 @@ func TestTools_aRulingOvertakenByANewDefinition_readsAsUnclassified(t *testing.T
 	}); err != nil {
 		t.Fatalf("Classify: %v", err)
 	}
-	if err := curator.Publish(ctx, []domain.ToolEntry{{
+	if err := curator.Publish(ctx, standalone([]domain.ToolEntry{{
 		ID: "crm.lookup", Server: "crm", Description: "Look up and close the account",
 		Digest: "sha-of-the-new-one",
-	}}); err != nil {
+	}})); err != nil {
 		t.Fatalf("Publish again: %v", err)
 	}
 
@@ -338,9 +338,9 @@ func TestTools_aRulingOnThePublishedDefinition_stillApplies(t *testing.T) {
 	curator := freshCurator(t)
 	ctx := context.Background()
 
-	if err := curator.Publish(ctx, []domain.ToolEntry{{
+	if err := curator.Publish(ctx, standalone([]domain.ToolEntry{{
 		ID: "crm.lookup", Server: "crm", Digest: "sha-1",
-	}}); err != nil {
+	}})); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if err := curator.Classify(ctx, domain.Scope{}, domain.ToolClassification{
@@ -366,9 +366,9 @@ func TestTools_aRulingFromBeforeDigestsExisted_stillApplies(t *testing.T) {
 	curator := freshCurator(t)
 	ctx := context.Background()
 
-	if err := curator.Publish(ctx, []domain.ToolEntry{{
+	if err := curator.Publish(ctx, standalone([]domain.ToolEntry{{
 		ID: "crm.lookup", Server: "crm", Digest: "sha-1",
-	}}); err != nil {
+	}})); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if err := curator.Classify(ctx, domain.Scope{}, domain.ToolClassification{
@@ -409,10 +409,10 @@ func TestTools_carryWhetherTheInstallationBroughtThemIn(t *testing.T) {
 	curator := freshCurator(t)
 	ctx := context.Background()
 
-	if err := curator.Publish(ctx, []domain.ToolEntry{
+	if err := curator.Publish(ctx, standalone([]domain.ToolEntry{
 		{ID: "crm.lookup", Server: "crm", OnSurface: true},
 		{ID: "crm.delete_account", Server: "crm", OnSurface: false},
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 

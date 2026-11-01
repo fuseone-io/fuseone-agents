@@ -250,8 +250,25 @@ func (i *Integrations) PutMCPServer(
 		"nobody chose" reopens every tool, and a credential restored is one
 		somebody believes they revoked.
 	*/
+	var toolsRemoved int64
 	return writeFolded(ctx, i.pool, i.settings, folded{
 		by: by, scope: scope, action: "mcp_server.configured", target: server.Name,
+		// Switched off, its tools go in the same transaction, as on removal:
+		// the worker that published them may be gone, and one that never
+		// reached the server has nothing to withdraw.
+		//
+		// Lock order, the same as DeleteMCPServer: the catalogue's lock first,
+		// then the server's row (read under lock by the fold). Publish takes
+		// the catalogue's lock and never a server row's, so no two of the
+		// three can each hold what the other waits for.
+		guard: func(ctx context.Context, tx settings.DB) error {
+			if server.Enabled {
+				return nil
+			}
+			var err error
+			toolsRemoved, err = dropServerTools(ctx, tx, server.Name)
+			return err
+		},
 		set: settings.Setting{
 			ScopeKind: settings.ScopeInstallation,
 			Kind:      settings.KindMCPServer, Name: server.Name,
@@ -361,6 +378,7 @@ func (i *Integrations) PutMCPServer(
 					"rateLimit":             rateLimitDetail(rateLimit),
 					"cache":                 resultCacheDetail(cache),
 					"stdioEgress":           stdioEgressDetail(stdioEgress),
+					"toolsRemoved":          toolsRemoved,
 				}, nil
 		},
 	})
@@ -958,6 +976,12 @@ func (i *Integrations) DeleteMCPServer(ctx context.Context, by domain.UserID, sc
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Its tools go with it, in the same transaction: a worker may not be
+	// running to notice, and the console would go on offering them.
+	tools, err := dropServerTools(ctx, tx, name)
+	if err != nil {
+		return err
+	}
 	if err := i.settings.DeleteTx(ctx, tx,
 		settings.ScopeInstallation, domain.Scope{},
 		settings.KindMCPServer, name); err != nil {
@@ -974,6 +998,7 @@ func (i *Integrations) DeleteMCPServer(ctx context.Context, by domain.UserID, sc
 	}
 	detail, err := json.Marshal(map[string]any{
 		"personalCredentialsRemoved": tag.RowsAffected(),
+		"toolsRemoved":               tools,
 	})
 	if err != nil {
 		return fmt.Errorf("admin: encode MCP server removal: %w", err)

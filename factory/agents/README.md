@@ -135,14 +135,15 @@ because it names tools the installation's catalogue does not have. The hosted
 server silently ignores an unknown set name, so a typo on a new registration
 shows up the same way: as a publish refusal that names the missing tools.
 
-That check only covers a catalogue that never had the tools. The catalogue
-only grows: a discovery records what it finds and never removes a tool it no
-longer sees (`Curator.Publish` in `internal/admin/curator.go` upserts). A
-registration that discovered `projects_*` once and later loses the toolset
-(the header removed, or a typo edited in) keeps the old entries, so the
-publish passes, and the role fails at its first call to a tool the server no
-longer offers. After changing a role's `X-MCP-Toolsets`, check its discovered
-tools in the console before trusting a publish.
+The same holds after a change. Each successful discovery is the whole answer
+for its server (`Curator.Publish` in `internal/admin/tool_catalogue.go`), so
+a registration that later loses `projects` — the header removed, or a typo
+edited in — loses the `projects_*` tools from the catalogue at its next
+discovery, and the publish is refused again. Their rulings are kept: the
+toolset restored brings them back classified. A server that cannot be
+reached keeps the tools of its last successful discovery, so after changing a
+role's `X-MCP-Toolsets` check that the server shows as reachable before
+trusting a publish.
 
 Beside a GitHub App the registration accepts only the hosted server's
 documented configuration headers (`X-MCP-Toolsets`, `X-MCP-Tools`,

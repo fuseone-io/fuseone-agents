@@ -52,12 +52,18 @@ A decisão carrega o digest da definição julgada. Se o servidor mudar schema o
 descrição da ferramenta, a decisão antiga fica stale e o Gate recusa até nova
 revisão.
 
-O catálogo só cresce. A descoberta registra as ferramentas que encontra e
-nunca remove uma que deixou de ver, e apagar um servidor deixa as ferramentas
-dele na lista (#219). Depois de estreitar o que um servidor oferece — um
-toolset menor, outra conta —, confira as ferramentas descobertas antes de
-confiar numa publicação: a checagem da publicação aceita uma ferramenta que o
-catálogo ainda lembra, mesmo que o servidor tenha deixado de oferecê-la.
+O catálogo acompanha o que os servidores oferecem. Cada descoberta bem-sucedida
+é a resposta completa sobre o seu servidor: uma ferramenta que o servidor
+deixou de listar sai do catálogo, e a checagem da publicação deixa de aceitá-la.
+Apagar ou desligar um servidor também remove as ferramentas dele. A decisão é
+mantida quando a ferramenta sai, então uma ferramenta que volta com a mesma
+definição não precisa de nova revisão.
+
+Um servidor que não pode ser alcançado mantém as ferramentas que a última
+descoberta bem-sucedida registrou: estar inalcançável não prova que ele deixou
+de oferecê-las. Depois de estreitar o que um servidor oferece — um toolset
+menor, outra conta —, confira se ele aparece como alcançável antes de confiar
+numa publicação.
 
 ## Credencial da instalação
 

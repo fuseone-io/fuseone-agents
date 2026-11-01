@@ -244,7 +244,11 @@ type modelToolSchemas interface {
 func (c *Catalog) Entries() []domain.ToolEntry {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	return c.entriesLocked()
+}
 
+// entriesLocked is Entries for a caller already holding the lock.
+func (c *Catalog) entriesLocked() []domain.ToolEntry {
 	out := make([]domain.ToolEntry, 0, len(c.entries))
 	for _, e := range c.entries {
 		out = append(out, domain.ToolEntry{

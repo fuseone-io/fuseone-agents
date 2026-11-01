@@ -156,7 +156,9 @@ A change to a role is made in the reference first, reviewed by pull request,
 and then copied into the console. When the console and the reference
 disagree, the console has drifted.
 
-After changing a registration's toolsets, check the server's discovered tools
-before trusting a publish. The tool catalogue only grows: a tool the server
-stopped offering stays listed, and the publish check still accepts it, so the
-role would fail at its first call instead (#219).
+After changing a registration's toolsets, check that the server shows as
+reachable before trusting a publish. Its next discovery replaces its tools: a
+tool the new toolsets no longer offer leaves the catalogue, and the publish
+check refuses a role that still names it. A server that cannot be reached
+keeps the tools of its last successful discovery, so until it is reached
+again the catalogue still shows the old set.
