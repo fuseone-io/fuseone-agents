@@ -97,6 +97,19 @@ repository. The App’s identity is what signs a role’s comments and reviews.<
 <li><strong>Copilot everywhere, and a person merges.</strong> Every role runs at copilot with
 <code dir="auto">standing_approvals: forbidden</code>, and once it has chosen a card from the board
 its first act is the work-item claim, before it reads the issue or writes.
+Choosing from the board shows Triage the cards’ titles — the board listing
+always returns them — so a title is untrusted text a role reads before its
+claim (#220). It is not the only text within reach: <code dir="auto">projects_list</code> and
+<code dir="auto">projects_get</code> also serve the board’s status updates, free text, and the
+Gate classifies a tool, not its method; Triage is told to list with
+<code dir="auto">list_project_items</code> only, which the pilot accepts within the claim’s
+bounded blast radius. Triage is told to use a title only to tell cards
+apart, but a title can still sway the choice, and the claim is the one
+write that follows unapproved (it is a Gate coordination exemption). A
+wrong claim only holds that card for this role while the run is open,
+releases when the run ends and puts the run’s cost on that card; it writes
+nothing to GitHub, and every GitHub write after it waits for a person. An
+atomic pick-and-claim tool that would hide the title is deferred.
 The Reviewer’s and QA’s verdicts are both pull-request reviews on the head
 SHA they read (APPROVE or REQUEST_CHANGES), under their own Apps. A person
 merges once both approve the current head and its checks are green. Cards
@@ -294,11 +307,15 @@ items); the classification takes the most dangerous action the tool can
 perform.</p>
 <p><strong>4. Taint.</strong> This repository is public: anyone can write an issue or a
 comment, so their text is untrusted, and a run that read it is tainted for the
-rest of the run. A tainted run needs a person for every write and can never
+rest of the run. A tainted run needs a person for every write — except the
+work-item claim, a coordination operation the Gate lets through (§ v1) — and
+can never
 perform a destructive action — approval does not release that block. Two
 consequences shape the design:</p>
 <ul>
-<li>Every write in the pilot is approved by a person. That is the measurement:
+<li>Every GitHub write in the pilot is approved by a person; the claim, which
+writes only the platform’s record of who holds a card, is not. That is the
+measurement:
 how many proposals were right, how many were edited, how many refused.</li>
 <li><strong>The Merger must not read free text.</strong> If it read a comment, it could not
 merge.</li>

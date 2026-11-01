@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-vdxcvpsm"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Fábrica de software | FuseOne Agents</title><link rel="canonical" href="https://fuseone-io.github.io/fuseone-agents/docs/manual/pt-br/software-factory/"/><link rel="sitemap" href="/fuseone-agents/docs/sitemap-index.xml"/><link rel="icon" type="image/svg+xml" href="/fuseone-agents/docs/favicon.svg"/><link rel="shortcut icon" href="/fuseone-agents/docs/favicon.svg" type="image/svg+xml"/><meta name="generator" content="Astro v7.4.2"/><meta name="generator" content="Starlight v0.41.11"/><meta property="og:title" content="Fábrica de software"/><meta property="og:type" content="article"/><meta property="og:url" content="https://fuseone-io.github.io/fuseone-agents/docs/manual/pt-br/software-factory/"/><meta property="og:locale" content="en"/><meta property="og:description" content="Rode papéis de agentes que fazem a triagem de issues e revisam pull requests num repositório do GitHub, cada um com o seu GitHub App e toda escrita aprovada por uma pessoa."/><meta property="og:site_name" content="FuseOne Agents"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="Rode papéis de agentes que fazem a triagem de issues e revisam pull requests num repositório do GitHub, cada um com o seu GitHub App e toda escrita aprovada por uma pessoa."/><script>
+<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-vdxcvpsm"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Fábrica de software | FuseOne Agents</title><link rel="canonical" href="https://fuseone-io.github.io/fuseone-agents/docs/manual/pt-br/software-factory/"/><link rel="sitemap" href="/fuseone-agents/docs/sitemap-index.xml"/><link rel="icon" type="image/svg+xml" href="/fuseone-agents/docs/favicon.svg"/><link rel="shortcut icon" href="/fuseone-agents/docs/favicon.svg" type="image/svg+xml"/><meta name="generator" content="Astro v7.4.2"/><meta name="generator" content="Starlight v0.41.11"/><meta property="og:title" content="Fábrica de software"/><meta property="og:type" content="article"/><meta property="og:url" content="https://fuseone-io.github.io/fuseone-agents/docs/manual/pt-br/software-factory/"/><meta property="og:locale" content="en"/><meta property="og:description" content="Rode papéis de agentes que fazem a triagem de issues e revisam pull requests num repositório do GitHub, cada um com o seu GitHub App e toda escrita no GitHub aprovada por uma pessoa."/><meta property="og:site_name" content="FuseOne Agents"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="Rode papéis de agentes que fazem a triagem de issues e revisam pull requests num repositório do GitHub, cada um com o seu GitHub App e toda escrita no GitHub aprovada por uma pessoa."/><script>
 	window.StarlightThemeProvider = (() => {
 		const storedTheme =
 			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
@@ -91,8 +91,10 @@ registro do servidor do GitHub, autenticado como o seu próprio App. As
 permissões do App são o primeiro limite, e o nome dele é o que assina os
 comentários e revisões do papel.</li>
 <li><strong>Todos os papéis em copiloto</strong>, com aprovações permanentes proibidas. Toda
-escrita que um papel propõe — comentário, rótulo, revisão, card movido —
-espera uma pessoa. Veja <a href="../autonomy-stages/">Rascunho, copiloto e autônomo</a>.</li>
+escrita no GitHub que um papel propõe — comentário, rótulo, revisão, card
+movido — espera uma pessoa. O claim do card, descrito abaixo, é a única
+escrita que não espera. Veja
+<a href="../autonomy-stages/">Rascunho, copiloto e autônomo</a>.</li>
 <li><strong>Uma pessoa faz o merge.</strong> Nenhum papel faz merge.</li>
 <li><strong>O board guia o trabalho</strong>, com cinco colunas: Triagem, Preparado, Doing,
 Travado e Done. Dentro de Doing, rótulos marcam em que ponto o pull request
@@ -102,11 +104,29 @@ Travado.</li>
 <li><strong>Um card por run.</strong> Um papel acorda no seu horário, escolhe um card, faz o
 claim dele com <code dir="auto">$fuseone.work_item.claim</code> e trabalha só nesse card. O claim
 fica registrado na trilha do run, e nenhum outro run do mesmo papel pode
-pegar um card que já está reservado.</li>
+pegar um card que já está reservado. Antes do claim, a Triagem é instruída
+a listar a coluna só com o <code dir="auto">projects_list</code>, método <code dir="auto">list_project_items</code>, e
+assim vê os títulos dos cards, que a listagem do board sempre traz. As
+mesmas ferramentas de Projects também podem devolver os status updates do
+board, que são texto livre, e nada na plataforma impede o modelo de pedir
+esses dados, porque o Gate classifica a ferramenta, não o método. O piloto
+aceita isso dentro dos limites do claim descritos abaixo; impedir de fato
+exige a ferramenta específica que ficou para depois. Um
+título é texto não confiável: o papel é instruído a usar o título só para
+diferenciar os cards e a escolher por idade e rótulo, e lê o corpo e os
+comentários da issue depois do claim. Mesmo assim, um título pode
+influenciar qual card o modelo escolhe, e o claim não precisa de aprovação,
+nem depois de texto não confiável: é uma operação de coordenação, para que
+dois runs nunca esperem uma pessoa para reservar um card. Um claim no card
+errado só reserva esse card para o papel enquanto o run está aberto, libera
+o card quando o run termina e lança o custo do run nesse card. Ele não
+escreve nada no GitHub, e toda escrita no GitHub depois dele espera uma
+pessoa. Uma ferramenta que escolhe e faz o claim do card de uma vez,
+escondendo até o título, ficou para depois.</li>
 </ul>
 <p>O repositório é público, então o texto de issues e pull requests não é
 confiável: um run que leu esse texto nunca pode executar uma ação destrutiva,
-e as escritas dele precisam de uma pessoa.</p>
+e as escritas dele no GitHub precisam de uma pessoa.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="1-crie-os-github-apps">1. Crie os GitHub Apps</h2><a class="sl-anchor-link" href="#1-crie-os-github-apps"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “1. Crie os GitHub Apps”</span></a></div>
 <p>Crie um GitHub App por papel, instale cada um só no repositório em que a
 fábrica trabalha e dê a ele só o que as ferramentas do papel precisam:</p>
@@ -203,7 +223,7 @@ quando não se pede nenhum campo (#220).</p>
 separadas.</p>
 <p>O <code dir="auto">projects_write</code> move cards e também pode remover um item. Classifique como
 <strong>write</strong>, não como destructive: um card removido pode ser adicionado de novo,
-e uma pessoa aprova toda escrita. Classificado como destrutivo, ele seria
+e uma pessoa aprova toda escrita no GitHub. Classificado como destrutivo, ele seria
 bloqueado de vez, e todo papel que lê texto de issue e move cards seria
 recusado na publicação.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="4-crie-a-área-da-fábrica">4. Crie a área da fábrica</h2><a class="sl-anchor-link" href="#4-crie-a-área-da-fábrica"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “4. Crie a área da fábrica”</span></a></div>

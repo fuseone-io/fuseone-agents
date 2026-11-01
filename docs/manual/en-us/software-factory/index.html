@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-vdxcvpsm"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Software factory | FuseOne Agents</title><link rel="canonical" href="https://fuseone-io.github.io/fuseone-agents/docs/manual/en-us/software-factory/"/><link rel="sitemap" href="/fuseone-agents/docs/sitemap-index.xml"/><link rel="icon" type="image/svg+xml" href="/fuseone-agents/docs/favicon.svg"/><link rel="shortcut icon" href="/fuseone-agents/docs/favicon.svg" type="image/svg+xml"/><meta name="generator" content="Astro v7.4.2"/><meta name="generator" content="Starlight v0.41.11"/><meta property="og:title" content="Software factory"/><meta property="og:type" content="article"/><meta property="og:url" content="https://fuseone-io.github.io/fuseone-agents/docs/manual/en-us/software-factory/"/><meta property="og:locale" content="en"/><meta property="og:description" content="Run agent roles that triage issues and review pull requests on a GitHub repository, each with its own GitHub App, every write approved by a person."/><meta property="og:site_name" content="FuseOne Agents"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="Run agent roles that triage issues and review pull requests on a GitHub repository, each with its own GitHub App, every write approved by a person."/><script>
+<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-vdxcvpsm"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Software factory | FuseOne Agents</title><link rel="canonical" href="https://fuseone-io.github.io/fuseone-agents/docs/manual/en-us/software-factory/"/><link rel="sitemap" href="/fuseone-agents/docs/sitemap-index.xml"/><link rel="icon" type="image/svg+xml" href="/fuseone-agents/docs/favicon.svg"/><link rel="shortcut icon" href="/fuseone-agents/docs/favicon.svg" type="image/svg+xml"/><meta name="generator" content="Astro v7.4.2"/><meta name="generator" content="Starlight v0.41.11"/><meta property="og:title" content="Software factory"/><meta property="og:type" content="article"/><meta property="og:url" content="https://fuseone-io.github.io/fuseone-agents/docs/manual/en-us/software-factory/"/><meta property="og:locale" content="en"/><meta property="og:description" content="Run agent roles that triage issues and review pull requests on a GitHub repository, each with its own GitHub App, every GitHub write approved by a person."/><meta property="og:site_name" content="FuseOne Agents"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="Run agent roles that triage issues and review pull requests on a GitHub repository, each with its own GitHub App, every GitHub write approved by a person."/><script>
 	window.StarlightThemeProvider = (() => {
 		const storedTheme =
 			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
@@ -89,9 +89,10 @@ criteria. Each role is an agent created in the console or the Studio.</li>
 registration of the GitHub server, authenticated as its own App. The App’s
 permissions are the first limit, and its name is what signs the role’s
 comments and reviews.</li>
-<li><strong>Every role at copilot</strong>, with standing approvals forbidden. Every write a
-role proposes — a comment, a label, a review, a card move — waits for a
-person. See <a href="../autonomy-stages/">Draft, copilot and autonomous</a>.</li>
+<li><strong>Every role at copilot</strong>, with standing approvals forbidden. Every GitHub
+write a role proposes — a comment, a label, a review, a card move — waits
+for a person. The card claim below is the one write that does not. See
+<a href="../autonomy-stages/">Draft, copilot and autonomous</a>.</li>
 <li><strong>A person merges.</strong> No role merges.</li>
 <li><strong>The board drives the work</strong>, with five lanes: Triagem, Preparado, Doing,
 Travado and Done. Inside Doing, labels mark where a pull request is:
@@ -100,11 +101,27 @@ Travado and Done. Inside Doing, labels mark where a pull request is:
 <li><strong>One card per run.</strong> A role wakes on its schedule, chooses a card, claims
 it with <code dir="auto">$fuseone.work_item.claim</code> and works only that card. The claim is
 recorded in the run’s trail, and no other run of the same role can take a
-card that is held.</li>
+card that is held. Before the claim, Triage is told to list its lane only
+with <code dir="auto">projects_list</code>, method <code dir="auto">list_project_items</code>, so it sees the cards’
+titles, which the board listing always returns. The same Projects tools can
+also return the board’s status updates, free text, and nothing in the
+platform stops a model from asking for them, because the Gate classifies a
+tool, not its method. The pilot accepts this within the claim’s limits
+below; preventing it needs the narrow tool that is deferred. A title is
+untrusted text:
+the role is told to use it only to tell cards apart and to choose by age
+and label, and it reads the issue’s body and comments after the claim. A
+title can still sway which card the model picks, and the claim needs no
+approval, even after untrusted text: it is a coordination operation, so two
+runs never wait on a person to reserve a card. A claim on the wrong card
+only holds that card for this role while the run is open, releases it when
+the run ends, and puts the run’s cost on that card. It writes nothing to
+GitHub, and every GitHub write after it waits for a person. A tool that
+picks and claims a card in one step, hiding even the title, is deferred.</li>
 </ul>
 <p>The repository is public, so issue and pull request text is untrusted: a run
-that read it can never take a destructive action, and its writes need a
-person.</p>
+that read it can never take a destructive action, and its GitHub writes need
+a person.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="1-create-the-github-apps">1. Create the GitHub Apps</h2><a class="sl-anchor-link" href="#1-create-the-github-apps"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “1. Create the GitHub Apps”</span></a></div>
 <p>Create one GitHub App per role, install it only on the repository the factory
 works, and give it only what its tools need:</p>
@@ -197,7 +214,7 @@ of the board’s issues and pull requests even when asked for no fields (#220).<
 <code dir="auto">github-reviewer.projects_list</code> are separate entries.</p>
 <p><code dir="auto">projects_write</code> moves cards and can also remove an item. Classify it as a
 <strong>write</strong>, not destructive: a removed card can be added back, and a person
-approves every write. Classified destructive, it would be blocked outright,
+approves every GitHub write. Classified destructive, it would be blocked outright,
 and every role that reads issue text and moves cards would be refused at
 publish.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="4-create-the-factorys-area">4. Create the factory’s area</h2><a class="sl-anchor-link" href="#4-create-the-factorys-area"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “4. Create the factory’s area”</span></a></div>
