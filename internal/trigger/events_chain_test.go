@@ -47,11 +47,11 @@ func chainDispatcher(store *ledger.Memory) *trigger.Dispatcher {
 	return dispatcherWith(store, pingPong)
 }
 
-func dispatcherWith(store *ledger.Memory, w wiring) *trigger.Dispatcher {
+func dispatcherWith(store *ledger.Memory, w trigger.Subscriptions) *trigger.Dispatcher {
 	clock := fixedClock{t: time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)}
 	opener := trigger.NewOpener(store, byAgent{"agent-a", "agent-b"}, clock).
 		WithContent(engine.NewMemoryContent())
-	return trigger.NewDispatcher(w, store, store, opener, clock, nil)
+	return trigger.NewDispatcher(w, store, opener, clock, nil)
 }
 
 // startRun seals a run_started: opened by an event carrying chain, or by a

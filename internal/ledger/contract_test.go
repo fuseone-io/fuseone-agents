@@ -60,6 +60,9 @@ type Store interface {
 	Simulations() ledger.SimulationQueue
 	WorkItemCost(ctx context.Context, filter domain.RunFilter, ref domain.WorkItemRef) (domain.WorkItemCost, error)
 	StartsAndFinishes(ctx context.Context, runs []domain.RunID) (map[domain.RunID][]domain.Step, error)
+	FinishedSince(ctx context.Context, after domain.FinishCursor, limit int) ([]domain.FinishedRun, error)
+	EventCursor(ctx context.Context) (domain.FinishCursor, error)
+	AdvanceEventCursor(ctx context.Context, to domain.FinishCursor) error
 }
 
 type factory struct {
@@ -105,7 +108,7 @@ func openPostgres(t *testing.T, dsn string) Store {
 		t.Fatalf("migrate: %v", err)
 	}
 	// Each test gets a clean ledger; these tables are the whole state.
-	if _, err := pool.Exec(ctx, `truncate run_steps, runs, run_work_items`); err != nil {
+	if _, err := pool.Exec(ctx, `truncate run_steps, runs, run_work_items, event_dispatch_cursor`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return ledger.NewPostgres(pool)

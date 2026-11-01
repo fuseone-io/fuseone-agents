@@ -125,7 +125,7 @@ func (p *workerParts) startLoops(
 		// opens carries a key derived from the source run, so a second pass
 		// reaches the run the first one opened.
 		go dispatchEvents(ctx, trigger.NewDispatcher(
-			p.registry, p.store, p.store, p.opener(), engine.SystemClock{}, slog.Default(),
+			p.registry, p.store, p.opener(), engine.SystemClock{}, slog.Default(),
 		))
 	}
 }

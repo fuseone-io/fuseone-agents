@@ -51,70 +51,101 @@ type Subscriptions interface {
 	Listeners(ctx context.Context) (map[string][]domain.AgentID, error)
 }
 
-// Finished lists the runs that have ended well since a moment.
-type Finished interface {
-	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
-}
+/*
+Feed is the finished runs the dispatcher works through, and where it has got
+to (#203).
 
-// Sources reads, for a batch of finished runs, only each run's opening and
-// closing steps: what opened it and its chain, and what it published. One
-// read per sweep rather than every step of every run.
-type Sources interface {
+It used to read the thirty newest finished runs on every sweep and remember
+nothing: the thirty-first to finish between two sweeps was never dispatched.
+Now it reads forward from a durable cursor, in the order runs committed in,
+and moves the cursor only once every run of a page has been dispatched or
+refused — so a page that fails is read again, and nothing is left behind.
+Two replicas may dispatch the same page; the idempotency key of each opened
+run makes the second a no-op, and the cursor keeps the furthest of their
+advances.
+*/
+type Feed interface {
+	FinishedSince(ctx context.Context, after domain.FinishCursor, limit int) ([]domain.FinishedRun, error)
+	EventCursor(ctx context.Context) (domain.FinishCursor, error)
+	AdvanceEventCursor(ctx context.Context, to domain.FinishCursor) error
+	// StartsAndFinishes reads, for a batch of finished runs, only each run's
+	// opening and closing steps: what opened it and its chain, and what it
+	// published. One read per page rather than every step of every run.
 	StartsAndFinishes(ctx context.Context, runs []domain.RunID) (map[domain.RunID][]domain.Step, error)
 }
 
 // Dispatcher opens the runs that finished runs imply.
 type Dispatcher struct {
-	subs    Subscriptions
-	runs    Finished
-	sources Sources
-	opener  *Opener
-	clock   Clock
-	log     *slog.Logger
+	subs   Subscriptions
+	feed   Feed
+	opener *Opener
+	clock  Clock
+	log    *slog.Logger
 }
 
-// NewDispatcher needs the sources, not only the finished runs: the source
-// run's own steps say where it stands in a chain of events (#203), and a
-// dispatcher that could not read them would bound nothing.
-func NewDispatcher(
-	subs Subscriptions, runs Finished, sources Sources, opener *Opener, clock Clock, log *slog.Logger,
-) *Dispatcher {
+func NewDispatcher(subs Subscriptions, feed Feed, opener *Opener, clock Clock, log *slog.Logger) *Dispatcher {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Dispatcher{subs: subs, runs: runs, sources: sources, opener: opener, clock: clock, log: log}
+	return &Dispatcher{subs: subs, feed: feed, opener: opener, clock: clock, log: log}
 }
 
-// Window is how far back a sweep looks. Generous next to the sweep interval,
-// so a pass that failed or a process that restarted still catches what
-// finished while it was away.
-const Window = 30
+// Page is how many finished runs a sweep reads at a time. A sweep reads page
+// after page until it has caught up, so this bounds one read, not how much
+// a sweep can dispatch.
+const Page = 30
 
-// Sweep publishes the events of recently finished runs and returns how many
-// runs it opened.
+// Sweep publishes the events of the runs that finished since the cursor,
+// page after page until it has caught up, and returns how many runs it
+// opened. A page that fails leaves the cursor where it was.
 func (d *Dispatcher) Sweep(ctx context.Context, limit int) (int, error) {
 	listeners, err := d.subs.Listeners(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("trigger: read listeners: %w", err)
 	}
-	if len(listeners) == 0 {
-		return 0, nil
+	opened := 0
+	for {
+		cursor, err := d.feed.EventCursor(ctx)
+		if err != nil {
+			return opened, fmt.Errorf("trigger: read event cursor: %w", err)
+		}
+		page, err := d.feed.FinishedSince(ctx, cursor, limit)
+		if err != nil || len(page) == 0 {
+			return opened, wrapFeed(err)
+		}
+		n, err := d.dispatchPage(ctx, page, listeners)
+		opened += n
+		if err != nil {
+			return opened, err
+		}
+		if err := d.feed.AdvanceEventCursor(ctx, page[len(page)-1].At); err != nil {
+			return opened, fmt.Errorf("trigger: advance event cursor: %w", err)
+		}
+		if len(page) < limit {
+			return opened, nil
+		}
 	}
+}
 
-	finished, err := d.runs.ListRuns(ctx, domain.RunFilter{}, "finished", limit)
-	if err != nil {
-		return 0, fmt.Errorf("trigger: list finished runs: %w", err)
+func wrapFeed(err error) error {
+	if err == nil {
+		return nil
 	}
+	return fmt.Errorf("trigger: read finished runs: %w", err)
+}
 
-	pending, err := d.candidates(ctx, finished, listeners)
+// dispatchPage opens the runs one page of finished runs implies.
+func (d *Dispatcher) dispatchPage(
+	ctx context.Context, page []domain.FinishedRun, listeners map[string][]domain.AgentID,
+) (int, error) {
+	pending, err := d.candidates(ctx, page, listeners)
 	if err != nil || len(pending) == 0 {
 		return 0, err
 	}
-	steps, err := d.sources.StartsAndFinishes(ctx, runIDs(pending))
+	steps, err := d.feed.StartsAndFinishes(ctx, runIDs(pending))
 	if err != nil {
 		return 0, fmt.Errorf("trigger: read source runs: %w", err)
 	}
-
 	opened := 0
 	for _, c := range pending {
 		src, ok, err := d.sourceOf(c.run, steps[c.run.RunID])

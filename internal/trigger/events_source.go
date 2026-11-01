@@ -20,11 +20,12 @@ type candidate struct {
 // candidates is the finished runs worth reading: those whose pinned version
 // declares an event somebody listens to.
 func (d *Dispatcher) candidates(
-	ctx context.Context, finished []domain.RunSummary, listeners map[string][]domain.AgentID,
+	ctx context.Context, page []domain.FinishedRun, listeners map[string][]domain.AgentID,
 ) ([]candidate, error) {
 	emits := pinnedEmits{subs: d.subs, seen: map[pinnedVersion][]domain.AgentEvent{}}
 	var out []candidate
-	for _, run := range finished {
+	for _, finished := range page {
+		run := finished.Run
 		declared, err := emits.of(ctx, run.AgentID, run.VersionID)
 		if err != nil {
 			return nil, err
