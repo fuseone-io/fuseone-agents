@@ -1,6 +1,6 @@
 ---
 title: Fábrica de software
-summary: Rode papéis de agentes que fazem a triagem de issues e revisam pull requests num repositório do GitHub, cada um com o seu GitHub App e toda escrita aprovada por uma pessoa.
+summary: Rode papéis de agentes que fazem a triagem de issues e revisam pull requests num repositório do GitHub, cada um com o seu GitHub App e toda escrita no GitHub aprovada por uma pessoa.
 section: integrations
 tags: fábrica, github, github app, papéis, triagem, revisão, qa, copiloto
 order: 22
@@ -30,8 +30,10 @@ e as instruções dos papéis ficam, revisadas como código, em
   permissões do App são o primeiro limite, e o nome dele é o que assina os
   comentários e revisões do papel.
 - **Todos os papéis em copiloto**, com aprovações permanentes proibidas. Toda
-  escrita que um papel propõe — comentário, rótulo, revisão, card movido —
-  espera uma pessoa. Veja [Rascunho, copiloto e autônomo](autonomy-stages.md).
+  escrita no GitHub que um papel propõe — comentário, rótulo, revisão, card
+  movido — espera uma pessoa. O claim do card, descrito abaixo, é a única
+  escrita que não espera. Veja
+  [Rascunho, copiloto e autônomo](autonomy-stages.md).
 - **Uma pessoa faz o merge.** Nenhum papel faz merge.
 - **O board guia o trabalho**, com cinco colunas: Triagem, Preparado, Doing,
   Travado e Done. Dentro de Doing, rótulos marcam em que ponto o pull request
@@ -57,7 +59,7 @@ e as instruções dos papéis ficam, revisadas como código, em
 
 O repositório é público, então o texto de issues e pull requests não é
 confiável: um run que leu esse texto nunca pode executar uma ação destrutiva,
-e as escritas dele precisam de uma pessoa.
+e as escritas dele no GitHub precisam de uma pessoa.
 
 ## 1. Crie os GitHub Apps
 
@@ -117,7 +119,7 @@ separadas.
 
 O `projects_write` move cards e também pode remover um item. Classifique como
 **write**, não como destructive: um card removido pode ser adicionado de novo,
-e uma pessoa aprova toda escrita. Classificado como destrutivo, ele seria
+e uma pessoa aprova toda escrita no GitHub. Classificado como destrutivo, ele seria
 bloqueado de vez, e todo papel que lê texto de issue e move cards seria
 recusado na publicação.
 

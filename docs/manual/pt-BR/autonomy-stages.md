@@ -13,7 +13,7 @@ Todo agente publicado nasce em **rascunho** e pausado. Sair de cada degrau é um
 | Estágio | O que ele pode fazer |
 |---|---|
 | **Rascunho** | Não abre execução real. Só ensaio |
-| **Copiloto** | Executa de verdade, e toda escrita espera uma pessoa |
+| **Copiloto** | Executa de verdade, e toda escrita espera uma pessoa (exceto o claim de work item) |
 | **Autônomo** | Executa e escreve sozinho, dentro do que política e classificação permitem |
 
 Repare no que **não** muda entre eles: o Gate avalia igual nos três. Autônomo não é "sem freio" — é "sem espera humana no que já estava liberado". Ferramenta destrutiva continua bloqueada, taint continua parando escrita, teto continua valendo.
@@ -28,7 +28,7 @@ O agente existe, tem versão publicada, e não abre execução real.
 
 ## Copiloto
 
-Executa de verdade. Toda escrita para e espera uma pessoa aprovar aquela chamada específica.
+Executa de verdade. Toda escrita para e espera uma pessoa aprovar aquela chamada específica. A única exceção é o claim de work item (`$fuseone.work_item.claim`), que só registra na plataforma qual card um run reservou e passa sem aprovação, para que dois runs nunca esperem uma pessoa para reservar o mesmo card.
 
 É o degrau onde se aprende o que o agente realmente faz com dado real — que nunca é exatamente o que o ensaio mostrou.
 

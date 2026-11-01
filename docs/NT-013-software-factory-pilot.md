@@ -177,11 +177,15 @@ perform.
 
 **4. Taint.** This repository is public: anyone can write an issue or a
 comment, so their text is untrusted, and a run that read it is tainted for the
-rest of the run. A tainted run needs a person for every write and can never
+rest of the run. A tainted run needs a person for every write — except the
+work-item claim, a coordination operation the Gate lets through (§ v1) — and
+can never
 perform a destructive action — approval does not release that block. Two
 consequences shape the design:
 
-- Every write in the pilot is approved by a person. That is the measurement:
+- Every GitHub write in the pilot is approved by a person; the claim, which
+  writes only the platform's record of who holds a card, is not. That is the
+  measurement:
   how many proposals were right, how many were edited, how many refused.
 - **The Merger must not read free text.** If it read a comment, it could not
   merge.

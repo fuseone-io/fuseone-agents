@@ -50,7 +50,8 @@ These hold before any lane rule applies.
    - A refusal with `work_item_run_holds_another` means this run already holds
      a card. Stop: a run holds at most one.
 3. **The outcome is written back** to the issue (or PR) and to the board, and
-   every write waits for a person's approval: every role runs at copilot, with
+   every GitHub write waits for a person's approval (the claim above is the
+   one write that does not): every role runs at copilot, with
    `standing_approvals: forbidden`, so no grant answers in a person's place.
    A card moves with the GitHub MCP server's projects tool, classified as a
    write, so moving a card is a proposal a person approves like any other.

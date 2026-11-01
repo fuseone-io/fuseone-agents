@@ -15,7 +15,9 @@ The pilot's first version runs entirely inside the platform (NT-013 § v1):
 - the official **GitHub MCP server** is the only tool server, registered once per
   role with that role's own GitHub App;
 - every role runs at **copilot** with `standing_approvals: forbidden`, so every
-  write it proposes waits for a person, and that is the measurement;
+  GitHub write it proposes waits for a person, and that is the measurement.
+  The one write that does not is the work-item claim, a coordination
+  operation that only records which card a run holds (LANES.md § claim);
 - **a person merges.** No role merges, and nothing here automates the merge.
 
 This directory is the harness as **reference text** (NT-013 § The harness):

@@ -180,10 +180,10 @@ identity the server may see.
 
 **Moving a card.** Cards move with the server's projects tool
 (`projects_write`). It is classified as a **write**, so a copilot run proposes
-the move and a person approves it, like any other write. NT-013 classifies a
+the move and a person approves it, like any other GitHub write. NT-013 classifies a
 bundled tool by its most dangerous action, and `projects_write` can also remove
 an item. The v1 decision (NT-013 § v1) is to classify it as a write anyway: a
-removed card can be added back, and a person approving every write is what
+removed card can be added back, and a person approving every GitHub write is what
 keeps it in check. Classified destructive, it would be blocked outright, and
 the publish check would refuse every role that reads issue text and moves
 cards. A narrower
