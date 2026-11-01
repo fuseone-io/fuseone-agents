@@ -57,13 +57,13 @@ func TestGitHubWebhook_declared_carriesItsEventsAndIsClosedUntilRotated(t *testi
 	if hook.Armed {
 		t.Error("a GitHub hook nobody rotated reports itself armed")
 	}
-	if _, err := hooks.SigningSecret(t.Context(), "gh/reviewer"); !errors.Is(err, trigger.ErrNotArmed) {
-		t.Errorf("SigningSecret before rotating = %v, want ErrNotArmed", err)
+	if _, err := acceptsSignature(t, hooks, "gh/reviewer", ""); !errors.Is(err, trigger.ErrNotArmed) {
+		t.Errorf("Authenticate before rotating = %v, want ErrNotArmed", err)
 	}
 }
 
 // GitHub signs with the secret, so the door has to read it back: what Rotate
-// handed the operator once is what SigningSecret opens.
+// handed the operator once is what a signature is checked against.
 func TestGitHubWebhook_rotated_signsWithTheSecretItHandedOut(t *testing.T) {
 	hooks := githubHooks(t)
 	if err := hooks.Sync(t.Context(), "reviewer", cx, fromGitHub("gh/reviewer", "pull_request")); err != nil {
@@ -74,9 +74,11 @@ func TestGitHubWebhook_rotated_signsWithTheSecretItHandedOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Rotate: %v", err)
 	}
-	got, err := hooks.SigningSecret(t.Context(), "gh/reviewer")
-	if err != nil || string(got) != secret {
-		t.Fatalf("SigningSecret = %q (%v), want the rotated secret", got, err)
+	if ok, err := acceptsSignature(t, hooks, "gh/reviewer", secret); err != nil || !ok {
+		t.Fatalf("a delivery signed with the rotated secret = %v (%v), want accepted", ok, err)
+	}
+	if ok, _ := acceptsSignature(t, hooks, "gh/reviewer", secret+"x"); ok {
+		t.Error("a delivery signed with another secret was accepted")
 	}
 	if hook, _ := hooks.Find(t.Context(), "gh/reviewer"); !hook.Armed {
 		t.Error("a rotated GitHub hook reports itself closed")
@@ -111,7 +113,7 @@ func TestGitHubWebhook_secret_isNeverAcceptedAsASentSecret(t *testing.T) {
 		t.Fatalf("Rotate: %v", err)
 	}
 
-	if ok, _ := hooks.Verify(t.Context(), "gh/reviewer", secret); ok {
+	if ok, _ := acceptsSecret(t, hooks, "gh/reviewer", secret); ok {
 		t.Error("a GitHub hook's secret was accepted as a sent secret")
 	}
 }
@@ -164,8 +166,8 @@ func TestSync_aGitHubPathRepublished_keepsItsSecretAndTakesTheNewEvents(t *testi
 	if !reflect.DeepEqual(hook.Events, []string{"pull_request.labeled"}) {
 		t.Errorf("events = %v, want the republished ones", hook.Events)
 	}
-	if got, err := hooks.SigningSecret(t.Context(), "gh/reviewer"); err != nil || string(got) != secret {
-		t.Errorf("SigningSecret after republishing = %q (%v), want the same secret", got, err)
+	if ok, err := acceptsSignature(t, hooks, "gh/reviewer", secret); err != nil || !ok {
+		t.Errorf("signed with the secret after republishing = %v (%v), want accepted", ok, err)
 	}
 }
 
@@ -178,7 +180,8 @@ func TestGitHubWebhook_sealedSecretCopiedToAnotherPath_doesNotOpen(t *testing.T)
 	if err := hooks.Sync(t.Context(), "reviewer", cx, both); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
-	if _, err := rotateAs(t, hooks, "reviewer", "gh/a"); err != nil {
+	secret, err := rotateAs(t, hooks, "reviewer", "gh/a")
+	if err != nil {
 		t.Fatalf("Rotate: %v", err)
 	}
 	if _, err := pool.Exec(t.Context(), `
@@ -188,8 +191,50 @@ func TestGitHubWebhook_sealedSecretCopiedToAnotherPath_doesNotOpen(t *testing.T)
 		t.Fatalf("copy: %v", err)
 	}
 
-	if got, err := hooks.SigningSecret(t.Context(), "gh/b"); err == nil {
-		t.Errorf("a secret sealed for gh/a opened on gh/b: %q", got)
+	if ok, err := acceptsSignature(t, hooks, "gh/b", secret); ok || err == nil {
+		t.Errorf("a secret sealed for gh/a opened on gh/b: accepted %v, err %v", ok, err)
+	}
+}
+
+/*
+A GitHub row with a hash and no sealed copy is closed.
+
+Only a legacy row or a hand-edited one looks like this. A hash cannot check a
+signature, so the hook must refuse, not fall back to anything else.
+*/
+func TestAuthenticate_aGitHubRowWithAHashButNoSealedSecret_isClosed(t *testing.T) {
+	pool := poolOf(t)
+	hooks := githubHooks(t)
+	if err := hooks.Sync(t.Context(), "reviewer", cx, fromGitHub("gh/legacy", "push")); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	_, hash, _ := trigger.NewSecret()
+	if _, err := pool.Exec(t.Context(),
+		`update webhook_triggers set secret_hash = $1 where path = 'gh/legacy'`, hash); err != nil {
+		t.Fatalf("legacy row: %v", err)
+	}
+
+	if _, err := acceptsSignature(t, hooks, "gh/legacy", ""); !errors.Is(err, trigger.ErrNotArmed) {
+		t.Errorf("Authenticate = %v, want ErrNotArmed", err)
+	}
+}
+
+// An ordinary hook is proved by the secret, and returned with its owner.
+func TestAuthenticate_anOrdinaryHook_returnsTheHookItChecked(t *testing.T) {
+	hooks := githubHooks(t)
+	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	secret, _ := rotateAs(t, hooks, "triage", "crm/ticket")
+
+	hook, err := hooks.Authenticate(t.Context(), "crm/ticket", trigger.Offer{Secret: secret})
+	if err != nil || hook.Agent != "triage" || hook.Path != "crm/ticket" {
+		t.Fatalf("Authenticate = %+v (%v), want triage's hook", hook, err)
+	}
+	if _, err := hooks.Authenticate(t.Context(), "crm/ticket", trigger.Offer{
+		Body: []byte(`{}`), Signature: signed(secret, `{}`),
+	}); !errors.Is(err, trigger.ErrRejected) {
+		t.Errorf("an ordinary hook proved by a signature = %v, want ErrRejected", err)
 	}
 }
 
@@ -223,6 +268,29 @@ func TestRotate_aPathThatChangedHands_armsNothingAndHandsOutNoKey(t *testing.T) 
 	if hook, _ := hooks.Find(t.Context(), "crm/ticket"); hook.Armed {
 		t.Error("the new owner's hook was armed by a rotation it never asked for")
 	}
+}
+
+// acceptsSecret reports whether a sent secret proves the hook at path, the way
+// an ordinary hook's caller offers it.
+func acceptsSecret(t *testing.T, hooks *trigger.PostgresWebhooks, path, secret string) (bool, error) {
+	t.Helper()
+	return accepted(hooks.Authenticate(t.Context(), path, trigger.Offer{Secret: secret}))
+}
+
+// acceptsSignature reports whether a body signed with secret proves the hook
+// at path, the way GitHub offers it.
+func acceptsSignature(t *testing.T, hooks *trigger.PostgresWebhooks, path, secret string) (bool, error) {
+	t.Helper()
+	body := `{"action":"opened"}`
+	return accepted(hooks.Authenticate(t.Context(), path,
+		trigger.Offer{Body: []byte(body), Signature: signed(secret, body)}))
+}
+
+func accepted(_ trigger.Hook, err error) (bool, error) {
+	if errors.Is(err, trigger.ErrRejected) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // rotateAs rotates a path on behalf of the agent the caller was authorised for.

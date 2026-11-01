@@ -1,11 +1,7 @@
 package trigger
 
 import (
-	"context"
-	"errors"
 	"fmt"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -41,38 +37,4 @@ func (p *PostgresWebhooks) sealFor(source, path, secret string) (sealed, nonce [
 		return nil, nil, fmt.Errorf("trigger: seal the secret of %q: %w", path, err)
 	}
 	return sealed, nonce, nil
-}
-
-// SigningSecret opens a GitHub hook's secret.
-//
-// The error never carries the secret, the ciphertext or the vault's reason: a
-// failure to open is reported as a failure, not as an oracle.
-func (p *PostgresWebhooks) SigningSecret(ctx context.Context, path string) ([]byte, error) {
-	var (
-		source        string
-		hash          []byte
-		sealed, nonce []byte
-	)
-	err := p.pool.QueryRow(ctx, `
-		select source, secret_hash, secret_sealed, secret_nonce
-		from webhook_triggers where path = $1`, path).Scan(&source, &hash, &sealed, &nonce)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNoHook
-	}
-	if err != nil {
-		return nil, fmt.Errorf("trigger: read the signing secret of %q: %w", path, err)
-	}
-	switch {
-	case source != domain.WebhookFromGitHub:
-		return nil, ErrNotGitHub
-	case len(hash) == 0 || len(sealed) == 0:
-		return nil, ErrNotArmed
-	case p.vault == nil:
-		return nil, ErrNoVault
-	}
-	secret, err := p.vault.Open(sealed, nonce, sealContext(path))
-	if err != nil {
-		return nil, fmt.Errorf("trigger: open the signing secret of %q: %w", path, err)
-	}
-	return secret, nil
 }

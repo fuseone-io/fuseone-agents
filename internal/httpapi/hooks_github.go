@@ -2,8 +2,6 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 
 	"github.com/fuseone/agents/internal/trigger"
@@ -29,30 +27,15 @@ type githubInput struct {
 }
 
 /*
-receiveGitHub serves a path whose published trigger says `from: github`.
+serveGitHub serves a delivery whose signature already proved a hook that says
+`from: github` (receive authenticates every kind the same way).
 
-The body is read before anything else, because the signature is over it. A
-body over the limit is never read whole, so it cannot be verified, and it is
-refused the way every delivery nobody can vouch for is: the same 401 as a
-wrong signature, an unrotated hook or a path that does not exist.
-
-After the signature, the caller is GitHub and may be told why a delivery did
-nothing: a ping is answered, an event the trigger did not name is acknowledged
-with 2xx — GitHub retries anything else and marks the hook failing — and a
-delivery with no id, or a body that is not JSON, is refused with the reason.
+The caller is GitHub and may be told why a delivery did nothing: a ping is
+answered, an event the trigger did not name is acknowledged with 2xx — GitHub
+retries anything else and marks the hook failing — and a delivery with no id,
+or a body that is not JSON, is refused with the reason.
 */
-func (h *Hooks) receiveGitHub(w http.ResponseWriter, r *http.Request, hook trigger.Hook) {
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxHookBody))
-	if err != nil {
-		h.log.Info("refused a GitHub delivery over the size limit", "path", hook.Path, "limit", maxHookBody)
-		rejectHook(w)
-		return
-	}
-	if !h.signedByGitHub(r, hook.Path, body) {
-		rejectHook(w)
-		return
-	}
-
+func (h *Hooks) serveGitHub(w http.ResponseWriter, r *http.Request, hook trigger.Hook, body []byte) {
 	event := r.Header.Get(githubEventHeader)
 	if event == "ping" {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "pong"})
@@ -85,17 +68,4 @@ func (h *Hooks) receiveGitHub(w http.ResponseWriter, r *http.Request, hook trigg
 		return
 	}
 	h.open(w, r, hook.Path, hook, delivery, input)
-}
-
-// signedByGitHub checks the delivery's signature against the hook's secret.
-// The secret and the reason it could not be read are never logged.
-func (h *Hooks) signedByGitHub(r *http.Request, path string, body []byte) bool {
-	secret, err := h.webhooks.SigningSecret(r.Context(), path)
-	if err != nil {
-		if !errors.Is(err, trigger.ErrNotArmed) && !errors.Is(err, trigger.ErrNoHook) {
-			h.log.Error("could not read a GitHub webhook's signing secret", "path", path, "err", err)
-		}
-		return false
-	}
-	return trigger.VerifyGitHubSignature(secret, body, r.Header.Get(githubSignatureHeader))
 }

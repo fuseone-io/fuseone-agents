@@ -32,10 +32,10 @@ func (s *spyHooks) Find(_ context.Context, path string) (trigger.Hook, error) {
 	return trigger.Hook{Path: s.path, Agent: s.agent, Armed: s.armed, From: s.from}, nil
 }
 
-func (s *spyHooks) Verify(context.Context, string, string) (bool, error) { return false, nil }
-
-func (s *spyHooks) SigningSecret(context.Context, string) ([]byte, error) {
-	return nil, trigger.ErrNotGitHub
+// Authenticate proves nothing: these tests are about the console's routes,
+// not deliveries.
+func (s *spyHooks) Authenticate(context.Context, string, trigger.Offer) (trigger.Hook, error) {
+	return trigger.Hook{}, trigger.ErrRejected
 }
 
 func (s *spyHooks) Rotate(_ context.Context, r trigger.Rotation) (string, error) {

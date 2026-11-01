@@ -29,7 +29,7 @@ func TestWebhook_declaredButNeverRotated_isClosed(t *testing.T) {
 
 	// A path that answered anything until somebody configured it would be an
 	// open door with an agent behind it.
-	if _, err := hooks.Verify(t.Context(), "crm/ticket", "guess"); !errors.Is(err, trigger.ErrNotArmed) {
+	if _, err := acceptsSecret(t, hooks, "crm/ticket", "guess"); !errors.Is(err, trigger.ErrNotArmed) {
 		t.Fatalf("Verify on an unarmed hook = %v, want ErrNotArmed", err)
 	}
 	hook, err := hooks.Find(t.Context(), "crm/ticket")
@@ -52,11 +52,11 @@ func TestWebhook_afterRotating_acceptsOnlyThatSecret(t *testing.T) {
 		t.Fatalf("Rotate: %v", err)
 	}
 
-	ok, err := hooks.Verify(t.Context(), "crm/ticket", secret)
+	ok, err := acceptsSecret(t, hooks, "crm/ticket", secret)
 	if err != nil || !ok {
 		t.Fatalf("Verify with the new secret = %v (%v), want true", ok, err)
 	}
-	if ok, _ := hooks.Verify(t.Context(), "crm/ticket", secret+"x"); ok {
+	if ok, _ := acceptsSecret(t, hooks, "crm/ticket", secret+"x"); ok {
 		t.Error("a wrong secret was accepted")
 	}
 }
@@ -72,10 +72,10 @@ func TestWebhook_rotating_retiresThePreviousSecret(t *testing.T) {
 
 	// Rotating is what somebody does after a secret leaks. If the old one
 	// still worked it would not be a rotation.
-	if ok, _ := hooks.Verify(t.Context(), "crm/ticket", first); ok {
+	if ok, _ := acceptsSecret(t, hooks, "crm/ticket", first); ok {
 		t.Error("the retired secret still works")
 	}
-	if ok, _ := hooks.Verify(t.Context(), "crm/ticket", second); !ok {
+	if ok, _ := acceptsSecret(t, hooks, "crm/ticket", second); !ok {
 		t.Error("the new secret does not work")
 	}
 }
@@ -92,7 +92,7 @@ func TestWebhook_republishing_keepsTheSecret(t *testing.T) {
 	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
 		t.Fatalf("Sync again: %v", err)
 	}
-	if ok, _ := hooks.Verify(t.Context(), "crm/ticket", secret); !ok {
+	if ok, _ := acceptsSecret(t, hooks, "crm/ticket", secret); !ok {
 		t.Error("republishing invalidated the secret")
 	}
 }
@@ -152,7 +152,7 @@ func TestSync_pathAnotherAgentAlreadyOwns_isRefusedRatherThanTransferred(t *test
 	if hook.Agent != "triage" {
 		t.Errorf("the path now belongs to %q, want triage", hook.Agent)
 	}
-	if ok, _ := hooks.Verify(t.Context(), "crm/ticket", secret); !ok {
+	if ok, _ := acceptsSecret(t, hooks, "crm/ticket", secret); !ok {
 		t.Error("the original secret stopped working")
 	}
 }

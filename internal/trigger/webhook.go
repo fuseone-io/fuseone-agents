@@ -42,12 +42,10 @@ type Hook struct {
 type Webhooks interface {
 	// Find returns the hook at a path, or ErrNoHook.
 	Find(ctx context.Context, path string) (Hook, error)
-	// Verify reports whether the secret matches the one stored for the path.
-	// A GitHub hook's secret is never accepted this way: it signs, it is not
-	// sent.
-	Verify(ctx context.Context, path, secret string) (bool, error)
-	// SigningSecret opens a GitHub hook's secret, to check a signature with.
-	SigningSecret(ctx context.Context, path string) ([]byte, error)
+	// Authenticate returns the hook at path if the offer proves it, from one
+	// read: ErrNoHook, ErrNotArmed or ErrRejected otherwise. It is the only
+	// way a delivery reaches a hook — the row checked is the row returned.
+	Authenticate(ctx context.Context, path string, offer Offer) (Hook, error)
 	// Rotate replaces the secret and returns the new one, once — only while
 	// the path still belongs to the agent that asked, or ErrNoHook.
 	Rotate(ctx context.Context, r Rotation) (string, error)
@@ -81,10 +79,6 @@ var ErrNotArmed = errors.New("trigger: the webhook has no secret yet")
 // back to check signatures, and without the master key it could only be
 // stored in the clear.
 var ErrNoVault = errors.New("trigger: a GitHub webhook's secret needs the master key to be stored")
-
-// ErrNotGitHub means the path is an ordinary hook, which keeps no signing
-// secret.
-var ErrNotGitHub = errors.New("trigger: the webhook does not come from GitHub")
 
 // ErrPathTaken means another agent already answers on that path.
 //

@@ -36,19 +36,26 @@ const hookColumns = `path, agent_id, company_id, area_id, secret_hash, rotated_b
 // A GitHub hook is armed only with its sealed copy: a hash alone cannot check
 // a signature, so a path that has one and not the other is closed.
 func scanHook(row pgx.Row) (Hook, error) {
+	var sealed []byte
+	return scanHookWith(row, &sealed)
+}
+
+// scanHookWith reads hookColumns into a Hook, the sealed secret into sealed,
+// and any further selected columns into extra.
+func scanHookWith(row pgx.Row, sealed *[]byte, extra ...any) (Hook, error) {
 	var (
 		hook          Hook
 		company, area string
 		secret        []byte
-		sealed        []byte
 		rotated       *time.Time
 	)
-	if err := row.Scan(&hook.Path, &hook.Agent, &company, &area, &secret, &hook.By, &rotated,
-		&hook.From, &hook.Events, &sealed); err != nil {
+	dest := append([]any{&hook.Path, &hook.Agent, &company, &area, &secret, &hook.By, &rotated,
+		&hook.From, &hook.Events, sealed}, extra...)
+	if err := row.Scan(dest...); err != nil {
 		return Hook{}, err
 	}
 	hook.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
-	hook.Armed = len(secret) > 0 && (hook.From != domain.WebhookFromGitHub || len(sealed) > 0)
+	hook.Armed = len(secret) > 0 && (hook.From != domain.WebhookFromGitHub || len(*sealed) > 0)
 	if len(hook.Events) == 0 {
 		hook.Events = nil
 	}
@@ -69,33 +76,6 @@ func (p *PostgresWebhooks) Find(ctx context.Context, path string) (Hook, error) 
 		return Hook{}, fmt.Errorf("trigger: find hook %q: %w", path, err)
 	}
 	return hook, nil
-}
-
-// Verify reports whether the offered secret is the one stored for the path.
-//
-// Never for a GitHub hook: its secret signs deliveries, and accepting it as a
-// sent secret would let whoever holds it skip the signature.
-func (p *PostgresWebhooks) Verify(ctx context.Context, path, secret string) (bool, error) {
-	var (
-		stored []byte
-		source string
-	)
-	err := p.pool.QueryRow(ctx,
-		`select secret_hash, source from webhook_triggers where path = $1`, path).Scan(&stored, &source)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, ErrNoHook
-	}
-	if err != nil {
-		return false, fmt.Errorf("trigger: verify %q: %w", path, err)
-	}
-	if len(stored) == 0 {
-		return false, ErrNotArmed
-	}
-	if source != "" {
-		return false, nil
-	}
-	return MatchesSecret(stored, secret), nil
 }
 
 // Rotate replaces the secret and returns the new one, once.

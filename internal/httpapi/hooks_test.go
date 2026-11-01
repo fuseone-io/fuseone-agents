@@ -24,37 +24,28 @@ type fakeHooks struct {
 	armed  map[string]string
 	agents map[string]domain.AgentID
 	// signing and events make a path a GitHub hook, as the real store does:
-	// its secret signs, so Verify never accepts it.
+	// its secret signs, so a sent secret never proves it.
 	signing map[string]string
 	events  map[string][]string
 }
 
-func (f *fakeHooks) Verify(_ context.Context, path, secret string) (bool, error) {
-	if _, github := f.signing[path]; github {
-		return false, nil
-	}
-	want, declared := f.armed[path]
-	if !declared {
-		return false, trigger.ErrNoHook
-	}
-	if want == "" {
-		return false, trigger.ErrNotArmed
-	}
-	return want == secret, nil
-}
-
-func (f *fakeHooks) SigningSecret(_ context.Context, path string) ([]byte, error) {
-	secret, github := f.signing[path]
+// Authenticate keeps the store's rules: one snapshot, checked by its own
+// kind, and returned as the hook that was checked.
+func (f *fakeHooks) Authenticate(ctx context.Context, path string, offer trigger.Offer) (trigger.Hook, error) {
+	hook, err := f.Find(ctx, path)
 	switch {
-	case !github:
-		if _, declared := f.agents[path]; declared {
-			return nil, trigger.ErrNotGitHub
+	case err != nil:
+		return trigger.Hook{}, err
+	case !hook.Armed:
+		return trigger.Hook{}, trigger.ErrNotArmed
+	case hook.From == domain.WebhookFromGitHub:
+		if !trigger.VerifyGitHubSignature([]byte(f.signing[path]), offer.Body, offer.Signature) {
+			return trigger.Hook{}, trigger.ErrRejected
 		}
-		return nil, trigger.ErrNoHook
-	case secret == "":
-		return nil, trigger.ErrNotArmed
+	case offer.Secret != f.armed[path]:
+		return trigger.Hook{}, trigger.ErrRejected
 	}
-	return []byte(secret), nil
+	return hook, nil
 }
 
 func (f *fakeHooks) Find(_ context.Context, path string) (trigger.Hook, error) {
