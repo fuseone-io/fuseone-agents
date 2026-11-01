@@ -2,7 +2,9 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -146,6 +148,13 @@ func runStatement(ctx context.Context, conn migrator, statement string) error {
 	if err != nil {
 		return err
 	}
+	// Every generated statement is held to the same list, all of them before
+	// any runs: a select may compute what to drop, not decide to do more.
+	for _, one := range generated {
+		if err := allowedOutsideTransaction(one); err != nil {
+			return fmt.Errorf("generated statement: %w", err)
+		}
+	}
 	for _, one := range generated {
 		if _, err := conn.Exec(ctx, one); err != nil {
 			return err
@@ -157,13 +166,54 @@ func runStatement(ctx context.Context, conn migrator, statement string) error {
 /*
 splitStatements cuts a marked file into statements: each ends at a line
 ending in a semicolon, comment lines never end one, and a chunk of only
-comments is no statement. Dollar quoting is refused rather than parsed — a
-function body has no business in a file that exists to build an index.
+comments is no statement. Every statement is checked against the allowed
+list before any runs, so a file outside it fails having touched nothing.
 */
 func splitStatements(body string) ([]string, error) {
-	if strings.Contains(body, "$$") {
-		return nil, fmt.Errorf("a no-transaction migration may not use dollar quoting")
+	statements, err := cutStatements(body)
+	if err != nil {
+		return nil, err
 	}
+	for _, statement := range statements {
+		if isGenerator(statement) {
+			if dollarQuote.MatchString(statement) {
+				return nil, errDollarQuote
+			}
+			continue
+		}
+		if err := allowedOutsideTransaction(statement); err != nil {
+			return nil, err
+		}
+	}
+	return statements, nil
+}
+
+/*
+The only statements a marked file may run, literally or generated: build or
+drop an index concurrently. That is the whole reason the opt-in exists;
+anything else keeps the transaction that makes a crash leave neither half.
+*/
+var allowedNoTransaction = regexp.MustCompile(
+	`^(create index concurrently (if not exists )?|drop index concurrently (if exists )?)\S`)
+
+// dollarQuote matches any dollar quote, $$ or named ($body$): quoting is
+// refused rather than parsed, since a quoted body could hide any statement.
+var dollarQuote = regexp.MustCompile(`\$[A-Za-z_]*\$`)
+
+var errDollarQuote = errors.New("a no-transaction migration may not use dollar quoting")
+
+func allowedOutsideTransaction(statement string) error {
+	if dollarQuote.MatchString(statement) {
+		return errDollarQuote
+	}
+	normal := strings.ToLower(strings.Join(strings.Fields(code(statement)), " "))
+	if !allowedNoTransaction.MatchString(normal) {
+		return fmt.Errorf("a no-transaction migration may only create or drop an index concurrently, not %q", normal)
+	}
+	return nil
+}
+
+func cutStatements(body string) ([]string, error) {
 	var out []string
 	var current []string
 	for _, line := range strings.Split(body, "\n") {

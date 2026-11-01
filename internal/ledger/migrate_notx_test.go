@@ -51,30 +51,28 @@ func TestMigrate_aNoTransactionFile_runsEachStatementOnItsOwn_andAPlainOneInOne(
 	plain := "create table probe (label text, xid text);\n" +
 		"insert into probe values ('plain', pg_current_xact_id()::text);\n" +
 		"insert into probe values ('plain', pg_current_xact_id()::text);\n"
+	// Two concurrent builds in one file: PostgreSQL refuses either inside a
+	// transaction block, implicit multi-statement ones included, so both
+	// succeed only if each statement runs on its own.
 	marked := "-- fuseone:no-transaction\n" +
-		"insert into probe values ('marked', pg_current_xact_id()::text);\n" +
-		"insert into probe values ('marked', pg_current_xact_id()::text);\n"
+		"create index concurrently if not exists probe_label_idx on probe (label);\n" +
+		"create index concurrently if not exists probe_xid_idx on probe (xid);\n"
 	if err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{
 		{Version: "0001_plain", Body: plain}, {Version: "0002_marked", Body: marked},
 	}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	xids := map[string]int{}
-	rows, err := pool.Query(t.Context(), `select label, count(distinct xid) from probe group by label`)
-	if err != nil {
+	var plainXids, built int
+	if err := pool.QueryRow(t.Context(), `select
+		(select count(distinct xid) from probe),
+		(select count(*) from pg_index i join pg_class c on c.oid = i.indexrelid
+		  where c.relname in ('probe_label_idx', 'probe_xid_idx') and i.indisvalid)`).
+		Scan(&plainXids, &built); err != nil {
 		t.Fatalf("read probe: %v", err)
 	}
-	for rows.Next() {
-		var label string
-		var n int
-		if err := rows.Scan(&label, &n); err != nil {
-			t.Fatalf("scan: %v", err)
-		}
-		xids[label] = n
-	}
-	if xids["plain"] != 1 || xids["marked"] != 2 {
-		t.Fatalf("distinct transactions = %v; want the plain file in one, each marked statement in its own", xids)
+	if plainXids != 1 || built != 2 {
+		t.Fatalf("plain file in %d transactions, %d concurrent builds valid; want 1 and 2", plainXids, built)
 	}
 	var digest string
 	if err := pool.QueryRow(t.Context(),
@@ -275,5 +273,46 @@ func TestMigrate_anInvalidFeedIndexLeftByAFailedBuild_isRebuilt(t *testing.T) {
 	}
 	if !feedIndexValid(t, pool) {
 		t.Fatal("runs_feed_idx is still INVALID: the leftover was taken as built")
+	}
+}
+
+/*
+The opt-in is for concurrent index builds and nothing else, and the runner
+holds a marked file to that: every literal statement is a create or drop
+index concurrently or a select, every statement a select generates is checked
+against the same list before any runs, and no dollar quote — named or not —
+gets through. A marked file outside the list fails before it touches anything.
+*/
+func TestMigrate_aNoTransactionFile_runsOnlyConcurrentIndexStatements(t *testing.T) {
+	plain := "create table probe (label text);\ninsert into probe values ('untouched');\n"
+	cases := map[string]string{
+		"a named dollar quote": "-- fuseone:no-transaction\n" +
+			"select $body$create index concurrently if not exists probe_idx on probe (label)$body$;\n",
+		"an update after an allowed statement": "-- fuseone:no-transaction\n" +
+			"create index concurrently if not exists probe_idx on probe (label);\n" +
+			"update probe set label = 'touched';\n",
+		"a generated update": "-- fuseone:no-transaction\n" +
+			"select 'create index concurrently if not exists probe_idx on probe (label)'\n" +
+			"union all select 'update probe set label = ''touched''';\n",
+	}
+	for name, marked := range cases {
+		t.Run(name, func(t *testing.T) {
+			pool := freshDatabase(t, "ledger/migrate_notx_fence")
+			err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{
+				{Version: "0001_plain", Body: plain}, {Version: "0002_marked", Body: marked},
+			})
+			if err == nil {
+				t.Fatal("the marked file ran")
+			}
+			var label string
+			var indexed bool
+			if err := pool.QueryRow(t.Context(), `select label, to_regclass('probe_idx') is not null from probe`).
+				Scan(&label, &indexed); err != nil {
+				t.Fatalf("read probe: %v", err)
+			}
+			if label != "untouched" || indexed || recorded(t, pool, "0002_marked") {
+				t.Fatalf("label %q, indexed %v: the refused file ran part of itself", label, indexed)
+			}
+		})
 	}
 }
