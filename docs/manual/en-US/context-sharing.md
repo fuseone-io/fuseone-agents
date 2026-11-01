@@ -90,10 +90,23 @@ new version while a run is going changes neither what that run publishes nor
 what its trail says about it; who listens is read from the versions
 published when the event goes out.
 
-A run an event opened without recording its place in the chain — which only
-a worker on an older version does, during an upgrade — publishes nothing
-further, and its trail says the chain is unknown. Counting it as the start
-of a new chain would let a cycle restart its count at every such run.
+A run an event opened without recording its place in the chain publishes
+nothing further: counting it as the start of a new chain would let a cycle
+restart its count at every such run. Only a worker on an older version opens
+runs like that, so this matters during an upgrade, and it is weaker than the
+limit while the upgrade is under way:
+
+- While any worker on the older version is still running, a chain can keep
+  going under it, uncounted, as it did before.
+- Once the last of those workers is gone, the first such run the new
+  version sees publishes nothing further.
+- Its trail says the chain is unknown only if a worker on the new version
+  closed it. A run an older worker closed carries no such line, although
+  its events are withheld all the same.
+
+Every finished run is dispatched, however many finish between two sweeps:
+the dispatcher works forward through finished runs from where it last got
+to, rather than looking at the newest few.
 
 Eight leaves room for composition designed on purpose — a pipeline of a
 handful of agents, or a review loop that goes round a few times. A chain

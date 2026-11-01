@@ -93,10 +93,23 @@ uma versão nova com a run em andamento não muda o que essa run publica nem o
 que a trilha diz sobre isso; quem escuta é lido das versões publicadas no
 momento em que o evento sai.
 
-Uma run aberta por um evento sem registrar a posição na cadeia — o que só um
-worker numa versão anterior faz, durante uma atualização — não publica mais
-nada, e a trilha diz que a cadeia é desconhecida. Contá-la como o início de
-uma cadeia nova deixaria um ciclo reiniciar a contagem a cada run dessas.
+Uma run aberta por um evento sem registrar a posição na cadeia não publica
+mais nada: contá-la como o início de uma cadeia nova deixaria um ciclo
+reiniciar a contagem a cada run dessas. Só um worker numa versão anterior
+abre runs assim, então isso importa durante uma atualização, e é mais fraco
+que o limite enquanto a atualização está em andamento:
+
+- Enquanto algum worker da versão anterior ainda estiver rodando, uma cadeia
+  pode continuar sob ele, sem contagem, como antes.
+- Quando o último desses workers sair, a primeira run desse tipo que a
+  versão nova vir não publica mais nada.
+- A trilha diz que a cadeia é desconhecida só se um worker da versão nova
+  encerrou a run. Uma run que um worker antigo encerrou não traz essa linha,
+  embora os eventos dela fiquem retidos do mesmo jeito.
+
+Toda run finalizada é despachada, não importa quantas terminem entre duas
+varreduras: o despachante avança pelas runs finalizadas a partir de onde
+parou, em vez de olhar só as mais recentes.
 
 Oito deixa espaço para composição feita de propósito — um pipeline de poucos
 agentes, ou um ciclo de revisão que dá algumas voltas. Uma cadeia que chega
