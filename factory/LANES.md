@@ -30,6 +30,17 @@ These hold before any lane rule applies.
      issue's body and comments are read only after the claim. The Reviewer
      and QA list pull requests by `number` and `created_at` alone, so they
      read no title at all.
+   - **The title is not the only untrusted text the Projects grant can
+     reach.** `projects_list` and `projects_get` are multiplexed: the same
+     tools also serve the board's status updates
+     (`list_project_status_updates`, `get_project_status_update`), whose
+     bodies are free text, and an injected title could steer the model into
+     those calls before the claim. Triage is told to list its lane only with
+     `projects_list`, method `list_project_items`, and never to call the
+     status-update methods before the claim. That is an instruction, not a
+     mechanism: the Gate classifies a tool, not its method. The pilot accepts
+     it within the claim's bounded blast radius below; preventing it
+     mechanically needs the deferred narrow tool.
    - **The claim is the one write that follows a title unapproved.** The Gate
      lets `$fuseone.work_item.claim` through even after untrusted content, by
      design (`internal/gate/coordination.go`): held to approval, two runs

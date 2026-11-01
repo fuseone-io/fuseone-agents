@@ -33,8 +33,12 @@ platform, with no code written for the factory:
   `standing_approvals: forbidden`, and once it has chosen a card from the board
   its first act is the work-item claim, before it reads the issue or writes.
   Choosing from the board shows Triage the cards' titles — the board listing
-  always returns them — so a title is the one untrusted text a role reads
-  before its claim (#220). Triage is told to use it only to tell cards
+  always returns them — so a title is untrusted text a role reads before its
+  claim (#220). It is not the only text within reach: `projects_list` and
+  `projects_get` also serve the board's status updates, free text, and the
+  Gate classifies a tool, not its method; Triage is told to list with
+  `list_project_items` only, which the pilot accepts within the claim's
+  bounded blast radius. Triage is told to use a title only to tell cards
   apart, but a title can still sway the choice, and the claim is the one
   write that follows unapproved (it is a Gate coordination exemption). A
   wrong claim only holds that card for this role while the run is open,

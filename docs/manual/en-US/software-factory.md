@@ -40,8 +40,14 @@ and the role instructions live, reviewed like code, in
 - **One card per run.** A role wakes on its schedule, chooses a card, claims
   it with `$fuseone.work_item.claim` and works only that card. The claim is
   recorded in the run's trail, and no other run of the same role can take a
-  card that is held. Before the claim, Triage sees only the cards' titles,
-  because the board listing always returns them. A title is untrusted text:
+  card that is held. Before the claim, Triage is told to list its lane only
+  with `projects_list`, method `list_project_items`, so it sees the cards'
+  titles, which the board listing always returns. The same Projects tools can
+  also return the board's status updates, free text, and nothing in the
+  platform stops a model from asking for them, because the Gate classifies a
+  tool, not its method. The pilot accepts this within the claim's limits
+  below; preventing it needs the narrow tool that is deferred. A title is
+  untrusted text:
   the role is told to use it only to tell cards apart and to choose by age
   and label, and it reads the issue's body and comments after the claim. A
   title can still sway which card the model picks, and the claim needs no

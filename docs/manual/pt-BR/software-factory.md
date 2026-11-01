@@ -43,8 +43,14 @@ e as instruções dos papéis ficam, revisadas como código, em
 - **Um card por run.** Um papel acorda no seu horário, escolhe um card, faz o
   claim dele com `$fuseone.work_item.claim` e trabalha só nesse card. O claim
   fica registrado na trilha do run, e nenhum outro run do mesmo papel pode
-  pegar um card que já está reservado. Antes do claim, a Triagem vê só os
-  títulos dos cards, porque a listagem do board sempre traz os títulos. Um
+  pegar um card que já está reservado. Antes do claim, a Triagem é instruída
+  a listar a coluna só com o `projects_list`, método `list_project_items`, e
+  assim vê os títulos dos cards, que a listagem do board sempre traz. As
+  mesmas ferramentas de Projects também podem devolver os status updates do
+  board, que são texto livre, e nada na plataforma impede o modelo de pedir
+  esses dados, porque o Gate classifica a ferramenta, não o método. O piloto
+  aceita isso dentro dos limites do claim descritos abaixo; impedir de fato
+  exige a ferramenta específica que ficou para depois. Um
   título é texto não confiável: o papel é instruído a usar o título só para
   diferenciar os cards e a escolher por idade e rótulo, e lê o corpo e os
   comentários da issue depois do claim. Mesmo assim, um título pode

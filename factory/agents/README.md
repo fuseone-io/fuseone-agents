@@ -74,6 +74,17 @@ nothing a title says. That is an instruction, not something the platform
 enforces: a title is untrusted text the model reads before the claim, and it
 can sway which card the model picks.
 
+The title is not the only text the Projects grant can reach before the claim.
+`projects_list` and `projects_get` are multiplexed by a `method` argument, and
+the same tools serve the board's status updates (`list_project_status_updates`,
+`get_project_status_update`), whose bodies are free text. Triage is told to
+list its lane only with `projects_list`, method `list_project_items`, and
+never to call a status-update method before the claim, a line sealed in
+`internal/spec/factory_references_test.go`. The Gate classifies a tool, not
+its method, so nothing stops a steered model from calling one; the pilot
+accepts that within the claim's bounded blast radius below, and preventing it
+mechanically needs the deferred narrow tool.
+
 The claim itself is not held for approval. The Gate exempts
 `$fuseone.work_item.claim` as a coordination operation, even after untrusted
 content (`internal/gate/coordination.go`), so a crafted title can steer which
