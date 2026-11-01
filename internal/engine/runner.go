@@ -195,6 +195,7 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 				StoppedBy:      proposal.StoppedBy,
 				HeadlineRef:    headlineRef,
 				HeadlineDigest: headlineDigest(proposal.Headline),
+				EventsWithheld: eventsWithheld(start, state),
 			}),
 		})
 		return status(state), err
