@@ -61,6 +61,10 @@ const (
 	// agent stands at the stage the publisher said it must not publish to.
 	// Its own code so a publisher can tell it from a definition it got wrong.
 	CodeStageRefused Code = "fuseone:stage-refused"
+	// CodeNoMasterKey is a GitHub webhook's secret refused because the
+	// installation has no master key to seal it with (#202). Its own code so
+	// the console can say what to configure rather than report a failure.
+	CodeNoMasterKey Code = "fuseone:no-master-key"
 	// The two the memory form answers when what somebody typed looks like a
 	// credential. Separate codes because the console does different things: one
 	// is a refusal to explain, the other a question to ask. Neither carries the
