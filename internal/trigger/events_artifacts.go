@@ -1,7 +1,6 @@
 package trigger
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -11,15 +10,11 @@ import (
 // The claim-checks an event grants its listeners: what the source run
 // published, by name, carried forward with the source's labels.
 
-func (d *Dispatcher) contextArtifacts(
-	ctx context.Context, source domain.RunSummary, event domain.AgentEvent,
+func contextArtifacts(
+	source domain.RunSummary, steps []domain.Step, event domain.AgentEvent,
 ) ([]domain.ContextArtifact, error) {
-	if d.reader == nil || len(event.Artifacts) == 0 {
+	if len(event.Artifacts) == 0 {
 		return nil, nil
-	}
-	steps, err := d.reader.Read(ctx, source.RunID, domain.FirstSeq)
-	if err != nil {
-		return nil, fmt.Errorf("trigger: read source run %s for context: %w", source.RunID, err)
 	}
 	published, err := publishedArtifacts(source, steps)
 	if err != nil {

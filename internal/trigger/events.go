@@ -58,16 +58,16 @@ type Dispatcher struct {
 	log    *slog.Logger
 }
 
-func NewDispatcher(subs Subscriptions, runs Finished, opener *Opener, clock Clock, log *slog.Logger) *Dispatcher {
+// NewDispatcher needs the reader, not only the finished runs: the source
+// run's own steps say where it stands in a chain of events (#203), and a
+// dispatcher that could not read them would bound nothing.
+func NewDispatcher(
+	subs Subscriptions, runs Finished, reader RunReader, opener *Opener, clock Clock, log *slog.Logger,
+) *Dispatcher {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Dispatcher{subs: subs, runs: runs, opener: opener, clock: clock, log: log}
-}
-
-func (d *Dispatcher) WithRunReader(reader RunReader) *Dispatcher {
-	d.reader = reader
-	return d
+	return &Dispatcher{subs: subs, runs: runs, reader: reader, opener: opener, clock: clock, log: log}
 }
 
 // Window is how far back a sweep looks. Generous next to the sweep interval,
@@ -100,8 +100,19 @@ func (d *Dispatcher) Sweep(ctx context.Context, limit int) (int, error) {
 
 	opened := 0
 	for _, run := range finished {
-		for _, event := range emitters[run.AgentID] {
-			n, err := d.publish(ctx, run, event, listeners[event.Event])
+		events := listened(emitters[run.AgentID], listeners)
+		if len(events) == 0 {
+			continue
+		}
+		src, ok, err := d.readSource(ctx, run)
+		if err != nil {
+			return opened, err
+		}
+		if !ok {
+			continue
+		}
+		for _, event := range events {
+			n, err := d.publish(ctx, src, event, listeners[event.Event])
 			if err != nil {
 				return opened, err
 			}
@@ -111,20 +122,80 @@ func (d *Dispatcher) Sweep(ctx context.Context, limit int) (int, error) {
 	return opened, nil
 }
 
+// listened is the run's events somebody listens to: nothing else is worth
+// reading the run for.
+func listened(events []domain.AgentEvent, listeners map[string][]domain.AgentID) []domain.AgentEvent {
+	var out []domain.AgentEvent
+	for _, event := range events {
+		if len(listeners[event.Event]) > 0 {
+			out = append(out, event)
+		}
+	}
+	return out
+}
+
+// source is a finished run as its events see it: its own steps, and the
+// chain a run its events open would stand in.
+type source struct {
+	run   domain.RunSummary
+	steps []domain.Step
+	next  domain.EventChain
+}
+
+/*
+readSource reads the finished run once, for its context and its place in a
+chain, and reports false when its events go no further.
+
+A run already MaxEventHops from its root opens nothing (#203). The run itself
+recorded that on its closing step, where the trail shows it; here it is only
+honoured, from the same recorded start, so a dispatcher on any replica
+reaches the same answer.
+*/
+func (d *Dispatcher) readSource(ctx context.Context, run domain.RunSummary) (source, bool, error) {
+	steps, err := d.reader.Read(ctx, run.RunID, domain.FirstSeq)
+	if err != nil {
+		return source{}, false, fmt.Errorf("trigger: read source run %s: %w", run.RunID, err)
+	}
+	chain, err := chainOf(run.RunID, steps)
+	if err != nil {
+		return source{}, false, err
+	}
+	next, ok := chain.Next(run.RunID)
+	if !ok {
+		d.log.Info("events withheld: the chain reached its hop limit",
+			"from", run.RunID, "root", chain.Root, "hop", chain.Hop, "limit", domain.MaxEventHops)
+		return source{}, false, nil
+	}
+	return source{run: run, steps: steps, next: next}, true, nil
+}
+
+// chainOf is the chain sealed on the run's start. A start that will not
+// decode fails the sweep: read as a root, it would restart the count.
+func chainOf(run domain.RunID, steps []domain.Step) (*domain.EventChain, error) {
+	for _, step := range steps {
+		if step.Kind != domain.StepRunStarted {
+			continue
+		}
+		var p domain.RunStartedPayload
+		if err := json.Unmarshal(step.Payload, &p); err != nil {
+			return nil, fmt.Errorf("trigger: decode start of %s: %w", run, err)
+		}
+		return p.Chain, nil
+	}
+	return nil, fmt.Errorf("trigger: source run %s has no start", run)
+}
+
 // publish opens one run per listener.
 func (d *Dispatcher) publish(
-	ctx context.Context, source domain.RunSummary, event domain.AgentEvent, listeners []domain.AgentID,
+	ctx context.Context, src source, event domain.AgentEvent, listeners []domain.AgentID,
 ) (int, error) {
-	if len(listeners) == 0 {
-		return 0, nil
-	}
-	artifacts, err := d.contextArtifacts(ctx, source, event)
+	artifacts, err := contextArtifacts(src.run, src.steps, event)
 	if err != nil {
 		return 0, err
 	}
 	opened := 0
 	for _, agent := range listeners {
-		created, err := d.openListener(ctx, source, event, agent, artifacts)
+		created, err := d.openListener(ctx, src, event, agent, artifacts)
 		if err != nil {
 			return opened, err
 		}
@@ -136,19 +207,20 @@ func (d *Dispatcher) publish(
 }
 
 func (d *Dispatcher) openListener(
-	ctx context.Context, source domain.RunSummary, event domain.AgentEvent,
+	ctx context.Context, src source, event domain.AgentEvent,
 	agent domain.AgentID, artifacts []domain.ContextArtifact,
 ) (bool, error) {
 	// An agent that listens to what it publishes would trigger itself for
-	// ever. Refused here as well as at authoring time, because cycles can be
-	// formed across two agents and only the dispatcher sees the whole graph.
-	if agent == source.AgentID {
+	// ever. Refused at once rather than after MaxEventHops runs: a cycle of
+	// one is never what anybody meant.
+	if agent == src.run.AgentID {
 		return false, nil
 	}
+	next := src.next
 	result, err := d.opener.Open(ctx, Request{
-		Agent: agent, IdemKey: fmt.Sprintf("event:%s:%s:%s", source.RunID, event.Event, agent),
-		Trigger: "event", By: source.OnBehalfOf, Input: inputFor(source, event, artifacts),
-		Labels: source.Labels.Clone(), ContextArtifacts: artifacts,
+		Agent: agent, IdemKey: fmt.Sprintf("event:%s:%s:%s", src.run.RunID, event.Event, agent),
+		Trigger: "event", By: src.run.OnBehalfOf, Input: inputFor(src.run, event, artifacts),
+		Labels: src.run.Labels.Clone(), ContextArtifacts: artifacts, Chain: &next,
 	})
 	if err != nil {
 		if isRefusal(err) {
@@ -159,7 +231,7 @@ func (d *Dispatcher) openListener(
 	}
 	if result.Created {
 		d.log.Info("event opened a run",
-			"event", event.Event, "from", source.RunID, "agent", agent, "run", result.RunID)
+			"event", event.Event, "from", src.run.RunID, "agent", agent, "run", result.RunID)
 	}
 	return result.Created, nil
 }

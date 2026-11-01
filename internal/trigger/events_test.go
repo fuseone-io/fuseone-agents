@@ -56,7 +56,43 @@ func dispatcherFor(t *testing.T, w wiring, done finished) (*trigger.Dispatcher, 
 	}}
 	clock := fixedClock{t: time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)}
 	opener := trigger.NewOpener(store, reg, clock).WithContent(engine.NewMemoryContent())
-	return trigger.NewDispatcher(w, done, opener, clock, nil), store
+	seedSources(t, store, done)
+	return trigger.NewDispatcher(w, done, store, opener, clock, nil), store
+}
+
+// eventOpened is the runs in the ledger other than the seeded source run-1:
+// the ones the sweep opened.
+func eventOpened(store *ledger.Memory) ([]domain.RunID, error) {
+	all, err := store.Runs(context.Background())
+	var out []domain.RunID
+	for _, id := range all {
+		if id != "run-1" {
+			out = append(out, id)
+		}
+	}
+	return out, err
+}
+
+// seeded opens done's runs in the ledger and hands them back.
+func seeded(t *testing.T, store *ledger.Memory, done finished) finished {
+	t.Helper()
+	seedSources(t, store, done)
+	return done
+}
+
+// seedSources opens each finished run in the ledger, as a run no event
+// opened: the dispatcher reads its own steps for where it stands in a chain.
+func seedSources(t *testing.T, store *ledger.Memory, done finished) {
+	t.Helper()
+	for _, run := range done {
+		if _, err := store.Append(context.Background(), domain.Step{
+			RunID: run.RunID, Kind: domain.StepRunStarted, Scope: run.Scope,
+			AgentID: run.AgentID, VersionID: "v1", OnBehalfOf: run.OnBehalfOf,
+			Labels: run.Labels, Payload: []byte(`{"trigger":"manual"}`),
+		}); err != nil {
+			t.Fatalf("open source %s: %v", run.RunID, err)
+		}
+	}
 }
 
 func aFinishedRun(agent domain.AgentID, id domain.RunID) finished {
@@ -82,7 +118,7 @@ func TestSweep_aFinishedRun_startsWhoeverListens(t *testing.T) {
 		t.Fatalf("opened %d runs, want 1", opened)
 	}
 
-	runs, _ := store.Runs(context.Background())
+	runs, _ := eventOpened(store)
 	if len(runs) != 1 {
 		t.Errorf("the ledger holds %d runs, want the one the event opened", len(runs))
 	}
@@ -104,12 +140,12 @@ func TestSweep_eventContextReachesTheListeningRunInput(t *testing.T) {
 			Artifacts: []string{"triage_summary", "suspected_cause"},
 		}}},
 		listen: map[string][]domain.AgentID{"incident.triaged": {"cobranca"}},
-	}, aFinishedRun("triage", "run-1"), opener, clock, nil)
+	}, seeded(t, store, aFinishedRun("triage", "run-1")), store, opener, clock, nil)
 
 	if _, err := d.Sweep(context.Background(), 50); err != nil {
 		t.Fatalf("Sweep: %v", err)
 	}
-	runs, _ := store.Runs(context.Background())
+	runs, _ := eventOpened(store)
 	if len(runs) != 1 {
 		t.Fatalf("runs = %v, want the listener run", runs)
 	}
@@ -190,7 +226,7 @@ func TestSweep_eventArtifactsBecomeAContextContract(t *testing.T) {
 		OnBehalfOf: "usr_ana",
 		Labels: domain.ScopeLabels(domain.Scope{Company: "acme", Area: "cx"}).
 			Union(domain.NewLabels(domain.LabelUntrusted)),
-	}}, opener, clock, nil).WithRunReader(store)
+	}}, store, opener, clock, nil)
 
 	if _, err := d.Sweep(ctx, 50); err != nil {
 		t.Fatalf("Sweep: %v", err)
@@ -277,7 +313,7 @@ func TestSweep_finalAnswerCanBecomeAContextContract(t *testing.T) {
 		RunID: "run-1", AgentID: "triage", Phase: "finished",
 		Scope:  domain.Scope{Company: "acme", Area: "cx"},
 		Labels: sourceLabels, OnBehalfOf: "usr_ana",
-	}}, opener, clock, nil).WithRunReader(store)
+	}}, store, opener, clock, nil)
 
 	if _, err := d.Sweep(ctx, 50); err != nil {
 		t.Fatalf("Sweep: %v", err)
@@ -331,7 +367,7 @@ func TestSweep_malformedSourceFinishFailsInsteadOfDroppingContext(t *testing.T) 
 			Event: "incident.triaged", Artifacts: []string{"triage_summary"},
 		}}},
 		listen: map[string][]domain.AgentID{"incident.triaged": {"cobranca"}},
-	}, aFinishedRun("triage", "run-1"), opener, clock, nil).WithRunReader(store)
+	}, aFinishedRun("triage", "run-1"), store, opener, clock, nil)
 
 	if _, err := d.Sweep(ctx, 50); err == nil {
 		t.Fatal("Sweep succeeded with a malformed source finish payload")
@@ -358,7 +394,7 @@ func TestSweep_theListeningRunInheritsTheSourceAuthorityAndLabels(t *testing.T) 
 	if _, err := d.Sweep(context.Background(), 50); err != nil {
 		t.Fatalf("Sweep: %v", err)
 	}
-	runs, _ := store.Runs(context.Background())
+	runs, _ := eventOpened(store)
 	if len(runs) != 1 {
 		t.Fatalf("runs = %v, want the listener run", runs)
 	}
@@ -390,12 +426,12 @@ func TestSweep_crossAreaSourceLabelsDoNotOpenAListeningRun(t *testing.T) {
 	d := trigger.NewDispatcher(wiring{
 		emits:  map[domain.AgentID][]domain.AgentEvent{"triage": {{Event: "incident.triaged"}}},
 		listen: map[string][]domain.AgentID{"incident.triaged": {"cobranca"}},
-	}, finished{{
+	}, seeded(t, store, finished{{
 		RunID: "run-1", AgentID: "triage", Phase: "finished",
 		Scope:      domain.Scope{Company: "acme", Area: "cx"},
 		OnBehalfOf: "usr_ana",
 		Labels:     domain.ScopeLabels(domain.Scope{Company: "acme", Area: "cx"}),
-	}}, opener, clock, nil)
+	}}), store, opener, clock, nil)
 
 	opened, err := d.Sweep(context.Background(), 50)
 	if err != nil {
@@ -404,7 +440,7 @@ func TestSweep_crossAreaSourceLabelsDoNotOpenAListeningRun(t *testing.T) {
 	if opened != 0 {
 		t.Fatalf("opened %d runs, want none", opened)
 	}
-	runs, _ := store.Runs(context.Background())
+	runs, _ := eventOpened(store)
 	if len(runs) != 0 {
 		t.Fatalf("ledger holds %d runs, want none", len(runs))
 	}
@@ -432,7 +468,7 @@ func TestSweep_runTwice_opensTheSameRunOnce(t *testing.T) {
 	if opened != 0 {
 		t.Errorf("the second sweep opened %d runs, want none", opened)
 	}
-	runs, _ := store.Runs(context.Background())
+	runs, _ := eventOpened(store)
 	if len(runs) != 1 {
 		t.Errorf("the ledger holds %d runs, want one", len(runs))
 	}
@@ -469,7 +505,7 @@ func TestSweep_anAgentListeningToItself_doesNotLoop(t *testing.T) {
 		t.Fatalf("Sweep: %v", err)
 	}
 
-	runs, _ := store.Runs(context.Background())
+	runs, _ := eventOpened(store)
 	if len(runs) != 0 {
 		t.Errorf("the ledger holds %d runs, want none: the agent listens to itself", len(runs))
 	}
@@ -493,7 +529,7 @@ func TestSweep_aStoppedPlatform_publishesNothingAndDoesNotFail(t *testing.T) {
 	d := trigger.NewDispatcher(wiring{
 		emits:  map[domain.AgentID][]domain.AgentEvent{"triage": {{Event: "ticket.triado"}}},
 		listen: map[string][]domain.AgentID{"ticket.triado": {"cobranca"}},
-	}, aFinishedRun("triage", "run-1"), opener, clock, nil)
+	}, seeded(t, store, aFinishedRun("triage", "run-1")), store, opener, clock, nil)
 
 	opened, err := d.Sweep(context.Background(), 50)
 	if err != nil {

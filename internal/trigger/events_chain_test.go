@@ -1,0 +1,257 @@
+package trigger_test
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+	"time"
+
+	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/trigger"
+)
+
+/*
+A chain of event-opened runs carries its length in the ledger, and stops at
+domain.MaxEventHops (#203). Without it an A → B → A cycle is bounded only by
+budget: each hop has a fresh idempotency key from its new source run.
+*/
+
+var chainScope = domain.Scope{Company: "acme", Area: "cx"}
+
+// byAgent publishes each agent under its own id, so a run opened for B is B's.
+type byAgent []domain.AgentID
+
+func (b byAgent) Versions(_ context.Context, agent domain.AgentID) ([]domain.AgentSummary, error) {
+	for _, known := range b {
+		if known == agent {
+			return []domain.AgentSummary{{ID: agent, VersionID: "v1", Scope: chainScope, Latest: true}}, nil
+		}
+	}
+	return nil, nil
+}
+
+// pingPong is the cycle: A's event starts B, B's starts A.
+var pingPong = wiring{
+	emits: map[domain.AgentID][]domain.AgentEvent{
+		"agent-a": {{Event: "ping"}}, "agent-b": {{Event: "pong"}},
+	},
+	listen: map[string][]domain.AgentID{"ping": {"agent-b"}, "pong": {"agent-a"}},
+}
+
+// chainDispatcher is one worker's dispatcher over a shared ledger: the
+// finished runs it sweeps are the ledger's own, as in production.
+func chainDispatcher(store *ledger.Memory) *trigger.Dispatcher {
+	clock := fixedClock{t: time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)}
+	opener := trigger.NewOpener(store, byAgent{"agent-a", "agent-b"}, clock).
+		WithContent(engine.NewMemoryContent())
+	return trigger.NewDispatcher(pingPong, store, store, opener, clock, nil)
+}
+
+// startRun seals a run_started, carrying chain when an event opened it.
+func startRun(t *testing.T, store *ledger.Memory, id domain.RunID, agent domain.AgentID, chain *domain.EventChain) {
+	t.Helper()
+	if _, err := store.Append(context.Background(), domain.Step{
+		RunID: id, Kind: domain.StepRunStarted, Scope: chainScope, AgentID: agent, VersionID: "v1",
+		IdemKey: "start:" + string(id), At: time.Date(2026, 10, 31, 8, 0, 0, 0, time.UTC),
+		Payload: mustJSON(domain.RunStartedPayload{Trigger: "manual", Chain: chain}),
+	}); err != nil {
+		t.Fatalf("start %s: %v", id, err)
+	}
+}
+
+func finishRun(t *testing.T, store *ledger.Memory, id domain.RunID) {
+	t.Helper()
+	if _, err := store.Append(context.Background(), domain.Step{
+		RunID: id, Kind: domain.StepRunFinished, Scope: chainScope,
+		At: time.Date(2026, 10, 31, 8, 30, 0, 0, time.UTC), Payload: mustJSON(domain.RunFinishedPayload{}),
+	}); err != nil {
+		t.Fatalf("finish %s: %v", id, err)
+	}
+}
+
+// openedChains is the chain sealed on every run an event opened.
+func openedChains(t *testing.T, store *ledger.Memory) map[domain.RunID]domain.EventChain {
+	t.Helper()
+	ids, err := store.Runs(context.Background())
+	if err != nil {
+		t.Fatalf("runs: %v", err)
+	}
+	out := map[domain.RunID]domain.EventChain{}
+	for _, id := range ids {
+		steps, err := store.Read(context.Background(), id, domain.FirstSeq)
+		if err != nil {
+			t.Fatalf("read %s: %v", id, err)
+		}
+		var p domain.RunStartedPayload
+		if err := json.Unmarshal(steps[0].Payload, &p); err != nil {
+			t.Fatalf("decode start of %s: %v", id, err)
+		}
+		if p.Trigger == "event" {
+			if p.Chain == nil {
+				t.Fatalf("%s was opened by an event and carries no chain", id)
+			}
+			out[id] = *p.Chain
+		}
+	}
+	return out
+}
+
+func TestSweep_aRunNoEventOpened_opensItsListenerAtHopOne(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	startRun(t, store, "run-root", "agent-a", nil)
+	finishRun(t, store, "run-root")
+
+	if _, err := chainDispatcher(store).Sweep(context.Background(), 50); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	chains := openedChains(t, store)
+	if len(chains) != 1 {
+		t.Fatalf("opened %d runs, want the listener", len(chains))
+	}
+	for _, chain := range chains {
+		if chain != (domain.EventChain{Root: "run-root", Hop: 1}) {
+			t.Fatalf("chain = %+v, want root run-root at hop 1", chain)
+		}
+	}
+}
+
+func TestSweep_anEventOpenedRun_carriesItsRootOneHopFurther(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	startRun(t, store, "run-mid", "agent-a", &domain.EventChain{Root: "run-root", Hop: 3})
+	finishRun(t, store, "run-mid")
+
+	if _, err := chainDispatcher(store).Sweep(context.Background(), 50); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	chains := openedChains(t, store)
+	if len(chains) != 1 {
+		t.Fatalf("opened %d runs, want the listener", len(chains))
+	}
+	for _, chain := range chains {
+		if chain != (domain.EventChain{Root: "run-root", Hop: 4}) {
+			t.Fatalf("chain = %+v, want root run-root at hop 4", chain)
+		}
+	}
+}
+
+func TestSweep_aRunAtTheHopLimit_opensNoListener(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	startRun(t, store, "run-last", "agent-a", &domain.EventChain{Root: "run-root", Hop: domain.MaxEventHops})
+	finishRun(t, store, "run-last")
+
+	opened, err := chainDispatcher(store).Sweep(context.Background(), 50)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 0 {
+		t.Fatalf("opened %d runs past the hop limit, want none", opened)
+	}
+	if ids, _ := store.Runs(context.Background()); len(ids) != 1 {
+		t.Fatalf("the ledger holds %d runs, want only the one at the limit", len(ids))
+	}
+}
+
+func TestSweep_redeliveringTheSameEvent_doesNotCountItAgain(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	startRun(t, store, "run-mid", "agent-a", &domain.EventChain{Root: "run-root", Hop: 2})
+	finishRun(t, store, "run-mid")
+
+	for range 3 {
+		if _, err := chainDispatcher(store).Sweep(context.Background(), 50); err != nil {
+			t.Fatalf("Sweep: %v", err)
+		}
+	}
+
+	chains := openedChains(t, store)
+	if len(chains) != 1 {
+		t.Fatalf("event-opened runs = %d after three sweeps, want one listener", len(chains))
+	}
+	for _, chain := range chains {
+		if chain.Hop != 3 {
+			t.Fatalf("listener at hop %d after three sweeps, want 3", chain.Hop)
+		}
+	}
+}
+
+/*
+The cycle the issue names, from the real entry: a finished run's event opens
+the next run, that run finishes, its event opens the next. Each pass is a
+different worker's dispatcher over the same ledger, so the count can only
+come from the ledger. The chain stops with the run at the limit: the root
+plus MaxEventHops event-opened runs, however many more passes run.
+*/
+func TestSweep_aTwoAgentCycle_stopsAtTheHopLimitAcrossWorkers(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	startRun(t, store, "run-root", "agent-a", nil)
+	finishRun(t, store, "run-root")
+
+	for range 3 * domain.MaxEventHops {
+		if _, err := chainDispatcher(store).Sweep(context.Background(), 1000); err != nil {
+			t.Fatalf("Sweep: %v", err)
+		}
+		finishOpenRuns(t, store)
+	}
+
+	chains := openedChains(t, store)
+	if len(chains) != domain.MaxEventHops {
+		t.Fatalf("the cycle opened %d runs, want %d", len(chains), domain.MaxEventHops)
+	}
+	deepest := 0
+	for _, chain := range chains {
+		if chain.Root != "run-root" {
+			t.Fatalf("chain root = %s, want run-root", chain.Root)
+		}
+		deepest = max(deepest, chain.Hop)
+	}
+	if deepest != domain.MaxEventHops {
+		t.Fatalf("deepest hop = %d, want %d", deepest, domain.MaxEventHops)
+	}
+}
+
+// A start that will not decode fails the sweep. Read as a root instead, it
+// would restart the count, and the cycle would go round again.
+func TestSweep_aSourceStartThatWillNotDecode_failsRatherThanRestartingTheCount(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	if _, err := store.Append(context.Background(), domain.Step{
+		RunID: "run-mid", Kind: domain.StepRunStarted, Scope: chainScope, AgentID: "agent-a",
+		VersionID: "v1", Payload: []byte(`{"trigger":"event","chain":{"hop":"eight"}}`),
+	}); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	finishRun(t, store, "run-mid")
+
+	if _, err := chainDispatcher(store).Sweep(context.Background(), 50); err == nil {
+		t.Fatal("Sweep succeeded on a source whose chain will not decode")
+	}
+	if ids, _ := store.Runs(context.Background()); len(ids) != 1 {
+		t.Fatalf("the ledger holds %d runs, want only the source", len(ids))
+	}
+}
+
+// finishOpenRuns ends every run still going, as a worker would.
+func finishOpenRuns(t *testing.T, store *ledger.Memory) {
+	t.Helper()
+	running, err := store.ListRuns(context.Background(), domain.RunFilter{}, "running", 1000)
+	if err != nil {
+		t.Fatalf("list running: %v", err)
+	}
+	for _, run := range running {
+		finishRun(t, store, run.RunID)
+	}
+}
