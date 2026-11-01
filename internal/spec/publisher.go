@@ -62,6 +62,10 @@ type Publication struct {
 // version closes, judged against the graph it is written into (#227).
 type Published struct {
 	EventCycles domain.EventCycleSearch
+	// Scopes is where each agent named in EventCycles lives, so the answer
+	// can hide an agent its reader may not read. The cycles are judged across
+	// every scope; who is told which names is the caller's to decide.
+	Scopes map[domain.AgentID]domain.Scope
 }
 
 /*
@@ -88,7 +92,7 @@ func (p *Publisher) Publish(ctx context.Context, pub Publication) (Published, er
 	if err := refuseStage(ctx, tx, pub.Spec.ID, pub.RefuseStages); err != nil {
 		return Published{}, err
 	}
-	judged, err := p.judge(ctx, tx, pub.Spec)
+	judged, err := p.judge(ctx, tx, inCompany(pub.Spec, pub.Company))
 	if err != nil {
 		return Published{}, err
 	}
@@ -111,7 +115,7 @@ func (p *Publisher) judge(ctx context.Context, tx pgx.Tx, s Spec) (Published, er
 	if err != nil {
 		return Published{}, fmt.Errorf("spec: publish %s: %w", s.ID, err)
 	}
-	judged := Published{EventCycles: domain.EventCyclesThrough(WiringWith(wiring, s), s.ID)}
+	judged := JudgedIn(WiringWith(wiring, s), s.ID)
 	if p.afterJudging != nil {
 		p.afterJudging()
 	}
@@ -162,4 +166,25 @@ func (p *Publisher) SetPaused(
 
 func (p *Publisher) IsPaused(ctx context.Context, agent domain.AgentID) (bool, error) {
 	return p.state.IsPaused(ctx, agent)
+}
+
+// JudgedIn finds the cycles through the agent and where each agent in them
+// lives.
+func JudgedIn(w domain.EventWiring, agent domain.AgentID) Published {
+	out := Published{EventCycles: domain.EventCyclesThrough(w, agent), Scopes: map[domain.AgentID]domain.Scope{}}
+	for _, cycle := range out.EventCycles.Cycles {
+		for _, a := range cycle {
+			out.Scopes[a] = w[a].Scope
+		}
+	}
+	return out
+}
+
+// inCompany is the version as it will be written: a file names no company,
+// and the publication supplies the one it is published into.
+func inCompany(s Spec, company domain.CompanyID) Spec {
+	if s.Company == "" {
+		s.Company = company
+	}
+	return s
 }

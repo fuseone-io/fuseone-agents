@@ -31,7 +31,7 @@ func WiringOf(specs []Spec) domain.EventWiring {
 }
 
 func wiringOf(s Spec) domain.AgentWiring {
-	out := domain.AgentWiring{Listens: listenedEvents(s)}
+	out := domain.AgentWiring{Listens: listenedEvents(s), Scope: domain.Scope{Company: s.Company, Area: s.Area}}
 	for _, e := range s.Emits {
 		out.Emits = append(out.Emits, e.Event)
 	}
@@ -73,7 +73,7 @@ a read per agent it replaced cost a round trip per agent, under the lock.
 */
 func (r *Registry) wiring(ctx context.Context) (domain.EventWiring, error) {
 	rows, err := r.q.Query(ctx, `
-		select distinct on (s.agent_id) s.agent_id, s.emits, s.triggers
+		select distinct on (s.agent_id) s.agent_id, s.company_id, s.area_id, s.emits, s.triggers
 		from agent_specs s
 		left join agent_state st on st.agent_id = s.agent_id
 		order by s.agent_id, (st.current_version = s.version_id) desc nulls last,
@@ -86,16 +86,17 @@ func (r *Registry) wiring(ctx context.Context) (domain.EventWiring, error) {
 	w := domain.EventWiring{}
 	for rows.Next() {
 		var (
-			agent           string
-			emits, triggers []byte
+			agent, company, area string
+			emits, triggers      []byte
 		)
-		if err := rows.Scan(&agent, &emits, &triggers); err != nil {
+		if err := rows.Scan(&agent, &company, &area, &emits, &triggers); err != nil {
 			return nil, fmt.Errorf("spec: scan the event wiring: %w", err)
 		}
 		s, err := declaredEvents(domain.AgentID(agent), emits, triggers)
 		if err != nil {
 			return nil, err
 		}
+		s.Company, s.Area = domain.CompanyID(company), domain.AreaID(area)
 		w[s.ID] = wiringOf(s)
 	}
 	if err := rows.Err(); err != nil {

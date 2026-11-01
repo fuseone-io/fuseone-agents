@@ -169,7 +169,7 @@ func (s *Server) PublishAgent(
 		Created:           !before[published.Version],
 		Paused:            paused,
 		Definition:        ptr(string(definition)),
-		EventCycleWarning: eventCycleWarning(judged.EventCycles),
+		EventCycleWarning: eventCycleWarning(judged, auth.VisibleScopes(ctx, domain.PermAgentRead)),
 	}, nil
 }
 

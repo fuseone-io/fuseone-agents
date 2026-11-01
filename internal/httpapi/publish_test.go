@@ -66,8 +66,7 @@ func (p *publisher) Publish(_ context.Context, pub spec.Publication) (spec.Publi
 			return spec.Published{}, fmt.Errorf("%w: %s is %s", spec.ErrStageRefused, pub.Spec.ID, p.stage)
 		}
 	}
-	judged := spec.Published{EventCycles: domain.EventCyclesThrough(
-		spec.WiringWith(spec.WiringOf(slices.Collect(maps.Values(p.latest))), pub.Spec), pub.Spec.ID)}
+	judged := spec.JudgedIn(spec.WiringWith(spec.WiringOf(slices.Collect(maps.Values(p.latest))), pub.Spec), pub.Spec.ID)
 	if p.afterJudging != nil {
 		p.afterJudging(pub.Spec.ID)
 	}

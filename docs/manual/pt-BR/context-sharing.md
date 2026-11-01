@@ -139,6 +139,11 @@ laço é publicada sem aviso. Só aparecem laços que passam pelo agente que
 você publica — um laço entre outros agentes não foi fechado pela sua
 publicação.
 
+Os laços são procurados em todas as empresas e áreas, porque um laço existe
+onde quer que os agentes dele estejam, mas o aviso só nomeia os agentes que
+você pode ler. Um agente fora do seu acesso aparece como "um agente fora do
+seu acesso": o laço e o tamanho dele você pode saber, o nome não.
+
 Um agente que escuta o próprio evento aparece sozinho,
 `developer → developer`, e o aviso diz isso: a plataforma nunca inicia um
 agente pelo próprio evento, então esse gatilho não faz nada.

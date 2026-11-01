@@ -29,8 +29,12 @@ export function eventCycleMessage(
       ? t("agents.eventCycleUnchecked", { hops: warning.hopLimit })
       : undefined;
   }
+  // The server writes an agent the reader may not read as an empty name:
+  // the loop is real, and that agent's name is not theirs to learn.
+  const named = (agent: string | undefined) =>
+    agent || t("agents.eventCycleHidden");
   const loops = warning.cycles.map((agents) =>
-    [...agents, agents[0]].join(" → "),
+    [...agents, agents[0]].map(named).join(" → "),
   );
   const cycles = new Intl.ListFormat(locale, { type: "conjunction" }).format(
     loops,

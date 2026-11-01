@@ -76,6 +76,22 @@ describe("the warning a publish that closes an event cycle shows", () => {
     expect(message).not.toMatch(/may not be all/);
   });
 
+  it("names an agent the reader may not read as outside their access", () => {
+    const pt_ = eventCycleMessage(
+      { cycles: [["dev", ""]], truncated: false, hopLimit: 8 },
+      pt,
+      "pt-BR",
+    );
+    const en_ = eventCycleMessage(
+      { cycles: [["dev", ""]], truncated: false, hopLimit: 8 },
+      en,
+      "en-US",
+    );
+
+    expect(pt_).toContain("dev → um agente fora do seu acesso → dev");
+    expect(en_).toContain("dev → an agent outside your access → dev");
+  });
+
   it("says the graph went unchecked when the search ran out first", () => {
     const message = eventCycleMessage(
       { cycles: [], truncated: true, hopLimit: 8 },

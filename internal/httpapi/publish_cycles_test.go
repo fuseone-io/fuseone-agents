@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"testing"
@@ -20,18 +21,31 @@ func emitsAndListens(emits, listens string) *openapi.PublishAgentJSONRequestBody
 	})
 }
 
-// looping is a current version that publishes one event and starts on
-// another, as the fake publisher holds it.
+// looping is a current version in acme/cx that publishes one event and
+// starts on another, as the fake publisher holds it.
 func looping(id domain.AgentID, emits, listens string) spec.Spec {
+	return loopingIn("cx", id, emits, listens)
+}
+
+// loopingIn is looping in another area of acme.
+func loopingIn(area domain.AreaID, id domain.AgentID, emits, listens string) spec.Spec {
 	return spec.Spec{
-		ID: id, Emits: spec.Emits{{Event: emits}},
+		ID: id, Company: "acme", Area: area, Emits: spec.Emits{{Event: emits}},
 		Triggers: []spec.Trigger{{Type: spec.TriggerEvent, Event: listens}},
 	}
 }
 
 func publishAs(t *testing.T, pub *publisher, agent string, body *openapi.PublishAgentJSONRequestBody) openapi.AgentPublished {
 	t.Helper()
-	got, err := tryPublish(publishServer(t, pub), agent, body)
+	return publishBy(t, inArea("cx", domain.RoleAuthor), pub, agent, body)
+}
+
+// publishBy is publishAs for a caller of the test's choosing.
+func publishBy(
+	t *testing.T, caller context.Context, pub *publisher, agent string, body *openapi.PublishAgentJSONRequestBody,
+) openapi.AgentPublished {
+	t.Helper()
+	got, err := tryPublishBy(caller, publishServer(t, pub), agent, body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +54,13 @@ func publishAs(t *testing.T, pub *publisher, agent string, body *openapi.Publish
 
 // tryPublish is publishAs for a goroutine, which may not stop the test.
 func tryPublish(s *Server, agent string, body *openapi.PublishAgentJSONRequestBody) (openapi.AgentPublished, error) {
-	resp, err := s.PublishAgent(inArea("cx", domain.RoleAuthor),
+	return tryPublishBy(inArea("cx", domain.RoleAuthor), s, agent, body)
+}
+
+func tryPublishBy(
+	caller context.Context, s *Server, agent string, body *openapi.PublishAgentJSONRequestBody,
+) (openapi.AgentPublished, error) {
+	resp, err := s.PublishAgent(caller,
 		openapi.PublishAgentRequestObject{AgentId: agent, Body: body})
 	if err != nil {
 		return openapi.AgentPublished{}, fmt.Errorf("PublishAgent %s: %w", agent, err)
@@ -171,5 +191,40 @@ func TestPublishAgent_twoPublicationsCloseACycleTogether_theSecondToJudgeWarns(t
 	}
 	if got := <-second; got.EventCycleWarning == nil {
 		t.Error("reviewer was not warned of the cycle it closed")
+	}
+}
+
+/*
+A cycle through an agent the caller may not read is named without that
+agent (review round 2).
+
+The cycle is judged across the whole installation, because it is real
+wherever its agents live. But an author with the right to publish in cx is
+not owed the names of agents in billing, which GetAgent and ListAgents hide
+from them: the answer keeps every step of the loop and the hop limit, and
+writes an agent outside the caller's read access as an empty name.
+*/
+func TestPublishAgent_aCycleThroughAnAreaTheCallerCannotRead_hidesThoseAgents(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher(loopingIn("billing", "invoicer", "review.done", "code.ready"))
+
+	got := publishAs(t, pub, "developer", emitsAndListens("code.ready", "review.done"))
+
+	want := &openapi.EventCycleWarning{Cycles: [][]string{{"developer", ""}}, HopLimit: domain.MaxEventHops}
+	if !reflect.DeepEqual(got.EventCycleWarning, want) {
+		t.Errorf("warning = %+v, want %+v", got.EventCycleWarning, want)
+	}
+}
+
+// A caller who may read agents everywhere is told every name.
+func TestPublishAgent_aCycleAcrossAreas_isNamedInFullToAnInstallationWideReader(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher(loopingIn("billing", "invoicer", "review.done", "code.ready"))
+
+	got := publishBy(t, everywhere(domain.RoleAdmin), pub, "developer", emitsAndListens("code.ready", "review.done"))
+
+	want := &openapi.EventCycleWarning{Cycles: [][]string{{"developer", "invoicer"}}, HopLimit: domain.MaxEventHops}
+	if !reflect.DeepEqual(got.EventCycleWarning, want) {
+		t.Errorf("warning = %+v, want %+v", got.EventCycleWarning, want)
 	}
 }

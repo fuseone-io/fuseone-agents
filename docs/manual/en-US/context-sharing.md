@@ -134,6 +134,11 @@ agent's current one: a version that stops listening to the loop publishes
 without a warning. Only loops through the agent you publish are named — one
 among other agents is not something your publish closed.
 
+Loops are found across every company and area, because a loop is real
+wherever its agents live, but the warning names only the agents you may read.
+An agent outside your access appears as "an agent outside your access": the
+loop and its length are yours to know, its name is not.
+
 An agent that listens to its own event is named alone, `developer →
 developer`, and the warning says so: the platform never starts an agent from
 its own event, so that trigger does nothing.

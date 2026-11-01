@@ -18,6 +18,11 @@ type EventCycle []AgentID
 type AgentWiring struct {
 	Emits   []string
 	Listens []string
+	// Scope is where the agent lives. Not read by the search, which judges
+	// across every scope because a cycle is real wherever its agents are;
+	// carried so whoever shows the answer can hide what its reader may not
+	// read.
+	Scope Scope
 }
 
 /*
