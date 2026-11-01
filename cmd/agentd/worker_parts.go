@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -75,6 +76,11 @@ type workerParts struct {
 	egress   *egress.Postgres
 	dedupe   *effectdedupe.Postgres
 	known    *known.Servers
+
+	// toolTicks drives the tool reconciler's passes in a journey, which needs
+	// to know a pass has happened. Nil in a running worker: the watch passes
+	// every toolRefresh.
+	toolTicks <-chan time.Time
 }
 
 // openWorkerParts connects everything a worker reads before it runs.

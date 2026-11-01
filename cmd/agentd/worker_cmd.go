@@ -83,7 +83,7 @@ func workerCmd(args []string) error {
 	}
 	parts.catalog.WithMetrics(metrics)
 
-	if err := parts.connectTools(ctx, cfg.servers, metrics); err != nil {
+	if err := parts.connectTools(ctx, cfg, metrics); err != nil {
 		return err
 	}
 
