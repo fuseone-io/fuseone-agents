@@ -117,6 +117,7 @@ type Store interface {
 	drift.LastBatteries
 	engine.Ledger
 	trigger.Feed
+	trigger.BacklogReader
 	Verify(ctx context.Context, runID domain.RunID) error
 }
 

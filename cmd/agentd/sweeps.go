@@ -93,7 +93,10 @@ func watchBudgets(ctx context.Context, watcher *budget.Watcher) {
 // this; every pass is one indexed query when nothing emits.
 const eventSweep = 15 * time.Second
 
-func dispatchEvents(ctx context.Context, dispatcher *trigger.Dispatcher) {
+// dispatchEvents sweeps, then reads what the sweep could not reach (#228):
+// after the sweep, so the backlog it reports is what is left, not what the
+// sweep was about to clear. One more range of the same partial index.
+func dispatchEvents(ctx context.Context, dispatcher *trigger.Dispatcher, backlog *trigger.BacklogWatch) {
 	ticker := time.NewTicker(eventSweep)
 	defer ticker.Stop()
 
@@ -102,6 +105,9 @@ func dispatchEvents(ctx context.Context, dispatcher *trigger.Dispatcher) {
 			slog.Error("event dispatch failed", "err", err)
 		} else if opened > 0 {
 			slog.Info("events opened runs", "runs", opened)
+		}
+		if err := backlog.Observe(ctx); err != nil && ctx.Err() == nil {
+			slog.Warn("could not read the event dispatch backlog", "err", err)
 		}
 
 		select {
