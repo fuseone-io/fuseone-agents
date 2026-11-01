@@ -9,9 +9,10 @@ import (
 
 /*
 The finished-run feed the event dispatcher reads (#203): real finished runs
-in the order they committed, after a cursor that only moves forward. A run
-that finishes between two sweeps, or a burst larger than one page, is read
-by a later page rather than left behind.
+in the order their finishing transactions were allocated ids — read only
+below pg_snapshot_xmin, where that order is stable — after a cursor that only
+moves forward. A run that finishes between two sweeps, or a burst larger
+than one page, is read by a later page rather than left behind.
 */
 
 func finishRunIn(t *testing.T, s Store, id domain.RunID) {
