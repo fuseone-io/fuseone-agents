@@ -22,12 +22,47 @@ These hold before any lane rule applies.
    request, and the reference is its number. The evidence is the run's
    ledger: the only calls ahead of the `work_item_claimed` step are listings,
    of the board or, for the Reviewer and QA, of the labelled pull requests.
+   - **A card's title may be read before the claim; nothing else of it may**
+     (#220). The board listing (`projects_list`, `projects_get`) always
+     returns item titles, even when asked for no fields. A title is untrusted
+     text: the role is told to use it only to tell cards apart and to choose
+     by age and label, but a title can still sway the model's choice. The
+     issue's body and comments are read only after the claim. The Reviewer
+     and QA list pull requests by `number` and `created_at` alone, so they
+     read no title at all.
+   - **The title is not the only untrusted text the Projects grant can
+     reach.** `projects_list` and `projects_get` are multiplexed: the same
+     tools also serve the board's status updates
+     (`list_project_status_updates`, `get_project_status_update`), whose
+     bodies are free text, and an injected title could steer the model into
+     those calls before the claim. Triage is told to list its lane only with
+     `projects_list`, method `list_project_items`, and never to call the
+     status-update methods before the claim. That is an instruction, not a
+     mechanism: the Gate classifies a tool, not its method. The pilot accepts
+     it within the claim's bounded blast radius below; preventing it
+     mechanically needs the deferred narrow tool.
+   - **The claim is the one write that follows a title unapproved.** The Gate
+     lets `$fuseone.work_item.claim` through even after untrusted content, by
+     design (`internal/gate/coordination.go`): held to approval, two runs
+     would pick the same card while the first waited on a person. A claim
+     steered to the wrong card can only hold that reference for this agent
+     while the run is open (parked or waiting on a person included), so other
+     runs of the same role skip it; release it when the run ends, however it
+     ends; and put the run's cost on that reference. The reference only has
+     to be in a canonical form: nothing checks that the card is in the lane,
+     or that it exists. The claim writes nothing to GitHub.
+   - Every GitHub write after the claim — a comment, a label, a card move —
+     waits for a person's approval, and the run page shows that person which
+     card the run claimed. The strict alternative — a narrow tool that picks
+     the next card of a lane and claims it atomically, exposing its content
+     only then — is deferred.
    - A refusal with `work_item_held` means another open run of this role holds
      the card. Pick the next card and claim that one instead.
    - A refusal with `work_item_run_holds_another` means this run already holds
      a card. Stop: a run holds at most one.
 3. **The outcome is written back** to the issue (or PR) and to the board, and
-   every write waits for a person's approval: every role runs at copilot, with
+   every GitHub write waits for a person's approval (the claim above is the
+   one write that does not): every role runs at copilot, with
    `standing_approvals: forbidden`, so no grant answers in a person's place.
    A card moves with the GitHub MCP server's projects tool, classified as a
    write, so moving a card is a proposal a person approves like any other.

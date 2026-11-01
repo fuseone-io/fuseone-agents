@@ -13,7 +13,7 @@ Every published agent starts in **draft** and paused. Leaving each rung is someb
 | Stage | What it may do |
 |---|---|
 | **Draft** | Opens no real run. Rehearsal only |
-| **Copilot** | Runs for real, and every write waits for a person |
+| **Copilot** | Runs for real, and every write waits for a person (the work-item claim aside) |
 | **Autonomous** | Runs and writes on its own, within what policy and classification already allow |
 
 Notice what does **not** change between them: the Gate evaluates the same in all three. Autonomous is not "no brakes" — it is "no human wait on what was already cleared". A destructive tool is still blocked, taint still stops a write, a ceiling still holds.
@@ -28,7 +28,7 @@ This is where you write, rehearse and correct. A rehearsal runs against situatio
 
 ## Copilot
 
-Runs for real. Every write stops and waits for a person to approve that specific call.
+Runs for real. Every write stops and waits for a person to approve that specific call. The one exception is the work-item claim (`$fuseone.work_item.claim`), which only records in the platform which card a run holds and passes without approval, so that two runs never wait on a person to reserve the same card.
 
 This is the rung where you learn what the agent actually does with real data, which is never exactly what the rehearsal showed.
 

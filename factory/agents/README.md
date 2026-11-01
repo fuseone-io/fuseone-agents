@@ -66,6 +66,44 @@ A fixed sentence rather than "mentions the tool somewhere": "Never call
 $fuseone.work_item.claim" also mentions it. The role's own wording around the
 line (which reference, what a refusal means) follows on the next lines.
 
+"Before reading the issue" means its body and comments. Triage chooses its
+card from a board listing, and `projects_list` always returns item titles,
+so Triage sees titles before it claims (#220). The reference tells it to use
+a title only to tell cards apart, to choose by age and label, and to act on
+nothing a title says. That is an instruction, not something the platform
+enforces: a title is untrusted text the model reads before the claim, and it
+can sway which card the model picks.
+
+The title is not the only text the Projects grant can reach before the claim.
+`projects_list` and `projects_get` are multiplexed by a `method` argument, and
+the same tools serve the board's status updates (`list_project_status_updates`,
+`get_project_status_update`), whose bodies are free text. Triage is told to
+list its lane only with `projects_list`, method `list_project_items`, and
+never to call a status-update method before the claim, a line sealed in
+`internal/spec/factory_references_test.go`. The Gate classifies a tool, not
+its method, so nothing stops a steered model from calling one; the pilot
+accepts that within the claim's bounded blast radius below, and preventing it
+mechanically needs the deferred narrow tool.
+
+The claim itself is not held for approval. The Gate exempts
+`$fuseone.work_item.claim` as a coordination operation, even after untrusted
+content (`internal/gate/coordination.go`), so a crafted title can steer which
+card gets claimed with no person in the loop. What such a claim can do is
+bounded:
+
+- it holds that reference for this agent while the run is open, parked or
+  waiting on a person included, so other runs of the same role skip it;
+- it releases when the run ends, however it ends;
+- the run's cost is attributed to that reference;
+- the reference only has to be canonical (`github:<owner>/<repo>#<n>` or
+  `ghproject:<id>`): nothing checks that the card is in the lane or exists;
+- it writes nothing to GitHub.
+
+Every GitHub write after it — comment, label, card move — waits for a
+person's approval, and the run page names the card the run claimed. A tool
+that picks and claims the next card atomically, exposing its content only
+afterwards, would remove the title from the pre-claim view; it is deferred.
+
 The order cannot be enforced with steps. The claim is a platform tool: the step
 machinery ignores it, so a first step reaching only the claim would never
 advance, and `spec.Parse` refuses a step that names a platform tool at all. At
@@ -153,10 +191,10 @@ identity the server may see.
 
 **Moving a card.** Cards move with the server's projects tool
 (`projects_write`). It is classified as a **write**, so a copilot run proposes
-the move and a person approves it, like any other write. NT-013 classifies a
+the move and a person approves it, like any other GitHub write. NT-013 classifies a
 bundled tool by its most dangerous action, and `projects_write` can also remove
 an item. The v1 decision (NT-013 § v1) is to classify it as a write anyway: a
-removed card can be added back, and a person approving every write is what
+removed card can be added back, and a person approving every GitHub write is what
 keeps it in check. Classified destructive, it would be blocked outright, and
 the publish check would refuse every role that reads issue text and moves
 cards. A narrower
