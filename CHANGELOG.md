@@ -25,6 +25,57 @@ field" is a commit message.
 
 ---
 
+## [0.86.0] — 2026-11-01
+
+### Upgrade notes
+
+- **An event chain stops eight hops from its root.** During the rolling
+  update to this version, a chain of agent events may continue under workers
+  still running the previous version, uncounted, as it did before. Once the
+  last of them is gone, the first event-opened run without a recorded chain
+  that the new version sees publishes no further events. Its trail says the
+  chain is unknown only if the new version closed that run. A chain in flight
+  during the update may therefore run past the limit while the versions
+  overlap, or stop early once, after; if it should continue, start its next
+  step by hand.
+- **Runs that finished in the hour before the upgrade are offered to event
+  listeners once more.** Migration 0092 gives them a dispatch position,
+  because the previous dispatcher read only the newest 30 and may have missed
+  some. Any that were already dispatched reach the run they opened, so no
+  listener starts twice. Older runs are not replayed.
+- **A disabled tool server's tools leave the catalogue.** They come back,
+  with their classifications, when the server is enabled again.
+
+### Added
+
+- **A webhook can come from GitHub.** A webhook trigger with `from: github`
+  and the `events` it starts on verifies GitHub's signature over the raw body,
+  uses GitHub's delivery id, and answers `ping`. Rotating a GitHub hook needs
+  the master key, because GitHub signs with the secret and the door must read
+  it back; without one the hook stays closed. Only the shape of an event name
+  is checked, so a misspelt one publishes and never fires.
+- **The run that reaches the end of an event chain says so.** Its trail
+  records that it published no further events, and why: the hop limit, or a
+  chain it could not establish.
+
+### Changed
+
+- **The tool catalogue follows what the servers offer.** Narrowing a
+  server's toolsets, deleting it or switching it off removes its tools from
+  the console and from the publish check. A tool that comes back with the same
+  definition keeps its classification. A server that is down keeps its last
+  discovered tools.
+- **The Triage reference may read card titles before its claim, and nothing
+  more.** The manual and the factory references now say that every GitHub
+  write after the claim waits for a person, and that the claim itself does
+  not.
+
+### Fixed
+
+- **Every finished run is dispatched to its event listeners.** The
+  dispatcher read only the 30 newest finished runs on each sweep, so a burst
+  larger than that lost the rest. It now reads forward from a durable cursor.
+
 ## [0.85.0] — 2026-10-31
 
 ### Upgrade notes
