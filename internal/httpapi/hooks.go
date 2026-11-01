@@ -48,6 +48,14 @@ func (h *Hooks) Mount(mux *http.ServeMux) {
 func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 	path := r.PathValue("path")
 
+	// A path whose published trigger says it comes from GitHub is checked
+	// GitHub's way. Asked before anything is said to the caller, so a GitHub
+	// path refuses exactly as an unknown one does.
+	if hook, err := h.webhooks.Find(r.Context(), path); err == nil && hook.From == domain.WebhookFromGitHub {
+		h.receiveGitHub(w, r, hook)
+		return
+	}
+
 	// Everything that is not a correct secret answers the same way. A caller
 	// probing paths must not learn which ones exist, which are configured, or
 	// which belong to an agent — that is a map of the installation.
@@ -56,7 +64,7 @@ func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 		if err != nil && !errors.Is(err, trigger.ErrNoHook) && !errors.Is(err, trigger.ErrNotArmed) {
 			h.log.Error("could not verify a webhook", "path", path, "err", err)
 		}
-		writeProblemJSON(w, http.StatusUnauthorized, CodeForbidden, "Rejected", "The secret is missing or wrong.")
+		rejectHook(w)
 		return
 	}
 
@@ -72,7 +80,7 @@ func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 
 	hook, err := h.webhooks.Find(r.Context(), path)
 	if err != nil {
-		writeProblemJSON(w, http.StatusUnauthorized, CodeForbidden, "Rejected", "The secret is missing or wrong.")
+		rejectHook(w)
 		return
 	}
 
@@ -83,11 +91,23 @@ func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.open(w, r, path, hook, delivery, body)
+}
+
+// rejectHook is the one answer to everything that did not authenticate.
+func rejectHook(w http.ResponseWriter) {
+	writeProblemJSON(w, http.StatusUnauthorized, CodeForbidden, "Rejected", "The secret is missing or wrong.")
+}
+
+// open starts the run a delivery names and answers the sender.
+func (h *Hooks) open(w http.ResponseWriter, r *http.Request, path string, hook trigger.Hook,
+	delivery string, input []byte,
+) {
 	opened, err := h.opener.Open(r.Context(), trigger.Request{
 		Agent:   hook.Agent,
 		IdemKey: trigger.DeliveryKey(path, delivery),
 		Trigger: "webhook",
-		Input:   body,
+		Input:   input,
 		// A body somebody outside sent. On a good day it is an ERP's JSON and
 		// on a bad one it is whatever they posted, and the difference is not
 		// visible from here — the secret proves who sent it and says nothing
