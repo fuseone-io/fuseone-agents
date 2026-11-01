@@ -160,7 +160,9 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 		return Spec{}, fmt.Errorf("spec: decode triggers: %w", err)
 	}
 	for _, t := range stored {
-		s.Triggers = append(s.Triggers, Trigger{Type: t.Type, Schedule: t.Schedule, Path: t.Path, Event: t.Event})
+		s.Triggers = append(s.Triggers, Trigger{
+			Type: t.Type, Schedule: t.Schedule, Path: t.Path, Event: t.Event, From: t.From, Events: t.Events,
+		})
 	}
 	if err := json.Unmarshal(emits, &s.Emits); err != nil {
 		return Spec{}, fmt.Errorf("spec: decode emits: %w", err)

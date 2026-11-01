@@ -105,6 +105,10 @@ type Trigger struct {
 	Schedule string `yaml:"schedule,omitempty"`
 	Path     string `yaml:"path,omitempty"`
 	Event    string `yaml:"on,omitempty"`
+	// From and Events belong to a webhook only: where its deliveries come
+	// from and which of them start a run (webhook_github.go).
+	From   string   `yaml:"from,omitempty"`
+	Events []string `yaml:"events,omitempty,flow"`
 }
 
 // frontmatter is the wire shape of the YAML block.
