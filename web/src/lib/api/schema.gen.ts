@@ -5038,6 +5038,56 @@ export interface components {
              *     caller cannot read the installation-wide runtime view.
              */
             egressDenials: components["schemas"]["RuntimeEgressDenialBucket"][];
+            eventDispatch?: components["schemas"]["RuntimeEventDispatch"];
+        };
+        /**
+         * @description What the event dispatcher has not reached yet. It reads finished runs
+         *     forward from one cursor for the installation, and only below the
+         *     oldest transaction still in flight, so a long transaction anywhere in
+         *     the database delays dispatch while it is open — it never skips a run.
+         *     Counts and ages only: no run, agent or transaction id. Absent when the
+         *     caller cannot read the installation-wide runtime view.
+         */
+        RuntimeEventDispatch: {
+            /**
+             * @description Degraded once the oldest waiting run has waited past degradedAfterSeconds. Never failing.
+             * @enum {string}
+             */
+            status: "ok" | "degraded";
+            /**
+             * Format: int64
+             * @description Finished runs past the cursor the dispatcher can read on its next sweep.
+             */
+            ready: number;
+            /**
+             * Format: int64
+             * @description Finished runs past the cursor that committed after the oldest open transaction began; they wait for it to end.
+             */
+            heldByXmin: number;
+            /**
+             * Format: int64
+             * @description How long the oldest finished run past the cursor has waited. Zero when caught up.
+             */
+            lagSeconds: number;
+            /**
+             * Format: date-time
+             * @description When the oldest finished run past the cursor finished. Absent when caught up.
+             */
+            oldestFinishedAt?: string;
+            /** @description A transaction holding an id is open somewhere in the database. */
+            xactOpen: boolean;
+            /** @description False when a transaction is open and the platform's database role may not see when it began (it lacks pg_read_all_stats). */
+            xactAgeKnown: boolean;
+            /**
+             * Format: int64
+             * @description Age of the oldest open transaction holding an id. Absent when none is open or its age is unknown.
+             */
+            xactAgeSeconds?: number;
+            /**
+             * Format: int64
+             * @description The lag past which status becomes degraded.
+             */
+            degradedAfterSeconds: number;
         };
         RuntimeQueue: {
             /**

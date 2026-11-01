@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -24,7 +25,12 @@ func (s *Server) GetRuntimeHealth(
 	if err != nil {
 		return nil, fmt.Errorf("runtime health: %w", err)
 	}
-	return openapi.GetRuntimeHealth200JSONResponse(runtimeHealthFrom(health)), nil
+	out := runtimeHealthFrom(health)
+	if health.EventDispatch != nil {
+		dispatch := runtimeEventDispatchFrom(*health.EventDispatch, clockOr(s.clock).Now())
+		out.EventDispatch = &dispatch
+	}
+	return openapi.GetRuntimeHealth200JSONResponse(out), nil
 }
 
 func runtimeHealthFrom(h domain.RuntimeHealth) openapi.RuntimeHealth {
@@ -78,6 +84,29 @@ func runtimeQueueFrom(q domain.RuntimeQueue) openapi.RuntimeQueue {
 	}
 	if !q.OldestReadyAt.IsZero() {
 		out.OldestReadyAt = ptr(q.OldestReadyAt)
+	}
+	return out
+}
+
+// runtimeEventDispatchFrom states the backlog as ages at now, by the server's
+// clock. The age of a holder the role cannot see is absent, not zero: zero
+// would read as nothing open.
+func runtimeEventDispatchFrom(b domain.EventDispatchBacklog, now time.Time) openapi.RuntimeEventDispatch {
+	out := openapi.RuntimeEventDispatch{
+		Status:               openapi.RuntimeEventDispatchStatus(b.Status(now)),
+		Ready:                b.Ready,
+		HeldByXmin:           b.HeldByXmin,
+		LagSeconds:           int64(b.Lag(now).Seconds()),
+		XactOpen:             b.Xact.Open,
+		DegradedAfterSeconds: int64(domain.EventDispatchDegradedAfter.Seconds()),
+	}
+	if !b.OldestFinishedAt.IsZero() {
+		out.OldestFinishedAt = ptr(b.OldestFinishedAt)
+	}
+	age, known := b.XactAge(now)
+	out.XactAgeKnown = known
+	if known && b.Xact.Open {
+		out.XactAgeSeconds = ptr(int64(age.Seconds()))
 	}
 	return out
 }

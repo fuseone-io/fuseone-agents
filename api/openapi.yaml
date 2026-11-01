@@ -7907,6 +7907,55 @@ components:
             arguments are not included. This global signal is empty when the
             caller cannot read the installation-wide runtime view.
           items: { $ref: '#/components/schemas/RuntimeEgressDenialBucket' }
+        eventDispatch:
+          $ref: '#/components/schemas/RuntimeEventDispatch'
+
+    RuntimeEventDispatch:
+      type: object
+      description: |
+        What the event dispatcher has not reached yet. It reads finished runs
+        forward from one cursor for the installation, and only below the
+        oldest transaction still in flight, so a long transaction anywhere in
+        the database delays dispatch while it is open — it never skips a run.
+        Counts and ages only: no run, agent or transaction id. Absent when the
+        caller cannot read the installation-wide runtime view.
+      required: [status, ready, heldByXmin, lagSeconds, xactOpen, xactAgeKnown, degradedAfterSeconds]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+          x-enum-varnames: [EventDispatchOk, EventDispatchDegraded]
+          description: Degraded once the oldest waiting run has waited past degradedAfterSeconds. Never failing.
+        ready:
+          type: integer
+          format: int64
+          description: Finished runs past the cursor the dispatcher can read on its next sweep.
+        heldByXmin:
+          type: integer
+          format: int64
+          description: Finished runs past the cursor that committed after the oldest open transaction began; they wait for it to end.
+        lagSeconds:
+          type: integer
+          format: int64
+          description: How long the oldest finished run past the cursor has waited. Zero when caught up.
+        oldestFinishedAt:
+          type: string
+          format: date-time
+          description: When the oldest finished run past the cursor finished. Absent when caught up.
+        xactOpen:
+          type: boolean
+          description: A transaction holding an id is open somewhere in the database.
+        xactAgeKnown:
+          type: boolean
+          description: False when a transaction is open and the platform's database role may not see when it began (it lacks pg_read_all_stats).
+        xactAgeSeconds:
+          type: integer
+          format: int64
+          description: Age of the oldest open transaction holding an id. Absent when none is open or its age is unknown.
+        degradedAfterSeconds:
+          type: integer
+          format: int64
+          description: The lag past which status becomes degraded.
 
     RuntimeQueue:
       type: object
