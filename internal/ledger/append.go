@@ -265,10 +265,7 @@ func upsertRun(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 			failure_provider   = case when $35 then runs.failure_provider else excluded.failure_provider end,
 			failure_status     = case when $35 then runs.failure_status else excluded.failure_status end,
 			failure_request_id = case when $35 then runs.failure_request_id else excluded.failure_request_id end,
-			failure_retryable  = case when $35 then runs.failure_retryable else excluded.failure_retryable end,
-			-- The finishing transaction: the commit order the event
-			-- dispatcher reads finished runs in (#203, migration 0092).
-			finished_xid       = case when $36 then pg_current_xact_id() else runs.finished_xid end`,
+			failure_retryable  = case when $35 then runs.failure_retryable else excluded.failure_retryable end`,
 		string(s.RunID), string(s.Scope.Company), string(s.Scope.Area),
 		string(s.AgentID), string(s.VersionID), string(s.OnBehalfOf),
 		phaseOrRunning(phase), s.Seq,
@@ -282,7 +279,6 @@ func upsertRun(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 		failureCode(s), failureProvider(s), failureStatus(s), failureRequestID(s), failureRetryable(s),
 		ticketKey, ticketRevision,
 		s.Kind == domain.StepEffectReconciled,
-		s.Kind == domain.StepRunFinished,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert run projection: %w", err)

@@ -18,6 +18,27 @@
 
 alter table runs add column finished_xid xid8;
 
+-- Stamped by the database, not by the code that finishes a run. During a
+-- rolling update a worker on the previous version finishes runs without
+-- knowing this column exists; so does a binary rolled back, or a row inserted
+-- straight into its terminal phase. Left NULL, such a run would be invisible
+-- to the dispatcher for ever. The trigger is the only writer of the column:
+-- one rule, whoever moved the run to 'finished' — the phase the dispatcher
+-- reads. Set once; a later update of a finished run keeps it.
+create function runs_stamp_finished_xid() returns trigger
+language plpgsql as $$
+begin
+    if new.phase = 'finished' and new.finished_xid is null then
+        new.finished_xid := pg_current_xact_id();
+    end if;
+    return new;
+end;
+$$;
+
+create trigger runs_finished_xid
+    before insert or update on runs
+    for each row execute function runs_stamp_finished_xid();
+
 create index runs_finished_xid_idx on runs (finished_xid, run_id)
     where finished_xid is not null;
 
@@ -43,3 +64,13 @@ update runs
  where phase = 'finished'
    and not simulated
    and ended_at > now() - interval '1 hour';
+
+-- Everything that finished earlier is marked as having finished before the
+-- feed existed: position 0, which the feed never offers. Left NULL, a later
+-- update of one of these rows — a future migration, a repair — would let the
+-- trigger stamp it as if it had just finished, and dispatch its events years
+-- late.
+update runs
+   set finished_xid = '0'
+ where phase = 'finished'
+   and finished_xid is null;
