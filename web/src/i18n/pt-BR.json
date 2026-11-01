@@ -2632,7 +2632,7 @@
     "eventDispatchReady": "Aguardando a próxima varredura",
     "eventDispatchThreshold": "Fica degradado quando uma execução espera mais de {{threshold}}. O despacho atrasa, nunca pula.",
     "eventDispatchXactAge": "A transação aberta mais antiga do banco está aberta há {{age}}; execuções que terminaram depois que ela começou esperam até ela acabar.",
-    "eventDispatchXactHidden": "Há uma transação aberta no banco, mas o papel de banco da plataforma não consegue ver desde quando. Conceda pg_read_all_stats a ele para ver a idade.",
+    "eventDispatchXactHidden": "Há uma transação aberta no banco, mas o papel de banco da plataforma não consegue ver desde quando. Isso é esperado: ver exige pg_read_all_stats, uma concessão para o cluster inteiro que também expõe as consultas de todas as sessões em todos os bancos, por isso a plataforma não a pede. Um administrador do banco pode consultar com o próprio papel.",
     "expiredLeases": "Leases expiradas",
     "failureAttemptsExhausted": "Tentativas esgotadas",
     "failureFallbackUnrehearsed": "Fallback não ensaiado",

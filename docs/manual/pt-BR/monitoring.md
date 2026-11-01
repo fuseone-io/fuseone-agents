@@ -76,25 +76,44 @@ fuseone_event_dispatch_degraded == 1                     for 5m
 time() - fuseone_event_dispatch_observed_timestamp_seconds > 180
 ```
 
-## Vendo a idade da transação
+## A idade da transação, e por que ela normalmente é desconhecida
 
 A idade da transação aberta vem de `pg_stat_activity`. O PostgreSQL mostra a
 qualquer papel que outra sessão detém uma transação, mas só mostra **quando
-ela começou** a um papel que seja superusuário, membro do papel da sessão ou
-membro de `pg_read_all_stats`. Um papel de aplicação comum vê que a transação
-está aberta, mas não a idade: o painel diz isso e a métrica
+ela começou** a um superusuário, a um membro do papel da sessão ou a um membro
+de `pg_read_all_stats`. Um papel de aplicação comum vê que a transação está
+aberta, mas não a idade: o painel diz isso e
 `fuseone_event_dispatch_oldest_xact_age_known` fica em 0.
 
-Para ver a idade, conceda o papel de monitoramento ao papel com que a
-plataforma se conecta:
+**Esse é o estado recomendado.** `pg_read_all_stats` não se limita ao banco da
+plataforma: é uma concessão **para o cluster inteiro**, que permite ao papel
+ler as estatísticas, as consultas em andamento e os endereços de cliente de
+todas as sessões em todos os bancos do servidor. Num cluster compartilhado com
+outras aplicações, concedê-la ao papel da plataforma deixaria qualquer um que
+comprometesse a plataforma ler as consultas de outros sistemas. A plataforma
+não precisa dela — a contagem da fila, o atraso e o sinal de saúde funcionam
+sem ela — então mantenha a idade desconhecida.
+
+Se quiser a idade sem a concessão ampla, ofereça uma interface estreita: uma
+função de propriedade de um papel privilegiado que devolva só o início da
+transação mais antiga, e nada mais.
 
 ```sql
-grant pg_read_all_stats to <papel da plataforma>;
+-- Como superusuário ou membro de pg_read_all_stats:
+create function oldest_xact_start() returns timestamptz
+language sql security definer set search_path = pg_catalog as $$
+    select min(xact_start) from pg_stat_activity where backend_xid is not null
+$$;
+revoke all on function oldest_xact_start() from public;
+grant execute on function oldest_xact_start() to <seu papel de monitoramento>;
 ```
 
-Nada mais depende dessa concessão. Sem ela — e mesmo que `pg_stat_activity`
-tenha sido revogado — a contagem da fila, o atraso e o sinal de saúde
-continuam funcionando.
+A plataforma em si não chama essa função hoje. Aponte o seu próprio
+monitoramento para ela (um exportador SQL do Prometheus, por exemplo),
+rodando com um papel de monitoramento dedicado, e não com o da plataforma.
+
+Quando o despacho está retido, um administrador do banco sempre consegue
+encontrar a transação com o próprio papel, como abaixo.
 
 ## Quando o despacho está retido
 

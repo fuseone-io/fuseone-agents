@@ -74,25 +74,44 @@ fuseone_event_dispatch_degraded == 1                     for 5m
 time() - fuseone_event_dispatch_observed_timestamp_seconds > 180
 ```
 
-## Seeing the holder's age
+## The holder's age, and why it is usually unknown
 
 The age of the open transaction comes from `pg_stat_activity`. PostgreSQL
-shows every role that another session holds a transaction, but only shows
-**when it began** to a role that is a superuser, a member of the session's
-role, or a member of `pg_read_all_stats`. A plain application role sees the
-transaction is open but not its age: the panel says so and the metric
+shows every role that another session holds a transaction, but shows **when
+it began** only to a superuser, a member of the session's role, or a member
+of `pg_read_all_stats`. A plain application role sees the transaction is
+open and not its age: the panel says so, and
 `fuseone_event_dispatch_oldest_xact_age_known` reads 0.
 
-To see the age, grant the monitoring role to the role the platform connects
-as:
+**That is the recommended state.** `pg_read_all_stats` is not scoped to the
+platform's database: it is a **cluster-wide** grant that lets the role read
+the statistics, the current queries and the client addresses of every
+session in every database on the server. On a cluster shared with other
+applications, granting it to the platform's role would let anything that
+compromises the platform read other systems' queries. The platform does not
+need it — the backlog counts, the lag and the health signal work without it
+— so keep the age unknown.
+
+If you want the age without the broad grant, give the platform a narrow
+interface instead: a function owned by a privileged role that returns only
+the oldest transaction's start, and nothing else.
 
 ```sql
-grant pg_read_all_stats to <platform role>;
+-- As a superuser or a member of pg_read_all_stats:
+create function oldest_xact_start() returns timestamptz
+language sql security definer set search_path = pg_catalog as $$
+    select min(xact_start) from pg_stat_activity where backend_xid is not null
+$$;
+revoke all on function oldest_xact_start() from public;
+grant execute on function oldest_xact_start() to <your monitoring role>;
 ```
 
-Nothing else depends on this grant. Without it — and even if
-`pg_stat_activity` has been revoked — the backlog counts, the lag and the
-health signal still work.
+The platform itself does not call such a function today. Point your own
+monitoring (a Prometheus SQL exporter, for example) at it, running as a
+dedicated monitoring role rather than as the platform's.
+
+When dispatch is held, a database administrator can always find the holder
+with their own role, as below.
 
 ## When dispatch is held
 

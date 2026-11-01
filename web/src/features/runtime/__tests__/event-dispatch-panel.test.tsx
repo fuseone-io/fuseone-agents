@@ -56,7 +56,11 @@ test("a holder the database role cannot see says so instead of showing an age", 
     />,
   );
 
-  expect(screen.getByText(/cannot see since when/)).toBeInTheDocument();
+  const note = screen.getByText(/cannot see since when/);
+  // The grant that would reveal it is cluster-wide; the panel must not
+  // present it as a harmless fix.
+  expect(note).toHaveTextContent(/cluster-wide/);
+  expect(note).toHaveTextContent(/expected/);
   expect(screen.queryByText(/has been open for/)).not.toBeInTheDocument();
 });
 
