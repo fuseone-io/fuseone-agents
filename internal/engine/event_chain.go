@@ -15,5 +15,6 @@ func eventsWithheld(start Start, state State) *domain.EventsWithheld {
 	if !start.PublishesEvents {
 		return nil
 	}
-	return state.Chain.Withheld()
+	_, withheld := state.Chain.Next(state.RunID)
+	return withheld
 }

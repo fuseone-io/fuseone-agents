@@ -3,6 +3,7 @@ package trigger_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,13 +50,23 @@ func chainDispatcher(store *ledger.Memory) *trigger.Dispatcher {
 	return trigger.NewDispatcher(pingPong, store, store, opener, clock, nil)
 }
 
-// startRun seals a run_started, carrying chain when an event opened it.
+// startRun seals a run_started: opened by an event carrying chain, or by a
+// person when chain is nil.
 func startRun(t *testing.T, store *ledger.Memory, id domain.RunID, agent domain.AgentID, chain *domain.EventChain) {
+	t.Helper()
+	trigger := "manual"
+	if chain != nil {
+		trigger = domain.TriggerEvent
+	}
+	sealStart(t, store, id, agent, domain.RunStartedPayload{Trigger: trigger, Chain: chain})
+}
+
+func sealStart(t *testing.T, store *ledger.Memory, id domain.RunID, agent domain.AgentID, p domain.RunStartedPayload) {
 	t.Helper()
 	if _, err := store.Append(context.Background(), domain.Step{
 		RunID: id, Kind: domain.StepRunStarted, Scope: chainScope, AgentID: agent, VersionID: "v1",
 		IdemKey: "start:" + string(id), At: time.Date(2026, 10, 31, 8, 0, 0, 0, time.UTC),
-		Payload: mustJSON(domain.RunStartedPayload{Trigger: "manual", Chain: chain}),
+		Payload: mustJSON(p),
 	}); err != nil {
 		t.Fatalf("start %s: %v", id, err)
 	}
@@ -83,6 +94,9 @@ func openedChains(t *testing.T, store *ledger.Memory) map[domain.RunID]domain.Ev
 		steps, err := store.Read(context.Background(), id, domain.FirstSeq)
 		if err != nil {
 			t.Fatalf("read %s: %v", id, err)
+		}
+		if strings.HasPrefix(steps[0].IdemKey, "start:") {
+			continue // sealed by the test, not opened by the sweep
 		}
 		var p domain.RunStartedPayload
 		if err := json.Unmarshal(steps[0].Payload, &p); err != nil {
@@ -219,6 +233,28 @@ func TestSweep_aTwoAgentCycle_stopsAtTheHopLimitAcrossWorkers(t *testing.T) {
 	}
 	if deepest != domain.MaxEventHops {
 		t.Fatalf("deepest hop = %d, want %d", deepest, domain.MaxEventHops)
+	}
+}
+
+/*
+A run an event opened with no chain was opened by a dispatcher that did not
+count — an older binary during a rolling update. Read as a root it would
+restart the count; it opens nothing instead (the run's own closing step says
+why).
+*/
+func TestSweep_anEventOpenedSourceWithNoChain_opensNoListener(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	sealStart(t, store, "run-old", "agent-a", domain.RunStartedPayload{Trigger: domain.TriggerEvent})
+	finishRun(t, store, "run-old")
+
+	opened, err := chainDispatcher(store).Sweep(context.Background(), 50)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 0 {
+		t.Fatalf("opened %d runs from a source whose chain is unknown, want none", opened)
 	}
 }
 

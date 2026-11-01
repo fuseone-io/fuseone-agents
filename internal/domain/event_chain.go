@@ -29,45 +29,62 @@ Eight is generous for composition anyone designs on purpose — a pipeline of
 a handful of agents, or a review loop that goes round a few times — and small
 enough that a cycle nobody intended stops after a few runs rather than after
 a day's budget. The factory's Developer ⇄ Reviewer exchange gets four rounds.
+
+A constant, not a setting. A configurable ceiling would have to be sealed in
+the chain itself: read from configuration at each hop, a change in the middle
+of a chain would judge its runs by two different limits.
 */
 const MaxEventHops = 8
 
-// ReasonEventHopLimit is why a run's events were not published: its chain is
-// already MaxEventHops long.
-const ReasonEventHopLimit = "event_hop_limit"
+// TriggerEvent is the trigger recorded on a run an event opened.
+const TriggerEvent = "event"
 
-// Next is the chain a run opened by this run's event stands in, and whether
-// it may be opened at all. A nil chain is a run no event opened: it is the
-// root.
-func (c *EventChain) Next(source RunID) (EventChain, bool) {
-	if c == nil {
-		return EventChain{Root: source, Hop: 1}, true
-	}
-	return EventChain{Root: c.Root, Hop: c.Hop + 1}, !c.Exhausted()
+const (
+	// ReasonEventHopLimit: the chain is already MaxEventHops long.
+	ReasonEventHopLimit = "event_hop_limit"
+	// ReasonEventChainUnknown: an event opened the run but sealed no chain,
+	// so how far it stands from its root cannot be known.
+	ReasonEventChainUnknown = "event_chain_unknown"
+)
+
+// ChainPosition is a run's place in a chain, judged from what its start
+// sealed: what opened it, and the chain an event carried.
+type ChainPosition struct {
+	Trigger string
+	Chain   *EventChain
 }
 
-// Exhausted reports whether a run at this point may publish nothing further.
-func (c *EventChain) Exhausted() bool {
-	return c != nil && c.Hop >= MaxEventHops
-}
+/*
+Next is the chain a run opened by this run's event stands in — or, when this
+run may publish nothing further, why.
 
-// Withheld is what a run at this point records about the events it will not
-// publish, or nil when it may publish them.
-func (c *EventChain) Withheld() *EventsWithheld {
-	if !c.Exhausted() {
-		return nil
+Only a run no event opened is a root. One an event opened without a chain
+was opened by a dispatcher that did not count: an older binary still running
+during a rolling update. Read as a root it would restart the count at every
+such hop, so it fails closed instead.
+*/
+func (p ChainPosition) Next(source RunID) (EventChain, *EventsWithheld) {
+	if p.Trigger != TriggerEvent {
+		return EventChain{Root: source, Hop: 1}, nil
 	}
-	return &EventsWithheld{
-		Reason: ReasonEventHopLimit, Root: c.Root, Hop: c.Hop, Limit: MaxEventHops,
+	if p.Chain == nil {
+		return EventChain{}, &EventsWithheld{Reason: ReasonEventChainUnknown, Limit: MaxEventHops}
 	}
+	if p.Chain.Hop >= MaxEventHops {
+		return EventChain{}, &EventsWithheld{
+			Reason: ReasonEventHopLimit, Root: p.Chain.Root, Hop: p.Chain.Hop, Limit: MaxEventHops,
+		}
+	}
+	return EventChain{Root: p.Chain.Root, Hop: p.Chain.Hop + 1}, nil
 }
 
 // EventsWithheld is sealed on run_finished when the run's declared events
 // will not be published, so the trail says why the next agent never started
-// rather than leaving a gap somebody has to explain.
+// rather than leaving a gap somebody has to explain. Root and Hop are empty
+// when the chain is unknown.
 type EventsWithheld struct {
 	Reason string `json:"reason"`
-	Root   RunID  `json:"root"`
-	Hop    int    `json:"hop"`
+	Root   RunID  `json:"root,omitempty"`
+	Hop    int    `json:"hop,omitempty"`
 	Limit  int    `json:"limit"`
 }

@@ -2544,6 +2544,7 @@
     "wholePeriod": "Todo o período",
     "finishedByFinish": "O modelo chamou a ação de finalizar, então a execução foi concluída.",
     "eventsWithheld": "Os eventos desta execução não foram publicados: a cadeia iniciada pela execução {{root}} chegou ao limite de {{limit}} saltos.",
+    "eventsWithheldChainUnknown": "Os eventos desta execução não foram publicados: um evento a abriu sem registrar a posição na cadeia, então a distância até a origem não pode ser contada.",
     "finishedByFinishStored": "O modelo chamou a ação de finalizar. A resposta final ficou no armazenamento de conteúdo, sujeita à retenção e ao apagamento.",
     "finishedByFinishWithOutcome": "O modelo chamou a ação de finalizar: {{outcome}}",
     "finishedByNoToolCall": "O modelo não propôs outra chamada de ferramenta, então a execução foi concluída.",

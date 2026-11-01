@@ -28,6 +28,11 @@ export function eventChainLine(payload: RawRecord): Line | undefined {
 export function eventsWithheldLine(payload: RawRecord): Line | undefined {
   const withheld = asRecord(payload.events_withheld);
   if (!withheld) return undefined;
+  // Opened by an event that sealed no chain — an older dispatcher during a
+  // rolling update — so there is no root to name.
+  if (withheld.reason === "event_chain_unknown") {
+    return { key: "runs.eventsWithheldChainUnknown" };
+  }
   const { root, limit } = withheld;
   if (typeof root !== "string" || typeof limit !== "number") return undefined;
   return { key: "runs.eventsWithheld", values: { root, limit } };

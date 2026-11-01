@@ -54,6 +54,20 @@ describe("a run at the end of its chain", () => {
     });
   });
 
+  it("says the chain was unknown when an older dispatcher sealed none", () => {
+    const line = detailOf({
+      seq: 9,
+      kind: "run_finished",
+      at: "2026-10-31T12:00:00Z",
+      payload: {
+        reason: "finish_tool",
+        events_withheld: { reason: "event_chain_unknown", limit: 8 },
+      },
+    } as never);
+
+    expect(line).toEqual({ key: "runs.eventsWithheldChainUnknown" });
+  });
+
   it("ignores a withheld record it cannot read", () => {
     const line = detailOf({
       seq: 9,

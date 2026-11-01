@@ -2544,6 +2544,7 @@
     "wholePeriod": "The whole period",
     "finishedByFinish": "The model called the finish action, so the run finished.",
     "eventsWithheld": "This run's events were not published: the chain run {{root}} started reached its limit of {{limit}} hops.",
+    "eventsWithheldChainUnknown": "This run's events were not published: an event opened it without recording its place in the chain, so its distance from the origin cannot be counted.",
     "finishedByFinishStored": "The model called the finish action. The closing answer is held in the content store, under retention and erasure.",
     "finishedByFinishWithOutcome": "The model called the finish action: {{outcome}}",
     "finishedByNoToolCall": "The model did not propose another tool call, so the run finished.",

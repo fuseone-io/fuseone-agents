@@ -146,43 +146,44 @@ type source struct {
 readSource reads the finished run once, for its context and its place in a
 chain, and reports false when its events go no further.
 
-A run already MaxEventHops from its root opens nothing (#203). The run itself
-recorded that on its closing step, where the trail shows it; here it is only
-honoured, from the same recorded start, so a dispatcher on any replica
-reaches the same answer.
+A run already MaxEventHops from its root opens nothing (#203), and neither
+does one an event opened without a chain. The run itself recorded that on its
+closing step, where the trail shows it; here it is only honoured, from the
+same recorded start, so a dispatcher on any replica reaches the same answer.
 */
 func (d *Dispatcher) readSource(ctx context.Context, run domain.RunSummary) (source, bool, error) {
 	steps, err := d.reader.Read(ctx, run.RunID, domain.FirstSeq)
 	if err != nil {
 		return source{}, false, fmt.Errorf("trigger: read source run %s: %w", run.RunID, err)
 	}
-	chain, err := chainOf(run.RunID, steps)
+	position, err := positionOf(run.RunID, steps)
 	if err != nil {
 		return source{}, false, err
 	}
-	next, ok := chain.Next(run.RunID)
-	if !ok {
-		d.log.Info("events withheld: the chain reached its hop limit",
-			"from", run.RunID, "root", chain.Root, "hop", chain.Hop, "limit", domain.MaxEventHops)
+	next, withheld := position.Next(run.RunID)
+	if withheld != nil {
+		d.log.Info("events withheld", "from", run.RunID, "reason", withheld.Reason,
+			"root", withheld.Root, "hop", withheld.Hop, "limit", withheld.Limit)
 		return source{}, false, nil
 	}
 	return source{run: run, steps: steps, next: next}, true, nil
 }
 
-// chainOf is the chain sealed on the run's start. A start that will not
-// decode fails the sweep: read as a root, it would restart the count.
-func chainOf(run domain.RunID, steps []domain.Step) (*domain.EventChain, error) {
+// positionOf is the run's place in a chain, from its sealed start. A start
+// that will not decode fails the sweep: read as a root, it would restart the
+// count.
+func positionOf(run domain.RunID, steps []domain.Step) (domain.ChainPosition, error) {
 	for _, step := range steps {
 		if step.Kind != domain.StepRunStarted {
 			continue
 		}
 		var p domain.RunStartedPayload
 		if err := json.Unmarshal(step.Payload, &p); err != nil {
-			return nil, fmt.Errorf("trigger: decode start of %s: %w", run, err)
+			return domain.ChainPosition{}, fmt.Errorf("trigger: decode start of %s: %w", run, err)
 		}
-		return p.Chain, nil
+		return domain.ChainPosition{Trigger: p.Trigger, Chain: p.Chain}, nil
 	}
-	return nil, fmt.Errorf("trigger: source run %s has no start", run)
+	return domain.ChainPosition{}, fmt.Errorf("trigger: source run %s has no start", run)
 }
 
 // publish opens one run per listener.
@@ -219,7 +220,7 @@ func (d *Dispatcher) openListener(
 	next := src.next
 	result, err := d.opener.Open(ctx, Request{
 		Agent: agent, IdemKey: fmt.Sprintf("event:%s:%s:%s", src.run.RunID, event.Event, agent),
-		Trigger: "event", By: src.run.OnBehalfOf, Input: inputFor(src.run, event, artifacts),
+		Trigger: domain.TriggerEvent, By: src.run.OnBehalfOf, Input: inputFor(src.run, event, artifacts),
 		Labels: src.run.Labels.Clone(), ContextArtifacts: artifacts, Chain: &next,
 	})
 	if err != nil {

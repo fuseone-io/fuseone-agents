@@ -13,9 +13,14 @@ dispatcher will open nothing from it; without this record the next agent
 simply never starts, and the trail has a gap somebody has to explain.
 */
 
-// finishAt advances a run an event opened at chain to its finish and returns
-// the closing payload.
-func finishAt(t *testing.T, chain *domain.EventChain, publishes bool) domain.RunFinishedPayload {
+// byEvent is the position of a run an event opened, carrying chain.
+func byEvent(chain *domain.EventChain) domain.ChainPosition {
+	return domain.ChainPosition{Trigger: domain.TriggerEvent, Chain: chain}
+}
+
+// finishAt advances a run opened at position to its finish and returns the
+// closing payload.
+func finishAt(t *testing.T, position domain.ChainPosition, publishes bool) domain.RunFinishedPayload {
 	t.Helper()
 	ctx := context.Background()
 	h := newHarness(t, Proposal{Done: true, Outcome: "done"})
@@ -25,7 +30,7 @@ func finishAt(t *testing.T, chain *domain.EventChain, publishes bool) domain.Run
 		RunID: start.RunID, Kind: domain.StepRunStarted,
 		Scope: start.Scope, AgentID: start.AgentID,
 		VersionID: start.VersionID, OnBehalfOf: start.OnBehalfOf,
-		Payload: mustJSON(domain.RunStartedPayload{Trigger: "event", Chain: chain}),
+		Payload: mustJSON(domain.RunStartedPayload{Trigger: position.Trigger, Chain: position.Chain}),
 	}); err != nil {
 		t.Fatalf("open run: %v", err)
 	}
@@ -42,7 +47,7 @@ func finishAt(t *testing.T, chain *domain.EventChain, publishes bool) domain.Run
 func TestAdvance_aRunAtTheHopLimitThatPublishes_recordsItsEventsWithheld(t *testing.T) {
 	t.Parallel()
 
-	finished := finishAt(t, &domain.EventChain{Root: "run-root", Hop: domain.MaxEventHops}, true)
+	finished := finishAt(t, byEvent(&domain.EventChain{Root: "run-root", Hop: domain.MaxEventHops}), true)
 
 	want := domain.EventsWithheld{
 		Reason: domain.ReasonEventHopLimit, Root: "run-root",
@@ -56,14 +61,28 @@ func TestAdvance_aRunAtTheHopLimitThatPublishes_recordsItsEventsWithheld(t *test
 func TestAdvance_aRunUnderTheHopLimit_withholdsNothing(t *testing.T) {
 	t.Parallel()
 
-	cases := map[string]*domain.EventChain{
-		"no event opened it": nil,
-		"one hop short":      {Root: "run-root", Hop: domain.MaxEventHops - 1},
+	cases := map[string]domain.ChainPosition{
+		"no event opened it": {Trigger: "cron"},
+		"one hop short":      byEvent(&domain.EventChain{Root: "run-root", Hop: domain.MaxEventHops - 1}),
 	}
-	for name, chain := range cases {
-		if got := finishAt(t, chain, true).EventsWithheld; got != nil {
+	for name, position := range cases {
+		if got := finishAt(t, position, true).EventsWithheld; got != nil {
 			t.Errorf("%s: events withheld = %+v, want none", name, got)
 		}
+	}
+}
+
+// Opened by an event with no chain — by an older dispatcher during a rolling
+// update — the run cannot know how far it stands from its root. Read as a
+// root it would restart the count, so it withholds, and says why.
+func TestAdvance_anEventOpenedRunWithNoChain_recordsTheChainAsUnknown(t *testing.T) {
+	t.Parallel()
+
+	finished := finishAt(t, byEvent(nil), true)
+
+	want := domain.EventsWithheld{Reason: domain.ReasonEventChainUnknown, Limit: domain.MaxEventHops}
+	if finished.EventsWithheld == nil || *finished.EventsWithheld != want {
+		t.Fatalf("events withheld = %+v, want %+v", finished.EventsWithheld, want)
 	}
 }
 
@@ -73,7 +92,7 @@ func TestAdvance_aRunAtTheHopLimitThatPublishesNothing_recordsNothing(t *testing
 	t.Parallel()
 
 	chain := &domain.EventChain{Root: "run-root", Hop: domain.MaxEventHops}
-	if got := finishAt(t, chain, false).EventsWithheld; got != nil {
+	if got := finishAt(t, byEvent(chain), false).EventsWithheld; got != nil {
 		t.Fatalf("events withheld = %+v for an agent that publishes none", got)
 	}
 }
