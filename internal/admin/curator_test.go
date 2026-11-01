@@ -49,7 +49,8 @@ func freshCurator(t *testing.T) *admin.Curator {
 	t.Helper()
 	pool := freshPool(t)
 	if _, err := pool.Exec(context.Background(),
-		`delete from settings where kind = 'tool'`); err != nil {
+		`delete from settings where kind = 'tool'; delete from tool_server_leases;
+		 delete from tool_server_grace`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 	return admin.NewCurator(pool)

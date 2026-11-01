@@ -705,6 +705,12 @@ type reconciler struct {
 	// under, so the administration can tell a discovery of the server as it
 	// is configured now from one of a configuration that has since changed.
 	generations map[string]time.Time
+	// holder names this worker in its publications and in the leases it
+	// holds on the servers its flags started; leases is where it renews them.
+	holder string
+	leases toolLeases
+	// flags is each server a --mcp flag names, as the flag describes it.
+	flags map[string]domain.MCPServer
 }
 
 func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorder) *reconciler {
@@ -713,6 +719,8 @@ func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorde
 		connectTo:   connectServer,
 		connected:   make(map[string]string),
 		generations: make(map[string]time.Time),
+		flags:       make(map[string]domain.MCPServer),
+		holder:      defaultOwner(),
 	}
 }
 
@@ -745,7 +753,16 @@ func (r *reconciler) withStdioEgressObserver(o stdioEgressObserver) *reconciler 
 // hold marks a server as connected by something other than the reconciler —
 // a --mcp flag. It is never disconnected here: the flag owns it, and the
 // console cannot see or change it.
-func (r *reconciler) hold(name string) { r.connected[name] = "flag" }
+//
+// What the flag says is kept, so a session that dies under it can be started
+// again: the flag still names the server.
+func (r *reconciler) hold(server domain.MCPServer) {
+	r.connected[server.Name] = flagMark
+	r.flags[server.Name] = server
+}
+
+// flagMark stands for a fingerprint on a server a --mcp flag connected.
+const flagMark = "flag"
 
 // reconcile connects what is newly configured and disconnects what is not.
 func (r *reconciler) reconcile(ctx context.Context) {
@@ -762,7 +779,12 @@ func (r *reconciler) reconcile(ctx context.Context) {
 		}
 	}
 
-	changed := r.disconnectStale(wanted)
+	// First, so a slow pass below cannot let this worker's leases run out —
+	// and after the flag servers that died are started again, because only
+	// a live session is leased.
+	changed := r.reviveFlagServers(ctx)
+	changed = r.renewLeases(ctx) || changed
+	changed = r.disconnectStale(wanted) || changed
 	for name, server := range wanted {
 		if _, already := r.connected[name]; already {
 			continue
@@ -799,7 +821,7 @@ func (r *reconciler) publication() domain.ToolPublication {
 	pub := r.catalog.Publication()
 	servers := make([]domain.PublishedServer, 0, len(pub.Servers))
 	for _, server := range pub.Servers {
-		if r.connected[server.Name] == "flag" {
+		if r.connected[server.Name] == flagMark {
 			server.Unmanaged = true
 		} else if generation, known := r.generations[server.Name]; known {
 			server.Generation = generation
@@ -809,6 +831,7 @@ func (r *reconciler) publication() domain.ToolPublication {
 		servers = append(servers, server)
 	}
 	pub.Servers = servers
+	pub.Holder = r.holder
 	return pub
 }
 
@@ -825,7 +848,7 @@ func (r *reconciler) publication() domain.ToolPublication {
 func (r *reconciler) disconnectStale(wanted map[string]domain.MCPServer) bool {
 	withdrew := false
 	for name, mark := range r.connected {
-		if mark == "flag" {
+		if mark == flagMark {
 			continue
 		}
 		server, still := wanted[name]
@@ -850,6 +873,11 @@ func (r *reconciler) disconnectStale(wanted map[string]domain.MCPServer) bool {
 // ghost of one.
 func (r *reconciler) refreshHealth(ctx context.Context) {
 	for name := range r.connected {
+		// A flag server whose session died stays held, to be started again;
+		// it is not reachable meanwhile.
+		if !r.catalog.Connected(name) {
+			continue
+		}
 		observe(ctx, r.health, name, true, r.catalog.CountFrom(name), "")
 	}
 }
@@ -941,16 +969,21 @@ func (r *reconciler) withProtocol(server domain.MCPServer) domain.MCPServer {
 	return server
 }
 
-// watch keeps reconciling until ctx is cancelled. Its caller owns it.
-func (r *reconciler) watch(ctx context.Context, every time.Duration) {
+// watchEvery reconciles on a timer until ctx is cancelled. Its caller owns it.
+func (r *reconciler) watchEvery(ctx context.Context, every time.Duration) {
 	ticker := time.NewTicker(every)
 	defer ticker.Stop()
+	r.watch(ctx, ticker.C)
+}
 
+// watch reconciles on every tick until ctx is cancelled. A tick is taken
+// only between passes, never during one.
+func (r *reconciler) watch(ctx context.Context, ticks <-chan time.Time) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-ticks:
 			r.reconcile(ctx)
 		}
 	}

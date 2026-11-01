@@ -127,7 +127,7 @@ func newFactoryJourney(t *testing.T, toolsets string) *factoryJourney {
 	// journey starts from an installation that has never discovered or ruled
 	// on a tool, whatever an earlier run or another journey left behind.
 	if _, err := pool.Exec(t.Context(),
-		`delete from settings where kind in ('tool', 'tool_classification')`); err != nil {
+		`delete from settings where kind in ('tool', 'tool_classification'); delete from tool_server_leases; delete from tool_server_grace`); err != nil {
 		t.Fatalf("reset the catalogue: %v", err)
 	}
 	v, err := vault.New(make([]byte, 32), "test")

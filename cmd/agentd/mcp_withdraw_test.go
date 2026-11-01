@@ -67,7 +67,7 @@ func TestReconciler_publication_carriesEachServersConfigurationOrUnmanaged(t *te
 		&testSession{tools: []*mcp.Tool{{Name: "run"}}}, nil); err != nil {
 		t.Fatalf("connect the command-line server: %v", err)
 	}
-	r.hold("local")
+	r.hold(domain.MCPServer{Name: "local"})
 
 	r.reconcile(context.Background())
 

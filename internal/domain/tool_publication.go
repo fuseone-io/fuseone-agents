@@ -11,6 +11,10 @@ import "time"
 type ToolPublication struct {
 	Servers []PublishedServer
 	Entries []ToolEntry
+	// Holder names the worker publishing. Every unmanaged server it speaks
+	// for is leased to it, and that lease — renewed while the worker runs the
+	// server — is what keeps the server's tools in the catalogue.
+	Holder string
 }
 
 // PublishedServer is one server a publication speaks for, and the

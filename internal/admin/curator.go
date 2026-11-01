@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -26,10 +27,12 @@ var ErrNotClassifiable = errors.New("admin: unknown is not a ruling")
 // ruling is durable and attributed rather than a flag on a running process.
 type Curator struct {
 	pool *pgxpool.Pool
+	// clock is what leases on unmanaged servers are written and judged by.
+	clock func() time.Time
 }
 
 func NewCurator(pool *pgxpool.Pool) *Curator {
-	return &Curator{pool: pool}
+	return &Curator{pool: pool, clock: time.Now}
 }
 
 // Classify records a ruling and the fact that somebody made it.

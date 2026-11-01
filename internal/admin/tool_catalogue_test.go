@@ -45,7 +45,7 @@ func standalone(entries []domain.ToolEntry) domain.ToolPublication {
 			servers = append(servers, domain.PublishedServer{Name: e.Server, Unmanaged: true})
 		}
 	}
-	return domain.ToolPublication{Servers: servers, Entries: entries}
+	return domain.ToolPublication{Servers: servers, Entries: entries, Holder: "worker-a"}
 }
 
 // configure saves a server row as the console would, and returns the

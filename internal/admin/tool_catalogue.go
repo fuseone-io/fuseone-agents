@@ -36,6 +36,9 @@ const toolKind = "tool"
 // server it no longer describes (judge). And every publication, from any
 // worker, clears the tools of servers the configuration no longer wants, so
 // the catalogue converges at the next publish whatever was lost on the way.
+// An unmanaged server has no configuration to say it is gone: the
+// publication leases it to the publishing worker, and the same sweep clears
+// the unmanaged servers nobody holds a lease on any more (HoldToolServers).
 // Rulings are not catalogue rows and are never dropped: a tool that comes
 // back finds the decision already made.
 func (c *Curator) Publish(ctx context.Context, pub domain.ToolPublication) error {
@@ -48,11 +51,15 @@ func (c *Curator) Publish(ctx context.Context, pub domain.ToolPublication) error
 	if err := lockToolCatalogue(ctx, tx); err != nil {
 		return err
 	}
+	now := c.clock()
+	if err := leaseUnmanaged(ctx, tx, pub, now); err != nil {
+		return err
+	}
 	configured, err := configuredServers(ctx, tx)
 	if err != nil {
 		return err
 	}
-	if err := sweepUnconfigured(ctx, tx, configured); err != nil {
+	if err := sweepCatalogue(ctx, tx, configured, now); err != nil {
 		return err
 	}
 	held := judge(pub, configured)
@@ -60,6 +67,11 @@ func (c *Curator) Publish(ctx context.Context, pub domain.ToolPublication) error
 		return err
 	}
 	if err := writeTools(ctx, tx, held); err != nil {
+		return err
+	}
+	// Again after the write: it may have rewritten an old worker's rows
+	// under a lease, settling their grace.
+	if err := forgetSettledGrace(ctx, tx); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -169,9 +181,12 @@ func encodeTool(e domain.ToolEntry, unmanaged bool) ([]byte, error) {
 		// while hiding the answer.
 		OnSurface bool `json:"onSurface"`
 		// A server the configuration does not hold: the sweep leaves it to the
-		// worker that started it.
+		// workers holding a lease on it.
 		Unmanaged bool `json:"unmanaged,omitempty"`
-	}{e.Server, e.Description, e.Digest, e.OnSurface, unmanaged})
+		// Written under a lease. A row marked unmanaged without it comes from
+		// a worker from before leases, which gets a grace (LegacyToolGrace).
+		Leased bool `json:"leased,omitempty"`
+	}{e.Server, e.Description, e.Digest, e.OnSurface, unmanaged, unmanaged})
 	if err != nil {
 		return nil, fmt.Errorf("admin: encode tool %s: %w", e.ID, err)
 	}
