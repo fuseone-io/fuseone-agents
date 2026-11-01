@@ -705,6 +705,9 @@ type reconciler struct {
 	// under, so the administration can tell a discovery of the server as it
 	// is configured now from one of a configuration that has since changed.
 	generations map[string]time.Time
+	// holder names this worker in its publications, and so in the lease the
+	// administration gives it on each server its flags started.
+	holder string
 }
 
 func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorder) *reconciler {
@@ -713,6 +716,7 @@ func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorde
 		connectTo:   connectServer,
 		connected:   make(map[string]string),
 		generations: make(map[string]time.Time),
+		holder:      defaultOwner(),
 	}
 }
 
@@ -809,6 +813,7 @@ func (r *reconciler) publication() domain.ToolPublication {
 		servers = append(servers, server)
 	}
 	pub.Servers = servers
+	pub.Holder = r.holder
 	return pub
 }
 

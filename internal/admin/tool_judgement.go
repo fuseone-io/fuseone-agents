@@ -84,21 +84,25 @@ func configuredServers(ctx context.Context, tx pgx.Tx) (map[string]time.Time, er
 	return out, rows.Err()
 }
 
-// sweepUnconfigured drops the tools of every managed server the
-// configuration no longer wants, whoever published them and whenever. It is
-// what makes a lost or late publication harmless: the next one, from any
-// worker, takes them away.
-func sweepUnconfigured(ctx context.Context, tx pgx.Tx, configured map[string]time.Time) error {
+/*
+sweepCatalogue drops the tools of every server nobody stands behind any more,
+whoever published them and whenever: a managed server the configuration no
+longer wants, and an unmanaged server nobody holds a live lease on. It is
+what makes a lost or late publication harmless — the next one, or any
+worker's next pass, takes them away.
+*/
+func sweepCatalogue(ctx context.Context, tx pgx.Tx, configured map[string]time.Time, now time.Time) error {
 	if _, err := tx.Exec(ctx, `
-		delete from settings
-		where scope_kind = 'installation' and company_id = '' and area_id = ''
-		  and kind = $1
-		  and not coalesce((value->>'unmanaged')::boolean, false)
-		  and not (value->>'server' = any($2))`,
+		delete from settings s
+		where s.scope_kind = 'installation' and s.company_id = '' and s.area_id = ''
+		  and s.kind = $1
+		  and ((not coalesce((s.value->>'unmanaged')::boolean, false)
+		        and not (s.value->>'server' = any($3)))
+		       or (`+unheldUnmanaged+`))`,
 		// Never nil: "= any(NULL)" is NULL, and with nothing configured the
 		// sweep would keep everything it exists to clear.
-		toolKind, append([]string{}, slices.Collect(maps.Keys(configured))...)); err != nil {
-		return fmt.Errorf("admin: drop the tools of servers no longer configured: %w", err)
+		toolKind, now, append([]string{}, slices.Collect(maps.Keys(configured))...)); err != nil {
+		return fmt.Errorf("admin: drop the tools of servers nobody serves: %w", err)
 	}
 	return nil
 }
