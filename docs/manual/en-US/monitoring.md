@@ -42,12 +42,14 @@ belongs to the installation and its count covers every scope's runs.
 
 ## Prometheus metrics
 
-The worker's metrics endpoint (`--metrics-addr`) exposes, after each sweep:
+The worker's metrics endpoint (`--metrics-addr`) exposes these, read on the
+worker's first sweep and then once a minute:
 
 | Metric | Type | Meaning |
 |---|---|---|
 | `fuseone_event_dispatch_backlog_runs{state="ready"}` | gauge | Runs waiting for the next sweep. |
 | `fuseone_event_dispatch_backlog_runs{state="held_by_xmin"}` | gauge | Runs held by the oldest open transaction. |
+| `fuseone_event_dispatch_backlog_capped` | gauge | 1 when a count stopped at 1,000: the backlog is at least that. |
 | `fuseone_event_dispatch_lag_seconds` | gauge | How long the oldest waiting run has waited. |
 | `fuseone_event_dispatch_held_by_xmin` | gauge | 1 while committed runs wait on an open transaction. |
 | `fuseone_event_dispatch_oldest_xact_age_seconds` | gauge | Age of the oldest open transaction holding an id. Omitted when unknown. |
@@ -60,11 +62,16 @@ The only label is `state`, with two values. No run, agent or transaction id
 ever becomes a label. The gauges appear only after the first successful read,
 so a worker that never looked cannot report that dispatch is caught up.
 
+The counts stop at 1,000 (shown as `1000+` on the page). The reading happens
+during the very incidents it describes, on every worker, so it is bounded: two
+index ranges of at most 1,001 rows and one row for the lag, however large the
+backlog grows.
+
 A starting point for alerts:
 
 ```
 fuseone_event_dispatch_degraded == 1                     for 5m
-time() - fuseone_event_dispatch_observed_timestamp_seconds > 120
+time() - fuseone_event_dispatch_observed_timestamp_seconds > 180
 ```
 
 ## Seeing the holder's age

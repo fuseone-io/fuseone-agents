@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -152,5 +153,29 @@ func TestAppend_cancelledContext_doesNotWrite(t *testing.T) {
 	}
 	if _, err := l.Head(context.Background(), "run-1"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("a cancelled append left state behind: %v", err)
+	}
+}
+
+// The memory ledger stops counting the event dispatch backlog where Postgres
+// does, so a suite on the fake cannot rely on a count production never gives.
+func TestEventDispatchBacklog_memoryStopsCountingAtTheCap(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	l := NewMemory()
+	for i := 0; i <= domain.EventDispatchCountCap; i++ {
+		id := domain.RunID(fmt.Sprintf("run-%04d", i))
+		for _, kind := range []domain.StepKind{domain.StepRunStarted, domain.StepRunFinished} {
+			if _, err := l.Append(ctx, step(id, kind)); err != nil {
+				t.Fatalf("append: %v", err)
+			}
+		}
+	}
+
+	got, err := l.EventDispatchBacklog(ctx)
+	if err != nil {
+		t.Fatalf("EventDispatchBacklog: %v", err)
+	}
+	if got.Ready != domain.EventDispatchCountCap || !got.Capped {
+		t.Fatalf("backlog = %+v; want %d and capped", got, domain.EventDispatchCountCap)
 	}
 }

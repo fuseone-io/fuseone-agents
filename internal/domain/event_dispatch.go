@@ -28,7 +28,16 @@ type EventDispatchBacklog struct {
 	OldestFinishedAt time.Time
 	// Xact is the oldest transaction holding an id — the one that sets xmin.
 	Xact OpenXact
+	// Capped reports that Ready or HeldByXmin stopped counting at
+	// EventDispatchCountCap: the true backlog is at least that.
+	Capped bool
 }
+
+// EventDispatchCountCap is where the backlog counts stop. The backlog is read
+// every minute on every worker and on every health page view, during the very
+// incident it describes; a count that walked the whole range would grow with
+// the incident. A thousand runs waiting already says everything a number can.
+const EventDispatchCountCap = 1000
 
 // OpenXact is the oldest open transaction that holds a transaction id.
 type OpenXact struct {

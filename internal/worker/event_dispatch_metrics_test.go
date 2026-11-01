@@ -36,11 +36,13 @@ func TestEventDispatchMetrics_aHeldBacklog_rendersLagHolderAndDegradation(t *tes
 		HeldByXmin:       5,
 		OldestFinishedAt: observedAt.Add(-6 * time.Minute),
 		Xact:             domain.OpenXact{Open: true, StartedAt: observedAt.Add(-7 * time.Minute)},
+		Capped:           true,
 	}, observedAt)
 
 	requireSamples(t, scrape(t, reg), []string{
 		`fuseone_event_dispatch_backlog_runs{state="ready"} 2`,
 		`fuseone_event_dispatch_backlog_runs{state="held_by_xmin"} 5`,
+		`fuseone_event_dispatch_backlog_capped 1`,
 		`fuseone_event_dispatch_lag_seconds 360`,
 		`fuseone_event_dispatch_held_by_xmin 1`,
 		`fuseone_event_dispatch_oldest_xact_age_seconds 420`,
@@ -58,6 +60,7 @@ func TestEventDispatchMetrics_caughtUp_isHealthyAndHoldsNothing(t *testing.T) {
 	requireSamples(t, scrape(t, reg), []string{
 		`fuseone_event_dispatch_backlog_runs{state="ready"} 0`,
 		`fuseone_event_dispatch_backlog_runs{state="held_by_xmin"} 0`,
+		`fuseone_event_dispatch_backlog_capped 0`,
 		`fuseone_event_dispatch_lag_seconds 0`,
 		`fuseone_event_dispatch_held_by_xmin 0`,
 		`fuseone_event_dispatch_oldest_xact_age_seconds 0`,

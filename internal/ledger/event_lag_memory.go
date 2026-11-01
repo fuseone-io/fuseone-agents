@@ -8,7 +8,8 @@ import (
 )
 
 // EventDispatchBacklog holds the Postgres contract: the real finished runs
-// past the cursor and when the oldest finished. Every append here completes
+// past the cursor, counted up to the cap, and when the first of them in the
+// feed's order finished. Every append here completes
 // as it happens, so no transaction is ever in flight to hold a run back:
 // everything waiting is Ready.
 func (m *Memory) EventDispatchBacklog(ctx context.Context) (domain.EventDispatchBacklog, error) {
@@ -23,6 +24,7 @@ func (m *Memory) EventDispatchBacklog(ctx context.Context) (domain.EventDispatch
 // eventDispatchBacklog reads under the caller's lock.
 func (m *Memory) eventDispatchBacklog() domain.EventDispatchBacklog {
 	var out domain.EventDispatchBacklog
+	first := uint64(0)
 	for id, order := range m.finishOrder {
 		steps := m.runs[id]
 		if !m.eventCursor.Before(domain.FinishCursor{Xid: order, Run: id}) || isSimulated(steps) {
@@ -33,11 +35,12 @@ func (m *Memory) eventDispatchBacklog() domain.EventDispatchBacklog {
 			continue
 		}
 		out.Ready++
-		if at := finishedAt(summary); out.OldestFinishedAt.IsZero() || at.Before(out.OldestFinishedAt) {
-			out.OldestFinishedAt = at
+		// The wait is the first run in the feed's order, as Postgres reads it.
+		if first == 0 || order < first {
+			first, out.OldestFinishedAt = order, finishedAt(summary)
 		}
 	}
-	return out
+	return capBacklog(out)
 }
 
 // finishedAt is when a finished run stopped: its end, or its last write when

@@ -2623,6 +2623,7 @@
     "destinations": "Destinations",
     "egressDenials": "Stdio egress denials · last 24 hours",
     "eventDispatch": "Event dispatch",
+    "eventDispatchAtLeast": "{{count}}+",
     "eventDispatchCaughtUp": "Caught up: every finished run has been offered to the agents that listen for its events.",
     "eventDispatchDegraded": "Degraded",
     "eventDispatchHealthy": "Healthy",

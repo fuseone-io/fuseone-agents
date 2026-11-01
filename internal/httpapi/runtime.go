@@ -96,6 +96,8 @@ func runtimeEventDispatchFrom(b domain.EventDispatchBacklog, now time.Time) open
 		Status:               openapi.RuntimeEventDispatchStatus(b.Status(now)),
 		Ready:                b.Ready,
 		HeldByXmin:           b.HeldByXmin,
+		CountCapped:          b.Capped,
+		CountCap:             domain.EventDispatchCountCap,
 		LagSeconds:           int64(b.Lag(now).Seconds()),
 		XactOpen:             b.Xact.Open,
 		DegradedAfterSeconds: int64(domain.EventDispatchDegradedAfter.Seconds()),

@@ -43,13 +43,14 @@ pertence à instalação e a contagem cobre as execuções de todos os escopos.
 
 ## Métricas do Prometheus
 
-O endpoint de métricas do worker (`--metrics-addr`) expõe, depois de cada
-varredura:
+O endpoint de métricas do worker (`--metrics-addr`) expõe estas métricas,
+lidas na primeira varredura do worker e depois uma vez por minuto:
 
 | Métrica | Tipo | Significado |
 |---|---|---|
 | `fuseone_event_dispatch_backlog_runs{state="ready"}` | gauge | Execuções aguardando a próxima varredura. |
 | `fuseone_event_dispatch_backlog_runs{state="held_by_xmin"}` | gauge | Execuções retidas pela transação aberta mais antiga. |
+| `fuseone_event_dispatch_backlog_capped` | gauge | 1 quando uma contagem parou em 1.000: a fila tem pelo menos isso. |
 | `fuseone_event_dispatch_lag_seconds` | gauge | Quanto tempo a execução mais antiga na fila está esperando. |
 | `fuseone_event_dispatch_held_by_xmin` | gauge | 1 enquanto execuções confirmadas esperam uma transação aberta. |
 | `fuseone_event_dispatch_oldest_xact_age_seconds` | gauge | Idade da transação aberta mais antiga que detém um id. Omitida quando desconhecida. |
@@ -63,11 +64,16 @@ transação vira rótulo. Os gauges só aparecem depois da primeira leitura bem
 sucedida, então um worker que nunca olhou não consegue dizer que o despacho
 está em dia.
 
+As contagens param em 1.000 (exibidas como `1000+` na página). A leitura
+acontece durante os próprios incidentes que descreve, em todo worker, então ela
+é limitada: dois intervalos de índice de no máximo 1.001 linhas e uma linha para
+o atraso, por maior que a fila fique.
+
 Um ponto de partida para alertas:
 
 ```
 fuseone_event_dispatch_degraded == 1                     for 5m
-time() - fuseone_event_dispatch_observed_timestamp_seconds > 120
+time() - fuseone_event_dispatch_observed_timestamp_seconds > 180
 ```
 
 ## Vendo a idade da transação

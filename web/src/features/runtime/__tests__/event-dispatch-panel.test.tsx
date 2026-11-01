@@ -10,6 +10,8 @@ function dispatch(input: Partial<RuntimeEventDispatch>): RuntimeEventDispatch {
     status: "ok",
     ready: 0,
     heldByXmin: 0,
+    countCapped: false,
+    countCap: 1000,
     lagSeconds: 0,
     xactOpen: false,
     xactAgeKnown: true,
@@ -56,6 +58,18 @@ test("a holder the database role cannot see says so instead of showing an age", 
 
   expect(screen.getByText(/cannot see since when/)).toBeInTheDocument();
   expect(screen.queryByText(/has been open for/)).not.toBeInTheDocument();
+});
+
+test("a count stopped at the cap reads as a lower bound", () => {
+  setLocale("en-US");
+  render(
+    <EventDispatchPanel
+      dispatch={dispatch({ heldByXmin: 1000, countCapped: true, lagSeconds: 900 })}
+    />,
+  );
+
+  expect(screen.getByText("1000+")).toBeInTheDocument();
+  expect(screen.queryByText("1000")).not.toBeInTheDocument();
 });
 
 test("a caught-up dispatcher is healthy", () => {

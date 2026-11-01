@@ -2623,6 +2623,7 @@
     "destinations": "Destinos",
     "egressDenials": "Negações de egresso stdio · últimas 24 horas",
     "eventDispatch": "Despacho de eventos",
+    "eventDispatchAtLeast": "{{count}}+",
     "eventDispatchCaughtUp": "Em dia: toda execução finalizada já foi oferecida aos agentes que escutam seus eventos.",
     "eventDispatchDegraded": "Degradado",
     "eventDispatchHealthy": "Saudável",

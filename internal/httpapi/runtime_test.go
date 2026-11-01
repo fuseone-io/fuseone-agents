@@ -93,3 +93,16 @@ func TestRuntimeEventDispatchFrom_aHiddenHolder_hasNoAge(t *testing.T) {
 		t.Fatalf("event dispatch = %+v; want the holder open with no age", got)
 	}
 }
+
+// A count stopped at the cap says so, and says where the cap is, so the page
+// reads "1000+" rather than a backlog of exactly a thousand.
+func TestRuntimeEventDispatchFrom_aCappedCount_saysItIsALowerBound(t *testing.T) {
+	t.Parallel()
+	got := runtimeEventDispatchFrom(domain.EventDispatchBacklog{
+		HeldByXmin: domain.EventDispatchCountCap, OldestFinishedAt: finishedAt, Capped: true,
+	}, finishedAt.Add(time.Minute))
+
+	if !got.CountCapped || got.CountCap != domain.EventDispatchCountCap {
+		t.Fatalf("event dispatch = %+v; want the count marked capped at %d", got, domain.EventDispatchCountCap)
+	}
+}

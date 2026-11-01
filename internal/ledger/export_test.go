@@ -17,6 +17,10 @@ const (
 	DeclaredPairStepsFilter = declaredPairSteps
 )
 
+// EventDispatchBacklogSQL is the backlog statement, for the plan test that
+// bounds what it reads.
+const EventDispatchBacklogSQL = eventDispatchBacklogSQL
+
 // AppendInTx seals a step inside a transaction the test holds open, so a race
 // can be staged on the production append rather than on a copy of its SQL.
 func AppendInTx(ctx context.Context, tx pgx.Tx, s domain.Step) (domain.Step, error) {
