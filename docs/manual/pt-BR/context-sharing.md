@@ -116,6 +116,29 @@ agentes, ou um ciclo de revisão que dá algumas voltas. Uma cadeia que chega
 ao limite costuma ser um ciclo que ninguém quis: veja quais agentes escutam
 uns aos outros antes de pensar em aumentá-lo.
 
+## Publicar uma versão que fecha um ciclo
+
+O limite é a metade em tempo de execução; é na publicação que você fica
+sabendo do ciclo primeiro. Quando a versão que você publica — o que ela
+emite e os eventos que a iniciam — fecha um laço com os agentes já
+publicados, a versão é publicada mesmo assim, e o Studio mostra um aviso com
+todos os agentes do laço, voltando ao que você publicou:
+`developer → reviewer → developer`. Vários laços aparecem do mais curto para
+o mais longo, depois pelo nome, então publicar a mesma coisa duas vezes dá o
+mesmo texto.
+
+É um aviso, não uma recusa. Um ciclo de revisão é um ciclo de propósito; o
+aviso existe para que um ciclo que ninguém quis seja notado antes de uma
+cadeia chegar ao oitavo salto. A versão é avaliada como vai ficar,
+substituindo a versão atual do agente: uma versão que deixa de escutar o
+laço é publicada sem aviso. Só aparecem laços que passam pelo agente que
+você publica — um laço entre outros agentes não foi fechado pela sua
+publicação.
+
+Um agente que escuta o próprio evento aparece sozinho,
+`developer → developer`, e o aviso diz isso: a plataforma nunca inicia um
+agente pelo próprio evento, então esse gatilho não faz nada.
+
 ## O que escrever no listener
 
 Diga ao listener quais nomes de artefato importam e quando chamar a ferramenta

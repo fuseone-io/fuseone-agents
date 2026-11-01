@@ -113,6 +113,27 @@ handful of agents, or a review loop that goes round a few times. A chain
 that reaches the limit is usually a cycle nobody meant: look at which agents
 listen to each other before raising it.
 
+## Publishing a version that closes a cycle
+
+The limit is the run-time half; publishing is where you hear about a cycle
+first. When the version you publish — what it emits, and the events it
+starts on — closes a loop with the agents already published, the version is
+still published, and the Studio shows a warning that names every agent in
+the loop, back to the one you published: `developer → reviewer → developer`.
+Several loops are listed shortest first, then by name, so publishing the
+same thing twice reads the same.
+
+It is a warning, not a refusal. A review loop is a cycle on purpose; the
+warning is there so that one nobody meant is noticed before a chain reaches
+the eighth hop. The version is judged as it will stand, replacing the
+agent's current one: a version that stops listening to the loop publishes
+without a warning. Only loops through the agent you publish are named — one
+among other agents is not something your publish closed.
+
+An agent that listens to its own event is named alone, `developer →
+developer`, and the warning says so: the platform never starts an agent from
+its own event, so that trigger does nothing.
+
 ## What to write in the listener
 
 Tell the listener which artifact names matter and when to call the read tool.
