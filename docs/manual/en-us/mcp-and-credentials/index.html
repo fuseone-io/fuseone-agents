@@ -129,6 +129,11 @@ so a tool that comes back with the same definition needs no fresh review.</p>
 recorded: unreachable is not evidence it stopped offering them. After
 narrowing what a server offers — a smaller toolset, a different account —
 check that it shows as reachable before trusting a publish.</p>
+<p>A server started with the worker’s <code dir="auto">--mcp</code> flag is not in the configuration,
+so there is nothing to delete or switch off. Its tools stay while any worker
+runs it, and leave within about three minutes of the last worker stopping — restarted
+without the flag, or gone. One worker dropping the flag does not remove tools
+another worker still serves. Decisions are kept here too.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="installation-credential">Installation credential</h2><a class="sl-anchor-link" href="#installation-credential"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Installation credential”</span></a></div>
 <p>Use an installation credential when the server acts as a service account:
 discovery, health checks, probes and tools that do not represent a particular
