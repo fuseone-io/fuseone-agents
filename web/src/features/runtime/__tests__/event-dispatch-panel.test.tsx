@@ -1,8 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { EventDispatchPanel } from "@/features/runtime/event-dispatch-panel";
+import { runtimeAttention } from "@/features/runtime/runtime-attention";
 import { setLocale } from "@/i18n";
-import type { RuntimeEventDispatch } from "@/lib/api/client";
+import type { RuntimeEventDispatch, RuntimeHealth } from "@/lib/api/client";
 
 function dispatch(input: Partial<RuntimeEventDispatch>): RuntimeEventDispatch {
   return {
@@ -63,4 +64,24 @@ test("a caught-up dispatcher is healthy", () => {
 
   expect(screen.getByText("Healthy")).toBeInTheDocument();
   expect(screen.getByText(/Caught up/)).toBeInTheDocument();
+});
+
+test("a degraded dispatcher needs attention, a healthy one does not", () => {
+  const base: RuntimeHealth = {
+    byPhase: {},
+    queue: { ready: 0, leased: 0, backingOff: 0, expiredLeases: 0 },
+    failures: [],
+    toolFailures: [],
+    channelFailures: [],
+    egressDenials: [],
+  };
+
+  const degraded = runtimeAttention({
+    ...base,
+    eventDispatch: dispatch({ status: "degraded", ready: 1, heldByXmin: 4, lagSeconds: 400 }),
+  });
+  expect(degraded.map(({ id, count }) => ({ id, count }))).toEqual([
+    { id: "dispatch:event_dispatch_degraded", count: 5 },
+  ]);
+  expect(runtimeAttention({ ...base, eventDispatch: dispatch({ ready: 3 }) })).toEqual([]);
 });

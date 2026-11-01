@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   Clock3,
+  Hourglass,
   type LucideIcon,
   MessageSquareWarning,
   ShieldAlert,
@@ -27,6 +28,7 @@ const ICONS: Record<RuntimeAttentionKind, LucideIcon> = {
   tool: Wrench,
   channel: MessageSquareWarning,
   egress: ShieldAlert,
+  dispatch: Hourglass,
   queue: Clock3,
 };
 
