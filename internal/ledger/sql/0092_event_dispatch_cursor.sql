@@ -5,13 +5,15 @@
 -- sweeps was never dispatched. Now it reads forward from a cursor and moves
 -- the cursor only once a page is dispatched.
 --
--- The order is the order runs committed in, not a clock. A run's finish is
--- stamped by the worker before its transaction commits; a run stamped earlier
--- can commit later, and a cursor that had passed its timestamp would never see
--- it. So the projection records the finishing transaction (finished_xid), and
--- the dispatcher reads only below the oldest transaction still in flight
--- (pg_snapshot_xmin): everything there has committed or never will, so no run
--- can later appear behind the cursor. A long transaction elsewhere delays
+-- Not a clock: a run's finish is stamped by the worker before its
+-- transaction commits, so a run stamped earlier can commit later, and a cursor
+-- that had passed its timestamp would never see it. The order is the id of the
+-- finishing transaction (finished_xid) — the order ids were allocated in,
+-- which is not commit order either: a lower id can commit after a higher one.
+-- So the dispatcher reads only below the oldest transaction still in flight
+-- (pg_snapshot_xmin). Every transaction there has committed or never will, so
+-- the order below that boundary is stable and no run can later appear behind
+-- the cursor. A long transaction elsewhere delays
 -- dispatch while it is open; it cannot make the dispatcher skip a run.
 --
 -- Numbered 0092 because #226 takes 0091; whichever merges second renumbers.

@@ -9,7 +9,8 @@ import (
 
 // FinishedSince holds the Postgres contract: real finished runs after the
 // cursor, in the order they finished, a page at a time. Every append here
-// commits as it happens, so the order runs finished in is the commit order.
+// completes as it happens, so there is never a transaction in flight to wait
+// for, and the order runs finished in is the feed's order.
 func (m *Memory) FinishedSince(
 	ctx context.Context, after domain.FinishCursor, limit int,
 ) ([]domain.FinishedRun, error) {

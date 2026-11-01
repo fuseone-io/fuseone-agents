@@ -57,8 +57,9 @@ to (#203).
 
 It used to read the thirty newest finished runs on every sweep and remember
 nothing: the thirty-first to finish between two sweeps was never dispatched.
-Now it reads forward from a durable cursor, in the order runs committed in,
-and moves the cursor only once every run of a page has been dispatched or
+Now it reads forward from a durable cursor — in the order the finishing
+transactions were allocated their ids, below a boundary where that order is
+stable (see domain.FinishCursor) — and moves the cursor only once every run of a page has been dispatched or
 refused — so a page that fails is read again, and nothing is left behind.
 Two replicas may dispatch the same page; the idempotency key of each opened
 run makes the second a no-op, and the cursor keeps the furthest of their

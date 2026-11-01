@@ -14,10 +14,12 @@ import (
 /*
 The finished-run feed the event dispatcher reads (#203, migration 0092).
 
-Read in commit order, and only below the oldest transaction still in flight.
-A run whose finish committed after a later one was read would otherwise land
-behind the cursor for ever; below pg_snapshot_xmin every transaction has
-committed or never will, so nothing can appear there later. A long-running
+Read in the order the finishing transactions were allocated their ids, and
+only below the oldest transaction still in flight. Allocation order is not
+commit order: a transaction with a lower id can commit after a higher one was
+read, and its run would land behind the cursor for ever. Below
+pg_snapshot_xmin every transaction has committed or never will, so the order
+there is stable and nothing can appear behind a position later. A long-running
 transaction elsewhere holds the feed back while it is open — it delays
 dispatch, never skips it.
 */

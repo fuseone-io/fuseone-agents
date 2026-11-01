@@ -28,8 +28,8 @@ func feedIDs(runs []domain.FinishedRun) []domain.RunID {
 	return out
 }
 
-func TestFinishedSince_pagesFinishedRunsInCommitOrderAfterTheCursor(t *testing.T) {
-	run(t, "finished runs in commit order", func(t *testing.T, s Store) {
+func TestFinishedSince_pagesFinishedRunsInFinishingOrderAfterTheCursor(t *testing.T) {
+	run(t, "finished runs in the order they finished", func(t *testing.T, s Store) {
 		ctx := context.Background()
 		for _, id := range []domain.RunID{"run-c", "run-a", "run-b"} {
 			finishRunIn(t, s, id)
