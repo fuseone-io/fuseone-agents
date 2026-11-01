@@ -31,7 +31,7 @@ Quem tem acesso à instalação inteira vê um painel **Despacho de eventos**:
 |---|---|
 | Aguardando a próxima varredura | Execuções finalizadas depois do cursor que o despachante já pode ler. Normalmente zero ou poucas, resolvidas em até quinze segundos. |
 | Retidas por uma transação aberta | Execuções finalizadas que foram confirmadas depois que a transação aberta mais antiga começou. Varrer mais vezes não as alcança; encerrar essa transação, sim. |
-| A execução mais antiga na fila terminou há … | O atraso: quanto tempo a execução finalizada mais antiga depois do cursor está esperando. |
+| A execução mais antiga na fila terminou há … | O atraso: quanto tempo a execução que terminou primeiro, depois do cursor, está esperando. Quando uma contagem chega a 1.000, aparece como "pelo menos": só uma amostra foi lida. |
 | Idade da transação aberta | Há quanto tempo a transação aberta mais antiga está aberta, exibida quando há execuções retidas. |
 | Saudável / Degradado | Fica degradado quando o atraso passa de cinco minutos, ou quando uma contagem chega a 1.000 (o atraso então vem de uma amostra e é só um limite inferior, então nunca é lido como saudável). |
 
@@ -51,11 +51,11 @@ lidas na primeira varredura do worker e depois uma vez por minuto:
 | `fuseone_event_dispatch_backlog_runs{state="ready"}` | gauge | Execuções aguardando a próxima varredura. |
 | `fuseone_event_dispatch_backlog_runs{state="held_by_xmin"}` | gauge | Execuções retidas pela transação aberta mais antiga. |
 | `fuseone_event_dispatch_backlog_capped{state="ready"\|"held_by_xmin"}` | gauge | 1 quando a contagem daquele estado parou em 1.000: ela é pelo menos isso. |
-| `fuseone_event_dispatch_lag_seconds` | gauge | Quanto tempo a execução mais antiga na fila está esperando. |
+| `fuseone_event_dispatch_lag_seconds` | gauge | Quanto tempo a execução que terminou primeiro na fila está esperando. Um limite inferior quando uma contagem parou no teto. |
 | `fuseone_event_dispatch_held_by_xmin` | gauge | 1 enquanto execuções confirmadas esperam uma transação aberta. |
 | `fuseone_event_dispatch_oldest_xact_age_seconds` | gauge | Idade da transação aberta mais antiga que detém um id. Omitida quando desconhecida. |
 | `fuseone_event_dispatch_oldest_xact_age_known` | gauge | 0 quando há uma transação aberta e não é possível ver quando ela começou. |
-| `fuseone_event_dispatch_degraded` | gauge | 1 quando o atraso passa de cinco minutos. |
+| `fuseone_event_dispatch_degraded` | gauge | 1 quando o atraso passa de cinco minutos, ou sempre que uma das contagens parou no teto. |
 | `fuseone_event_dispatch_observed_timestamp_seconds` | gauge | Quando o worker leu a fila pela última vez. |
 | `fuseone_event_dispatch_observe_failures_total` | counter | Leituras da fila que falharam. |
 
@@ -66,8 +66,11 @@ está em dia.
 
 As contagens param em 1.000 (exibidas como `1000+` na página). A leitura
 acontece durante os próprios incidentes que descreve, em todo worker, então ela
-é limitada: dois intervalos de índice de no máximo 1.001 linhas e uma linha para
-o atraso, por maior que a fila fique.
+é limitada: dois intervalos de índice de no máximo 1.001 linhas cada, por maior
+que a fila fique. O atraso é o término mais antigo entre as linhas que esses
+intervalos leem — pelo relógio que registrou cada término, não pela ordem em
+que o feed as lê. Quando uma contagem para no teto, isso é uma amostra: o
+atraso é um limite inferior e o status fica degradado.
 
 Um ponto de partida para alertas:
 

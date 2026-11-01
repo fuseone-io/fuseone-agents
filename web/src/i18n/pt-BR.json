@@ -2629,6 +2629,7 @@
     "eventDispatchHealthy": "Saudável",
     "eventDispatchHeld": "Retidas por uma transação aberta",
     "eventDispatchLag": "A execução mais antiga na fila terminou há {{lag}}.",
+    "eventDispatchLagAtLeast": "A execução mais antiga na fila terminou há pelo menos {{lag}}: só as primeiras {{cap}} execuções de cada tipo foram lidas.",
     "eventDispatchReady": "Aguardando a próxima varredura",
     "eventDispatchThreshold": "Fica degradado quando uma execução espera mais de {{threshold}}, ou quando {{cap}} execuções estão esperando — a partir daí só uma amostra é lida, e a espera dela é um limite inferior. O despacho atrasa, nunca pula.",
     "eventDispatchXactAge": "A transação aberta mais antiga do banco está aberta há {{age}}; execuções que terminaram depois que ela começou esperam até ela acabar.",

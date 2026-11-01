@@ -29,7 +29,9 @@ export function EventDispatchPanel({ dispatch }: { dispatch: RuntimeEventDispatc
         <p>
           {dispatch.ready + dispatch.heldByXmin === 0
             ? t("runtime.eventDispatchCaughtUp")
-            : t("runtime.eventDispatchLag", { lag: seconds(dispatch.lagSeconds) })}
+            : t(dispatch.readyCapped || dispatch.heldCapped
+                ? "runtime.eventDispatchLagAtLeast"
+                : "runtime.eventDispatchLag", { lag: seconds(dispatch.lagSeconds), cap: dispatch.countCap })}
         </p>
         {dispatch.heldByXmin > 0 && <Holder dispatch={dispatch} />}
         <p>

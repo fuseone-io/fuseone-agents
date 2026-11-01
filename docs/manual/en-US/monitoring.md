@@ -30,7 +30,7 @@ Readers with access to the whole installation see an **Event dispatch** panel:
 |---|---|
 | Waiting for the next sweep | Finished runs past the cursor the dispatcher can read now. Normally zero or a handful, cleared within fifteen seconds. |
 | Held by an open transaction | Finished runs that committed after the oldest open transaction began. Sweeping more often does not reach them; ending that transaction does. |
-| The oldest waiting run finished … ago | The lag: how long the oldest finished run past the cursor has waited. |
+| The oldest waiting run finished … ago | The lag: how long the earliest-finished run past the cursor has waited. When a count reached 1,000 it reads "at least": only a sample was read. |
 | Open transaction age | How long the oldest open transaction has been open, shown when runs are held. |
 | Healthy / Degraded | Degraded once the lag passes five minutes, or once a count reaches 1,000 (the lag is then read from a sample and is only a lower bound, so it is never read as healthy). |
 
@@ -50,11 +50,11 @@ worker's first sweep and then once a minute:
 | `fuseone_event_dispatch_backlog_runs{state="ready"}` | gauge | Runs waiting for the next sweep. |
 | `fuseone_event_dispatch_backlog_runs{state="held_by_xmin"}` | gauge | Runs held by the oldest open transaction. |
 | `fuseone_event_dispatch_backlog_capped{state="ready"\|"held_by_xmin"}` | gauge | 1 when that state's count stopped at 1,000: it is at least that. |
-| `fuseone_event_dispatch_lag_seconds` | gauge | How long the oldest waiting run has waited. |
+| `fuseone_event_dispatch_lag_seconds` | gauge | How long the earliest-finished waiting run has waited. A lower bound when a count is capped. |
 | `fuseone_event_dispatch_held_by_xmin` | gauge | 1 while committed runs wait on an open transaction. |
 | `fuseone_event_dispatch_oldest_xact_age_seconds` | gauge | Age of the oldest open transaction holding an id. Omitted when unknown. |
 | `fuseone_event_dispatch_oldest_xact_age_known` | gauge | 0 when a transaction is open and its start cannot be seen. |
-| `fuseone_event_dispatch_degraded` | gauge | 1 once the lag passes five minutes. |
+| `fuseone_event_dispatch_degraded` | gauge | 1 once the lag passes five minutes, or whenever either count is capped. |
 | `fuseone_event_dispatch_observed_timestamp_seconds` | gauge | When the worker last read the backlog. |
 | `fuseone_event_dispatch_observe_failures_total` | counter | Backlog reads that failed. |
 
@@ -64,8 +64,11 @@ so a worker that never looked cannot report that dispatch is caught up.
 
 The counts stop at 1,000 (shown as `1000+` on the page). The reading happens
 during the very incidents it describes, on every worker, so it is bounded: two
-index ranges of at most 1,001 rows and one row for the lag, however large the
-backlog grows.
+index ranges of at most 1,001 rows each, however large the backlog grows. The
+lag is the earliest finish among the rows those ranges read — by the clock that
+stamped each finish, not by the order the feed reads them in. When a count is
+capped that is a sample, so the lag is a lower bound and the status is
+degraded.
 
 A starting point for alerts:
 

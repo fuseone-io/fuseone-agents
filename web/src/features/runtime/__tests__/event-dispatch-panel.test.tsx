@@ -77,6 +77,8 @@ test("a count stopped at the cap reads as a lower bound", () => {
   expect(screen.getByText("1000")).toBeInTheDocument();
   expect(screen.getByText("1000+")).toBeInTheDocument();
   expect(screen.getByText(/or once 1000 runs are waiting/)).toBeInTheDocument();
+  // Read from a sample, the wait is a lower bound, and says so.
+  expect(screen.getByText(/finished at least 15m 0s ago: only the first 1000 runs/)).toBeInTheDocument();
 });
 
 test("a caught-up dispatcher is healthy", () => {

@@ -2629,6 +2629,7 @@
     "eventDispatchHealthy": "Healthy",
     "eventDispatchHeld": "Held by an open transaction",
     "eventDispatchLag": "The oldest waiting run finished {{lag}} ago.",
+    "eventDispatchLagAtLeast": "The oldest waiting run finished at least {{lag}} ago: only the first {{cap}} runs of each kind were read.",
     "eventDispatchReady": "Waiting for the next sweep",
     "eventDispatchThreshold": "Degrades once a run has waited more than {{threshold}}, or once {{cap}} runs are waiting — past that only a sample is read, and its wait is a lower bound. Dispatch is delayed, never skipped.",
     "eventDispatchXactAge": "The oldest open transaction in the database has been open for {{age}}; runs that finished after it began wait until it ends.",
