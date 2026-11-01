@@ -13,8 +13,12 @@
 -- So the dispatcher reads only below the oldest transaction still in flight
 -- (pg_snapshot_xmin). Every transaction there has committed or never will, so
 -- the order below that boundary is stable and no run can later appear behind
--- the cursor. A long transaction elsewhere delays
--- dispatch while it is open; it cannot make the dispatcher skip a run.
+-- the cursor. A long transaction elsewhere delays dispatch while it is open;
+-- it cannot make the dispatcher skip a run.
+--
+-- Cheap on a ledger with years of history: the column is added without a
+-- default (no rewrite), and only runs that finish from now on — plus the last
+-- hour's — ever get a value, so the partial index holds those and nothing else.
 --
 -- Numbered 0092 because #226 takes 0091; whichever merges second renumbers.
 
@@ -26,11 +30,18 @@ alter table runs add column finished_xid xid8;
 -- straight into its terminal phase. Left NULL, such a run would be invisible
 -- to the dispatcher for ever. The trigger is the only writer of the column:
 -- one rule, whoever moved the run to 'finished' — the phase the dispatcher
--- reads. Set once; a later update of a finished run keeps it.
+-- reads.
+--
+-- Only the moment of finishing stamps: a row inserted already finished, or
+-- an update that moves a run into 'finished'. A run that finished before this
+-- migration keeps no position for ever, so a later update of it — a future
+-- migration, a repair — cannot make it look as if it had just finished and
+-- dispatch its events years late.
 create function runs_stamp_finished_xid() returns trigger
 language plpgsql as $$
 begin
-    if new.phase = 'finished' and new.finished_xid is null then
+    if new.phase = 'finished' and new.finished_xid is null
+       and (tg_op = 'INSERT' or old.phase is distinct from 'finished') then
         new.finished_xid := pg_current_xact_id();
     end if;
     return new;
@@ -54,25 +65,23 @@ create table event_dispatch_cursor (
     run_id       text    not null
 );
 
--- The first deploy. Runs that finished before this column existed have no
+-- The first deploy. Runs that finished before this column existed keep no
 -- position, so they are never offered — the history is not replayed. Except
 -- the last hour's: the previous dispatcher read only the newest thirty
 -- finished runs, so some of those may never have been dispatched. They get
 -- this transaction's position, so the new dispatcher offers each of them
 -- once. Any that were dispatched already reach the run they opened through
 -- the same idempotency key; an hour keeps that re-check cheap.
-update runs
-   set finished_xid = pg_current_xact_id()
- where phase = 'finished'
-   and not simulated
-   and ended_at > now() - interval '1 hour';
+--
+-- A function so the rule is one statement in one place, called once here.
+create function runs_backfill_finished_xid() returns void
+language sql as $$
+    update runs
+       set finished_xid = pg_current_xact_id()
+     where phase = 'finished'
+       and not simulated
+       and finished_xid is null
+       and ended_at > now() - interval '1 hour';
+$$;
 
--- Everything that finished earlier is marked as having finished before the
--- feed existed: position 0, which the feed never offers. Left NULL, a later
--- update of one of these rows — a future migration, a repair — would let the
--- trigger stamp it as if it had just finished, and dispatch its events years
--- late.
-update runs
-   set finished_xid = '0'
- where phase = 'finished'
-   and finished_xid is null;
+select runs_backfill_finished_xid();

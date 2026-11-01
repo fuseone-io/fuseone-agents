@@ -54,30 +54,46 @@ func TestFinishedSince_aRunFinishedWithoutNamingTheColumn_stillAppears(t *testin
 	}
 }
 
-/*
-A run that finished before the feed existed is marked so by migration 0092
-(position 0). Touched by a later update — a future migration, a repair — it
-must not be stamped as if it had just finished, or its events would be
-dispatched years late.
-*/
-func TestFinishedSince_aRunFinishedBeforeTheFeedExisted_staysOut(t *testing.T) {
+// feedPool opens the Postgres ledger and a raw pool on the same database.
+func feedPool(t *testing.T) (Store, *pgxpool.Pool) {
+	t.Helper()
 	dsn := testdb.DSN(t)
 	if dsn == "" {
 		requireDatabase(t, dsn)
 		t.Skip("TEST_DATABASE_URL is unset")
 	}
 	s := openPostgres(t, dsn)
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, dsn)
+	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(pool.Close)
+	return s, pool
+}
 
-	finishRunIn(t, s, "run-history")
-	if _, err := pool.Exec(ctx, `update runs set finished_xid = '0' where run_id = 'run-history'`); err != nil {
-		t.Fatalf("mark as history: %v", err)
+// asHistory makes a finished run look like one that finished before the
+// feed existed: no position, ended long ago. The update does not change the
+// phase, so the trigger leaves it alone.
+func asHistory(t *testing.T, pool *pgxpool.Pool, id domain.RunID, endedAgo string) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(), `update runs
+		set finished_xid = null, ended_at = now() - $2::interval where run_id = $1`, string(id), endedAgo); err != nil {
+		t.Fatalf("make %s history: %v", id, err)
 	}
+}
+
+/*
+A run that finished before the feed existed has no position, and keeps none:
+a later update that does not move it into 'finished' — a future migration, a
+repair, a lease column — must not stamp it as if it had just finished, or
+its events would be dispatched years late.
+*/
+func TestFinishedSince_aHistoricRunUpdatedLater_staysOut(t *testing.T) {
+	s, pool := feedPool(t)
+	ctx := context.Background()
+	finishRunIn(t, s, "run-history")
+	asHistory(t, pool, "run-history", "2 days")
+
 	if _, err := pool.Exec(ctx, `update runs set updated_at = now() where run_id = 'run-history'`); err != nil {
 		t.Fatalf("later update: %v", err)
 	}
@@ -85,6 +101,32 @@ func TestFinishedSince_aRunFinishedBeforeTheFeedExisted_staysOut(t *testing.T) {
 	got, err := s.FinishedSince(ctx, domain.FinishCursor{}, 10)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("feed = %v, %v; a run from before the feed is never offered", feedIDs(got), err)
+	}
+}
+
+/*
+The first deploy offers the last hour's finished runs once — the previous
+dispatcher read only the newest thirty, so some may never have been
+dispatched — and nothing older: the history is not replayed.
+*/
+func TestBackfill_offersTheLastHoursFinishedRunsAndNothingOlder(t *testing.T) {
+	s, pool := feedPool(t)
+	ctx := context.Background()
+	finishRunIn(t, s, "run-recent")
+	asHistory(t, pool, "run-recent", "10 minutes")
+	finishRunIn(t, s, "run-old")
+	asHistory(t, pool, "run-old", "3 hours")
+
+	if _, err := pool.Exec(ctx, `select runs_backfill_finished_xid()`); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+
+	got, err := s.FinishedSince(ctx, domain.FinishCursor{}, 10)
+	if err != nil {
+		t.Fatalf("FinishedSince: %v", err)
+	}
+	if ids := feedIDs(got); len(ids) != 1 || ids[0] != "run-recent" {
+		t.Fatalf("feed after the backfill = %v, want only [run-recent]", ids)
 	}
 }
 

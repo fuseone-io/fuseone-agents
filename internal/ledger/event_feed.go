@@ -28,7 +28,7 @@ func (p *Postgres) FinishedSince(
 ) ([]domain.FinishedRun, error) {
 	rows, err := p.pool.Query(ctx, `select`+runColumns+`, finished_xid::text
 		from runs
-		where finished_xid > '0'::xid8
+		where finished_xid is not null
 		  and (finished_xid, run_id) > ($1::xid8, $2)
 		  and finished_xid < pg_snapshot_xmin(pg_current_snapshot())
 		  and phase = 'finished' and `+realRuns+`
