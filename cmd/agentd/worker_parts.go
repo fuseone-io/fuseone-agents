@@ -255,14 +255,20 @@ func (p *workerParts) connectTools(
 	// worker, with nothing on any screen saying so.
 	if p.integrations != nil {
 		reconcile.reconcile(ctx)
+	}
+	// Published before the watch starts: the publication reads the
+	// reconciler's state, which belongs to the watch once it runs.
+	if p.curator != nil {
+		if err := p.curator.Publish(ctx, reconcile.publication()); err != nil {
+			return err
+		}
+	}
+	if p.integrations != nil {
 		go reconcile.watch(ctx, toolRefresh)
 	}
 
 	if p.curator == nil {
 		return nil
-	}
-	if err := p.curator.Publish(ctx, p.catalog.Publication()); err != nil {
-		return err
 	}
 	if err := syncRulings(ctx, p.catalog, p.curator); err != nil {
 		return err

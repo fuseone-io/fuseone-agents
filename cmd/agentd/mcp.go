@@ -15,7 +15,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -702,13 +701,18 @@ type reconciler struct {
 	// connected maps a server name to the fingerprint of what was connected
 	// under it, so a changed address is noticed rather than assumed stable.
 	connected map[string]string
+	// generations is the configuration each connected server was discovered
+	// under, so the administration can tell a discovery of the server as it
+	// is configured now from one of a configuration that has since changed.
+	generations map[string]time.Time
 }
 
 func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorder) *reconciler {
 	return &reconciler{
 		catalog: catalog, servers: servers, health: health,
-		connectTo: connectServer,
-		connected: make(map[string]string),
+		connectTo:   connectServer,
+		connected:   make(map[string]string),
+		generations: make(map[string]time.Time),
 	}
 }
 
@@ -758,8 +762,7 @@ func (r *reconciler) reconcile(ctx context.Context) {
 		}
 	}
 
-	withdrawn := r.disconnectStale(wanted)
-	changed := len(withdrawn) > 0
+	changed := r.disconnectStale(wanted)
 	for name, server := range wanted {
 		if _, already := r.connected[name]; already {
 			continue
@@ -778,24 +781,45 @@ func (r *reconciler) reconcile(ctx context.Context) {
 	// appeared on no screen, so the one place an operator goes to classify a
 	// new tool would not list it.
 	if changed && r.publisher != nil {
-		pub := r.catalog.Publication()
-		pub.Withdrawn = withdrawn
-		if err := r.publisher.Publish(ctx, pub); err != nil {
+		if err := r.publisher.Publish(ctx, r.publication()); err != nil {
 			slog.Error("could not publish the tool catalogue", "err", err)
 		}
 	}
 }
 
+// publication is the catalogue with each server's standing: the
+// configuration it was discovered under, or unmanaged for a server the
+// command line started. A session this reconciler cannot place is left out
+// rather than published without a configuration to be judged by.
+func (r *reconciler) publication() domain.ToolPublication {
+	pub := r.catalog.Publication()
+	servers := make([]domain.PublishedServer, 0, len(pub.Servers))
+	for _, server := range pub.Servers {
+		if r.connected[server.Name] == "flag" {
+			server.Unmanaged = true
+		} else if generation, known := r.generations[server.Name]; known {
+			server.Generation = generation
+		} else {
+			continue
+		}
+		servers = append(servers, server)
+	}
+	pub.Servers = servers
+	return pub
+}
+
 // disconnectStale drops every session that is not a working one for what is
-// configured, and returns the servers the configuration no longer wants.
+// configured, and reports whether any was dropped because the configuration
+// no longer wants it.
 //
 // Gone, switched off, pointing somewhere else, or a session that died under
-// an unchanged configuration all end the session in hand. Only the first two
-// are withdrawn: the configuration says those offer nothing now. The other
-// two are reconnected, and a reconnect that fails says only that this worker
-// cannot reach the server, not that it stopped offering its tools.
-func (r *reconciler) disconnectStale(wanted map[string]domain.MCPServer) []string {
-	var withdrawn []string
+// an unchanged configuration all end the session in hand. The first two are
+// worth a publication even with nothing new connected: it is what lets the
+// administration clear their tools without waiting for another change. The
+// administration judges against its own configuration, so this only says
+// when, never what.
+func (r *reconciler) disconnectStale(wanted map[string]domain.MCPServer) bool {
+	withdrew := false
 	for name, mark := range r.connected {
 		if mark == "flag" {
 			continue
@@ -808,12 +832,10 @@ func (r *reconciler) disconnectStale(wanted map[string]domain.MCPServer) []strin
 			slog.Error("could not disconnect a tool server", "server", name, "err", err)
 		}
 		delete(r.connected, name)
-		if !still {
-			withdrawn = append(withdrawn, name)
-		}
+		delete(r.generations, name)
+		withdrew = withdrew || !still
 	}
-	slices.Sort(withdrawn)
-	return withdrawn
+	return withdrew
 }
 
 // refreshHealth restates what is connected right now.
@@ -895,6 +917,7 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool 
 	}
 
 	r.connected[server.Name] = fingerprint(server)
+	r.generations[server.Name] = server.UpdatedAt
 	count := r.catalog.CountFrom(server.Name)
 	slog.Info("tool server connected",
 		"server", server.Name, "transport", server.TransportOf(), "tools", count)

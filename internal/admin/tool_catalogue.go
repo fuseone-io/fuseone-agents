@@ -8,7 +8,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/settings"
 )
 
 // toolKind is the settings row a discovered tool is published as.
@@ -28,35 +27,51 @@ const toolKind = "tool"
 // applied them by definition, and the two would disagree about the row a
 // Curator is looking at.
 //
-// A server the publication names is judged whole: what it no longer offers is
-// dropped, and only those catalogue rows — a ruling is kept by tool name, so a
-// tool that comes back finds the decision already made. A server it does not
-// name is left alone; see domain.ToolPublication.
+// What a publication says is judged against the configuration as it stands
+// under the catalogue's lock — never as the worker read it — so a late
+// publication from a worker that missed a change records nothing about the
+// server it no longer describes (judge). And every publication, from any
+// worker, clears the tools of servers the configuration no longer wants, so
+// the catalogue converges at the next publish whatever was lost on the way.
+// Rulings are not catalogue rows and are never dropped: a tool that comes
+// back finds the decision already made.
 func (c *Curator) Publish(ctx context.Context, pub domain.ToolPublication) error {
-	if len(pub.Entries) == 0 && len(pub.Servers) == 0 && len(pub.Withdrawn) == 0 {
-		return nil
-	}
-
 	tx, err := c.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("admin: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Two workers publishing the same server would each keep its own list and
-	// drop the other's: serialised, the later discovery is the one that holds.
 	if err := lockToolCatalogue(ctx, tx); err != nil {
 		return err
 	}
-	if err := dropUnoffered(ctx, tx, pub); err != nil {
+	configured, err := configuredServers(ctx, tx)
+	if err != nil {
 		return err
 	}
-	if err := dropWithdrawn(ctx, tx, pub.Withdrawn); err != nil {
+	if err := sweepUnconfigured(ctx, tx, configured); err != nil {
 		return err
+	}
+	held := judge(pub, configured)
+	if err := dropUnoffered(ctx, tx, held); err != nil {
+		return err
+	}
+	if err := writeTools(ctx, tx, held); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("admin: commit the tool catalogue: %w", err)
+	}
+	return nil
+}
+
+func writeTools(ctx context.Context, tx pgx.Tx, held judged) error {
+	if len(held.entries) == 0 {
+		return nil
 	}
 	batch := &pgx.Batch{}
-	for _, e := range pub.Entries {
-		value, err := encodeTool(e)
+	for _, e := range held.entries {
+		value, err := encodeTool(e, held.unmanaged[e.Server])
 		if err != nil {
 			return err
 		}
@@ -67,12 +82,8 @@ func (c *Curator) Publish(ctx context.Context, pub domain.ToolPublication) error
 				value = excluded.value, updated_at = now()`,
 			toolKind, string(e.ID), value)
 	}
-
 	if err := tx.SendBatch(ctx, batch).Close(); err != nil {
 		return fmt.Errorf("admin: publish tools: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("admin: commit the tool catalogue: %w", err)
 	}
 	return nil
 }
@@ -105,35 +116,14 @@ func dropServerTools(ctx context.Context, tx pgx.Tx, server string) (int64, erro
 	return tag.RowsAffected(), nil
 }
 
-// dropWithdrawn removes the tools of servers a worker found the configuration
-// no longer wants — judged now, under the lock, not when the worker read the
-// configuration: a server registered or switched on again in between is
-// wanted, and keeps its tools.
-func dropWithdrawn(ctx context.Context, tx pgx.Tx, servers []string) error {
-	for _, server := range servers {
-		if _, err := tx.Exec(ctx, `
-			delete from settings
-			where scope_kind = 'installation' and company_id = '' and area_id = ''
-			  and kind = $1 and value->>'server' = $2
-			  and not exists (
-			      select 1 from settings
-			      where scope_kind = 'installation' and company_id = '' and area_id = ''
-			        and kind = $3 and name = $2 and enabled)`,
-			toolKind, server, string(settings.KindMCPServer)); err != nil {
-			return fmt.Errorf("admin: drop the tools of withdrawn %s: %w", server, err)
-		}
-	}
-	return nil
-}
-
-// dropUnoffered removes, for each server the publication names, the tools it
+// dropUnoffered removes, for each server the publication holds, the tools it
 // no longer lists.
-func dropUnoffered(ctx context.Context, tx pgx.Tx, pub domain.ToolPublication) error {
-	kept := make(map[string][]string, len(pub.Servers))
-	for _, e := range pub.Entries {
+func dropUnoffered(ctx context.Context, tx pgx.Tx, held judged) error {
+	kept := make(map[string][]string, len(held.servers))
+	for _, e := range held.entries {
 		kept[e.Server] = append(kept[e.Server], string(e.ID))
 	}
-	for _, server := range pub.Servers {
+	for _, server := range held.servers {
 		if _, err := tx.Exec(ctx, `
 			delete from settings
 			where scope_kind = 'installation' and company_id = '' and area_id = ''
@@ -145,7 +135,7 @@ func dropUnoffered(ctx context.Context, tx pgx.Tx, pub domain.ToolPublication) e
 	return nil
 }
 
-func encodeTool(e domain.ToolEntry) ([]byte, error) {
+func encodeTool(e domain.ToolEntry, unmanaged bool) ([]byte, error) {
 	value, err := json.Marshal(struct {
 		Server      string `json:"server"`
 		Description string `json:"description,omitempty"`
@@ -155,7 +145,10 @@ func encodeTool(e domain.ToolEntry) ([]byte, error) {
 		// showed every discovered tool as taken would be offering the choice
 		// while hiding the answer.
 		OnSurface bool `json:"onSurface"`
-	}{e.Server, e.Description, e.Digest, e.OnSurface})
+		// A server the configuration does not hold: the sweep leaves it to the
+		// worker that started it.
+		Unmanaged bool `json:"unmanaged,omitempty"`
+	}{e.Server, e.Description, e.Digest, e.OnSurface, unmanaged})
 	if err != nil {
 		return nil, fmt.Errorf("admin: encode tool %s: %w", e.ID, err)
 	}

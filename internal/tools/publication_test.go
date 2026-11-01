@@ -34,7 +34,7 @@ func TestPublication_namesEveryConnectedServer_evenOneOfferingNothing(t *testing
 
 	pub := c.Publication()
 
-	if !slices.Equal(pub.Servers, []string{"crm", "github"}) {
+	if !slices.Equal(pub.ServerNames(), []string{"crm", "github"}) {
 		t.Fatalf("Servers = %v, want the two connected, including the one offering nothing", pub.Servers)
 	}
 	if len(pub.Entries) != 1 || pub.Entries[0].ID != "crm.lookup" {
