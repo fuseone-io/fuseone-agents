@@ -69,6 +69,11 @@ func (c *Curator) Publish(ctx context.Context, pub domain.ToolPublication) error
 	if err := writeTools(ctx, tx, held); err != nil {
 		return err
 	}
+	// Again after the write: it may have rewritten an old worker's rows
+	// under a lease, settling their grace.
+	if err := forgetSettledGrace(ctx, tx); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("admin: commit the tool catalogue: %w", err)
 	}

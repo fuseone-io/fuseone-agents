@@ -192,9 +192,37 @@ func writtenByAnOldWorker(t *testing.T, server, id string) {
 	if _, err := openPool(t).Exec(context.Background(), `
 		insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_at)
 		values ('installation', '', '', 'tool', $1,
-		        jsonb_build_object('server', $2::text, 'onSurface', false, 'unmanaged', true), true, now())`,
+		        jsonb_build_object('server', $2::text, 'onSurface', false, 'unmanaged', true), true, now())
+		on conflict (scope_kind, company_id, area_id, kind, name) do update set value = excluded.value`,
 		id, server); err != nil {
 		t.Fatalf("write %s as an old worker would: %v", id, err)
+	}
+}
+
+/*
+A new worker adopts an old worker's server: it publishes it under a lease, so
+the old rows are now its own and the grace they had is settled. A day later an
+old worker publishes the server again, the old way. That is a new old-style
+publication, and it gets a grace of its own — not the one the adoption
+settled, long over by now, which would sweep it at once.
+*/
+func TestPublish_anAdoptedServerPublishedTheOldWayAgain_getsAGraceOfItsOwn(t *testing.T) {
+	curator, clock := leasedCatalogue(t)
+	writtenByAnOldWorker(t, "old", "old.run")
+	renew(t, curator, "worker-new")
+	publish(t, curator, domain.ToolPublication{
+		Servers: []domain.PublishedServer{{Name: "old", Unmanaged: true}},
+		Entries: []domain.ToolEntry{{ID: "old.run", Server: "old"}}, Holder: "worker-a",
+	})
+
+	clock.advance(admin.LegacyToolGrace)
+	renew(t, curator, "worker-a", "old")
+	writtenByAnOldWorker(t, "old", "old.run")
+	clock.advance(admin.ToolServerLease + time.Second)
+	renew(t, curator, "worker-new")
+
+	if got := offered(t, curator, "old"); !slices.Equal(got, []domain.ToolID{"old.run"}) {
+		t.Fatalf("old offers %v; the old worker's new publication was swept on the adoption's expired grace", got)
 	}
 }
 
