@@ -120,12 +120,17 @@ comportamento seguro: novidade não entra no alcance por acidente.</p>
 <p>A decisão carrega o digest da definição julgada. Se o servidor mudar schema ou
 descrição da ferramenta, a decisão antiga fica stale e o Gate recusa até nova
 revisão.</p>
-<p>O catálogo só cresce. A descoberta registra as ferramentas que encontra e
-nunca remove uma que deixou de ver, e apagar um servidor deixa as ferramentas
-dele na lista (#219). Depois de estreitar o que um servidor oferece — um
-toolset menor, outra conta —, confira as ferramentas descobertas antes de
-confiar numa publicação: a checagem da publicação aceita uma ferramenta que o
-catálogo ainda lembra, mesmo que o servidor tenha deixado de oferecê-la.</p>
+<p>O catálogo acompanha o que os servidores oferecem. Cada descoberta bem-sucedida
+é a resposta completa sobre o seu servidor: uma ferramenta que o servidor
+deixou de listar sai do catálogo, e a checagem da publicação deixa de aceitá-la.
+Apagar ou desligar um servidor também remove as ferramentas dele. A decisão é
+mantida quando a ferramenta sai, então uma ferramenta que volta com a mesma
+definição não precisa de nova revisão.</p>
+<p>Um servidor que não pode ser alcançado mantém as ferramentas que a última
+descoberta bem-sucedida registrou: estar inalcançável não prova que ele deixou
+de oferecê-las. Depois de estreitar o que um servidor oferece — um toolset
+menor, outra conta —, confira se ele aparece como alcançável antes de confiar
+numa publicação.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="credencial-da-instalação">Credencial da instalação</h2><a class="sl-anchor-link" href="#credencial-da-instalação"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Credencial da instalação”</span></a></div>
 <p>Use credencial da instalação quando o servidor age como uma conta de serviço:
 discovery, health checks, probes e ferramentas que não representam uma pessoa
