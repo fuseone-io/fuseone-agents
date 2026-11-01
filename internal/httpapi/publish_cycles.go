@@ -21,7 +21,9 @@ Read here, before the write and outside it, two publications that close a
 loop only together could each judge the graph from before the other.
 */
 func eventCycleWarning(search domain.EventCycleSearch) *openapi.EventCycleWarning {
-	if len(search.Cycles) == 0 {
+	// A search that ran out with nothing found is not "no cycle": it says so,
+	// with no cycles named and truncated set.
+	if len(search.Cycles) == 0 && !search.Truncated {
 		return nil
 	}
 	out := &openapi.EventCycleWarning{

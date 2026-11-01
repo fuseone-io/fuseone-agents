@@ -127,7 +127,9 @@ todos os agentes do laço, voltando ao que você publicou:
 o mais longo, depois pelo nome, então publicar a mesma coisa duas vezes dá o
 mesmo texto. A lista tem limite, tanto em quantos laços nomeia quanto em
 quanto do grafo percorre; quando para em algum dos dois, diz que pode haver
-mais, e sempre nomeia pelo menos o mais curto.
+mais, e nomeia pelo menos o mais curto. Num grafo grande demais para
+percorrer dentro do limite, o aviso diz que a versão não foi verificada por
+inteiro, em vez de não dizer nada.
 
 É um aviso, não uma recusa. Um ciclo de revisão é um ciclo de propósito; o
 aviso existe para que um ciclo que ninguém quis seja notado antes de uma

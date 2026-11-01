@@ -76,6 +76,17 @@ describe("the warning a publish that closes an event cycle shows", () => {
     expect(message).not.toMatch(/may not be all/);
   });
 
+  it("says the graph went unchecked when the search ran out first", () => {
+    const message = eventCycleMessage(
+      { cycles: [], truncated: true, hopLimit: 8 },
+      en,
+      "en-US",
+    );
+
+    expect(message).toMatch(/too large to check/);
+    expect(message).toContain("8 hops");
+  });
+
   it("says nothing when the publish closed no cycle", () => {
     expect(eventCycleMessage(undefined, pt, "pt-BR")).toBeUndefined();
   });

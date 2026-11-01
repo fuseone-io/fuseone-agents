@@ -1,81 +1,56 @@
 package spec
 
 import (
+	"cmp"
+	"context"
+	"encoding/json"
+	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/fuseone/agents/internal/domain"
 )
 
 /*
-EventGraphWith is the published event graph as it would stand with this
-version current (#227).
+The event graph as a publication judges it (#227): what each agent's current
+version declares, not the edges those declarations draw.
 
-The version replaces its agent's current one, so every edge that agent's
-current version drew — out of it and into it — goes, and the edges the draft
-declares are joined to the rest: to the agents that listen to what it emits,
-and from the agents that emit what it listens to. An agent that listens to
-its own event is an edge to itself.
-
-Pure, so the cycle check a publish runs is the graph's arithmetic and not a
-read in the middle of a transaction. It draws only edges with both ends,
-which is what a cycle is made of; the dangling ones a screen shows are
-Registry.Edges' to draw.
+The edges are a product — every emitter of an event times every listener of
+it — and a judgement made under the graph lock must not pay for it. The cycle
+search reads the declarations and the listeners of an event only for the
+agents it reaches.
 */
-func EventGraphWith(published []domain.EventEdge, draft Spec) []domain.EventEdge {
-	var out []domain.EventEdge
-	for _, e := range published {
-		if e.From != draft.ID && e.To != draft.ID {
-			out = append(out, e)
-		}
-	}
 
-	others := rolesBesides(published, draft.ID)
-	listens := listenedEvents(draft)
-	for _, emitted := range draft.Emits {
-		for _, to := range others.listeners[emitted.Event] {
-			out = append(out, domain.EventEdge{From: draft.ID, Event: emitted.Event, To: to})
-		}
-		if slices.Contains(listens, emitted.Event) {
-			out = append(out, domain.EventEdge{From: draft.ID, Event: emitted.Event, To: draft.ID})
-		}
+// WiringOf is what these versions declare about events, one entry per agent.
+func WiringOf(specs []Spec) domain.EventWiring {
+	w := make(domain.EventWiring, len(specs))
+	for _, s := range specs {
+		w[s.ID] = wiringOf(s)
 	}
-	for _, event := range listens {
-		for _, from := range others.emitters[event] {
-			out = append(out, domain.EventEdge{From: from, Event: event, To: draft.ID})
-		}
+	return w
+}
+
+func wiringOf(s Spec) domain.AgentWiring {
+	out := domain.AgentWiring{Listens: listenedEvents(s)}
+	for _, e := range s.Emits {
+		out.Emits = append(out.Emits, e.Event)
 	}
 	return out
 }
 
-// eventRoles is, per event, the agents that listen to it and the ones that
-// emit it.
-type eventRoles struct {
-	listeners map[string][]domain.AgentID
-	emitters  map[string][]domain.AgentID
-}
-
 /*
-rolesBesides is who listens and who emits, apart from the agent itself.
-
-Read from every edge, the agent's own included: review listening to what dev
-emits is drawn only as an edge out of dev, and it is still true of review
-after dev's publish.
+WiringWith is the published wiring as it would stand with this version
+current: the version replaces whatever its agent's current one declared, and
+every other agent is left as published. A copy, so the caller's map is never
+changed under it.
 */
-func rolesBesides(published []domain.EventEdge, agent domain.AgentID) eventRoles {
-	roles := eventRoles{listeners: map[string][]domain.AgentID{}, emitters: map[string][]domain.AgentID{}}
-	for _, e := range published {
-		roles.listeners[e.Event] = addOther(roles.listeners[e.Event], e.To, agent)
-		roles.emitters[e.Event] = addOther(roles.emitters[e.Event], e.From, agent)
+func WiringWith(published domain.EventWiring, draft Spec) domain.EventWiring {
+	w := maps.Clone(published)
+	if w == nil {
+		w = domain.EventWiring{}
 	}
-	return roles
-}
-
-// addOther adds an agent once, unless it is absent or the one excluded.
-func addOther(agents []domain.AgentID, one, excluded domain.AgentID) []domain.AgentID {
-	if one == "" || one == excluded || slices.Contains(agents, one) {
-		return agents
-	}
-	return append(agents, one)
+	w[draft.ID] = wiringOf(draft)
+	return w
 }
 
 // listenedEvents is the events whose publication starts this version.
@@ -85,6 +60,106 @@ func listenedEvents(s Spec) []string {
 		if t.Type == TriggerEvent && t.Event != "" {
 			out = append(out, t.Event)
 		}
+	}
+	return out
+}
+
+/*
+wiring reads every agent's current declarations in one query.
+
+The same choice of current version as List — the one somebody chose, else
+the newest — and only the two columns a graph is drawn from. The listing and
+a read per agent it replaced cost a round trip per agent, under the lock.
+*/
+func (r *Registry) wiring(ctx context.Context) (domain.EventWiring, error) {
+	rows, err := r.q.Query(ctx, `
+		select distinct on (s.agent_id) s.agent_id, s.emits, s.triggers
+		from agent_specs s
+		left join agent_state st on st.agent_id = s.agent_id
+		order by s.agent_id, (st.current_version = s.version_id) desc nulls last,
+		         s.published_at desc`)
+	if err != nil {
+		return nil, fmt.Errorf("spec: read the event wiring: %w", err)
+	}
+	defer rows.Close()
+
+	w := domain.EventWiring{}
+	for rows.Next() {
+		var (
+			agent           string
+			emits, triggers []byte
+		)
+		if err := rows.Scan(&agent, &emits, &triggers); err != nil {
+			return nil, fmt.Errorf("spec: scan the event wiring: %w", err)
+		}
+		s, err := declaredEvents(domain.AgentID(agent), emits, triggers)
+		if err != nil {
+			return nil, err
+		}
+		w[s.ID] = wiringOf(s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("spec: read the event wiring: %w", err)
+	}
+	return w, nil
+}
+
+// declaredEvents decodes the two columns a graph is drawn from, the same way
+// Get decodes them.
+func declaredEvents(agent domain.AgentID, emits, triggers []byte) (Spec, error) {
+	s := Spec{ID: agent}
+	if err := json.Unmarshal(emits, &s.Emits); err != nil {
+		return Spec{}, fmt.Errorf("spec: decode emits of %s: %w", agent, err)
+	}
+	var stored []domain.AgentTrigger
+	if err := json.Unmarshal(triggers, &stored); err != nil {
+		return Spec{}, fmt.Errorf("spec: decode triggers of %s: %w", agent, err)
+	}
+	for _, t := range stored {
+		s.Triggers = append(s.Triggers, Trigger{Type: t.Type, Event: t.Event})
+	}
+	return s, nil
+}
+
+// EdgesOf is the edges a wiring draws, for a screen: every one, including an
+// event nobody listens to and a trigger nothing publishes. In the agents'
+// name order, so the same wiring always draws the same list.
+func EdgesOf(w domain.EventWiring) []domain.EventEdge {
+	agents := slices.SortedFunc(maps.Keys(w), cmp.Compare[domain.AgentID])
+	listeners, emitted := map[string][]domain.AgentID{}, map[string]bool{}
+	for _, a := range agents {
+		for _, e := range w[a].Listens {
+			listeners[e] = append(listeners[e], a)
+		}
+		for _, e := range w[a].Emits {
+			emitted[e] = true
+		}
+	}
+	var edges []domain.EventEdge
+	for _, from := range agents {
+		for _, event := range w[from].Emits {
+			edges = append(edges, edgesFrom(from, event, listeners[event])...)
+		}
+	}
+	for _, to := range agents {
+		for _, event := range w[to].Listens {
+			if !emitted[event] {
+				edges = append(edges, domain.EventEdge{Event: event, To: to})
+			}
+		}
+	}
+	return edges
+}
+
+// edgesFrom is one emitter's edges for one event: one per listener, or one
+// that goes nowhere when nobody listens.
+func edgesFrom(from domain.AgentID, event string, listeners []domain.AgentID) []domain.EventEdge {
+	if len(listeners) == 0 {
+		return []domain.EventEdge{{From: from, Event: event}}
+	}
+	out := make([]domain.EventEdge, 0, len(listeners))
+	for _, to := range listeners {
+		out = append(out, domain.EventEdge{From: from, Event: event, To: to})
 	}
 	return out
 }

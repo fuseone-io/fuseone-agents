@@ -21,7 +21,14 @@ export function eventCycleMessage(
   t: TFunction,
   locale: Locale,
 ): string | undefined {
-  if (!warning || warning.cycles.length === 0) return undefined;
+  if (!warning) return undefined;
+  // Truncated with nothing named: the search ran out before it could tell,
+  // which is not the same as finding no cycle.
+  if (warning.cycles.length === 0) {
+    return warning.truncated
+      ? t("agents.eventCycleUnchecked", { hops: warning.hopLimit })
+      : undefined;
+  }
   const loops = warning.cycles.map((agents) =>
     [...agents, agents[0]].join(" → "),
   );

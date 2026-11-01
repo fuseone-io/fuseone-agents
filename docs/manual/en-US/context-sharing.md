@@ -123,7 +123,9 @@ the loop, back to the one you published: `developer → reviewer → developer`.
 Several loops are listed shortest first, then by name, so publishing the
 same thing twice reads the same. The list is bounded, both in how many loops
 it names and in how much of the graph it searches; when it stops at either
-bound it says there may be more, and it always names at least the shortest.
+bound it says there may be more, and it names at least the shortest. On a
+graph too large to search within the bound, the warning says the version was
+not checked in full, rather than saying nothing.
 
 It is a warning, not a refusal. A review loop is a cycle on purpose; the
 warning is there so that one nobody meant is noticed before a chain reaches

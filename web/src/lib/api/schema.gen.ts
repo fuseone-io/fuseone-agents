@@ -4848,7 +4848,8 @@ export interface components {
             /**
              * @description True when the search stopped at its bound — on the number of cycles
              *     it names or on the work it may do — so the cycles listed may not be
-             *     all there are.
+             *     all there are. With no cycles listed, the graph was too large to
+             *     search for this version within the bound: unchecked, not clear.
              */
             truncated: boolean;
             /** @description How many hops from its root an event chain may reach. */

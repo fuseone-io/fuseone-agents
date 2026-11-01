@@ -85,6 +85,30 @@ func TestPublishAgent_stopsListeningToTheCycle_answersWithNoWarning(t *testing.T
 	}
 }
 
+/*
+A graph too large to search within the bound is said to be unchecked, not
+passed over in silence.
+
+Silence is what a publish that closes no cycle answers, so a search that ran
+out before it could tell would read as "no cycle" — the one answer it has no
+grounds for.
+*/
+func TestPublishAgent_aGraphBeyondTheWorkBound_saysItWasNotChecked(t *testing.T) {
+	t.Parallel()
+	noisy := spec.Spec{ID: "noisy"}
+	for i := range domain.MaxCycleWork {
+		noisy.Triggers = append(noisy.Triggers,
+			spec.Trigger{Type: spec.TriggerEvent, Event: fmt.Sprintf("e%06d", i)})
+	}
+
+	got := publishAs(t, newPublisher(noisy), "developer", emitsAndListens("code.ready", "review.done"))
+
+	want := &openapi.EventCycleWarning{Cycles: [][]string{}, Truncated: true, HopLimit: domain.MaxEventHops}
+	if !reflect.DeepEqual(got.EventCycleWarning, want) {
+		t.Errorf("warning = %+v, want %+v", got.EventCycleWarning, want)
+	}
+}
+
 // More cycles than one answer names: the answer says the list stops short,
 // so nobody reads sixteen loops as all of them.
 func TestPublishAgent_closesMoreCyclesThanTheAnswerNames_saysItIsTruncated(t *testing.T) {

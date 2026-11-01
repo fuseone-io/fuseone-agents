@@ -69,55 +69,11 @@ func (r *Registry) Listeners(ctx context.Context) (map[string][]domain.EventList
 // and a trigger nothing publishes are the two mistakes this graph exists to
 // make visible, and omitting them would leave a picture that looks correct.
 func (r *Registry) Edges(ctx context.Context) ([]domain.EventEdge, error) {
-	specs, err := r.latest(ctx)
+	w, err := r.wiring(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return EdgesOf(specs), nil
-}
-
-// EdgesOf is the graph the given current versions draw, as Edges reads it:
-// pure, so a fake publisher judges cycles by the same graph the real one does.
-func EdgesOf(specs []Spec) []domain.EventEdge {
-	emitters := map[string][]domain.AgentID{}
-	listeners := map[string][]domain.AgentID{}
-	for _, s := range specs {
-		for _, declared := range s.Emits {
-			emitters[declared.Event] = append(emitters[declared.Event], s.ID)
-		}
-		for _, event := range listenedEvents(s) {
-			listeners[event] = append(listeners[event], s.ID)
-		}
-	}
-
-	var edges []domain.EventEdge
-	for event, froms := range emitters {
-		for _, from := range froms {
-			edges = append(edges, edgesFrom(from, event, listeners[event])...)
-		}
-	}
-	for event, tos := range listeners {
-		if len(emitters[event]) > 0 {
-			continue
-		}
-		for _, to := range tos {
-			edges = append(edges, domain.EventEdge{Event: event, To: to})
-		}
-	}
-	return edges
-}
-
-// edgesFrom is one emitter's edges for one event: one per listener, or one
-// that goes nowhere when nobody listens.
-func edgesFrom(from domain.AgentID, event string, listeners []domain.AgentID) []domain.EventEdge {
-	if len(listeners) == 0 {
-		return []domain.EventEdge{{From: from, Event: event}}
-	}
-	out := make([]domain.EventEdge, 0, len(listeners))
-	for _, to := range listeners {
-		out = append(out, domain.EventEdge{From: from, Event: event, To: to})
-	}
-	return out
+	return EdgesOf(w), nil
 }
 
 // latest reads the current version of every published agent.

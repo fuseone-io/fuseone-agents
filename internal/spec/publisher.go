@@ -107,11 +107,11 @@ func (p *Publisher) Publish(ctx context.Context, pub Publication) (Published, er
 // judge reads the graph inside the publication's transaction and finds the
 // cycles the version closes in it, replacing its agent's current version.
 func (p *Publisher) judge(ctx context.Context, tx pgx.Tx, s Spec) (Published, error) {
-	edges, err := p.registry.within(tx).Edges(ctx)
+	wiring, err := p.registry.within(tx).wiring(ctx)
 	if err != nil {
-		return Published{}, fmt.Errorf("spec: publish %s: read the event graph: %w", s.ID, err)
+		return Published{}, fmt.Errorf("spec: publish %s: %w", s.ID, err)
 	}
-	judged := Published{EventCycles: domain.EventCyclesThrough(EventGraphWith(edges, s), s.ID)}
+	judged := Published{EventCycles: domain.EventCyclesThrough(WiringWith(wiring, s), s.ID)}
 	if p.afterJudging != nil {
 		p.afterJudging()
 	}

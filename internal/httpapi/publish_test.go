@@ -67,7 +67,7 @@ func (p *publisher) Publish(_ context.Context, pub spec.Publication) (spec.Publi
 		}
 	}
 	judged := spec.Published{EventCycles: domain.EventCyclesThrough(
-		spec.EventGraphWith(spec.EdgesOf(slices.Collect(maps.Values(p.latest))), pub.Spec), pub.Spec.ID)}
+		spec.WiringWith(spec.WiringOf(slices.Collect(maps.Values(p.latest))), pub.Spec), pub.Spec.ID)}
 	if p.afterJudging != nil {
 		p.afterJudging(pub.Spec.ID)
 	}
