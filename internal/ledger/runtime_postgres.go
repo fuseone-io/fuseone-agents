@@ -167,6 +167,11 @@ func (p *Postgres) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (
 		if err != nil {
 			return domain.RuntimeHealth{}, err
 		}
+		backlog, err := p.EventDispatchBacklog(ctx)
+		if err != nil {
+			return domain.RuntimeHealth{}, err
+		}
+		out.EventDispatch = &backlog
 	}
 	return out, nil
 }

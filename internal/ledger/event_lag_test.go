@@ -71,3 +71,31 @@ func TestEventDispatchBacklog_caughtUp_isEmpty(t *testing.T) {
 		}
 	})
 }
+
+/*
+The runtime view carries the backlog for a caller who reads the installation,
+and nothing for one who reads an area: the cursor is the installation's, and
+its count is every scope's runs.
+*/
+func TestRuntimeHealth_carriesTheEventDispatchBacklogOnlyInstallationWide(t *testing.T) {
+	run(t, "the backlog is an installation-wide fact", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		finishRunIn(t, s, "run-a")
+
+		wide, err := s.RuntimeHealth(ctx, domain.RunFilter{Scopes: []domain.Scope{{Company: domain.Installation}}})
+		if err != nil {
+			t.Fatalf("RuntimeHealth: %v", err)
+		}
+		if wide.EventDispatch == nil || wide.EventDispatch.Ready+wide.EventDispatch.HeldByXmin != 1 {
+			t.Fatalf("installation-wide backlog = %+v, want the one finished run", wide.EventDispatch)
+		}
+
+		area, err := s.RuntimeHealth(ctx, domain.RunFilter{Scopes: []domain.Scope{{Company: "acme", Area: "cx"}}})
+		if err != nil {
+			t.Fatalf("RuntimeHealth: %v", err)
+		}
+		if area.EventDispatch != nil {
+			t.Fatalf("area-scoped backlog = %+v, want none", area.EventDispatch)
+		}
+	})
+}

@@ -16,7 +16,11 @@ func (m *Memory) EventDispatchBacklog(ctx context.Context) (domain.EventDispatch
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	return m.eventDispatchBacklog(), nil
+}
 
+// eventDispatchBacklog reads under the caller's lock.
+func (m *Memory) eventDispatchBacklog() domain.EventDispatchBacklog {
 	var out domain.EventDispatchBacklog
 	for id, order := range m.finishOrder {
 		steps := m.runs[id]
@@ -32,5 +36,5 @@ func (m *Memory) EventDispatchBacklog(ctx context.Context) (domain.EventDispatch
 			out.OldestFinishedAt = summary.EndedAt
 		}
 	}
-	return out, nil
+	return out
 }

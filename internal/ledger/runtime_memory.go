@@ -114,6 +114,10 @@ func (m *Memory) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (do
 		}
 		return strings.Compare(a.Code, b.Code)
 	})
+	if runtimeCanReadInstallation(filter) {
+		backlog := m.eventDispatchBacklog()
+		out.EventDispatch = &backlog
+	}
 	return out, nil
 }
 
