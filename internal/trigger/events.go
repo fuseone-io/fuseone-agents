@@ -48,7 +48,7 @@ type Subscriptions interface {
 	// finished runs publish.
 	EmitsOf(ctx context.Context, agent domain.AgentID, version domain.VersionID) ([]domain.AgentEvent, error)
 	// Listeners maps an event to the agents it starts.
-	Listeners(ctx context.Context) (map[string][]domain.AgentID, error)
+	Listeners(ctx context.Context) (map[string][]domain.EventListener, error)
 }
 
 /*
@@ -136,7 +136,7 @@ func wrapFeed(err error) error {
 
 // dispatchPage opens the runs one page of finished runs implies.
 func (d *Dispatcher) dispatchPage(
-	ctx context.Context, page []domain.FinishedRun, listeners map[string][]domain.AgentID,
+	ctx context.Context, page []domain.FinishedRun, listeners map[string][]domain.EventListener,
 ) (int, error) {
 	pending, err := d.candidates(ctx, page, listeners)
 	if err != nil || len(pending) == 0 {
@@ -168,15 +168,15 @@ func (d *Dispatcher) dispatchPage(
 
 // publish opens one run per listener.
 func (d *Dispatcher) publish(
-	ctx context.Context, src source, event domain.AgentEvent, listeners []domain.AgentID,
+	ctx context.Context, src source, event domain.AgentEvent, listeners []domain.EventListener,
 ) (int, error) {
 	artifacts, err := contextArtifacts(src.run, src.steps, event)
 	if err != nil {
 		return 0, err
 	}
 	opened := 0
-	for _, agent := range listeners {
-		created, err := d.openListener(ctx, src, event, agent, artifacts)
+	for _, listener := range listeners {
+		created, err := d.openListener(ctx, src, event, listener, artifacts)
 		if err != nil {
 			return opened, err
 		}
@@ -189,8 +189,9 @@ func (d *Dispatcher) publish(
 
 func (d *Dispatcher) openListener(
 	ctx context.Context, src source, event domain.AgentEvent,
-	agent domain.AgentID, artifacts []domain.ContextArtifact,
+	listener domain.EventListener, artifacts []domain.ContextArtifact,
 ) (bool, error) {
+	agent := listener.Agent
 	// An agent that listens to what it publishes would trigger itself for
 	// ever. Refused at once rather than after MaxEventHops runs: a cycle of
 	// one is never what anybody meant.
@@ -202,6 +203,11 @@ func (d *Dispatcher) openListener(
 		Agent: agent, IdemKey: fmt.Sprintf("event:%s:%s:%s", src.run.RunID, event.Event, agent),
 		Trigger: domain.TriggerEvent, By: src.run.OnBehalfOf, Input: inputFor(src.run, event, artifacts),
 		Labels: src.run.Labels.Clone(), ContextArtifacts: artifacts, Chain: &next,
+		// The version that listened when the event went out. A publish that
+		// stopped listening since must not start the version that never
+		// asked; a superseded listening version still opens, because it is
+		// the one that chose to start from this event.
+		Version: listener.Version,
 	})
 	if err != nil {
 		if isRefusal(err) {

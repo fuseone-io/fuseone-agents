@@ -26,6 +26,14 @@ func (c FinishCursor) Before(o FinishCursor) bool {
 	return strings.Compare(string(c.Run), string(o.Run)) < 0
 }
 
+// EventListener is an agent an event starts, and the published version that
+// declared the trigger. A run is opened on that version: a later publish
+// that stops listening must not start the version that never asked.
+type EventListener struct {
+	Agent   AgentID
+	Version VersionID
+}
+
 // FinishedRun is a run that finished, and where it stands in commit order.
 type FinishedRun struct {
 	Run RunSummary

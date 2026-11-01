@@ -347,6 +347,52 @@ func TestSweep_twoRunsPinnedToDifferentVersions_eachPublishesItsOwn(t *testing.T
 	}
 }
 
+// newerSilentVersion publishes agent-b at v2 — current, and no longer
+// listening — above the v1 that listened.
+type newerSilentVersion struct{}
+
+func (newerSilentVersion) Versions(_ context.Context, agent domain.AgentID) ([]domain.AgentSummary, error) {
+	out := []domain.AgentSummary{{ID: agent, VersionID: "v1", Scope: chainScope}}
+	if agent == "agent-b" {
+		out = append([]domain.AgentSummary{{ID: agent, VersionID: "v2", Scope: chainScope, Latest: true}}, out...)
+	}
+	return out, nil
+}
+
+/*
+The event went out while agent-b's v1 listened to it. A publish of a v2
+that stops listening, landing between the listener snapshot and the open,
+must not start v2 — the version that never asked for this event. The run
+opens on the version that listened: that is the agent that chose to start
+from it, when it was published.
+*/
+func TestSweep_theListenerOpensOnTheVersionThatListened(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	startRun(t, store, "run-root", "agent-a", nil)
+	finishRun(t, store, "run-root")
+	clock := fixedClock{t: time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)}
+	opener := trigger.NewOpener(store, newerSilentVersion{}, clock).WithContent(engine.NewMemoryContent())
+	w := pingPong
+	w.listenAt = map[domain.AgentID]domain.VersionID{"agent-b": "v1"}
+
+	if _, err := trigger.NewDispatcher(w, store, opener, clock, nil).Sweep(context.Background(), 50); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	ids, _ := store.Runs(context.Background())
+	for _, id := range ids {
+		steps, _ := store.Read(context.Background(), id, domain.FirstSeq)
+		if steps[0].AgentID == "agent-b" && steps[0].VersionID != "v1" {
+			t.Fatalf("the listener opened on %s, want v1 — the version that listened", steps[0].VersionID)
+		}
+	}
+	if len(ids) != 2 {
+		t.Fatalf("runs = %v, want the source and the listener", ids)
+	}
+}
+
 // finishOpenRuns ends every run still going, as a worker would.
 func finishOpenRuns(t *testing.T, store *ledger.Memory) {
 	t.Helper()

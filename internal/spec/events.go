@@ -43,17 +43,20 @@ func (r *Registry) EmitsOf(ctx context.Context, agent domain.AgentID, version do
 	return []domain.AgentEvent(s.Emits), nil
 }
 
-// Listeners maps each event to the agents it starts.
-func (r *Registry) Listeners(ctx context.Context) (map[string][]domain.AgentID, error) {
+// Listeners maps each event to the agents it starts, each with the version
+// that declared the trigger: the run an event opens is pinned to it, so a
+// publish that stops listening in between does not start the version that
+// never asked.
+func (r *Registry) Listeners(ctx context.Context) (map[string][]domain.EventListener, error) {
 	specs, err := r.latest(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := map[string][]domain.AgentID{}
+	out := map[string][]domain.EventListener{}
 	for _, s := range specs {
 		for _, t := range s.Triggers {
 			if t.Type == TriggerEvent && t.Event != "" {
-				out[t.Event] = append(out[t.Event], s.ID)
+				out[t.Event] = append(out[t.Event], domain.EventListener{Agent: s.ID, Version: s.Version})
 			}
 		}
 	}
@@ -86,7 +89,7 @@ func (r *Registry) Edges(ctx context.Context) ([]domain.EventEdge, error) {
 				continue
 			}
 			for _, to := range listeners[event] {
-				edges = append(edges, domain.EventEdge{From: agent, Event: event, To: to})
+				edges = append(edges, domain.EventEdge{From: agent, Event: event, To: to.Agent})
 			}
 		}
 	}
@@ -95,7 +98,7 @@ func (r *Registry) Edges(ctx context.Context) ([]domain.EventEdge, error) {
 			continue
 		}
 		for _, to := range agents {
-			edges = append(edges, domain.EventEdge{Event: event, To: to})
+			edges = append(edges, domain.EventEdge{Event: event, To: to.Agent})
 		}
 	}
 	return edges, nil

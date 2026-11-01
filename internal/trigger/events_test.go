@@ -24,6 +24,9 @@ type wiring struct {
 	emits  map[domain.AgentID][]domain.AgentEvent
 	pinned map[domain.VersionID][]domain.AgentEvent
 	listen map[string][]domain.AgentID
+	// listenAt is the version each listener listened with; absent, the
+	// version the opener finds current.
+	listenAt map[domain.AgentID]domain.VersionID
 }
 
 func (w wiring) EmitsOf(_ context.Context, agent domain.AgentID, version domain.VersionID) ([]domain.AgentEvent, error) {
@@ -33,8 +36,14 @@ func (w wiring) EmitsOf(_ context.Context, agent domain.AgentID, version domain.
 	return w.emits[agent], nil
 }
 
-func (w wiring) Listeners(context.Context) (map[string][]domain.AgentID, error) {
-	return w.listen, nil
+func (w wiring) Listeners(context.Context) (map[string][]domain.EventListener, error) {
+	out := map[string][]domain.EventListener{}
+	for event, agents := range w.listen {
+		for _, agent := range agents {
+			out[event] = append(out[event], domain.EventListener{Agent: agent, Version: w.listenAt[agent]})
+		}
+	}
+	return out, nil
 }
 
 func mustJSON(v any) []byte {
