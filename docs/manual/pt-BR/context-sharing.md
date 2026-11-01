@@ -88,6 +88,16 @@ A contagem fica registrada no passo de abertura de cada run, então todo
 worker chega à mesma resposta, e um evento entregue duas vezes não conta duas
 vezes. Um agente que escuta o próprio evento é recusado na hora.
 
+O que uma run publica é o que a versão em que ela executou declara. Publicar
+uma versão nova com a run em andamento não muda o que essa run publica nem o
+que a trilha diz sobre isso; quem escuta é lido das versões publicadas no
+momento em que o evento sai.
+
+Uma run aberta por um evento sem registrar a posição na cadeia — o que só um
+worker numa versão anterior faz, durante uma atualização — não publica mais
+nada, e a trilha diz que a cadeia é desconhecida. Contá-la como o início de
+uma cadeia nova deixaria um ciclo reiniciar a contagem a cada run dessas.
+
 Oito deixa espaço para composição feita de propósito — um pipeline de poucos
 agentes, ou um ciclo de revisão que dá algumas voltas. Uma cadeia que chega
 ao limite costuma ser um ciclo que ninguém quis: veja quais agentes escutam

@@ -85,6 +85,16 @@ The count is recorded on each run's opening step, so every worker reaches
 the same answer, and an event delivered twice does not count twice. An agent
 that listens to its own event is refused at once.
 
+What a run publishes is what the version it ran on declares. Publishing a
+new version while a run is going changes neither what that run publishes nor
+what its trail says about it; who listens is read from the versions
+published when the event goes out.
+
+A run an event opened without recording its place in the chain — which only
+a worker on an older version does, during an upgrade — publishes nothing
+further, and its trail says the chain is unknown. Counting it as the start
+of a new chain would let a cycle restart its count at every such run.
+
 Eight leaves room for composition designed on purpose — a pipeline of a
 handful of agents, or a review loop that goes round a few times. A chain
 that reaches the limit is usually a cycle nobody meant: look at which agents
