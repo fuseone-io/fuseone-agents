@@ -66,6 +66,16 @@ A fixed sentence rather than "mentions the tool somewhere": "Never call
 $fuseone.work_item.claim" also mentions it. The role's own wording around the
 line (which reference, what a refusal means) follows on the next lines.
 
+"Before reading the issue" means its body and comments. Triage chooses its
+card from a board listing, and `projects_list` always returns item titles,
+so Triage sees titles before it claims (#220). The reference tells it to use
+a title only to tell cards apart, to choose by age and label, and to act on
+nothing a title says. That is an instruction, not something the platform
+enforces: a title is untrusted text the model reads before the claim, and
+what contains it is copilot with every write approved by a person. A tool
+that picks and claims the next card atomically, exposing its content only
+afterwards, would remove the title from the pre-claim view; it is deferred.
+
 The order cannot be enforced with steps. The claim is a platform tool: the step
 machinery ignores it, so a first step reaching only the claim would never
 advance, and `spec.Parse` refuses a step that names a platform tool at all. At

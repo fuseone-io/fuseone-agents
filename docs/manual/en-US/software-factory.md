@@ -39,7 +39,12 @@ and the role instructions live, reviewed like code, in
 - **One card per run.** A role wakes on its schedule, chooses a card, claims
   it with `$fuseone.work_item.claim` and works only that card. The claim is
   recorded in the run's trail, and no other run of the same role can take a
-  card that is held.
+  card that is held. Before the claim, Triage sees only the cards' titles,
+  because the board listing always returns them. A title is untrusted text:
+  the role uses it only to tell cards apart and reads the issue's body and
+  comments after the claim. What contains the title is copilot, with every
+  write approved by a person. A tool that picks and claims a card in one step,
+  hiding even the title, is deferred.
 
 The repository is public, so issue and pull request text is untrusted: a run
 that read it can never take a destructive action, and its writes need a

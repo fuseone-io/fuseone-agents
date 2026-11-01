@@ -32,6 +32,11 @@ platform, with no code written for the factory:
 - **Copilot everywhere, and a person merges.** Every role runs at copilot with
   `standing_approvals: forbidden`, and once it has chosen a card from the board
   its first act is the work-item claim, before it reads the issue or writes.
+  Choosing from the board shows Triage the cards' titles — the board listing
+  always returns them — so a title is the one untrusted text a role reads
+  before its claim (#220). It is used only to tell cards apart, copilot with
+  every write approved by a person contains it, and an atomic
+  pick-and-claim tool that would hide it is deferred.
   The Reviewer's and QA's verdicts are both pull-request reviews on the head
   SHA they read (APPROVE or REQUEST_CHANGES), under their own Apps. A person
   merges once both approve the current head and its checks are green. Cards

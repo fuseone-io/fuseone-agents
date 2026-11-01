@@ -41,7 +41,13 @@ e as instruções dos papéis ficam, revisadas como código, em
 - **Um card por run.** Um papel acorda no seu horário, escolhe um card, faz o
   claim dele com `$fuseone.work_item.claim` e trabalha só nesse card. O claim
   fica registrado na trilha do run, e nenhum outro run do mesmo papel pode
-  pegar um card que já está reservado.
+  pegar um card que já está reservado. Antes do claim, a Triagem vê só os
+  títulos dos cards, porque a listagem do board sempre traz os títulos. Um
+  título é texto não confiável: o papel usa o título só para diferenciar os
+  cards e lê o corpo e os comentários da issue depois do claim. O que contém o
+  título é o copiloto, com toda escrita aprovada por uma pessoa. Uma
+  ferramenta que escolhe e faz o claim do card de uma vez, escondendo até o
+  título, ficou para depois.
 
 O repositório é público, então o texto de issues e pull requests não é
 confiável: um run que leu esse texto nunca pode executar uma ação destrutiva,
