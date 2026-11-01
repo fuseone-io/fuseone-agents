@@ -8,6 +8,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/trigger"
 )
 
 // syncedHooks records what a publish reconciles, and is otherwise spyHooks.
@@ -84,7 +85,7 @@ func TestAgentFrom_aGitHubWebhook_showsItsSourceAndEvents(t *testing.T) {
 	}
 }
 
-func githubWebhookServer(t *testing.T, hooks *spyHooks) *Server {
+func githubWebhookServer(t *testing.T, hooks trigger.Webhooks) *Server {
 	t.Helper()
 	return NewServer(ledger.NewMemory(), "test").WithAgents(triggerable(t)).WithWebhooks(hooks)
 }
@@ -108,6 +109,42 @@ func TestRotateWebhookSecret_aGitHubHookWithNoMasterKey_isRefusedWithAReason(t *
 	}
 	if refused.Type == nil || *refused.Type != "fuseone:no-master-key" {
 		t.Errorf("problem type = %v, want fuseone:no-master-key", refused.Type)
+	}
+}
+
+// changedHands is the store the moment after the console's check: Find still
+// reports the path as triage's, and the row already belongs to billing.
+type changedHands struct{ *spyHooks }
+
+func (c changedHands) Find(ctx context.Context, path string) (trigger.Hook, error) {
+	hook, err := c.spyHooks.Find(ctx, path)
+	hook.Agent = "triage"
+	return hook, err
+}
+
+/*
+A path that changed hands between the check and the rotation hands out no key.
+
+The console checks the path belongs to the agent, then rotates. Rotated by
+path alone, a path claimed by another agent in between was armed and its key
+returned to somebody authorised only for the old owner.
+*/
+func TestRotateWebhookSecret_aPathThatChangedHands_isAbsentAndArmsNothing(t *testing.T) {
+	t.Parallel()
+	owner := &spyHooks{path: "crm/ticket", agent: "billing"}
+
+	resp, err := githubWebhookServer(t, changedHands{owner}).RotateWebhookSecret(
+		inArea("cx", domain.RoleAuthor),
+		openapi.RotateWebhookSecretRequestObject{AgentId: "triage", Path: "crm/ticket"},
+	)
+	if err != nil {
+		t.Fatalf("RotateWebhookSecret: %v", err)
+	}
+	if _, absent := resp.(openapi.RotateWebhookSecret404ApplicationProblemPlusJSONResponse); !absent {
+		t.Fatalf("response = %T, want 404", resp)
+	}
+	if owner.armed {
+		t.Error("the new owner's hook was armed")
 	}
 }
 

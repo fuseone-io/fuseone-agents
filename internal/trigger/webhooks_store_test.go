@@ -3,7 +3,6 @@ package trigger_test
 import (
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/testdb"
@@ -48,7 +47,7 @@ func TestWebhook_afterRotating_acceptsOnlyThatSecret(t *testing.T) {
 		t.Fatalf("Sync: %v", err)
 	}
 
-	secret, err := hooks.Rotate(t.Context(), "crm/ticket", "usr_ana", time.Now())
+	secret, err := rotateAs(t, hooks, "triage", "crm/ticket")
 	if err != nil {
 		t.Fatalf("Rotate: %v", err)
 	}
@@ -68,8 +67,8 @@ func TestWebhook_rotating_retiresThePreviousSecret(t *testing.T) {
 		t.Fatalf("Sync: %v", err)
 	}
 
-	first, _ := hooks.Rotate(t.Context(), "crm/ticket", "usr_ana", time.Now())
-	second, _ := hooks.Rotate(t.Context(), "crm/ticket", "usr_ana", time.Now())
+	first, _ := rotateAs(t, hooks, "triage", "crm/ticket")
+	second, _ := rotateAs(t, hooks, "triage", "crm/ticket")
 
 	// Rotating is what somebody does after a secret leaks. If the old one
 	// still worked it would not be a rotation.
@@ -86,7 +85,7 @@ func TestWebhook_republishing_keepsTheSecret(t *testing.T) {
 	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
-	secret, _ := hooks.Rotate(t.Context(), "crm/ticket", "usr_ana", time.Now())
+	secret, _ := rotateAs(t, hooks, "triage", "crm/ticket")
 
 	// Publishing a new version must not break every sender configured against
 	// this path. Editing a prompt is not a security event.
@@ -103,7 +102,7 @@ func TestWebhook_pathNoLongerDeclared_stopsAnswering(t *testing.T) {
 	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
-	if _, err := hooks.Rotate(t.Context(), "crm/ticket", "usr_ana", time.Now()); err != nil {
+	if _, err := rotateAs(t, hooks, "triage", "crm/ticket"); err != nil {
 		t.Fatalf("Rotate: %v", err)
 	}
 
@@ -118,7 +117,7 @@ func TestWebhook_pathNoLongerDeclared_stopsAnswering(t *testing.T) {
 func TestRotate_pathNobodyDeclared_isRefused(t *testing.T) {
 	hooks := webhooksFor(t)
 
-	if _, err := hooks.Rotate(t.Context(), "made/up", "usr_ana", time.Now()); !errors.Is(err, trigger.ErrNoHook) {
+	if _, err := rotateAs(t, hooks, "triage", "made/up"); !errors.Is(err, trigger.ErrNoHook) {
 		t.Errorf("Rotate on an undeclared path = %v, want ErrNoHook", err)
 	}
 }
@@ -129,7 +128,7 @@ func TestSync_pathAnotherAgentAlreadyOwns_isRefusedRatherThanTransferred(t *test
 	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
-	secret, err := hooks.Rotate(t.Context(), "crm/ticket", "usr_ana", time.Now())
+	secret, err := rotateAs(t, hooks, "triage", "crm/ticket")
 	if err != nil {
 		t.Fatalf("Rotate: %v", err)
 	}

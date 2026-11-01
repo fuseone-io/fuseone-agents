@@ -88,7 +88,14 @@ func (s *Server) RotateWebhookSecret(
 		return absent, nil
 	}
 
-	secret, err := s.webhooks.Rotate(ctx, path, callerOf(ctx), clockOr(s.clock).Now())
+	secret, err := s.webhooks.Rotate(ctx, trigger.Rotation{
+		Path: path, Agent: domain.AgentID(req.AgentId), By: callerOf(ctx), At: clockOr(s.clock).Now(),
+	})
+	if errors.Is(err, trigger.ErrNoHook) {
+		// Gone, or another agent's since the check above: absent either way,
+		// the same answer a path that was never this agent's gets.
+		return absent, nil
+	}
 	if errors.Is(err, trigger.ErrNoVault) {
 		return openapi.RotateWebhookSecret409ApplicationProblemPlusJSONResponse(
 			refusal(http.StatusConflict, CodeNoMasterKey, "No master key",

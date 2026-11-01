@@ -69,7 +69,7 @@ func (f *fakeHooks) Find(_ context.Context, path string) (trigger.Hook, error) {
 	return trigger.Hook{Path: path, Agent: agent, Armed: f.armed[path] != ""}, nil
 }
 
-func (f *fakeHooks) Rotate(context.Context, string, domain.UserID, time.Time) (string, error) {
+func (f *fakeHooks) Rotate(context.Context, trigger.Rotation) (string, error) {
 	return "", nil
 }
 func (f *fakeHooks) Sync(context.Context, domain.AgentID, domain.Scope, []domain.WebhookTrigger) error {

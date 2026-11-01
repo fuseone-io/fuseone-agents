@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -39,8 +38,9 @@ func (s *spyHooks) SigningSecret(context.Context, string) ([]byte, error) {
 	return nil, trigger.ErrNotGitHub
 }
 
-func (s *spyHooks) Rotate(_ context.Context, path string, _ domain.UserID, _ time.Time) (string, error) {
-	if path != s.path {
+func (s *spyHooks) Rotate(_ context.Context, r trigger.Rotation) (string, error) {
+	// The store's rule: a path that is not this agent's, now, is absent.
+	if r.Path != s.path || r.Agent != s.agent {
 		return "", trigger.ErrNoHook
 	}
 	if s.from == domain.WebhookFromGitHub && s.noVault {

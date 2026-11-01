@@ -70,7 +70,7 @@ func TestGitHubWebhook_rotated_signsWithTheSecretItHandedOut(t *testing.T) {
 		t.Fatalf("Sync: %v", err)
 	}
 
-	secret, err := hooks.Rotate(t.Context(), "gh/reviewer", "usr_ana", time.Now())
+	secret, err := rotateAs(t, hooks, "reviewer", "gh/reviewer")
 	if err != nil {
 		t.Fatalf("Rotate: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestGitHubWebhook_rotatedWithNoVault_isRefusedAndStaysClosed(t *testing.T) 
 		t.Fatalf("Sync: %v", err)
 	}
 
-	if _, err := hooks.Rotate(t.Context(), "gh/reviewer", "usr_ana", time.Now()); !errors.Is(err, trigger.ErrNoVault) {
+	if _, err := rotateAs(t, hooks, "reviewer", "gh/reviewer"); !errors.Is(err, trigger.ErrNoVault) {
 		t.Fatalf("Rotate with no vault = %v, want ErrNoVault", err)
 	}
 	if hook, _ := hooks.Find(t.Context(), "gh/reviewer"); hook.Armed {
@@ -106,7 +106,7 @@ func TestGitHubWebhook_secret_isNeverAcceptedAsASentSecret(t *testing.T) {
 	if err := hooks.Sync(t.Context(), "reviewer", cx, fromGitHub("gh/reviewer", "pull_request")); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
-	secret, err := hooks.Rotate(t.Context(), "gh/reviewer", "usr_ana", time.Now())
+	secret, err := rotateAs(t, hooks, "reviewer", "gh/reviewer")
 	if err != nil {
 		t.Fatalf("Rotate: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestSync_aPathChangingItsSource_closesIt(t *testing.T) {
 			if err := hooks.Sync(t.Context(), "triage", cx, c.before); err != nil {
 				t.Fatalf("Sync: %v", err)
 			}
-			if _, err := hooks.Rotate(t.Context(), "hooks/a", "usr_ana", time.Now()); err != nil {
+			if _, err := rotateAs(t, hooks, "triage", "hooks/a"); err != nil {
 				t.Fatalf("Rotate: %v", err)
 			}
 
@@ -155,7 +155,7 @@ func TestSync_aGitHubPathRepublished_keepsItsSecretAndTakesTheNewEvents(t *testi
 	if err := hooks.Sync(t.Context(), "reviewer", cx, fromGitHub("gh/reviewer", "pull_request")); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
-	secret, _ := hooks.Rotate(t.Context(), "gh/reviewer", "usr_ana", time.Now())
+	secret, _ := rotateAs(t, hooks, "reviewer", "gh/reviewer")
 
 	if err := hooks.Sync(t.Context(), "reviewer", cx, fromGitHub("gh/reviewer", "pull_request.labeled")); err != nil {
 		t.Fatalf("Sync again: %v", err)
@@ -178,7 +178,7 @@ func TestGitHubWebhook_sealedSecretCopiedToAnotherPath_doesNotOpen(t *testing.T)
 	if err := hooks.Sync(t.Context(), "reviewer", cx, both); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
-	if _, err := hooks.Rotate(t.Context(), "gh/a", "usr_ana", time.Now()); err != nil {
+	if _, err := rotateAs(t, hooks, "reviewer", "gh/a"); err != nil {
 		t.Fatalf("Rotate: %v", err)
 	}
 	if _, err := pool.Exec(t.Context(), `
@@ -191,6 +191,44 @@ func TestGitHubWebhook_sealedSecretCopiedToAnotherPath_doesNotOpen(t *testing.T)
 	if got, err := hooks.SigningSecret(t.Context(), "gh/b"); err == nil {
 		t.Errorf("a secret sealed for gh/a opened on gh/b: %q", got)
 	}
+}
+
+/*
+A rotation arms only the hook of the agent that asked for it.
+
+The console checks the path belongs to the agent and then rotates. If the path
+changed hands in between — the agent withdrew it and another claimed it — a
+rotation by path alone armed the new owner's hook and handed its key to
+somebody authorised for the old one.
+*/
+func TestRotate_aPathThatChangedHands_armsNothingAndHandsOutNoKey(t *testing.T) {
+	hooks := githubHooks(t)
+	if err := hooks.Sync(t.Context(), "triage", cx, ordinary("crm/ticket")); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	// What the console saw: crm/ticket belongs to triage. Then it changes hands.
+	if err := hooks.Sync(t.Context(), "triage", cx, nil); err != nil {
+		t.Fatalf("withdraw: %v", err)
+	}
+	if err := hooks.Sync(t.Context(), "billing", cx, ordinary("crm/ticket")); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+
+	_, err := hooks.Rotate(t.Context(), trigger.Rotation{
+		Path: "crm/ticket", Agent: "triage", By: "usr_ana", At: time.Now(),
+	})
+	if !errors.Is(err, trigger.ErrNoHook) {
+		t.Fatalf("Rotate for the previous owner = %v, want ErrNoHook", err)
+	}
+	if hook, _ := hooks.Find(t.Context(), "crm/ticket"); hook.Armed {
+		t.Error("the new owner's hook was armed by a rotation it never asked for")
+	}
+}
+
+// rotateAs rotates a path on behalf of the agent the caller was authorised for.
+func rotateAs(t *testing.T, hooks *trigger.PostgresWebhooks, agent domain.AgentID, path string) (string, error) {
+	t.Helper()
+	return hooks.Rotate(t.Context(), trigger.Rotation{Path: path, Agent: agent, By: "usr_ana", At: time.Now()})
 }
 
 func poolOf(t *testing.T) *pgxpool.Pool {

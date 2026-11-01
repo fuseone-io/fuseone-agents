@@ -48,12 +48,27 @@ type Webhooks interface {
 	Verify(ctx context.Context, path, secret string) (bool, error)
 	// SigningSecret opens a GitHub hook's secret, to check a signature with.
 	SigningSecret(ctx context.Context, path string) ([]byte, error)
-	// Rotate replaces the secret and returns the new one, once.
-	Rotate(ctx context.Context, path string, by domain.UserID, at time.Time) (string, error)
+	// Rotate replaces the secret and returns the new one, once — only while
+	// the path still belongs to the agent that asked, or ErrNoHook.
+	Rotate(ctx context.Context, r Rotation) (string, error)
 	// Sync reconciles an agent's declared webhooks.
 	Sync(ctx context.Context, agent domain.AgentID, scope domain.Scope, hooks []domain.WebhookTrigger) error
 	// ForAgent lists what an agent declares, for the console.
 	ForAgent(ctx context.Context, agent domain.AgentID) ([]Hook, error)
+}
+
+// Rotation is a request for a new secret: the path, the agent whose path the
+// caller was authorised for, and who asked when.
+//
+// The agent is part of the request because the check that the caller may
+// rotate this path and the write happen at two moments. A path that changed
+// hands between them must not arm the new owner's hook and hand its key to
+// somebody authorised for the old one.
+type Rotation struct {
+	Path  string
+	Agent domain.AgentID
+	By    domain.UserID
+	At    time.Time
 }
 
 // ErrNoHook means nothing is declared at that path.

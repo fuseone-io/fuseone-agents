@@ -102,40 +102,47 @@ func (p *PostgresWebhooks) Verify(ctx context.Context, path, secret string) (boo
 //
 // Rotating is also how the first one is generated: there is no separate
 // "arm" — a hook either has a current secret or it is closed.
-func (p *PostgresWebhooks) Rotate(
-	ctx context.Context, path string, by domain.UserID, at time.Time,
-) (string, error) {
+//
+// The row is read for the agent that asked and locked until the write, so a
+// path that belongs to somebody else is absent to this rotation, exactly as a
+// path that was never this agent's — and it cannot change hands, or source,
+// between the read and the write.
+func (p *PostgresWebhooks) Rotate(ctx context.Context, r Rotation) (string, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return "", fmt.Errorf("trigger: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	var source string
-	err := p.pool.QueryRow(ctx, `select source from webhook_triggers where path = $1`, path).Scan(&source)
+	err = tx.QueryRow(ctx,
+		`select source from webhook_triggers where path = $1 and agent_id = $2 for update`,
+		r.Path, string(r.Agent)).Scan(&source)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNoHook
 	}
 	if err != nil {
-		return "", fmt.Errorf("trigger: rotate %q: %w", path, err)
+		return "", fmt.Errorf("trigger: rotate %q: %w", r.Path, err)
 	}
 
 	secret, hash, err := NewSecret()
 	if err != nil {
 		return "", err
 	}
-	sealed, nonce, err := p.sealFor(source, path, secret)
+	sealed, nonce, err := p.sealFor(source, r.Path, secret)
 	if err != nil {
 		return "", err
 	}
-
-	tag, err := p.pool.Exec(ctx, `
+	if _, err := tx.Exec(ctx, `
 		update webhook_triggers
 		set secret_hash = $2, rotated_by = $3, rotated_at = $4,
 			secret_sealed = $5, secret_nonce = $6
-		where path = $1 and source = $7`, path, hash, string(by), at.UTC(), sealed, nonce, source)
-	if err != nil {
-		return "", fmt.Errorf("trigger: rotate %q: %w", path, err)
+		where path = $1`,
+		r.Path, hash, string(r.By), r.At.UTC(), sealed, nonce); err != nil {
+		return "", fmt.Errorf("trigger: rotate %q: %w", r.Path, err)
 	}
-	if tag.RowsAffected() == 0 {
-		// Gone, or republished with another source between the read and the
-		// write: either way this secret was sealed for a hook that no longer
-		// exists as read.
-		return "", ErrNoHook
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("trigger: rotate %q: %w", r.Path, err)
 	}
 	return secret, nil
 }
