@@ -21,6 +21,9 @@ const (
 // bounds what it reads.
 const EventDispatchBacklogSQL = eventDispatchBacklogSQL
 
+// FinishedSinceSQL is one page of the dispatcher's feed, for the same test.
+const FinishedSinceSQL = finishedSinceSQL
+
 // AppendInTx seals a step inside a transaction the test holds open, so a race
 // can be staged on the production append rather than on a copy of its SQL.
 func AppendInTx(ctx context.Context, tx pgx.Tx, s domain.Step) (domain.Step, error) {
