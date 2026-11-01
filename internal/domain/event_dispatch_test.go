@@ -49,7 +49,7 @@ func TestEventDispatchBacklog_status_degradesOnlyPastTheThreshold(t *testing.T) 
 		// A capped count means the lag was read from a sample of the
 		// backlog, so it is only a lower bound: never read it as healthy.
 		{"capped, recent sample", domain.EventDispatchBacklog{
-			Ready: domain.EventDispatchCountCap, OldestFinishedAt: lagNow.Add(-time.Second), Capped: true,
+			Ready: domain.EventDispatchCountCap, OldestFinishedAt: lagNow.Add(-time.Second), ReadyCapped: true,
 		}, domain.EventDispatchDegraded},
 	}
 	for _, c := range cases {

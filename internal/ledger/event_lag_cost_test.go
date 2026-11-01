@@ -150,11 +150,12 @@ func TestEventDispatchBacklog_aBacklogFarPastTheCap_readsABoundedRange(t *testin
 			// Held when this test holds xmin. Without its hold the runs are
 			// ready — unless a transaction elsewhere on the cluster holds
 			// them, which is why the ready cases read whichever is larger.
-			count := max(got.Ready, got.HeldByXmin)
+			count, capped := max(got.Ready, got.HeldByXmin), got.ReadyCapped || got.HeldCapped
 			if c.held {
-				count = got.HeldByXmin
+				// Each count says whether it was cut: here only the held one.
+				count, capped = got.HeldByXmin, got.HeldCapped && !got.ReadyCapped
 			}
-			if !got.Capped || count != domain.EventDispatchCountCap {
+			if !capped || count != domain.EventDispatchCountCap {
 				t.Fatalf("backlog = %+v; want the count stopped at the cap of %d", got, domain.EventDispatchCountCap)
 			}
 			requireBoundedPlan(t, pool, "backlog", ledger.EventDispatchBacklogSQL,

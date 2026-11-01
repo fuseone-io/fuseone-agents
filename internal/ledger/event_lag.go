@@ -88,10 +88,10 @@ func (p *Postgres) oldestXact(ctx context.Context, held bool) (domain.OpenXact, 
 // with a limit of the cap plus one reached it when it came back above it.
 func capBacklog(b domain.EventDispatchBacklog) domain.EventDispatchBacklog {
 	if b.Ready > domain.EventDispatchCountCap {
-		b.Ready, b.Capped = domain.EventDispatchCountCap, true
+		b.Ready, b.ReadyCapped = domain.EventDispatchCountCap, true
 	}
 	if b.HeldByXmin > domain.EventDispatchCountCap {
-		b.HeldByXmin, b.Capped = domain.EventDispatchCountCap, true
+		b.HeldByXmin, b.HeldCapped = domain.EventDispatchCountCap, true
 	}
 	return b
 }

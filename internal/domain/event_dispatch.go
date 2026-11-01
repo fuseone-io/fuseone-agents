@@ -24,15 +24,22 @@ type EventDispatchBacklog struct {
 	// them until that transaction ends, however often it sweeps.
 	HeldByXmin int64
 	// OldestFinishedAt is the earliest finish among the runs past the
-	// cursor that were read; zero when nothing is waiting. When Capped,
-	// only a sample was read and the true earliest may be earlier still.
+	// cursor that were read; zero when nothing is waiting. When a count
+	// is capped, only a sample was read and the true earliest may be
+	// earlier still.
 	OldestFinishedAt time.Time
 	// Xact is the oldest transaction holding an id — the one that sets xmin.
 	Xact OpenXact
-	// Capped reports that Ready or HeldByXmin stopped counting at
-	// EventDispatchCountCap: the true backlog is at least that.
-	Capped bool
+	// ReadyCapped and HeldCapped report that Ready, or HeldByXmin, stopped
+	// counting at EventDispatchCountCap: that count is at least the cap.
+	// Each says which count was cut, so exactly a thousand reads as a
+	// thousand and only the cut one as more.
+	ReadyCapped bool
+	HeldCapped  bool
 }
+
+// Capped reports that either count stopped at the cap.
+func (b EventDispatchBacklog) Capped() bool { return b.ReadyCapped || b.HeldCapped }
 
 // EventDispatchCountCap is where the backlog counts stop. The backlog is read
 // every minute on every worker and on every health page view, during the very
@@ -103,7 +110,7 @@ dispatcher drains every readable page on each fifteen-second sweep, so a
 backlog that large is either held by xmin or a dispatcher not keeping up.
 */
 func (b EventDispatchBacklog) Status(now time.Time) string {
-	if b.Capped || b.Lag(now) > EventDispatchDegradedAfter {
+	if b.Capped() || b.Lag(now) > EventDispatchDegradedAfter {
 		return EventDispatchDegraded
 	}
 	return EventDispatchOK

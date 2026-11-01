@@ -99,10 +99,13 @@ func TestRuntimeEventDispatchFrom_aHiddenHolder_hasNoAge(t *testing.T) {
 func TestRuntimeEventDispatchFrom_aCappedCount_saysItIsALowerBound(t *testing.T) {
 	t.Parallel()
 	got := runtimeEventDispatchFrom(domain.EventDispatchBacklog{
-		HeldByXmin: domain.EventDispatchCountCap, OldestFinishedAt: finishedAt, Capped: true,
+		Ready:      domain.EventDispatchCountCap,
+		HeldByXmin: domain.EventDispatchCountCap, OldestFinishedAt: finishedAt, HeldCapped: true,
 	}, finishedAt.Add(time.Minute))
 
-	if !got.CountCapped || got.CountCap != domain.EventDispatchCountCap {
+	// A thousand ready exactly, and more than a thousand held: only the
+	// held count is a lower bound.
+	if got.ReadyCapped || !got.HeldCapped || got.CountCap != domain.EventDispatchCountCap {
 		t.Fatalf("event dispatch = %+v; want the count marked capped at %d", got, domain.EventDispatchCountCap)
 	}
 }

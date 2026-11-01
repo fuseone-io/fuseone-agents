@@ -50,7 +50,7 @@ lidas na primeira varredura do worker e depois uma vez por minuto:
 |---|---|---|
 | `fuseone_event_dispatch_backlog_runs{state="ready"}` | gauge | Execuções aguardando a próxima varredura. |
 | `fuseone_event_dispatch_backlog_runs{state="held_by_xmin"}` | gauge | Execuções retidas pela transação aberta mais antiga. |
-| `fuseone_event_dispatch_backlog_capped` | gauge | 1 quando uma contagem parou em 1.000: a fila tem pelo menos isso. |
+| `fuseone_event_dispatch_backlog_capped{state="ready"\|"held_by_xmin"}` | gauge | 1 quando a contagem daquele estado parou em 1.000: ela é pelo menos isso. |
 | `fuseone_event_dispatch_lag_seconds` | gauge | Quanto tempo a execução mais antiga na fila está esperando. |
 | `fuseone_event_dispatch_held_by_xmin` | gauge | 1 enquanto execuções confirmadas esperam uma transação aberta. |
 | `fuseone_event_dispatch_oldest_xact_age_seconds` | gauge | Idade da transação aberta mais antiga que detém um id. Omitida quando desconhecida. |

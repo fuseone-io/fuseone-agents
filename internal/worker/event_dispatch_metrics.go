@@ -79,8 +79,10 @@ func renderEventDispatchMetrics(w io.Writer, g eventDispatchReading) {
 	fmt.Fprintln(w, "# TYPE fuseone_event_dispatch_backlog_runs gauge")
 	fmt.Fprintf(w, "fuseone_event_dispatch_backlog_runs{state=%s} %d\n", label(backlogReady), b.Ready)
 	fmt.Fprintf(w, "fuseone_event_dispatch_backlog_runs{state=%s} %d\n", label(backlogHeldByXmin), b.HeldByXmin)
-	gauge(w, "fuseone_event_dispatch_backlog_capped",
-		"1 when a backlog count stopped at its cap: the true count is at least that.", boolGauge(b.Capped))
+	fmt.Fprintln(w, "# HELP fuseone_event_dispatch_backlog_capped 1 when that state's backlog count stopped at its cap: the true count is at least that.")
+	fmt.Fprintln(w, "# TYPE fuseone_event_dispatch_backlog_capped gauge")
+	fmt.Fprintf(w, "fuseone_event_dispatch_backlog_capped{state=%s} %s\n", label(backlogReady), formatGauge(boolGauge(b.ReadyCapped)))
+	fmt.Fprintf(w, "fuseone_event_dispatch_backlog_capped{state=%s} %s\n", label(backlogHeldByXmin), formatGauge(boolGauge(b.HeldCapped)))
 	gauge(w, "fuseone_event_dispatch_lag_seconds",
 		"How long the oldest finished run past the cursor has waited.", seconds(b.Lag(now)))
 	gauge(w, "fuseone_event_dispatch_held_by_xmin",

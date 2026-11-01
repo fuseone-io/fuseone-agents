@@ -10,7 +10,8 @@ function dispatch(input: Partial<RuntimeEventDispatch>): RuntimeEventDispatch {
     status: "ok",
     ready: 0,
     heldByXmin: 0,
-    countCapped: false,
+    readyCapped: false,
+    heldCapped: false,
     countCap: 1000,
     lagSeconds: 0,
     xactOpen: false,
@@ -68,13 +69,14 @@ test("a count stopped at the cap reads as a lower bound", () => {
   setLocale("en-US");
   render(
     <EventDispatchPanel
-      dispatch={dispatch({ heldByXmin: 1000, countCapped: true, lagSeconds: 900 })}
+      dispatch={dispatch({ ready: 1000, heldByXmin: 1000, heldCapped: true, lagSeconds: 900 })}
     />,
   );
 
+  // Exactly a thousand ready; more than a thousand held.
+  expect(screen.getByText("1000")).toBeInTheDocument();
   expect(screen.getByText("1000+")).toBeInTheDocument();
   expect(screen.getByText(/or once 1000 runs are waiting/)).toBeInTheDocument();
-  expect(screen.queryByText("1000")).not.toBeInTheDocument();
 });
 
 test("a caught-up dispatcher is healthy", () => {

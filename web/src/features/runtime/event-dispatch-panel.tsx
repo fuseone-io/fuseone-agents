@@ -22,8 +22,8 @@ export function EventDispatchPanel({ dispatch }: { dispatch: RuntimeEventDispatc
         {degraded ? t("runtime.eventDispatchDegraded") : t("runtime.eventDispatchHealthy")}
       </Badge>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <Count label={t("runtime.eventDispatchReady")} value={counted(dispatch, dispatch.ready, t)} />
-        <Count label={t("runtime.eventDispatchHeld")} value={counted(dispatch, dispatch.heldByXmin, t)} />
+        <Count label={t("runtime.eventDispatchReady")} value={counted(dispatch.ready, dispatch.readyCapped, t)} />
+        <Count label={t("runtime.eventDispatchHeld")} value={counted(dispatch.heldByXmin, dispatch.heldCapped, t)} />
       </div>
       <div className="mt-4 grid gap-1 text-xs text-muted-foreground">
         <p>
@@ -52,11 +52,11 @@ function Holder({ dispatch }: { dispatch: RuntimeEventDispatch }) {
 
 // A count that stopped at the cap is a lower bound, and says so.
 function counted(
-  dispatch: RuntimeEventDispatch,
   value: number,
+  capped: boolean,
   t: (key: string, values?: Record<string, unknown>) => string,
 ): string {
-  if (dispatch.countCapped && value >= dispatch.countCap) {
+  if (capped) {
     return t("runtime.eventDispatchAtLeast", { count: value });
   }
   return String(value);

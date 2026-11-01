@@ -5064,8 +5064,10 @@ export interface components {
              * @description Finished runs past the cursor that committed after the oldest open transaction began; they wait for it to end.
              */
             heldByXmin: number;
-            /** @description A count stopped at countCap, so the backlog is at least that. Counting stops there so reading the backlog cannot grow with it. */
-            countCapped: boolean;
+            /** @description The ready count stopped at countCap, so it is at least that. Counting stops there so reading the backlog cannot grow with it. */
+            readyCapped: boolean;
+            /** @description The held count stopped at countCap, so it is at least that. */
+            heldCapped: boolean;
             /**
              * Format: int64
              * @description Where ready and heldByXmin stop counting.

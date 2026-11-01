@@ -7919,7 +7919,7 @@ components:
         the database delays dispatch while it is open — it never skips a run.
         Counts and ages only: no run, agent or transaction id. Absent when the
         caller cannot read the installation-wide runtime view.
-      required: [status, ready, heldByXmin, countCapped, countCap, lagSeconds, xactOpen, xactAgeKnown, degradedAfterSeconds]
+      required: [status, ready, heldByXmin, readyCapped, heldCapped, countCap, lagSeconds, xactOpen, xactAgeKnown, degradedAfterSeconds]
       properties:
         status:
           type: string
@@ -7934,9 +7934,12 @@ components:
           type: integer
           format: int64
           description: Finished runs past the cursor that committed after the oldest open transaction began; they wait for it to end.
-        countCapped:
+        readyCapped:
           type: boolean
-          description: A count stopped at countCap, so the backlog is at least that. Counting stops there so reading the backlog cannot grow with it.
+          description: The ready count stopped at countCap, so it is at least that. Counting stops there so reading the backlog cannot grow with it.
+        heldCapped:
+          type: boolean
+          description: The held count stopped at countCap, so it is at least that.
         countCap:
           type: integer
           format: int64

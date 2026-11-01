@@ -175,7 +175,7 @@ func TestEventDispatchBacklog_memoryStopsCountingAtTheCap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EventDispatchBacklog: %v", err)
 	}
-	if got.Ready != domain.EventDispatchCountCap || !got.Capped {
+	if got.Ready != domain.EventDispatchCountCap || !got.ReadyCapped || got.HeldCapped {
 		t.Fatalf("backlog = %+v; want %d and capped", got, domain.EventDispatchCountCap)
 	}
 }

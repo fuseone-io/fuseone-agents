@@ -49,7 +49,7 @@ worker's first sweep and then once a minute:
 |---|---|---|
 | `fuseone_event_dispatch_backlog_runs{state="ready"}` | gauge | Runs waiting for the next sweep. |
 | `fuseone_event_dispatch_backlog_runs{state="held_by_xmin"}` | gauge | Runs held by the oldest open transaction. |
-| `fuseone_event_dispatch_backlog_capped` | gauge | 1 when a count stopped at 1,000: the backlog is at least that. |
+| `fuseone_event_dispatch_backlog_capped{state="ready"\|"held_by_xmin"}` | gauge | 1 when that state's count stopped at 1,000: it is at least that. |
 | `fuseone_event_dispatch_lag_seconds` | gauge | How long the oldest waiting run has waited. |
 | `fuseone_event_dispatch_held_by_xmin` | gauge | 1 while committed runs wait on an open transaction. |
 | `fuseone_event_dispatch_oldest_xact_age_seconds` | gauge | Age of the oldest open transaction holding an id. Omitted when unknown. |
