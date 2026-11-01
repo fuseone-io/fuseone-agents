@@ -63,6 +63,12 @@ recorded: unreachable is not evidence it stopped offering them. After
 narrowing what a server offers — a smaller toolset, a different account —
 check that it shows as reachable before trusting a publish.
 
+A server started with the worker's `--mcp` flag is not in the configuration,
+so there is nothing to delete or switch off. Its tools stay while any worker
+runs it, and leave within about three minutes of the last worker stopping — restarted
+without the flag, or gone. One worker dropping the flag does not remove tools
+another worker still serves. Decisions are kept here too.
+
 ## Installation credential
 
 Use an installation credential when the server acts as a service account:

@@ -65,6 +65,12 @@ de oferecê-las. Depois de estreitar o que um servidor oferece — um toolset
 menor, outra conta —, confira se ele aparece como alcançável antes de confiar
 numa publicação.
 
+Um servidor iniciado com a flag `--mcp` do worker não está na configuração,
+então não há o que apagar nem desligar. As ferramentas dele ficam enquanto
+algum worker o executa e saem em até cerca de três minutos depois que o último para —
+reiniciado sem a flag, ou desligado. Um worker que deixa a flag não remove
+ferramentas que outro worker ainda serve. Aqui também as decisões são mantidas.
+
 ## Credencial da instalação
 
 Use credencial da instalação quando o servidor age como uma conta de serviço:
