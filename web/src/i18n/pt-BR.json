@@ -296,6 +296,8 @@
     "enableTheTool": "Habilitar a ferramenta",
     "enabledHere": "Habilitadas neste agente",
     "enabledOfTotal": "{{enabled}} de {{total}} habilitadas",
+    "eventCycleSelf": "Um agente nunca é iniciado pelo próprio evento.",
+    "eventCycleWarning": "Publicada, mas os eventos desta versão fecham um ciclo: {{cycles}}. Um ciclo intencional é permitido; em execução, a cadeia para depois de {{hops}} saltos.",
     "eventGraph": "Quem dispara quem",
     "fieldArea": "área",
     "fieldBudget": "teto",
