@@ -149,10 +149,12 @@ Not webhooks, yet. The platform's webhook route authenticates with an
 neither, and the route does not verify `X-Hub-Signature-256` or read
 `X-GitHub-Event`. A GitHub adapter is listed below as platform work.
 
-Not agent-to-agent events, yet. `emits`/`event` exist, but only a direct
-self-loop is refused: an A → B → A chain has no hop limit, and the factory's
-developer ⇄ reviewer exchange is exactly that cycle. Until a chain has a depth
-bound, the board is the handoff.
+Not agent-to-agent events, yet. `emits`/`event` exist, and since #203 a chain
+of event-opened runs stops eight hops from the run that started it, with the
+run at the limit recording that its events were withheld — so the factory's
+developer ⇄ reviewer exchange would get four rounds, not a day's budget. The
+roles still wake on the board in v1: event handoff waits for the GitHub
+webhook adapter, and for a case that carries the card across runs.
 
 ## Guardrails
 
@@ -305,7 +307,7 @@ deferred.*
 | A Level 1 developer: GitHub-API commits for small changes | #154 Level 1 | Developer |
 | A coding runtime behind one MCP tool | #154 Level 2: build and test before a PR | Developer and QA beyond chores |
 | A GitHub webhook adapter (signature, delivery id, event filter) | event-driven roles instead of polling | after the pilot |
-| A hop limit on event chains | agent-to-agent handoff | after the pilot |
+| A hop limit on event chains (*done, #203*) | agent-to-agent handoff | after the pilot |
 | A case spanning runs and agents | the card carried across event-opened runs, beyond the claim's key | after the pilot |
 
 ## Measured during the pilot

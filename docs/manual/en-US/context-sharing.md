@@ -72,6 +72,24 @@ Approval does not release the data barrier. The fix is to wire the agents in a
 scope that is allowed to carry the same data, or to publish a broader-scoped
 agent intentionally.
 
+## Event chains stop after eight hops
+
+A run an event opened can publish events of its own, so agents can form a
+chain — and a cycle: A's event starts B, B's event starts A. A chain is
+counted from the run no event opened, and it stops eight hops from it. The
+run at the eighth hop still runs, but the events it declares are not
+published, and its closing step in the trail says so, naming the run that
+started the chain and the limit. Its listeners do not start.
+
+The count is recorded on each run's opening step, so every worker reaches
+the same answer, and an event delivered twice does not count twice. An agent
+that listens to its own event is refused at once.
+
+Eight leaves room for composition designed on purpose — a pipeline of a
+handful of agents, or a review loop that goes round a few times. A chain
+that reaches the limit is usually a cycle nobody meant: look at which agents
+listen to each other before raising it.
+
 ## What to write in the listener
 
 Tell the listener which artifact names matter and when to call the read tool.

@@ -74,6 +74,25 @@ Aprovação não libera a barreira de dados. O conserto é ligar os agentes em u
 escopo que pode carregar o mesmo dado, ou publicar intencionalmente um agente
 em escopo mais amplo.
 
+## Cadeias de eventos param depois de oito saltos
+
+Uma run aberta por um evento pode publicar os próprios eventos, então os
+agentes podem formar uma cadeia — e um ciclo: o evento de A inicia B, o
+evento de B inicia A. A cadeia é contada a partir da run que nenhum evento
+abriu, e para a oito saltos dela. A run no oitavo salto ainda executa, mas os
+eventos que ela declara não são publicados, e o passo de encerramento na
+trilha diz isso, com a run que iniciou a cadeia e o limite. Os listeners dela
+não iniciam.
+
+A contagem fica registrada no passo de abertura de cada run, então todo
+worker chega à mesma resposta, e um evento entregue duas vezes não conta duas
+vezes. Um agente que escuta o próprio evento é recusado na hora.
+
+Oito deixa espaço para composição feita de propósito — um pipeline de poucos
+agentes, ou um ciclo de revisão que dá algumas voltas. Uma cadeia que chega
+ao limite costuma ser um ciclo que ninguém quis: veja quais agentes escutam
+uns aos outros antes de pensar em aumentá-lo.
+
 ## O que escrever no listener
 
 Diga ao listener quais nomes de artefato importam e quando chamar a ferramenta
