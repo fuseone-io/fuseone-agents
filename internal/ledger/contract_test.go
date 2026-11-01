@@ -63,6 +63,7 @@ type Store interface {
 	FinishedSince(ctx context.Context, after domain.FinishCursor, limit int) ([]domain.FinishedRun, error)
 	EventCursor(ctx context.Context) (domain.FinishCursor, error)
 	AdvanceEventCursor(ctx context.Context, to domain.FinishCursor) error
+	EventDispatchBacklog(ctx context.Context) (domain.EventDispatchBacklog, error)
 }
 
 type factory struct {
