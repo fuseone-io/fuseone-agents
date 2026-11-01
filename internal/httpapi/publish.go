@@ -124,6 +124,10 @@ func (s *Server) PublishAgent(
 	if err != nil {
 		return nil, err
 	}
+	cycles, err := s.eventCycleWarning(ctx, published)
+	if err != nil {
+		return nil, err
+	}
 
 	err = s.publisher.Publish(ctx, spec.Publication{
 		Spec: published, By: callerOf(ctx), Company: scope.Company,
@@ -164,9 +168,10 @@ func (s *Server) PublishAgent(
 
 	return openapi.PublishAgent200JSONResponse{
 		AgentId: string(published.ID), VersionId: string(published.Version),
-		Created:    !before[published.Version],
-		Paused:     paused,
-		Definition: ptr(string(definition)),
+		Created:           !before[published.Version],
+		Paused:            paused,
+		Definition:        ptr(string(definition)),
+		EventCycleWarning: cycles,
 	}, nil
 }
 
