@@ -17,18 +17,8 @@ inserted straight into its terminal phase — still reaches the feed. Left
 NULL, the feed would exclude it for ever.
 */
 func TestFinishedSince_aRunFinishedWithoutNamingTheColumn_stillAppears(t *testing.T) {
-	dsn := testdb.DSN(t)
-	if dsn == "" {
-		requireDatabase(t, dsn)
-		t.Skip("TEST_DATABASE_URL is unset")
-	}
-	s := openPostgres(t, dsn)
+	s, pool := feedPool(t)
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
 
 	mustAppend(t, s, step("run-legacy", domain.StepRunStarted))
 	if _, err := pool.Exec(ctx, `update runs set phase = 'finished', ended_at = now(), updated_at = now()
@@ -41,17 +31,12 @@ func TestFinishedSince_aRunFinishedWithoutNamingTheColumn_stillAppears(t *testin
 		t.Fatalf("terminal insert: %v", err)
 	}
 
-	got, err := s.FinishedSince(ctx, domain.FinishCursor{}, 10)
-	if err != nil {
-		t.Fatalf("FinishedSince: %v", err)
-	}
-	ids := map[domain.RunID]bool{}
-	for _, id := range feedIDs(got) {
-		ids[id] = true
-	}
-	if !ids["run-legacy"] || !ids["run-inserted"] {
-		t.Fatalf("feed = %v; want both runs finished without naming finished_xid", feedIDs(got))
-	}
+	// Both were given a position by the database itself (positionOf fails
+	// on a run without one), and the feed offers them in its order.
+	want := []domain.FinishCursor{positionOf(t, s, "run-legacy"), positionOf(t, s, "run-inserted")}
+	settle(t, s, want...)
+	got, w := readFeed(t, s, domain.FinishCursor{}, 10)
+	requireFeedPrefix(t, got, w, want, 10)
 }
 
 // feedPool opens the Postgres ledger and a raw pool on the same database.
@@ -121,13 +106,15 @@ func TestBackfill_offersTheLastHoursFinishedRunsAndNothingOlder(t *testing.T) {
 		t.Fatalf("backfill: %v", err)
 	}
 
-	got, err := s.FinishedSince(ctx, domain.FinishCursor{}, 10)
-	if err != nil {
-		t.Fatalf("FinishedSince: %v", err)
+	var oldPositioned bool
+	if err := pool.QueryRow(ctx, `select finished_xid is not null from runs where run_id = 'run-old'`).
+		Scan(&oldPositioned); err != nil || oldPositioned {
+		t.Fatalf("run-old positioned = %v, %v; the history is not replayed", oldPositioned, err)
 	}
-	if ids := feedIDs(got); len(ids) != 1 || ids[0] != "run-recent" {
-		t.Fatalf("feed after the backfill = %v, want only [run-recent]", ids)
-	}
+	want := []domain.FinishCursor{positionOf(t, s, "run-recent")}
+	settle(t, s, want...)
+	got, w := readFeed(t, s, domain.FinishCursor{}, 10)
+	requireFeedPrefix(t, got, w, want, 10)
 }
 
 /*
@@ -138,18 +125,8 @@ moved the cursor past both positions — and the older run lands behind the
 cursor, never dispatched.
 */
 func TestFinishedSince_aRunCommittedPastAnOpenTransaction_waitsForIt(t *testing.T) {
-	dsn := testdb.DSN(t)
-	if dsn == "" {
-		requireDatabase(t, dsn)
-		t.Skip("TEST_DATABASE_URL is unset")
-	}
-	s := openPostgres(t, dsn)
+	s, pool := feedPool(t)
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
 
 	inFlight, err := pool.Begin(ctx)
 	if err != nil {
@@ -162,6 +139,7 @@ func TestFinishedSince_aRunCommittedPastAnOpenTransaction_waitsForIt(t *testing.
 	}
 	finishRunIn(t, s, "run-later")
 
+	// Held whatever else is open: this test's own transaction is older.
 	held, err := s.FinishedSince(ctx, domain.FinishCursor{}, 10)
 	if err != nil {
 		t.Fatalf("FinishedSince: %v", err)
@@ -173,11 +151,8 @@ func TestFinishedSince_aRunCommittedPastAnOpenTransaction_waitsForIt(t *testing.
 	if err := inFlight.Rollback(ctx); err != nil {
 		t.Fatalf("rollback: %v", err)
 	}
-	released, err := s.FinishedSince(ctx, domain.FinishCursor{}, 10)
-	if err != nil {
-		t.Fatalf("FinishedSince: %v", err)
-	}
-	if got := feedIDs(released); len(got) != 1 || got[0] != "run-later" {
-		t.Fatalf("after the older transaction ended: %v, want [run-later]", got)
-	}
+	want := []domain.FinishCursor{positionOf(t, s, "run-later")}
+	settle(t, s, want...)
+	released, w := readFeed(t, s, domain.FinishCursor{}, 10)
+	requireFeedPrefix(t, released, w, want, 10)
 }

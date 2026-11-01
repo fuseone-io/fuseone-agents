@@ -44,14 +44,18 @@ func TestEventDispatchBacklog_anOpenTransaction_holdsTheRunAndAges(t *testing.T)
 	tx, began := holdXmin(t, pool)
 	finishRunIn(t, s, "run-later")
 
+	// Held whatever else is open on the cluster: this test's transaction is
+	// older than the run, so the run is at or above xmin.
 	held := backlogOf(t, s)
 	if held.HeldByXmin != 1 || held.Ready != 0 || !held.Held() {
 		t.Fatalf("backlog = %+v; want the run held by xmin, none ready", held)
 	}
-	if !held.Xact.Open || !held.Xact.StartedAt.Equal(began) {
-		t.Fatalf("holder = %+v; want the open transaction, begun %v", held.Xact, began)
+	// The holder is the oldest id-holding transaction: this test's own, or
+	// an older one elsewhere — never a younger one, never none.
+	if !held.Xact.Open || held.Xact.StartedAt.IsZero() || held.Xact.StartedAt.After(began) {
+		t.Fatalf("holder = %+v; want a transaction open since %v or earlier", held.Xact, began)
 	}
-	now := began.Add(10 * time.Minute)
+	now := held.Xact.StartedAt.Add(10 * time.Minute)
 	before, _ := held.XactAge(now)
 	after, known := held.XactAge(now.Add(time.Minute))
 	if !known || after-before != time.Minute || before != 10*time.Minute {
@@ -61,9 +65,17 @@ func TestEventDispatchBacklog_anOpenTransaction_holdsTheRunAndAges(t *testing.T)
 	if err := tx.Rollback(ctx); err != nil {
 		t.Fatalf("rollback: %v", err)
 	}
-	released := backlogOf(t, s)
-	if released.HeldByXmin != 0 || released.Ready != 1 {
-		t.Fatalf("after the transaction ended: %+v; want the run ready", released)
+	at := positionOf(t, s, "run-later")
+	settle(t, s, at)
+	var released domain.EventDispatchBacklog
+	w := bracket(t, pool, func() { released = backlogOf(t, s) })
+	switch {
+	case at.Xid < w.lo && (released.Ready != 1 || released.HeldByXmin != 0):
+		t.Fatalf("after the transaction ended: %+v; want the run ready (xmin passed it)", released)
+	case at.Xid >= w.hi && (released.HeldByXmin != 1 || released.Ready != 0):
+		t.Fatalf("after the transaction ended: %+v; want the run still held (xmin has not passed it)", released)
+	case released.Ready+released.HeldByXmin != 1:
+		t.Fatalf("after the transaction ended: %+v; want the one run, ready or held", released)
 	}
 }
 

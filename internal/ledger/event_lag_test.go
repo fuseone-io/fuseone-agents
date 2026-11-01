@@ -3,6 +3,7 @@ package ledger_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -34,12 +35,7 @@ func TestEventDispatchBacklog_countsTheRealFinishedRunsPastTheCursor(t *testing.
 		sim.Payload = []byte(`{"trigger":"manual","simulated":true,"simulation":"batch-1"}`)
 		mustAppend(t, s, sim)
 		mustAppend(t, s, step("run-sim", domain.StepRunFinished))
-
-		page, err := s.FinishedSince(ctx, domain.FinishCursor{}, 10)
-		if err != nil || len(page) != 3 {
-			t.Fatalf("FinishedSince = %v, %v", feedIDs(page), err)
-		}
-		if err := s.AdvanceEventCursor(ctx, page[0].At); err != nil {
+		if err := s.AdvanceEventCursor(ctx, positionOf(t, s, "run-a")); err != nil {
 			t.Fatalf("advance: %v", err)
 		}
 
@@ -47,21 +43,32 @@ func TestEventDispatchBacklog_countsTheRealFinishedRunsPastTheCursor(t *testing.
 		if behind := got.Ready + got.HeldByXmin; behind != 2 {
 			t.Fatalf("behind = %d (%+v), want the two real finished runs past the cursor", behind, got)
 		}
-		if want := page[1].Run.EndedAt; !got.OldestFinishedAt.Equal(want) {
+		if want := endedAt(t, s, "run-b"); !got.OldestFinishedAt.Equal(want) {
 			t.Fatalf("oldest finished at %v, want %v: the first run past the cursor", got.OldestFinishedAt, want)
 		}
 	})
 }
 
+// endedAt is when a run ended, as the run listing reports it.
+func endedAt(t *testing.T, s Store, id domain.RunID) time.Time {
+	t.Helper()
+	runs, err := s.ListRuns(context.Background(), domain.RunFilter{}, "", 100)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	for _, r := range runs {
+		if r.RunID == id {
+			return r.EndedAt
+		}
+	}
+	t.Fatalf("%s is not listed", id)
+	return time.Time{}
+}
+
 func TestEventDispatchBacklog_caughtUp_isEmpty(t *testing.T) {
 	run(t, "nothing waits once the cursor reached the last run", func(t *testing.T, s Store) {
-		ctx := context.Background()
 		finishRunIn(t, s, "run-a")
-		page, err := s.FinishedSince(ctx, domain.FinishCursor{}, 10)
-		if err != nil || len(page) != 1 {
-			t.Fatalf("FinishedSince = %v, %v", feedIDs(page), err)
-		}
-		if err := s.AdvanceEventCursor(ctx, page[0].At); err != nil {
+		if err := s.AdvanceEventCursor(context.Background(), positionOf(t, s, "run-a")); err != nil {
 			t.Fatalf("advance: %v", err)
 		}
 
