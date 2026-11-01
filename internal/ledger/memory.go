@@ -46,6 +46,12 @@ type Memory struct {
 	lastFailure   map[domain.RunID]domain.FailureSummary
 	lastFailureAt map[domain.RunID]time.Time
 
+	// The finished-run feed (#203): the order runs finished in, standing in
+	// for the finishing transaction, and where the dispatcher has got to.
+	finishOrder map[domain.RunID]uint64
+	finishSeq   uint64
+	eventCursor domain.FinishCursor
+
 	// Clock is injectable so lease expiry is testable without sleeping.
 	Clock func() time.Time
 }
@@ -59,6 +65,7 @@ func NewMemory() *Memory {
 		lastError:     make(map[domain.RunID]string),
 		lastFailure:   make(map[domain.RunID]domain.FailureSummary),
 		lastFailureAt: make(map[domain.RunID]time.Time),
+		finishOrder:   make(map[domain.RunID]uint64),
 	}
 }
 
@@ -175,6 +182,10 @@ func (m *Memory) append(
 	}
 
 	m.runs[s.RunID] = append(steps, sealed)
+	if sealed.Kind == domain.StepRunFinished {
+		m.finishSeq++
+		m.finishOrder[sealed.RunID] = m.finishSeq
+	}
 	if sealed.IdemKey != "" {
 		m.idems[sealed.IdemKey] = struct{}{}
 	}

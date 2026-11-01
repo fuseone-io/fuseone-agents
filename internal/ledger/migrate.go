@@ -2,15 +2,11 @@ package ledger
 
 import (
 	"context"
-	"crypto/sha256"
-	"embed"
 	"fmt"
 	"io"
-	"io/fs"
 	"log/slog"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -18,16 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-//go:embed all:sql
-var migrationFS embed.FS
-
 const migrationDigestBoundary = "0081_inbox_run_index"
-
-type embeddedMigration struct {
-	version string
-	body    []byte
-	digest  string
-}
 
 type appliedMigration struct {
 	digest       *string
@@ -71,16 +58,18 @@ func migrationLogger(logger *slog.Logger) *slog.Logger {
 }
 
 func migrate(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error {
-	files, err := fs.Glob(migrationFS, "sql/*.sql")
-	if err != nil {
-		return fmt.Errorf("list migrations: %w", err)
-	}
-	slices.Sort(files)
-	migrations, err := embeddedMigrations(migrationFS, files)
+	migrations, err := loadMigrations()
 	if err != nil {
 		return err
 	}
+	return migrateSet(ctx, pool, migrations, logger)
+}
 
+// migrateSet applies whichever of migrations have not run yet. Production
+// always hands it the whole embedded set; only a test hands it a prefix.
+func migrateSet(
+	ctx context.Context, pool *pgxpool.Pool, migrations []embeddedMigration, logger *slog.Logger,
+) error {
 	// One connection for the whole run: a session-level lock belongs to the
 	// connection that took it, and a pool would hand the unlock to another.
 	conn, err := pool.Acquire(ctx)
@@ -102,8 +91,42 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error
 		_, _ = conn.Exec(unlock, `select pg_advisory_unlock($1)`, migrationLock)
 	}()
 
-	// Bootstrap: the table that records progress cannot record its own
-	// creation, so it is created idempotently before anything is checked.
+	if err := bootstrapSchemaMigrations(ctx, conn); err != nil {
+		return err
+	}
+
+	applied, err := appliedVersions(ctx, conn)
+	if err != nil {
+		return err
+	}
+	if err := validateApplied(migrations, applied, logger); err != nil {
+		return err
+	}
+	if err := baselineLegacy(ctx, conn, applied); err != nil {
+		return err
+	}
+	return applyPending(ctx, conn, migrations, applied)
+}
+
+// applyPending runs, in order, each migration not yet recorded.
+func applyPending(
+	ctx context.Context, conn migrator, migrations []embeddedMigration, applied map[string]appliedMigration,
+) error {
+	for _, migration := range migrations {
+		if _, done := applied[migration.version]; done {
+			continue
+		}
+		if err := applyOne(ctx, conn, migration.version, migration.body, migration.digest); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// bootstrapSchemaMigrations creates the table that records progress. It
+// cannot record its own creation, so it is created idempotently before
+// anything is checked.
+func bootstrapSchemaMigrations(ctx context.Context, conn migrator) error {
 	if _, err := conn.Exec(ctx, `
 		create table if not exists schema_migrations (
 			version    text        not null primary key,
@@ -118,27 +141,6 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error
 		alter table schema_migrations add column if not exists digest_source text
 	`); err != nil {
 		return fmt.Errorf("upgrade schema_migrations: %w", err)
-	}
-
-	applied, err := appliedVersions(ctx, conn)
-	if err != nil {
-		return err
-	}
-	if err := validateApplied(migrations, applied, logger); err != nil {
-		return err
-	}
-	if err := baselineLegacy(ctx, conn, applied); err != nil {
-		return err
-	}
-
-	for _, migration := range migrations {
-		version := migration.version
-		if _, done := applied[version]; done {
-			continue
-		}
-		if err := applyOne(ctx, conn, version, migration.body, migration.digest); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -189,28 +191,6 @@ func appliedVersions(ctx context.Context, conn migrator) (map[string]appliedMigr
 		out[v] = appliedMigration{digest: digest, digestSource: source}
 	}
 	return out, rows.Err()
-}
-
-func embeddedMigrations(filesystem fs.FS, files []string) ([]embeddedMigration, error) {
-	out := make([]embeddedMigration, 0, len(files))
-	for _, file := range files {
-		body, err := fs.ReadFile(filesystem, file)
-		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", file, err)
-		}
-		version := strings.TrimSuffix(strings.TrimPrefix(file, "sql/"), ".sql")
-		out = append(out, embeddedMigration{
-			version: version,
-			body:    body,
-			digest:  digestBytes(body),
-		})
-	}
-	return out, nil
-}
-
-func digestBytes(body []byte) string {
-	digest := sha256.Sum256(body)
-	return fmt.Sprintf("%x", digest[:])
 }
 
 func validateApplied(

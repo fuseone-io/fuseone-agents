@@ -1,3 +1,7 @@
+import {
+  eventChainLine,
+  eventsWithheldLine,
+} from "@/features/runs/event-chain-story";
 import { effectOf, verdictOf } from "@/features/runs/step-verb";
 import { explainRule } from "@/lib/gate-rules";
 import {
@@ -136,9 +140,13 @@ export function detailOf(step: Step): Line {
     }
 
     case "run_started":
-      return typeof payload.trigger === "string"
-        ? { key: "runs.storyTrigger", values: { trigger: payload.trigger } }
-        : NOTHING;
+      // A run an event opened says where it stands in its chain (#203).
+      return (
+        eventChainLine(payload) ??
+        (typeof payload.trigger === "string"
+          ? { key: "runs.storyTrigger", values: { trigger: payload.trigger } }
+          : NOTHING)
+      );
 
     case "gate_decided": {
       // Never "runs.storyRefused": the rule is named and explained, so the
@@ -294,6 +302,10 @@ export function detailOf(step: Step): Line {
         const outcome = inline;
         return { key: "runs.stoppedByException", values: { what: stopped, outcome } };
       }
+      // Outranks how the run closed: the reader looking at the end of a
+      // chain is asking why the next agent never started (#203).
+      const withheld = eventsWithheldLine(payload);
+      if (withheld) return withheld;
       if (reason === "no_tool_call") {
         return inline
           ? { key: "runs.finishedByNoToolCallWithOutcome", values: { outcome: inline } }

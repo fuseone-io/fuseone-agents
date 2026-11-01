@@ -85,6 +85,10 @@ type Request struct {
 	// operator asked to run from it (#16). An id and nothing else: the trail
 	// points at the source, it does not copy it.
 	SourceRun domain.RunID
+	// Chain is where a run an event opens stands in the chain of runs events
+	// opened (#203). Set by the dispatcher alone, from the source run's own
+	// recorded start, and sealed so the next hop reads it from the ledger.
+	Chain *domain.EventChain
 }
 
 // ErrUnknownAgent means nothing is published under that id.
@@ -202,6 +206,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 			Case: req.Case, Origin: req.Origin, Ticket: ticket,
 			ContextArtifacts: cloneContextArtifacts(req.ContextArtifacts),
 			SourceRun:        req.SourceRun,
+			Chain:            req.Chain,
 		}),
 	})
 	if err != nil {

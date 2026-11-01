@@ -52,6 +52,10 @@ type RunStartedPayload struct {
 	// approvals, reservations and outcome are its own, and nothing of them
 	// travels here.
 	SourceRun RunID `json:"source_run,omitempty"`
+	// Chain is where this run stands among runs events opened one after
+	// another, when an event opened it (#203). Absent on every other run,
+	// which is the root of any chain its events start.
+	Chain *EventChain `json:"chain,omitempty"`
 }
 
 /*
@@ -498,4 +502,7 @@ type RunFinishedPayload struct {
 	// is immutable — inline, an erasure request could never reach it (#165).
 	HeadlineRef    string `json:"headline_ref,omitempty"`
 	HeadlineDigest string `json:"headline_digest,omitempty"`
+	// EventsWithheld says this run's declared events will not be published,
+	// and why — so a listener that never started has a recorded reason (#203).
+	EventsWithheld *EventsWithheld `json:"events_withheld,omitempty"`
 }

@@ -98,7 +98,7 @@ func dispatchEvents(ctx context.Context, dispatcher *trigger.Dispatcher) {
 	defer ticker.Stop()
 
 	for {
-		if opened, err := dispatcher.Sweep(ctx, trigger.Window); err != nil {
+		if opened, err := dispatcher.Sweep(ctx, trigger.Page); err != nil {
 			slog.Error("event dispatch failed", "err", err)
 		} else if opened > 0 {
 			slog.Info("events opened runs", "runs", opened)

@@ -94,6 +94,9 @@ func (r *Resolver) Resolve(ctx context.Context, agent domain.AgentID, version do
 			// The engine reads it here and nowhere else: dropped, the
 			// registry keeps the line and every grant still releases.
 			StandingApprovals: spec.StandingApprovals,
+			// Read at the finish, where a run at the end of an event chain
+			// records that its events will not be published (#203).
+			PublishesEvents: len(spec.Emits) > 0,
 		},
 		Planner:  planner,
 		Fallback: r.fallback(spec),

@@ -329,6 +329,10 @@ type Start struct {
 	// no grant given ahead of time may release a call of this run: every park
 	// waits for a person (#192).
 	StandingApprovals domain.StandingPolicy
+	// PublishesEvents says the definition declares events. A run at the end
+	// of an event chain records on its closing step that they will not be
+	// published (#203); one that declares none has nothing to withhold.
+	PublishesEvents bool
 }
 
 // Status is the outcome of one Advance.

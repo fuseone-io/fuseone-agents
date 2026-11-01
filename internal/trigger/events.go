@@ -30,78 +30,134 @@ source run, the event and the target, so a second pass reaches the run the
 first one already opened.
 */
 
-// Subscriptions is who publishes and who listens, declared here by the
-// consumer and read from the published specifications.
+/*
+Subscriptions is who publishes and who listens, declared here by the consumer
+and read from the published specifications.
+
+What a run publishes is what the version it was pinned to declares — the
+same version the engine resolved the run from, and the one it judged its
+withheld record by. Asking the latest version instead would let a publish in
+the middle of a run make the two disagree, either way: a run that emitted
+when it started stops emitting, or one that did not starts to. Who listens is
+read from the versions published now: a listener chooses to start from an
+event when it is published, and a run is opened from the version current
+when it opens.
+*/
 type Subscriptions interface {
-	// Emitters maps an agent to the events it publishes.
-	Emitters(ctx context.Context) (map[domain.AgentID][]domain.AgentEvent, error)
+	// EmitsOf is what one published version of an agent declares its
+	// finished runs publish.
+	EmitsOf(ctx context.Context, agent domain.AgentID, version domain.VersionID) ([]domain.AgentEvent, error)
 	// Listeners maps an event to the agents it starts.
-	Listeners(ctx context.Context) (map[string][]domain.AgentID, error)
+	Listeners(ctx context.Context) (map[string][]domain.EventListener, error)
 }
 
-// Finished lists the runs that have ended well since a moment.
-type Finished interface {
-	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
-}
+/*
+Feed is the finished runs the dispatcher works through, and where it has got
+to (#203).
 
-type RunReader interface {
-	Read(ctx context.Context, runID domain.RunID, fromSeq int64) ([]domain.Step, error)
+It used to read the thirty newest finished runs on every sweep and remember
+nothing: the thirty-first to finish between two sweeps was never dispatched.
+Now it reads forward from a durable cursor — in the order the finishing
+transactions were allocated their ids, below a boundary where that order is
+stable (see domain.FinishCursor) — and moves the cursor only once every run of a page has been dispatched or
+refused — so a page that fails is read again, and nothing is left behind.
+Two replicas may dispatch the same page; the idempotency key of each opened
+run makes the second a no-op, and the cursor keeps the furthest of their
+advances.
+*/
+type Feed interface {
+	FinishedSince(ctx context.Context, after domain.FinishCursor, limit int) ([]domain.FinishedRun, error)
+	EventCursor(ctx context.Context) (domain.FinishCursor, error)
+	AdvanceEventCursor(ctx context.Context, to domain.FinishCursor) error
+	// StartsAndFinishes reads, for a batch of finished runs, only each run's
+	// opening and closing steps: what opened it and its chain, and what it
+	// published. One read per page rather than every step of every run.
+	StartsAndFinishes(ctx context.Context, runs []domain.RunSummary) (map[domain.RunID][]domain.Step, error)
 }
 
 // Dispatcher opens the runs that finished runs imply.
 type Dispatcher struct {
 	subs   Subscriptions
-	runs   Finished
-	reader RunReader
+	feed   Feed
 	opener *Opener
 	clock  Clock
 	log    *slog.Logger
 }
 
-func NewDispatcher(subs Subscriptions, runs Finished, opener *Opener, clock Clock, log *slog.Logger) *Dispatcher {
+func NewDispatcher(subs Subscriptions, feed Feed, opener *Opener, clock Clock, log *slog.Logger) *Dispatcher {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Dispatcher{subs: subs, runs: runs, opener: opener, clock: clock, log: log}
+	return &Dispatcher{subs: subs, feed: feed, opener: opener, clock: clock, log: log}
 }
 
-func (d *Dispatcher) WithRunReader(reader RunReader) *Dispatcher {
-	d.reader = reader
-	return d
-}
+// Page is how many finished runs a sweep reads at a time. A sweep reads page
+// after page until it has caught up, so this bounds one read, not how much
+// a sweep can dispatch.
+const Page = 30
 
-// Window is how far back a sweep looks. Generous next to the sweep interval,
-// so a pass that failed or a process that restarted still catches what
-// finished while it was away.
-const Window = 30
-
-// Sweep publishes the events of recently finished runs and returns how many
-// runs it opened.
+// Sweep publishes the events of the runs that finished since the cursor,
+// page after page until it has caught up, and returns how many runs it
+// opened. A page that fails leaves the cursor where it was.
 func (d *Dispatcher) Sweep(ctx context.Context, limit int) (int, error) {
-	emitters, err := d.subs.Emitters(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("trigger: read emitters: %w", err)
-	}
-	if len(emitters) == 0 {
-		return 0, nil
-	}
 	listeners, err := d.subs.Listeners(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("trigger: read listeners: %w", err)
 	}
-	if len(listeners) == 0 {
-		return 0, nil
-	}
-
-	finished, err := d.runs.ListRuns(ctx, domain.RunFilter{}, "finished", limit)
-	if err != nil {
-		return 0, fmt.Errorf("trigger: list finished runs: %w", err)
-	}
-
 	opened := 0
-	for _, run := range finished {
-		for _, event := range emitters[run.AgentID] {
-			n, err := d.publish(ctx, run, event, listeners[event.Event])
+	for {
+		cursor, err := d.feed.EventCursor(ctx)
+		if err != nil {
+			return opened, fmt.Errorf("trigger: read event cursor: %w", err)
+		}
+		page, err := d.feed.FinishedSince(ctx, cursor, limit)
+		if err != nil || len(page) == 0 {
+			return opened, wrapFeed(err)
+		}
+		n, err := d.dispatchPage(ctx, page, listeners)
+		opened += n
+		if err != nil {
+			return opened, err
+		}
+		if err := d.feed.AdvanceEventCursor(ctx, page[len(page)-1].At); err != nil {
+			return opened, fmt.Errorf("trigger: advance event cursor: %w", err)
+		}
+		if len(page) < limit {
+			return opened, nil
+		}
+	}
+}
+
+func wrapFeed(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("trigger: read finished runs: %w", err)
+}
+
+// dispatchPage opens the runs one page of finished runs implies.
+func (d *Dispatcher) dispatchPage(
+	ctx context.Context, page []domain.FinishedRun, listeners map[string][]domain.EventListener,
+) (int, error) {
+	pending, err := d.candidates(ctx, page, listeners)
+	if err != nil || len(pending) == 0 {
+		return 0, err
+	}
+	steps, err := d.feed.StartsAndFinishes(ctx, summaries(pending))
+	if err != nil {
+		return 0, fmt.Errorf("trigger: read source runs: %w", err)
+	}
+	opened := 0
+	for _, c := range pending {
+		src, ok, err := d.sourceOf(c.run, steps[c.run.RunID])
+		if err != nil {
+			return opened, err
+		}
+		if !ok {
+			continue
+		}
+		for _, event := range c.events {
+			n, err := d.publish(ctx, src, event, listeners[event.Event])
 			if err != nil {
 				return opened, err
 			}
@@ -113,18 +169,15 @@ func (d *Dispatcher) Sweep(ctx context.Context, limit int) (int, error) {
 
 // publish opens one run per listener.
 func (d *Dispatcher) publish(
-	ctx context.Context, source domain.RunSummary, event domain.AgentEvent, listeners []domain.AgentID,
+	ctx context.Context, src source, event domain.AgentEvent, listeners []domain.EventListener,
 ) (int, error) {
-	if len(listeners) == 0 {
-		return 0, nil
-	}
-	artifacts, err := d.contextArtifacts(ctx, source, event)
+	artifacts, err := contextArtifacts(src.run, src.steps, event)
 	if err != nil {
 		return 0, err
 	}
 	opened := 0
-	for _, agent := range listeners {
-		created, err := d.openListener(ctx, source, event, agent, artifacts)
+	for _, listener := range listeners {
+		created, err := d.openListener(ctx, src, event, listener, artifacts)
 		if err != nil {
 			return opened, err
 		}
@@ -136,19 +189,26 @@ func (d *Dispatcher) publish(
 }
 
 func (d *Dispatcher) openListener(
-	ctx context.Context, source domain.RunSummary, event domain.AgentEvent,
-	agent domain.AgentID, artifacts []domain.ContextArtifact,
+	ctx context.Context, src source, event domain.AgentEvent,
+	listener domain.EventListener, artifacts []domain.ContextArtifact,
 ) (bool, error) {
+	agent := listener.Agent
 	// An agent that listens to what it publishes would trigger itself for
-	// ever. Refused here as well as at authoring time, because cycles can be
-	// formed across two agents and only the dispatcher sees the whole graph.
-	if agent == source.AgentID {
+	// ever. Refused at once rather than after MaxEventHops runs: a cycle of
+	// one is never what anybody meant.
+	if agent == src.run.AgentID {
 		return false, nil
 	}
+	next := src.next
 	result, err := d.opener.Open(ctx, Request{
-		Agent: agent, IdemKey: fmt.Sprintf("event:%s:%s:%s", source.RunID, event.Event, agent),
-		Trigger: "event", By: source.OnBehalfOf, Input: inputFor(source, event, artifacts),
-		Labels: source.Labels.Clone(), ContextArtifacts: artifacts,
+		Agent: agent, IdemKey: fmt.Sprintf("event:%s:%s:%s", src.run.RunID, event.Event, agent),
+		Trigger: domain.TriggerEvent, By: src.run.OnBehalfOf, Input: inputFor(src.run, event, artifacts),
+		Labels: src.run.Labels.Clone(), ContextArtifacts: artifacts, Chain: &next,
+		// The version that listened when the event went out. A publish that
+		// stopped listening since must not start the version that never
+		// asked; a superseded listening version still opens, because it is
+		// the one that chose to start from this event.
+		Version: listener.Version,
 	})
 	if err != nil {
 		if isRefusal(err) {
@@ -159,7 +219,7 @@ func (d *Dispatcher) openListener(
 	}
 	if result.Created {
 		d.log.Info("event opened a run",
-			"event", event.Event, "from", source.RunID, "agent", agent, "run", result.RunID)
+			"event", event.Event, "from", src.run.RunID, "agent", agent, "run", result.RunID)
 	}
 	return result.Created, nil
 }
@@ -189,96 +249,6 @@ func inputFor(source domain.RunSummary, event domain.AgentEvent, artifacts []dom
 		panic(fmt.Sprintf("trigger: encode event input: %v", err))
 	}
 	return data
-}
-
-func (d *Dispatcher) contextArtifacts(
-	ctx context.Context, source domain.RunSummary, event domain.AgentEvent,
-) ([]domain.ContextArtifact, error) {
-	if d.reader == nil || len(event.Artifacts) == 0 {
-		return nil, nil
-	}
-	steps, err := d.reader.Read(ctx, source.RunID, domain.FirstSeq)
-	if err != nil {
-		return nil, fmt.Errorf("trigger: read source run %s for context: %w", source.RunID, err)
-	}
-	published, err := publishedArtifacts(source, steps)
-	if err != nil {
-		return nil, err
-	}
-	if len(published) == 0 {
-		return nil, nil
-	}
-
-	out := make([]domain.ContextArtifact, 0, len(event.Artifacts))
-	for _, name := range event.Artifacts {
-		if artifact, ok := published[name]; ok {
-			out = append(out, artifact)
-		}
-	}
-	return out, nil
-}
-
-func publishedArtifacts(
-	source domain.RunSummary, steps []domain.Step,
-) (map[string]domain.ContextArtifact, error) {
-	out := map[string]domain.ContextArtifact{}
-	for _, step := range steps {
-		if step.Kind != domain.StepRunFinished {
-			continue
-		}
-		var p domain.RunFinishedPayload
-		if err := json.Unmarshal(step.Payload, &p); err != nil {
-			return nil, fmt.Errorf("trigger: decode finished payload of %s: %w", source.RunID, err)
-		}
-		if artifact, ok := finalAnswerArtifact(source, p); ok {
-			out[artifact.Name] = artifact
-		}
-		for _, artifact := range p.Artifacts {
-			if artifact, ok := normalizeArtifact(source, artifact); ok {
-				out[artifact.Name] = artifact
-			}
-		}
-	}
-	return out, nil
-}
-
-func finalAnswerArtifact(
-	source domain.RunSummary, p domain.RunFinishedPayload,
-) (domain.ContextArtifact, bool) {
-	if p.OutcomeRef == "" || p.OutcomeDigest == "" {
-		return domain.ContextArtifact{}, false
-	}
-	return domain.ContextArtifact{
-		Name: domain.ArtifactFinalAnswer, Kind: "text",
-		Ref: p.OutcomeRef, Digest: p.OutcomeDigest,
-		SourceRun: source.RunID, SourceAgent: source.AgentID,
-		Labels: source.Labels.Clone(),
-	}, true
-}
-
-func normalizeArtifact(
-	source domain.RunSummary, artifact domain.ContextArtifact,
-) (domain.ContextArtifact, bool) {
-	if artifact.Name == "" || artifact.Ref == "" || artifact.Digest == "" {
-		return domain.ContextArtifact{}, false
-	}
-	artifact.SourceRun = firstRun(artifact.SourceRun, source.RunID)
-	if artifact.SourceAgent == "" {
-		artifact.SourceAgent = source.AgentID
-	}
-	if len(artifact.Labels) == 0 {
-		artifact.Labels = source.Labels.Clone()
-	} else {
-		artifact.Labels = artifact.Labels.Clone()
-	}
-	return artifact, true
-}
-
-func firstRun(value, fallback domain.RunID) domain.RunID {
-	if value != "" {
-		return value
-	}
-	return fallback
 }
 
 // isRefusal reports whether the opener declined for a configured reason.
