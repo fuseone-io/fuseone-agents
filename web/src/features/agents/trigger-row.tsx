@@ -14,8 +14,10 @@ import {
   emptyTrigger,
   fieldOf,
   incomplete,
+  needsEvents,
   type TriggerKind,
 } from "@/features/agents/trigger-kinds";
+import { WebhookSourceField } from "@/features/agents/webhook-source-field";
 import type { AgentTrigger } from "@/lib/api/client";
 
 /** One trigger: its kind, the one thing that kind needs, and a way out. */
@@ -73,10 +75,13 @@ export function TriggerRow({
               value={String(trigger[field] ?? "")}
               onChange={(e) => onChange({ [field]: e.target.value })}
             />
-            {incomplete(trigger) && (
+            {incomplete(trigger) && !needsEvents(trigger) && (
               <p className="text-2xs text-warning">
                 {t(`agents.triggerNeeds.${kind}`)}
               </p>
+            )}
+            {kind === "webhook" && (
+              <WebhookSourceField trigger={trigger} onChange={onChange} />
             )}
           </>
         )}

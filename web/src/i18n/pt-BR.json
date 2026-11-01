@@ -720,7 +720,18 @@
     "writeFirst": "Escreva as instruções primeiro. As etapas são uma leitura delas — sem texto, não há o que ler.",
     "writeIt": "Escrever",
     "writeTheNextStep": "Escrever o próximo passo",
-    "zeroIsNoCeiling": "Zero é sem teto, o que é diferente de um teto de zero."
+    "zeroIsNoCeiling": "Zero é sem teto, o que é diferente de um teto de zero.",
+    "webhookSource": {
+      "label": "Enviado por",
+      "any": "Qualquer remetente (segredo no cabeçalho)",
+      "github": "GitHub (entrega assinada)",
+      "events": "Eventos do GitHub",
+      "eventsExample": "pull_request.opened, issues.labeled",
+      "needsEvents": "Nomeie os eventos que iniciam uma execução: sem eles, toda entrega do GitHub iniciaria uma."
+    },
+    "fromGitHub": "GitHub",
+    "githubSecretField": "Campo Secret do webhook no GitHub",
+    "githubDeliveryExplains": "No GitHub, cole este endereço em Payload URL, escolha <code>application/json</code> em Content type e cole a chave em Secret. O GitHub assina cada entrega com ela; a chave nunca é enviada."
   },
   "approvals": {
     "actionDenied": "Ação negada",
@@ -2275,7 +2286,8 @@
     "memory-secret": "Esse texto contém uma chave privada ou um token de acesso completo. A memória é citada de volta para os agentes e guardada por anos, então não pode conter um.",
     "memory-secret-warned": "Parte desse texto é longa e aleatória o bastante para ser uma credencial. Confira e, se não for, confirme.",
     "standing-forbidden": "A definição de {{detail}} proíbe aprovações permanentes: toda aprovação que ele pedir espera uma pessoa. Mude isso no agente, não aqui.",
-    "source-input-erased": "A entrada que esta execução registrou foi apagada ou expirou, então nenhuma execução foi aberta. Ela não pode ser recuperada."
+    "source-input-erased": "A entrada que esta execução registrou foi apagada ou expirou, então nenhuma execução foi aberta. Ela não pode ser recuperada.",
+    "no-master-key": "Este webhook vem do GitHub e a instalação não tem chave mestra (FUSEONE_MASTER_KEY). Sem ela, a chave só poderia ser guardada às claras, então o webhook continua fechado até a chave mestra ser configurada."
   },
   "retention": {
     "byDefault": "padrão, ninguém escolheu",
