@@ -37,10 +37,12 @@ func (d *Dispatcher) candidates(
 	return out, nil
 }
 
-func runIDs(pending []candidate) []domain.RunID {
-	out := make([]domain.RunID, len(pending))
+// summaries is the candidates as the ledger addresses them: id and the
+// moment each opened, which is how their steps are partitioned.
+func summaries(pending []candidate) []domain.RunSummary {
+	out := make([]domain.RunSummary, len(pending))
 	for i, c := range pending {
-		out[i] = c.run.RunID
+		out[i] = c.run
 	}
 	return out
 }

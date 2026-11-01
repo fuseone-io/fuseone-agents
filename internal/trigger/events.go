@@ -71,7 +71,7 @@ type Feed interface {
 	// StartsAndFinishes reads, for a batch of finished runs, only each run's
 	// opening and closing steps: what opened it and its chain, and what it
 	// published. One read per page rather than every step of every run.
-	StartsAndFinishes(ctx context.Context, runs []domain.RunID) (map[domain.RunID][]domain.Step, error)
+	StartsAndFinishes(ctx context.Context, runs []domain.RunSummary) (map[domain.RunID][]domain.Step, error)
 }
 
 // Dispatcher opens the runs that finished runs imply.
@@ -142,7 +142,7 @@ func (d *Dispatcher) dispatchPage(
 	if err != nil || len(pending) == 0 {
 		return 0, err
 	}
-	steps, err := d.feed.StartsAndFinishes(ctx, runIDs(pending))
+	steps, err := d.feed.StartsAndFinishes(ctx, summaries(pending))
 	if err != nil {
 		return 0, fmt.Errorf("trigger: read source runs: %w", err)
 	}
