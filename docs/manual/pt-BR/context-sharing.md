@@ -125,7 +125,9 @@ publicados, a versão é publicada mesmo assim, e o Studio mostra um aviso com
 todos os agentes do laço, voltando ao que você publicou:
 `developer → reviewer → developer`. Vários laços aparecem do mais curto para
 o mais longo, depois pelo nome, então publicar a mesma coisa duas vezes dá o
-mesmo texto.
+mesmo texto. A lista tem limite, tanto em quantos laços nomeia quanto em
+quanto do grafo percorre; quando para em algum dos dois, diz que pode haver
+mais, e sempre nomeia pelo menos o mais curto.
 
 É um aviso, não uma recusa. Um ciclo de revisão é um ciclo de propósito; o
 aviso existe para que um ciclo que ninguém quis seja notado antes de uma

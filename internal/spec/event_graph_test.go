@@ -41,7 +41,7 @@ func TestEventGraphWith_theDraftReplacesItsAgentsCurrentEdges(t *testing.T) {
 
 	got := spec.EventGraphWith(published, draft("dev", []string{"code.ready"}, "review.done"))
 
-	want := domain.EventCyclesThrough(got, "dev")
+	want := domain.EventCyclesThrough(got, "dev").Cycles
 	if !reflect.DeepEqual(want, []domain.EventCycle{{"dev", "review"}}) {
 		t.Fatalf("cycles through the draft = %v, want dev → review → dev", want)
 	}
@@ -73,7 +73,7 @@ func TestEventGraphWith_theCurrentVersionAgain_leavesTheCyclesAsTheyWere(t *test
 
 	got := spec.EventGraphWith(published, draft("dev", []string{"code.ready"}, "review.done"))
 
-	if cycles := domain.EventCyclesThrough(got, "dev"); len(cycles) != 1 {
+	if cycles := domain.EventCyclesThrough(got, "dev").Cycles; len(cycles) != 1 {
 		t.Errorf("cycles = %v, want the one dev already closed", cycles)
 	}
 }

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -93,5 +94,25 @@ func TestPublishAgent_theGraphCannotBeRead_writesNothing(t *testing.T) {
 
 	if err == nil || len(pub.published) != 0 {
 		t.Errorf("err = %v, published = %d; want an error and nothing written", err, len(pub.published))
+	}
+}
+
+// More cycles than one answer names: the answer says the list stops short,
+// so nobody reads sixteen loops as all of them.
+func TestPublishAgent_closesMoreCyclesThanTheAnswerNames_saysItIsTruncated(t *testing.T) {
+	t.Parallel()
+	var many graph
+	for i := range domain.MaxEventCycles + 4 {
+		reviewer := domain.AgentID(fmt.Sprintf("reviewer-%02d", i))
+		many.edges = append(many.edges,
+			domain.EventEdge{From: "developer", Event: "code.ready", To: reviewer},
+			domain.EventEdge{From: reviewer, Event: "review.done", To: "developer"})
+	}
+
+	got, _ := publishWithGraph(t, many, "developer", emitsAndListens("code.ready", "review.done"))
+
+	if got.EventCycleWarning == nil || !got.EventCycleWarning.Truncated ||
+		len(got.EventCycleWarning.Cycles) != domain.MaxEventCycles {
+		t.Errorf("warning = %+v, want %d cycles, said to be truncated", got.EventCycleWarning, domain.MaxEventCycles)
 	}
 }

@@ -4845,6 +4845,12 @@ export interface components {
              *     name, and bounded: a dense graph names its first few.
              */
             cycles: string[][];
+            /**
+             * @description True when the search stopped at its bound — on the number of cycles
+             *     it names or on the work it may do — so the cycles listed may not be
+             *     all there are.
+             */
+            truncated: boolean;
             /** @description How many hops from its root an event chain may reach. */
             hopLimit: number;
         };

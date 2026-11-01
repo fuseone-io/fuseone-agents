@@ -121,7 +121,9 @@ starts on — closes a loop with the agents already published, the version is
 still published, and the Studio shows a warning that names every agent in
 the loop, back to the one you published: `developer → reviewer → developer`.
 Several loops are listed shortest first, then by name, so publishing the
-same thing twice reads the same.
+same thing twice reads the same. The list is bounded, both in how many loops
+it names and in how much of the graph it searches; when it stops at either
+bound it says there may be more, and it always names at least the shortest.
 
 It is a warning, not a refusal. A review loop is a cycle on purpose; the
 warning is there so that one nobody meant is noticed before a chain reaches

@@ -28,11 +28,14 @@ export function eventCycleMessage(
   const cycles = new Intl.ListFormat(locale, { type: "conjunction" }).format(
     loops,
   );
-  const message = t("agents.eventCycleWarning", {
-    cycles,
-    hops: warning.hopLimit,
-  });
-  return warning.cycles.some((agents) => agents.length === 1)
-    ? `${message} ${t("agents.eventCycleSelf")}`
-    : message;
+  const sentences = [
+    t("agents.eventCycleWarning", { cycles, hops: warning.hopLimit }),
+  ];
+  // The server stops at a bound on what it names and on the work it does;
+  // a list cut there must not read as every loop there is.
+  if (warning.truncated) sentences.push(t("agents.eventCycleTruncated"));
+  if (warning.cycles.some((agents) => agents.length === 1)) {
+    sentences.push(t("agents.eventCycleSelf"));
+  }
+  return sentences.join(" ");
 }

@@ -85,7 +85,11 @@ describe("publishing a version that closes an event cycle", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("publishes, and warns naming every agent in the cycle", async () => {
-    serve({ cycles: [["developer", "reviewer"]], hopLimit: 8 });
+    serve({
+      cycles: [["developer", "reviewer"]],
+      truncated: false,
+      hopLimit: 8,
+    });
 
     await publish();
 

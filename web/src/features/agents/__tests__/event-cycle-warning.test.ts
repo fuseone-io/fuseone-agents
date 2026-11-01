@@ -8,7 +8,7 @@ const en = i18next.getFixedT("en-US");
 describe("the warning a publish that closes an event cycle shows", () => {
   it("names every agent in the cycle and comes back to the first", () => {
     const message = eventCycleMessage(
-      { cycles: [["dev", "revisor", "qa"]], hopLimit: 8 },
+      { cycles: [["dev", "revisor", "qa"]], truncated: false, hopLimit: 8 },
       pt,
       "pt-BR",
     );
@@ -19,7 +19,7 @@ describe("the warning a publish that closes an event cycle shows", () => {
 
   it("says the same in English", () => {
     const message = eventCycleMessage(
-      { cycles: [["dev", "reviewer"]], hopLimit: 8 },
+      { cycles: [["dev", "reviewer"]], truncated: false, hopLimit: 8 },
       en,
       "en-US",
     );
@@ -35,6 +35,7 @@ describe("the warning a publish that closes an event cycle shows", () => {
           ["a", "b"],
           ["a", "c", "d"],
         ],
+        truncated: false,
         hopLimit: 8,
       },
       pt,
@@ -46,13 +47,33 @@ describe("the warning a publish that closes an event cycle shows", () => {
 
   it("says an agent is never started by its own event", () => {
     const message = eventCycleMessage(
-      { cycles: [["dev"]], hopLimit: 8 },
+      { cycles: [["dev"]], truncated: false, hopLimit: 8 },
       en,
       "en-US",
     );
 
     expect(message).toContain("dev → dev");
     expect(message).toMatch(/never started by its own event/);
+  });
+
+  it("says when the list stops short of every cycle", () => {
+    const message = eventCycleMessage(
+      { cycles: [["a", "b"]], truncated: true, hopLimit: 8 },
+      pt,
+      "pt-BR",
+    );
+
+    expect(message).toMatch(/podem não ser todos/);
+  });
+
+  it("says nothing of a short list when the list is whole", () => {
+    const message = eventCycleMessage(
+      { cycles: [["a", "b"]], truncated: false, hopLimit: 8 },
+      en,
+      "en-US",
+    );
+
+    expect(message).not.toMatch(/may not be all/);
   });
 
   it("says nothing when the publish closed no cycle", () => {

@@ -32,12 +32,14 @@ func (s *Server) eventCycleWarning(ctx context.Context, published spec.Spec) (*o
 	if err != nil {
 		return nil, fmt.Errorf("read the event graph for %s: %w", published.ID, err)
 	}
-	cycles := domain.EventCyclesThrough(spec.EventGraphWith(edges, published), published.ID)
-	if len(cycles) == 0 {
+	search := domain.EventCyclesThrough(spec.EventGraphWith(edges, published), published.ID)
+	if len(search.Cycles) == 0 {
 		return nil, nil
 	}
-	out := &openapi.EventCycleWarning{Cycles: make([][]string, 0, len(cycles)), HopLimit: domain.MaxEventHops}
-	for _, cycle := range cycles {
+	out := &openapi.EventCycleWarning{
+		Cycles: make([][]string, 0, len(search.Cycles)), Truncated: search.Truncated, HopLimit: domain.MaxEventHops,
+	}
+	for _, cycle := range search.Cycles {
 		agents := make([]string, len(cycle))
 		for i, agent := range cycle {
 			agents[i] = string(agent)

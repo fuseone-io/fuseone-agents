@@ -297,6 +297,7 @@
     "enabledHere": "Habilitadas neste agente",
     "enabledOfTotal": "{{enabled}} de {{total}} habilitadas",
     "eventCycleSelf": "Um agente nunca é iniciado pelo próprio evento.",
+    "eventCycleTruncated": "Pode haver mais ciclos: os listados podem não ser todos.",
     "eventCycleWarning": "Publicada, mas os eventos desta versão fecham um ciclo: {{cycles}}. Um ciclo intencional é permitido; em execução, a cadeia para depois de {{hops}} saltos.",
     "eventGraph": "Quem dispara quem",
     "fieldArea": "área",

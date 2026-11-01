@@ -7675,7 +7675,7 @@ components:
         back to start it again. A warning, never a refusal — a review loop is
         a cycle on purpose — and at run time the chain stops hopLimit hops
         from the run that started it.
-      required: [cycles, hopLimit]
+      required: [cycles, truncated, hopLimit]
       properties:
         cycles:
           type: array
@@ -7686,6 +7686,12 @@ components:
           items:
             type: array
             items: { type: string }
+        truncated:
+          type: boolean
+          description: |
+            True when the search stopped at its bound — on the number of cycles
+            it names or on the work it may do — so the cycles listed may not be
+            all there are.
         hopLimit:
           type: integer
           description: How many hops from its root an event chain may reach.

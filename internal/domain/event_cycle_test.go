@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -44,6 +45,11 @@ func TestEventCyclesThrough_closedPaths_namedFromTheAgentInAStableOrder(t *testi
 			want:  []EventCycle{{"a"}},
 		},
 		{
+			name:  "its own event and a loop through another, the cycle of one first",
+			edges: []EventEdge{edge("a", "x", "b"), edge("b", "y", "a"), edge("a", "x", "a")},
+			want:  []EventCycle{{"a"}, {"a", "b"}},
+		},
+		{
 			name: "a chain that never comes back",
 			edges: []EventEdge{
 				edge("a", "x", "b"), edge("b", "y", "c"), edge("", "w", "a"), edge("c", "z", ""),
@@ -70,7 +76,7 @@ func TestEventCyclesThrough_closedPaths_namedFromTheAgentInAStableOrder(t *testi
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if got := EventCyclesThrough(tc.edges, through(tc.through)); !reflect.DeepEqual(got, tc.want) {
+			if got := EventCyclesThrough(tc.edges, through(tc.through)).Cycles; !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("cycles = %v, want %v", got, tc.want)
 			}
 		})
@@ -83,7 +89,7 @@ func TestEventCyclesThrough_aCycleElsewhere_isNotThisAgents(t *testing.T) {
 	t.Parallel()
 	edges := []EventEdge{edge("a", "x", "b"), edge("b", "y", "c"), edge("c", "z", "b")}
 
-	if got := EventCyclesThrough(edges, "a"); got != nil {
+	if got := EventCyclesThrough(edges, "a").Cycles; got != nil {
 		t.Errorf("cycles = %v, want none through a", got)
 	}
 }
@@ -119,7 +125,86 @@ func TestEventCyclesThrough_aDenseGraph_stopsAtTheBound(t *testing.T) {
 		}
 	}
 
-	if got := EventCyclesThrough(edges, "a"); len(got) != MaxEventCycles {
-		t.Errorf("cycles = %d, want the bound %d", len(got), MaxEventCycles)
+	got := EventCyclesThrough(edges, "a")
+	if len(got.Cycles) != MaxEventCycles || !got.Truncated {
+		t.Errorf("cycles = %d (truncated %v), want the bound %d, said to be truncated",
+			len(got.Cycles), got.Truncated, MaxEventCycles)
+	}
+}
+
+// numbered is n agents named so their order is their number.
+func numbered(n int) []AgentID {
+	out := make([]AgentID, n)
+	for i := range out {
+		out[i] = AgentID(fmt.Sprintf("a%02d", i))
+	}
+	return out
+}
+
+/*
+A dense graph with no cycle costs nothing to search.
+
+Every edge points forward, so nothing comes back to the agent — but a search
+that walked every simple path to find that out did work exponential in the
+number of agents: 24 of them took eight seconds. Only an agent that can reach
+the published one and be reached from it can be on a cycle through it, and
+here there is none.
+*/
+func TestEventCyclesThrough_aDenseAcyclicGraph_expandsNothing(t *testing.T) {
+	t.Parallel()
+	for _, n := range []int{24, 40} {
+		agents := numbered(n)
+		var edges []EventEdge
+		for i, from := range agents {
+			for _, to := range agents[i+1:] {
+				edges = append(edges, edge(from, "e", to))
+			}
+		}
+		for _, asked := range []AgentID{agents[0], agents[n/2], agents[n-1]} {
+			got := EventCyclesThrough(edges, asked)
+			if got.Expansions != 0 || len(got.Cycles) != 0 || got.Truncated {
+				t.Errorf("%d agents, through %s: %+v; want no cycle and no expansion", n, asked, got)
+			}
+		}
+	}
+}
+
+/*
+A dense graph whose only cycles are long stops at the work bound, and says so.
+
+Agent a starts any of twelve agents that all start each other, and only the
+last of them leads on, through a chain of twenty, back to a. Every agent is
+on a cycle through a, so nothing can be pruned, and no cycle is shorter than
+23: before reaching that length the search would wander through the twelve in
+every order there is.
+*/
+func TestEventCyclesThrough_aDenseCyclicGraph_stopsAtTheExpansionBound(t *testing.T) {
+	t.Parallel()
+	cluster, chain := numbered(12), numbered(32)[12:]
+	edges := []EventEdge{edge(cluster[11], "out", chain[0]), edge(chain[len(chain)-1], "e", "a")}
+	for i, from := range cluster {
+		edges = append(edges, edge("a", "e", from))
+		for j, to := range cluster {
+			if i != j {
+				edges = append(edges, edge(from, "e", to))
+			}
+		}
+	}
+	for i := 1; i < len(chain); i++ {
+		edges = append(edges, edge(chain[i-1], "e", chain[i]))
+	}
+
+	got := EventCyclesThrough(edges, "a")
+
+	if got.Expansions > MaxCycleExpansions || !got.Truncated {
+		t.Errorf("expansions = %d (truncated %v), want at most %d and said to be truncated",
+			got.Expansions, got.Truncated, MaxCycleExpansions)
+	}
+	// Stopping short of every cycle is not stopping short of saying there is
+	// one: after pruning, an edge out of the agent always leads back, and the
+	// shortest way back is named.
+	shortest := append(EventCycle{"a", cluster[11]}, chain...)
+	if !reflect.DeepEqual(got.Cycles, []EventCycle{shortest}) {
+		t.Errorf("cycles = %v, want the shortest one, %v", got.Cycles, shortest)
 	}
 }
