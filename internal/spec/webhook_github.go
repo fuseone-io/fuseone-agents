@@ -41,8 +41,15 @@ Each of these would publish and then misbehave in silence. A source nobody
 serves is verified as an ordinary hook and refuses every real delivery; events
 on a hook with no source are never read, so the author's filter is a comment; a
 GitHub hook that names no event would start a run on every delivery GitHub
-sends, which on a busy repository is a bill; and a name GitHub never sends is a
-filter nothing passes.
+sends, which on a busy repository is a bill; and a name that is not even shaped
+like one GitHub sends is a filter nothing passes.
+
+Only the shape is checked. GitHub's list of events and actions is long and
+grows, and a copy of it here would refuse tomorrow's event on the day GitHub
+adds it — so a well-shaped misspelling (`pull_requset.opened`) publishes and
+never fires. The manual and the Studio say so, and point at the webhook's
+Recent Deliveries in GitHub, where a delivery nothing accepted shows its 200
+"ignored".
 
 `ping` is refused because it never starts a run: GitHub sends it once, when the
 hook is created, and the door answers it without opening anything.

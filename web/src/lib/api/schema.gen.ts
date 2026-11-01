@@ -4924,7 +4924,8 @@ export interface components {
             /**
              * @description With `from: github` only, and required there: `event` takes every
              *     action of it, `event.action` only that one — for example
-             *     `pull_request.labeled`.
+             *     `pull_request.labeled`. Only the shape of a name is checked: a
+             *     misspelt event publishes and never fires.
              */
             events?: string[];
         };

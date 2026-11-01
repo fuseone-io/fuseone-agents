@@ -86,6 +86,11 @@ export function WebhookSourceField({
               {t("agents.webhookSource.needsEvents")}
             </p>
           )}
+          {/* Publishing checks only the shape of a name, so a misspelt one
+              publishes and never fires: say so, and where to look. */}
+          <p className="text-2xs text-muted-foreground">
+            {t("agents.webhookSource.eventsHint")}
+          </p>
         </>
       )}
     </div>

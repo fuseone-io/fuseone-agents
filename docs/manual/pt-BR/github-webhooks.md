@@ -36,8 +36,15 @@ triggers:
 - `ping` não entra na lista: o GitHub manda uma vez, quando o hook é criado, e
   a plataforma responde sem iniciar nada.
 
-A publicação recusa um webhook do GitHub sem eventos, um nome que o GitHub
-nunca manda e eventos num webhook que não diz `from: github`.
+A publicação recusa um webhook do GitHub sem eventos, um nome que não tem a
+forma `evento` ou `evento.ação` e eventos num webhook que não diz
+`from: github`.
+
+**Só a forma do nome é conferida.** Um evento escrito errado que ainda tem a
+forma certa — `pull_requset.opened` — é publicado e nunca dispara. Se um agente
+não começa quando você espera, abra **Recent Deliveries** no webhook do GitHub:
+uma entrega que o gatilho não nomeou aparece com 200 e
+`{"status":"ignored"}`.
 
 ## Gere a chave
 

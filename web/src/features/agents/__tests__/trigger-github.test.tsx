@@ -79,6 +79,18 @@ describe("a webhook that comes from GitHub", () => {
     expect(screen.queryByText(/Name the events/)).not.toBeInTheDocument();
   });
 
+  // Only the shape of a name is checked: pull_requset.opened publishes and
+  // never fires, and the screen has to say where to look when that happens.
+  it("says a misspelt event never fires and where to check", async () => {
+    const user = userEvent.setup();
+    render(<Harness initial={{ type: "webhook", path: "gh/reviewer" }} />);
+
+    await user.click(screen.getByRole("combobox", { name: "Sent by" }));
+    await user.click(await screen.findByRole("option", { name: /GitHub/ }));
+
+    expect(screen.getByText(/misspelt event never fires/)).toBeInTheDocument();
+  });
+
   it("drops the events when the source goes back to any sender", async () => {
     const user = userEvent.setup();
     render(

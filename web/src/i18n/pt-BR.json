@@ -727,7 +727,8 @@
       "github": "GitHub (entrega assinada)",
       "events": "Eventos do GitHub",
       "eventsExample": "pull_request.opened, issues.labeled",
-      "needsEvents": "Nomeie os eventos que iniciam uma execução: sem eles, toda entrega do GitHub iniciaria uma."
+      "needsEvents": "Nomeie os eventos que iniciam uma execução: sem eles, toda entrega do GitHub iniciaria uma.",
+      "eventsHint": "Só a forma do nome é conferida: um evento escrito errado nunca dispara. Se nada iniciar, veja o registro de entregas (Recent Deliveries) do webhook no GitHub."
     },
     "fromGitHub": "GitHub",
     "githubSecretField": "Campo Secret do webhook no GitHub",

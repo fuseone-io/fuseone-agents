@@ -107,11 +107,29 @@ func TestRegistry_aGitHubWebhook_readsBackWithItsSourceAndEvents(t *testing.T) {
 }
 
 /*
+Only the shape of an event name is checked, and that is the contract.
+
+GitHub's events and actions are many and grow; a copy of the list here would
+refuse a new event on the day GitHub adds it. So a well-shaped misspelling
+publishes — and never fires, which the manual and the Studio say, pointing at
+GitHub's delivery log.
+*/
+func TestParse_aWellShapedMisspelling_publishes(t *testing.T) {
+	t.Parallel()
+
+	s := parse(t, withTrigger(`  - { type: webhook, path: a/b, from: github, events: [pull_requset.opened] }`))
+
+	if got := spec.Webhooks(s)[0].Events; !reflect.DeepEqual(got, []string{"pull_requset.opened"}) {
+		t.Errorf("events = %v, want the misspelling kept as declared", got)
+	}
+}
+
+/*
 What the door could not act on is refused at parse.
 
 Each of these publishes cleanly if let through and then fires nothing, or fires
 on everything: a source nobody serves, events on a hook that cannot filter
-them, a GitHub hook that names no event, or a name GitHub never sends.
+them, a GitHub hook that names no event, or a name not shaped like an event.
 */
 func TestParse_aGitHubWebhookItCannotServe_isRefused(t *testing.T) {
 	t.Parallel()
@@ -120,7 +138,7 @@ func TestParse_aGitHubWebhookItCannotServe_isRefused(t *testing.T) {
 		"unknown source":                 `  - { type: webhook, path: a/b, from: gitlab, events: [push] }`,
 		"events without a source":        `  - { type: webhook, path: a/b, events: [push] }`,
 		"github with no event":           `  - { type: webhook, path: a/b, from: github }`,
-		"an event GitHub never names":    `  - { type: webhook, path: a/b, from: github, events: ["Pull Request"] }`,
+		"not the shape of an event name": `  - { type: webhook, path: a/b, from: github, events: ["Pull Request"] }`,
 		"an action with no event":        `  - { type: webhook, path: a/b, from: github, events: [.opened] }`,
 		"ping, which never starts a run": `  - { type: webhook, path: a/b, from: github, events: [ping] }`,
 		"a source on a cron":             `  - { type: cron, schedule: "* * * * *", from: github, events: [push] }`,

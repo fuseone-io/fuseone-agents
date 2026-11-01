@@ -727,7 +727,8 @@
       "github": "GitHub (signed delivery)",
       "events": "GitHub events",
       "eventsExample": "pull_request.opened, issues.labeled",
-      "needsEvents": "Name the events that start a run: without them every delivery GitHub sends would start one."
+      "needsEvents": "Name the events that start a run: without them every delivery GitHub sends would start one.",
+      "eventsHint": "Only the shape of a name is checked: a misspelt event never fires. If nothing starts, check the webhook's Recent Deliveries in GitHub."
     },
     "fromGitHub": "GitHub",
     "githubSecretField": "The GitHub webhook's Secret field",
