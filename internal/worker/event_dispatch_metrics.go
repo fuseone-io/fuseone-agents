@@ -20,7 +20,12 @@ backlog state, from a two-word vocabulary; no run, agent or transaction id
 can reach a sample because the observation carries none.
 */
 type eventDispatchGauges struct {
-	mu       sync.Mutex
+	mu   sync.Mutex
+	last eventDispatchReading
+}
+
+// eventDispatchReading is what one scrape renders, copied out of the lock.
+type eventDispatchReading struct {
 	observed bool
 	backlog  domain.EventDispatchBacklog
 	at       time.Time
@@ -41,7 +46,7 @@ func (r *MetricsRegistry) EventDispatch(b domain.EventDispatchBacklog, now time.
 	g := &r.eventDispatch
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.observed, g.backlog, g.at = true, b, now
+	g.last.observed, g.last.backlog, g.last.at = true, b, now
 }
 
 // EventDispatchUnobserved counts an observation that could not be read. The
@@ -53,16 +58,16 @@ func (r *MetricsRegistry) EventDispatchUnobserved() {
 	g := &r.eventDispatch
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.failures++
+	g.last.failures++
 }
 
-func (g *eventDispatchGauges) snapshot() eventDispatchGauges {
+func (g *eventDispatchGauges) snapshot() eventDispatchReading {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return eventDispatchGauges{observed: g.observed, backlog: g.backlog, at: g.at, failures: g.failures}
+	return g.last
 }
 
-func renderEventDispatchMetrics(w io.Writer, g eventDispatchGauges) {
+func renderEventDispatchMetrics(w io.Writer, g eventDispatchReading) {
 	fmt.Fprintln(w, "# HELP fuseone_event_dispatch_observe_failures_total Event dispatch backlog reads that failed.")
 	fmt.Fprintln(w, "# TYPE fuseone_event_dispatch_observe_failures_total counter")
 	fmt.Fprintf(w, "fuseone_event_dispatch_observe_failures_total %d\n", g.failures)
