@@ -22,11 +22,11 @@ import (
 Publishing the version that closes an event cycle answers with a warning
 naming the cycle (#227), from the route the Studio calls.
 
-Through the router, the JSON on the wire and the registry serve wires as the
-composition, because the warning crosses every one of them: a field the
-contract dropped, a graph read from somewhere else, or a server that never
-asked would each publish silently, and a test calling the handler with a fake
-graph would pass all three.
+Through the router, the JSON on the wire and the Postgres publisher serve
+wires, which judges the graph inside its own transaction, because the warning
+crosses every one of them: a field the contract dropped, a graph read from
+somewhere else, or a publisher that never asked would each publish silently,
+and a test calling the handler with a fake would pass all three.
 */
 func TestPublishRoute_theVersionThatClosesACycle_publishesAndNamesIt(t *testing.T) {
 	route := cycleRoute(t)
@@ -60,7 +60,6 @@ func cycleRoute(t *testing.T) publishRoute {
 	registry := spec.NewRegistry(pool)
 	api := httpapi.NewServer(ledger.NewMemory(), "test").
 		WithAgents(registry).
-		WithComposition(registry).
 		WithPublisher(spec.NewPublisher(pool, engine.SystemClock{}))
 	return publishRoute{handler: openAccess(apiHandlerFor(api))}
 }

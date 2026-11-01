@@ -23,10 +23,27 @@ var ErrNotPublished = errors.New("spec: no such published version")
 // file on disk can change, and the version that ran must not.
 type Registry struct {
 	pool *pgxpool.Pool
+	// q is where reads go: the pool, or the transaction of a publish that
+	// judges the graph under the same lock as its write (within).
+	q querier
+}
+
+// querier is what a read needs, so the same read can run on the pool or
+// inside a caller's transaction.
+type querier interface {
+	// args is any because this is pgx's own signature, which both the pool
+	// and a transaction satisfy.
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
 func NewRegistry(pool *pgxpool.Pool) *Registry {
-	return &Registry{pool: pool}
+	return &Registry{pool: pool, q: pool}
+}
+
+// within is the same registry reading inside a transaction.
+func (r *Registry) within(tx pgx.Tx) *Registry {
+	return &Registry{pool: r.pool, q: tx}
 }
 
 // Publish records a version, or does nothing if it is already there.
@@ -36,7 +53,11 @@ func NewRegistry(pool *pgxpool.Pool) *Registry {
 // published what was already published, which is not an error and must not
 // overwrite the original's authorship or date.
 func (r *Registry) Publish(ctx context.Context, s Spec, by domain.UserID, company domain.CompanyID) error {
-	return publishOn(ctx, r.pool, s, by, company)
+	// Under the event graph's lock: with no version chosen, the newest is
+	// current, so this write can change the graph a publication judges.
+	return underEventGraphLock(ctx, r.pool, func(tx pgx.Tx) error {
+		return publishOn(ctx, tx, s, by, company)
+	})
 }
 
 // execer is what a write needs, so the same write can run on the pool or
@@ -128,7 +149,7 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 		approvals        []byte
 		company          string
 	)
-	err := r.pool.QueryRow(ctx, `
+	err := r.q.QueryRow(ctx, `
 		select agent_id, version_id, company_id, area_id, name,
 		       provider, model, effort, cache_prefix_ttl, reply_locale, tools,
 		       budget, triggers, instructions, source, emits, steps,
@@ -207,7 +228,7 @@ func (r *Registry) Declared(
 	ctx context.Context, agent domain.AgentID, version domain.VersionID,
 ) (Declarations, error) {
 	var raw, emits, approvals []byte
-	err := r.pool.QueryRow(ctx, `
+	err := r.q.QueryRow(ctx, `
 		select steps, emits, approvals from agent_specs
 		where agent_id = $1 and version_id = $2`,
 		string(agent), string(version)).Scan(&raw, &emits, &approvals)

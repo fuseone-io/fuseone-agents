@@ -54,7 +54,7 @@ func (r *Registry) List(ctx context.Context, scope domain.Scope, allVersions boo
 	}
 
 	where, args := scopeSQL(scope)
-	rows, err := r.pool.Query(ctx, fmt.Sprintf(selection, where), args...)
+	rows, err := r.q.Query(ctx, fmt.Sprintf(selection, where), args...)
 	if err != nil {
 		return nil, fmt.Errorf("spec: list agents: %w", err)
 	}
@@ -113,7 +113,7 @@ func (r *Registry) Versions(ctx context.Context, agent domain.AgentID) ([]domain
 	// the first row as the answer — the opener pins a run to it — so ordering
 	// by publication alone made a withdrawn version the one every new run got
 	// (PRD DE-08).
-	rows, err := r.pool.Query(ctx, `
+	rows, err := r.q.Query(ctx, `
 		select s.agent_id, s.version_id, s.company_id, s.area_id, s.name,
 		       s.provider, s.model, s.effort, s.fallback_provider, s.fallback_model,
 		       s.cache_prefix_ttl, s.reply_locale, s.tools, s.budget, s.triggers,
@@ -155,7 +155,7 @@ func (r *Registry) Versions(ctx context.Context, agent domain.AgentID) ([]domain
 func (r *Registry) Instructions(
 	ctx context.Context, agent domain.AgentID, version domain.VersionID,
 ) (text, source string, err error) {
-	err = r.pool.QueryRow(ctx, `
+	err = r.q.QueryRow(ctx, `
 		select instructions, source from agent_specs
 		where agent_id = $1 and version_id = $2`,
 		string(agent), string(version)).Scan(&text, &source)
@@ -182,7 +182,9 @@ The row is created if the agent has none, paused, because an agent nobody has
 decided about does not start (PRD DE-07).
 */
 func (r *Registry) MakeCurrent(ctx context.Context, agent domain.AgentID, version domain.VersionID) error {
-	return makeCurrentOn(ctx, r.pool, agent, version)
+	return underEventGraphLock(ctx, r.pool, func(tx pgx.Tx) error {
+		return makeCurrentOn(ctx, tx, agent, version)
+	})
 }
 
 func makeCurrentOn(ctx context.Context, q execer, agent domain.AgentID, version domain.VersionID) error {

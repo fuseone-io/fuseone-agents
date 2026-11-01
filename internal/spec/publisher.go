@@ -24,6 +24,10 @@ type Publisher struct {
 	registry *Registry
 	state    *State
 	clock    Clock
+	// afterJudging runs between the graph's judgement and the version's
+	// write. Nil outside tests; set by export_test.go to hold a publication
+	// there while another one races it.
+	afterJudging func()
 }
 
 // Clock is when a pause was decided.
@@ -54,27 +58,64 @@ type Publication struct {
 	RefuseStages []domain.Stage
 }
 
-// Publish writes the version and makes it current, in one transaction.
-func (p *Publisher) Publish(ctx context.Context, pub Publication) error {
+// Published is what a publication found on the way: the event cycles the
+// version closes, judged against the graph it is written into (#227).
+type Published struct {
+	EventCycles domain.EventCycleSearch
+}
+
+/*
+Publish writes the version and makes it current, in one transaction, and
+judges the event cycles it closes in the same one.
+
+The judgement is taken under the event graph's lock, which every write that
+can change a current version takes too (lockEventGraph). Read outside it, two
+publications closing a cycle only together could each judge the graph from
+before the other and both publish unwarned. Under it, the second waits for
+the first to commit and judges the graph the first left. The lock comes
+first, before the agent's own row, so every writer takes the two in one order.
+*/
+func (p *Publisher) Publish(ctx context.Context, pub Publication) (Published, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("spec: publish %s: begin: %w", pub.Spec.ID, err)
+		return Published{}, fmt.Errorf("spec: publish %s: begin: %w", pub.Spec.ID, err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if err := lockEventGraph(ctx, tx); err != nil {
+		return Published{}, fmt.Errorf("spec: publish %s: %w", pub.Spec.ID, err)
+	}
 	if err := refuseStage(ctx, tx, pub.Spec.ID, pub.RefuseStages); err != nil {
-		return err
+		return Published{}, err
+	}
+	judged, err := p.judge(ctx, tx, pub.Spec)
+	if err != nil {
+		return Published{}, err
 	}
 	if err := publishOn(ctx, tx, pub.Spec, pub.By, pub.Company); err != nil {
-		return err
+		return Published{}, err
 	}
 	if err := makeCurrentOn(ctx, tx, pub.Spec.ID, pub.Spec.Version); err != nil {
-		return err
+		return Published{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("spec: publish %s: commit: %w", pub.Spec.ID, err)
+		return Published{}, fmt.Errorf("spec: publish %s: commit: %w", pub.Spec.ID, err)
 	}
-	return nil
+	return judged, nil
+}
+
+// judge reads the graph inside the publication's transaction and finds the
+// cycles the version closes in it, replacing its agent's current version.
+func (p *Publisher) judge(ctx context.Context, tx pgx.Tx, s Spec) (Published, error) {
+	edges, err := p.registry.within(tx).Edges(ctx)
+	if err != nil {
+		return Published{}, fmt.Errorf("spec: publish %s: read the event graph: %w", s.ID, err)
+	}
+	judged := Published{EventCycles: domain.EventCyclesThrough(EventGraphWith(edges, s), s.ID)}
+	if p.afterJudging != nil {
+		p.afterJudging()
+	}
+	return judged, nil
 }
 
 /*
