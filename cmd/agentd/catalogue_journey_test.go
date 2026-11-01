@@ -264,6 +264,37 @@ func TestCatalogue_aLateBroadDiscoveryAfterTheToolsetsNarrowed_isIgnored(t *test
 	}
 }
 
+/*
+The review's third sequence. A discovers and publishes, then is gone. B
+never reaches the server, so it holds nothing to withdraw. The server is
+switched off, and B passes — with nothing connected and nothing changed, it
+publishes nothing. Only the switch itself can take the tools away.
+*/
+func TestCatalogue_aServerSwitchedOffWhileNoWorkerHoldsIt_stopsOfferingItsTools(t *testing.T) {
+	j := newFactoryJourney(t, triageToolsets)
+	j.discover(t)
+	j.classify(t)
+	b := j.replica(t)
+	b.connectTo = func(
+		context.Context, *tools.Catalog, domain.MCPServer,
+		domain.MCPCredentials, OAuthGrantStore, MCPUserCredentialStore, credentialPolicy,
+		stdioEgressObserver,
+	) error {
+		return errors.New("dial tcp: connection refused")
+	}
+	b.reconcile(t.Context())
+
+	j.disable(t)
+	b.reconcile(t.Context())
+
+	if left := ofServer(j.listed(t), "github-triage"); len(left) != 0 {
+		t.Fatalf("the switched-off server offers %v with no worker holding it", left)
+	}
+	if !j.refused(t) {
+		t.Fatal("the Triage reference published against a switched-off server")
+	}
+}
+
 // Switched off, a server offers nothing to any run, and the catalogue says
 // so at the next pass.
 func TestCatalogue_aDisabledServer_stopsOfferingItsTools(t *testing.T) {

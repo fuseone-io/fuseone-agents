@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/settings"
 )
 
 // toolKind is the settings row a discovered tool is published as.
@@ -104,7 +105,7 @@ func writeTools(ctx context.Context, tx pgx.Tx, held judged) error {
 // offers.
 const toolCatalogueLock = "tool-catalogue"
 
-func lockToolCatalogue(ctx context.Context, tx pgx.Tx) error {
+func lockToolCatalogue(ctx context.Context, tx settings.DB) error {
 	if _, err := tx.Exec(ctx,
 		`select pg_advisory_xact_lock(hashtextextended($1, 0))`, toolCatalogueLock); err != nil {
 		return fmt.Errorf("admin: lock the tool catalogue: %w", err)
@@ -114,7 +115,7 @@ func lockToolCatalogue(ctx context.Context, tx pgx.Tx) error {
 
 // dropServerTools removes every catalogue row of one server, under the
 // catalogue's lock, and reports how many went. Rulings stay.
-func dropServerTools(ctx context.Context, tx pgx.Tx, server string) (int64, error) {
+func dropServerTools(ctx context.Context, tx settings.DB, server string) (int64, error) {
 	if err := lockToolCatalogue(ctx, tx); err != nil {
 		return 0, err
 	}
