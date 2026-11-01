@@ -182,3 +182,64 @@ func TestHoldToolServers_aSweptServerStartedAgain_findsItsRuling(t *testing.T) {
 		t.Fatalf("local.run reads %+v, want the write ruling it had", got)
 	}
 }
+
+// writtenByAnOldWorker records a tool the way a worker from before leases
+// publishes an unmanaged server: marked unmanaged, and nothing else. That
+// worker may be alive and serving it, and will never renew a lease it does
+// not know exists.
+func writtenByAnOldWorker(t *testing.T, server, id string) {
+	t.Helper()
+	if _, err := openPool(t).Exec(context.Background(), `
+		insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_at)
+		values ('installation', '', '', 'tool', $1,
+		        jsonb_build_object('server', $2::text, 'onSurface', false, 'unmanaged', true), true, now())`,
+		id, server); err != nil {
+		t.Fatalf("write %s as an old worker would: %v", id, err)
+	}
+}
+
+/*
+A rolling upgrade: an old worker still serves a --mcp server, published the
+old way with no lease. A new worker that does not run that server sweeps. The
+old worker's tools get one grace period from the first sweep that sees them
+rather than leaving at once — and once it is over, with nobody renewing, they
+leave like any other unheld server's.
+*/
+func TestHoldToolServers_anOldWorkersUnleasedServer_survivesTheGraceThenLeaves(t *testing.T) {
+	curator, clock := leasedCatalogue(t)
+	writtenByAnOldWorker(t, "old", "old.run")
+
+	renew(t, curator, "worker-new")
+	clock.advance(admin.LegacyToolGrace - time.Second)
+	renew(t, curator, "worker-new")
+	if got := offered(t, curator, "old"); !slices.Equal(got, []domain.ToolID{"old.run"}) {
+		t.Fatalf("old offers %v inside the grace, while the old worker may still serve it", got)
+	}
+
+	clock.advance(2 * time.Second)
+	renew(t, curator, "worker-new")
+
+	if got := offered(t, curator, "old"); len(got) != 0 {
+		t.Fatalf("old offers %v after the grace ran out with nobody renewing", got)
+	}
+}
+
+// A publication sweeps too, and gives an old worker's server the same grace.
+func TestPublish_anOldWorkersUnleasedServer_isGivenTheGraceToo(t *testing.T) {
+	curator, pool := catalogueOf(t)
+	clock := &leaseClock{now: time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)}
+	curator = curator.WithClock(clock.read)
+	crm := configure(t, pool, "crm", true)
+	writtenByAnOldWorker(t, "old", "old.run")
+
+	publish(t, curator, discovered("crm", crm, "crm.lookup"))
+	clock.advance(admin.LegacyToolGrace - time.Second)
+	publish(t, curator, discovered("crm", crm, "crm.lookup"))
+	kept := offered(t, curator, "old")
+	clock.advance(2 * time.Second)
+	publish(t, curator, discovered("crm", crm, "crm.lookup"))
+
+	if left := offered(t, curator, "old"); !slices.Equal(kept, []domain.ToolID{"old.run"}) || len(left) != 0 {
+		t.Fatalf("old offered %v inside the grace and %v after; want kept, then gone", kept, left)
+	}
+}

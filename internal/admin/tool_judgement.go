@@ -89,20 +89,25 @@ sweepCatalogue drops the tools of every server nobody stands behind any more,
 whoever published them and whenever: a managed server the configuration no
 longer wants, and an unmanaged server nobody holds a live lease on. It is
 what makes a lost or late publication harmless — the next one, or any
-worker's next pass, takes them away.
+worker's next pass, takes them away. An old worker's unleased server starts
+its grace here the first time a sweep sees it.
 */
 func sweepCatalogue(ctx context.Context, tx pgx.Tx, configured map[string]time.Time, now time.Time) error {
+	if err := beginLegacyGrace(ctx, tx, now); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `
 		delete from settings s
 		where s.scope_kind = 'installation' and s.company_id = '' and s.area_id = ''
 		  and s.kind = $1
 		  and ((not coalesce((s.value->>'unmanaged')::boolean, false)
-		        and not (s.value->>'server' = any($3)))
+		        and not (s.value->>'server' = any($4)))
 		       or (`+unheldUnmanaged+`))`,
 		// Never nil: "= any(NULL)" is NULL, and with nothing configured the
 		// sweep would keep everything it exists to clear.
-		toolKind, now, append([]string{}, slices.Collect(maps.Keys(configured))...)); err != nil {
+		toolKind, now, graceBegunBy(now),
+		append([]string{}, slices.Collect(maps.Keys(configured))...)); err != nil {
 		return fmt.Errorf("admin: drop the tools of servers nobody serves: %w", err)
 	}
-	return nil
+	return forgetSettledGrace(ctx, tx)
 }

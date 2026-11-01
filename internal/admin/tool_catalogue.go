@@ -178,7 +178,10 @@ func encodeTool(e domain.ToolEntry, unmanaged bool) ([]byte, error) {
 		// A server the configuration does not hold: the sweep leaves it to the
 		// workers holding a lease on it.
 		Unmanaged bool `json:"unmanaged,omitempty"`
-	}{e.Server, e.Description, e.Digest, e.OnSurface, unmanaged})
+		// Written under a lease. A row marked unmanaged without it comes from
+		// a worker from before leases, which gets a grace (LegacyToolGrace).
+		Leased bool `json:"leased,omitempty"`
+	}{e.Server, e.Description, e.Digest, e.OnSurface, unmanaged, unmanaged})
 	if err != nil {
 		return nil, fmt.Errorf("admin: encode tool %s: %w", e.ID, err)
 	}

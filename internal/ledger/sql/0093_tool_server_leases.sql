@@ -19,3 +19,20 @@ create table tool_server_leases (
     expires_at timestamptz not null,
     primary key (server, holder)
 );
+
+-- When a sweep first saw an unmanaged server published the old way.
+--
+-- A worker from before this migration publishes --mcp servers marked
+-- unmanaged and nothing else, and never renews a lease it does not know
+-- exists. During a rolling upgrade it may still be serving them while a new
+-- worker, without the flag, sweeps. Its rows are told apart by carrying no
+-- lease marker (the new workers write one), and each such server is given
+-- one grace period counted from the first sweep that saw it, not from this
+-- migration: an old worker can publish a server for the first time an hour
+-- into the rollout, and its grace starts then. The row goes when the server
+-- has no old-style rows left, so an old worker publishing it again later
+-- gets a grace of its own.
+create table tool_server_grace (
+    server     text        primary key,
+    first_seen timestamptz not null
+);

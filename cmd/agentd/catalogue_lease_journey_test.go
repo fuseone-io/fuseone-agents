@@ -182,6 +182,38 @@ func TestCatalogue_aCommandLineServerDroppedFromEveryWorker_leavesTheCatalogue(t
 	}
 }
 
+/*
+A rolling upgrade. A worker from before leases still runs local-reports from
+its flag; it published the tool marked unmanaged, and never renews. A new
+worker without the flag starts and passes: the tool stays for the grace,
+because the old worker may still be serving it. When the grace is over and
+nobody has renewed, it leaves.
+*/
+func TestCatalogue_anOldWorkersCommandLineServer_survivesTheRolloutGrace(t *testing.T) {
+	j := newFactoryJourney(t, triageToolsets)
+	clock := &journeyClock{now: time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)}
+	if _, err := j.pool.Exec(t.Context(), `
+		insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_at)
+		values ('installation', '', '', 'tool', $1,
+		        '{"server": "local-reports", "onSurface": false, "unmanaged": true}', true, now())`,
+		localRunReport); err != nil {
+		t.Fatalf("publish as the old worker did: %v", err)
+	}
+
+	fresh := j.startWorker(t, clock, "--owner", "worker-new")
+	clock.advance(admin.LegacyToolGrace - time.Second)
+	fresh.pass()
+	_, kept := j.listed(t)[localRunReport]
+	clock.advance(2 * time.Second)
+	fresh.pass()
+	_, still := j.listed(t)[localRunReport]
+
+	if !kept || still {
+		t.Fatalf("%s listed inside the grace: %v, after it: %v; want kept, then gone",
+			localRunReport, kept, still)
+	}
+}
+
 // A worker that keeps the flag keeps its server offered, however long it
 // runs: the lease its start-up took is renewed on every pass.
 func TestCatalogue_aCommandLineServerStillRunning_staysPastTheFirstLease(t *testing.T) {

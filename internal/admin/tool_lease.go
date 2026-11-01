@@ -117,16 +117,22 @@ func leaseUnmanaged(ctx context.Context, db settings.DB, pub domain.ToolPublicat
 
 /*
 unheldUnmanaged is the catalogue row of an unmanaged server nobody holds a
-live lease on. $2 is the moment it is judged at.
+live lease on, and that is due to leave. $2 is the moment it is judged at,
+$3 the moment an old worker's grace must have begun by to be over.
 
-A row published before leases existed has none, and leaves at the first
-sweep unless a worker running its server renews first: the rows #223 found
-stuck are cleared by the upgrade itself.
+A row a lease-era worker wrote carries the lease marker, and leaves as soon
+as its leases run out. A row without it was written by a worker from before
+leases, which may still be serving it and cannot renew (legacyGrace): it
+leaves once its server's grace is over.
 */
 const unheldUnmanaged = `coalesce((s.value->>'unmanaged')::boolean, false)
 	and not exists (
 		select 1 from tool_server_leases l
-		where l.server = s.value->>'server' and l.expires_at > $2)`
+		where l.server = s.value->>'server' and l.expires_at > $2)
+	and (coalesce((s.value->>'leased')::boolean, false)
+	     or exists (
+		select 1 from tool_server_grace g
+		where g.server = s.value->>'server' and g.first_seen <= $3))`
 
 // sweepUnheld drops the tools of unmanaged servers nobody holds. It looks
 // before it locks: most passes find nothing, and the catalogue's lock is
@@ -143,7 +149,8 @@ func (c *Curator) sweepUnheld(ctx context.Context, now time.Time) error {
 		select exists (
 			select 1 from settings s
 			where s.scope_kind = 'installation' and s.company_id = '' and s.area_id = ''
-			  and s.kind = $1 and `+unheldUnmanaged+`)`, toolKind, now).Scan(&found); err != nil {
+			  and s.kind = $1 and ((`+unheldUnmanaged+`) or (`+ungracedLegacy+`)))`,
+		toolKind, now, graceBegunBy(now)).Scan(&found); err != nil {
 		return fmt.Errorf("admin: look for unheld servers: %w", err)
 	}
 	if !found {
