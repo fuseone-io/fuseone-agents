@@ -24,6 +24,7 @@ import (
 	"github.com/fuseone/agents/internal/httpapi"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/model"
+	"github.com/fuseone/agents/internal/trigger"
 )
 
 var version = "0.1.0-dev"
@@ -115,6 +116,7 @@ type Store interface {
 	drift.Batteries
 	drift.LastBatteries
 	engine.Ledger
+	trigger.Sources
 	Verify(ctx context.Context, runID domain.RunID) error
 }
 

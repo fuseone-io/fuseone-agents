@@ -56,30 +56,33 @@ type Finished interface {
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
 }
 
-type RunReader interface {
-	Read(ctx context.Context, runID domain.RunID, fromSeq int64) ([]domain.Step, error)
+// Sources reads, for a batch of finished runs, only each run's opening and
+// closing steps: what opened it and its chain, and what it published. One
+// read per sweep rather than every step of every run.
+type Sources interface {
+	StartsAndFinishes(ctx context.Context, runs []domain.RunID) (map[domain.RunID][]domain.Step, error)
 }
 
 // Dispatcher opens the runs that finished runs imply.
 type Dispatcher struct {
-	subs   Subscriptions
-	runs   Finished
-	reader RunReader
-	opener *Opener
-	clock  Clock
-	log    *slog.Logger
+	subs    Subscriptions
+	runs    Finished
+	sources Sources
+	opener  *Opener
+	clock   Clock
+	log     *slog.Logger
 }
 
-// NewDispatcher needs the reader, not only the finished runs: the source
+// NewDispatcher needs the sources, not only the finished runs: the source
 // run's own steps say where it stands in a chain of events (#203), and a
 // dispatcher that could not read them would bound nothing.
 func NewDispatcher(
-	subs Subscriptions, runs Finished, reader RunReader, opener *Opener, clock Clock, log *slog.Logger,
+	subs Subscriptions, runs Finished, sources Sources, opener *Opener, clock Clock, log *slog.Logger,
 ) *Dispatcher {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Dispatcher{subs: subs, runs: runs, reader: reader, opener: opener, clock: clock, log: log}
+	return &Dispatcher{subs: subs, runs: runs, sources: sources, opener: opener, clock: clock, log: log}
 }
 
 // Window is how far back a sweep looks. Generous next to the sweep interval,
@@ -103,25 +106,25 @@ func (d *Dispatcher) Sweep(ctx context.Context, limit int) (int, error) {
 		return 0, fmt.Errorf("trigger: list finished runs: %w", err)
 	}
 
-	emits := pinnedEmits{subs: d.subs, seen: map[pinnedVersion][]domain.AgentEvent{}}
+	pending, err := d.candidates(ctx, finished, listeners)
+	if err != nil || len(pending) == 0 {
+		return 0, err
+	}
+	steps, err := d.sources.StartsAndFinishes(ctx, runIDs(pending))
+	if err != nil {
+		return 0, fmt.Errorf("trigger: read source runs: %w", err)
+	}
+
 	opened := 0
-	for _, run := range finished {
-		declared, err := emits.of(ctx, run.AgentID, run.VersionID)
-		if err != nil {
-			return opened, err
-		}
-		events := listened(declared, listeners)
-		if len(events) == 0 {
-			continue
-		}
-		src, ok, err := d.readSource(ctx, run)
+	for _, c := range pending {
+		src, ok, err := d.sourceOf(c.run, steps[c.run.RunID])
 		if err != nil {
 			return opened, err
 		}
 		if !ok {
 			continue
 		}
-		for _, event := range events {
+		for _, event := range c.events {
 			n, err := d.publish(ctx, src, event, listeners[event.Event])
 			if err != nil {
 				return opened, err
@@ -130,97 +133,6 @@ func (d *Dispatcher) Sweep(ctx context.Context, limit int) (int, error) {
 		}
 	}
 	return opened, nil
-}
-
-type pinnedVersion struct {
-	agent   domain.AgentID
-	version domain.VersionID
-}
-
-// pinnedEmits asks each pinned version once per sweep. A published version
-// never changes, so the answer cannot go stale within one.
-type pinnedEmits struct {
-	subs Subscriptions
-	seen map[pinnedVersion][]domain.AgentEvent
-}
-
-func (p pinnedEmits) of(
-	ctx context.Context, agent domain.AgentID, version domain.VersionID,
-) ([]domain.AgentEvent, error) {
-	key := pinnedVersion{agent, version}
-	if events, ok := p.seen[key]; ok {
-		return events, nil
-	}
-	events, err := p.subs.EmitsOf(ctx, agent, version)
-	if err != nil {
-		return nil, fmt.Errorf("trigger: events of %s@%s: %w", agent, version, err)
-	}
-	p.seen[key] = events
-	return events, nil
-}
-
-// listened is the run's events somebody listens to: nothing else is worth
-// reading the run for.
-func listened(events []domain.AgentEvent, listeners map[string][]domain.AgentID) []domain.AgentEvent {
-	var out []domain.AgentEvent
-	for _, event := range events {
-		if len(listeners[event.Event]) > 0 {
-			out = append(out, event)
-		}
-	}
-	return out
-}
-
-// source is a finished run as its events see it: its own steps, and the
-// chain a run its events open would stand in.
-type source struct {
-	run   domain.RunSummary
-	steps []domain.Step
-	next  domain.EventChain
-}
-
-/*
-readSource reads the finished run once, for its context and its place in a
-chain, and reports false when its events go no further.
-
-A run already MaxEventHops from its root opens nothing (#203), and neither
-does one an event opened without a chain. The run itself recorded that on its
-closing step, where the trail shows it; here it is only honoured, from the
-same recorded start, so a dispatcher on any replica reaches the same answer.
-*/
-func (d *Dispatcher) readSource(ctx context.Context, run domain.RunSummary) (source, bool, error) {
-	steps, err := d.reader.Read(ctx, run.RunID, domain.FirstSeq)
-	if err != nil {
-		return source{}, false, fmt.Errorf("trigger: read source run %s: %w", run.RunID, err)
-	}
-	position, err := positionOf(run.RunID, steps)
-	if err != nil {
-		return source{}, false, err
-	}
-	next, withheld := position.Next(run.RunID)
-	if withheld != nil {
-		d.log.Info("events withheld", "from", run.RunID, "reason", withheld.Reason,
-			"root", withheld.Root, "hop", withheld.Hop, "limit", withheld.Limit)
-		return source{}, false, nil
-	}
-	return source{run: run, steps: steps, next: next}, true, nil
-}
-
-// positionOf is the run's place in a chain, from its sealed start. A start
-// that will not decode fails the sweep: read as a root, it would restart the
-// count.
-func positionOf(run domain.RunID, steps []domain.Step) (domain.ChainPosition, error) {
-	for _, step := range steps {
-		if step.Kind != domain.StepRunStarted {
-			continue
-		}
-		var p domain.RunStartedPayload
-		if err := json.Unmarshal(step.Payload, &p); err != nil {
-			return domain.ChainPosition{}, fmt.Errorf("trigger: decode start of %s: %w", run, err)
-		}
-		return domain.ChainPosition{Trigger: p.Trigger, Chain: p.Chain}, nil
-	}
-	return domain.ChainPosition{}, fmt.Errorf("trigger: source run %s has no start", run)
 }
 
 // publish opens one run per listener.

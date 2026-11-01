@@ -59,6 +59,7 @@ type Store interface {
 	Agreement(ctx context.Context, since time.Time) ([]domain.Agreement, error)
 	Simulations() ledger.SimulationQueue
 	WorkItemCost(ctx context.Context, filter domain.RunFilter, ref domain.WorkItemRef) (domain.WorkItemCost, error)
+	StartsAndFinishes(ctx context.Context, runs []domain.RunID) (map[domain.RunID][]domain.Step, error)
 }
 
 type factory struct {

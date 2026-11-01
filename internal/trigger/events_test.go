@@ -359,6 +359,8 @@ func TestSweep_malformedSourceFinishFailsInsteadOfDroppingContext(t *testing.T) 
 	reg := registry{versions: []domain.AgentSummary{
 		{ID: "cobranca", VersionID: "v1", Scope: domain.Scope{Company: "acme", Area: "cx"}, Latest: true},
 	}}
+	// A sound start, so the finish is what fails.
+	seedSources(t, store, aFinishedRun("triage", "run-1"))
 	if _, err := store.Append(ctx, domain.Step{
 		RunID: "run-1", Kind: domain.StepRunFinished,
 		Scope:   domain.Scope{Company: "acme", Area: "cx"},
