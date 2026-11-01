@@ -222,6 +222,29 @@ func TestPublish_anUnmanagedPublicationForAConfiguredName_isIgnored(t *testing.T
 	}
 }
 
+// Every tool is written in one statement, and one statement cannot touch a
+// row twice: a tool listed twice is recorded once, as last listed, rather
+// than failing the whole publication.
+func TestPublish_aToolListedTwice_isRecordedOnceAsLastListed(t *testing.T) {
+	curator, pool := catalogueOf(t)
+	g := configure(t, pool, "github", true)
+	pub := discovered("github", g)
+	pub.Entries = []domain.ToolEntry{
+		{ID: "github.issue_read", Server: "github", Description: "first"},
+		{ID: "github.issue_read", Server: "github", Description: "second"},
+	}
+
+	publish(t, curator, pub)
+
+	entries, err := curator.Tools(context.Background())
+	if err != nil {
+		t.Fatalf("Tools: %v", err)
+	}
+	if got := find(t, entries, "github.issue_read"); got.Description != "second" {
+		t.Fatalf("issue_read reads %q, want the last listing", got.Description)
+	}
+}
+
 // Two workers rediscovering one server at once each publish a whole answer.
 // The catalogue ends with one of them, never a mix: a mix is a list no
 // server ever offered.

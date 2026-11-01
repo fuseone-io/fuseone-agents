@@ -92,6 +92,23 @@ func TestReconciler_aServerTheConfigurationNoLongerWants_triggersAPublication(t 
 	}
 }
 
+// A server that stays down is tried on every pass. Nothing about the
+// catalogue changed, so nothing is published: each publication takes the
+// installation-wide catalogue lock, and one per refresh per replica for as
+// long as a server is down is load for no news.
+func TestReconciler_aServerThatStaysDown_publishesNothing(t *testing.T) {
+	t.Parallel()
+	r, publisher := reconcilerOver(t, []domain.MCPServer{crmServer()}, true)
+
+	for range 3 {
+		r.reconcile(context.Background())
+	}
+
+	if publisher.calls != 0 {
+		t.Fatalf("published %d times while the only server stayed down, want none", publisher.calls)
+	}
+}
+
 // A server still wanted but not reachable right now is not spoken for: this
 // worker cannot see its tools, which says nothing about whether it offers
 // them.

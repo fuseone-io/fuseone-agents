@@ -767,8 +767,12 @@ func (r *reconciler) reconcile(ctx context.Context) {
 		if _, already := r.connected[name]; already {
 			continue
 		}
-		r.connect(ctx, server)
-		changed = true
+		// Only a connection that took changes the catalogue. A server that
+		// stays down is retried every pass, and publishing each time would
+		// take the catalogue's lock to say nothing new.
+		if r.connect(ctx, server) {
+			changed = true
+		}
 	}
 
 	r.refreshHealth(ctx)

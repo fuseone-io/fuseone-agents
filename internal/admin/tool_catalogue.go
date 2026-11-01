@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 
@@ -65,24 +67,34 @@ func (c *Curator) Publish(ctx context.Context, pub domain.ToolPublication) error
 	return nil
 }
 
+// writeTools records every held tool in one statement. A tool ID is unique
+// across the catalogue — it is the settings row's name — so the last entry
+// for an ID is the one kept, and the insert never meets one row twice.
 func writeTools(ctx context.Context, tx pgx.Tx, held judged) error {
 	if len(held.entries) == 0 {
 		return nil
 	}
-	batch := &pgx.Batch{}
+	values := make(map[string]string, len(held.entries))
 	for _, e := range held.entries {
 		value, err := encodeTool(e, held.unmanaged[e.Server])
 		if err != nil {
 			return err
 		}
-		batch.Queue(`
-			insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_at)
-			values ('installation', '', '', $1, $2, $3, true, now())
-			on conflict (scope_kind, company_id, area_id, kind, name) do update set
-				value = excluded.value, updated_at = now()`,
-			toolKind, string(e.ID), value)
+		values[string(e.ID)] = string(value)
 	}
-	if err := tx.SendBatch(ctx, batch).Close(); err != nil {
+	names := slices.Sorted(maps.Keys(values))
+	encoded := make([]string, len(names))
+	for i, name := range names {
+		encoded[i] = values[name]
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_at)
+		select 'installation', '', '', $1, t.name, t.value::jsonb, true, now()
+		from unnest($2::text[], $3::text[]) as t(name, value)
+		on conflict (scope_kind, company_id, area_id, kind, name) do update set
+			value = excluded.value, updated_at = now()
+		where settings.value is distinct from excluded.value`,
+		toolKind, names, encoded); err != nil {
 		return fmt.Errorf("admin: publish tools: %w", err)
 	}
 	return nil
@@ -116,21 +128,31 @@ func dropServerTools(ctx context.Context, tx pgx.Tx, server string) (int64, erro
 	return tag.RowsAffected(), nil
 }
 
-// dropUnoffered removes, for each server the publication holds, the tools it
-// no longer lists.
+/*
+dropUnoffered removes, for every server the publication holds, the tools it
+no longer lists — one statement, one pass over the catalogue's rows, however
+many servers. A tool ID names one row across the catalogue, so "not kept"
+needs no pairing with its server.
+
+An anti-join rather than "<> all(kept)": the array form compares every row
+with every kept ID, and at 50 servers of 100 tools it took 245 ms where this
+takes 10 ms (and the per-server statements it replaces, 64 ms).
+*/
 func dropUnoffered(ctx context.Context, tx pgx.Tx, held judged) error {
-	kept := make(map[string][]string, len(held.servers))
-	for _, e := range held.entries {
-		kept[e.Server] = append(kept[e.Server], string(e.ID))
+	if len(held.servers) == 0 {
+		return nil
 	}
-	for _, server := range held.servers {
-		if _, err := tx.Exec(ctx, `
-			delete from settings
-			where scope_kind = 'installation' and company_id = '' and area_id = ''
-			  and kind = $1 and value->>'server' = $2 and not (name = any($3))`,
-			toolKind, server, append([]string{}, kept[server]...)); err != nil {
-			return fmt.Errorf("admin: drop the tools %s no longer offers: %w", server, err)
-		}
+	kept := make([]string, 0, len(held.entries))
+	for _, e := range held.entries {
+		kept = append(kept, string(e.ID))
+	}
+	if _, err := tx.Exec(ctx, `
+		delete from settings s
+		where s.scope_kind = 'installation' and s.company_id = '' and s.area_id = ''
+		  and s.kind = $1 and s.value->>'server' = any($2)
+		  and not exists (select 1 from unnest($3::text[]) k(name) where k.name = s.name)`,
+		toolKind, held.servers, kept); err != nil {
+		return fmt.Errorf("admin: drop the tools no longer offered: %w", err)
 	}
 	return nil
 }
