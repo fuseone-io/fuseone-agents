@@ -1185,6 +1185,11 @@ paths:
         This is also how a webhook is first opened. A declared path with no
         secret refuses everything, which is the safe state for a door with an
         agent behind it.
+
+        A webhook that comes from GitHub (`from: github`) keeps its secret
+        sealed by the vault besides the hash, because GitHub signs deliveries
+        with it instead of sending it. Paste it into the GitHub webhook's
+        Secret field; it is never accepted in `X-FuseOne-Secret`.
       parameters:
         - name: agentId
           in: path
@@ -1213,6 +1218,14 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            A GitHub webhook, and this installation has no master key: its
+            secret would have to be stored in the clear, so it is not stored
+            and the webhook stays closed. Problem code `fuseone:no-master-key`.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /runs/throughput:
     get:
@@ -7718,6 +7731,13 @@ components:
             behind it.
         rotatedBy: { type: string }
         rotatedAt: { type: string, format: date-time, nullable: true }
+        from:
+          type: string
+          enum: [github]
+          description: |
+            Absent for an ordinary webhook, whose caller sends the secret in
+            `X-FuseOne-Secret`. `github` for one GitHub signs: the secret goes
+            into the GitHub webhook's Secret field.
 
     AgentTrigger:
       type: object
@@ -7744,6 +7764,21 @@ components:
         schedule: { type: string }
         path: { type: string }
         event: { type: string }
+        from:
+          type: string
+          enum: [github]
+          description: |
+            A webhook only. `github` makes the path verify GitHub's signature
+            (X-Hub-Signature-256), take X-GitHub-Delivery as the delivery id,
+            and start a run only for the `events` listed.
+        events:
+          type: array
+          items: { type: string }
+          description: |
+            With `from: github` only, and required there: `event` takes every
+            action of it, `event.action` only that one — for example
+            `pull_request.labeled`. Only the shape of a name is checked: a
+            misspelt event publishes and never fires.
 
     AgentEvent:
       type: object

@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -20,30 +19,44 @@ type spyHooks struct {
 	path  string
 	agent domain.AgentID
 	armed bool
+	// from makes the path a GitHub hook; with noVault its rotation is refused
+	// the way the store refuses it without a master key.
+	from    string
+	noVault bool
 }
 
 func (s *spyHooks) Find(_ context.Context, path string) (trigger.Hook, error) {
 	if path != s.path {
 		return trigger.Hook{}, trigger.ErrNoHook
 	}
-	return trigger.Hook{Path: s.path, Agent: s.agent, Armed: s.armed}, nil
+	return trigger.Hook{Path: s.path, Agent: s.agent, Armed: s.armed, From: s.from}, nil
 }
 
-func (s *spyHooks) Verify(context.Context, string, string) (bool, error) { return false, nil }
+// Authenticate proves nothing: these tests are about the console's routes,
+// not deliveries.
+func (s *spyHooks) Authenticate(context.Context, string, trigger.Offer) (trigger.Hook, error) {
+	return trigger.Hook{}, trigger.ErrRejected
+}
 
-func (s *spyHooks) Rotate(_ context.Context, path string, _ domain.UserID, _ time.Time) (string, error) {
-	if path != s.path {
+func (s *spyHooks) Rotate(_ context.Context, r trigger.Rotation) (string, error) {
+	// The store's rule: a path that is not this agent's, now, is absent.
+	if r.Path != s.path || r.Agent != s.agent {
 		return "", trigger.ErrNoHook
+	}
+	if s.from == domain.WebhookFromGitHub && s.noVault {
+		return "", trigger.ErrNoVault
 	}
 	s.armed = true
 	secret, _, err := trigger.NewSecret()
 	return secret, err
 }
 
-func (s *spyHooks) Sync(context.Context, domain.AgentID, domain.Scope, []string) error { return nil }
+func (s *spyHooks) Sync(context.Context, domain.AgentID, domain.Scope, []domain.WebhookTrigger) error {
+	return nil
+}
 
 func (s *spyHooks) ForAgent(context.Context, domain.AgentID) ([]trigger.Hook, error) {
-	return []trigger.Hook{{Path: s.path, Agent: s.agent, Armed: s.armed}}, nil
+	return []trigger.Hook{{Path: s.path, Agent: s.agent, Armed: s.armed, From: s.from}}, nil
 }
 
 func webhookServer(t *testing.T) *Server {

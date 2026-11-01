@@ -45,18 +45,44 @@ func (h *Hooks) Mount(mux *http.ServeMux) {
 	mux.Handle("POST /hooks/{path...}", http.HandlerFunc(h.receive))
 }
 
+/*
+receive serves every delivery, whatever kind of hook its path is.
+
+The bounded body is read first, for every path. A GitHub hook cannot be
+checked without it — the signature is over the body — and if any other path
+answered before reading it, a client sending a slow body would tell GitHub
+paths from the rest by how long the refusal took.
+
+Then one read authenticates: the hook returned is the row whose key was
+checked, so the run is opened for the agent the delivery proved, not for
+whoever holds the path by the time a second lookup ran. Everything that is not
+a proof answers the same way — a caller probing paths must not learn which
+exist, which are configured, which come from GitHub, or which belong to an
+agent; that is a map of the installation.
+*/
 func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 	path := r.PathValue("path")
 
-	// Everything that is not a correct secret answers the same way. A caller
-	// probing paths must not learn which ones exist, which are configured, or
-	// which belong to an agent — that is a map of the installation.
-	ok, err := h.webhooks.Verify(r.Context(), path, r.Header.Get(secretHeader))
-	if err != nil || !ok {
-		if err != nil && !errors.Is(err, trigger.ErrNoHook) && !errors.Is(err, trigger.ErrNotArmed) {
-			h.log.Error("could not verify a webhook", "path", path, "err", err)
-		}
-		writeProblemJSON(w, http.StatusUnauthorized, CodeForbidden, "Rejected", "The secret is missing or wrong.")
+	body, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, maxHookBody))
+	hook, err := h.webhooks.Authenticate(r.Context(), path, trigger.Offer{
+		Secret:    r.Header.Get(secretHeader),
+		Signature: r.Header.Get(githubSignatureHeader),
+		Body:      body,
+	})
+	if err != nil {
+		h.logRefusal(path, err, readErr)
+		rejectHook(w)
+		return
+	}
+	if readErr != nil {
+		// Only an ordinary hook gets here: a body over the limit was never
+		// read whole, so no GitHub signature over it can have matched.
+		writeProblemJSON(w, http.StatusRequestEntityTooLarge, CodeInvalidInput, "The body is too large",
+			"A webhook body becomes a run's input and reaches a model.")
+		return
+	}
+	if hook.From == domain.WebhookFromGitHub {
+		h.serveGitHub(w, r, hook, body)
 		return
 	}
 
@@ -70,24 +96,37 @@ func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hook, err := h.webhooks.Find(r.Context(), path)
-	if err != nil {
-		writeProblemJSON(w, http.StatusUnauthorized, CodeForbidden, "Rejected", "The secret is missing or wrong.")
-		return
-	}
+	h.open(w, r, path, hook, delivery, body)
+}
 
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxHookBody))
-	if err != nil {
-		writeProblemJSON(w, http.StatusRequestEntityTooLarge, CodeInvalidInput, "The body is too large",
-			"A webhook body becomes a run's input and reaches a model.")
-		return
+// logRefusal records a refusal worth an operator's attention: a failure to
+// check at all, or a body over the limit. A wrong key or an unknown path is a
+// caller's mistake or a probe, and logging each would let anybody fill the log.
+func (h *Hooks) logRefusal(path string, err, readErr error) {
+	switch {
+	case errors.Is(err, trigger.ErrNoHook), errors.Is(err, trigger.ErrNotArmed), errors.Is(err, trigger.ErrRejected):
+		if readErr != nil {
+			h.log.Info("refused a webhook delivery over the size limit", "path", path, "limit", maxHookBody)
+		}
+	default:
+		h.log.Error("could not authenticate a webhook delivery", "path", path, "err", err)
 	}
+}
 
+// rejectHook is the one answer to everything that did not authenticate.
+func rejectHook(w http.ResponseWriter) {
+	writeProblemJSON(w, http.StatusUnauthorized, CodeForbidden, "Rejected", "The secret is missing or wrong.")
+}
+
+// open starts the run a delivery names and answers the sender.
+func (h *Hooks) open(w http.ResponseWriter, r *http.Request, path string, hook trigger.Hook,
+	delivery string, input []byte,
+) {
 	opened, err := h.opener.Open(r.Context(), trigger.Request{
 		Agent:   hook.Agent,
 		IdemKey: trigger.DeliveryKey(path, delivery),
 		Trigger: "webhook",
-		Input:   body,
+		Input:   input,
 		// A body somebody outside sent. On a good day it is an ERP's JSON and
 		// on a bad one it is whatever they posted, and the difference is not
 		// visible from here — the secret proves who sent it and says nothing

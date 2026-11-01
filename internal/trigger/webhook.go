@@ -32,20 +32,41 @@ type Hook struct {
 	Armed   bool
 	Rotated time.Time
 	By      domain.UserID
+	// From and Events are the published source and the deliveries that start
+	// a run; see domain.WebhookTrigger.
+	From   string
+	Events []string
 }
 
 // Webhooks is where paths and their secrets are kept.
 type Webhooks interface {
 	// Find returns the hook at a path, or ErrNoHook.
 	Find(ctx context.Context, path string) (Hook, error)
-	// Verify reports whether the secret matches the one stored for the path.
-	Verify(ctx context.Context, path, secret string) (bool, error)
-	// Rotate replaces the secret and returns the new one, once.
-	Rotate(ctx context.Context, path string, by domain.UserID, at time.Time) (string, error)
-	// Sync reconciles an agent's declared paths.
-	Sync(ctx context.Context, agent domain.AgentID, scope domain.Scope, paths []string) error
+	// Authenticate returns the hook at path if the offer proves it, from one
+	// read: ErrNoHook, ErrNotArmed or ErrRejected otherwise. It is the only
+	// way a delivery reaches a hook — the row checked is the row returned.
+	Authenticate(ctx context.Context, path string, offer Offer) (Hook, error)
+	// Rotate replaces the secret and returns the new one, once — only while
+	// the path still belongs to the agent that asked, or ErrNoHook.
+	Rotate(ctx context.Context, r Rotation) (string, error)
+	// Sync reconciles an agent's declared webhooks.
+	Sync(ctx context.Context, agent domain.AgentID, scope domain.Scope, hooks []domain.WebhookTrigger) error
 	// ForAgent lists what an agent declares, for the console.
 	ForAgent(ctx context.Context, agent domain.AgentID) ([]Hook, error)
+}
+
+// Rotation is a request for a new secret: the path, the agent whose path the
+// caller was authorised for, and who asked when.
+//
+// The agent is part of the request because the check that the caller may
+// rotate this path and the write happen at two moments. A path that changed
+// hands between them must not arm the new owner's hook and hand its key to
+// somebody authorised for the old one.
+type Rotation struct {
+	Path  string
+	Agent domain.AgentID
+	By    domain.UserID
+	At    time.Time
 }
 
 // ErrNoHook means nothing is declared at that path.
@@ -53,6 +74,11 @@ var ErrNoHook = errors.New("trigger: no webhook at that path")
 
 // ErrNotArmed means the path exists but nobody has generated its secret.
 var ErrNotArmed = errors.New("trigger: the webhook has no secret yet")
+
+// ErrNoVault means a GitHub hook's secret cannot be kept: it has to be read
+// back to check signatures, and without the master key it could only be
+// stored in the clear.
+var ErrNoVault = errors.New("trigger: a GitHub webhook's secret needs the master key to be stored")
 
 // ErrPathTaken means another agent already answers on that path.
 //

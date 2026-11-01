@@ -58,17 +58,7 @@ func agentFrom(a domain.AgentSummary) openapi.Agent {
 	if len(a.Triggers) > 0 {
 		triggers := make([]openapi.AgentTrigger, 0, len(a.Triggers))
 		for _, t := range a.Triggers {
-			trigger := openapi.AgentTrigger{Type: openapi.AgentTriggerType(t.Type)}
-			if t.Schedule != "" {
-				trigger.Schedule = ptr(t.Schedule)
-			}
-			if t.Path != "" {
-				trigger.Path = ptr(t.Path)
-			}
-			if t.Event != "" {
-				trigger.Event = ptr(t.Event)
-			}
-			triggers = append(triggers, trigger)
+			triggers = append(triggers, apiTrigger(t))
 		}
 		agent.Triggers = &triggers
 	}

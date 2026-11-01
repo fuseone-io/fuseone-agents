@@ -23,17 +23,29 @@ import (
 type fakeHooks struct {
 	armed  map[string]string
 	agents map[string]domain.AgentID
+	// signing and events make a path a GitHub hook, as the real store does:
+	// its secret signs, so a sent secret never proves it.
+	signing map[string]string
+	events  map[string][]string
 }
 
-func (f *fakeHooks) Verify(_ context.Context, path, secret string) (bool, error) {
-	want, declared := f.armed[path]
-	if !declared {
-		return false, trigger.ErrNoHook
+// Authenticate keeps the store's rules: one snapshot, checked by its own
+// kind, and returned as the hook that was checked.
+func (f *fakeHooks) Authenticate(ctx context.Context, path string, offer trigger.Offer) (trigger.Hook, error) {
+	hook, err := f.Find(ctx, path)
+	switch {
+	case err != nil:
+		return trigger.Hook{}, err
+	case !hook.Armed:
+		return trigger.Hook{}, trigger.ErrNotArmed
+	case hook.From == domain.WebhookFromGitHub:
+		if !trigger.VerifyGitHubSignature([]byte(f.signing[path]), offer.Body, offer.Signature) {
+			return trigger.Hook{}, trigger.ErrRejected
+		}
+	case offer.Secret != f.armed[path]:
+		return trigger.Hook{}, trigger.ErrRejected
 	}
-	if want == "" {
-		return false, trigger.ErrNotArmed
-	}
-	return want == secret, nil
+	return hook, nil
 }
 
 func (f *fakeHooks) Find(_ context.Context, path string) (trigger.Hook, error) {
@@ -41,13 +53,19 @@ func (f *fakeHooks) Find(_ context.Context, path string) (trigger.Hook, error) {
 	if !ok {
 		return trigger.Hook{}, trigger.ErrNoHook
 	}
+	if secret, github := f.signing[path]; github {
+		return trigger.Hook{Path: path, Agent: agent, Armed: secret != "",
+			From: domain.WebhookFromGitHub, Events: f.events[path]}, nil
+	}
 	return trigger.Hook{Path: path, Agent: agent, Armed: f.armed[path] != ""}, nil
 }
 
-func (f *fakeHooks) Rotate(context.Context, string, domain.UserID, time.Time) (string, error) {
+func (f *fakeHooks) Rotate(context.Context, trigger.Rotation) (string, error) {
 	return "", nil
 }
-func (f *fakeHooks) Sync(context.Context, domain.AgentID, domain.Scope, []string) error { return nil }
+func (f *fakeHooks) Sync(context.Context, domain.AgentID, domain.Scope, []domain.WebhookTrigger) error {
+	return nil
+}
 func (f *fakeHooks) ForAgent(context.Context, domain.AgentID) ([]trigger.Hook, error) {
 	return nil, nil
 }

@@ -805,6 +805,11 @@ export interface paths {
          *     This is also how a webhook is first opened. A declared path with no
          *     secret refuses everything, which is the safe state for a door with an
          *     agent behind it.
+         *
+         *     A webhook that comes from GitHub (`from: github`) keeps its secret
+         *     sealed by the vault besides the hash, because GitHub signs deliveries
+         *     with it instead of sending it. Paste it into the GitHub webhook's
+         *     Secret field; it is never accepted in `X-FuseOne-Secret`.
          */
         post: operations["rotateWebhookSecret"];
         delete?: never;
@@ -4878,6 +4883,13 @@ export interface components {
             rotatedBy?: string;
             /** Format: date-time */
             rotatedAt?: string | null;
+            /**
+             * @description Absent for an ordinary webhook, whose caller sends the secret in
+             *     `X-FuseOne-Secret`. `github` for one GitHub signs: the secret goes
+             *     into the GitHub webhook's Secret field.
+             * @enum {string}
+             */
+            from?: "github";
         };
         /**
          * @description How a run starts. A type outside this list is refused rather than
@@ -4902,6 +4914,20 @@ export interface components {
             schedule?: string;
             path?: string;
             event?: string;
+            /**
+             * @description A webhook only. `github` makes the path verify GitHub's signature
+             *     (X-Hub-Signature-256), take X-GitHub-Delivery as the delivery id,
+             *     and start a run only for the `events` listed.
+             * @enum {string}
+             */
+            from?: "github";
+            /**
+             * @description With `from: github` only, and required there: `event` takes every
+             *     action of it, `event.action` only that one — for example
+             *     `pull_request.labeled`. Only the shape of a name is checked: a
+             *     misspelt event publishes and never fires.
+             */
+            events?: string[];
         };
         /**
          * @description One event this agent publishes when a run finishes. The event name is
@@ -6612,6 +6638,19 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /**
+             * @description A GitHub webhook, and this installation has no master key: its
+             *     secret would have to be stored in the clear, so it is not stored
+             *     and the webhook stays closed. Problem code `fuseone:no-master-key`.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     getThroughput: {

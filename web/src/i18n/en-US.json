@@ -720,7 +720,19 @@
     "writeFirst": "Write the instructions first. The stages are a reading of them — with no text there is nothing to read.",
     "writeIt": "Write",
     "writeTheNextStep": "Write the next step",
-    "zeroIsNoCeiling": "Zero means no ceiling, which is not the same as a ceiling of zero."
+    "zeroIsNoCeiling": "Zero means no ceiling, which is not the same as a ceiling of zero.",
+    "webhookSource": {
+      "label": "Sent by",
+      "any": "Any sender (secret in a header)",
+      "github": "GitHub (signed delivery)",
+      "events": "GitHub events",
+      "eventsExample": "pull_request.opened, issues.labeled",
+      "needsEvents": "Name the events that start a run: without them every delivery GitHub sends would start one.",
+      "eventsHint": "Only the shape of a name is checked: a misspelt event never fires. If nothing starts, check the webhook's Recent Deliveries in GitHub."
+    },
+    "fromGitHub": "GitHub",
+    "githubSecretField": "The GitHub webhook's Secret field",
+    "githubDeliveryExplains": "In GitHub, paste this address into Payload URL, choose <code>application/json</code> as the Content type and paste the key into Secret. GitHub signs every delivery with it; the key itself is never sent."
   },
   "approvals": {
     "actionDenied": "Action denied",
@@ -2275,7 +2287,8 @@
     "memory-secret": "That text contains a private key or a complete access token. Memory is quoted back to agents and kept for years, so it cannot hold one.",
     "memory-secret-warned": "Part of that text is long and random enough to be a credential. Check it, then confirm if it is not one.",
     "standing-forbidden": "{{detail}}'s definition forbids standing approvals: every approval it asks for waits for a person. Change that on the agent, not here.",
-    "source-input-erased": "The input this run was recorded with was erased or has expired, so no run was opened. It cannot be brought back."
+    "source-input-erased": "The input this run was recorded with was erased or has expired, so no run was opened. It cannot be brought back.",
+    "no-master-key": "This webhook comes from GitHub and the installation has no master key (FUSEONE_MASTER_KEY). Without it the key could only be stored in the clear, so the webhook stays closed until the master key is configured."
   },
   "retention": {
     "byDefault": "default, nobody chose it",

@@ -65,6 +65,10 @@ type AgentTrigger struct {
 	Schedule string `json:"schedule,omitempty"`
 	Path     string `json:"path,omitempty"`
 	Event    string `json:"event,omitempty"`
+	// From and Events are a webhook's source and the deliveries it accepts;
+	// see WebhookTrigger.
+	From   string   `json:"from,omitempty"`
+	Events []string `json:"events,omitempty"`
 }
 
 /*

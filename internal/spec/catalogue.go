@@ -238,7 +238,9 @@ func scanAgent(row interface{ Scan(...any) error }) (domain.AgentSummary, error)
 func triggersOf(s Spec) []domain.AgentTrigger {
 	out := make([]domain.AgentTrigger, 0, len(s.Triggers))
 	for _, t := range s.Triggers {
-		out = append(out, domain.AgentTrigger{Type: t.Type, Schedule: t.Schedule, Path: t.Path, Event: t.Event})
+		out = append(out, domain.AgentTrigger{
+			Type: t.Type, Schedule: t.Schedule, Path: t.Path, Event: t.Event, From: t.From, Events: t.Events,
+		})
 	}
 	return out
 }

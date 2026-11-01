@@ -3,7 +3,6 @@ package spec
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -28,17 +27,6 @@ func CronSchedules(s Spec) []string {
 	for _, t := range s.Triggers {
 		if t.Type == TriggerCron && t.Schedule != "" {
 			out = append(out, t.Schedule)
-		}
-	}
-	return out
-}
-
-// WebhookPaths is every path this version declares, without its leading slash.
-func WebhookPaths(s Spec) []string {
-	out := []string{}
-	for _, t := range s.Triggers {
-		if t.Type == TriggerWebhook && t.Path != "" {
-			out = append(out, strings.TrimPrefix(t.Path, "/"))
 		}
 	}
 	return out
@@ -118,6 +106,7 @@ const (
 func triggerProblems(triggers []Trigger) []string {
 	var problems []string
 	for _, t := range triggers {
+		problems = append(problems, sourceProblems(t)...)
 		switch t.Type {
 		case TriggerCron, TriggerWebhook, TriggerEvent:
 		case TriggerChannel:

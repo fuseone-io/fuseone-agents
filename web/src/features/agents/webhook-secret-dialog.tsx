@@ -18,14 +18,20 @@ import {
  * again — the dialog says so plainly rather than letting somebody close it and
  * find out later. Copy is the only action, because reading a 43-character
  * secret off a screen is how the wrong one ends up in a configuration file.
+ *
+ * For a webhook GitHub sends, the key goes into GitHub's Secret field: GitHub
+ * signs each delivery with it, never sends it, and names deliveries itself —
+ * so neither the header nor Idempotency-Key is worth mentioning.
  */
 export function WebhookSecretDialog({
   secret,
   url,
+  fromGitHub = false,
   onClose,
 }: {
   secret?: string;
   url?: string;
+  fromGitHub?: boolean;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -52,7 +58,11 @@ export function WebhookSecretDialog({
             </code>
           </Field>
 
-          <Field label={t("agents.secretHeader")}>
+          <Field
+            label={t(
+              fromGitHub ? "agents.githubSecretField" : "agents.secretHeader",
+            )}
+          >
             <div className="flex items-center gap-2">
               <code className="min-w-0 flex-1 truncate rounded-lg border border-border bg-muted px-3 py-2 font-mono text-xs">
                 {secret}
@@ -75,7 +85,11 @@ export function WebhookSecretDialog({
             />
             <span>
               <Trans
-                i18nKey="agents.idempotencyExplains"
+                i18nKey={
+                  fromGitHub
+                    ? "agents.githubDeliveryExplains"
+                    : "agents.idempotencyExplains"
+                }
                 components={{ code: <code className="font-mono" /> }}
               />
             </span>

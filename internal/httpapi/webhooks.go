@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/fuseone/agents/internal/auth"
@@ -45,6 +47,10 @@ func (s *Server) ListWebhooks(
 		if !hook.Rotated.IsZero() {
 			item.RotatedAt = ptr(hook.Rotated)
 		}
+		if hook.From != "" {
+			from := openapi.WebhookFrom(hook.From)
+			item.From = &from
+		}
 		items = append(items, item)
 	}
 	return openapi.ListWebhooks200JSONResponse{Items: items}, nil
@@ -82,7 +88,21 @@ func (s *Server) RotateWebhookSecret(
 		return absent, nil
 	}
 
-	secret, err := s.webhooks.Rotate(ctx, path, callerOf(ctx), clockOr(s.clock).Now())
+	secret, err := s.webhooks.Rotate(ctx, trigger.Rotation{
+		Path: path, Agent: domain.AgentID(req.AgentId), By: callerOf(ctx), At: clockOr(s.clock).Now(),
+	})
+	if errors.Is(err, trigger.ErrNoHook) {
+		// Gone, or another agent's since the check above: absent either way,
+		// the same answer a path that was never this agent's gets.
+		return absent, nil
+	}
+	if errors.Is(err, trigger.ErrNoVault) {
+		return openapi.RotateWebhookSecret409ApplicationProblemPlusJSONResponse(
+			refusal(http.StatusConflict, CodeNoMasterKey, "No master key",
+				"A GitHub webhook's secret is sealed with the installation's master key ("+
+					"FUSEONE_MASTER_KEY), and none is set. Without it the secret could only be "+
+					"stored in the clear, so the webhook stays closed until the key is configured.")), nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("rotate webhook secret: %w", err)
 	}

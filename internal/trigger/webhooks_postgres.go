@@ -15,93 +15,129 @@ import (
 // PostgresWebhooks keeps the declared paths and their secrets.
 //
 // The secret is stored only as a hash: a database dump must not hand somebody
-// the ability to make agents run.
-type PostgresWebhooks struct{ pool *pgxpool.Pool }
+// the ability to make agents run. A GitHub hook keeps a sealed copy beside the
+// hash, because GitHub signs with the secret instead of sending it — see
+// webhooks_github_postgres.go.
+type PostgresWebhooks struct {
+	pool  *pgxpool.Pool
+	vault Sealer
+}
 
 func NewPostgresWebhooks(pool *pgxpool.Pool) *PostgresWebhooks {
 	return &PostgresWebhooks{pool: pool}
 }
 
-// Find returns what is declared at a path.
-func (p *PostgresWebhooks) Find(ctx context.Context, path string) (Hook, error) {
+// hookColumns is what Find and ForAgent read, in scanHook's order.
+const hookColumns = `path, agent_id, company_id, area_id, secret_hash, rotated_by, rotated_at,
+	source, events, secret_sealed`
+
+// scanHook reads one row of hookColumns.
+//
+// A GitHub hook is armed only with its sealed copy: a hash alone cannot check
+// a signature, so a path that has one and not the other is closed.
+func scanHook(row pgx.Row) (Hook, error) {
+	var sealed []byte
+	return scanHookWith(row, &sealed)
+}
+
+// scanHookWith reads hookColumns into a Hook, the sealed secret into sealed,
+// and any further selected columns into extra.
+func scanHookWith(row pgx.Row, sealed *[]byte, extra ...any) (Hook, error) {
 	var (
-		hook    Hook
-		company string
-		area    string
-		secret  []byte
-		rotated *time.Time
+		hook          Hook
+		company, area string
+		secret        []byte
+		rotated       *time.Time
 	)
-	err := p.pool.QueryRow(ctx, `
-		select path, agent_id, company_id, area_id, secret_hash, rotated_by, rotated_at
-		from webhook_triggers where path = $1`, path,
-	).Scan(&hook.Path, &hook.Agent, &company, &area, &secret, &hook.By, &rotated)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Hook{}, ErrNoHook
+	dest := append([]any{&hook.Path, &hook.Agent, &company, &area, &secret, &hook.By, &rotated,
+		&hook.From, &hook.Events, sealed}, extra...)
+	if err := row.Scan(dest...); err != nil {
+		return Hook{}, err
 	}
-	if err != nil {
-		return Hook{}, fmt.Errorf("trigger: find hook %q: %w", path, err)
-	}
-
 	hook.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
-	hook.Armed = len(secret) > 0
+	hook.Armed = len(secret) > 0 && (hook.From != domain.WebhookFromGitHub || len(*sealed) > 0)
+	if len(hook.Events) == 0 {
+		hook.Events = nil
+	}
 	if rotated != nil {
 		hook.Rotated = rotated.UTC()
 	}
 	return hook, nil
 }
 
-// Verify reports whether the offered secret is the one stored for the path.
-func (p *PostgresWebhooks) Verify(ctx context.Context, path, secret string) (bool, error) {
-	var stored []byte
-	err := p.pool.QueryRow(ctx,
-		`select secret_hash from webhook_triggers where path = $1`, path).Scan(&stored)
-
+// Find returns what is declared at a path.
+func (p *PostgresWebhooks) Find(ctx context.Context, path string) (Hook, error) {
+	hook, err := scanHook(p.pool.QueryRow(ctx,
+		`select `+hookColumns+` from webhook_triggers where path = $1`, path))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return false, ErrNoHook
+		return Hook{}, ErrNoHook
 	}
 	if err != nil {
-		return false, fmt.Errorf("trigger: verify %q: %w", path, err)
+		return Hook{}, fmt.Errorf("trigger: find hook %q: %w", path, err)
 	}
-	if len(stored) == 0 {
-		return false, ErrNotArmed
-	}
-	return MatchesSecret(stored, secret), nil
+	return hook, nil
 }
 
 // Rotate replaces the secret and returns the new one, once.
 //
 // Rotating is also how the first one is generated: there is no separate
 // "arm" — a hook either has a current secret or it is closed.
-func (p *PostgresWebhooks) Rotate(
-	ctx context.Context, path string, by domain.UserID, at time.Time,
-) (string, error) {
+//
+// The row is read for the agent that asked and locked until the write, so a
+// path that belongs to somebody else is absent to this rotation, exactly as a
+// path that was never this agent's — and it cannot change hands, or source,
+// between the read and the write.
+func (p *PostgresWebhooks) Rotate(ctx context.Context, r Rotation) (string, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return "", fmt.Errorf("trigger: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var source string
+	err = tx.QueryRow(ctx,
+		`select source from webhook_triggers where path = $1 and agent_id = $2 for update`,
+		r.Path, string(r.Agent)).Scan(&source)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNoHook
+	}
+	if err != nil {
+		return "", fmt.Errorf("trigger: rotate %q: %w", r.Path, err)
+	}
+
 	secret, hash, err := NewSecret()
 	if err != nil {
 		return "", err
 	}
-
-	tag, err := p.pool.Exec(ctx, `
-		update webhook_triggers
-		set secret_hash = $2, rotated_by = $3, rotated_at = $4
-		where path = $1`, path, hash, string(by), at.UTC())
+	sealed, nonce, err := p.sealFor(source, r.Path, secret)
 	if err != nil {
-		return "", fmt.Errorf("trigger: rotate %q: %w", path, err)
+		return "", err
 	}
-	if tag.RowsAffected() == 0 {
-		return "", ErrNoHook
+	if _, err := tx.Exec(ctx, `
+		update webhook_triggers
+		set secret_hash = $2, rotated_by = $3, rotated_at = $4,
+			secret_sealed = $5, secret_nonce = $6
+		where path = $1`,
+		r.Path, hash, string(r.By), r.At.UTC(), sealed, nonce); err != nil {
+		return "", fmt.Errorf("trigger: rotate %q: %w", r.Path, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("trigger: rotate %q: %w", r.Path, err)
 	}
 	return secret, nil
 }
 
-// Sync reconciles an agent's declared paths with what its newest version says.
+// Sync reconciles an agent's declared webhooks with what its newest version
+// says.
 //
 // A path that is still declared keeps its secret: rewriting it on every
-// publish would break every sender the moment somebody edited a prompt. A path
-// no longer declared is deleted, because a version that withdrew a webhook must
+// publish would break every sender the moment somebody edited a prompt —
+// unless its source changed, because a secret handed to a sender who sends it
+// must not start working for one who signs with it, or the reverse. A path no
+// longer declared is deleted, because a version that withdrew a webhook must
 // stop answering on it.
 func (p *PostgresWebhooks) Sync(
-	ctx context.Context, agent domain.AgentID, scope domain.Scope, paths []string,
+	ctx context.Context, agent domain.AgentID, scope domain.Scope, hooks []domain.WebhookTrigger,
 ) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -109,33 +145,16 @@ func (p *PostgresWebhooks) Sync(
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	for _, path := range paths {
-		// Claimed, never taken. A path already answering for somebody else has
-		// a sender holding its secret, and quietly repointing that path would
-		// aim an existing key at a different agent.
-		var owner string
-		if err := tx.QueryRow(ctx, `
-			insert into webhook_triggers (path, agent_id, company_id, area_id)
-			values ($1, $2, $3, $4)
-			on conflict (path) do update set
-				company_id = excluded.company_id,
-				area_id = excluded.area_id
-			where webhook_triggers.agent_id = excluded.agent_id
-			returning agent_id`,
-			path, string(agent), string(scope.Company), string(scope.Area),
-		).Scan(&owner); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return fmt.Errorf("%w: %q belongs to another agent", ErrPathTaken, path)
-			}
-			return fmt.Errorf("trigger: sync hook %q: %w", path, err)
+	paths := []string{}
+	for _, hook := range hooks {
+		if err := claimHook(ctx, tx, agent, scope, hook); err != nil {
+			return err
 		}
+		paths = append(paths, hook.Path)
 	}
 
-	// Empty rather than nil: nil binds as NULL and the delete would match
-	// nothing, leaving a withdrawn webhook answering forever.
-	if paths == nil {
-		paths = []string{}
-	}
+	// Never nil: nil binds as NULL and the delete would match nothing,
+	// leaving a withdrawn webhook answering forever.
 	if _, err := tx.Exec(ctx, `
 		delete from webhook_triggers
 		where agent_id = $1 and path <> all($2::text[])`,
@@ -145,11 +164,50 @@ func (p *PostgresWebhooks) Sync(
 	return tx.Commit(ctx)
 }
 
+// claimHook writes one declared webhook.
+//
+// Claimed, never taken. A path already answering for somebody else has a
+// sender holding its secret, and quietly repointing that path would aim an
+// existing key at a different agent.
+func claimHook(
+	ctx context.Context, tx pgx.Tx, agent domain.AgentID, scope domain.Scope, hook domain.WebhookTrigger,
+) error {
+	events := hook.Events
+	if events == nil {
+		events = []string{}
+	}
+	var owner string
+	err := tx.QueryRow(ctx, `
+		insert into webhook_triggers (path, agent_id, company_id, area_id, source, events)
+		values ($1, $2, $3, $4, $5, $6)
+		on conflict (path) do update set
+			company_id = excluded.company_id,
+			area_id = excluded.area_id,
+			events = excluded.events,
+			source = excluded.source,
+			secret_hash = case when webhook_triggers.source = excluded.source
+				then webhook_triggers.secret_hash end,
+			secret_sealed = case when webhook_triggers.source = excluded.source
+				then webhook_triggers.secret_sealed end,
+			secret_nonce = case when webhook_triggers.source = excluded.source
+				then webhook_triggers.secret_nonce end
+		where webhook_triggers.agent_id = excluded.agent_id
+		returning agent_id`,
+		hook.Path, string(agent), string(scope.Company), string(scope.Area), hook.From, events,
+	).Scan(&owner)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("%w: %q belongs to another agent", ErrPathTaken, hook.Path)
+	}
+	if err != nil {
+		return fmt.Errorf("trigger: sync hook %q: %w", hook.Path, err)
+	}
+	return nil
+}
+
 // ForAgent lists what an agent declares, for the console.
 func (p *PostgresWebhooks) ForAgent(ctx context.Context, agent domain.AgentID) ([]Hook, error) {
-	rows, err := p.pool.Query(ctx, `
-		select path, agent_id, company_id, area_id, secret_hash, rotated_by, rotated_at
-		from webhook_triggers where agent_id = $1 order by path`, string(agent))
+	rows, err := p.pool.Query(ctx,
+		`select `+hookColumns+` from webhook_triggers where agent_id = $1 order by path`, string(agent))
 	if err != nil {
 		return nil, fmt.Errorf("trigger: hooks of %s: %w", agent, err)
 	}
@@ -157,20 +215,9 @@ func (p *PostgresWebhooks) ForAgent(ctx context.Context, agent domain.AgentID) (
 
 	var out []Hook
 	for rows.Next() {
-		var (
-			hook          Hook
-			company, area string
-			secret        []byte
-			rotated       *time.Time
-		)
-		if err := rows.Scan(&hook.Path, &hook.Agent, &company, &area,
-			&secret, &hook.By, &rotated); err != nil {
+		hook, err := scanHook(rows)
+		if err != nil {
 			return nil, err
-		}
-		hook.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
-		hook.Armed = len(secret) > 0
-		if rotated != nil {
-			hook.Rotated = rotated.UTC()
 		}
 		out = append(out, hook)
 	}

@@ -1,20 +1,10 @@
 import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Mono } from "@/components/shared/mono";
+import { RotateButton } from "@/features/agents/webhook-rotate-button";
 import { WebhookSecretDialog } from "@/features/agents/webhook-secret-dialog";
 import {
   useRotateWebhookSecret,
@@ -35,14 +25,19 @@ export function WebhooksPanel({ agentId }: { agentId: string }) {
   const { t } = useTranslation();
   const { data, isLoading } = useWebhooks(agentId);
   const rotate = useRotateWebhookSecret(agentId);
-  const [issued, setIssued] = useState<{ secret: string; url: string }>();
+  const [issued, setIssued] = useState<{
+    secret: string;
+    url: string;
+    fromGitHub: boolean;
+  }>();
 
   const hooks = data?.items ?? [];
   if (!isLoading && hooks.length === 0) return null;
 
-  const generate = (path: string) => {
-    rotate.mutate(path, {
-      onSuccess: (result) => setIssued(result),
+  const generate = (hook: Webhook) => {
+    rotate.mutate(hook.path, {
+      onSuccess: (result) =>
+        setIssued({ ...result, fromGitHub: hook.from === "github" }),
       onError: (error) =>
         toast.error(t("agents.keyFailed"), {
           description: problemMessage(error, t),
@@ -62,15 +57,20 @@ export function WebhooksPanel({ agentId }: { agentId: string }) {
         <ul className="flex flex-col gap-3">
           {hooks.map((hook) => (
             <li key={hook.path} className="flex flex-col gap-1.5">
-              {/* A route, not a phrase. */}
-              {/* eslint-disable-next-line i18next/no-literal-string */}
-              <Mono className="truncate">/hooks/{hook.path}</Mono>
+              <div className="flex items-center gap-2">
+                {/* A route, not a phrase. */}
+                {/* eslint-disable-next-line i18next/no-literal-string */}
+                <Mono className="truncate">/hooks/{hook.path}</Mono>
+                {hook.from === "github" && (
+                  <Badge variant="outline">{t("agents.fromGitHub")}</Badge>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <State hook={hook} />
                 <RotateButton
                   hook={hook}
                   pending={rotate.isPending}
-                  onGenerate={() => generate(hook.path)}
+                  onGenerate={() => generate(hook)}
                 />
               </div>
             </li>
@@ -81,6 +81,7 @@ export function WebhooksPanel({ agentId }: { agentId: string }) {
       <WebhookSecretDialog
         secret={issued?.secret}
         url={issued?.url}
+        fromGitHub={issued?.fromGitHub}
         onClose={() => setIssued(undefined)}
       />
     </section>
@@ -104,65 +105,5 @@ function State({ hook }: { hook: Webhook }) {
         by: hook.rotatedBy ?? "",
       })}
     </span>
-  );
-}
-
-/**
- * Generating the first key breaks nothing. Replacing one that exists breaks
- * every sender configured against it, so only that asks first.
- */
-function RotateButton({
-  hook,
-  pending,
-  onGenerate,
-}: {
-  hook: Webhook;
-  pending: boolean;
-  onGenerate: () => void;
-}) {
-  const { t } = useTranslation();
-  if (!hook.armed) {
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        className="ml-auto h-7"
-        disabled={pending}
-        onClick={onGenerate}
-      >
-        {t("agents.generateKey")}
-      </Button>
-    );
-  }
-
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="ml-auto h-7"
-          disabled={pending}
-        >
-          {t("agents.rotate")}
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>
-            {t("agents.rotateTitle", { path: hook.path })}
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            {t("agents.rotateWarning")}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-          <AlertDialogAction onClick={onGenerate}>
-            {t("agents.rotate")}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   );
 }

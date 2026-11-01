@@ -152,7 +152,7 @@ func (s *Server) PublishAgent(
 		}
 	}
 	if s.webhooks != nil {
-		if err := s.webhooks.Sync(ctx, published.ID, scope, spec.WebhookPaths(published)); err != nil {
+		if err := s.webhooks.Sync(ctx, published.ID, scope, spec.Webhooks(published)); err != nil {
 			return nil, fmt.Errorf("reconcile the webhooks of %s: %w", published.ID, err)
 		}
 	}
@@ -323,10 +323,7 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 	draft.Approvals = approvalsOf(in.Approvals)
 	draft.StandingApprovals = standingOf(in.StandingApprovals)
 	for _, t := range valueOr(in.Triggers) {
-		draft.Triggers = append(draft.Triggers, spec.Trigger{
-			Type: string(t.Type), Schedule: valueOr(t.Schedule),
-			Path: valueOr(t.Path), Event: valueOr(t.Event),
-		})
+		draft.Triggers = append(draft.Triggers, specTrigger(t))
 	}
 	draft.Steps = stepsOf(in.Steps)
 

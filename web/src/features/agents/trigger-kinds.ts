@@ -57,7 +57,26 @@ export function fieldOf(
 export function incomplete(trigger: AgentTrigger): boolean {
   const field = fieldOf(trigger.type);
   if (field === undefined) return false;
-  return !String(trigger[field] ?? "").trim();
+  return !String(trigger[field] ?? "").trim() || needsEvents(trigger);
+}
+
+/**
+ * A webhook GitHub sends that names no event.
+ *
+ * GitHub sends every event the hook subscribes to, so a GitHub webhook with no
+ * events would start a run per delivery — the server refuses it, and the row
+ * says so before anybody presses publish.
+ */
+export function needsEvents(trigger: AgentTrigger): boolean {
+  return trigger.from === "github" && (trigger.events ?? []).length === 0;
+}
+
+/** Events typed as a comma-separated list, empty entries dropped. */
+export function eventsFrom(text: string): string[] {
+  return text
+    .split(",")
+    .map((event) => event.trim())
+    .filter(Boolean);
 }
 
 /** A new row of the kind chosen, with nothing filled in. */
