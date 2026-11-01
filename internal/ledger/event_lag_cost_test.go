@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
 )
@@ -35,16 +37,8 @@ func runsScans(n planNode, into []planNode) []planNode {
 	return into
 }
 
-/*
-The backlog read stays bounded however large the backlog grows (#228). It runs
-every minute on every worker and on every health page view while xmin is
-stuck — exactly when the range past the cursor grows without limit. So every
-read of runs is an index range from the cursor, and none touches more rows
-than the count cap and the one it needs to know it was reached. Asserted on
-the rows the plan examined, not on wall time.
-*/
-func TestEventDispatchBacklog_aBacklogFarPastTheCap_readsABoundedRange(t *testing.T) {
-	s, pool := feedPool(t)
+func seedBacklog(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
 	ctx := context.Background()
 	if _, err := pool.Exec(ctx, `insert into runs
 		(run_id, company_id, area_id, agent_id, version_id, phase, last_seq, started_at, updated_at, ended_at)
@@ -55,14 +49,14 @@ func TestEventDispatchBacklog_aBacklogFarPastTheCap_readsABoundedRange(t *testin
 	if _, err := pool.Exec(ctx, `analyze runs`); err != nil {
 		t.Fatalf("analyze: %v", err)
 	}
+}
 
-	got := backlogOf(t, s)
-	if !got.Capped || max(got.Ready, got.HeldByXmin) != domain.EventDispatchCountCap {
-		t.Fatalf("backlog = %+v; want a count stopped at the cap of %d", got, domain.EventDispatchCountCap)
-	}
-
+// requireBoundedPlan explains the production statement and asserts every
+// read of runs is an index range examining at most the cap plus one rows.
+func requireBoundedPlan(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
 	var raw []byte
-	if err := pool.QueryRow(ctx, `explain (analyze, format json) `+ledger.EventDispatchBacklogSQL,
+	if err := pool.QueryRow(context.Background(), `explain (analyze, format json) `+ledger.EventDispatchBacklogSQL,
 		"0", "", domain.EventDispatchCountCap+1).Scan(&raw); err != nil {
 		t.Fatalf("explain: %v", err)
 	}
@@ -78,9 +72,46 @@ func TestEventDispatchBacklog_aBacklogFarPastTheCap_readsABoundedRange(t *testin
 	}
 	for _, scan := range scans {
 		examined := scan.ActualRows*scan.ActualLoops + scan.RemovedByFiltr
+		t.Logf("%s using %s: %.0f rows examined", scan.NodeType, scan.Index, examined)
 		if scan.Index != "runs_finished_xid_idx" || examined > domain.EventDispatchCountCap+1 {
 			t.Errorf("%s on %q examined %.0f rows; want an index range on runs_finished_xid_idx of at most %d",
 				scan.NodeType, scan.Index, examined, domain.EventDispatchCountCap+1)
 		}
+	}
+}
+
+/*
+The backlog read stays bounded however large the backlog grows (#228). It runs
+every minute on every worker and on every health page view while xmin is
+stuck — exactly when the range past the cursor grows without limit. So every
+read of runs is an index range from the cursor, and none touches more rows
+than the count cap and the one it needs to know it was reached. Asserted on
+the rows the plan examined, not on wall time, for a backlog the dispatcher can
+read and for one an open transaction holds.
+*/
+func TestEventDispatchBacklog_aBacklogFarPastTheCap_readsABoundedRange(t *testing.T) {
+	for _, held := range []bool{false, true} {
+		name := map[bool]string{false: "ready", true: "held by xmin"}[held]
+		t.Run(name, func(t *testing.T) {
+			s, pool := feedPool(t)
+			if held {
+				holdXmin(t, pool)
+			}
+			seedBacklog(t, pool)
+
+			got := backlogOf(t, s)
+			// Held when this test holds xmin. Without its hold the runs are
+			// ready — unless a transaction elsewhere on the cluster holds
+			// them, which is why the ready case reads whichever is larger.
+			count := max(got.Ready, got.HeldByXmin)
+			if held {
+				count = got.HeldByXmin
+			}
+			if !got.Capped || count != domain.EventDispatchCountCap {
+				t.Fatalf("backlog = %+v; want the %s count stopped at the cap of %d",
+					got, name, domain.EventDispatchCountCap)
+			}
+			requireBoundedPlan(t, pool)
+		})
 	}
 }
