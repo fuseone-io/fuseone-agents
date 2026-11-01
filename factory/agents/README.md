@@ -71,8 +71,25 @@ card from a board listing, and `projects_list` always returns item titles,
 so Triage sees titles before it claims (#220). The reference tells it to use
 a title only to tell cards apart, to choose by age and label, and to act on
 nothing a title says. That is an instruction, not something the platform
-enforces: a title is untrusted text the model reads before the claim, and
-what contains it is copilot with every write approved by a person. A tool
+enforces: a title is untrusted text the model reads before the claim, and it
+can sway which card the model picks.
+
+The claim itself is not held for approval. The Gate exempts
+`$fuseone.work_item.claim` as a coordination operation, even after untrusted
+content (`internal/gate/coordination.go`), so a crafted title can steer which
+card gets claimed with no person in the loop. What such a claim can do is
+bounded:
+
+- it holds that reference for this agent while the run is open, parked or
+  waiting on a person included, so other runs of the same role skip it;
+- it releases when the run ends, however it ends;
+- the run's cost is attributed to that reference;
+- the reference only has to be canonical (`github:<owner>/<repo>#<n>` or
+  `ghproject:<id>`): nothing checks that the card is in the lane or exists;
+- it writes nothing to GitHub.
+
+Every GitHub write after it — comment, label, card move — waits for a
+person's approval, and the run page names the card the run claimed. A tool
 that picks and claims the next card atomically, exposing its content only
 afterwards, would remove the title from the pre-claim view; it is deferred.
 

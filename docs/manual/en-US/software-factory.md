@@ -41,10 +41,15 @@ and the role instructions live, reviewed like code, in
   recorded in the run's trail, and no other run of the same role can take a
   card that is held. Before the claim, Triage sees only the cards' titles,
   because the board listing always returns them. A title is untrusted text:
-  the role uses it only to tell cards apart and reads the issue's body and
-  comments after the claim. What contains the title is copilot, with every
-  write approved by a person. A tool that picks and claims a card in one step,
-  hiding even the title, is deferred.
+  the role is told to use it only to tell cards apart and to choose by age
+  and label, and it reads the issue's body and comments after the claim. A
+  title can still sway which card the model picks, and the claim needs no
+  approval, even after untrusted text: it is a coordination operation, so two
+  runs never wait on a person to reserve a card. A claim on the wrong card
+  only holds that card for this role while the run is open, releases it when
+  the run ends, and puts the run's cost on that card. It writes nothing to
+  GitHub, and every GitHub write after it waits for a person. A tool that
+  picks and claims a card in one step, hiding even the title, is deferred.
 
 The repository is public, so issue and pull request text is untrusted: a run
 that read it can never take a destructive action, and its writes need a

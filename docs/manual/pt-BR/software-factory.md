@@ -43,11 +43,17 @@ e as instruções dos papéis ficam, revisadas como código, em
   fica registrado na trilha do run, e nenhum outro run do mesmo papel pode
   pegar um card que já está reservado. Antes do claim, a Triagem vê só os
   títulos dos cards, porque a listagem do board sempre traz os títulos. Um
-  título é texto não confiável: o papel usa o título só para diferenciar os
-  cards e lê o corpo e os comentários da issue depois do claim. O que contém o
-  título é o copiloto, com toda escrita aprovada por uma pessoa. Uma
-  ferramenta que escolhe e faz o claim do card de uma vez, escondendo até o
-  título, ficou para depois.
+  título é texto não confiável: o papel é instruído a usar o título só para
+  diferenciar os cards e a escolher por idade e rótulo, e lê o corpo e os
+  comentários da issue depois do claim. Mesmo assim, um título pode
+  influenciar qual card o modelo escolhe, e o claim não precisa de aprovação,
+  nem depois de texto não confiável: é uma operação de coordenação, para que
+  dois runs nunca esperem uma pessoa para reservar um card. Um claim no card
+  errado só reserva esse card para o papel enquanto o run está aberto, libera
+  o card quando o run termina e lança o custo do run nesse card. Ele não
+  escreve nada no GitHub, e toda escrita no GitHub depois dele espera uma
+  pessoa. Uma ferramenta que escolhe e faz o claim do card de uma vez,
+  escondendo até o título, ficou para depois.
 
 O repositório é público, então o texto de issues e pull requests não é
 confiável: um run que leu esse texto nunca pode executar uma ação destrutiva,

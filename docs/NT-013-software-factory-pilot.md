@@ -34,9 +34,13 @@ platform, with no code written for the factory:
   its first act is the work-item claim, before it reads the issue or writes.
   Choosing from the board shows Triage the cards' titles — the board listing
   always returns them — so a title is the one untrusted text a role reads
-  before its claim (#220). It is used only to tell cards apart, copilot with
-  every write approved by a person contains it, and an atomic
-  pick-and-claim tool that would hide it is deferred.
+  before its claim (#220). Triage is told to use it only to tell cards
+  apart, but a title can still sway the choice, and the claim is the one
+  write that follows unapproved (it is a Gate coordination exemption). A
+  wrong claim only holds that card for this role while the run is open,
+  releases when the run ends and puts the run's cost on that card; it writes
+  nothing to GitHub, and every GitHub write after it waits for a person. An
+  atomic pick-and-claim tool that would hide the title is deferred.
   The Reviewer's and QA's verdicts are both pull-request reviews on the head
   SHA they read (APPROVE or REQUEST_CHANGES), under their own Apps. A person
   merges once both approve the current head and its checks are green. Cards
