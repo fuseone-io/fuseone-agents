@@ -156,3 +156,31 @@ func TestFinishedSince_aRunCommittedPastAnOpenTransaction_waitsForIt(t *testing.
 	released, w := readFeed(t, s, domain.FinishCursor{}, 10)
 	requireFeedPrefix(t, released, w, want, 10)
 }
+
+/*
+The feed pages in numeric position order. Its select list carries the
+position as text, under the column's own name, and an ORDER BY on that name
+binds to the output column: the page was sorted as text, where "10" comes
+before "9". At a digit boundary — xid 999,999 to 1,000,000 — a page took the
+longer positions first and moved the cursor past the shorter ones, which
+were then behind it for ever. Positions are set explicitly here (the trigger
+stamps only a NULL), far below any xmin.
+*/
+func TestFinishedSince_pagesInNumericOrderAcrossADigitBoundary(t *testing.T) {
+	s, pool := feedPool(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `insert into runs
+		(run_id, company_id, area_id, agent_id, version_id, phase, last_seq, started_at, updated_at, ended_at, finished_xid)
+		values ('run-nine', 'acme', 'cx', 'triage', 'v3', 'finished', 2, now(), now(), now(), '9'),
+		       ('run-ten',  'acme', 'cx', 'triage', 'v3', 'finished', 2, now(), now(), now(), '10')`); err != nil {
+		t.Fatalf("seed positions 9 and 10: %v", err)
+	}
+
+	got, err := s.FinishedSince(ctx, domain.FinishCursor{}, 1)
+	if err != nil {
+		t.Fatalf("FinishedSince: %v", err)
+	}
+	if len(got) != 1 || got[0].At.Xid != 9 {
+		t.Fatalf("first page = %+v; want position 9 before position 10", got)
+	}
+}
