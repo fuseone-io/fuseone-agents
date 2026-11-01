@@ -19,12 +19,18 @@ about what a model decided today (PRD SE-10).
 */
 
 type wiring struct {
+	// emits is what every version of an agent publishes, unless pinned
+	// names that version.
 	emits  map[domain.AgentID][]domain.AgentEvent
+	pinned map[domain.VersionID][]domain.AgentEvent
 	listen map[string][]domain.AgentID
 }
 
-func (w wiring) Emitters(context.Context) (map[domain.AgentID][]domain.AgentEvent, error) {
-	return w.emits, nil
+func (w wiring) EmitsOf(_ context.Context, agent domain.AgentID, version domain.VersionID) ([]domain.AgentEvent, error) {
+	if events, ok := w.pinned[version]; ok {
+		return events, nil
+	}
+	return w.emits[agent], nil
 }
 
 func (w wiring) Listeners(context.Context) (map[string][]domain.AgentID, error) {

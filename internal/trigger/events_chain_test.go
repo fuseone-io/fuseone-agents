@@ -44,10 +44,14 @@ var pingPong = wiring{
 // chainDispatcher is one worker's dispatcher over a shared ledger: the
 // finished runs it sweeps are the ledger's own, as in production.
 func chainDispatcher(store *ledger.Memory) *trigger.Dispatcher {
+	return dispatcherWith(store, pingPong)
+}
+
+func dispatcherWith(store *ledger.Memory, w wiring) *trigger.Dispatcher {
 	clock := fixedClock{t: time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)}
 	opener := trigger.NewOpener(store, byAgent{"agent-a", "agent-b"}, clock).
 		WithContent(engine.NewMemoryContent())
-	return trigger.NewDispatcher(pingPong, store, store, opener, clock, nil)
+	return trigger.NewDispatcher(w, store, store, opener, clock, nil)
 }
 
 // startRun seals a run_started: opened by an event carrying chain, or by a
@@ -277,6 +281,69 @@ func TestSweep_aSourceStartThatWillNotDecode_failsRatherThanRestartingTheCount(t
 	}
 	if ids, _ := store.Runs(context.Background()); len(ids) != 1 {
 		t.Fatalf("the ledger holds %d runs, want only the source", len(ids))
+	}
+}
+
+/*
+What a source run publishes is what its pinned version declares — the same
+version the engine resolved its run from, so the withheld record on its
+closing step and the fan-out here cannot disagree. A publish in the middle
+of the run changes neither.
+*/
+func TestSweep_whatARunPublishes_isWhatItsPinnedVersionDeclares(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		pinned []domain.AgentEvent
+		want   int
+	}{
+		"pinned emits, latest stopped": {[]domain.AgentEvent{{Event: "ping"}}, 1},
+		"pinned silent, latest emits":  {nil, 0},
+	}
+	for name, c := range cases {
+		store := ledger.NewMemory()
+		startRun(t, store, "run-root", "agent-a", nil) // pinned to v1
+		finishRun(t, store, "run-root")
+		latest := pingPong
+		if c.want == 1 {
+			latest.emits = map[domain.AgentID][]domain.AgentEvent{} // a later version stopped
+		}
+		latest.pinned = map[domain.VersionID][]domain.AgentEvent{"v1": c.pinned}
+
+		opened, err := dispatcherWith(store, latest).Sweep(context.Background(), 50)
+		if err != nil {
+			t.Fatalf("%s: Sweep: %v", name, err)
+		}
+		if opened != c.want {
+			t.Errorf("%s: opened %d runs, want %d", name, opened, c.want)
+		}
+	}
+}
+
+// Two runs of the same agent pinned to different versions, in one sweep: each
+// publishes what its own version declares.
+func TestSweep_twoRunsPinnedToDifferentVersions_eachPublishesItsOwn(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	startRun(t, store, "run-v1", "agent-a", nil)
+	finishRun(t, store, "run-v1")
+	if _, err := store.Append(context.Background(), domain.Step{
+		RunID: "run-v2", Kind: domain.StepRunStarted, Scope: chainScope, AgentID: "agent-a", VersionID: "v2",
+		Payload: mustJSON(domain.RunStartedPayload{Trigger: "manual"}),
+	}); err != nil {
+		t.Fatalf("start v2: %v", err)
+	}
+	finishRun(t, store, "run-v2")
+	w := pingPong
+	w.pinned = map[domain.VersionID][]domain.AgentEvent{"v1": {{Event: "ping"}}, "v2": nil}
+
+	opened, err := dispatcherWith(store, w).Sweep(context.Background(), 50)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 {
+		t.Fatalf("opened %d runs, want only the v1 run's listener", opened)
 	}
 }
 

@@ -30,11 +30,23 @@ source run, the event and the target, so a second pass reaches the run the
 first one already opened.
 */
 
-// Subscriptions is who publishes and who listens, declared here by the
-// consumer and read from the published specifications.
+/*
+Subscriptions is who publishes and who listens, declared here by the consumer
+and read from the published specifications.
+
+What a run publishes is what the version it was pinned to declares — the
+same version the engine resolved the run from, and the one it judged its
+withheld record by. Asking the latest version instead would let a publish in
+the middle of a run make the two disagree, either way: a run that emitted
+when it started stops emitting, or one that did not starts to. Who listens is
+read from the versions published now: a listener chooses to start from an
+event when it is published, and a run is opened from the version current
+when it opens.
+*/
 type Subscriptions interface {
-	// Emitters maps an agent to the events it publishes.
-	Emitters(ctx context.Context) (map[domain.AgentID][]domain.AgentEvent, error)
+	// EmitsOf is what one published version of an agent declares its
+	// finished runs publish.
+	EmitsOf(ctx context.Context, agent domain.AgentID, version domain.VersionID) ([]domain.AgentEvent, error)
 	// Listeners maps an event to the agents it starts.
 	Listeners(ctx context.Context) (map[string][]domain.AgentID, error)
 }
@@ -78,13 +90,6 @@ const Window = 30
 // Sweep publishes the events of recently finished runs and returns how many
 // runs it opened.
 func (d *Dispatcher) Sweep(ctx context.Context, limit int) (int, error) {
-	emitters, err := d.subs.Emitters(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("trigger: read emitters: %w", err)
-	}
-	if len(emitters) == 0 {
-		return 0, nil
-	}
 	listeners, err := d.subs.Listeners(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("trigger: read listeners: %w", err)
@@ -98,9 +103,14 @@ func (d *Dispatcher) Sweep(ctx context.Context, limit int) (int, error) {
 		return 0, fmt.Errorf("trigger: list finished runs: %w", err)
 	}
 
+	emits := pinnedEmits{subs: d.subs, seen: map[pinnedVersion][]domain.AgentEvent{}}
 	opened := 0
 	for _, run := range finished {
-		events := listened(emitters[run.AgentID], listeners)
+		declared, err := emits.of(ctx, run.AgentID, run.VersionID)
+		if err != nil {
+			return opened, err
+		}
+		events := listened(declared, listeners)
 		if len(events) == 0 {
 			continue
 		}
@@ -120,6 +130,33 @@ func (d *Dispatcher) Sweep(ctx context.Context, limit int) (int, error) {
 		}
 	}
 	return opened, nil
+}
+
+type pinnedVersion struct {
+	agent   domain.AgentID
+	version domain.VersionID
+}
+
+// pinnedEmits asks each pinned version once per sweep. A published version
+// never changes, so the answer cannot go stale within one.
+type pinnedEmits struct {
+	subs Subscriptions
+	seen map[pinnedVersion][]domain.AgentEvent
+}
+
+func (p pinnedEmits) of(
+	ctx context.Context, agent domain.AgentID, version domain.VersionID,
+) ([]domain.AgentEvent, error) {
+	key := pinnedVersion{agent, version}
+	if events, ok := p.seen[key]; ok {
+		return events, nil
+	}
+	events, err := p.subs.EmitsOf(ctx, agent, version)
+	if err != nil {
+		return nil, fmt.Errorf("trigger: events of %s@%s: %w", agent, version, err)
+	}
+	p.seen[key] = events
+	return events, nil
 }
 
 // listened is the run's events somebody listens to: nothing else is worth

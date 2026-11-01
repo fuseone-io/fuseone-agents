@@ -32,6 +32,17 @@ func (r *Registry) Emitters(ctx context.Context) (map[domain.AgentID][]domain.Ag
 	return out, nil
 }
 
+// EmitsOf is what one published version declares its finished runs publish.
+// Asked of the version a run was pinned to: the latest may say otherwise,
+// and the run was resolved — and judged its withheld events — by its own.
+func (r *Registry) EmitsOf(ctx context.Context, agent domain.AgentID, version domain.VersionID) ([]domain.AgentEvent, error) {
+	s, err := r.Get(ctx, agent, version)
+	if err != nil {
+		return nil, fmt.Errorf("spec: read %s@%s: %w", agent, version, err)
+	}
+	return []domain.AgentEvent(s.Emits), nil
+}
+
 // Listeners maps each event to the agents it starts.
 func (r *Registry) Listeners(ctx context.Context) (map[string][]domain.AgentID, error) {
 	specs, err := r.latest(ctx)
