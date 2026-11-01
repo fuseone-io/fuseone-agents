@@ -22,7 +22,11 @@ const ANY = "any";
  * `event.action` for one.
  *
  * The events are kept as typed text while editing, so a comma typed before the
- * next name is not swallowed; what reaches the trigger is the parsed list.
+ * next name is not swallowed; what reaches the trigger is the parsed list. The
+ * text follows the trigger whenever the two disagree: the rows are keyed by
+ * position, so removing one hands this component to the next row, and text
+ * left from the removed row would be shown over — and written into — the
+ * remaining one.
  */
 export function WebhookSourceField({
   trigger,
@@ -32,7 +36,13 @@ export function WebhookSourceField({
   onChange: (over: Partial<AgentTrigger>) => void;
 }) {
   const { t } = useTranslation();
-  const [text, setText] = useState((trigger.events ?? []).join(", "));
+  const declared = trigger.events ?? [];
+  const [text, setText] = useState(declared.join(", "));
+  if (eventsFrom(text).join(",") !== declared.join(",")) {
+    // Adjusting state while rendering, as React documents for state that must
+    // follow a prop: the trigger changed under this text.
+    setText(declared.join(", "));
+  }
   const github = trigger.from === "github";
 
   return (
