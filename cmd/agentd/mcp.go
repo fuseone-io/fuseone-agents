@@ -709,6 +709,8 @@ type reconciler struct {
 	// holds on the servers its flags started; leases is where it renews them.
 	holder string
 	leases toolLeases
+	// flags is each server a --mcp flag names, as the flag describes it.
+	flags map[string]domain.MCPServer
 }
 
 func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorder) *reconciler {
@@ -717,6 +719,7 @@ func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorde
 		connectTo:   connectServer,
 		connected:   make(map[string]string),
 		generations: make(map[string]time.Time),
+		flags:       make(map[string]domain.MCPServer),
 		holder:      defaultOwner(),
 	}
 }
@@ -750,7 +753,13 @@ func (r *reconciler) withStdioEgressObserver(o stdioEgressObserver) *reconciler 
 // hold marks a server as connected by something other than the reconciler —
 // a --mcp flag. It is never disconnected here: the flag owns it, and the
 // console cannot see or change it.
-func (r *reconciler) hold(name string) { r.connected[name] = flagMark }
+//
+// What the flag says is kept, so a session that dies under it can be started
+// again: the flag still names the server.
+func (r *reconciler) hold(server domain.MCPServer) {
+	r.connected[server.Name] = flagMark
+	r.flags[server.Name] = server
+}
 
 // flagMark stands for a fingerprint on a server a --mcp flag connected.
 const flagMark = "flag"
@@ -770,8 +779,11 @@ func (r *reconciler) reconcile(ctx context.Context) {
 		}
 	}
 
-	// First, so a slow pass below cannot let this worker's leases run out.
-	changed := r.renewLeases(ctx)
+	// First, so a slow pass below cannot let this worker's leases run out —
+	// and after the flag servers that died are started again, because only
+	// a live session is leased.
+	changed := r.reviveFlagServers(ctx)
+	changed = r.renewLeases(ctx) || changed
 	changed = r.disconnectStale(wanted) || changed
 	for name, server := range wanted {
 		if _, already := r.connected[name]; already {
@@ -861,6 +873,11 @@ func (r *reconciler) disconnectStale(wanted map[string]domain.MCPServer) bool {
 // ghost of one.
 func (r *reconciler) refreshHealth(ctx context.Context) {
 	for name := range r.connected {
+		// A flag server whose session died stays held, to be started again;
+		// it is not reachable meanwhile.
+		if !r.catalog.Connected(name) {
+			continue
+		}
 		observe(ctx, r.health, name, true, r.catalog.CountFrom(name), "")
 	}
 }

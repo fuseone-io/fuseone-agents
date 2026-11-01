@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"strings"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -31,7 +30,7 @@ func (p *workerParts) connectTools(
 		reconcile = reconcile.publishingTo(p.curator).classifyingWith(p.curator).
 			holdingAs(cfg.owner, p.curator)
 	}
-	p.connectFlagServers(ctx, cfg.servers, reconcile, egressObserver)
+	connectFlagServers(ctx, cfg.servers, reconcile)
 
 	// Then the configured ones, and again on a timer. Before this, a server
 	// added from the console offered nothing until somebody restarted the
@@ -70,11 +69,10 @@ func (p *workerParts) startToolWatch(ctx context.Context, reconcile *reconciler)
 	go reconcile.watchEvery(ctx, toolRefresh)
 }
 
-// connectFlagServers starts the servers the --mcp flags name, and hands each
-// that answered to the reconciler as one it must never disconnect.
-func (p *workerParts) connectFlagServers(
-	ctx context.Context, servers []string, reconcile *reconciler, egressObserver *stdioEgressReporting,
-) {
+// connectFlagServers hands the servers the --mcp flags name to the reconciler
+// as ones it must never disconnect, and starts them. One that does not answer
+// now is started again on a later pass, as one whose session dies is.
+func connectFlagServers(ctx context.Context, servers []string, reconcile *reconciler) {
 	for _, entry := range servers {
 		name, command, _ := strings.Cut(entry, "=")
 		// Accepted by having been typed. A server named on the command line
@@ -85,18 +83,10 @@ func (p *workerParts) connectFlagServers(
 		// It carries no variables of its own: those live in the vault, and a
 		// flag has no vault entry. A local server that needs a credential is
 		// configured through the console.
-		if err := connectServer(ctx, p.catalog, domain.MCPServer{
+		reconcile.hold(domain.MCPServer{
 			Name: name, Transport: domain.TransportStdio, Command: command,
 			AcceptsLocalExecution: true,
-		}, domain.MCPCredentials{}, nil, nil, credentialPolicy{}, egressObserver); err != nil {
-			slog.Error("tool server did not answer; its tools are unavailable",
-				"server", name, "err", err)
-			observe(ctx, p.health, name, false, 0, err.Error())
-			continue
-		}
-		reconcile.hold(name)
-		count := p.catalog.CountFrom(name)
-		slog.Info("tool server connected", "server", name, "transport", "stdio", "tools", count)
-		observe(ctx, p.health, name, true, count, "")
+		})
 	}
+	reconcile.reviveFlagServers(ctx)
 }

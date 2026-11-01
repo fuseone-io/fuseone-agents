@@ -37,23 +37,49 @@ const stdioToolServerArg = "stdio-tool-server"
 
 // TestStdioToolServer is not a test. It is the --mcp server the journeys
 // below start: the test binary, run again with an argument no test run
-// passes, serving one tool over stdio until the worker closes it.
+// passes, serving over stdio until the worker closes it.
+//
+// Given a path after the argument, it is a server that can die for good:
+// exit_now leaves the path behind and exits, and a server started again
+// finds the path and refuses to start.
 func TestStdioToolServer(t *testing.T) {
-	if !slices.Contains(flag.Args(), stdioToolServerArg) {
+	args := flag.Args()
+	at := slices.Index(args, stdioToolServerArg)
+	if at < 0 {
 		t.Skip("only run as a --mcp command by the journeys in this file")
+	}
+	tombstone := ""
+	if at+1 < len(args) {
+		tombstone = args[at+1]
+	}
+	if _, err := os.Stat(tombstone); tombstone != "" && err == nil {
+		os.Exit(1)
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "local-reports", Version: "test"}, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "run_report"},
 		func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
 			return &mcp.CallToolResult{}, nil, nil
 		})
+	mcp.AddTool(server, &mcp.Tool{Name: "exit_now"},
+		func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
+			if tombstone != "" {
+				_ = os.WriteFile(tombstone, nil, 0o600)
+			}
+			os.Exit(0)
+			return nil, nil, nil
+		})
 	_ = server.Run(context.Background(), &mcp.StdioTransport{})
 	os.Exit(0)
 }
 
-// localReportsFlag is the --mcp flag that starts the server above.
-func localReportsFlag() string {
-	return "local-reports=" + os.Args[0] + " -test.run=^TestStdioToolServer$ -- " + stdioToolServerArg
+// localReportsFlag is the --mcp flag that starts the server above; a
+// tombstone path makes it one that cannot be started again once it died.
+func localReportsFlag(tombstone ...string) string {
+	flag := "local-reports=" + os.Args[0] + " -test.run=^TestStdioToolServer$ -- " + stdioToolServerArg
+	for _, path := range tombstone {
+		flag += " " + path
+	}
+	return flag
 }
 
 // journeyClock is the time every worker's leases are written and judged by:
@@ -79,8 +105,26 @@ func (c *journeyClock) advance(d time.Duration) {
 // runningWorker is a worker process over the journey's database: started
 // from its flags through connectTools, and passing whenever the test ticks.
 type runningWorker struct {
-	ticks chan time.Time
-	stop  context.CancelFunc
+	ticks   chan time.Time
+	stop    context.CancelFunc
+	catalog *tools.Catalog
+}
+
+// kill calls exit_now through the worker's catalogue, the way a run would
+// call a tool, and keeps calling until the worker has noticed the session
+// is gone.
+func (w *runningWorker) kill(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
+	_, _ = w.catalog.Invoke(ctx, engine.Call{RunID: "run-kill", Seq: 1, Tool: "local-reports.exit_now"})
+	deadline := time.Now().Add(10 * time.Second)
+	for seq := int64(2); w.catalog.Connected("local-reports"); seq++ {
+		if time.Now().After(deadline) {
+			t.Fatal("the worker never noticed local-reports died; nothing below would prove anything")
+		}
+		_, _ = w.catalog.Invoke(ctx, engine.Call{RunID: "run-kill", Seq: seq, Tool: localRunReport})
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // pass returns once the worker has completed at least one whole reconcile
@@ -118,7 +162,57 @@ func (j *factoryJourney) startWorker(t *testing.T, clock *journeyClock, args ...
 	if err := parts.connectTools(ctx, cfg, nil); err != nil {
 		t.Fatalf("start the worker %v: %v", args, err)
 	}
-	return &runningWorker{ticks: ticks, stop: stop}
+	return &runningWorker{ticks: ticks, stop: stop, catalog: catalog}
+}
+
+/*
+The flag still names the server, but its process died and cannot be started
+again. The worker no longer serves it, so it must stop renewing the lease:
+once the lease runs out the tool leaves, as if the flag were gone. A worker
+that renewed by the flag alone kept the dead server's tools for as long as it
+ran.
+*/
+func TestCatalogue_aCommandLineServerThatDiedForGood_leavesTheCatalogue(t *testing.T) {
+	j := newFactoryJourney(t, triageToolsets)
+	clock := &journeyClock{now: time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)}
+	tombstone := t.TempDir() + "/local-reports.dead"
+	a := j.startWorker(t, clock, "--owner", "worker-a", "--mcp", localReportsFlag(tombstone))
+	b := j.startWorker(t, clock, "--owner", "worker-b")
+	if _, listed := j.listed(t)[localRunReport]; !listed {
+		t.Fatalf("%s was never published; nothing below would prove anything", localRunReport)
+	}
+
+	a.kill(t)
+	clock.advance(admin.ToolServerLease / 2)
+	a.pass()
+	clock.advance(admin.ToolServerLease/2 + time.Second)
+	a.pass()
+	b.pass()
+
+	if _, still := j.listed(t)[localRunReport]; still {
+		t.Fatalf("%s is still offered, though the only worker naming it holds a dead session", localRunReport)
+	}
+}
+
+// A process that died but starts again is reconnected, and its worker goes
+// on serving — and leasing — it.
+func TestCatalogue_aCommandLineServerThatDiedAndRestarts_staysOffered(t *testing.T) {
+	j := newFactoryJourney(t, triageToolsets)
+	clock := &journeyClock{now: time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)}
+	a := j.startWorker(t, clock, "--owner", "worker-a", "--mcp", localReportsFlag())
+	b := j.startWorker(t, clock, "--owner", "worker-b")
+
+	a.kill(t)
+	clock.advance(admin.ToolServerLease / 2)
+	a.pass()
+	clock.advance(admin.ToolServerLease/2 + time.Second)
+	a.pass()
+	b.pass()
+
+	if _, kept := j.listed(t)[localRunReport]; !kept || !a.catalog.Connected("local-reports") {
+		t.Fatalf("%s listed %v, session connected %v; want it reconnected and still offered",
+			localRunReport, kept, a.catalog.Connected("local-reports"))
+	}
 }
 
 const localRunReport = "local-reports.run_report"

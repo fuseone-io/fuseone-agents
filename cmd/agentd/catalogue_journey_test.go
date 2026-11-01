@@ -321,7 +321,7 @@ func TestCatalogue_aCommandLineServer_survivesAnotherReplicasPublication(t *test
 	if err := j.catalog.AddServer(t.Context(), "local-reports", local, nil); err != nil {
 		t.Fatalf("connect the command-line server: %v", err)
 	}
-	j.worker.hold("local-reports")
+	j.worker.hold(domain.MCPServer{Name: "local-reports"})
 	j.discover(t)
 	if _, listed := j.listed(t)["local-reports.run_report"]; !listed {
 		t.Fatal("the command-line server's tool was never published; the sweep below would prove nothing")

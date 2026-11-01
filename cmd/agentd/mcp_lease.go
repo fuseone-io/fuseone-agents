@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
+
+	"github.com/fuseone/agents/internal/domain"
 )
 
 /*
@@ -45,14 +47,61 @@ func (r *reconciler) renewLeases(ctx context.Context) bool {
 	return lapsed
 }
 
-// flagServers is the servers this worker holds because its flags started
-// them.
+// flagServers is the servers this worker serves because its flags started
+// them: held, and with a live session. A session that died is not served,
+// and leasing it would keep its tools on offer for as long as the worker ran.
 func (r *reconciler) flagServers() []string {
 	var out []string
 	for _, name := range slices.Sorted(maps.Keys(r.connected)) {
-		if r.connected[name] == flagMark {
+		if r.connected[name] == flagMark && r.catalog.Connected(name) {
 			out = append(out, name)
 		}
 	}
 	return out
+}
+
+/*
+reviveFlagServers starts again every server a flag names whose session is not
+live — it died, or never came up — and reports whether one did.
+
+The flag still names it, so it is reconnected rather than dropped, as a
+configured server whose session died is. Until a reconnect takes, the server
+is not leased, and once its lease runs out its tools leave; a reconnect that
+takes is worth a publication, which leases it again.
+*/
+func (r *reconciler) reviveFlagServers(ctx context.Context) bool {
+	revived := false
+	for _, name := range slices.Sorted(maps.Keys(r.flags)) {
+		if r.catalog.Connected(name) {
+			continue
+		}
+		if r.connectFlag(ctx, r.flags[name]) {
+			revived = true
+		}
+	}
+	return revived
+}
+
+// connectFlag connects one flag server, from what the flag says: no
+// credentials, which a flag cannot carry.
+func (r *reconciler) connectFlag(ctx context.Context, server domain.MCPServer) bool {
+	// What a dead session left behind; RemoveServer of nothing is nothing.
+	_ = r.catalog.RemoveServer(server.Name)
+	if err := r.connectTo(ctx, r.catalog, server, domain.MCPCredentials{},
+		nil, nil, credentialPolicy{}, r.egress); err != nil {
+		slog.Error("tool server did not answer; its tools are unavailable",
+			"server", server.Name, "err", err)
+		observe(ctx, r.health, server.Name, false, 0, err.Error())
+		return false
+	}
+	if r.rulings != nil {
+		if _, err := r.catalog.Sync(ctx, r.rulings, domain.Scope{}); err != nil {
+			slog.Error("could not apply tool classifications after discovery",
+				"server", server.Name, "err", err)
+		}
+	}
+	count := r.catalog.CountFrom(server.Name)
+	slog.Info("tool server connected", "server", server.Name, "transport", "stdio", "tools", count)
+	observe(ctx, r.health, server.Name, true, count, "")
+	return true
 }
