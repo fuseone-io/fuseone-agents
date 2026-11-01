@@ -23,6 +23,11 @@ finished since migration 0092; a dispatcher that keeps up leaves that range
 empty. The split is the feed's own boundary, in the same statement's
 snapshot: below pg_snapshot_xmin the feed can read a run, at or above it the
 run is committed and waits for the oldest transaction in flight.
+
+A run's wait starts at its end, or at its last write when no end was
+recorded: ended_at is nullable and 0092 positions a row inserted already
+finished. updated_at is never null, so a run waiting is never read as a run
+that has waited no time.
 */
 func (p *Postgres) EventDispatchBacklog(ctx context.Context) (domain.EventDispatchBacklog, error) {
 	cursor, err := p.EventCursor(ctx)
@@ -35,7 +40,7 @@ func (p *Postgres) EventDispatchBacklog(ctx context.Context) (domain.EventDispat
 		with boundary as (select pg_snapshot_xmin(pg_current_snapshot()) as xmin)
 		select count(*) filter (where finished_xid < boundary.xmin),
 		       count(*) filter (where finished_xid >= boundary.xmin),
-		       min(ended_at)
+		       min(coalesce(ended_at, updated_at))
 		from runs, boundary
 		where finished_xid is not null
 		  and (finished_xid, run_id) > ($1::xid8, $2)

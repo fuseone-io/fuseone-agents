@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -32,9 +33,18 @@ func (m *Memory) eventDispatchBacklog() domain.EventDispatchBacklog {
 			continue
 		}
 		out.Ready++
-		if out.OldestFinishedAt.IsZero() || summary.EndedAt.Before(out.OldestFinishedAt) {
-			out.OldestFinishedAt = summary.EndedAt
+		if at := finishedAt(summary); out.OldestFinishedAt.IsZero() || at.Before(out.OldestFinishedAt) {
+			out.OldestFinishedAt = at
 		}
 	}
 	return out
+}
+
+// finishedAt is when a finished run stopped: its end, or its last write when
+// nothing recorded an end — as Postgres reads coalesce(ended_at, updated_at).
+func finishedAt(summary domain.RunSummary) time.Time {
+	if summary.EndedAt.IsZero() {
+		return summary.UpdatedAt
+	}
+	return summary.EndedAt
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
 )
 
@@ -63,6 +64,35 @@ func TestEventDispatchBacklog_anOpenTransaction_holdsTheRunAndAges(t *testing.T)
 	released := backlogOf(t, s)
 	if released.HeldByXmin != 0 || released.Ready != 1 {
 		t.Fatalf("after the transaction ended: %+v; want the run ready", released)
+	}
+}
+
+/*
+A run inserted straight into 'finished' carries no ended_at — the column is
+nullable and 0092 stamps such a row with a position all the same. It waits
+like any other, so its wait must count: the lag falls back to the instant the
+row was last written rather than reading a positive backlog as caught up.
+*/
+func TestEventDispatchBacklog_aFinishedRunWithNoEndedAt_stillHasAWait(t *testing.T) {
+	s, pool := feedPool(t)
+	ctx := context.Background()
+	written := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	if _, err := pool.Exec(ctx, `insert into runs
+		(run_id, company_id, area_id, agent_id, version_id, phase, last_seq, started_at, updated_at)
+		values ('run-inserted', 'acme', 'cx', 'triage', 'v3', 'finished', 2, $1::timestamptz - interval '1 minute', $1)`,
+		written); err != nil {
+		t.Fatalf("terminal insert: %v", err)
+	}
+
+	got := backlogOf(t, s)
+	if got.Ready+got.HeldByXmin != 1 {
+		t.Fatalf("backlog = %+v; want the inserted run waiting", got)
+	}
+	if !got.OldestFinishedAt.Equal(written) {
+		t.Fatalf("oldest finished at %v, want %v: the row's own last write", got.OldestFinishedAt, written)
+	}
+	if status := got.Status(written.Add(time.Hour)); status != domain.EventDispatchDegraded {
+		t.Fatalf("status an hour later = %q; a run waiting an hour is not healthy", status)
 	}
 }
 
