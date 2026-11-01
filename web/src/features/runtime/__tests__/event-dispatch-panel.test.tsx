@@ -73,6 +73,7 @@ test("a count stopped at the cap reads as a lower bound", () => {
   );
 
   expect(screen.getByText("1000+")).toBeInTheDocument();
+  expect(screen.getByText(/or once 1000 runs are waiting/)).toBeInTheDocument();
   expect(screen.queryByText("1000")).not.toBeInTheDocument();
 });
 

@@ -2630,7 +2630,7 @@
     "eventDispatchHeld": "Held by an open transaction",
     "eventDispatchLag": "The oldest waiting run finished {{lag}} ago.",
     "eventDispatchReady": "Waiting for the next sweep",
-    "eventDispatchThreshold": "Degrades once a run has waited more than {{threshold}}. Dispatch is delayed, never skipped.",
+    "eventDispatchThreshold": "Degrades once a run has waited more than {{threshold}}, or once {{cap}} runs are waiting — past that only a sample is read, and its wait is a lower bound. Dispatch is delayed, never skipped.",
     "eventDispatchXactAge": "The oldest open transaction in the database has been open for {{age}}; runs that finished after it began wait until it ends.",
     "eventDispatchXactHidden": "A transaction is open in the database, but the platform's database role cannot see since when. That is expected: seeing it takes pg_read_all_stats, a cluster-wide grant that also exposes every session's queries in every database, so the platform does not ask for it. A database administrator can look with their own role.",
     "expiredLeases": "Expired leases",

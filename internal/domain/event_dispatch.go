@@ -23,8 +23,9 @@ type EventDispatchBacklog struct {
 	// above the oldest transaction still in flight. The feed cannot read
 	// them until that transaction ends, however often it sweeps.
 	HeldByXmin int64
-	// OldestFinishedAt is when the oldest run past the cursor finished;
-	// zero when nothing is waiting.
+	// OldestFinishedAt is the earliest finish among the runs past the
+	// cursor that were read; zero when nothing is waiting. When Capped,
+	// only a sample was read and the true earliest may be earlier still.
 	OldestFinishedAt time.Time
 	// Xact is the oldest transaction holding an id — the one that sets xmin.
 	Xact OpenXact
@@ -89,10 +90,20 @@ func (b EventDispatchBacklog) XactAge(now time.Time) (time.Duration, bool) {
 	return now.Sub(b.Xact.StartedAt), true
 }
 
-// Status is the health signal at now: degraded once the oldest finished run
-// has waited past EventDispatchDegradedAfter, whichever the cause.
+/*
+Status is the health signal at now: degraded once the oldest finished run has
+waited past EventDispatchDegradedAfter, whichever the cause — and degraded
+whenever a count was capped.
+
+A capped count means the lag was read from a bounded sample of the backlog,
+so it is only a lower bound: an older run may sit beyond the sample. Reading
+that as healthy would be the one wrong answer. And a thousand finished runs
+not yet dispatched is itself the condition the signal exists for: the
+dispatcher drains every readable page on each fifteen-second sweep, so a
+backlog that large is either held by xmin or a dispatcher not keeping up.
+*/
 func (b EventDispatchBacklog) Status(now time.Time) string {
-	if b.Lag(now) > EventDispatchDegradedAfter {
+	if b.Capped || b.Lag(now) > EventDispatchDegradedAfter {
 		return EventDispatchDegraded
 	}
 	return EventDispatchOK

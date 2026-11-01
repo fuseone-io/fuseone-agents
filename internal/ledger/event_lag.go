@@ -20,7 +20,8 @@ Bounded by construction, because a health page and a metrics loop read it
 during the very incidents it describes — while xmin is stuck the range past
 the cursor grows without limit, and a read that walked it would grow with
 the incident. Each count stops at domain.EventDispatchCountCap, and the wait
-is read from one row (see eventDispatchBacklogSQL). The split is the feed's
+is the earliest finish among the rows those counts read (see
+eventDispatchBacklogSQL). The split is the feed's
 own boundary: below pg_snapshot_xmin the feed can read a run, at or above it
 the run is committed and waits for the oldest transaction in flight.
 
@@ -99,39 +100,37 @@ func capBacklog(b domain.EventDispatchBacklog) domain.EventDispatchBacklog {
 const insufficientPrivilege = "42501"
 
 /*
-eventDispatchBacklogSQL reads three bounded things, each an index range on
-runs_finished_xid_idx starting at the cursor ($1, $2):
+eventDispatchBacklogSQL reads two bounded samples, each an index range on the
+feed's index starting at the cursor ($1, $2) and stopping after $3 rows:
 
-  - the ready runs, below pg_snapshot_xmin, stopping after $3;
-  - the held runs, at or above it, stopping after $3;
-  - the first run past the cursor in the feed's order — one row — for the
-    wait: the run the dispatcher will reach first is the one that has
-    waited longest for it.
+  - the ready runs, below pg_snapshot_xmin;
+  - the held runs, at or above it.
 
-$3 is the count cap plus one, so a count of $3 says the cap was reached
-without reading further. Sharing one statement shares one snapshot, so the
-split is the feed's own boundary at one instant.
+Each sample yields its count and the earliest finish among its rows. The
+feed's order is the order finishing transactions were given ids, not the
+order the runs finished by their workers' clocks, so the wait is the minimum
+over the rows read, never the first row. $3 is the count cap plus one: a
+count of $3 says the cap was reached, and that the minimum is a lower bound
+(Status then degrades). One statement shares one snapshot, so the split is
+the feed's own boundary at one instant.
 */
 const eventDispatchBacklogSQL = `
-		select
-		  (select count(*) from (
-		     select 1 from runs
+		with ready as (
+		     select coalesce(ended_at, updated_at) as at from runs
 		     where finished_xid is not null
 		       and (finished_xid, run_id) > ($1::xid8, $2)
 		       and finished_xid < pg_snapshot_xmin(pg_current_snapshot())
 		       and phase = 'finished' and ` + realRuns + `
 		     order by finished_xid, run_id
-		     limit $3) ready),
-		  (select count(*) from (
-		     select 1 from runs
-		     where finished_xid >= pg_snapshot_xmin(pg_current_snapshot())
-		       and (finished_xid, run_id) > ($1::xid8, $2)
-		       and phase = 'finished' and ` + realRuns + `
-		     order by finished_xid, run_id
-		     limit $3) held),
-		  (select coalesce(ended_at, updated_at) from runs
+		     limit $3),
+		held as (
+		     select coalesce(ended_at, updated_at) as at from runs
 		     where finished_xid is not null
+		       and finished_xid >= pg_snapshot_xmin(pg_current_snapshot())
 		       and (finished_xid, run_id) > ($1::xid8, $2)
 		       and phase = 'finished' and ` + realRuns + `
 		     order by finished_xid, run_id
-		     limit 1)`
+		     limit $3)
+		select (select count(*) from ready),
+		       (select count(*) from held),
+		       least((select min(at) from ready), (select min(at) from held))`

@@ -33,7 +33,7 @@ Quem tem acesso à instalação inteira vê um painel **Despacho de eventos**:
 | Retidas por uma transação aberta | Execuções finalizadas que foram confirmadas depois que a transação aberta mais antiga começou. Varrer mais vezes não as alcança; encerrar essa transação, sim. |
 | A execução mais antiga na fila terminou há … | O atraso: quanto tempo a execução finalizada mais antiga depois do cursor está esperando. |
 | Idade da transação aberta | Há quanto tempo a transação aberta mais antiga está aberta, exibida quando há execuções retidas. |
-| Saudável / Degradado | Fica degradado quando o atraso passa de cinco minutos. |
+| Saudável / Degradado | Fica degradado quando o atraso passa de cinco minutos, ou quando uma contagem chega a 1.000 (o atraso então vem de uma amostra e é só um limite inferior, então nunca é lido como saudável). |
 
 Um despachante degradado também aparece em **Precisa de atenção**. Degradado
 não é falha: nada se perde e a plataforma continua funcionando.

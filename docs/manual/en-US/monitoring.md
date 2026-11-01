@@ -32,7 +32,7 @@ Readers with access to the whole installation see an **Event dispatch** panel:
 | Held by an open transaction | Finished runs that committed after the oldest open transaction began. Sweeping more often does not reach them; ending that transaction does. |
 | The oldest waiting run finished … ago | The lag: how long the oldest finished run past the cursor has waited. |
 | Open transaction age | How long the oldest open transaction has been open, shown when runs are held. |
-| Healthy / Degraded | Degraded once the lag passes five minutes. |
+| Healthy / Degraded | Degraded once the lag passes five minutes, or once a count reaches 1,000 (the lag is then read from a sample and is only a lower bound, so it is never read as healthy). |
 
 A degraded dispatcher also appears under **Needs attention**. Degraded is not
 a failure: nothing is lost, and the platform keeps working.

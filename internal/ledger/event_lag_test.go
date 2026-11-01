@@ -106,3 +106,37 @@ func TestRuntimeHealth_carriesTheEventDispatchBacklogOnlyInstallationWide(t *tes
 		}
 	})
 }
+
+// finishRunAt finishes a run whose steps were stamped at at, by the worker's
+// clock — which is what ended_at records, whatever order the finishing
+// transactions were given their ids in.
+func finishRunAt(t *testing.T, s Store, id domain.RunID, at time.Time) {
+	t.Helper()
+	for _, kind := range []domain.StepKind{domain.StepRunStarted, domain.StepRunFinished} {
+		one := step(id, kind)
+		one.At = at
+		mustAppend(t, s, one)
+	}
+}
+
+/*
+The feed's order is the order the finishing transactions were given ids, not
+the order the runs finished by the clock that stamped them. A run first in the
+feed can have finished just now while the next one finished an hour ago; the
+wait is the hour, and an hour of waiting is not healthy.
+*/
+func TestEventDispatchBacklog_theOldestWaitIsTheEarliestFinish_notTheFirstInFeedOrder(t *testing.T) {
+	run(t, "the wait is the earliest finish among the runs waiting", func(t *testing.T, s Store) {
+		now := time.Now().UTC().Truncate(time.Microsecond)
+		finishRunAt(t, s, "run-first-in-feed", now)
+		finishRunAt(t, s, "run-an-hour-ago", now.Add(-time.Hour))
+
+		got := backlogOf(t, s)
+		if want := now.Add(-time.Hour); !got.OldestFinishedAt.Equal(want) {
+			t.Fatalf("oldest finished at %v, want %v: the run that finished an hour ago", got.OldestFinishedAt, want)
+		}
+		if status := got.Status(now); status != domain.EventDispatchDegraded {
+			t.Fatalf("status = %q with a run waiting an hour; want degraded", status)
+		}
+	})
+}

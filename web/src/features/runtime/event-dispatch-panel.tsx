@@ -35,6 +35,7 @@ export function EventDispatchPanel({ dispatch }: { dispatch: RuntimeEventDispatc
         <p>
           {t("runtime.eventDispatchThreshold", {
             threshold: seconds(dispatch.degradedAfterSeconds),
+            cap: dispatch.countCap,
           })}
         </p>
       </div>

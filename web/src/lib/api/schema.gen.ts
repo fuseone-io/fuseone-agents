@@ -5050,7 +5050,7 @@ export interface components {
          */
         RuntimeEventDispatch: {
             /**
-             * @description Degraded once the oldest waiting run has waited past degradedAfterSeconds. Never failing.
+             * @description Degraded once the oldest waiting run has waited past degradedAfterSeconds, or whenever a count is capped (the lag is then read from a sample and is only a lower bound). Never failing.
              * @enum {string}
              */
             status: "ok" | "degraded";
@@ -5073,7 +5073,7 @@ export interface components {
             countCap: number;
             /**
              * Format: int64
-             * @description How long the oldest finished run past the cursor has waited. Zero when caught up.
+             * @description How long the earliest-finished run past the cursor has waited, by the clock that stamped its finish. Zero when caught up; a lower bound when a count is capped.
              */
             lagSeconds: number;
             /**
