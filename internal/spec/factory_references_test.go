@@ -106,11 +106,14 @@ func TestFactoryReferences_eachFile_carriesTheClaimLineOnce(t *testing.T) {
 	}
 }
 
-// triageTitleRule is what Triage may do with the one untrusted text it reads
-// before its claim: the board listing always returns card titles (#220). Each
-// sentence sits on a line of its own and is compared whole, like the claim
-// line, so a reworded or dropped rule fails here rather than in a run.
-var triageTitleRule = []string{
+// triagePreClaimRule fences what Triage reads before its claim: card titles
+// and nothing more. The board listing always returns them (#220), and a
+// card's title is untrusted text, so Triage uses it only to tell the cards
+// apart. It is not the only untrusted text Triage reads: it reads the issue's
+// body and its comments only after it holds the card. Each sentence sits on a
+// line of its own and is compared whole, like the claim line, so a reworded
+// or dropped rule fails here rather than in a run.
+var triagePreClaimRule = []string{
 	// projects_list and projects_get are multiplexed: the same grant reaches
 	// the board's status updates, whose bodies are free text.
 	"Before the claim, list the lane only with projects_list, method list_project_items; never call list_project_status_updates or get_project_status_update.",
@@ -119,7 +122,7 @@ var triageTitleRule = []string{
 	"Read the issue's body and its comments only after you hold its card.",
 }
 
-func TestFactoryReferences_triage_carriesTheTitleRuleBeforeItsClaim(t *testing.T) {
+func TestFactoryReferences_triage_carriesThePreClaimRuleBeforeItsClaim(t *testing.T) {
 	t.Parallel()
 
 	lines := strings.Split(string(factoryReferences(t)["triage"]), "\n")
@@ -127,7 +130,7 @@ func TestFactoryReferences_triage_carriesTheTitleRuleBeforeItsClaim(t *testing.T
 	if claimAt < 0 {
 		t.Fatal("the Triage reference has no claim line")
 	}
-	for _, sentence := range triageTitleRule {
+	for _, sentence := range triagePreClaimRule {
 		at := slices.Index(lines, sentence)
 		switch {
 		case at < 0:
