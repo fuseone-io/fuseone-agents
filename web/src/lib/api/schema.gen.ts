@@ -4834,9 +4834,12 @@ export interface components {
         /**
          * @description Present when the published version takes part in a cycle of the static
          *     event graph: its events, through the agents listening to them, come
-         *     back to start it again. A warning, never a refusal — a review loop is
-         *     a cycle on purpose — and at run time the chain stops hopLimit hops
-         *     from the run that started it.
+         *     back to start it again. Also present, with no cycles and truncated
+         *     true, when the graph was too large to check in full for this version:
+         *     unchecked is not clear, so the absence of a cycle is never reported
+         *     from a search that stopped short. A warning, never a refusal — a
+         *     review loop is a cycle on purpose — and at run time the chain stops
+         *     hopLimit hops from the run that started it.
          */
         EventCycleWarning: {
             /**
