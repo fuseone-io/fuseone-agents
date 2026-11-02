@@ -56,6 +56,9 @@ type RunStartedPayload struct {
 	// another, when an event opened it (#203). Absent on every other run,
 	// which is the root of any chain its events start.
 	Chain *EventChain `json:"chain,omitempty"`
+	// WorkItem is the card this run is attributed to by how it was opened
+	// (#204, slice 3): attribution only, never a claim. See RunWorkItem.
+	WorkItem *RunWorkItem `json:"work_item,omitempty"`
 }
 
 /*
