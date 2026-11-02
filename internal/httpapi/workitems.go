@@ -38,11 +38,24 @@ func (s *Server) WithWorkItems(w WorkItems) *Server {
 // run:read and agent:read, cost where they hold cost:read.
 type trailAccess struct{ runs, cost []domain.Scope }
 
-func trailAccessOf(ctx context.Context) trailAccess {
+func (s *Server) trailAccessOf(ctx context.Context) trailAccess {
+	grants := s.grantsFor()
 	return trailAccess{
-		runs: trailScopes(auth.VisibleScopes(ctx, domain.PermRunRead), auth.VisibleScopes(ctx, domain.PermAgentRead)),
-		cost: auth.VisibleScopes(ctx, domain.PermCostRead),
+		runs: trailScopes(grants(ctx, domain.PermRunRead), grants(ctx, domain.PermAgentRead)),
+		cost: grants(ctx, domain.PermCostRead),
 	}
+}
+
+// grantsFor is where the caller holds a permission: the caller's own grants,
+// as every other read asks. Only a test sets trailGrants, to state a caller
+// no shipped role describes — run:read without agent:read or cost:read — so
+// the rules for those combinations are proved through this handler rather
+// than beside it.
+func (s *Server) grantsFor() func(context.Context, domain.Permission) []domain.Scope {
+	if s.trailGrants != nil {
+		return s.trailGrants
+	}
+	return auth.VisibleScopes
 }
 
 // trailScopes is where the caller reads both runs and agents. Scopes nest
@@ -66,7 +79,7 @@ func trailScopes(runs, agents []domain.Scope) []domain.Scope {
 func (s *Server) GetWorkItemTrail(
 	ctx context.Context, req openapi.GetWorkItemTrailRequestObject,
 ) (openapi.GetWorkItemTrailResponseObject, error) {
-	if len(auth.VisibleScopes(ctx, domain.PermRunRead)) == 0 {
+	if len(s.grantsFor()(ctx, domain.PermRunRead)) == 0 {
 		return openapi.GetWorkItemTrail403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermRunRead, domain.Scope{}),
 		}, nil
@@ -83,7 +96,7 @@ func (s *Server) GetWorkItemTrail(
 		}
 		page.After = after
 	}
-	return s.workItemTrail(ctx, trailAccessOf(ctx), ref, page)
+	return s.workItemTrail(ctx, s.trailAccessOf(ctx), ref, page)
 }
 
 // workItemTrail reads one page under an access already derived from the

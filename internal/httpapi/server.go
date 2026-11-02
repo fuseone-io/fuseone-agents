@@ -80,10 +80,13 @@ type Server struct {
 	standing       StandingApprovals
 	standingEvents StandingEvents
 	// workItems reads a card's trail (#204). Nil answers every trail empty.
-	workItems  WorkItems
-	areas      Areas
-	authoring  Authoring
-	assistants Assistants
+	workItems WorkItems
+	// trailGrants is where the trail's caller holds a permission;
+	// auth.VisibleScopes when nil (see grantsFor).
+	trailGrants func(context.Context, domain.Permission) []domain.Scope
+	areas       Areas
+	authoring   Authoring
+	assistants  Assistants
 	// tokenisers answer how large an instruction is to the model that will
 	// read it, since nothing on this side can compute that.
 	tokenisers Tokenisers

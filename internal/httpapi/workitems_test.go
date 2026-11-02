@@ -238,11 +238,15 @@ func TestGetWorkItemTrail_cost_presentWithCostReadAbsentWithout(t *testing.T) {
 		t.Errorf("with cost:read: cost = %v, want 250", r.CostMicros)
 	}
 
-	// No shipped role reads runs without cost:read, so the caller's access
-	// is stated directly at the seam the handler derives it into.
-	noCost := trailAccess{runs: []domain.Scope{trailFactory}}
-	resp, err := server.workItemTrail(ctx, noCost, trailCard, domain.WorkItemPage{})
-	trailPage(t, resp, err)
+	// No shipped role reads runs and agents without cost:read, so the caller
+	// is stated, and the request goes through the handler all the same.
+	noCost := stated(server, map[domain.Permission][]domain.Scope{
+		domain.PermRunRead: {trailFactory}, domain.PermAgentRead: {trailFactory},
+	})
+	resp, err := noCost.GetWorkItemTrail(context.Background(), trailRequest(trailCard, nil, 0))
+	if page := trailPage(t, resp, err); len(page.Runs) != 1 {
+		t.Fatalf("without cost:read the run itself is missing: %v", trailRunIDs(page))
+	}
 	if raw := trailJSON(t, resp); strings.Contains(string(raw), "costMicros") {
 		t.Errorf("without cost:read the body carries a cost: %s", raw)
 	}
@@ -287,13 +291,10 @@ func TestGetWorkItemTrail_aWideCallersCursor_reusedNarrow_readsOnlyTheNarrowScop
 	seed.claim("run-4", "reviewer", trailFactory, trailCard, 40)
 	server := trailServer(seed)
 	wide := trailGet(t, server, companyAuditor(), trailRequest(trailCard, nil, 1))
-	after, err := domain.DecodeWorkItemCursor(*wide.NextCursor)
-	if err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-
-	narrow := trailAccess{runs: []domain.Scope{trailFactory}}
-	resp, err := server.workItemTrail(context.Background(), narrow, trailCard, domain.WorkItemPage{After: after, Limit: 10})
+	narrow := stated(trailServer(seed), map[domain.Permission][]domain.Scope{
+		domain.PermRunRead: {trailFactory}, domain.PermAgentRead: {trailFactory},
+	})
+	resp, err := narrow.GetWorkItemTrail(context.Background(), trailRequest(trailCard, wide.NextCursor, 10))
 	page := trailPage(t, resp, err)
 	if ids := trailRunIDs(page); len(ids) != 1 || ids[0] != "run-4" {
 		t.Fatalf("resumed narrow = %v, want only run-4", ids)
@@ -348,9 +349,45 @@ func TestGetWorkItemTrail_noScopeReadsBothRunsAndAgents_isEmptyWithoutAskingTheS
 	t.Parallel()
 	seed := newTrailSeed(t)
 	seed.claim("run-1", "triage", trailFactory, trailCard, 10)
+	disjoint := stated(trailServer(seed), map[domain.Permission][]domain.Scope{
+		domain.PermRunRead: {trailCX}, domain.PermAgentRead: {trailFactory},
+	})
 
-	resp, err := trailServer(seed).workItemTrail(context.Background(), trailAccess{}, trailCard, domain.WorkItemPage{})
+	resp, err := disjoint.GetWorkItemTrail(context.Background(), trailRequest(trailCard, nil, 0))
 	if page := trailPage(t, resp, err); len(page.Runs) != 0 {
 		t.Fatalf("runs = %v; an access reaching nowhere read the whole ledger", trailRunIDs(page))
 	}
+}
+
+// The agent:read rule (#230), through the handler: a caller who reads runs
+// in two areas but agents in one sees only that one's runs — the other's
+// would name agents they may not read.
+func TestGetWorkItemTrail_runReadWithoutAgentRead_leavesThatAreasRunsOut(t *testing.T) {
+	t.Parallel()
+	seed := newTrailSeed(t)
+	seed.claim("run-factory", "triage", trailFactory, trailCard, 10)
+	seed.claim("run-cx", "secret-agent", trailCX, trailCard, 20)
+	caller := stated(trailServer(seed), map[domain.Permission][]domain.Scope{
+		domain.PermRunRead:   {trailFactory, trailCX},
+		domain.PermAgentRead: {trailFactory},
+		domain.PermCostRead:  {trailFactory, trailCX},
+	})
+
+	resp, err := caller.GetWorkItemTrail(context.Background(), trailRequest(trailCard, nil, 0))
+	page := trailPage(t, resp, err)
+	if ids := trailRunIDs(page); len(ids) != 1 || ids[0] != "run-factory" {
+		t.Fatalf("runs = %v; want only the area whose agents the caller reads", ids)
+	}
+	if raw := trailJSON(t, resp); strings.Contains(string(raw), "secret-agent") {
+		t.Fatalf("the body names an agent the caller may not read: %s", raw)
+	}
+}
+
+// stated is the server answering a caller whose permissions are stated per
+// scope instead of derived from a role. No shipped role reads runs without
+// reading agents and cost, so the combinations the handler must still get
+// right can only be written down.
+func stated(server *Server, grants map[domain.Permission][]domain.Scope) *Server {
+	server.trailGrants = func(_ context.Context, perm domain.Permission) []domain.Scope { return grants[perm] }
+	return server
 }
