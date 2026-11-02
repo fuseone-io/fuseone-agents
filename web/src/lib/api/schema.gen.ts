@@ -885,6 +885,14 @@ export interface paths {
          *     `$fuseone.work_item.link`, oldest claim first, and per role what those
          *     runs asked people and what they cost (#204).
          *
+         *     A run also joins the trail when it inherited the card, or a pull
+         *     request linked to it, by how it was opened: an event from a run that
+         *     claimed or itself inherited the card (`link: event`), or a signed
+         *     GitHub delivery about it (`link: github_delivery`). Attribution only:
+         *     an inheritance never holds the card. A run is on a trail once, by its
+         *     claim when that is on the same trail; each row names the run's other
+         *     attribution in `claimedRef` or `inheritedRef`.
+         *
          *     Resolution is one level deep. Asked by a pull request linked to a
          *     card, the answer is that card's trail: `ref` is the card and
          *     `resolvedFrom` is the pull request asked for. Asked by a card, or by
@@ -5333,16 +5341,33 @@ export interface components {
              * @description Absent while the run is going.
              */
             endedAt?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the run joined the trail: the moment of its claim, or for an
+             *     inherited run the moment it opened. The trail's order.
+             */
             claimedAt: string;
             /**
              * @description How the run came to be on the trail: `claim`, it claimed the card
-             *     itself; `alias`, it claimed a pull request linked to the card.
+             *     itself; `alias`, it claimed a pull request linked to the card;
+             *     `event`, an event opened it from a run on the card; and
+             *     `github_delivery`, a signed GitHub delivery about the card, or
+             *     about a pull request linked to it, opened it.
              * @enum {string}
              */
-            link: "claim" | "alias";
-            /** @description The reference the run claimed, in canonical form. */
+            link: "claim" | "alias" | "event" | "github_delivery";
+            /** @description The reference the run claimed, or inherited, in canonical form. */
             ref: string;
+            /**
+             * @description On an inherited run, the card the run claimed itself, when it
+             *     claimed one: it is on that card's trail as well. Absent otherwise.
+             */
+            claimedRef?: string;
+            /**
+             * @description On a run that is here by its claim, the card it inherited by how
+             *     it was opened, when it inherited one. Absent otherwise.
+             */
+            inheritedRef?: string;
         };
         WorkItemRole: {
             agentId: string;

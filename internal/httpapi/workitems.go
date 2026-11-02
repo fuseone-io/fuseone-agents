@@ -162,6 +162,12 @@ func toWorkItemRun(r domain.WorkItemRun) openapi.WorkItemRun {
 	if !r.EndedAt.IsZero() {
 		run.EndedAt = ptr(r.EndedAt)
 	}
+	if r.ClaimedRef != "" {
+		run.ClaimedRef = ptr(string(r.ClaimedRef))
+	}
+	if r.InheritedRef != "" {
+		run.InheritedRef = ptr(string(r.InheritedRef))
+	}
 	return run
 }
 
