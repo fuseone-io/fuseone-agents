@@ -121,6 +121,37 @@ describe("a work item's trail", () => {
     expect(within(dev).queryByText(PR)).toBeNull();
   });
 
+  it("marks runs that inherited the card, and names the card an inherited run claimed", async () => {
+    const OTHER = "github:fuseone-io/fuseone-agents#300";
+    serve({
+      "": {
+        ref: REF,
+        runs: [
+          {
+            ...run("run-qa", "qa", "2026-10-01T09:00:00Z"),
+            link: "event" as const,
+            claimedRef: OTHER,
+          },
+          {
+            ...run("run-hook", "triage", "2026-10-01T10:00:00Z"),
+            link: "github_delivery" as const,
+          },
+        ],
+        roles: [],
+      },
+    });
+    open();
+
+    const qa = await screen.findByRole("row", { name: /run-qa/ });
+    expect(within(qa).getByText("Evento")).toBeInTheDocument();
+    expect(
+      within(qa).getByRole("link", { name: `Também assumiu ${OTHER}` }),
+    ).toHaveAttribute("href", workItemPath(OTHER));
+    const hook = screen.getByRole("row", { name: /run-hook/ });
+    expect(within(hook).getByText("Entrega do GitHub")).toBeInTheDocument();
+    expect(within(hook).queryByText(REF)).toBeNull();
+  });
+
   it("opened by a linked pull request, shows the card's trail and says where it came from", async () => {
     serve({ "": { ...firstPage, resolvedFrom: PR } });
     open(workItemPath(PR));

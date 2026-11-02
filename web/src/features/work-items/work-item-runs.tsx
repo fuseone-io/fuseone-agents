@@ -13,6 +13,7 @@ import { StateDot } from "@/components/shared/state-dot";
 import { stateOfPhase } from "@/lib/agent-state";
 import { PHASE_LABELS } from "@/features/runs/phase-badge";
 import { formatInstant } from "@/lib/format";
+import { WorkItemRunLink } from "@/features/work-items/work-item-run-link";
 import type { WorkItemRun } from "@/lib/api/client";
 
 const HEAD =
@@ -30,25 +31,16 @@ const COLUMNS = [
 ] as const;
 
 /**
- * How a run is on the trail: it claimed the card, or a pull request linked to
- * it — named, so the reader sees which.
- */
-function RunLink({ run }: { run: WorkItemRun }) {
-  const { t } = useTranslation();
-  if (run.link !== "alias") return <>{t("workItems.linkClaim")}</>;
-  return (
-    <span className="flex items-center gap-2">
-      {t("workItems.linkAlias")}
-      <Mono>{run.ref}</Mono>
-    </span>
-  );
-}
-
-/**
  * The card's runs, oldest claim first. Each leads to the run's own screen,
  * where its trail is; nothing of the trail itself is repeated here.
  */
-export function WorkItemRuns({ runs }: { runs: WorkItemRun[] }) {
+export function WorkItemRuns({
+  runs,
+  card,
+}: {
+  runs: WorkItemRun[];
+  card: string;
+}) {
   const { t } = useTranslation();
   return (
     <Table>
@@ -87,7 +79,7 @@ export function WorkItemRuns({ runs }: { runs: WorkItemRun[] }) {
               </span>
             </TableCell>
             <TableCell>
-              <RunLink run={run} />
+              <WorkItemRunLink run={run} card={card} />
             </TableCell>
             <TableCell className={NUM}>
               {run.endedAt

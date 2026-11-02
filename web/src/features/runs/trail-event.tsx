@@ -15,6 +15,7 @@ import { formatTime, shortHash } from "@/lib/format";
 import { hasContent } from "@/features/runs/step-content-ref";
 import { RememberThisButton } from "@/features/runs/remember-this-button";
 import { WorkItemRefLink } from "@/features/work-items/work-item-ref-link";
+import { StartInheritance } from "@/features/runs/start-inheritance";
 import type { Step } from "@/lib/api/client";
 
 /** The reference a claim step names, or "" for any other step. */
@@ -78,12 +79,16 @@ export function TrailEvent({
       {line(detailOf(step), t) && (
         <p className="mt-0.5 text-xs text-muted-foreground">
           {claimedRef(step) ? (
-            <WorkItemRefLink reference={claimedRef(step)} label={line(detailOf(step), t)} />
+            <WorkItemRefLink
+              reference={claimedRef(step)}
+              label={line(detailOf(step), t)}
+            />
           ) : (
             line(detailOf(step), t)
           )}
         </p>
       )}
+      <StartInheritance step={step} />
     </>
   );
 
