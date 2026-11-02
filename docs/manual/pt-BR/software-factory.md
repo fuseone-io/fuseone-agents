@@ -68,6 +68,11 @@ e as instruções dos papéis ficam, revisadas como código, em
   escondendo até o título, ficou para depois. O Arquiteto lista a coluna
   Triagem, e o Desenvolvedor a coluna Doing, do mesmo jeito, e os dois
   recebem a mesma instrução.
+- **O histórico de um card.** A linha **Item** do claim, na trilha de um run,
+  leva a todos os runs que fizeram o claim da mesma referência, com as
+  aprovações e o custo de cada papel (veja [Ler uma execução](reading-a-run.md)).
+  Uma issue e o pull request dela são duas referências, então por enquanto
+  cada uma tem o seu próprio histórico.
 
 O repositório é público, então o texto de issues e pull requests não é
 confiável: um run que leu esse texto nunca pode executar uma ação destrutiva,

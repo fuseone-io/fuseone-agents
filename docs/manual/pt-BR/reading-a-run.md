@@ -83,4 +83,17 @@ podem consultar novamente, mas três leituras consecutivas de uma ferramenta
 que produzam o mesmo resultado completo estacionam como
 `investigation_stalled` antes que o teto de dinheiro seja a única parada.
 
+### Quais execuções trabalharam neste card
+
+Uma execução que assumiu um card mostra **Item: <referência>** na trilha. A
+referência é um link para o histórico do próprio card: todas as execuções que
+o assumiram, da mais antiga para a mais nova, cada uma levando de volta à sua
+execução, e uma linha por papel com as aprovações pedidas, quantas foram
+aprovadas e recusadas, as execuções que uma pessoa abandonou e quanto o papel
+custou. Você só vê as execuções das áreas que pode ler, e nada das outras
+entra em nenhum total; o custo só aparece onde você tem permissão para vê-lo
+e, fora disso, a tela diz que ele não está visível em vez de mostrar zero. É
+uma visão dessa referência apenas: por enquanto, a issue e o pull request que
+a resolve aparecem separadamente.
+
 O que decide cada parada está em [O que a plataforma para antes de acontecer](what-the-gate-stops.md) e em [Políticas](policies.md).

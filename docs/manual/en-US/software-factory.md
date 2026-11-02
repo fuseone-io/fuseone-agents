@@ -64,6 +64,10 @@ and the role instructions live, reviewed like code, in
   picks and claims a card in one step, hiding even the title, is deferred.
   The Architect lists the Triagem lane, and the Developer the Doing lane,
   the same way, and both are told the same.
+- **A card's trail.** The claim's **Item** line in a run's trail links to
+  every run that claimed the same reference, with each role's approvals and
+  cost (see [Reading a run](reading-a-run.md)). An issue and its pull request
+  are two references, so for now each has its own trail.
 
 The repository is public, so issue and pull request text is untrusted: a run
 that read it can never take a destructive action, and its GitHub writes need
