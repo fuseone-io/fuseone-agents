@@ -33,7 +33,7 @@ func (r *Registry) ApprovalPolicy(
 	ctx context.Context, agent domain.AgentID, version domain.VersionID,
 ) (domain.ApprovalPolicy, error) {
 	var raw []byte
-	err := r.pool.QueryRow(ctx, `
+	err := r.q.QueryRow(ctx, `
 		select approvals from agent_specs
 		where agent_id = $1 and version_id = $2`,
 		string(agent), string(version)).Scan(&raw)

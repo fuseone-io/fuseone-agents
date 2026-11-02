@@ -41,7 +41,9 @@ func (s *Server) WithSchedules(schedules Schedules) *Server {
 // authorship and pausing is operations, and an interface that made them one
 // call would invite a screen that starts an agent by saving it.
 type Publisher interface {
-	Publish(ctx context.Context, p spec.Publication) error
+	// Publish judges the event cycles the version closes under the same
+	// serialisation as its write, and answers with them (#227).
+	Publish(ctx context.Context, p spec.Publication) (spec.Published, error)
 	EnsurePaused(ctx context.Context, agent domain.AgentID, by domain.UserID) error
 	SetPaused(ctx context.Context, agent domain.AgentID, paused bool, by domain.UserID) error
 	IsPaused(ctx context.Context, agent domain.AgentID) (bool, error)
@@ -125,7 +127,7 @@ func (s *Server) PublishAgent(
 		return nil, err
 	}
 
-	err = s.publisher.Publish(ctx, spec.Publication{
+	judged, err := s.publisher.Publish(ctx, spec.Publication{
 		Spec: published, By: callerOf(ctx), Company: scope.Company,
 		RefuseStages: refusedStages(req.Params.RefuseIfStage),
 	})
@@ -164,9 +166,10 @@ func (s *Server) PublishAgent(
 
 	return openapi.PublishAgent200JSONResponse{
 		AgentId: string(published.ID), VersionId: string(published.Version),
-		Created:    !before[published.Version],
-		Paused:     paused,
-		Definition: ptr(string(definition)),
+		Created:           !before[published.Version],
+		Paused:            paused,
+		Definition:        ptr(string(definition)),
+		EventCycleWarning: eventCycleWarning(judged, auth.VisibleScopes(ctx, domain.PermAgentRead)),
 	}, nil
 }
 

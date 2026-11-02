@@ -3,7 +3,11 @@ package httpapi
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -27,26 +31,58 @@ type publisher struct {
 	// stage, when set, is the stage the agent stands at: a publication
 	// refusing it is refused, as spec.Publisher does under its lock.
 	stage domain.Stage
+
+	// mu is the event graph's lock: a publication judges the cycles it closes
+	// and writes its version while holding it, as spec.Publisher does under
+	// its advisory lock, so two publications cannot judge the same graph.
+	mu sync.Mutex
+	// latest is each agent's current version, the graph's source.
+	latest map[domain.AgentID]spec.Spec
+	// queued counts publications waiting for mu.
+	queued atomic.Int32
+	// afterJudging, when set, runs between the judgement and the write.
+	afterJudging func(domain.AgentID)
 }
 
-func newPublisher() *publisher {
-	return &publisher{paused: map[domain.AgentID]bool{}}
+// newPublisher is a fake publisher whose agents are currently at these
+// versions.
+func newPublisher(current ...spec.Spec) *publisher {
+	p := &publisher{paused: map[domain.AgentID]bool{}, latest: map[domain.AgentID]spec.Spec{}}
+	for _, s := range current {
+		p.latest[s.ID] = s
+	}
+	return p
 }
 
-func (p *publisher) Publish(_ context.Context, pub spec.Publication) error {
+func (p *publisher) Publish(_ context.Context, pub spec.Publication) (spec.Published, error) {
+	p.queued.Add(1)
+	p.mu.Lock()
+	p.queued.Add(-1)
+	defer p.mu.Unlock()
+
 	p.refused = append(p.refused, pub.RefuseStages)
 	for _, refused := range pub.RefuseStages {
 		if refused == p.stage {
-			return fmt.Errorf("%w: %s is %s", spec.ErrStageRefused, pub.Spec.ID, p.stage)
+			return spec.Published{}, fmt.Errorf("%w: %s is %s", spec.ErrStageRefused, pub.Spec.ID, p.stage)
 		}
+	}
+	judged := spec.JudgedIn(spec.WiringWith(spec.WiringOf(slices.Collect(maps.Values(p.latest))), pub.Spec), pub.Spec.ID)
+	if p.afterJudging != nil {
+		p.afterJudging(pub.Spec.ID)
 	}
 	p.published = append(p.published, pub.Spec)
 	p.companies = append(p.companies, pub.Company)
 	p.current = append(p.current, pub.Spec.Version)
-	return nil
+	p.latest[pub.Spec.ID] = pub.Spec
+	return judged, nil
 }
 
+// waiting is how many publications are queued for the graph's lock.
+func (p *publisher) waiting() int32 { return p.queued.Load() }
+
 func (p *publisher) EnsurePaused(_ context.Context, agent domain.AgentID, _ domain.UserID) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.ensured = append(p.ensured, agent)
 	if _, decided := p.paused[agent]; !decided {
 		p.paused[agent] = true
@@ -55,11 +91,15 @@ func (p *publisher) EnsurePaused(_ context.Context, agent domain.AgentID, _ doma
 }
 
 func (p *publisher) SetPaused(_ context.Context, agent domain.AgentID, paused bool, _ domain.UserID) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.paused[agent] = paused
 	return nil
 }
 
 func (p *publisher) IsPaused(_ context.Context, agent domain.AgentID) (bool, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	stopped, decided := p.paused[agent]
 	return !decided || stopped, nil
 }

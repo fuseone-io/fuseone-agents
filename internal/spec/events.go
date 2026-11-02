@@ -69,39 +69,11 @@ func (r *Registry) Listeners(ctx context.Context) (map[string][]domain.EventList
 // and a trigger nothing publishes are the two mistakes this graph exists to
 // make visible, and omitting them would leave a picture that looks correct.
 func (r *Registry) Edges(ctx context.Context) ([]domain.EventEdge, error) {
-	emitters, err := r.Emitters(ctx)
+	w, err := r.wiring(ctx)
 	if err != nil {
 		return nil, err
 	}
-	listeners, err := r.Listeners(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var edges []domain.EventEdge
-	published := map[string]bool{}
-	for agent, events := range emitters {
-		for _, declared := range events {
-			event := declared.Event
-			published[event] = true
-			if len(listeners[event]) == 0 {
-				edges = append(edges, domain.EventEdge{From: agent, Event: event})
-				continue
-			}
-			for _, to := range listeners[event] {
-				edges = append(edges, domain.EventEdge{From: agent, Event: event, To: to.Agent})
-			}
-		}
-	}
-	for event, agents := range listeners {
-		if published[event] {
-			continue
-		}
-		for _, to := range agents {
-			edges = append(edges, domain.EventEdge{Event: event, To: to.Agent})
-		}
-	}
-	return edges, nil
+	return EdgesOf(w), nil
 }
 
 // latest reads the current version of every published agent.

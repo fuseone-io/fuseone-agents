@@ -4829,6 +4829,34 @@ export interface components {
              *     that keeps its agents in git commits this.
              */
             definition?: string;
+            eventCycleWarning?: components["schemas"]["EventCycleWarning"];
+        };
+        /**
+         * @description Present when the published version takes part in a cycle of the static
+         *     event graph: its events, through the agents listening to them, come
+         *     back to start it again. A warning, never a refusal — a review loop is
+         *     a cycle on purpose — and at run time the chain stops hopLimit hops
+         *     from the run that started it.
+         */
+        EventCycleWarning: {
+            /**
+             * @description Each cycle as the agents in it, starting from the published one,
+             *     in the order their events start each other. Shortest first, then by
+             *     name, and bounded: a dense graph names its first few. An agent the
+             *     caller may not read (agent:read) is an empty string: the cycle is
+             *     judged across every scope, and its name is not the caller's to
+             *     learn.
+             */
+            cycles: string[][];
+            /**
+             * @description True when the search stopped at its bound — on the number of cycles
+             *     it names or on the work it may do — so the cycles listed may not be
+             *     all there are. With no cycles listed, the graph was too large to
+             *     search for this version within the bound: unchecked, not clear.
+             */
+            truncated: boolean;
+            /** @description How many hops from its root an event chain may reach. */
+            hopLimit: number;
         };
         AgentDetail: {
             agent: components["schemas"]["Agent"];

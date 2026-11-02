@@ -25,7 +25,7 @@ func twoVersions(t *testing.T, pool *pgxpool.Pool) (first, second spec.Spec) {
 	if first.Version == second.Version {
 		t.Fatal("test setup did not change the version")
 	}
-	if err := spec.NewPublisher(pool, fixedClock{}).Publish(context.Background(),
+	if _, err := spec.NewPublisher(pool, fixedClock{}).Publish(context.Background(),
 		spec.Publication{Spec: first, By: "usr_ana", Company: "acme"}); err != nil {
 		t.Fatalf("Publish(first): %v", err)
 	}
@@ -55,7 +55,7 @@ func TestPublisher_agentIsAutonomous_refusesAndWritesNothing(t *testing.T) {
 		t.Fatalf("SetStage: %v", err)
 	}
 
-	err := spec.NewPublisher(pool, fixedClock{}).Publish(ctx, spec.Publication{
+	_, err := spec.NewPublisher(pool, fixedClock{}).Publish(ctx, spec.Publication{
 		Spec: second, By: "usr_ana", Company: "acme", RefuseStages: refuseAutonomous,
 	})
 	if !errors.Is(err, spec.ErrStageRefused) {
@@ -72,7 +72,7 @@ func TestPublisher_agentIsCopilot_publishesUnderTheSameCondition(t *testing.T) {
 		t.Fatalf("SetStage: %v", err)
 	}
 
-	if err := spec.NewPublisher(pool, fixedClock{}).Publish(ctx, spec.Publication{
+	if _, err := spec.NewPublisher(pool, fixedClock{}).Publish(ctx, spec.Publication{
 		Spec: second, By: "usr_ana", Company: "acme", RefuseStages: refuseAutonomous,
 	}); err != nil {
 		t.Fatalf("Publish = %v, want the copilot agent's version published", err)
@@ -90,7 +90,7 @@ func TestPublisher_agentNeverPublished_guardedPublicationCreatesItAtDraft(t *tes
 	ctx := context.Background()
 	fresh := published(t, definition)
 
-	if err := spec.NewPublisher(pool, fixedClock{}).Publish(ctx, spec.Publication{
+	if _, err := spec.NewPublisher(pool, fixedClock{}).Publish(ctx, spec.Publication{
 		Spec: fresh, By: "usr_ana", Company: "acme", RefuseStages: refuseAutonomous,
 	}); err != nil {
 		t.Fatalf("Publish = %v, want a new agent published", err)
@@ -131,9 +131,9 @@ func TestPublisher_promotionCommittedWhileThePublicationWaits_refuses(t *testing
 
 	done := make(chan error, 1)
 	go func() {
-		done <- spec.NewPublisher(pool, fixedClock{}).Publish(ctx, spec.Publication{
+		done <- errOf(spec.NewPublisher(pool, fixedClock{}).Publish(ctx, spec.Publication{
 			Spec: second, By: "usr_ana", Company: "acme", RefuseStages: refuseAutonomous,
-		})
+		}))
 	}()
 	waitForLockWait(t, pool, "%agent_state%", done)
 	if err := promotion.Commit(ctx); err != nil {
@@ -173,9 +173,9 @@ func TestPublisher_promotionAfterTheJudgement_waitsForThePublicationToCommit(t *
 
 	published := make(chan error, 1)
 	go func() {
-		published <- spec.NewPublisher(pool, fixedClock{}).Publish(ctx, spec.Publication{
+		published <- errOf(spec.NewPublisher(pool, fixedClock{}).Publish(ctx, spec.Publication{
 			Spec: second, By: "usr_ana", Company: "acme", RefuseStages: refuseAutonomous,
-		})
+		}))
 	}()
 	waitForLockWait(t, pool, "%insert into agent_specs%", published)
 
@@ -193,6 +193,9 @@ func TestPublisher_promotionAfterTheJudgement_waitsForThePublicationToCommit(t *
 		t.Fatalf("SetStage after the publication committed: %v", err)
 	}
 }
+
+// errOf is a publication's error alone, for the tests that only judge stages.
+func errOf(_ spec.Published, err error) error { return err }
 
 // waitForLockWait returns once another backend running a query matching
 // pattern is queued on a lock, and fails if that write finished first.

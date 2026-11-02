@@ -13,6 +13,8 @@ import { agentRequirements } from "@/features/agents/agent-required";
 import { AgentGuidedPath } from "@/features/agents/agent-guided-path";
 import { guidedAgentSteps } from "@/features/agents/agent-guided-path-model";
 import { usePublishAgent } from "@/features/agents/agent-editor-api";
+import { announcePublished } from "@/features/agents/publish-feedback";
+import { currentLocale } from "@/i18n";
 import { useAgent } from "@/features/agents/agent-detail-api";
 import { useTools } from "@/features/admin/api";
 import { useChannels } from "@/features/channels/api";
@@ -75,13 +77,7 @@ export function AgentEditorPage() {
       { agentId, definition: draft },
       {
         onSuccess: (result) => {
-          toast.success(
-            result.created
-              ? t("agents.versionPublished", {
-                  version: result.versionId.slice(0, 9),
-                })
-              : t("agents.noChange"),
-          );
+          announcePublished(result, t, currentLocale());
           void navigate(`/agents/${agentId}`);
         },
         onError: (error) => toast.error(problemMessage(error, t)),
