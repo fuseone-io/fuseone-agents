@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Bookmark,
   Activity,
   Bot,
   Brain,
@@ -165,6 +166,9 @@ export const PAGE_ICONS: Record<string, LucideIcon> = {
   cost: Wallet,
   admin: Settings2,
   integrations: Plug,
+  // Reached from a run's claim, never from the navigation: there is no list
+  // of cards to start from yet. The symbol is the claim's own in the trail.
+  "work-items": Bookmark,
 };
 
 /** The catalogue key for each screen's name, so the breadcrumb and the
@@ -182,6 +186,7 @@ export const PAGE_TITLES: Record<string, string> = {
   cost: "nav.cost",
   admin: "nav.admin",
   integrations: "nav.integrations",
+  "work-items": "workItems.title",
 };
 
 /**

@@ -2962,5 +2962,32 @@
     "constrain": "constrain",
     "duplicate": "skip",
     "require_approval": "escalate"
+  },
+  "workItems": {
+    "columnAbandoned": "Abandoned",
+    "columnApproved": "Approved",
+    "columnArea": "Area",
+    "columnClaimed": "Claimed",
+    "columnCost": "Cost",
+    "columnEnded": "Ended",
+    "columnFirstClaim": "First claim",
+    "columnLastEnd": "Last ended",
+    "columnLink": "Linked by",
+    "columnRefused": "Refused",
+    "columnRequested": "Approvals asked",
+    "columnRole": "Role",
+    "columnRuns": "Runs",
+    "costHidden": "Cost not visible to you",
+    "empty": "No run you can see claimed this reference",
+    "emptyHint": "A run appears here once it claims the card with $fuseone.work_item.claim, in an area you can read.",
+    "linkClaim": "Claim",
+    "noRef": "No reference given",
+    "noRefHint": "Open a work item from the claim in a run's trail.",
+    "notEnded": "Not yet",
+    "roles": "By role",
+    "scopeNote": "A view of this reference only: for now, an issue and the pull request that answers it are shown separately, each with a trail of its own.",
+    "subtitle": "Every run that claimed this reference, and what each role asked and spent.",
+    "timeline": "Runs",
+    "title": "Work item"
   }
 }
