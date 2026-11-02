@@ -42,7 +42,7 @@ steps:
       - github-architect.projects_list
       - github-architect.projects_get
       - github-architect.projects_write
-    stops_when: a decision the plan needs belongs to the owner, and each open decision is commented on the issue as a question to whoever decides and the card is in Travado
+    stops_when: "the card is in Travado, and the comment that blocked it names the action that unblocks it and ends with Return to: Triagem"
 budget:
   micros: 2000000
   tool_calls: 80

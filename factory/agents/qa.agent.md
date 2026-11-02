@@ -38,7 +38,7 @@ steps:
       - github-qa.projects_list
       - github-qa.projects_get
       - github-qa.projects_write
-    stops_when: a criterion cannot be judged met or not met without a person, and that question is commented on the pull request and the card of the issue it closes is in Travado
+    stops_when: "the card is in Travado, and the comment that blocked it names the action that unblocks it and ends with Return to: Doing"
 budget:
   micros: 1000000
   tool_calls: 50

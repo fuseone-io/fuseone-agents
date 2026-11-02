@@ -42,7 +42,7 @@ steps:
       - github-reviewer.projects_list
       - github-reviewer.projects_get
       - github-reviewer.projects_write
-    stops_when: the change cannot be judged without a decision only a person can make, and that question is commented on the pull request and the card of the issue it closes is in Travado
+    stops_when: "the card is in Travado, and the comment that blocked it names the action that unblocks it and ends with Return to: Doing"
 budget:
   micros: 2000000
   tool_calls: 80

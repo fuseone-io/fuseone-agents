@@ -33,7 +33,7 @@ steps:
       - github-triage.add_issue_comment
       - github-triage.issue_write
       - github-triage.projects_write
-    stops_when: what is missing is something only a person can answer, and that question is commented on the issue and the card is in Travado
+    stops_when: "the card is in Travado, and the comment that blocked it names the action that unblocks it and ends with Return to: Triagem"
 budget:
   micros: 500000
   tool_calls: 30

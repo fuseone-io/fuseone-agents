@@ -51,7 +51,7 @@ steps:
       - github-developer.projects_list
       - github-developer.projects_get
       - github-developer.projects_write
-    stops_when: the card is left for a person, with its issue labelled factory:needs-runtime and the reason commented, or with the question commented and the card in Travado
+    stops_when: "the card is left for a person: its issue labelled factory:needs-runtime with the reason commented, or the card in Travado, and the comment that blocked it names the action that unblocks it and ends with Return to: Doing"
 budget:
   micros: 3000000
   tool_calls: 100
