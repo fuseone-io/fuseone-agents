@@ -86,12 +86,14 @@ func listened(events []domain.AgentEvent, listeners map[string][]domain.EventLis
 	return out
 }
 
-// source is a finished run as its events see it: its opening and closing
-// steps, and the chain a run its events open would stand in.
+// source is a finished run as its events see it: its opening, claiming and
+// closing steps, the chain a run its events open would stand in, and the
+// work item that run inherits (#204, slice 3), nil for none.
 type source struct {
-	run   domain.RunSummary
-	steps []domain.Step
-	next  domain.EventChain
+	run      domain.RunSummary
+	steps    []domain.Step
+	next     domain.EventChain
+	workItem *domain.RunWorkItem
 }
 
 /*
@@ -114,7 +116,48 @@ func (d *Dispatcher) sourceOf(run domain.RunSummary, steps []domain.Step) (sourc
 			"root", withheld.Root, "hop", withheld.Hop, "limit", withheld.Limit)
 		return source{}, false, nil
 	}
-	return source{run: run, steps: steps, next: next}, true, nil
+	return source{run: run, steps: steps, next: next, workItem: inheritanceOf(run.RunID, steps)}, true, nil
+}
+
+/*
+inheritanceOf is what a run the source's events open inherits, read from the
+source's own record: its first claim, and the inheritance its start sealed.
+domain.InheritWorkItem decides between them. Nothing else of the source is
+read — not its input, not what it published — so nothing a model wrote can
+name the card.
+
+A claim or a start that will not decode passes nothing on rather than
+failing the sweep: this is attribution, and the listener opens either way.
+*/
+func inheritanceOf(run domain.RunID, steps []domain.Step) *domain.RunWorkItem {
+	var claimed domain.WorkItemRef
+	var inherited *domain.RunWorkItem
+	started := false
+	for _, step := range steps {
+		switch {
+		case step.Kind == domain.StepRunStarted && !started:
+			started = true
+			var p domain.RunStartedPayload
+			if json.Unmarshal(step.Payload, &p) == nil {
+				inherited = p.WorkItem
+			}
+		case step.Kind == domain.StepWorkItemClaimed && claimed == "":
+			claimed = claimedRef(step)
+		}
+	}
+	return domain.InheritWorkItem(run, claimed, inherited)
+}
+
+// claimedRef is the canonical reference a claim step holds, or "".
+func claimedRef(step domain.Step) domain.WorkItemRef {
+	var p domain.WorkItemClaimedPayload
+	if json.Unmarshal(step.Payload, &p) != nil {
+		return ""
+	}
+	if ref, ok := domain.ParseWorkItemRef(string(p.Ref)); ok && ref == p.Ref {
+		return ref
+	}
+	return ""
 }
 
 // positionOf is the run's place in a chain, from its sealed start. A start

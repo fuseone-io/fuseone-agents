@@ -70,8 +70,9 @@ type Feed interface {
 	EventCursor(ctx context.Context) (domain.FinishCursor, error)
 	AdvanceEventCursor(ctx context.Context, to domain.FinishCursor) error
 	// StartsAndFinishes reads, for a batch of finished runs, only each run's
-	// opening and closing steps: what opened it and its chain, and what it
-	// published. One read per page rather than every step of every run.
+	// opening, claiming and closing steps: what opened it, its chain and
+	// what it inherited, the card it claimed, and what it published. One read
+	// per page rather than every step of every run.
 	StartsAndFinishes(ctx context.Context, runs []domain.RunSummary) (map[domain.RunID][]domain.Step, error)
 }
 
@@ -203,7 +204,7 @@ func (d *Dispatcher) openListener(
 	result, err := d.opener.Open(ctx, Request{
 		Agent: agent, IdemKey: fmt.Sprintf("event:%s:%s:%s", src.run.RunID, event.Event, agent),
 		Trigger: domain.TriggerEvent, By: src.run.OnBehalfOf, Input: inputFor(src.run, event, artifacts),
-		Labels: src.run.Labels.Clone(), ContextArtifacts: artifacts, Chain: &next,
+		Labels: src.run.Labels.Clone(), ContextArtifacts: artifacts, Chain: &next, WorkItem: src.workItem,
 		// The version that listened when the event went out. A publish that
 		// stopped listening since must not start the version that never
 		// asked; a superseded listening version still opens, because it is
