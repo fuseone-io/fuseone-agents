@@ -9,13 +9,14 @@ import (
 )
 
 /*
-StartsAndFinishes is, for a batch of runs, only each run's opening and
-closing steps, in sequence order.
+StartsAndFinishes is, for a batch of runs, only each run's opening, claiming
+and closing steps, in sequence order.
 
 What the event dispatcher needs and nothing more: what opened a finished run
-and the chain it carries, and what it published when it closed (#203). The
+and the chain it carries, what it published when it closed (#203), and the
+card it claimed, which the runs its events open inherit (#204, slice 3). The
 dispatcher sweeps every few seconds on every replica; reading each run whole
-to find two steps would grow with how long its runs are. Runs that do not
+to find three steps would grow with how long its runs are. Runs that do not
 exist are absent from the answer, not an error: the caller decides what a
 missing start means.
 */
@@ -31,17 +32,7 @@ func (p *Postgres) StartsAndFinishes(
 	for i, r := range runs {
 		ids[i], opened[i] = string(r.RunID), r.StartedAt
 	}
-	// opened_at is the partition key: constrained by the moments the batch
-	// opened at, the read prunes to their months rather than scanning every
-	// partition the ledger has. The pair is matched exactly below, so an id
-	// and a moment from two different runs cannot meet.
-	rows, err := p.pool.Query(ctx, `
-		select `+stepColumns+`
-		from run_steps
-		where run_id = any($1) and opened_at = any($2)
-		  and (run_id, opened_at) in (select * from unnest($1::text[], $2::timestamptz[]))
-		  and kind in ('run_started', 'run_finished')
-		order by run_id, seq`, ids, opened)
+	rows, err := p.pool.Query(ctx, startsAndFinishesSQL, ids, opened)
 	if err != nil {
 		return nil, fmt.Errorf("read starts and finishes: %w", err)
 	}
@@ -57,8 +48,22 @@ func (p *Postgres) StartsAndFinishes(
 	return out, nil
 }
 
+// startsAndFinishesSQL is the batch read, one statement for the batch.
+//
+// opened_at is the partition key: constrained by the moments the batch
+// opened at, the read prunes to their months rather than scanning every
+// partition the ledger has. The pair is matched exactly below, so an id and
+// a moment from two different runs cannot meet.
+const startsAndFinishesSQL = `
+		select ` + stepColumns + `
+		from run_steps
+		where run_id = any($1) and opened_at = any($2)
+		  and (run_id, opened_at) in (select * from unnest($1::text[], $2::timestamptz[]))
+		  and kind in ('run_started', 'work_item_claimed', 'run_finished')
+		order by run_id, seq`
+
 // StartsAndFinishes holds the Postgres contract: only the asked runs that
-// exist, only their opening and closing steps, in sequence order.
+// exist, only their opening, claiming and closing steps, in sequence order.
 func (m *Memory) StartsAndFinishes(
 	ctx context.Context, runs []domain.RunSummary,
 ) (map[domain.RunID][]domain.Step, error) {
@@ -77,10 +82,14 @@ func (m *Memory) StartsAndFinishes(
 			continue
 		}
 		for _, s := range steps {
-			if s.Kind == domain.StepRunStarted || s.Kind == domain.StepRunFinished {
+			if startOrFinish(s.Kind) {
 				out[id] = append(out[id], s)
 			}
 		}
 	}
 	return out, nil
+}
+
+func startOrFinish(kind domain.StepKind) bool {
+	return kind == domain.StepRunStarted || kind == domain.StepWorkItemClaimed || kind == domain.StepRunFinished
 }
