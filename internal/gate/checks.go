@@ -62,6 +62,9 @@ func checkContract(r Request) result {
 	if coordinationMisclassified(r) {
 		return stop(fmt.Sprintf("coordination tool %q must be classified as a write, not %s", r.Tool, r.Effect))
 	}
+	if why, refused := linkUnmakeable(r); refused {
+		return stop(why)
+	}
 	if len(r.Args) > 0 && !json.Valid(r.Args) {
 		return stop("arguments are not valid JSON")
 	}
