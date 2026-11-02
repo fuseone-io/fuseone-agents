@@ -131,6 +131,9 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	}
 
 	out.Failed = res.IsError
+	// Only a live answer carries the registration's provenance: a cached one
+	// was given to another run.
+	out.Provenance = entry.Provenance
 	if res.IsError {
 		out.ErrorCode = CodeMCPToolError
 		recordMCPToolCall(metrics, "error", CodeMCPToolError, false)

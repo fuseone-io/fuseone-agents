@@ -17,11 +17,10 @@ import (
 // the phase its steps project. So this store cannot release a claim by
 // writing anything either.
 //
-// A link is judged here too, at the seq it would be sealed at: the run's
-// steps are contiguous from FirstSeq, so that is one past their count.
+// A link is judged here too; see judgeWorkItemLink.
 func (m *Memory) judgeWorkItem(s domain.Step) error {
-	if err := judgeLink(s, int64(len(m.runs[s.RunID]))+domain.FirstSeq); err != nil {
-		return err
+	if s.Kind == domain.StepWorkItemLinked {
+		return m.judgeWorkItemLink(s)
 	}
 	if s.Kind != domain.StepWorkItemClaimed {
 		return nil

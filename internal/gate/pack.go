@@ -106,4 +106,17 @@ type Request struct {
 	// this only prevents the Gate from asking for a second approval before the
 	// review queue gets the item it exists to inspect.
 	PendingReview bool
+
+	// LinkProven is set by the engine when the run's own record proves a
+	// $fuseone.work_item.link: the run holds a card, and its create_pull_request
+	// returned an answer naming the pull request being linked. Only then is
+	// the link a coordination operation; unproven, it is an ordinary write,
+	// and a person's approval becomes its proof (#204). Derived from the
+	// ledger, like every other input here, so a replay can derive it again.
+	LinkProven bool
+	// LinkRefusal is why a link can never be made, set by the engine from
+	// the same record: the run holds no card, or the reference is not a pull
+	// request of the card's repository. The Gate refuses such a link rather
+	// than asking a person to approve something the ledger would refuse.
+	LinkRefusal string
 }

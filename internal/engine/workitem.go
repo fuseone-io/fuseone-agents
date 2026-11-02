@@ -87,8 +87,15 @@ func (r *Runner) reserve(ctx context.Context, call Call) error {
 func (r *Runner) execute(
 	ctx context.Context, state State, start Start, call Call,
 ) (State, ToolResult, error) {
-	if call.Tool == domain.ToolWorkItemClaim {
+	switch {
+	case call.Tool == domain.ToolWorkItemClaim:
 		return r.claimWorkItem(ctx, state, start, call)
+	case call.Tool == domain.ToolWorkItemLink:
+		return r.linkWorkItem(ctx, state, start, call)
+	case call.Tool.Coordination():
+		// A coordination id this release does not execute is never handed on:
+		// the tool layer below must not answer for the platform.
+		return State{}, ToolResult{}, fmt.Errorf("engine: coordination tool %s has no executor", call.Tool)
 	}
 	// The last answer before the effect leaves the process. The call record
 	// was fenced, but a worker can be suspended between that write and this

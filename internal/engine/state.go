@@ -156,6 +156,8 @@ type State struct {
 	// Gate — which never saw the grant — asks again: the approval decided
 	// nothing and the run loops until it parks.
 	Approved *ApprovedCall
+	// workItem is what a work-item link may rest on (#204); see workItemFacts.
+	workItem workItemFacts
 	// PendingTool is set while a tool call is recorded but its result is not.
 	// A run loaded in that shape crashed mid-call, and the outcome is unknown.
 	PendingTool domain.ToolID

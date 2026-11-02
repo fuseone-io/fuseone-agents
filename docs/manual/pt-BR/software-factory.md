@@ -34,8 +34,9 @@ e as instruções dos papéis ficam, revisadas como código, em
   comentários e revisões do papel.
 - **Todos os papéis em copiloto**, com aprovações permanentes proibidas. Toda
   escrita no GitHub que um papel propõe — comentário, rótulo, revisão, card
-  movido — espera uma pessoa. O claim do card, descrito abaixo, é a única
-  escrita que não espera. Veja
+  movido — espera uma pessoa. O claim do card, descrito abaixo, e o vínculo
+  que o Desenvolvedor faz do pull request que acabou de abrir são as escritas
+  que não esperam, e nenhuma das duas escreve no GitHub. Veja
   [Rascunho, copiloto e autônomo](autonomy-stages.md).
 - **Uma pessoa faz o merge.** Nenhum papel faz merge.
 - **O board guia o trabalho**, com cinco colunas: Triagem, Preparado, Doing,
@@ -69,10 +70,21 @@ e as instruções dos papéis ficam, revisadas como código, em
   Triagem, e o Desenvolvedor a coluna Doing, do mesmo jeito, e os dois
   recebem a mesma instrução.
 - **O histórico de um card.** A linha **Item** do claim, na trilha de um run,
-  leva a todos os runs que fizeram o claim da mesma referência, com as
-  aprovações e o custo de cada papel (veja [Ler uma execução](reading-a-run.md)).
-  Uma issue e o pull request dela são duas referências, então por enquanto
-  cada uma tem o seu próprio histórico.
+  leva a todos os runs que fizeram o claim do card, com as aprovações e o
+  custo de cada papel (veja [Ler uma execução](reading-a-run.md)). A issue e
+  os pull requests vinculados a ela aparecem juntos: logo depois de abrir um
+  pull request, o Desenvolvedor o vincula à issue do seu claim com
+  `$fuseone.work_item.link`, e a partir daí os runs do Revisor e do QA nesse
+  pull request entram no histórico da issue, marcados como **Pull request**.
+  Abrir o histórico de um pull request vinculado mostra o histórico da issue
+  e avisa isso. O vínculo não espera ninguém quando o próprio
+  `create_pull_request` do run citou aquele pull request — respondido pelo
+  servidor hospedado do GitHub registrado com o GitHub App do papel — e espera
+  uma pessoa nos outros casos. Mantenha o resultado do `create_pull_request`
+  como **untrusted**, o padrão: o vínculo é provado pelo pull request que a
+  plataforma lê da resposta, não pela resposta, que continua marcando o run
+  como não confiável, e toda escrita seguinte continua esperando uma pessoa; um pull request pertence a um só card para sempre, e um
+  vínculo que você não pode ler aparece para você como se não existisse.
 
 O repositório é público, então o texto de issues e pull requests não é
 confiável: um run que leu esse texto nunca pode executar uma ação destrutiva,

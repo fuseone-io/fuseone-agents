@@ -57,8 +57,11 @@ func envelopeForState(start Start, state State) gate.Pack {
 	// run chooses its card, and its retry, whatever step it is at. Declared
 	// means in the frozen pack —
 	// an agent that never listed it is never offered it (#206).
-	if start.Pack.Allows(domain.ToolWorkItemClaim) {
-		pack = gate.NewPack(append(pack.Tools(), domain.ToolWorkItemClaim)...)
+	// The link likewise: the act right after the run's pull request opens.
+	for _, tool := range []domain.ToolID{domain.ToolWorkItemClaim, domain.ToolWorkItemLink} {
+		if start.Pack.Allows(tool) {
+			pack = gate.NewPack(append(pack.Tools(), tool)...)
+		}
 	}
 	if start.MemoryLearning.Enabled() {
 		pack = gate.NewPack(append(pack.Tools(), domain.ToolMemoryFind, domain.ToolMemorySuggest)...)

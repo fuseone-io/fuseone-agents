@@ -269,6 +269,8 @@ type ToolReturnedPayload struct {
 	// Context is present when the result came from the platform-owned context
 	// reader. It links the use back to the source run and artifact digest.
 	Context *ContextArtifact `json:"context,omitempty"`
+	// PullRequest is the pull request a trusted create_pull_request answer named, and where from (#204).
+	PullRequest *PullRequestStamp `json:"pull_request,omitempty"`
 }
 
 // EffectReconciledPayload records the final truth learned after a write whose

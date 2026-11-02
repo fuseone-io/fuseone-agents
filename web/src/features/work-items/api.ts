@@ -7,7 +7,8 @@ export const workItemKeys = {
 };
 
 /**
- * One card's trail, a page of runs at a time.
+ * One card's trail, a page of runs at a time: the card's own runs and those
+ * of the pull requests linked to it.
  *
  * The roles come with the first page only — the server folds them over every
  * run the caller may read — so they are read from there and never summed
@@ -32,5 +33,9 @@ export function useWorkItemTrail(ref: string) {
     ...query,
     runs: pages.flatMap((page) => page.runs),
     roles: pages[0]?.roles ?? [],
+    // What the server resolved the reference to: the card itself, or — asked
+    // by a pull request linked to it — the card, with the pull request asked.
+    card: pages[0]?.ref,
+    resolvedFrom: pages[0]?.resolvedFrom,
   };
 }

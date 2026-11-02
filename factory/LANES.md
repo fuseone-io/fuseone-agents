@@ -64,9 +64,17 @@ These hold before any lane rule applies.
      the card. Pick the next card and claim that one instead.
    - A refusal with `work_item_run_holds_another` means this run already holds
      a card. Stop: a run holds at most one.
+   - **The Developer links the pull request it opens** to the card it holds,
+     with `$fuseone.work_item.link`, right after `create_pull_request`
+     succeeds (#204). The card's trail then shows the runs that review and
+     test the pull request. The link names only the pull request; the card is
+     the run's own claim. It passes without approval only when the run's own
+     `create_pull_request` answered naming that pull request, and otherwise
+     waits for a person. It writes nothing to GitHub.
 3. **The outcome is written back** to the issue (or PR) and to the board, and
-   every GitHub write waits for a person's approval (the claim above is the
-   one write that does not): every role runs at copilot, with
+   every GitHub write waits for a person's approval (the claim and the
+   Developer's proven link above write nothing to GitHub, and are the
+   platform writes that do not wait): every role runs at copilot, with
    `standing_approvals: forbidden`, so no grant answers in a person's place.
    A card moves with the GitHub MCP server's projects tool, classified as a
    write, so moving a card is a proposal a person approves like any other.

@@ -30,6 +30,21 @@ const COLUMNS = [
 ] as const;
 
 /**
+ * How a run is on the trail: it claimed the card, or a pull request linked to
+ * it — named, so the reader sees which.
+ */
+function RunLink({ run }: { run: WorkItemRun }) {
+  const { t } = useTranslation();
+  if (run.link !== "alias") return <>{t("workItems.linkClaim")}</>;
+  return (
+    <span className="flex items-center gap-2">
+      {t("workItems.linkAlias")}
+      <Mono>{run.ref}</Mono>
+    </span>
+  );
+}
+
+/**
  * The card's runs, oldest claim first. Each leads to the run's own screen,
  * where its trail is; nothing of the trail itself is repeated here.
  */
@@ -71,7 +86,9 @@ export function WorkItemRuns({ runs }: { runs: WorkItemRun[] }) {
                 {t(PHASE_LABELS[run.phase])}
               </span>
             </TableCell>
-            <TableCell>{t("workItems.linkClaim")}</TableCell>
+            <TableCell>
+              <RunLink run={run} />
+            </TableCell>
             <TableCell className={NUM}>
               {run.endedAt
                 ? formatInstant(run.endedAt)

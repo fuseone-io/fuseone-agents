@@ -12,10 +12,10 @@ import (
 /*
 A work_item_linked step, against both stores (#204, slice 2a).
 
-This release seals a link only when its payload is one every reader can read,
-and projects nothing from it: the alias projection comes with the writer, in
-2b. What it must already do is carry a run with a link in it through every
-reader that walks steps by kind, exactly as it carried the run before.
+A link is sealed only when its payload is one every reader can read, and a run
+with a link in it goes through every reader that walks steps by kind exactly
+as it did before. The writer's fence — the held claim, the proof, one root per
+alias — is in workitem_alias_test.go (2b).
 */
 
 const linkAlias = domain.WorkItemRef("github:fuseone-io/fuseone-agents#240")
@@ -47,7 +47,9 @@ func claimedAndReturned(t *testing.T, s Store) int64 {
 		domain.ToolCalledPayload{Tool: "github.create_pull_request", Effect: domain.EffectWrite})
 	called.AgentID = "developer"
 	mustAppend(t, s, called)
-	returned := withPayload(t, step("run-a", domain.StepToolReturned), domain.ToolReturnedPayload{ResultRef: "content:pr"})
+	returned := withPayload(t, step("run-a", domain.StepToolReturned), domain.ToolReturnedPayload{
+		Tool: "github.create_pull_request", ResultRef: "content:pr", PullRequest: hosted(linkAlias),
+	})
 	returned.AgentID = "developer"
 	sealed, err := s.Append(context.Background(), returned)
 	if err != nil {
@@ -168,7 +170,8 @@ func TestWorkItemLink_inASimulatedRun_sealed(t *testing.T) {
 		if err := claim(t, s, "run-sim", "developer", card); err != nil {
 			t.Fatalf("simulated claim: %v", err)
 		}
-		if _, err := s.Append(context.Background(), linkStepOf(t, "run-sim", "developer", linkPayload(2))); err != nil {
+		proof := returnPullRequest(t, s, "run-sim", "developer", linkAlias)
+		if _, err := s.Append(context.Background(), linkStepOf(t, "run-sim", "developer", linkPayload(proof))); err != nil {
 			t.Fatalf("Append(simulated link) = %v", err)
 		}
 	})

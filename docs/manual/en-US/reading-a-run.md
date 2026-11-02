@@ -90,8 +90,11 @@ oldest first, each leading back to its run, and one row per role with the
 approvals it asked for, how many were approved and refused, the runs a person
 abandoned, and what the role cost. You see only the runs of areas you can
 read, and nothing of the others counts in any total; the cost appears only
-where you may read it, and otherwise says so instead of showing zero. It is a
-view of that one reference: for now an issue and the pull request that
-answers it show separately.
+where you may read it, and otherwise says so instead of showing zero. The
+issue and the pull requests linked to it are joined: a run that claimed a
+linked pull request is on the issue's trail, marked **Pull request** with the
+pull request beside it, and opening a linked pull request's trail shows the
+issue's trail and says which pull request you opened. A link made in an area
+you cannot read joins nothing for you.
 
 What decides each stop is in [What the platform stops before it happens](what-the-gate-stops.md) and in [Policies](policies.md).

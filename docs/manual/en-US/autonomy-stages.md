@@ -28,7 +28,7 @@ This is where you write, rehearse and correct. A rehearsal runs against situatio
 
 ## Copilot
 
-Runs for real. Every write stops and waits for a person to approve that specific call. The one exception is the work-item claim (`$fuseone.work_item.claim`), which only records in the platform which card a run holds and passes without approval, so that two runs never wait on a person to reserve the same card.
+Runs for real. Every write stops and waits for a person to approve that specific call. The exceptions are the work-item claim (`$fuseone.work_item.claim`), which only records in the platform which card a run holds and passes without approval, so that two runs never wait on a person to reserve the same card, and the work-item link (`$fuseone.work_item.link`), which records a pull request as part of the card the run holds and passes without approval only when the run's own `create_pull_request` named that pull request. A link without that proof waits for a person like any other write.
 
 This is the rung where you learn what the agent actually does with real data, which is never exactly what the rehearsal showed.
 

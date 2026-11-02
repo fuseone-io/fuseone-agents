@@ -16,24 +16,26 @@ import (
 // where the engine asks, from the worker's real wiring. A layer that exists
 // but was never stacked here plans every role without the claim, silently:
 // the planner skips a tool it cannot describe (#206).
-func TestWorkerDeps_describeAndClassifyTheWorkItemClaim(t *testing.T) {
+func TestWorkerDeps_describeAndClassifyTheWorkItemClaimAndLink(t *testing.T) {
 	t.Parallel()
 
 	content := engine.NewMemoryContent()
 	p := &workerParts{content: content, catalog: tools.NewCatalog(content)}
 	deps := p.deps(gate.New(), nil)
 
-	if _, _, _, ok := p.toolSchemas().Schema(domain.ToolWorkItemClaim); !ok {
-		t.Error("the planner's schema view cannot describe the claim")
-	}
-	if _, _, _, ok := deps.Schemas.Schema(domain.ToolWorkItemClaim); !ok {
-		t.Error("the engine's schema view cannot describe the claim")
-	}
-	if effect, ok := deps.Catalog.Effect(domain.ToolWorkItemClaim); !ok || effect != domain.EffectWrite {
-		t.Errorf("Catalog.Effect(claim) = %s, %v; want write", effect, ok)
-	}
-	_, err := deps.Tools.Invoke(context.Background(), engine.Call{Tool: domain.ToolWorkItemClaim})
-	if !errors.Is(err, workitem.ErrEngineExecuted) {
-		t.Errorf("Tools.Invoke(claim) = %v; the outermost layer must refuse to forward it", err)
+	for _, tool := range []domain.ToolID{domain.ToolWorkItemClaim, domain.ToolWorkItemLink} {
+		if _, _, _, ok := p.toolSchemas().Schema(tool); !ok {
+			t.Errorf("the planner's schema view cannot describe %s", tool)
+		}
+		if _, _, _, ok := deps.Schemas.Schema(tool); !ok {
+			t.Errorf("the engine's schema view cannot describe %s", tool)
+		}
+		if effect, ok := deps.Catalog.Effect(tool); !ok || effect != domain.EffectWrite {
+			t.Errorf("Catalog.Effect(%s) = %s, %v; want write", tool, effect, ok)
+		}
+		_, err := deps.Tools.Invoke(context.Background(), engine.Call{Tool: tool})
+		if !errors.Is(err, workitem.ErrEngineExecuted) {
+			t.Errorf("Tools.Invoke(%s) = %v; the outermost layer must refuse to forward it", tool, err)
+		}
 	}
 }

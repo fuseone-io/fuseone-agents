@@ -77,6 +77,8 @@ type countingTools struct {
 	evidence      domain.ApprovalEvidence
 	evidenceErr   error
 	evidenceCalls []Call
+	provenance    domain.ToolProvenance
+	labels        domain.Labels
 }
 
 func (c *countingTools) ApprovalBinding(call Call) string {
@@ -96,7 +98,8 @@ func (c *countingTools) Reserve(context.Context, Call) error {
 func (c *countingTools) Invoke(ctx context.Context, call Call) (ToolResult, error) {
 	c.invocations = append(c.invocations, call.Tool)
 	c.calls = append(c.calls, call)
-	result := ToolResult{Failed: c.failed, ErrorCode: c.errorCode, Cached: c.cached}
+	result := ToolResult{Failed: c.failed, ErrorCode: c.errorCode, Cached: c.cached,
+		Provenance: c.provenance, Labels: c.labels}
 	body := c.body
 	if i := len(c.invocations) - 1; i < len(c.bodies) {
 		body = c.bodies[i]

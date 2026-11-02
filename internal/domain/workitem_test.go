@@ -22,11 +22,13 @@ func TestToolID_workItemClaimIsPlatformOwnedWithNoServer(t *testing.T) {
 	}
 }
 
-func TestToolID_coordination_isTheWorkItemClaimAlone(t *testing.T) {
+func TestToolID_coordination_isTheWorkItemClaimAndLinkAlone(t *testing.T) {
 	t.Parallel()
 
-	if !domain.ToolWorkItemClaim.Coordination() {
-		t.Fatalf("%s: Coordination = false, want true", domain.ToolWorkItemClaim)
+	for _, id := range []domain.ToolID{domain.ToolWorkItemClaim, domain.ToolWorkItemLink} {
+		if !id.Coordination() {
+			t.Fatalf("%s: Coordination = false, want true", id)
+		}
 	}
 	// Closed by name, like PlatformOwned: being platform-owned is not enough,
 	// and a near miss of the id must not borrow the exemption.
@@ -34,6 +36,7 @@ func TestToolID_coordination_isTheWorkItemClaimAlone(t *testing.T) {
 		domain.ToolMemorySuggest, domain.ToolMemoryFind,
 		domain.ToolContextRead, domain.ToolTicketAnswer,
 		"$fuseone.work_item.clam", "$fuseone.work_item.claim ", "github.claim", "",
+		"$fuseone.work_item.lnk", "$fuseone.work_item.link ", "github.link", "$fuseone.work_item.",
 	} {
 		if id.Coordination() {
 			t.Errorf("%q: Coordination = true, want false", id)

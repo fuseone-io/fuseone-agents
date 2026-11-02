@@ -63,6 +63,7 @@ func (s *State) Apply(step domain.Step) error {
 		s.executed[step.IdemKey] = struct{}{}
 	}
 
+	s.noteWorkItem(step)
 	return s.applyKind(step)
 }
 

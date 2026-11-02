@@ -14,20 +14,21 @@ import (
 WorkItemTrail reads a card's trail in at most two statements, none of
 which grows with the card's history.
 
-Every statement starts from the same source: run_work_items by its (ref)
-index, joined to the runs projection narrowed by the caller's own filter
-and stripped of simulations. The filter is the generic one, applied to runs
-in a subquery so its columns stay those of runs alone; the card is matched
-here, by an explicit predicate, never by teaching the generic filter about
-work items.
+Every statement resolves the reference asked for and reads from the same
+source — see workItemSource: the claims of the card and of its readable
+aliases (#204, slice 2b), by run_work_items' (ref) index, joined to the runs
+projection narrowed by the caller's own filter and stripped of simulations.
+The filter is the generic one, applied to runs in a subquery so its columns
+stay those of runs alone; the card is matched here, by an explicit predicate,
+never by teaching the generic filter about work items.
 
-A page is one statement, limited to the page plus one row. The first page
-adds the role summary: one aggregate grouped by agent and scope that counts
-the approval steps in SQL, bounded on run_steps' partition key by the card's
-earliest and latest opening moments as the same statement computes them —
-one snapshot, so a run is never counted without its approvals. Only the
-months the card's runs opened in are read, and no list of runs ever leaves
-the database or comes back into it.
+A page is one statement, limited to the page plus one row, that also answers
+what the trail resolved to. The first page adds the role summary: one
+aggregate grouped by agent and scope that counts the approval steps in SQL,
+bounded on run_steps' partition key by the card's earliest and latest opening
+moments as the same statement computes them — one snapshot, so a run is never
+counted without its approvals. Only the months the card's runs opened in are
+read, and no list of runs ever leaves the database or comes back into it.
 */
 func (p *Postgres) WorkItemTrail(
 	ctx context.Context, filter domain.RunFilter, cost *domain.RunFilter,
@@ -36,46 +37,47 @@ func (p *Postgres) WorkItemTrail(
 	if page.After != nil {
 		// A later page has no summary to agree with: one statement, its own
 		// snapshot.
-		runs, err := workItemRuns(ctx, p.pool, filter, ref, page.After, page.Size()+1)
+		target, runs, err := workItemRuns(ctx, p.pool, filter, ref, page.After, page.Size()+1)
 		if err != nil {
 			return domain.WorkItemTrail{}, err
 		}
-		return trailFrom(ref, runs, nil, cost, page), nil
+		return trailFrom(target, runs, nil, cost, page), nil
 	}
-	runs, shares, err := p.workItemFirstPage(ctx, filter, ref, page.Size()+1)
+	target, runs, shares, err := p.workItemFirstPage(ctx, filter, ref, page.Size()+1)
 	if err != nil {
 		return domain.WorkItemTrail{}, err
 	}
-	return trailFrom(ref, runs, shares, cost, page), nil
+	return trailFrom(target, runs, shares, cost, page), nil
 }
 
 /*
 workItemFirstPage reads the first page and the role summary in one
-read-only repeatable-read transaction, so both describe the same runs. Read
-in two snapshots, a run committed between them was counted by the summary —
-with its approvals and cost — and missing from a timeline that said it had
-ended, with no next page to reach it by.
+read-only repeatable-read transaction, so both describe the same runs and
+resolve through the same links. Read in two snapshots, a run committed
+between them was counted by the summary — with its approvals and cost — and
+missing from a timeline that said it had ended, with no next page to reach it
+by.
 */
 func (p *Postgres) workItemFirstPage(
 	ctx context.Context, filter domain.RunFilter, ref domain.WorkItemRef, limit int,
-) ([]domain.WorkItemRun, []domain.WorkItemRoleShare, error) {
+) (trailRef, []domain.WorkItemRun, []domain.WorkItemRoleShare, error) {
 	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
-		return nil, nil, fmt.Errorf("open the trail's snapshot: %w", err)
+		return trailRef{}, nil, nil, fmt.Errorf("open the trail's snapshot: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	runs, err := workItemRuns(ctx, tx, filter, ref, nil, limit)
+	target, runs, err := workItemRuns(ctx, tx, filter, ref, nil, limit)
 	if err != nil {
-		return nil, nil, err
+		return trailRef{}, nil, nil, err
 	}
 	shares, err := workItemShares(ctx, tx, filter, ref)
 	if err != nil {
-		return nil, nil, err
+		return trailRef{}, nil, nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, nil, fmt.Errorf("close the trail's snapshot: %w", err)
+		return trailRef{}, nil, nil, fmt.Errorf("close the trail's snapshot: %w", err)
 	}
-	return runs, shares, nil
+	return target, runs, shares, nil
 }
 
 // trailQuerier is what the trail's reads run on: the pool, or the
@@ -84,69 +86,64 @@ type trailQuerier interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
-// workItemSource is the FROM of every trail statement: the card's claims
-// joined to the runs the filter reads. Who and where are the run's, from
-// the projection the filter was applied to — never the claim row's, which
-// gives only the join, the card and the moment of the claim. args holds
-// the filter's arguments and the ref, the last of them.
-func workItemSource(filter domain.RunFilter, ref domain.WorkItemRef) (string, []any) {
-	where, args := runFilterSQL(filter)
-	where = whereAnd(where, realRuns)
-	args = append(args, string(ref))
-	return `
-		from run_work_items c
-		join (select run_id, agent_id, company_id, area_id, phase, started_at, ended_at, cost_micros
-		      from runs ` + where + `) r
-		  on r.run_id = c.run_id
-		where c.ref = $` + fmt.Sprint(len(args)), args
-}
-
-// workItemRunsSQL is one page: the card's runs the filter reads, past the
-// cursor when there is one, in the trail's order, limited when a limit is
-// given.
+// workItemRunsSQL is one page: what the reference resolved to, and the
+// card's runs the filter reads, past the cursor when there is one, in the
+// trail's order, limited when a limit is given. Always at least one row: an
+// empty page is the resolution with no run.
 func workItemRunsSQL(
 	filter domain.RunFilter, ref domain.WorkItemRef, after *domain.WorkItemCursor, limit int,
 ) (string, []any) {
-	source, args := workItemSource(filter, ref)
-	sql := `select c.run_id, r.agent_id, r.company_id, r.area_id, c.claimed_at,
-	               r.phase, r.started_at, r.ended_at` + source
+	with, from, args := workItemSource(filter, ref)
+	page := `select c.run_id, r.agent_id, r.company_id, r.area_id, c.claimed_at,
+	               r.phase, r.started_at, r.ended_at, c.ref,
+	               case when c.ref = (select card from card_of) then 'claim' else 'alias' end as link` + from
 	if after != nil {
 		args = append(args, after.ClaimedAt.UTC(), string(after.RunID))
-		sql += fmt.Sprintf(` and (c.claimed_at, c.run_id) > ($%d, $%d)`, len(args)-1, len(args))
+		page += fmt.Sprintf(` and (c.claimed_at, c.run_id) > ($%d, $%d)`, len(args)-1, len(args))
 	}
-	sql += ` order by c.claimed_at, c.run_id`
+	page += ` order by c.claimed_at, c.run_id`
 	if limit > 0 {
 		args = append(args, limit)
-		sql += fmt.Sprintf(` limit $%d`, len(args))
+		page += fmt.Sprintf(` limit $%d`, len(args))
 	}
-	return sql, args
+	return `with ` + with + `, page as (` + page + `)
+		select k.card, k.resolved_from, p.run_id, coalesce(p.agent_id, ''), coalesce(p.company_id, ''),
+		       coalesce(p.area_id, ''), coalesce(p.claimed_at, 'epoch'), coalesce(p.phase, ''),
+		       coalesce(p.started_at, 'epoch'), p.ended_at, coalesce(p.ref, ''), coalesce(p.link, '')
+		from card_of k left join page p on true
+		order by p.claimed_at, p.run_id`, args
 }
 
 func workItemRuns(
 	ctx context.Context, q trailQuerier, filter domain.RunFilter, ref domain.WorkItemRef, after *domain.WorkItemCursor, limit int,
-) ([]domain.WorkItemRun, error) {
+) (trailRef, []domain.WorkItemRun, error) {
 	sql, args := workItemRunsSQL(filter, ref, after, limit)
 	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
-		return nil, fmt.Errorf("read the work item's runs: %w", err)
+		return trailRef{}, nil, fmt.Errorf("read the work item's runs: %w", err)
 	}
 	defer rows.Close()
 
+	target := trailRef{target: ref}
 	out := []domain.WorkItemRun{}
 	for rows.Next() {
 		var r domain.WorkItemRun
+		var runID *domain.RunID
 		var ended *time.Time
-		if err := rows.Scan(&r.RunID, &r.AgentID, &r.Scope.Company, &r.Scope.Area,
-			&r.ClaimedAt, &r.Phase, &r.StartedAt, &ended); err != nil {
-			return nil, fmt.Errorf("scan a work item's run: %w", err)
+		if err := rows.Scan(&target.target, &target.from, &runID, &r.AgentID, &r.Scope.Company, &r.Scope.Area,
+			&r.ClaimedAt, &r.Phase, &r.StartedAt, &ended, &r.Ref, &r.Link); err != nil {
+			return trailRef{}, nil, fmt.Errorf("scan a work item's run: %w", err)
 		}
+		if runID == nil {
+			continue
+		}
+		r.RunID = *runID
 		if ended != nil {
 			r.EndedAt = *ended
 		}
-		r.Link = domain.WorkItemLinkClaim
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	return target, out, rows.Err()
 }
 
 // workItemShares is the role summary, read in one statement.
@@ -188,9 +185,10 @@ func workItemShares(
 // are pruned while it runs rather than when it is planned. The decision's
 // verdict is read here; no payload leaves the database.
 func workItemRolesSQL(filter domain.RunFilter, ref domain.WorkItemRef) (string, []any) {
-	source, args := workItemSource(filter, ref)
+	with, from, args := workItemSource(filter, ref)
 	return fmt.Sprintf(`
-		with trail as (
+		with %s,
+		trail as (
 			select r.run_id, r.agent_id, r.company_id, r.area_id, r.started_at, r.ended_at,
 			       r.cost_micros, c.claimed_at
 			%s
@@ -215,5 +213,5 @@ func workItemRolesSQL(filter domain.RunFilter, ref domain.WorkItemRef) (string, 
 		       coalesce(sum(a.requested), 0)::int, coalesce(sum(a.approved), 0)::int,
 		       coalesce(sum(a.refused), 0)::int, coalesce(sum(a.abandoned), 0)::int
 		from trail t left join asked a on a.run_id = t.run_id
-		group by t.agent_id, t.company_id, t.area_id`, source), args
+		group by t.agent_id, t.company_id, t.area_id`, with, from), args
 }

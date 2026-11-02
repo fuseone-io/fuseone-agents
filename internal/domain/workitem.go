@@ -79,9 +79,10 @@ func ParseWorkItemRef(raw string) (WorkItemRef, bool) {
 // only safe because the engine executes these ids itself and never hands them
 // to a tool server, so the set is explicit and closed: being platform-owned is
 // not enough (a ticket answer reaches a person), and no prefix or registration
-// can join it.
+// can join it. The link joins it only behind the Gate's own proof check: an
+// unproven link is an ordinary write (#204).
 func (t ToolID) Coordination() bool {
-	return t == ToolWorkItemClaim
+	return t == ToolWorkItemClaim || t == ToolWorkItemLink
 }
 
 // WorkItemClaimedPayload is the claim as the ledger records it. The agent is

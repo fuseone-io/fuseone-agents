@@ -12,16 +12,16 @@ import (
 /*
 A work_item_linked step, as this release reads it (#204, slice 2a).
 
-Nothing on this release writes one. A newer worker will, and during a rolling
-upgrade the next turn of that run can land on a worker still on this release:
-it folds the run from the ledger, and a kind its fold does not know fails the
-run outright. That is the whole reason this slice exists.
+A newer worker writes one (2b), and during a rolling upgrade the next turn of
+that run can land on a worker on the release before it: it folds the run from
+the ledger, and a kind its fold does not know fails the run outright. That is
+why the readers shipped first, and these tests keep them reading.
 */
 
 const linkedPR = "github:fuseone-io/fuseone-agents#240"
 
-// linkStep is a link as the writer will seal it: the run's identity, the
-// claimed card as its root, and the claim's own returned call as the proof.
+// linkStep is a link as the writer seals it: the run's identity, the claimed
+// card as its root, and a returned call as the proof.
 func linkStep(start Start, root string, proofSeq int64) domain.Step {
 	return domain.Step{
 		RunID: start.RunID, Kind: domain.StepWorkItemLinked, Scope: start.Scope,
@@ -92,7 +92,10 @@ func TestAdvance_runWithAWorkItemLinkFromANewerWorker_foldsAndResumes(t *testing
 	if len(returned) != 1 {
 		t.Fatalf("the claim did not return: %v", h.kinds(t))
 	}
-	linked, err := h.ledger.Append(context.Background(), linkStep(start, claimedCard, returned[0].Seq))
+	// The newer worker's run opened its pull request, and the link names that
+	// return as its proof: the only proof a link without a person has.
+	proof := sealPullRequestReturn(t, h, start)
+	linked, err := h.ledger.Append(context.Background(), linkStep(start, claimedCard, proof))
 	if err != nil {
 		t.Fatalf("seal the newer worker's link: %v", err)
 	}
@@ -117,4 +120,26 @@ func TestAdvance_runWithAWorkItemLinkFromANewerWorker_foldsAndResumes(t *testing
 	if !reflect.DeepEqual(calledAfter, []domain.ToolID{"crm.lookup"}) {
 		t.Fatalf("calls after the link = %v, want the next proposal carried out; trail %v", calledAfter, h.kinds(t))
 	}
+}
+
+// sealPullRequestReturn records a create_pull_request of the run that answered
+// naming linkedPR, as a newer worker writes it, and returns the return's seq.
+func sealPullRequestReturn(t *testing.T, h *harness, start Start) int64 {
+	t.Helper()
+	var seq int64
+	for _, st := range []domain.Step{
+		{Kind: domain.StepToolCalled, Payload: mustJSON(domain.ToolCalledPayload{
+			Tool: "github.create_pull_request", Effect: domain.EffectWrite})},
+		{Kind: domain.StepToolReturned, Payload: mustJSON(domain.ToolReturnedPayload{
+			Tool:        "github.create_pull_request",
+			PullRequest: &domain.PullRequestStamp{Ref: linkedPR, Via: domain.ProvenanceHostedGitHubApp}})},
+	} {
+		st.RunID, st.Scope, st.AgentID, st.VersionID = start.RunID, start.Scope, start.AgentID, start.VersionID
+		sealed, err := h.ledger.Append(context.Background(), st)
+		if err != nil {
+			t.Fatalf("seal %s: %v", st.Kind, err)
+		}
+		seq = sealed.Seq
+	}
+	return seq
 }

@@ -12,8 +12,8 @@ import (
 
 /*
 recordWorkItemClaim judges and projects a claim inside the append's
-transaction. A link is only held to its shape, at the seq it was sealed at —
-nothing projects it yet (#204). Any other step passes through untouched.
+transaction, and hands a link to recordWorkItemLink (#204). Any other step
+passes through untouched.
 
 Lock first, judge second. The run's own lock is already held by the append,
 which settles "one card per run". "One open run per card per agent" spans runs,
@@ -28,8 +28,8 @@ Lock order is always the run first, then the card, and nothing takes them the
 other way round, so two claimers cannot deadlock.
 */
 func recordWorkItemClaim(ctx context.Context, tx pgx.Tx, s domain.Step) error {
-	if err := judgeLink(s, s.Seq); err != nil {
-		return err
+	if s.Kind == domain.StepWorkItemLinked {
+		return recordWorkItemLink(ctx, tx, s)
 	}
 	if s.Kind != domain.StepWorkItemClaimed {
 		return nil

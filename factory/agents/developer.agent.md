@@ -10,6 +10,7 @@ triggers:
   - { type: cron, schedule: "30 * * * *" }
 tools:
   - $fuseone.work_item.claim
+  - $fuseone.work_item.link
   - github-developer.search_pull_requests
   - github-developer.projects_list
   - github-developer.projects_get
@@ -143,6 +144,11 @@ Open the pull request
 - The pull request's body says Closes #<issue number>, where each acceptance
   criterion is addressed, which commit holds the test and that its red is CI's
   run on that commit, and that you built and ran nothing yourself.
+Right after create_pull_request succeeds, call $fuseone.work_item.link with the pull request's reference, github:fuseone-io/fuseone-agents#<pull request number>, and with nothing else.
+That links the pull request to the card you hold, so the issue's trail shows
+the runs that review and test it. If the link is refused, the pull request
+stands: say why in a pull request comment, and never retry it with another
+reference.
 - Then label the pull request factory:needs-review.
 
 Answer a review

@@ -37,6 +37,34 @@ linked pull request. It sees titles before the claim, like Triage, under the
 same rule; its pre-claim lines are sealed in
 `internal/spec/factory_references_test.go`.
 
+### The Developer's link line
+
+The Developer declares `$fuseone.work_item.link` beside the claim, and its
+instructions carry this line, exactly, on a line of its own, in *Open the pull
+request* (sealed in `internal/spec/factory_link_test.go`):
+
+```
+Right after create_pull_request succeeds, call $fuseone.work_item.link with the pull request's reference, github:fuseone-io/fuseone-agents#<pull request number>, and with nothing else.
+```
+
+The link records the pull request as another name of the issue the run
+claimed (#204), so the issue's trail shows the Reviewer's and QA's runs on the
+pull request. The run gives only the pull request; the platform fills in the
+card from the run's own claim. It is not held for approval when the run's own
+`create_pull_request` answered naming that pull request: the platform checks
+that against the run's record, and the Gate then treats the link like the
+claim (`internal/gate/coordination.go`). That answer counts only from the
+hosted GitHub MCP server (`https://api.githubcopilot.com/mcp/`) registered with
+the role's GitHub App. Keep `create_pull_request` a write whose result is
+**untrusted**, the default: the answer's content taints the run like any
+other, and every later write still waits for a person. What proves the link is
+not that content but the platform's own reading of it, one pull request
+reference under that registration's provenance. Any other link waits for a
+person, like every write. A pull request has one card for good: linking it again is a
+success with no effect, and linking one another card owns is refused with
+`work_item_linked_elsewhere`. The link writes nothing to GitHub. No other role
+declares it.
+
 ### The Developer's Level 1 boundary
 
 The Developer changes files through the GitHub API and runs nothing (#154
@@ -250,7 +278,9 @@ bounded:
 - it writes nothing to GitHub.
 
 Every GitHub write after it — comment, label, card move — waits for a
-person's approval, and the run page names the card the run claimed. A tool
+person's approval, and the run page names the card the run claimed. The
+Developer's link is the other platform write that does not wait, and only when
+the run's own `create_pull_request` proves it (see the Developer's link line). A tool
 that picks and claims the next card atomically, exposing its content only
 afterwards, would remove the title from the pre-claim view; it is deferred.
 

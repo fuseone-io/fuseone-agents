@@ -195,6 +195,7 @@ func (r *Runner) decide(
 		IdemKey:         idemKey,
 		AlreadyExecuted: already,
 		PendingReview:   pendingReviewWrite(start, p, effect, state.Labels),
+		LinkProven:      linkProven(state, p), LinkRefusal: linkRefusalOf(state, p),
 		// Only for the exact call that was cleared. A grant that travelled to
 		// a different tool, different arguments or changed server-owned
 		// configuration would make the platform do something nobody agreed to.
@@ -596,6 +597,7 @@ func (r *Runner) invoke(
 	returned := domain.ToolReturnedPayload{
 		Tool: p.Tool, ResultRef: result.ResultRef,
 		ResultDigest: result.ResultDigest, ResultBytes: result.ResultBytes,
+		PullRequest: r.pullRequestOf(ctx, p.Tool, result),
 	}
 	if result.Cached {
 		returned.Cached = true
