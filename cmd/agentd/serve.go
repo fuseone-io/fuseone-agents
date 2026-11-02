@@ -80,7 +80,7 @@ func serve(args []string) error {
 		slog.Info("seeded demo ledger")
 	}
 
-	api := httpapi.NewServer(store, version)
+	api := ledgerAPI(store, version)
 	if identity == nil {
 		// The database branch below wires its own Postgres store; without
 		// one, the console reads the store the demo was seeded into.

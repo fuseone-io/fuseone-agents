@@ -113,6 +113,7 @@ usage:
 type Store interface {
 	httpapi.Store
 	httpapi.LastBattery
+	httpapi.WorkItems
 	drift.Batteries
 	drift.LastBatteries
 	engine.Ledger
