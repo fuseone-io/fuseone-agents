@@ -131,7 +131,8 @@ func sealPullRequestReturn(t *testing.T, h *harness, start Start) int64 {
 		{Kind: domain.StepToolCalled, Payload: mustJSON(domain.ToolCalledPayload{
 			Tool: "github.create_pull_request", Effect: domain.EffectWrite})},
 		{Kind: domain.StepToolReturned, Payload: mustJSON(domain.ToolReturnedPayload{
-			Tool: "github.create_pull_request", PullRequest: linkedPR})},
+			Tool:        "github.create_pull_request",
+			PullRequest: &domain.PullRequestStamp{Ref: linkedPR, Via: domain.ProvenanceHostedGitHubApp}})},
 	} {
 		st.RunID, st.Scope, st.AgentID, st.VersionID = start.RunID, start.Scope, start.AgentID, start.VersionID
 		sealed, err := h.ledger.Append(context.Background(), st)

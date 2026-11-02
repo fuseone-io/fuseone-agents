@@ -45,6 +45,7 @@ func linkHarness(t *testing.T, proposals ...Proposal) (*harness, Start) {
 	h := newHarness(t, proposals...)
 	h.runner.deps.Catalog = staticCatalog{createPR: domain.EffectWrite, "crm.note": domain.EffectWrite}
 	h.tools.body = []byte(prAnswer)
+	h.tools.provenance = domain.ProvenanceHostedGitHubApp
 	start := h.start(t, generousBudget())
 	start.Pack = gate.NewPack(domain.ToolWorkItemClaim, domain.ToolWorkItemLink, createPR, "crm.note")
 	start.Stage = domain.StageCopilot
@@ -132,10 +133,11 @@ func TestAdvance_createPullRequestReturn_recordsThePullRequestItsAnswerNamed(t *
 	openPullRequest(t, h, start)
 
 	payloads := returnedPayloads(t, h)
-	if len(payloads) != 2 || payloads[1].Tool != createPR || payloads[1].PullRequest != linkPR {
+	want := &domain.PullRequestStamp{Ref: linkPR, Via: domain.ProvenanceHostedGitHubApp}
+	if len(payloads) != 2 || payloads[1].Tool != createPR || payloads[1].PullRequest == nil || *payloads[1].PullRequest != *want {
 		t.Fatalf("returns = %+v; want create_pull_request's to name %s", payloads, linkPR)
 	}
-	if payloads[0].PullRequest != "" {
+	if payloads[0].PullRequest != nil {
 		t.Fatalf("the claim's return names a pull request: %+v", payloads[0])
 	}
 }
@@ -147,8 +149,33 @@ func TestAdvance_failedOrOtherReturns_nameNoPullRequest(t *testing.T) {
 	openPullRequest(t, h, start)
 
 	for _, p := range returnedPayloads(t, h) {
-		if p.PullRequest != "" {
+		if p.PullRequest != nil {
 			t.Fatalf("a failed create_pull_request named %s: %+v", p.PullRequest, p)
+		}
+	}
+}
+
+// An answer that may not prove anything is not stamped, and the link of the
+// pull request it named parks for a person (#239 review): a result labelled
+// untrusted, or a server the catalogue established no provenance for.
+func TestAdvance_linkAfterAnAnswerThatCannotProve_isNotStampedAndParks(t *testing.T) {
+	t.Parallel()
+	for name, set := range map[string]func(*countingTools){
+		"untrusted result": func(c *countingTools) { c.labels = domain.NewLabels(domain.LabelUntrusted) },
+		"no provenance":    func(c *countingTools) { c.provenance = "" },
+	} {
+		h, start := linkHarness(t, claimProposal(linkRootCard), createPRProposal(), linkProposal(linkPR))
+		set(h.tools)
+		openPullRequest(t, h, start)
+		requestsBefore := len(h.stepsOf(t, "run-1", domain.StepApprovalRequested))
+
+		advance(t, h, start, 1)
+
+		if p := returnedPayloads(t, h)[1]; p.PullRequest != nil {
+			t.Errorf("%s: create_pull_request was stamped %+v", name, p.PullRequest)
+		}
+		if got := len(h.stepsOf(t, "run-1", domain.StepApprovalRequested)); got != requestsBefore+1 || len(linkedPayloads(t, h)) != 0 {
+			t.Errorf("%s: the link went through unasked: %v", name, h.kinds(t))
 		}
 	}
 }
@@ -260,7 +287,8 @@ func sealOtherCardsLink(t *testing.T, h *harness) {
 		{Kind: domain.StepRunStarted},
 		{Kind: domain.StepWorkItemClaimed, Payload: mustJSON(domain.WorkItemClaimedPayload{Ref: "github:fuseone-io/fuseone-agents#7"})},
 		{Kind: domain.StepToolCalled, Payload: mustJSON(domain.ToolCalledPayload{Tool: createPR, Effect: domain.EffectWrite})},
-		{Kind: domain.StepToolReturned, Payload: mustJSON(domain.ToolReturnedPayload{Tool: createPR, PullRequest: linkPR})},
+		{Kind: domain.StepToolReturned, Payload: mustJSON(domain.ToolReturnedPayload{Tool: createPR,
+			PullRequest: &domain.PullRequestStamp{Ref: linkPR, Via: domain.ProvenanceHostedGitHubApp}})},
 		{Kind: domain.StepWorkItemLinked, Payload: mustJSON(domain.WorkItemLinkedPayload{
 			Alias: linkPR, Root: "github:fuseone-io/fuseone-agents#7",
 			Proof: domain.WorkItemLinkProof{Kind: domain.StepToolReturned, Seq: 4},
@@ -291,5 +319,34 @@ func TestEnvelope_declaredLink_isReachableAtEveryStep(t *testing.T) {
 	start.Pack = gate.NewPack("a.one", "a.two")
 	if envelopeForState(start, state).Allows(domain.ToolWorkItemLink) {
 		t.Fatal("an agent that never declared the link is offered it")
+	}
+}
+
+// A stamp is judged where it is folded, not only where it is written: one on
+// a step sealed untrusted — written by anything but this release's engine —
+// proves no link to the Gate.
+func TestFold_untrustedStampOrNoProvenance_provesNoLink(t *testing.T) {
+	t.Parallel()
+	for name, c := range map[string]struct {
+		labels domain.Labels
+		via    domain.ToolProvenance
+	}{
+		"an untrusted step": {domain.NewLabels(domain.LabelUntrusted), domain.ProvenanceHostedGitHubApp},
+		"no provenance":     {domain.Labels{}, ""},
+	} {
+		steps := []domain.Step{
+			{RunID: "run-1", Seq: 1, Kind: domain.StepRunStarted, Payload: mustJSON(domain.RunStartedPayload{Trigger: "cron"})},
+			{RunID: "run-1", Seq: 2, Kind: domain.StepWorkItemClaimed, Payload: mustJSON(domain.WorkItemClaimedPayload{Ref: linkRootCard})},
+			{RunID: "run-1", Seq: 3, Kind: domain.StepToolCalled, Payload: mustJSON(domain.ToolCalledPayload{Tool: createPR, Effect: domain.EffectWrite})},
+			{RunID: "run-1", Seq: 4, Kind: domain.StepToolReturned, Labels: c.labels, Payload: mustJSON(domain.ToolReturnedPayload{
+				Tool: createPR, PullRequest: &domain.PullRequestStamp{Ref: linkPR, Via: c.via}})},
+		}
+		state, err := Fold(steps)
+		if err != nil {
+			t.Fatalf("%s: Fold: %v", name, err)
+		}
+		if proven, _ := linkStanding(state, linkProposal(linkPR)); proven {
+			t.Errorf("%s: the folded stamp proves the link", name)
+		}
 	}
 }

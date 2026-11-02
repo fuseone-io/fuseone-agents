@@ -73,7 +73,9 @@ and the role instructions live, reviewed like code, in
   the Reviewer's and QA's runs on that pull request are on the issue's trail,
   marked **Pull request**. Opening the trail of a linked pull request shows
   the issue's trail and says so. The link waits for no one when the run's own
-  `create_pull_request` named that pull request, and for a person otherwise;
+  `create_pull_request` named that pull request — answered by the hosted GitHub
+  server registered with the role's GitHub App, and classified as a write whose
+  result is not untrusted — and for a person otherwise;
   a pull request belongs to one card for good, and a link you cannot read is
   shown to you as no link at all.
 

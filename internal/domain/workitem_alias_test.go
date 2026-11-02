@@ -87,15 +87,27 @@ func TestPullRequestNamed_anythingElse_namesNone(t *testing.T) {
 func returnedPR() domain.ToolReturnedPayload {
 	return domain.ToolReturnedPayload{
 		Tool: "github-developer.create_pull_request", ResultRef: "content:pr",
-		PullRequest: linkAlias,
+		PullRequest: &domain.PullRequestStamp{Ref: linkAlias, Via: domain.ProvenanceHostedGitHubApp},
 	}
 }
 
 func TestJudgePullRequestProof_theRunsOwnSuccessfulCreate_proves(t *testing.T) {
 	t.Parallel()
 
-	if err := domain.JudgePullRequestProof(returnedPR(), linkAlias); err != nil {
+	if err := domain.JudgePullRequestProof(returnedPR(), domain.Labels{}, linkAlias); err != nil {
 		t.Fatalf("JudgePullRequestProof = %v, want the proof accepted", err)
+	}
+}
+
+// An answer labelled untrusted proves nothing, whatever it names and however
+// it was stamped: a server classified untrusted can name a pull request it
+// never opened.
+func TestJudgePullRequestProof_anUntrustedResult_unproven(t *testing.T) {
+	t.Parallel()
+
+	untrusted := domain.NewLabels(domain.LabelUntrusted)
+	if err := domain.JudgePullRequestProof(returnedPR(), untrusted, linkAlias); !errors.Is(err, domain.ErrWorkItemLinkUnproven) {
+		t.Fatalf("JudgePullRequestProof(untrusted) = %v, want ErrWorkItemLinkUnproven", err)
 	}
 }
 
@@ -106,15 +118,17 @@ func TestJudgePullRequestProof_anyPartMissing_unproven(t *testing.T) {
 		"another tool":       func(p *domain.ToolReturnedPayload) { p.Tool = "github-developer.pull_request_read" },
 		"the link tool":      func(p *domain.ToolReturnedPayload) { p.Tool = domain.ToolWorkItemLink },
 		"a failed call":      func(p *domain.ToolReturnedPayload) { p.Failed, p.ErrorCode = true, "tool_error" },
-		"another number":     func(p *domain.ToolReturnedPayload) { p.PullRequest = "github:fuseone-io/fuseone-agents#241" },
-		"nothing named":      func(p *domain.ToolReturnedPayload) { p.PullRequest = "" },
+		"another number":     func(p *domain.ToolReturnedPayload) { p.PullRequest.Ref = "github:fuseone-io/fuseone-agents#241" },
+		"nothing named":      func(p *domain.ToolReturnedPayload) { p.PullRequest = nil },
 		"served from cache":  func(p *domain.ToolReturnedPayload) { p.Cached = true },
-		"another repository": func(p *domain.ToolReturnedPayload) { p.PullRequest = "github:fuseone-io/fuseone-site#240" },
+		"another repository": func(p *domain.ToolReturnedPayload) { p.PullRequest.Ref = "github:fuseone-io/fuseone-site#240" },
+		"no provenance":      func(p *domain.ToolReturnedPayload) { p.PullRequest.Via = "" },
+		"another provenance": func(p *domain.ToolReturnedPayload) { p.PullRequest.Via = "github_local" },
 	}
 	for name, mutate := range cases {
 		p := returnedPR()
 		mutate(&p)
-		if err := domain.JudgePullRequestProof(p, linkAlias); !errors.Is(err, domain.ErrWorkItemLinkUnproven) {
+		if err := domain.JudgePullRequestProof(p, domain.Labels{}, linkAlias); !errors.Is(err, domain.ErrWorkItemLinkUnproven) {
 			t.Errorf("%s: JudgePullRequestProof = %v, want ErrWorkItemLinkUnproven", name, err)
 		}
 	}

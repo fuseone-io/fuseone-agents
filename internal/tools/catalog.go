@@ -116,6 +116,9 @@ type Entry struct {
 	// effect. Empty means the tool participates only in the ordinary per-run
 	// idempotency already recorded in the ledger.
 	Dedupe domain.ToolDedupe
+	// Provenance is what the server's registration established (#204); set at
+	// registration, never by a ruling.
+	Provenance domain.ToolProvenance
 }
 
 // Catalog is the registered tool surface of an installation.

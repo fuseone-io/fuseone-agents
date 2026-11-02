@@ -32,8 +32,8 @@ reading the ledger again:
 
   - the card the run holds: its first claim, which is the only one the ledger
     sealed as a hold — a second card is refused, a retry is the same card;
-  - each pull request a create_pull_request of this run answered naming, at
-    the seq of that return;
+  - each pull request a trusted create_pull_request of this run, answered by
+    the hosted GitHub server as an App, named — at the seq of that return;
   - each request for the link a person approved, at the seq of the decision.
 
 Noted beside the fold, never instead of it: none of it changes a decision the
@@ -59,13 +59,13 @@ func (s *State) noteWorkItem(step domain.Step) {
 		}
 	case domain.StepToolReturned:
 		var p domain.ToolReturnedPayload
-		if json.Unmarshal(step.Payload, &p) == nil && p.PullRequest != "" &&
-			domain.JudgePullRequestProof(p, p.PullRequest) == nil {
+		if json.Unmarshal(step.Payload, &p) == nil && p.PullRequest != nil &&
+			domain.JudgePullRequestProof(p, step.Labels, p.PullRequest.Ref) == nil {
 			if s.workItem.pullRequests == nil {
 				s.workItem.pullRequests = map[domain.WorkItemRef]int64{}
 			}
-			if _, seen := s.workItem.pullRequests[p.PullRequest]; !seen {
-				s.workItem.pullRequests[p.PullRequest] = step.Seq
+			if _, seen := s.workItem.pullRequests[p.PullRequest.Ref]; !seen {
+				s.workItem.pullRequests[p.PullRequest.Ref] = step.Seq
 			}
 		}
 	case domain.StepApprovalDecided:

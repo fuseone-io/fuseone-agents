@@ -222,6 +222,7 @@ type ToolResult struct {
 	CachedFromRun domain.RunID
 	CachedFromSeq int64
 	Context       *domain.ContextArtifact
+	Provenance    domain.ToolProvenance // what the catalogue established about the server (#204)
 }
 
 // Catalog resolves a tool's effect classification, set centrally by the

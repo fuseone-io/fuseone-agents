@@ -2,7 +2,6 @@ package ledger
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -131,24 +130,24 @@ func heldCard(ctx context.Context, tx pgx.Tx, s domain.Step, openedAt time.Time)
 	return domain.WorkItemRef(held), nil
 }
 
-// postgresStepAt reads one step of the run, in the run's own partition.
+// postgresStepAt reads one step of the run, whole — its labels included —
+// in the run's own partition.
 func postgresStepAt(ctx context.Context, tx pgx.Tx, runID domain.RunID, openedAt time.Time) stepAt {
 	return func(seq int64) (domain.Step, bool, error) {
-		st := domain.Step{RunID: runID, Seq: seq}
-		var kind string
-		err := tx.QueryRow(ctx, `
-			select kind, payload from run_steps
+		rows, err := tx.Query(ctx, `select `+stepColumns+` from run_steps
 			where run_id = $1 and seq = $2 and opened_at = $3`,
-			string(runID), seq, openedAt,
-		).Scan(&kind, &st.Payload)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.Step{}, false, nil
-		}
+			string(runID), seq, openedAt)
 		if err != nil {
 			return domain.Step{}, false, fmt.Errorf("read the link's proof: %w", err)
 		}
-		st.Kind = domain.StepKind(kind)
-		return st, true, nil
+		steps, err := scanSteps(rows)
+		if err != nil {
+			return domain.Step{}, false, fmt.Errorf("read the link's proof: %w", err)
+		}
+		if len(steps) == 0 {
+			return domain.Step{}, false, nil
+		}
+		return steps[0], true, nil
 	}
 }
 

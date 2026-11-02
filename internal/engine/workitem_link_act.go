@@ -186,16 +186,25 @@ func (r *Runner) answerLink(ctx context.Context, state State, call Call, answer 
 
 // pullRequestOf is the pull request a create_pull_request answer named, read
 // back from the content store as the call returns, so the tool_returned step
-// can carry it as the proof a link is later judged by. Anything that cannot
-// be read names none, and a link of it then needs a person.
-func (r *Runner) pullRequestOf(ctx context.Context, tool domain.ToolID, result ToolResult) domain.WorkItemRef {
-	if !tool.CreatesPullRequest() || result.Failed || result.Cached || result.ResultRef == "" || r.deps.Content == nil {
-		return ""
+// can carry it as the proof a link is later judged by.
+//
+// Stamped only when the answer may prove anything: a live, successful,
+// trusted result from a server whose registration the catalogue established
+// as the hosted GitHub server reached as an App. An untrusted result, a
+// server nobody could vouch for, or an answer that cannot be read stamps
+// nothing, and a link of it then needs a person.
+func (r *Runner) pullRequestOf(ctx context.Context, tool domain.ToolID, result ToolResult) *domain.PullRequestStamp {
+	if !tool.CreatesPullRequest() || result.Failed || result.Cached || result.ResultRef == "" || r.deps.Content == nil ||
+		result.Labels.HasAny(domain.LabelUntrusted) || result.Provenance != domain.ProvenanceHostedGitHubApp {
+		return nil
 	}
 	body, err := r.deps.Content.Get(ctx, result.ResultRef)
 	if err != nil {
-		return ""
+		return nil
 	}
-	ref, _ := domain.PullRequestNamed(body)
-	return ref
+	ref, ok := domain.PullRequestNamed(body)
+	if !ok {
+		return nil
+	}
+	return &domain.PullRequestStamp{Ref: ref, Via: result.Provenance}
 }

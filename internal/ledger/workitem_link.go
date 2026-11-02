@@ -76,8 +76,9 @@ type stepAt func(seq int64) (domain.Step, bool, error)
 /*
 judgeLinkProof holds the proof to the steps it names. The kind the payload
 claims must be the kind of the step at that seq; a returned call must be the
-run's own create_pull_request naming the alias; a decision must approve a
-request, earlier in the run, for the link itself.
+run's own trusted create_pull_request, stamped with the hosted GitHub
+provenance and naming the alias; a decision must approve a request, earlier in
+the run, for the link itself.
 */
 func judgeLinkProof(p domain.WorkItemLinkedPayload, read stepAt) error {
 	proof, found, err := read(p.Proof.Seq)
@@ -92,7 +93,8 @@ func judgeLinkProof(p domain.WorkItemLinkedPayload, read stepAt) error {
 		if err := json.Unmarshal(proof.Payload, &returned); err != nil {
 			return fmt.Errorf("%w: %w", domain.ErrWorkItemLinkUnproven, err)
 		}
-		return domain.JudgePullRequestProof(returned, p.Alias)
+		// The labels it was sealed with: an untrusted result proves nothing.
+		return domain.JudgePullRequestProof(returned, proof.Labels, p.Alias)
 	}
 	var decided domain.ApprovalDecidedPayload
 	if err := json.Unmarshal(proof.Payload, &decided); err != nil {

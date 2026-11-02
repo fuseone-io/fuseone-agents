@@ -110,6 +110,7 @@ func (c *Catalog) AddServer(
 			Effect:      domain.EffectUnknown,
 			Untrusted:   true,
 			Suggested:   c.suggestion(name, t.Name),
+			Provenance:  opts.provenance,
 		}
 	}
 	if old != nil {

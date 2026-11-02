@@ -137,7 +137,8 @@ func (g *fakeGitHub) Invoke(ctx context.Context, call engine.Call) (engine.ToolR
 	if err != nil {
 		return engine.ToolResult{}, err
 	}
-	return engine.ToolResult{ResultRef: ref, ResultDigest: engine.ResultDigest(body), ResultBytes: int64(len(body))}, nil
+	return engine.ToolResult{ResultRef: ref, ResultDigest: engine.ResultDigest(body), ResultBytes: int64(len(body)),
+		Provenance: domain.ProvenanceHostedGitHubApp}, nil
 }
 
 type journeyPlanner struct{ proposals []engine.Proposal }

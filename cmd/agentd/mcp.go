@@ -69,6 +69,7 @@ func connectServer(
 		tools.WithRateLimit(server.RateLimit),
 		tools.WithResultCache(server.Cache),
 		tools.WithCallTimeout(server.CallTimeout),
+		tools.WithProvenance(domain.HostedGitHubProvenance(server, creds)),
 	); err != nil {
 		_ = managed.Close()
 		return fmt.Errorf("import tools from %s: %w", server.Name, err)

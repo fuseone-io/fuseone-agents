@@ -27,18 +27,36 @@ const (
 func returnPullRequest(t *testing.T, s Store, runID domain.RunID, agent domain.AgentID, pr domain.WorkItemRef) int64 {
 	t.Helper()
 	return returnOf(t, s, runID, agent, domain.ToolReturnedPayload{
-		Tool: "github-developer.create_pull_request", ResultRef: "content:pr", PullRequest: pr,
+		Tool: "github-developer.create_pull_request", ResultRef: "content:pr", PullRequest: hosted(pr),
 	})
 }
 
+// hosted is a pull request stamped as the engine stamps a trusted answer of
+// the hosted GitHub server reached as an App. None for an empty reference.
+func hosted(pr domain.WorkItemRef) *domain.PullRequestStamp {
+	if pr == "" {
+		return nil
+	}
+	return &domain.PullRequestStamp{Ref: pr, Via: domain.ProvenanceHostedGitHubApp}
+}
+
 func returnOf(t *testing.T, s Store, runID domain.RunID, agent domain.AgentID, p domain.ToolReturnedPayload) int64 {
+	t.Helper()
+	return returnLabelled(t, s, runID, agent, p, domain.Labels{})
+}
+
+// returnLabelled is returnOf with the labels the tool_returned step is sealed
+// with, as the engine seals a result's taint.
+func returnLabelled(
+	t *testing.T, s Store, runID domain.RunID, agent domain.AgentID, p domain.ToolReturnedPayload, labels domain.Labels,
+) int64 {
 	t.Helper()
 	called := withPayload(t, step(runID, domain.StepToolCalled),
 		domain.ToolCalledPayload{Tool: p.Tool, Effect: domain.EffectWrite})
 	called.AgentID = agent
 	mustAppend(t, s, called)
 	returned := withPayload(t, step(runID, domain.StepToolReturned), p)
-	returned.AgentID = agent
+	returned.AgentID, returned.Labels = agent, labels
 	sealed, err := s.Append(context.Background(), returned)
 	if err != nil {
 		t.Fatalf("return %s: %v", p.Tool, err)
@@ -161,7 +179,7 @@ func TestWorkItemLink_anotherCompanysAlias_doesNotConflict(t *testing.T) {
 		called := withPayload(t, step("run-g", domain.StepToolCalled),
 			domain.ToolCalledPayload{Tool: "github.create_pull_request", Effect: domain.EffectWrite})
 		returned := withPayload(t, step("run-g", domain.StepToolReturned),
-			domain.ToolReturnedPayload{Tool: "github.create_pull_request", PullRequest: linkAlias})
+			domain.ToolReturnedPayload{Tool: "github.create_pull_request", PullRequest: hosted(linkAlias)})
 		for _, st := range []*domain.Step{&called, &returned} {
 			st.AgentID, st.Scope = "developer", other
 		}
@@ -217,7 +235,7 @@ func TestWorkItemLink_proofThatDoesNotVerify_refused(t *testing.T) {
 		},
 		"a return of another tool": func(t *testing.T, s Store) domain.WorkItemLinkedPayload {
 			proof := returnOf(t, s, "run-a", "developer", domain.ToolReturnedPayload{
-				Tool: "github-developer.pull_request_read", PullRequest: linkAlias,
+				Tool: "github-developer.pull_request_read", PullRequest: hosted(linkAlias),
 			})
 			return linked(linkAlias, card, proof)
 		},
@@ -231,8 +249,23 @@ func TestWorkItemLink_proofThatDoesNotVerify_refused(t *testing.T) {
 		},
 		"a failed create": func(t *testing.T, s Store) domain.WorkItemLinkedPayload {
 			proof := returnOf(t, s, "run-a", "developer", domain.ToolReturnedPayload{
-				Tool: "github-developer.create_pull_request", PullRequest: linkAlias,
+				Tool: "github-developer.create_pull_request", PullRequest: hosted(linkAlias),
 				Failed: true, ErrorCode: "tool_error",
+			})
+			return linked(linkAlias, card, proof)
+		},
+		// The two halves of who answered (#239 review): a result labelled
+		// untrusted, and a stamp with no provenance, each prove nothing — so a
+		// forged stamp cannot pass at append either.
+		"an untrusted result": func(t *testing.T, s Store) domain.WorkItemLinkedPayload {
+			proof := returnLabelled(t, s, "run-a", "developer", domain.ToolReturnedPayload{
+				Tool: "github-developer.create_pull_request", PullRequest: hosted(linkAlias),
+			}, domain.NewLabels(domain.LabelUntrusted))
+			return linked(linkAlias, card, proof)
+		},
+		"a stamp with no provenance": func(t *testing.T, s Store) domain.WorkItemLinkedPayload {
+			proof := returnOf(t, s, "run-a", "developer", domain.ToolReturnedPayload{
+				Tool: "github-developer.create_pull_request", PullRequest: &domain.PullRequestStamp{Ref: linkAlias},
 			})
 			return linked(linkAlias, card, proof)
 		},

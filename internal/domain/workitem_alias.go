@@ -105,10 +105,13 @@ func pullRequestRef(raw json.RawMessage) (WorkItemRef, bool) {
 	return ParseWorkItemRef("github:" + m[1] + "/" + m[2] + "#" + m[3])
 }
 
-// JudgePullRequestProof holds a returned call to being the proof of a link to
-// alias: create_pull_request, answered by the server for this run rather than
-// from a cache, not failed, and naming exactly that pull request.
-func JudgePullRequestProof(returned ToolReturnedPayload, alias WorkItemRef) error {
+// JudgePullRequestProof holds a returned call — its payload and the labels its
+// step was sealed with — to being the proof of a link to alias:
+// create_pull_request, answered by the server for this run rather than from a
+// cache, not failed, not labelled untrusted, stamped by the engine with the
+// hosted GitHub provenance, and naming exactly that pull request.
+func JudgePullRequestProof(returned ToolReturnedPayload, labels Labels, alias WorkItemRef) error {
+	stamp := returned.PullRequest
 	switch {
 	case !returned.Tool.CreatesPullRequest():
 		return fmt.Errorf("%w: the proof is a return of %q, not of create_pull_request", ErrWorkItemLinkUnproven, returned.Tool)
@@ -116,9 +119,14 @@ func JudgePullRequestProof(returned ToolReturnedPayload, alias WorkItemRef) erro
 		return fmt.Errorf("%w: the create_pull_request it names failed", ErrWorkItemLinkUnproven)
 	case returned.Cached:
 		return fmt.Errorf("%w: the create_pull_request it names was answered from a cache", ErrWorkItemLinkUnproven)
-	case returned.PullRequest != alias:
+	case labels.HasAny(LabelUntrusted):
+		return fmt.Errorf("%w: the create_pull_request it names returned an untrusted result", ErrWorkItemLinkUnproven)
+	case stamp == nil || stamp.Via != ProvenanceHostedGitHubApp:
+		return fmt.Errorf("%w: the create_pull_request it names was not answered by the hosted GitHub server as an App",
+			ErrWorkItemLinkUnproven)
+	case stamp.Ref != alias:
 		return fmt.Errorf("%w: the create_pull_request it names answered %q, not %q",
-			ErrWorkItemLinkUnproven, returned.PullRequest, alias)
+			ErrWorkItemLinkUnproven, stamp.Ref, alias)
 	}
 	return nil
 }

@@ -44,6 +44,7 @@ type serverOptions struct {
 	rateLimit   *domain.MCPRateLimit
 	cache       *domain.MCPResultCache
 	callTimeout time.Duration
+	provenance  domain.ToolProvenance
 }
 
 type ServerOption func(*serverOptions)
@@ -59,6 +60,13 @@ func WithRateLimit(limit *domain.MCPRateLimit) ServerOption {
 			Burst:         limit.Burst,
 		}
 	}
+}
+
+// WithProvenance is what the registration establishes about the server
+// (#204): every live answer it gives carries it to the engine. Empty is
+// nothing, the safe reading of a registration nobody could vouch for.
+func WithProvenance(provenance domain.ToolProvenance) ServerOption {
+	return func(options *serverOptions) { options.provenance = provenance }
 }
 
 // WithCallTimeout is the server's own per-call ceiling, in seconds. Nil or

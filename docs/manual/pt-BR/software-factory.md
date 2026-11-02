@@ -78,8 +78,10 @@ e as instruções dos papéis ficam, revisadas como código, em
   pull request entram no histórico da issue, marcados como **Pull request**.
   Abrir o histórico de um pull request vinculado mostra o histórico da issue
   e avisa isso. O vínculo não espera ninguém quando o próprio
-  `create_pull_request` do run citou aquele pull request, e espera uma pessoa
-  nos outros casos; um pull request pertence a um só card para sempre, e um
+  `create_pull_request` do run citou aquele pull request — respondido pelo
+  servidor hospedado do GitHub registrado com o GitHub App do papel, e
+  classificado como escrita cujo resultado não é untrusted — e espera uma
+  pessoa nos outros casos; um pull request pertence a um só card para sempre, e um
   vínculo que você não pode ler aparece para você como se não existisse.
 
 O repositório é público, então o texto de issues e pull requests não é

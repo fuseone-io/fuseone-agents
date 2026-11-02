@@ -23,7 +23,8 @@ func (s trailSeed) linkPR(id domain.RunID, agent domain.AgentID, scope domain.Sc
 	s.t.Helper()
 	tool := domain.ToolID("github-developer.create_pull_request")
 	s.step(id, agent, scope, domain.StepToolCalled, domain.ToolCalledPayload{Tool: tool, Effect: domain.EffectWrite})
-	proof := s.step(id, agent, scope, domain.StepToolReturned, domain.ToolReturnedPayload{Tool: tool, PullRequest: trailPR})
+	proof := s.step(id, agent, scope, domain.StepToolReturned, domain.ToolReturnedPayload{Tool: tool,
+		PullRequest: &domain.PullRequestStamp{Ref: trailPR, Via: domain.ProvenanceHostedGitHubApp}})
 	s.step(id, agent, scope, domain.StepWorkItemLinked, domain.WorkItemLinkedPayload{
 		Alias: trailPR, Root: trailCard,
 		Proof: domain.WorkItemLinkProof{Kind: domain.StepToolReturned, Seq: proof.Seq},

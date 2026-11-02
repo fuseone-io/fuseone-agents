@@ -48,7 +48,7 @@ func claimedAndReturned(t *testing.T, s Store) int64 {
 	called.AgentID = "developer"
 	mustAppend(t, s, called)
 	returned := withPayload(t, step("run-a", domain.StepToolReturned), domain.ToolReturnedPayload{
-		Tool: "github.create_pull_request", ResultRef: "content:pr", PullRequest: linkAlias,
+		Tool: "github.create_pull_request", ResultRef: "content:pr", PullRequest: hosted(linkAlias),
 	})
 	returned.AgentID = "developer"
 	sealed, err := s.Append(context.Background(), returned)

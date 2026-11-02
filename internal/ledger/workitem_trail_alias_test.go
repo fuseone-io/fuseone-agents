@@ -29,7 +29,7 @@ func linkIn(t *testing.T, s Store, id domain.RunID, agent domain.AgentID, scope 
 		st.AgentID, st.Scope = agent, scope
 		return st
 	}
-	pr := domain.ToolReturnedPayload{Tool: "github-developer.create_pull_request", PullRequest: alias}
+	pr := domain.ToolReturnedPayload{Tool: "github-developer.create_pull_request", PullRequest: hosted(alias)}
 	mustAppend(t, s, stamped(withPayload(t, step(id, domain.StepToolCalled),
 		domain.ToolCalledPayload{Tool: pr.Tool, Effect: domain.EffectWrite})))
 	proof := mustAppendSeq(t, s, stamped(withPayload(t, step(id, domain.StepToolReturned), pr)))
