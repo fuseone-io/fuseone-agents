@@ -153,3 +153,111 @@ func TestReleaseGuard_cleanHeadAtOriginMain_accepted(t *testing.T) {
 		t.Fatalf("guard refused a clean HEAD at origin/main: %v\n%s", err, out)
 	}
 }
+
+// newReleaseFixture adds to the fixture what `make release` reads: the
+// repository's real Makefile and guard, and a changelog that already has the
+// section for the version under release. All three are committed and pushed,
+// so a clean tree at origin/main is the starting point.
+func newReleaseFixture(t *testing.T, version string) *fixture {
+	t.Helper()
+	f := newFixture(t)
+	f.copyIn("../Makefile", "Makefile")
+	f.copyIn("release-guard.sh", "scripts/release-guard.sh")
+	f.write("CHANGELOG.md", "# Changelog\n\n## ["+version+"]\n")
+	f.git(f.work, "add", "Makefile", "scripts/release-guard.sh", "CHANGELOG.md")
+	f.git(f.work, "commit", "--quiet", "-m", "release inputs")
+	f.git(f.work, "push", "--quiet", "origin", "main")
+	f.git(f.work, "fetch", "--quiet", "origin")
+	return f
+}
+
+func (f *fixture) copyIn(src, dst string) {
+	f.t.Helper()
+	body, err := os.ReadFile(src)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	path := filepath.Join(f.work, dst)
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		f.t.Fatal(err)
+	}
+	if err := os.WriteFile(path, body, 0o700); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+// makeRelease runs the real `release` target. GO=true keeps the Makefile's
+// package listing from invoking Go in a repository that has no module.
+// check replaces $(MAKE) for the recursive `make check`: "true" passes it
+// instantly, "false" fails it, which proves a refusal came before the check.
+func (f *fixture) makeRelease(version, check string) (string, error) {
+	f.t.Helper()
+	cmd := exec.Command("make", "--no-print-directory", "release",
+		"V="+version, "GO=true", "MAKE="+check)
+	cmd.Dir = f.work
+	cmd.Env = f.env
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func (f *fixture) tags(dir string) string {
+	f.t.Helper()
+	return strings.TrimSpace(f.git(dir, "tag", "--list"))
+}
+
+func TestMakeRelease_refusedBeforeAnyTag(t *testing.T) {
+	t.Parallel()
+	const version = "9.9.9"
+	cases := []struct {
+		name    string
+		arrange func(f *fixture)
+		reason  string
+	}{
+		{
+			name:    "untracked file",
+			arrange: func(f *fixture) { f.write("stray.txt", "x") },
+			reason:  "dirty",
+		},
+		{
+			name:    "HEAD ahead of origin/main",
+			arrange: func(f *fixture) { f.commit("docs-changelog-cut") },
+			reason:  "origin/main",
+		},
+	}
+	// With a passing check, nothing but the guard stands between the target
+	// and the tag. With a failing one, a refusal that names the reason proves
+	// the guard ran before the check.
+	checks := []string{"true", "false"}
+	for _, tc := range cases {
+		for _, check := range checks {
+			t.Run(tc.name+"/check="+check, func(t *testing.T) {
+				t.Parallel()
+				f := newReleaseFixture(t, version)
+				tc.arrange(f)
+				out, err := f.makeRelease(version, check)
+				if err == nil {
+					t.Fatalf("make release accepted; want refusal naming %q\n%s", tc.reason, out)
+				}
+				if !strings.Contains(out, tc.reason) {
+					t.Fatalf("make release refused without naming %q:\n%s", tc.reason, out)
+				}
+				if local, remote := f.tags(f.work), f.tags(f.origin); local != "" || remote != "" {
+					t.Fatalf("refused release left tags: local %q, origin %q", local, remote)
+				}
+			})
+		}
+	}
+}
+
+// The anchor for the refusals above: with the guard satisfied, the same
+// invocation reaches the tag and pushes it, so their refusal is the guard's.
+func TestMakeRelease_cleanHeadAtOriginMain_tagsAndPushes(t *testing.T) {
+	t.Parallel()
+	f := newReleaseFixture(t, "9.9.9")
+	if out, err := f.makeRelease("9.9.9", "true"); err != nil {
+		t.Fatalf("make release refused a clean HEAD at origin/main: %v\n%s", err, out)
+	}
+	if got := f.tags(f.origin); got != "v9.9.9" {
+		t.Fatalf("origin tags = %q, want v9.9.9", got)
+	}
+}
