@@ -9,7 +9,7 @@ import (
 )
 
 /*
-WorkItemTrail reads a card's trail in at most three statements, none of
+WorkItemTrail reads a card's trail in at most two statements, none of
 which grows with the card's history.
 
 Every statement starts from the same source: run_work_items by its (ref)
@@ -20,11 +20,12 @@ here, by an explicit predicate, never by teaching the generic filter about
 work items.
 
 A page is one statement, limited to the page plus one row. The first page
-adds the role summary: the card's earliest and latest opening moments, then
-one aggregate grouped by agent and scope that counts the approval steps in
-SQL. The two moments bound run_steps' partition key as parameters, so the
-summary touches only the months the card's runs opened in, and no list of
-runs ever leaves the database or comes back into it.
+adds the role summary: one aggregate grouped by agent and scope that counts
+the approval steps in SQL, bounded on run_steps' partition key by the card's
+earliest and latest opening moments as the same statement computes them —
+one snapshot, so a run is never counted without its approvals. Only the
+months the card's runs opened in are read, and no list of runs ever leaves
+the database or comes back into it.
 */
 func (p *Postgres) WorkItemTrail(
 	ctx context.Context, filter domain.RunFilter, cost *domain.RunFilter,
@@ -108,22 +109,11 @@ func (p *Postgres) workItemRuns(
 	return out, rows.Err()
 }
 
-// workItemShares is the role summary: the card's earliest and latest
-// opening moments, then the aggregate between them. A card nobody the
-// caller can read claimed has no moments, and no summary to read.
+// workItemShares is the role summary, read in one statement.
 func (p *Postgres) workItemShares(
 	ctx context.Context, filter domain.RunFilter, ref domain.WorkItemRef,
 ) ([]domain.WorkItemRoleShare, error) {
-	source, args := workItemSource(filter, ref)
-	var lo, hi *time.Time
-	if err := p.pool.QueryRow(ctx, `select min(r.started_at), max(r.started_at)`+source, args...).
-		Scan(&lo, &hi); err != nil {
-		return nil, fmt.Errorf("read the work item's span: %w", err)
-	}
-	if lo == nil || hi == nil {
-		return []domain.WorkItemRoleShare{}, nil
-	}
-	sql, args := workItemRolesSQL(filter, ref, *lo, *hi)
+	sql, args := workItemRolesSQL(filter, ref)
 	rows, err := p.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("read the work item's roles: %w", err)
@@ -147,13 +137,18 @@ func (p *Postgres) workItemShares(
 }
 
 // workItemRolesSQL aggregates the card's runs per agent and scope, with the
-// approval steps counted in the database. Each step is matched to its run by
-// (run_id, opened_at), and opened_at — the partition key — is bounded by the
-// card's own first and last opening moments, so only their months are read.
-// The decision's verdict is read here; no payload leaves the database.
-func workItemRolesSQL(filter domain.RunFilter, ref domain.WorkItemRef, lo, hi time.Time) (string, []any) {
+// approval steps counted in the database, in one statement and so one
+// snapshot: the runs, their cost, the span of their opening moments and their
+// approvals are all read from the same moment, and a run that commits while
+// the summary is read is counted with what it asked or not at all.
+//
+// Each step is matched to its run by (run_id, opened_at), and opened_at — the
+// partition key — is bounded by the span the same statement computed. The
+// bound is not known when the statement is planned, so the months outside it
+// are pruned while it runs rather than when it is planned. The decision's
+// verdict is read here; no payload leaves the database.
+func workItemRolesSQL(filter domain.RunFilter, ref domain.WorkItemRef) (string, []any) {
 	source, args := workItemSource(filter, ref)
-	args = append(args, lo.UTC(), hi.UTC())
 	return fmt.Sprintf(`
 		with trail as (
 			select r.run_id, r.agent_id, r.company_id, r.area_id, r.started_at, r.ended_at,
@@ -170,7 +165,8 @@ func workItemRolesSQL(filter domain.RunFilter, ref domain.WorkItemRef, lo, hi ti
 			       count(*) filter (where s.kind = 'abandoned') as abandoned
 			from run_steps s
 			join trail t on t.run_id = s.run_id and t.started_at = s.opened_at
-			where s.opened_at >= $%d and s.opened_at <= $%d
+			where s.opened_at >= (select min(started_at) from trail)
+			  and s.opened_at <= (select max(started_at) from trail)
 			  and s.kind in ('approval_requested', 'approval_decided', 'abandoned')
 			group by s.run_id
 		)
@@ -179,5 +175,5 @@ func workItemRolesSQL(filter domain.RunFilter, ref domain.WorkItemRef, lo, hi ti
 		       coalesce(sum(a.requested), 0)::int, coalesce(sum(a.approved), 0)::int,
 		       coalesce(sum(a.refused), 0)::int, coalesce(sum(a.abandoned), 0)::int
 		from trail t left join asked a on a.run_id = t.run_id
-		group by t.agent_id, t.company_id, t.area_id`, source, len(args)-1, len(args)), args
+		group by t.agent_id, t.company_id, t.area_id`, source), args
 }

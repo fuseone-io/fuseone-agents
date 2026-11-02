@@ -72,8 +72,21 @@ func seedOtherCards(t *testing.T, pool *pgxpool.Pool) {
 // explainJSON explains a production statement with its arguments.
 func explainJSON(t *testing.T, pool *pgxpool.Pool, sql string, args ...any) planNode {
 	t.Helper()
+	return explainWith(t, pool, "format json", sql, args...)
+}
+
+// explainAnalyzeJSON runs the statement and returns the plan with what each
+// node did: a partition pruned while the statement ran shows as never
+// executed (no loops) or is counted in its Append's Subplans Removed.
+func explainAnalyzeJSON(t *testing.T, pool *pgxpool.Pool, sql string, args ...any) planNode {
+	t.Helper()
+	return explainWith(t, pool, "analyze, format json", sql, args...)
+}
+
+func explainWith(t *testing.T, pool *pgxpool.Pool, options, sql string, args ...any) planNode {
+	t.Helper()
 	var raw []byte
-	if err := pool.QueryRow(context.Background(), `explain (format json) `+sql, args...).Scan(&raw); err != nil {
+	if err := pool.QueryRow(context.Background(), `explain (`+options+`) `+sql, args...).Scan(&raw); err != nil {
 		t.Fatalf("explain: %v", err)
 	}
 	var plans []struct {
@@ -113,22 +126,17 @@ func TestWorkItemTrail_plan_runsByTheRefIndexAndStepsPrunedToTheirMonths(t *test
 	at := &domain.WorkItemCursor{ClaimedAt: first, RunID: "run-card-0"}
 	requireRefIndex(t, pool, "a later page", filter, at, domain.DefaultWorkItemPage+1)
 
-	// The bounds the store reads before the summary: the card's first and
-	// last opening moment.
-	sql, args := ledger.WorkItemRolesSQL(filter, card, first, second.Add(time.Hour))
-	plan := explainJSON(t, pool, sql, args...)
-	var read []string
-	for _, r := range scannedRelations(plan) {
-		if strings.HasPrefix(r, "run_steps") {
-			read = append(read, r)
-		}
-	}
+	// The summary bounds run_steps by the span it computes itself, so the
+	// pruning happens while it runs: analysed, only the card's months execute.
+	sql, args := ledger.WorkItemRolesSQL(filter, card)
+	plan := explainAnalyzeJSON(t, pool, sql, args...)
+	read, pruned := runStepsPartitions(plan)
 	refIndex := false
 	for _, n := range planNodes(plan, nil) {
 		refIndex = refIndex || n.Index == "run_work_items_ref_idx"
 	}
 	want := []string{partitionOf(first), partitionOf(second)}
-	t.Logf("the role summary reads %v, ref index %v", read, refIndex)
+	t.Logf("the role summary reads %v, ref index %v; pruned while running: %s", read, refIndex, pruned)
 	if !slices.Equal(read, want) || !refIndex {
 		t.Errorf("the role summary reads %v (ref index %v); want only the card's months %v, by the ref index",
 			read, refIndex, want)
@@ -204,9 +212,18 @@ type queryCounter struct {
 	widest int
 	// most is the most rows any one statement returned.
 	most int64
+	// before, when set, runs just before each statement is sent, outside the
+	// lock: a test stages a concurrent commit at an exact point with it.
+	before func(sql string)
 }
 
 func (q *queryCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, d pgx.TraceQueryStartData) context.Context {
+	q.mu.Lock()
+	before := q.before
+	q.mu.Unlock()
+	if before != nil {
+		before(d.SQL)
+	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.asked = append(q.asked, strings.Join(strings.Fields(d.SQL), " "))
@@ -263,9 +280,9 @@ func countedLedger(t *testing.T) (*ledger.Postgres, *pgxpool.Pool, *queryCounter
 	return ledger.NewPostgres(pool), plain, counter
 }
 
-// Ten runs, each with approvals: the first page is three statements (the
-// page, the card's bounds, the role summary) and a later one is one. A read
-// per run would be twelve.
+// Ten runs, each with approvals: the first page is two statements (the
+// page, the role summary in one snapshot) and a later one is one. A read
+// per run would be eleven.
 func TestWorkItemTrail_statementsPerPage_doNotGrowWithTheRuns(t *testing.T) {
 	s, _, counter := countedLedger(t)
 	for i := range 10 {
@@ -280,8 +297,8 @@ func TestWorkItemTrail_statementsPerPage_doNotGrowWithTheRuns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first page: %v", err)
 	}
-	if asked := counter.take(); len(asked) != 3 {
-		t.Errorf("the first page ran %d statements, want 3 (page, bounds, roles): %q", len(asked), asked)
+	if asked := counter.take(); len(asked) != 2 {
+		t.Errorf("the first page ran %d statements, want 2 (page, roles): %q", len(asked), asked)
 	}
 	if _, err := s.WorkItemTrail(context.Background(), domain.RunFilter{}, nil, card,
 		domain.WorkItemPage{Limit: 4, After: first.Next}); err != nil {

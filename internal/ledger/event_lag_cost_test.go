@@ -24,13 +24,15 @@ const feedIndex = "runs_feed_idx"
 
 // planNode is the part of EXPLAIN (ANALYZE, FORMAT JSON) the bound is read from.
 type planNode struct {
-	NodeType       string     `json:"Node Type"`
-	Relation       string     `json:"Relation Name"`
-	Index          string     `json:"Index Name"`
-	ActualRows     float64    `json:"Actual Rows"`
-	ActualLoops    float64    `json:"Actual Loops"`
-	RemovedByFiltr float64    `json:"Rows Removed by Filter"`
-	Plans          []planNode `json:"Plans"`
+	NodeType       string  `json:"Node Type"`
+	Relation       string  `json:"Relation Name"`
+	Index          string  `json:"Index Name"`
+	ActualRows     float64 `json:"Actual Rows"`
+	ActualLoops    float64 `json:"Actual Loops"`
+	RemovedByFiltr float64 `json:"Rows Removed by Filter"`
+	// SubplansRemoved is how many partitions an Append pruned while it ran.
+	SubplansRemoved int        `json:"Subplans Removed"`
+	Plans           []planNode `json:"Plans"`
 }
 
 // runsScans collects every node of the plan that reads the runs table.

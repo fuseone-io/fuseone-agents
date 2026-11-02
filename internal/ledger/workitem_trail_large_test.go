@@ -2,6 +2,7 @@ package ledger_test
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -107,8 +108,8 @@ func TestWorkItemTrail_aCardWithALongHistory_readsABoundedFirstPage(t *testing.T
 		t.Fatalf("roles = %+v; want three roles over all %d runs, half approved, all costed", got.Roles, bigCard)
 	}
 	t.Logf("first page: %d statements, widest list argument %d, most rows from one statement %d", asked, widest, most)
-	if asked > 3 || widest > 0 || most > 51 {
-		t.Fatalf("first page ran %d statements, a list of %d, up to %d rows; want at most 3, no list, the page plus one",
+	if asked > 2 || widest > 0 || most > 51 {
+		t.Fatalf("first page ran %d statements, a list of %d, up to %d rows; want at most 2, no list, the page plus one",
 			asked, widest, most)
 	}
 }
@@ -119,9 +120,8 @@ func TestWorkItemTrail_plan_theRoleSummaryIsAnAggregatePrunedToTheCardsMonths(t 
 	seedBigCard(t, pool, months)
 	factory := domain.RunFilter{Scopes: []domain.Scope{areaFactory}}
 
-	lo, hi := months[0], months[2].Add(time.Duration(bigCard)*time.Second)
-	sql, args := ledger.WorkItemRolesSQL(factory, card, lo, hi)
-	plan := explainJSON(t, pool, sql, args...)
+	sql, args := ledger.WorkItemRolesSQL(factory, card)
+	plan := explainAnalyzeJSON(t, pool, sql, args...)
 
 	// Here the card is nearly the whole of run_work_items, so reading it whole
 	// is the right plan; the ref index is asserted where the card is a sliver
@@ -131,15 +131,34 @@ func TestWorkItemTrail_plan_theRoleSummaryIsAnAggregatePrunedToTheCardsMonths(t 
 	for _, n := range planNodes(plan, nil) {
 		aggregate = aggregate || n.NodeType == "Aggregate"
 	}
-	var steps []string
-	for _, r := range scannedRelations(plan) {
-		if strings.HasPrefix(r, "run_steps") {
-			steps = append(steps, r)
+	read, pruned := runStepsPartitions(plan)
+	want := []string{partitionOf(months[0]), partitionOf(months[1]), partitionOf(months[2])}
+	t.Logf("role summary: aggregate %v, run_steps partitions executed %v, pruned while running: %s",
+		aggregate, read, pruned)
+	if !aggregate || !slices.Equal(read, want) {
+		t.Fatalf("role summary plan: aggregate %v, executed %v; want an aggregate over only %v", aggregate, read, want)
+	}
+}
+
+// runStepsPartitions is, from an analysed plan, the run_steps partitions a
+// statement actually read — scanned at least once — and a note of how the
+// others were pruned while it ran: never executed, or removed from an Append.
+func runStepsPartitions(root planNode) ([]string, string) {
+	var read, idle []string
+	removed := 0
+	for _, n := range planNodes(root, nil) {
+		removed += n.SubplansRemoved
+		if !strings.HasPrefix(n.Relation, "run_steps_") {
+			continue
+		}
+		switch {
+		case n.ActualLoops > 0 && !slices.Contains(read, n.Relation):
+			read = append(read, n.Relation)
+		case n.ActualLoops == 0 && !slices.Contains(idle, n.Relation):
+			idle = append(idle, n.Relation)
 		}
 	}
-	want := []string{partitionOf(months[0]), partitionOf(months[1]), partitionOf(months[2])}
-	t.Logf("role summary: aggregate %v, run_steps read %v", aggregate, steps)
-	if !aggregate || !slices.Equal(steps, want) {
-		t.Fatalf("role summary plan: aggregate %v, reads %v; want an aggregate over only %v", aggregate, steps, want)
-	}
+	slices.Sort(read)
+	slices.Sort(idle)
+	return read, fmt.Sprintf("%d never executed %v, %d subplans removed", len(idle), idle, removed)
 }
