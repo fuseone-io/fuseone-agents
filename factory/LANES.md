@@ -40,8 +40,9 @@ These hold before any lane rule applies.
      those calls before the claim. Triage is told to list its lane only with
      `projects_list`, method `list_project_items`, and never to call the
      status-update methods before the claim. That is an instruction, not a
-     mechanism: the Gate classifies a tool, not its method. The Developer,
-     which lists the *Doing* lane, is told the same. The pilot accepts
+     mechanism: the Gate classifies a tool, not its method. The Architect,
+     which lists the same lane, and the Developer, which lists the *Doing*
+     lane, are told the same. The pilot accepts
      it within the claim's bounded blast radius below; preventing it
      mechanically needs the deferred narrow tool.
    - **The claim is the one write that follows a title unapproved.** The Gate
@@ -102,21 +103,80 @@ did). Done when the issue has:
 ### Triagem → `factory:needs-design`
 
 Added by **Triage** when the card is understood but has no plan or acceptance
-criteria and writing them needs design. The card stays in Triagem; the
-Architect takes it from there and removes the label when it moves the card.
-Done when the triage comment says what the design has to decide.
+criteria and writing them needs design. The card stays in Triagem; Triage
+skips it from then on, and the Architect takes it from there. Done when the
+triage comment says what the design has to decide.
+
+The **Architect** removes the label when it moves the card to Preparado, and
+removes it first: a card left in Triagem without it is Triage's again, which
+moves a card with a plan and criteria on, while a card left with it would be
+the Architect's oldest card on every run. A card it moves to Travado keeps the
+label, so a person who answers and moves it back to Triagem returns it to the
+Architect. If the label or the move cannot be written, the card goes to
+Travado, with that as the last comment.
 
 ### Any lane → Travado
 
 Moved by **any role**, when only a person can unblock the card. Done when:
 
-- [ ] the **last comment** on the issue is the reason, written as the question
-      a person must answer, addressed to who decides (the owner, for a product
-      decision);
+- [ ] the **last comment** on the issue or pull request the role worked on
+      names what blocks the card and the action that clears it, as a question or a request addressed to the
+      person who can take it (the owner, for a product decision), never as a
+      fact alone;
+- [ ] its **last line** names the lane the card returns to:
+      `Return to: Triagem` from Triage or the Architect,
+      `Return to: Doing` from the Developer, the Reviewer or QA;
 - [ ] nothing the role wrote after that comment.
+
+Triage and the Architect work the card's issue, so their comment is there.
+The Reviewer and QA work the pull request, and so does the Developer when it
+answers a review: their comment is on the pull request, and they move the card
+of the issue it closes. The operator finds that pull request from the card:
+it is the card itself when the pull request is on the board, or the one the
+card's **Linked pull requests** field lists.
 
 **Travado only leaves by a person.** No role moves a card out of Travado, and
 no role acts on a card in Travado: a role that lists its lane skips it.
+Clearing the blocker moves nothing on the board, so in v1 the lane has an
+owner:
+
+The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane named on that comment's last line, Triagem or Doing, leaving its labels as they are; that comment is the last one on the issue or pull request the role worked on, and a pull request is either the card itself or the one in the card's Linked pull requests field.
+
+The lane comes from the role that blocked the card, and its comment says so
+on its last line:
+
+- `Return to: Triagem` — Triage and the Architect. A card that still carries
+  `factory:needs-design` goes back to the Architect; one without it, to
+  Triage.
+- `Return to: Doing` — the Developer, the Reviewer and QA. The pull request
+  keeps its sub-state label (`factory:needs-review`, `factory:needs-qa`, …),
+  and the role that label names resumes it. Sent to Triagem instead, the card
+  would be triaged again while its pull request still waits in Doing.
+
+The role's comment is addressed to whoever can clear the blocker; the
+operator is who notices that it was cleared. A card nobody can move on, a
+person closes or keeps.
+
+Each way into Travado names its blocker and the action that clears it, and
+taking that action is what keeps the role from blocking the card again on its
+next run:
+
+| Role | Why it blocked | The action that clears it |
+|---|---|---|
+| Triage | only a person can answer what is missing | answer the question in a comment |
+| Triage | a duplicate | close one issue, or comment why both stay |
+| Triage | the issue is empty or unreadable | its author describes the request |
+| Architect | a decision belongs to the owner | answer each question in a comment |
+| Architect | an earlier run stopped half way | comment resume or discard: a person's comment after the plan is what lets the next run go on |
+| Architect | a sub-issue, the label or the move failed | fix it (create the label, grant the permission), then comment that it is fixed |
+| Architect | the card would change `factory/` or a `CLAUDE.md` | make that change yourself, or rewrite the request so it needs none, and comment which |
+| Architect | the issue is empty or unreadable | its author describes the request |
+| Developer | `factory:needs-runtime` could not be set | create the label (factory/agents/README.md § The labels) |
+| Developer | a decision only a person can make | answer the question in a comment |
+| Developer | a review finding needs a build or a test run | answer that finding yourself and relabel the pull request `factory:needs-review` |
+| Developer | the card would change `factory/` or a `CLAUDE.md` | make that change yourself, or rewrite the issue so it needs none |
+| Reviewer | the change cannot be judged without a person's decision | answer the question in a comment |
+| QA | a criterion cannot be judged without a person | answer the question in a comment |
 
 ### Preparado → Doing
 
@@ -148,8 +208,8 @@ the Developer skips it from then on. Done when:
 
 If the label cannot be set — it was never created in the repository
 (factory/agents/README.md § The labels) — the card goes to **Travado**
-instead, with that as the last comment: left in *Doing* unlabelled, it would
-be the oldest card again on every run.
+instead, with a last comment asking a person to create the label: left in
+*Doing* unlabelled, it would be the oldest card again on every run.
 
 The label waits for Level 2: build and test before a pull request, from a
 coding runtime behind one MCP tool (NT-013 § What the platform needs). The

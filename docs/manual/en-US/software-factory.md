@@ -1,8 +1,8 @@
 ---
 title: Software factory
-summary: Run agent roles that triage issues, make small changes and review pull requests on a GitHub repository, each with its own GitHub App, every GitHub write approved by a person.
+summary: Run agent roles that triage issues, plan them, make small changes and review pull requests on a GitHub repository, each with its own GitHub App, every GitHub write approved by a person.
 section: integrations
-tags: factory, github, github app, roles, triage, developer, review, qa, copilot
+tags: factory, github, github app, roles, triage, architect, plan, developer, review, qa, copilot
 order: 22
 ---
 
@@ -21,8 +21,10 @@ and the role instructions live, reviewed like code, in
 
 ## What the first version is
 
-- **Four roles.** Triage turns a new issue into a prepared card; the
-  Developer makes a small change and opens its pull request; the Reviewer
+- **Five roles.** Triage turns a new issue into a prepared card, or hands it
+  to the Architect with `factory:needs-design` when it needs a plan; the
+  Architect verifies the change in the code and writes its plan and
+  acceptance criteria on the issue; the Developer makes a small change and opens its pull request; the Reviewer
   reviews a pull request; QA checks it against CI and the acceptance
   criteria. Each role is an agent created in the console or the Studio.
 - **One GitHub App per role.** Each role reaches GitHub only through its own
@@ -60,7 +62,8 @@ and the role instructions live, reviewed like code, in
   the run ends, and puts the run's cost on that card. It writes nothing to
   GitHub, and every GitHub write after it waits for a person. A tool that
   picks and claims a card in one step, hiding even the title, is deferred.
-  The Developer lists the Doing lane the same way and is told the same.
+  The Architect lists the Triagem lane, and the Developer the Doing lane,
+  the same way, and both are told the same.
 
 The repository is public, so issue and pull request text is untrusted: a run
 that read it can never take a destructive action, and its GitHub writes need
@@ -93,12 +96,15 @@ works, and give it only what its tools need:
 | Role | Repository permissions | Organisation permissions |
 |---|---|---|
 | Triage | Issues: write, Pull requests: read, Metadata: read | Projects: write |
+| Architect | Contents: read, Issues: write, Metadata: read | Projects: write |
 | Reviewer | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | Developer | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
 
 QA's verdict is a pull request review, so QA needs Pull requests: write just
-like the Reviewer. Do not give the Developer's App the Workflows permission:
+like the Reviewer. The Architect reads the code and writes only issues and the
+board: give its App Contents: **read**, never write, so GitHub refuses any
+file or branch it could be talked into writing. Do not give the Developer's App the Workflows permission:
 without it, GitHub refuses any change the Developer makes under
 `.github/workflows`. Generate a private key for each App and note its App id
 and installation id.
@@ -151,9 +157,9 @@ is needed in v1.
 ## 3. Register the GitHub server once per role
 
 In the administration, register the hosted GitHub MCP server
-(`https://api.githubcopilot.com/mcp/`) four times, one per role, with the id
-`github-<role>`: `github-triage`, `github-reviewer`, `github-qa`,
-`github-developer`. Choose the
+(`https://api.githubcopilot.com/mcp/`) five times, one per role, with the id
+`github-<role>`: `github-triage`, `github-architect`, `github-reviewer`,
+`github-qa`, `github-developer`. Choose the
 **GitHub App** credential and fill in that role's App (see
 [MCPs and credentials](mcp-and-credentials.md), section "GitHub App").
 
@@ -163,6 +169,7 @@ The hosted server's default toolsets do not include `projects`, so set the
 | Role | Toolsets |
 |---|---|
 | Triage | `issues,projects` |
+| Architect | `issues,projects,repos` |
 | Reviewer | `pull_requests,repos,issues,projects` |
 | QA | `pull_requests,repos,issues,projects` |
 | Developer | `pull_requests,repos,issues,projects` |
@@ -181,11 +188,18 @@ of the board's issues and pull requests even when asked for no fields (#220).
 
 | Classify as | Tools |
 |---|---|
-| read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `get_commit` |
+| read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `list_commits`, `get_commit` |
 | write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `projects_write`, `create_branch`, `create_or_update_file`, `push_files`, `create_pull_request` |
 
 Classify each tool on every role's server: `github-triage.projects_list` and
-`github-reviewer.projects_list` are separate entries.
+`github-reviewer.projects_list` are separate entries. `issue_write` is also how
+the Architect creates a sub-issue under the card's issue, so it stays a write
+on `github-architect` too.
+
+The Architect's `repos` toolset also offers file and branch writes, and no
+header removes them on the same server: `X-MCP-Readonly` would remove its
+issue writes as well. Its reference declares none of them, and its App's
+Contents: read refuses them.
 
 `projects_write` moves cards and can also remove an item. Classify it as a
 **write**, not destructive: a removed card can be added back, and a person
@@ -207,6 +221,7 @@ instead of spending:
 | Role | Schedule | Ceiling per run | Tool calls | Steps |
 |---|---|---|---|---|
 | Triage | every hour at :00 | 500,000 micros | 30 | 60 |
+| Architect | every hour at :20 | 2,000,000 micros | 80 | 160 |
 | Reviewer | every hour at :15 | 2,000,000 micros | 80 | 160 |
 | QA | every hour at :45 | 1,000,000 micros | 50 | 100 |
 | Developer | every hour at :30 | 3,000,000 micros | 100 | 200 |
@@ -220,6 +235,7 @@ For each role, create the agent in the Studio from its reference: the
 frontmatter's fields, and the body as its instructions.
 
 - [Triage](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/triage.agent.md)
+- [Architect](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/architect.agent.md)
 - [Reviewer](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/reviewer.agent.md)
 - [QA](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/qa.agent.md)
 - [Developer](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/developer.agent.md)
@@ -243,6 +259,30 @@ What the roles follow is in the same directory:
 [role references README](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/README.md)
 explains every line of a reference.
 
+## What the Architect does
+
+The Architect takes the oldest Triagem card labelled `factory:needs-design`,
+which Triage leaves to it. It checks every claim about the code in the code,
+with read tools only, and writes the plan and its acceptance criteria as a
+comment on the issue: the issue's body stays the requester's, and a later plan
+is a new comment rather than an edit. A large item is split into sub-issues,
+created under the card's issue. Then:
+
+- with no decision open, it removes `factory:needs-design` and moves the card
+  to Preparado, where a person pulls it into Doing;
+- when a decision belongs to the owner, it writes the plan so far and each
+  open decision as a question, @mentioning whoever decides so GitHub
+  notifies them, and moves the card to Travado, keeping the label, so the
+  card comes back to it once the question is answered and the board operator
+  returns it to Triagem, as its comment's last line says (below);
+- if a sub-issue, the label or the move cannot be written, it says which on
+  the issue and moves the card to Travado, so the card is not picked again
+  every hour.
+
+It never writes code, opens a branch or a pull request, or plans a change to
+`factory/` or the `CLAUDE.md` files. Its App needs no ruleset on `main`
+before it starts: with Contents: read it cannot write there.
+
 ## What the Developer does, and what waits
 
 The Developer works at **Level 1**: small, self-contained changes made
@@ -265,6 +305,32 @@ MCP tool: the intended runtime is
 [FuseOne Forja](https://github.com/fuseone-io/fuseone-forja), a separate
 project still at its proposed phase 0, with `forja.implement` as a write tool
 under the Gate.
+
+## Who takes a card out of Travado
+
+No role moves a card out of Travado, and clearing what blocked it does not
+move it either. In the first version this is a person's standing
+job, given to whoever operates the board:
+
+The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane named on that comment's last line, Triagem or Doing, leaving its labels as they are; that comment is the last one on the issue or pull request the role worked on, and a pull request is either the card itself or the one in the card's Linked pull requests field.
+
+Triage and the Architect write that comment on the card's issue; the
+Reviewer, QA and the Developer answering a review write it on the pull
+request, which is the card itself or the one in the card's **Linked pull
+requests** field. The last line of that comment is fixed: `Return to: Triagem` when Triage or
+the Architect blocked the card, `Return to: Doing` when the Developer, the
+Reviewer or QA did. A card back in Triagem that still carries
+`factory:needs-design` resumes with the Architect; a card back in Doing
+keeps its pull request's label, so the role that label names resumes it.
+
+The role that blocked the card says in that comment what blocks it and what
+a person must do to clear it — answer a question, create a missing label,
+say whether to resume or discard a half-finished plan — never only what
+happened. Taking that action is what keeps the role from blocking the card
+again on its next run; the operator is who notices it was taken.
+[LANES](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/LANES.md)
+lists every way into Travado and its action. Without someone in this job, a
+blocked card waits forever.
 
 ## Changing a role
 

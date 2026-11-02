@@ -61,7 +61,7 @@ const triageReference = "../../factory/agents/triage.agent.md"
 var hostedToolsets = map[string][]string{
 	"issues":   {"issue_read", "list_issues", "search_issues", "add_issue_comment", "issue_write"},
 	"projects": {"projects_list", "projects_get", "projects_write"},
-	"repos": {"get_file_contents", "search_code", "get_commit",
+	"repos": {"get_file_contents", "search_code", "get_commit", "list_commits",
 		"create_branch", "create_or_update_file", "push_files"},
 	"pull_requests": {"search_pull_requests", "pull_request_read", "create_pull_request"},
 }

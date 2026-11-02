@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/fuseone/agents/internal/spec"
 )
 
 // The factory routes cards by labels, and GitHub applies only labels the
@@ -120,6 +122,36 @@ func decodeJSON(data string) (any, error) {
 	return v, err
 }
 
+// No role moves a card out of Travado, and answering the question on the
+// issue moves nothing: without a person whose job is the Travado lane, a
+// blocked card sits there forever. In v1 that person is the board operator,
+// stated in one exact sentence per language wherever the lanes and the setup
+// are described. A card goes back where it was blocked, not to one lane for
+// all: a pull request blocked in Doing sent to Triagem would be triaged again
+// while it still carries its sub-state label. The blocking comment names the
+// lane (factory_references_test.go, returnLines).
+const (
+	travadoOperatorEN = "The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane named on that comment's last line, Triagem or Doing, leaving its labels as they are; that comment is the last one on the issue or pull request the role worked on, and a pull request is either the card itself or the one in the card's Linked pull requests field."
+	travadoOperatorPT = "Quem opera o board revisa a coluna Travado todo dia útil e, quando o bloqueio indicado no comentário que travou um card é resolvido, devolve o card para a coluna indicada na última linha desse comentário, Triagem ou Doing, sem mexer nos rótulos; esse comentário é o último da issue ou do pull request em que o papel trabalhou, e o pull request é o próprio card ou o que aparece no campo Linked pull requests do card."
+)
+
+func TestFactorySetup_travado_hasTheBoardOperatorAsItsOwnerInEveryText(t *testing.T) {
+	t.Parallel()
+
+	want := map[string]string{
+		"../../factory/LANES.md":                      travadoOperatorEN,
+		"../../factory/agents/README.md":              travadoOperatorEN,
+		"../../docs/manual/en-US/software-factory.md": travadoOperatorEN,
+		"../../docs/manual/pt-BR/software-factory.md": travadoOperatorPT,
+	}
+	for path, sentence := range want {
+		lines := strings.Split(readFile(t, path), "\n")
+		if count := countLines(lines, sentence); count != 1 {
+			t.Errorf("%s carries the Travado owner line %d times, want 1", path, count)
+		}
+	}
+}
+
 // namesTheFullRuleset catches the wording the prerequisite must not use: #207
 // is the deferred, full ruleset, never the one to install in v1.
 var namesTheFullRuleset = regexp.MustCompile(`(?i)#207\s+ruleset|ruleset\s+(of|da|de|do)\s+(issue\s+)?#207`)
@@ -190,6 +222,49 @@ func TestFactorySetup_everyLabelTheRolesUse_isCreatedByTheSetup(t *testing.T) {
 			prefix := "gh label create " + label + " "
 			if !slices.ContainsFunc(lines, func(line string) bool { return strings.HasPrefix(line, prefix) }) {
 				t.Errorf("%s has no line starting %q", path, prefix)
+			}
+		}
+	}
+}
+
+// factoryServers is every MCP server the role references reach, read from
+// their tools (github-<role>.<tool>), sorted. Platform tools ($fuseone.*)
+// need no registration.
+func factoryServers(t *testing.T) []string {
+	t.Helper()
+	var servers []string
+	for role, data := range factoryReferences(t) {
+		s, err := spec.Parse(role, data)
+		if err != nil {
+			t.Fatalf("parse %s: %v", role, err)
+		}
+		for _, tool := range s.Tools {
+			server, _, ok := strings.Cut(string(tool), ".")
+			if !ok || strings.HasPrefix(server, "$") || slices.Contains(servers, server) {
+				continue
+			}
+			servers = append(servers, server)
+		}
+	}
+	slices.Sort(servers)
+	return servers
+}
+
+// A role whose server the setup never names is a role nobody registers as
+// documented: its publish is refused for every GitHub tool it declares.
+func TestFactorySetup_everyServerTheRolesReach_isNamedByTheSetup(t *testing.T) {
+	t.Parallel()
+
+	servers := factoryServers(t)
+	// The anchor: an empty scan would pass on any setup text.
+	if !slices.Contains(servers, "github-triage") || !slices.Contains(servers, "github-developer") {
+		t.Fatalf("servers read from the references = %v; the scan is broken", servers)
+	}
+	for _, path := range factorySetupTexts {
+		text := readFile(t, path)
+		for _, server := range servers {
+			if !strings.Contains(text, "`"+server+"`") {
+				t.Errorf("%s never names the server `%s`", path, server)
 			}
 		}
 	}

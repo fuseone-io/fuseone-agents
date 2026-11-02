@@ -1,8 +1,8 @@
 ---
 title: Fábrica de software
-summary: Rode papéis de agentes que fazem a triagem de issues, fazem mudanças pequenas e revisam pull requests num repositório do GitHub, cada um com o seu GitHub App e toda escrita no GitHub aprovada por uma pessoa.
+summary: Rode papéis de agentes que fazem a triagem de issues, planejam, fazem mudanças pequenas e revisam pull requests num repositório do GitHub, cada um com o seu GitHub App e toda escrita no GitHub aprovada por uma pessoa.
 section: integrations
-tags: fábrica, github, github app, papéis, triagem, desenvolvedor, revisão, qa, copiloto
+tags: fábrica, github, github app, papéis, triagem, arquiteto, plano, desenvolvedor, revisão, qa, copiloto
 order: 22
 ---
 
@@ -22,8 +22,10 @@ e as instruções dos papéis ficam, revisadas como código, em
 
 ## O que é a primeira versão
 
-- **Quatro papéis.** A Triagem transforma uma issue nova num card preparado;
-  o Desenvolvedor faz uma mudança pequena e abre o pull request dela; o
+- **Cinco papéis.** A Triagem transforma uma issue nova num card preparado,
+  ou passa o card para o Arquiteto com `factory:needs-design` quando ele
+  precisa de um plano; o Arquiteto confere a mudança no código e escreve o
+  plano e os critérios de aceite na issue; o Desenvolvedor faz uma mudança pequena e abre o pull request dela; o
   Revisor revisa um pull request; o QA confere o pull request contra o CI e os
   critérios de aceite. Cada papel é um agente criado no console ou no Studio.
 - **Um GitHub App por papel.** Cada papel só alcança o GitHub pelo seu próprio
@@ -63,8 +65,9 @@ e as instruções dos papéis ficam, revisadas como código, em
   o card quando o run termina e lança o custo do run nesse card. Ele não
   escreve nada no GitHub, e toda escrita no GitHub depois dele espera uma
   pessoa. Uma ferramenta que escolhe e faz o claim do card de uma vez,
-  escondendo até o título, ficou para depois. O Desenvolvedor lista a coluna
-  Doing do mesmo jeito e recebe a mesma instrução.
+  escondendo até o título, ficou para depois. O Arquiteto lista a coluna
+  Triagem, e o Desenvolvedor a coluna Doing, do mesmo jeito, e os dois
+  recebem a mesma instrução.
 
 O repositório é público, então o texto de issues e pull requests não é
 confiável: um run que leu esse texto nunca pode executar uma ação destrutiva,
@@ -98,12 +101,15 @@ fábrica trabalha e dê a ele só o que as ferramentas do papel precisam:
 | Papel | Permissões no repositório | Permissões na organização |
 |---|---|---|
 | Triagem | Issues: write, Pull requests: read, Metadata: read | Projects: write |
+| Arquiteto | Contents: read, Issues: write, Metadata: read | Projects: write |
 | Revisor | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | Desenvolvedor | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
 
 O veredito do QA é uma revisão de pull request, então o QA precisa de Pull
-requests: write, assim como o Revisor. Não dê a permissão Workflows ao App do
+requests: write, assim como o Revisor. O Arquiteto lê o código e só escreve
+em issues e no board: dê ao App dele Contents: **read**, nunca write, para que
+o GitHub recuse qualquer arquivo ou branch que tentem convencê-lo a escrever. Não dê a permissão Workflows ao App do
 Desenvolvedor: sem ela, o GitHub recusa qualquer mudança que o Desenvolvedor
 faça em `.github/workflows`. Gere uma chave privada para cada App e anote o
 ID do App e o ID da instalação.
@@ -158,9 +164,9 @@ para depois
 ## 3. Registre o servidor do GitHub uma vez por papel
 
 Na administração, registre o GitHub MCP hospedado
-(`https://api.githubcopilot.com/mcp/`) quatro vezes, uma por papel, com o id
-`github-<papel>`: `github-triage`, `github-reviewer`, `github-qa`,
-`github-developer`. Escolha a
+(`https://api.githubcopilot.com/mcp/`) cinco vezes, uma por papel, com o id
+`github-<papel>`: `github-triage`, `github-architect`, `github-reviewer`,
+`github-qa`, `github-developer`. Escolha a
 credencial **GitHub App** e preencha o App daquele papel (veja
 [MCPs e credenciais](mcp-and-credentials.md), seção "GitHub App").
 
@@ -171,6 +177,7 @@ registros:
 | Papel | Toolsets |
 |---|---|
 | Triagem | `issues,projects` |
+| Arquiteto | `issues,projects,repos` |
 | Revisor | `pull_requests,repos,issues,projects` |
 | QA | `pull_requests,repos,issues,projects` |
 | Desenvolvedor | `pull_requests,repos,issues,projects` |
@@ -191,12 +198,18 @@ quando não se pede nenhum campo (#220).
 
 | Classifique como | Ferramentas |
 |---|---|
-| read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `get_commit` |
+| read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `list_commits`, `get_commit` |
 | write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `projects_write`, `create_branch`, `create_or_update_file`, `push_files`, `create_pull_request` |
 
 Classifique cada ferramenta no servidor de cada papel:
 `github-triage.projects_list` e `github-reviewer.projects_list` são entradas
-separadas.
+separadas. O `issue_write` também é como o Arquiteto cria uma sub-issue embaixo
+da issue do card, então ele continua sendo write no `github-architect`.
+
+O toolset `repos` do Arquiteto também oferece escritas de arquivo e de branch,
+e nenhum header tira essas ferramentas no mesmo servidor: o `X-MCP-Readonly`
+tiraria também as escritas em issues. A referência dele não declara nenhuma
+delas, e o Contents: read do App dele as recusa.
 
 O `projects_write` move cards e também pode remover um item. Classifique como
 **write**, não como destructive: um card removido pode ser adicionado de novo,
@@ -218,6 +231,7 @@ em vez de gastar:
 | Papel | Horário | Teto por run | Chamadas de ferramenta | Passos |
 |---|---|---|---|---|
 | Triagem | toda hora, aos :00 | 500.000 micros | 30 | 60 |
+| Arquiteto | toda hora, aos :20 | 2.000.000 micros | 80 | 160 |
 | Revisor | toda hora, aos :15 | 2.000.000 micros | 80 | 160 |
 | QA | toda hora, aos :45 | 1.000.000 micros | 50 | 100 |
 | Desenvolvedor | toda hora, aos :30 | 3.000.000 micros | 100 | 200 |
@@ -231,6 +245,7 @@ Para cada papel, crie o agente no Studio a partir da referência: os campos do
 frontmatter, e o corpo como instruções.
 
 - [Triagem](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/triage.agent.md)
+- [Arquiteto](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/architect.agent.md)
 - [Revisor](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/reviewer.agent.md)
 - [QA](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/qa.agent.md)
 - [Desenvolvedor](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/developer.agent.md)
@@ -253,6 +268,32 @@ O que os papéis seguem está no mesmo diretório:
 (o que significa pronto em cada coluna e rótulo). O
 [README das referências](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/README.md)
 explica cada linha de uma referência.
+
+## O que o Arquiteto faz
+
+O Arquiteto pega o card mais antigo da coluna Triagem com o rótulo
+`factory:needs-design`, que a Triagem deixa para ele. Ele confere no código
+cada afirmação sobre o código, só com ferramentas de leitura, e escreve o
+plano e os critérios de aceite num comentário na issue: o corpo da issue
+continua sendo de quem pediu, e um plano novo é um comentário novo, não uma
+edição. Um item grande é dividido em sub-issues, criadas embaixo da issue do
+card. Depois:
+
+- sem nenhuma decisão em aberto, ele tira o `factory:needs-design` e move o
+  card para Preparado, de onde uma pessoa o puxa para Doing;
+- quando uma decisão cabe ao dono, ele escreve o plano até ali e cada decisão
+  em aberto como pergunta, mencionando com @ quem decide para que o GitHub
+  avise essa pessoa, e move o card para Travado mantendo o rótulo, para que o
+  card volte para ele quando a pergunta for respondida e quem opera o board o
+  devolver para Triagem, como diz a última linha do comentário (abaixo);
+- se uma sub-issue, o rótulo ou a movimentação não puder ser gravado, ele diz
+  qual na issue e move o card para Travado, para que o card não seja escolhido
+  de novo a cada hora.
+
+Ele nunca escreve código, nunca abre branch nem pull request e nunca planeja
+uma mudança em `factory/` ou nos arquivos `CLAUDE.md`. O App dele não precisa
+de ruleset no `main` antes de começar: com Contents: read, ele não consegue
+escrever lá.
 
 ## O que o Desenvolvedor faz, e o que fica esperando
 
@@ -277,6 +318,34 @@ código atrás de uma única ferramenta MCP: o runtime previsto é o
 [FuseOne Forja](https://github.com/fuseone-io/fuseone-forja), um projeto à
 parte, ainda na fase 0 proposta, com `forja.implement` como ferramenta de
 escrita sob o Gate.
+
+## Quem tira um card de Travado
+
+Nenhum papel tira um card de Travado, e resolver o que o travou também não
+move o card. Na primeira versão isso é uma tarefa fixa de uma pessoa,
+dada a quem opera o board:
+
+Quem opera o board revisa a coluna Travado todo dia útil e, quando o bloqueio indicado no comentário que travou um card é resolvido, devolve o card para a coluna indicada na última linha desse comentário, Triagem ou Doing, sem mexer nos rótulos; esse comentário é o último da issue ou do pull request em que o papel trabalhou, e o pull request é o próprio card ou o que aparece no campo Linked pull requests do card.
+
+A Triagem e o Arquiteto escrevem esse comentário na issue do card; o
+Revisor, o QA e o Desenvolvedor, quando responde a uma revisão, escrevem no
+pull request, que é o próprio card ou o que aparece no campo **Linked pull
+requests** do card. A última linha desse comentário é fixa: `Return to: Triagem` quando quem
+travou o card foi a Triagem ou o Arquiteto, `Return to: Doing` quando foi o
+Desenvolvedor, o Revisor ou o QA. Um card que volta para Triagem ainda com
+`factory:needs-design` é retomado pelo Arquiteto; um card que volta para Doing
+mantém o rótulo do pull request, e o papel indicado por esse rótulo o
+retoma.
+
+O papel que travou o card diz nesse comentário o que bloqueia o card e o que
+uma pessoa precisa fazer para resolver — responder a uma pergunta, criar um
+rótulo que falta, dizer se um plano pela metade deve ser retomado ou
+descartado —, nunca só o que aconteceu. É essa ação que impede o papel de
+travar o card de novo no próximo run; quem opera o board é quem percebe que
+ela foi feita. O
+[LANES](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/LANES.md)
+lista cada caminho para Travado e a ação de cada um. Sem alguém nessa tarefa,
+um card travado fica esperando para sempre.
 
 ## Mudando um papel
 
