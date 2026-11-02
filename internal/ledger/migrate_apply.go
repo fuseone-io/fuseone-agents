@@ -2,9 +2,7 @@ package ledger
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -129,6 +127,13 @@ func applyOutsideTransaction(ctx context.Context, conn migrator, version string,
 	if err != nil {
 		return fmt.Errorf("apply %s: %w", version, err)
 	}
+	// Every table resolves before anything runs: one that does not leaves no
+	// schema to look in for a leftover, and the file would fail part-way.
+	for _, statement := range statements {
+		if _, err := indexSchema(ctx, conn, statement); err != nil {
+			return fmt.Errorf("apply %s: %w", version, err)
+		}
+	}
 	for _, statement := range statements {
 		if err := runStatement(ctx, conn, statement); err != nil {
 			return fmt.Errorf("apply %s: %w", version, err)
@@ -139,7 +144,7 @@ func applyOutsideTransaction(ctx context.Context, conn migrator, version string,
 
 func runStatement(ctx context.Context, conn migrator, statement indexStatement) error {
 	if statement.create {
-		if err := dropInvalidIndex(ctx, conn, statement.name); err != nil {
+		if err := dropInvalidIndex(ctx, conn, statement); err != nil {
 			return err
 		}
 	}
@@ -147,132 +152,59 @@ func runStatement(ctx context.Context, conn migrator, statement indexStatement) 
 	return err
 }
 
-// dropInvalidIndex drops, concurrently, an index of that name in the current
-// schema that a failed concurrent build left INVALID. A valid one is kept.
-func dropInvalidIndex(ctx context.Context, conn migrator, name string) error {
-	rows, err := conn.Query(ctx, `select i.indisvalid from pg_index i
-		join pg_class c on c.oid = i.indexrelid
-		where c.relname = $1 and c.relnamespace = current_schema()::regnamespace`, name)
+// indexState is where a create's index lands — its table's schema, resolved
+// as PostgreSQL resolves the table (qualified, or through search_path) — and
+// whether an index of that name is already there, valid or not.
+type indexState struct {
+	schema string
+	exists bool
+	valid  bool
+}
+
+// indexSchema resolves a create's table with to_regclass and reads the index
+// of that name in the table's schema. A table that does not resolve is an
+// error. A drop has no table and nothing to resolve.
+func indexSchema(ctx context.Context, conn migrator, statement indexStatement) (indexState, error) {
+	if !statement.create {
+		return indexState{}, nil
+	}
+	rows, err := conn.Query(ctx, `select n.nspname, i.indisvalid
+		from pg_class t
+		join pg_namespace n on n.oid = t.relnamespace
+		left join pg_class c on c.relname = $2 and c.relnamespace = t.relnamespace
+		left join pg_index i on i.indexrelid = c.oid
+		where t.oid = to_regclass($1)`, statement.table, statement.name)
 	if err != nil {
-		return fmt.Errorf("check index %s: %w", name, err)
+		return indexState{}, fmt.Errorf("resolve table %s: %w", statement.table, err)
 	}
-	valid, err := pgx.CollectRows(rows, pgx.RowTo[bool])
+	found, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (indexState, error) {
+		var st indexState
+		var valid *bool
+		err := row.Scan(&st.schema, &valid)
+		st.exists, st.valid = valid != nil, valid != nil && *valid
+		return st, err
+	})
 	if err != nil {
-		return fmt.Errorf("check index %s: %w", name, err)
+		return indexState{}, fmt.Errorf("resolve table %s: %w", statement.table, err)
 	}
-	if len(valid) == 0 || valid[0] {
-		return nil
+	if len(found) == 0 {
+		return indexState{}, fmt.Errorf("table %s does not resolve", statement.table)
 	}
-	if _, err := conn.Exec(ctx, `drop index concurrently `+pgx.Identifier{name}.Sanitize()); err != nil {
-		return fmt.Errorf("drop invalid index %s: %w", name, err)
+	return found[0], nil
+}
+
+// dropInvalidIndex drops, concurrently, the index a create names when a
+// failed concurrent build left it INVALID in its table's schema. A valid one
+// is kept. The drop is qualified with that schema, so it acts on exactly the
+// index that was found.
+func dropInvalidIndex(ctx context.Context, conn migrator, statement indexStatement) error {
+	st, err := indexSchema(ctx, conn, statement)
+	if err != nil || !st.exists || st.valid {
+		return err
+	}
+	if _, err := conn.Exec(ctx,
+		`drop index concurrently `+pgx.Identifier{st.schema, statement.name}.Sanitize()); err != nil {
+		return fmt.Errorf("drop invalid index %s.%s: %w", st.schema, statement.name, err)
 	}
 	return nil
-}
-
-/*
-splitStatements cuts a marked file into statements — each ends at a line
-ending in a semicolon, comment lines never end one, and a chunk of only
-comments is no statement — and parses every one before any runs, so a file
-outside the grammar fails having touched nothing.
-*/
-func splitStatements(body string) ([]indexStatement, error) {
-	texts, err := cutStatements(body)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]indexStatement, 0, len(texts))
-	for _, text := range texts {
-		parsed, err := parseIndexStatement(text)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, parsed)
-	}
-	return out, nil
-}
-
-// indexStatement is one statement a marked file may run, as the one parser
-// read it: the fence and the runner both take it from here, so what was
-// allowed and what is run cannot disagree.
-type indexStatement struct {
-	create bool   // create index concurrently if not exists, else drop
-	name   string // the index, plain: unquoted, unqualified, as PostgreSQL folds it
-	text   string // the statement as written
-}
-
-/*
-indexGrammar is the whole of what a marked file may hold, and only in forms
-that are safe to run again after a crash:
-
-	create index concurrently if not exists <name> on …
-	drop index concurrently if exists <name>
-
-The name is plain — [a-z_][a-z0-9_]* after folding, unquoted, unqualified —
-so the runner checks exactly the index the statement names for an INVALID
-leftover. Without "if [not] exists" a re-run after a crash fails on a
-duplicate or a missing index; a quoted or qualified name is one the check
-would not find. A unique index is refused: a failed unique build leaves an
-INVALID index that still enforces uniqueness on writes, and nothing here
-needs one. Keywords match in any case, as PostgreSQL reads them; the
-statement is lowered and its spaces collapsed before matching.
-*/
-var indexGrammar = regexp.MustCompile(
-	`^(?:(create) index concurrently if not exists ([a-z_][a-z0-9_]*) on \S|(drop) index concurrently if exists ([a-z_][a-z0-9_]*) ?;?$)`)
-
-// dollarQuote matches any dollar quote, $$ or named ($body$): quoting is
-// refused rather than parsed, since a quoted body could hide any statement.
-var dollarQuote = regexp.MustCompile(`\$[A-Za-z_]*\$`)
-
-var errDollarQuote = errors.New("a no-transaction migration may not use dollar quoting")
-
-func parseIndexStatement(text string) (indexStatement, error) {
-	if dollarQuote.MatchString(text) {
-		return indexStatement{}, errDollarQuote
-	}
-	normal := normalised(text)
-	m := indexGrammar.FindStringSubmatch(normal)
-	switch {
-	case m == nil:
-		return indexStatement{}, fmt.Errorf("a no-transaction migration may only hold "+
-			"create index concurrently if not exists <name> on … or drop index concurrently if exists <name>, "+
-			"with a plain name; not %q", normal)
-	case m[1] == "create":
-		return indexStatement{create: true, name: m[2], text: text}, nil
-	default:
-		return indexStatement{name: m[4], text: text}, nil
-	}
-}
-
-// normalised is a statement's code, lower case, with runs of space as one.
-func normalised(statement string) string {
-	return strings.ToLower(strings.Join(strings.Fields(code(statement)), " "))
-}
-
-func cutStatements(body string) ([]string, error) {
-	var out []string
-	var current []string
-	for _, line := range strings.Split(body, "\n") {
-		trimmed := strings.TrimSpace(line)
-		current = append(current, line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "--") || !strings.HasSuffix(trimmed, ";") {
-			continue
-		}
-		out = append(out, strings.Join(current, "\n"))
-		current = nil
-	}
-	if code(strings.Join(current, "\n")) != "" {
-		return nil, fmt.Errorf("a no-transaction migration ends in an unterminated statement")
-	}
-	return out, nil
-}
-
-// code is a statement without its comment lines.
-func code(statement string) string {
-	var kept []string
-	for _, line := range strings.Split(statement, "\n") {
-		if trimmed := strings.TrimSpace(line); trimmed != "" && !strings.HasPrefix(trimmed, "--") {
-			kept = append(kept, trimmed)
-		}
-	}
-	return strings.Join(kept, " ")
 }

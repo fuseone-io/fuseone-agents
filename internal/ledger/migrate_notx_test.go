@@ -329,6 +329,10 @@ func TestMigrate_aNoTransactionFile_runsOnlyConcurrentIndexStatements(t *testing
 		// INVALID index that still enforces uniqueness on writes, and nothing
 		// here needs one.
 		"a unique index": allowedThen("create unique index concurrently if not exists probe_label_idx on probe (label);"),
+		// The index's schema is its table's: a table that does not resolve
+		// leaves nowhere to look for an INVALID leftover.
+		"a table that does not resolve": allowedThen(
+			"create index concurrently if not exists probe_label_idx on no_such_table (label);"),
 	}
 	for name, marked := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -431,4 +435,83 @@ func TestMigrate_anInvalidLeftoverNamedInMixedCase_isRebuilt(t *testing.T) {
 		where indexrelid = 'probe_idx'::regclass`).Scan(&valid); err != nil || !valid {
 		t.Fatalf("probe_idx valid = %v, %v; want the leftover rebuilt", valid, err)
 	}
+}
+
+// invalidIndexIn leaves an INVALID probe_idx on schema.probe, then makes the
+// labels distinct so a rebuild can succeed.
+func invalidIndexIn(t *testing.T, pool *pgxpool.Pool, schema string) {
+	t.Helper()
+	for _, stmt := range []string{
+		// The database is reused across runs and only public is emptied.
+		`drop schema if exists ` + schema + ` cascade`,
+		`create schema ` + schema,
+		`create table ` + schema + `.probe (label text)`,
+		`insert into ` + schema + `.probe values ('same'), ('same')`,
+	} {
+		if _, err := pool.Exec(t.Context(), stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+	if _, err := pool.Exec(t.Context(),
+		`create unique index concurrently probe_idx on `+schema+`.probe (label)`); err == nil {
+		t.Fatal("the failing build succeeded")
+	}
+	if _, err := pool.Exec(t.Context(),
+		`delete from `+schema+`.probe where ctid = (select min(ctid) from `+schema+`.probe)`); err != nil {
+		t.Fatalf("make the labels distinct: %v", err)
+	}
+}
+
+// requireValidIn asserts schema.probe_idx exists and is valid.
+func requireValidIn(t *testing.T, pool *pgxpool.Pool, schema string) {
+	t.Helper()
+	var valid bool
+	if err := pool.QueryRow(t.Context(), `select indisvalid from pg_index
+		where indexrelid = to_regclass($1)`, schema+".probe_idx").Scan(&valid); err != nil || !valid {
+		t.Fatalf("%s.probe_idx valid = %v, %v; want the leftover rebuilt where the table lives", schema, valid, err)
+	}
+}
+
+/*
+An index lives in its table's schema, not in current_schema(). Over an
+INVALID other.probe_idx, a build on other.probe must find that leftover and
+rebuild it there — never be recorded with the index still invalid.
+*/
+func TestMigrate_anInvalidLeftoverOnAQualifiedTable_isRebuiltInItsSchema(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_schema")
+	invalidIndexIn(t, pool, "other")
+	marked := "-- fuseone:no-transaction\n" +
+		"create index concurrently if not exists probe_idx on other.probe (label);\n"
+
+	if err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{{Version: "0001_marked", Body: marked}}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	requireValidIn(t, pool, "other")
+}
+
+/*
+An unqualified table resolves through search_path, possibly to a schema past
+the first. With search_path = lacks, other and probe only in other, the build
+lands in other, so the leftover is looked for — and rebuilt — there.
+*/
+func TestMigrate_anInvalidLeftoverOnATableFoundThroughSearchPath_isRebuiltInItsSchema(t *testing.T) {
+	admin := freshDatabase(t, "ledger/migrate_notx_search_path")
+	invalidIndexIn(t, admin, "other")
+	if _, err := admin.Exec(t.Context(), `drop schema if exists lacks cascade; create schema lacks`); err != nil {
+		t.Fatalf("create lacks: %v", err)
+	}
+	cfg := admin.Config().Copy()
+	cfg.ConnConfig.RuntimeParams["search_path"] = "lacks, other"
+	pool, err := pgxpool.NewWithConfig(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("connect with search_path: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	marked := "-- fuseone:no-transaction\n" +
+		"create index concurrently if not exists probe_idx on probe (label);\n"
+
+	if err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{{Version: "0001_marked", Body: marked}}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	requireValidIn(t, admin, "other")
 }
