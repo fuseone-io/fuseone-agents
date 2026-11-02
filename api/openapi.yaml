@@ -4631,6 +4631,7 @@ components:
         - run_finished
         - model_fallback
         - work_item_claimed
+        - work_item_linked
 
     StandingPolicy:
       type: string
@@ -8275,9 +8276,44 @@ components:
             Kind-specific detail. Bulky content is not inlined: payloads carry
             a reference into object storage plus a digest, because arguments
             and results routinely contain personal data.
+
+            A `work_item_linked` step carries a WorkItemLinkedPayload.
         hash:
           type: string
           description: Hex-encoded SHA-256 sealing this step to the previous one.
+
+    WorkItemLinkedPayload:
+      type: object
+      required: [alias, root, proof]
+      description: |
+        A pull request recorded as another name of the card a run claimed
+        (#204). Every field is required and none is free text.
+      properties:
+        alias:
+          type: string
+          description: |
+            The pull request linked, as github:owner/repo#number in canonical
+            form. The one thing the run supplies.
+        root:
+          type: string
+          description: |
+            The card the alias becomes another name for: the run's own claim,
+            in the same owner and repository as the alias.
+        proof: { $ref: '#/components/schemas/WorkItemLinkProof' }
+
+    WorkItemLinkProof:
+      type: object
+      required: [kind, seq]
+      description: |
+        The earlier step of the same run that warrants the link. A
+        `tool_returned` is the result of the run's own create_pull_request
+        that named the alias; an `approval_decided` is a person who approved
+        the link instead.
+      properties:
+        kind:
+          type: string
+          enum: [tool_returned, approval_decided]
+        seq: { type: integer, format: int64 }
 
     StepContent:
       type: object
