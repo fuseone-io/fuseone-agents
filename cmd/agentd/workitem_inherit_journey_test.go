@@ -113,6 +113,38 @@ func (r inheritRig) claimAndFinish(t *testing.T, id domain.RunID, agent domain.A
 	}
 }
 
+/*
+onlyFinished is the Postgres store as the dispatcher's feed, with the feed's
+position narrowed to one agent's finished run.
+
+The real feed reads below the cluster's oldest open transaction and from one
+cursor the whole database shares, so on a server other suites are using it
+can hold this run back, or another test's dispatcher can move past it. What
+the journey proves is downstream of that: the batch read (StartsAndFinishes,
+the store's own), the precedence, the opener and the projection.
+*/
+type onlyFinished struct {
+	Store
+	run string
+}
+
+func (f onlyFinished) FinishedSince(ctx context.Context, after domain.FinishCursor, _ int) ([]domain.FinishedRun, error) {
+	if after.Run != "" {
+		return nil, nil
+	}
+	runs, err := f.ListRuns(ctx, domain.RunFilter{AgentID: domain.AgentID(f.run)}, "", 1)
+	if err != nil || len(runs) == 0 {
+		return nil, err
+	}
+	return []domain.FinishedRun{{Run: runs[0], At: domain.FinishCursor{Xid: 1, Run: runs[0].RunID}}}, nil
+}
+
+func (onlyFinished) EventCursor(context.Context) (domain.FinishCursor, error) {
+	return domain.FinishCursor{}, nil
+}
+
+func (onlyFinished) AdvanceEventCursor(context.Context, domain.FinishCursor) error { return nil }
+
 // trail reads ref's trail through the route serve mounts, as a factory
 // approver.
 func (r inheritRig) trail(t *testing.T, ref string) openapi.WorkItemTrail {
@@ -189,7 +221,8 @@ func TestJourney_anEventOpenedListenerOfADeveloperRun_showsUnderTheDevelopersCar
 	rig.claimAndFinish(t, domain.RunID("run-"+developer), domain.AgentID(developer), card)
 
 	parts := &workerParts{store: rig.store, registry: spec.NewRegistry(rig.pool), configPool: rig.pool}
-	dispatcher := trigger.NewDispatcher(parts.registry, parts.store, parts.opener(), engine.SystemClock{}, nil)
+	dispatcher := trigger.NewDispatcher(parts.registry, onlyFinished{Store: parts.store, run: developer},
+		parts.opener(), engine.SystemClock{}, nil)
 	if _, err := dispatcher.Sweep(t.Context(), trigger.Page); err != nil {
 		t.Fatalf("Sweep: %v", err)
 	}
