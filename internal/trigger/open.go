@@ -89,6 +89,12 @@ type Request struct {
 	// opened (#203). Set by the dispatcher alone, from the source run's own
 	// recorded start, and sealed so the next hop reads it from the ledger.
 	Chain *domain.EventChain
+	// WorkItem is the card the run is attributed to by how it was opened
+	// (#204, slice 3), attribution only. Trusted context like Chain and
+	// Ticket: set by the dispatcher from the source run's record and by the
+	// GitHub door from a signed delivery's structural fields, never parsed
+	// from Input or anything else a model or a sender wrote.
+	WorkItem *domain.RunWorkItem
 }
 
 // ErrUnknownAgent means nothing is published under that id.
@@ -114,6 +120,10 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 	ticket := cloneTicket(req.Ticket)
 	if ticket != nil && !ticket.Valid() {
 		return Result{}, fmt.Errorf("trigger: invalid ticket context")
+	}
+	workItem, err := workItemOf(req)
+	if err != nil {
+		return Result{}, err
 	}
 
 	if existing, err := o.ledger.RunByIdemKey(ctx, req.IdemKey); err == nil {
@@ -207,6 +217,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 			ContextArtifacts: cloneContextArtifacts(req.ContextArtifacts),
 			SourceRun:        req.SourceRun,
 			Chain:            req.Chain,
+			WorkItem:         workItem,
 		}),
 	})
 	if err != nil {
@@ -233,26 +244,6 @@ func (o *Opener) store(ctx context.Context, runID domain.RunID, input []byte) (s
 		return "", fmt.Errorf("trigger: store input: %w", err)
 	}
 	return ref, nil
-}
-
-func cloneTicket(in *domain.TicketContext) *domain.TicketContext {
-	if in == nil {
-		return nil
-	}
-	out := *in
-	return &out
-}
-
-func cloneContextArtifacts(in []domain.ContextArtifact) []domain.ContextArtifact {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]domain.ContextArtifact, len(in))
-	for i, artifact := range in {
-		out[i] = artifact
-		out[i].Labels = artifact.Labels.Clone()
-	}
-	return out
 }
 
 // newRunID names a run after the intention that opened it.
