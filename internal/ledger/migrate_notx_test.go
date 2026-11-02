@@ -56,7 +56,8 @@ func TestMigrate_aNoTransactionFile_runsEachStatementOnItsOwn_andAPlainOneInOne(
 	// succeed only if each statement runs on its own.
 	marked := "-- fuseone:no-transaction\n" +
 		"create index concurrently if not exists probe_label_idx on probe (label);\n" +
-		"create index concurrently if not exists probe_xid_idx on probe (xid);\n"
+		"create index concurrently if not exists probe_xid_idx on probe (xid);\n" +
+		"drop index concurrently if exists probe_never_idx;\n"
 	if err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{
 		{Version: "0001_plain", Body: plain}, {Version: "0002_marked", Body: marked},
 	}); err != nil {
@@ -293,12 +294,20 @@ func TestMigrate_anInvalidFeedIndexLeftByAFailedBuild_isRebuilt(t *testing.T) {
 }
 
 /*
-The opt-in is for concurrent index builds and nothing else, and the runner
-holds a marked file to that: every literal statement is a create or drop
-index concurrently or a select, every statement a select generates is checked
-against the same list before any runs, and no dollar quote — named or not —
-gets through. A marked file outside the list fails before it touches anything.
+The opt-in is for concurrent index builds and nothing else, and only in forms
+that are safe to run twice: create index concurrently if not exists <name> on
+…, and drop index concurrently if exists <name>, with a plain name — unquoted,
+unqualified — that the runner can check for an INVALID leftover. Anything
+else, and any dollar quote, is refused before any statement of the file runs:
+each case below puts an allowed build first and asserts it never happened.
 */
+// allowedThen is a marked file whose first statement is allowed and whose
+// second is the one under test.
+func allowedThen(statement string) string {
+	return "-- fuseone:no-transaction\n" +
+		"create index concurrently if not exists probe_idx on probe (label);\n" + statement + "\n"
+}
+
 func TestMigrate_aNoTransactionFile_runsOnlyConcurrentIndexStatements(t *testing.T) {
 	plain := "create table probe (label text);\ninsert into probe values ('untouched');\n"
 	cases := map[string]string{
@@ -310,6 +319,16 @@ func TestMigrate_aNoTransactionFile_runsOnlyConcurrentIndexStatements(t *testing
 		"a select after an allowed statement": "-- fuseone:no-transaction\n" +
 			"create index concurrently if not exists probe_idx on probe (label);\n" +
 			"select 'update probe set label = ''touched''';\n",
+		"a quoted name":                  allowedThen(`create index concurrently if not exists "ProbeIdx" on probe (label);`),
+		"a create without if not exists": allowedThen("create index concurrently probe_label_idx on probe (label);"),
+		"a drop without if exists":       allowedThen("drop index concurrently probe_old_idx;"),
+		"a schema-qualified create": allowedThen(
+			"create index concurrently if not exists public.probe_label_idx on probe (label);"),
+		"a schema-qualified drop": allowedThen("drop index concurrently if exists public.probe_old_idx;"),
+		// Refused rather than handled: a unique build that fails leaves an
+		// INVALID index that still enforces uniqueness on writes, and nothing
+		// here needs one.
+		"a unique index": allowedThen("create unique index concurrently if not exists probe_label_idx on probe (label);"),
 	}
 	for name, marked := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -355,5 +374,61 @@ func TestMigrate_aNoTransactionFileWithASelect_isRefusedWithNoEffect(t *testing.
 	if err == nil || recorded(t, pool, "0002_marked") || last != 1 || called {
 		t.Fatalf("err %v, recorded %v, sequence at %d (called %v); want refused, unrecorded, untouched",
 			err, recorded(t, pool, "0002_marked"), last, called)
+	}
+}
+
+// makeInvalidIndex leaves an INVALID index named as given on probe: a unique
+// concurrent build over duplicate labels fails part-way.
+func makeInvalidIndex(t *testing.T, pool *pgxpool.Pool, quoted string) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `create table probe (label text);
+		insert into probe values ('same'), ('same')`); err != nil {
+		t.Fatalf("seed probe: %v", err)
+	}
+	if _, err := pool.Exec(t.Context(),
+		`create unique index concurrently `+quoted+` on probe (label)`); err == nil {
+		t.Fatal("the failing build succeeded")
+	}
+}
+
+/*
+A quoted name is refused, so an INVALID index under a name the runner cannot
+check never ends up recorded as built: "if not exists" would have skipped the
+rebuild while the record said done.
+*/
+func TestMigrate_anInvalidIndexUnderAQuotedName_isNeverRecordedAsBuilt(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_quoted")
+	makeInvalidIndex(t, pool, `"ProbeIdx"`)
+	marked := "-- fuseone:no-transaction\n" +
+		`create index concurrently if not exists "ProbeIdx" on probe (label);` + "\n"
+
+	err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{{Version: "0001_marked", Body: marked}})
+	if err == nil || recorded(t, pool, "0001_marked") {
+		t.Fatalf("err %v, recorded %v; want the quoted name refused and nothing recorded",
+			err, recorded(t, pool, "0001_marked"))
+	}
+}
+
+/*
+Keywords and an unquoted name are matched as PostgreSQL reads them: Probe_Idx
+unquoted is probe_idx. The runner checks the name the statement will create,
+so a mixed-case spelling still finds and rebuilds the INVALID leftover.
+*/
+func TestMigrate_anInvalidLeftoverNamedInMixedCase_isRebuilt(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_case")
+	makeInvalidIndex(t, pool, "probe_idx")
+	if _, err := pool.Exec(t.Context(), `delete from probe where ctid = (select min(ctid) from probe)`); err != nil {
+		t.Fatalf("make the labels distinct: %v", err)
+	}
+	marked := "-- fuseone:no-transaction\n" +
+		"CREATE INDEX CONCURRENTLY IF NOT EXISTS Probe_Idx ON probe (label);\n"
+
+	if err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{{Version: "0001_marked", Body: marked}}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	var valid bool
+	if err := pool.QueryRow(t.Context(), `select indisvalid from pg_index
+		where indexrelid = 'probe_idx'::regclass`).Scan(&valid); err != nil || !valid {
+		t.Fatalf("probe_idx valid = %v, %v; want the leftover rebuilt", valid, err)
 	}
 }

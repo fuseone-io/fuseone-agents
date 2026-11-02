@@ -121,8 +121,8 @@ file runs again on the next start and must be idempotent.
 Before a "create index concurrently if not exists <name>", the runner drops
 an INVALID index of that name — what a concurrent build that died leaves
 behind, and what "if not exists" would otherwise accept as built. The check
-is the runner's own fixed query, not something the file runs: a marked file
-holds index statements and nothing else.
+is the runner's own fixed query on the name the parser read, not something
+the file runs: a marked file holds index statements and nothing else.
 */
 func applyOutsideTransaction(ctx context.Context, conn migrator, version string, body []byte, digest string) error {
 	statements, err := splitStatements(string(body))
@@ -137,13 +137,13 @@ func applyOutsideTransaction(ctx context.Context, conn migrator, version string,
 	return recordMigration(ctx, conn, version, digest)
 }
 
-func runStatement(ctx context.Context, conn migrator, statement string) error {
-	if name, ok := createIfNotExistsName(statement); ok {
-		if err := dropInvalidIndex(ctx, conn, name); err != nil {
+func runStatement(ctx context.Context, conn migrator, statement indexStatement) error {
+	if statement.create {
+		if err := dropInvalidIndex(ctx, conn, statement.name); err != nil {
 			return err
 		}
 	}
-	_, err := conn.Exec(ctx, statement)
+	_, err := conn.Exec(ctx, statement.text)
 	return err
 }
 
@@ -169,44 +169,55 @@ func dropInvalidIndex(ctx context.Context, conn migrator, name string) error {
 	return nil
 }
 
-// createIfNotExists captures the index a create-if-not-exists names.
-var createIfNotExists = regexp.MustCompile(`^create index concurrently if not exists ([a-z_][a-z0-9_]*) on `)
-
-func createIfNotExistsName(statement string) (string, bool) {
-	m := createIfNotExists.FindStringSubmatch(normalised(statement))
-	if m == nil {
-		return "", false
-	}
-	return m[1], true
-}
-
 /*
-splitStatements cuts a marked file into statements: each ends at a line
+splitStatements cuts a marked file into statements — each ends at a line
 ending in a semicolon, comment lines never end one, and a chunk of only
-comments is no statement. Every statement is checked against the allowed
-list before any runs, so a file outside it fails having touched nothing.
+comments is no statement — and parses every one before any runs, so a file
+outside the grammar fails having touched nothing.
 */
-func splitStatements(body string) ([]string, error) {
-	statements, err := cutStatements(body)
+func splitStatements(body string) ([]indexStatement, error) {
+	texts, err := cutStatements(body)
 	if err != nil {
 		return nil, err
 	}
-	for _, statement := range statements {
-		if err := allowedOutsideTransaction(statement); err != nil {
+	out := make([]indexStatement, 0, len(texts))
+	for _, text := range texts {
+		parsed, err := parseIndexStatement(text)
+		if err != nil {
 			return nil, err
 		}
+		out = append(out, parsed)
 	}
-	return statements, nil
+	return out, nil
+}
+
+// indexStatement is one statement a marked file may run, as the one parser
+// read it: the fence and the runner both take it from here, so what was
+// allowed and what is run cannot disagree.
+type indexStatement struct {
+	create bool   // create index concurrently if not exists, else drop
+	name   string // the index, plain: unquoted, unqualified, as PostgreSQL folds it
+	text   string // the statement as written
 }
 
 /*
-The only statements a marked file may hold: build or drop an index
-concurrently. That is the whole reason the opt-in exists. Nothing else runs —
-not a select either, since a select runs functions and functions have effects
-(setval, advisory locks) that no later refusal can take back.
+indexGrammar is the whole of what a marked file may hold, and only in forms
+that are safe to run again after a crash:
+
+	create index concurrently if not exists <name> on …
+	drop index concurrently if exists <name>
+
+The name is plain — [a-z_][a-z0-9_]* after folding, unquoted, unqualified —
+so the runner checks exactly the index the statement names for an INVALID
+leftover. Without "if [not] exists" a re-run after a crash fails on a
+duplicate or a missing index; a quoted or qualified name is one the check
+would not find. A unique index is refused: a failed unique build leaves an
+INVALID index that still enforces uniqueness on writes, and nothing here
+needs one. Keywords match in any case, as PostgreSQL reads them; the
+statement is lowered and its spaces collapsed before matching.
 */
-var allowedNoTransaction = regexp.MustCompile(
-	`^(create index concurrently (if not exists )?|drop index concurrently (if exists )?)\S`)
+var indexGrammar = regexp.MustCompile(
+	`^(?:(create) index concurrently if not exists ([a-z_][a-z0-9_]*) on \S|(drop) index concurrently if exists ([a-z_][a-z0-9_]*) ?;?$)`)
 
 // dollarQuote matches any dollar quote, $$ or named ($body$): quoting is
 // refused rather than parsed, since a quoted body could hide any statement.
@@ -214,14 +225,22 @@ var dollarQuote = regexp.MustCompile(`\$[A-Za-z_]*\$`)
 
 var errDollarQuote = errors.New("a no-transaction migration may not use dollar quoting")
 
-func allowedOutsideTransaction(statement string) error {
-	if dollarQuote.MatchString(statement) {
-		return errDollarQuote
+func parseIndexStatement(text string) (indexStatement, error) {
+	if dollarQuote.MatchString(text) {
+		return indexStatement{}, errDollarQuote
 	}
-	if normal := normalised(statement); !allowedNoTransaction.MatchString(normal) {
-		return fmt.Errorf("a no-transaction migration may only create or drop an index concurrently, not %q", normal)
+	normal := normalised(text)
+	m := indexGrammar.FindStringSubmatch(normal)
+	switch {
+	case m == nil:
+		return indexStatement{}, fmt.Errorf("a no-transaction migration may only hold "+
+			"create index concurrently if not exists <name> on … or drop index concurrently if exists <name>, "+
+			"with a plain name; not %q", normal)
+	case m[1] == "create":
+		return indexStatement{create: true, name: m[2], text: text}, nil
+	default:
+		return indexStatement{name: m[4], text: text}, nil
 	}
-	return nil
 }
 
 // normalised is a statement's code, lower case, with runs of space as one.
