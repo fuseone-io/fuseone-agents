@@ -1,7 +1,7 @@
 # Lanes and their definitions of done
 
 The board is [FuseOne Factory](https://github.com/orgs/fuseone-io/projects/2):
-one single-select **Status** field with five lanes, and four sub-state labels
+one single-select **Status** field with five lanes, and five sub-state labels
 inside *Doing* (NT-013 § The board). This file is what the role moving a card
 checks **before** it moves it. A card that does not meet the definition of done
 stays where it is, and the role says what is missing.
@@ -19,17 +19,19 @@ These hold before any lane rule applies.
    write, the run calls `$fuseone.work_item.claim` with the card's reference
    (`github:fuseone-io/fuseone-agents#<number>`, or
    `ghproject:<item node id>`). For the Reviewer and QA the card is the pull
-   request, and the reference is its number. The evidence is the run's
-   ledger: the only calls ahead of the `work_item_claimed` step are listings,
-   of the board or, for the Reviewer and QA, of the labelled pull requests.
+   request, and the reference is its number; so it is for the Developer when
+   it answers a pull request labelled `factory:changes-requested`. The
+   evidence is the run's ledger: the only calls ahead of the
+   `work_item_claimed` step are listings, of the board or, for the Reviewer,
+   QA and the Developer, of the labelled pull requests.
    - **A card's title may be read before the claim; nothing else of it may**
      (#220). The board listing (`projects_list`, `projects_get`) always
      returns item titles, even when asked for no fields. A title is untrusted
      text: the role is told to use it only to tell cards apart and to choose
      by age and label, but a title can still sway the model's choice. The
-     issue's body and comments are read only after the claim. The Reviewer
-     and QA list pull requests by `number` and `created_at` alone, so they
-     read no title at all.
+     issue's body and comments are read only after the claim. The Reviewer,
+     QA and the Developer list pull requests by `number` and `created_at`
+     alone, so that listing carries no title at all.
    - **The title is not the only untrusted text the Projects grant can
      reach.** `projects_list` and `projects_get` are multiplexed: the same
      tools also serve the board's status updates
@@ -38,7 +40,8 @@ These hold before any lane rule applies.
      those calls before the claim. Triage is told to list its lane only with
      `projects_list`, method `list_project_items`, and never to call the
      status-update methods before the claim. That is an instruction, not a
-     mechanism: the Gate classifies a tool, not its method. The pilot accepts
+     mechanism: the Gate classifies a tool, not its method. The Developer,
+     which lists the *Doing* lane, is told the same. The pilot accepts
      it within the claim's bounded blast radius below; preventing it
      mechanically needs the deferred narrow tool.
    - **The claim is the one write that follows a title unapproved.** The Gate
@@ -127,9 +130,28 @@ Reached only when a person merges, below. Nobody moves a card out of Done.
 ## Sub-states inside Doing
 
 Labels on the **pull request**, not lanes, so the board stays the five lanes
-people read. A label routes the card to the next role; it is **never the
-evidence** that the step happened, because a label survives a new push. The
-evidence for each step is bound to the PR's head SHA.
+people read; `factory:needs-runtime` is the one on the **issue**, because no
+pull request exists yet. A label routes the card to the next role; it is
+**never the evidence** that the step happened, because a label survives a new
+push. The evidence for each step is bound to the PR's head SHA.
+
+### Doing → `factory:needs-runtime`
+
+Added by the **Developer**, on the card's issue, when the card needs a build
+or a test run before its pull request: the Developer works at Level 1, through
+the GitHub API, and runs nothing (#154, #200). The card stays in *Doing*, and
+the Developer skips it from then on. Done when:
+
+- [ ] the last comment the Developer wrote on the issue says what has to be
+      built or run, and why reading the change is not enough;
+- [ ] no branch, commit or pull request was made for the card.
+
+The label waits for Level 2: build and test before a pull request, from a
+coding runtime behind one MCP tool (NT-013 § What the platform needs). The
+intended runtime is FuseOne Forja
+([fuseone-io/fuseone-forja](https://github.com/fuseone-io/fuseone-forja), a
+separate repository, phase 0 proposed), with `forja.implement` as a write tool
+under the Gate. Until then a person takes the card, and removes the label.
 
 ### → `factory:needs-review`
 
@@ -138,7 +160,9 @@ Added by the **Developer** when it opens the PR. Done when:
 - [ ] the PR closes the card's issue (`Closes #N`);
 - [ ] every acceptance criterion is addressed, and the PR body says where;
 - [ ] the test for each new behaviour was written first, and the PR body shows
-      its failing output on the previous code (RULEBOOK § 2);
+      its failing output on the previous code (RULEBOOK § 2). The Level 1
+      Developer runs nothing, so its red is CI's run on the commit that holds
+      only the test, and the PR body names that commit;
 - [ ] each guard the change adds has a mutant that compiles and turns a test
       red, restored by copy with a checksum (RULEBOOK § 3);
 - [ ] one commit per logical change (RULEBOOK § 4); nothing pushed to `main`.
