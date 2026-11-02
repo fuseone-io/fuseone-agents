@@ -21,7 +21,7 @@ const HEAD =
 const NUM = "text-right font-mono text-xs tabular-nums";
 
 const COLUMNS = [
-  ["workItems.columnClaimed", false],
+  ["workItems.columnJoined", false],
   ["runs.columnRun", false],
   ["runs.columnAgent", false],
   ["workItems.columnArea", false],

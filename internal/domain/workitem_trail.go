@@ -36,7 +36,7 @@ const (
 )
 
 // WorkItemRun is one run on the trail: who, where, how far it got, and when
-// it claimed the card. It is a summary, never the run's steps.
+// it joined the card's trail. It is a summary, never the run's steps.
 type WorkItemRun struct {
 	RunID   RunID
 	AgentID AgentID
@@ -45,6 +45,10 @@ type WorkItemRun struct {
 	// StartedAt is when the run opened; EndedAt is zero while it is going.
 	StartedAt time.Time
 	EndedAt   time.Time
+	// ClaimedAt is when the run joined the trail — not necessarily a claim:
+	// the claim's moment for a claim or an alias, the run's opening for an
+	// inheritance, which claimed nothing here. Link says which. The name is
+	// the wire's, kept for compatibility.
 	ClaimedAt time.Time
 	Link      WorkItemLink
 	// Ref is what the run claimed, or inherited: the card, or the alias it
@@ -163,7 +167,8 @@ func WorkItemRoles(shares []WorkItemRoleShare) []WorkItemRole {
 	return out
 }
 
-// CompareWorkItemRuns is the trail's order: oldest claim first, a shared
+// CompareWorkItemRuns is the trail's order: the run that joined it first
+// (ClaimedAt: its claim, or its opening for an inheritance) first, a shared
 // instant broken by run id.
 func CompareWorkItemRuns(a, b WorkItemRun) int {
 	return cmp.Or(a.ClaimedAt.Compare(b.ClaimedAt), strings.Compare(string(a.RunID), string(b.RunID)))

@@ -882,8 +882,8 @@ export interface paths {
          * The trail of one work item reference
          * @description Every run that claimed the card through `$fuseone.work_item.claim`,
          *     or claimed a pull request linked to it through
-         *     `$fuseone.work_item.link`, oldest claim first, and per role what those
-         *     runs asked people and what they cost (#204).
+         *     `$fuseone.work_item.link`, in the order they joined the trail, and
+         *     per role what those runs asked people and what they cost (#204).
          *
          *     A run also joins the trail when it inherited the card, or a pull
          *     request linked to it, by how it was opened: an event from a run that
@@ -5319,11 +5319,15 @@ export interface components {
              *     `ref` and resolved to it. Absent otherwise.
              */
             resolvedFrom?: string;
-            /** @description This page of runs, oldest claim first. */
+            /**
+             * @description This page of runs, in the order they joined the trail (each
+             *     run's `claimedAt`).
+             */
             runs: components["schemas"]["WorkItemRun"][];
             /**
              * @description One row per agent over every readable run of the reference, in
-             *     the order each first claimed it. Present on the first page only.
+             *     the order each first joined the trail. Present on the first page
+             *     only.
              */
             roles?: components["schemas"]["WorkItemRole"][];
             /** @description Where the next page starts. Absent on the last page. */
@@ -5343,8 +5347,11 @@ export interface components {
             endedAt?: string;
             /**
              * Format: date-time
-             * @description When the run joined the trail: the moment of its claim, or for an
-             *     inherited run the moment it opened. The trail's order.
+             * @description When the run joined the trail — not necessarily a claim. For
+             *     `claim` and `alias` it is the moment of the claim; for `event`
+             *     and `github_delivery`, which claimed nothing here, it is the
+             *     moment the run opened. `link` says which. The trail's order. The
+             *     name is kept for compatibility.
              */
             claimedAt: string;
             /**
@@ -5377,7 +5384,12 @@ export interface components {
             refused: number;
             /** @description Runs of this role a person abandoned. */
             abandoned: number;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The first attribution of any of the role's runs to the trail: the
+             *     earliest `claimedAt` among them, which for an inherited run is
+             *     when it opened, not a claim. The name is kept for compatibility.
+             */
             firstClaimedAt: string;
             /**
              * Format: date-time

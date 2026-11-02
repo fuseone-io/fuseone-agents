@@ -13,7 +13,8 @@ import (
 /*
 Where a page of a card's trail ended.
 
-The trail reads oldest claim first and breaks a shared instant by run id, so
+The trail reads in the order runs joined it — the claim, or the opening of
+an inherited run — and breaks a shared instant by run id, so
 a position is those two values and nothing else. Keyset rather than offset:
 runs keep claiming the card while somebody reads it, and an offset would
 repeat or skip whatever moved under it.
