@@ -109,6 +109,7 @@ func toolsetServer(header string) *mcp.Server {
 // factoryJourney is one installation: the console's server and the worker's
 // reconciler over the same database, as serve and worker are deployed.
 type factoryJourney struct {
+	server       string // the role's registration, github-<role>
 	pool         *pgxpool.Pool
 	api          *httpapi.Server
 	worker       *reconciler
@@ -120,6 +121,12 @@ type factoryJourney struct {
 }
 
 func newFactoryJourney(t *testing.T, toolsets string) *factoryJourney {
+	t.Helper()
+	return newRoleJourney(t, "github-triage", toolsets)
+}
+
+// newRoleJourney is newFactoryJourney for the role registered as server.
+func newRoleJourney(t *testing.T, server, toolsets string) *factoryJourney {
 	t.Helper()
 	pool := testdb.Pool(t)
 	// The catalogue and its rulings are installation-wide and outlive a
@@ -164,7 +171,7 @@ func newFactoryJourney(t *testing.T, toolsets string) *factoryJourney {
 	t.Cleanup(remote.Close)
 
 	j := &factoryJourney{
-		pool: pool, api: api, worker: worker, catalog: catalog, hosted: hosted,
+		server: server, pool: pool, api: api, worker: worker, catalog: catalog, hosted: hosted,
 		curator: curator, integrations: integrations, remote: remote.URL + "/mcp/",
 	}
 	j.register(t, j.remote, toolsets)
@@ -187,14 +194,14 @@ func installer(t *testing.T) context.Context {
 // registration.
 const triageToolsets = "issues,projects"
 
-// register is the administration form for github-triage: the App, and the
+// register is the administration form for the role's server: the App, and the
 // toolsets beside it.
 func (j *factoryJourney) register(t *testing.T, url, toolsets string) {
 	t.Helper()
 	github := j.hosted.github
 	headers := map[string]string{"X-MCP-Toolsets": toolsets}
 	resp, err := j.api.PutMCPServer(installer(t), openapi.PutMCPServerRequestObject{
-		Name: "github-triage",
+		Name: j.server,
 		Body: &openapi.PutMCPServerJSONRequestBody{
 			Transport: ptrTo(openapi.TransportHttp), Url: &url, Headers: &headers,
 			GithubApp: &openapi.MCPGitHubApp{
@@ -204,7 +211,7 @@ func (j *factoryJourney) register(t *testing.T, url, toolsets string) {
 		},
 	})
 	if _, ok := resp.(openapi.PutMCPServer204Response); err != nil || !ok {
-		t.Fatalf("register github-triage = %#v, %v; want 204", resp, err)
+		t.Fatalf("register %s = %#v, %v; want 204", j.server, resp, err)
 	}
 }
 
@@ -215,13 +222,13 @@ func (j *factoryJourney) discover(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	j.worker.reconcile(ctx)
-	if !j.catalog.Connected("github-triage") {
-		t.Fatalf("github-triage did not connect; the publish below would prove nothing")
+	if !j.catalog.Connected(j.server) {
+		t.Fatalf("%s did not connect; the publish below would prove nothing", j.server)
 	}
 }
 
-// classify rules on every discovered tool the way README says: reading issue
-// and board text is an untrusted read, the rest are writes.
+// classify rules on every discovered tool the way README says: every read is
+// untrusted, and the tools that change GitHub are writes.
 func (j *factoryJourney) classify(t *testing.T) {
 	t.Helper()
 	resp, err := j.api.ListTools(installer(t), openapi.ListToolsRequestObject{})
@@ -231,7 +238,7 @@ func (j *factoryJourney) classify(t *testing.T) {
 	}
 	writes := []string{"add_issue_comment", "issue_write", "projects_write"}
 	for _, tool := range listed.Items {
-		name, ours := strings.CutPrefix(tool.ToolId, "github-triage.")
+		name, ours := strings.CutPrefix(tool.ToolId, j.server+".")
 		if !ours {
 			continue
 		}
@@ -263,11 +270,16 @@ func (j *factoryJourney) publish(t *testing.T, reference spec.Spec) openapi.Publ
 
 func readTriageReference(t *testing.T) spec.Spec {
 	t.Helper()
-	raw, err := os.ReadFile(triageReference)
+	return readReference(t, triageReference)
+}
+
+func readReference(t *testing.T, path string) spec.Spec {
+	t.Helper()
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read the reference: %v", err)
 	}
-	reference, err := spec.Parse(triageReference, raw)
+	reference, err := spec.Parse(path, raw)
 	if err != nil {
 		t.Fatalf("the reference does not parse: %v", err)
 	}
@@ -340,16 +352,23 @@ func TestFactoryTriage_referenceRegisteredAsDocumented_publishesFromTheStudio(t 
 	j := newFactoryJourney(t, triageToolsets)
 	j.discover(t)
 	j.classify(t)
-	reference := readTriageReference(t)
 
+	assertPublishesAsTheReference(t, j, readTriageReference(t), triageToolsets)
+}
+
+// assertPublishesAsTheReference publishes reference through the Studio's form,
+// and requires what was published to be the reference, judged against the
+// role's server reached as its App with the role's toolsets.
+func assertPublishesAsTheReference(t *testing.T, j *factoryJourney, reference spec.Spec, toolsets string) {
+	t.Helper()
 	resp := j.publish(t, reference)
 
 	published, ok := resp.(openapi.PublishAgent200JSONResponse)
 	if refused, was := resp.(openapi.PublishAgent400ApplicationProblemPlusJSONResponse); was && refused.Detail != nil {
-		t.Fatalf("publishing the Triage reference was refused: %s", *refused.Detail)
+		t.Fatalf("publishing the %s reference was refused: %s", reference.ID, *refused.Detail)
 	}
 	if !ok {
-		t.Fatalf("publishing the Triage reference answered %#v; want it published", resp)
+		t.Fatalf("publishing the %s reference answered %#v; want it published", reference.ID, resp)
 	}
 	// The form carried the whole file: what was published is the reference.
 	got, err := spec.NewRegistry(j.pool).Get(t.Context(), reference.ID, domain.VersionID(published.VersionId))
@@ -379,7 +398,7 @@ func TestFactoryTriage_referenceRegisteredAsDocumented_publishesFromTheStudio(t 
 			j.hosted.refused, len(j.hosted.toolsets), j.hosted.github.Minted())
 	}
 	for _, header := range j.hosted.toolsets {
-		if header != triageToolsets {
+		if header != toolsets {
 			t.Fatalf("X-MCP-Toolsets = %q on a request, want the registration's", header)
 		}
 	}
