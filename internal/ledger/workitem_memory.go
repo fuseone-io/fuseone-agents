@@ -3,7 +3,7 @@ package ledger
 import (
 	"context"
 	"encoding/json"
-	"slices"
+	"fmt"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -24,7 +24,10 @@ func (m *Memory) judgeWorkItem(s domain.Step) error {
 	if err != nil {
 		return err
 	}
-	agent, scope := projectedIdentity(m.runs[s.RunID], s)
+	agent, scope, err := startedIdentity(m.runs[s.RunID])
+	if err != nil {
+		return err
+	}
 	if err := claimSpeaksForRun(s, agent, scope); err != nil {
 		return err
 	}
@@ -50,12 +53,16 @@ func (m *Memory) judgeWorkItem(s domain.Step) error {
 	return judgeClaim(ref, own, heldElsewhere)
 }
 
-// projectedIdentity is the run's agent and scope as the Postgres projection
-// holds them once the step is folded in: the first non-empty value of each,
-// the incoming step included, as upsertRun keeps them.
-func projectedIdentity(steps []domain.Step, s domain.Step) (domain.AgentID, domain.Scope) {
-	who := identityOf(append(slices.Clip(steps), s))
-	return who.AgentID, who.Scope
+// startedIdentity is the run's agent and scope as they stood before the
+// claim — the incoming step excluded, as the Postgres store judges before
+// upsertRun — and refuses a run that has not started: no steps, or a first
+// step that is not its run_started.
+func startedIdentity(steps []domain.Step) (domain.AgentID, domain.Scope, error) {
+	if len(steps) == 0 || steps[0].Kind != domain.StepRunStarted {
+		return "", domain.Scope{}, fmt.Errorf("%w: the run has not started", domain.ErrWorkItemInvalid)
+	}
+	who := identityOf(steps)
+	return who.AgentID, who.Scope, nil
 }
 
 // claimOfRun is the card a run holds and the agent that claimed it.

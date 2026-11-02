@@ -140,9 +140,11 @@ first claim succeeds, a retry of it succeeds, a second card is refused. Nothing
 is projected and no other run is consulted or blocked.
 */
 //
-// The same read gives the run's identity as the projection holds it, already
-// folded with this step by upsertRun: the agent and scope the claim must be
-// sealed under (claimSpeaksForRun).
+// The same read gives the run's identity as the projection held it before
+// this step — the claim is judged before upsertRun folds it in — and so the
+// agent and scope the claim must be sealed under (claimSpeaksForRun). A run
+// with no row, or whose first step is not its run_started, has not started:
+// a claim there would create the run it claims to speak for.
 type claimRun struct {
 	agent     domain.AgentID
 	scope     domain.Scope
@@ -151,9 +153,18 @@ type claimRun struct {
 
 func claimingRun(ctx context.Context, tx pgx.Tx, runID domain.RunID) (claimRun, error) {
 	var r claimRun
-	if err := tx.QueryRow(ctx,
-		`select agent_id, company_id, area_id, simulated from runs where run_id = $1`, string(runID),
-	).Scan(&r.agent, &r.scope.Company, &r.scope.Area, &r.simulated); err != nil {
+	var started bool
+	err := tx.QueryRow(ctx, `
+		select r.agent_id, r.company_id, r.area_id, r.simulated,
+		       exists (select 1 from run_steps s
+		               where s.run_id = r.run_id and s.seq = 1 and s.opened_at = r.started_at
+		                 and s.kind = 'run_started')
+		from runs r where r.run_id = $1`, string(runID),
+	).Scan(&r.agent, &r.scope.Company, &r.scope.Area, &r.simulated, &started)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows) || (err == nil && !started):
+		return claimRun{}, fmt.Errorf("%w: run %s has not started", domain.ErrWorkItemInvalid, runID)
+	case err != nil:
 		return claimRun{}, fmt.Errorf("read the claiming run: %w", err)
 	}
 	return r, nil

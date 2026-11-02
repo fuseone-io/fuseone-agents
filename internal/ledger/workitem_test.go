@@ -271,6 +271,55 @@ func TestWorkItemClaim_aLegacyClaimUnderAnotherAgent_stillHoldsForTheRunsAgent(t
 	})
 }
 
+/*
+A claim speaks for a run that already started (review round 2).
+
+Judged against an identity that included the claim itself, a
+work_item_claimed sealed as the first step of a run nobody opened created
+its own run: it agreed with itself, was projected, and held the card for an
+agent with no run_started — a holder that would never finish. The claim
+needs the run's run_started before it, and is refused without one, leaving
+no step, no run and no holder.
+*/
+func TestWorkItemClaim_asTheFirstStepOfAnUnknownRun_refusedAndStoresNothing(t *testing.T) {
+	run(t, "a claim needs a started run", func(t *testing.T, s Store) {
+		if _, err := s.Append(context.Background(), claimStep(t, "run-ghost", "triage", card)); !errors.Is(err, domain.ErrWorkItemInvalid) {
+			t.Fatalf("claim on an unknown run = %v, want ErrWorkItemInvalid", err)
+		}
+		if steps, err := s.Read(context.Background(), "run-ghost", domain.FirstSeq); err == nil && len(steps) > 0 {
+			t.Fatalf("the refused claim left %d steps", len(steps))
+		}
+		listed, err := s.ListRuns(context.Background(), domain.RunFilter{}, "", 100)
+		if err != nil || len(listed) != 0 {
+			t.Fatalf("runs = %+v, %v; the refused claim created a run", listed, err)
+		}
+		openRunOf(t, s, "run-real", "triage")
+		if err := claim(t, s, "run-real", "triage", card); err != nil {
+			t.Fatalf("a real run's claim = %v; the refused claim left a holder", err)
+		}
+	})
+}
+
+// The identity the claim is judged against is the run's as it stood before
+// the claim: a run opened with no agent does not take the claim's, and a run
+// whose first step is not its run_started has not started.
+func TestWorkItemClaim_againstARunThatHasNoIdentityOrNoStart_refused(t *testing.T) {
+	run(t, "a claim does not give its run an identity", func(t *testing.T, s Store) {
+		openRunOf(t, s, "run-nameless", "")
+		mustAppend(t, s, step("run-unstarted", domain.StepPlanned))
+
+		for _, id := range []domain.RunID{"run-nameless", "run-unstarted"} {
+			before := headSeq(t, s, id)
+			if err := claim(t, s, id, "triage", card); !errors.Is(err, domain.ErrWorkItemInvalid) {
+				t.Errorf("%s: claim = %v, want ErrWorkItemInvalid", id, err)
+			}
+			if after := headSeq(t, s, id); after != before {
+				t.Errorf("%s: head moved %d -> %d; the refused claim was sealed", id, before, after)
+			}
+		}
+	})
+}
+
 // Cost per card counts every run that claimed it, including one that failed
 // before its first write — the run nothing else would ever attribute.
 func TestWorkItemCost_includesARunThatFailedBeforeAnyWrite(t *testing.T) {
