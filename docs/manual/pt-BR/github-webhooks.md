@@ -110,3 +110,13 @@ entrega, não que o texto da issue ou do pull request dentro dela seja seguro
 para agir. Num repositório público qualquer pessoa escreve esse texto, então o
 Gate trata o que o agente faz depois de lê-lo de acordo — veja
 [Labels e barreiras de dados](data-barriers.md).
+
+A execução também entra no histórico da issue ou do pull request de que a
+entrega trata, `github:<owner>/<repo>#<number>`, para `issues`,
+`issue_comment` (um comentário num pull request entra nesse pull request) e
+os eventos de `pull_request`. Só o repositório e o número que o GitHub escreve
+são lidos, depois que a assinatura confere; um título, um comentário ou um nome
+de branch que escreva uma referência nunca é considerado. É só atribuição: a
+execução não fica com nada preso por isso, e uma entrega de qualquer outro
+evento abre a execução sem card nenhum — veja
+[Quais execuções trabalharam neste card](reading-a-run.md).
