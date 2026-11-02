@@ -5,7 +5,9 @@ to upgrade an installation that is currently working.
 
 Versions are [semantic](https://semver.org). A release is a `v`-prefixed tag,
 and pushing one builds the image and chart that carry that version — nothing is
-released by merging.
+released by merging. The cut is a `docs(changelog): cut X.Y.Z` pull request;
+once it has merged, `make release V=X.Y.Z` tags the merged commit on `main`
+(see [Releases](README.md#releases)).
 
 ## What each section is for
 
