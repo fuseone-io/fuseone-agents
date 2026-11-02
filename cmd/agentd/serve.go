@@ -298,18 +298,7 @@ func serve(args []string) error {
 		// is an ERP or a CRM, not a person with a browser. They are
 		// authenticated by a secret an operator generated, and a path with no
 		// secret answers exactly like a path that does not exist.
-		httpapi.NewHooks(
-			webhooksWith(identity.pool, masterVault),
-			trigger.NewOpener(store, spec.NewRegistry(identity.pool), engine.SystemClock{}).
-				WithContent(ledger.NewContent(identity.pool)).
-				WithPauses(spec.NewState(identity.pool)).
-				// A webhook is a way a run starts, so the switches reach it
-				// too. One honoured by the console and not by an inbound hook
-				// is a stop that quietens the half nobody is watching.
-				WithStops(admin.NewStops(identity.pool)).
-				WithStages(spec.NewState(identity.pool)),
-			slog.Default(),
-		).Mount(root)
+		webhookDoor(identity.pool, store, masterVault).Mount(root)
 	} else {
 		mountOpen(root, apiHandler)
 	}
