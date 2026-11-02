@@ -48,7 +48,8 @@ func TestOpen_invalidWorkItem_refused(t *testing.T) {
 		"event without a run": {Ref: "github:o/r#7", Source: domain.WorkItemFromEvent},
 	} {
 		opener, store := openerFor(t)
-		_, err := opener.Open(t.Context(), trigger.Request{
+		stored := &countingContent{}
+		_, err := opener.WithContent(stored).Open(t.Context(), trigger.Request{
 			Agent: "triage", IdemKey: "k-" + name, Input: []byte("x"), WorkItem: item,
 		})
 		if !errors.Is(err, domain.ErrRunWorkItemInvalid) {
@@ -57,7 +58,19 @@ func TestOpen_invalidWorkItem_refused(t *testing.T) {
 		if runs, _ := store.Runs(context.Background()); len(runs) != 0 {
 			t.Errorf("%s: %d runs opened", name, len(runs))
 		}
+		// The ledger would refuse the start too, but only after the input
+		// was stored with no run to own it: the opener refuses first.
+		if stored.puts != 0 {
+			t.Errorf("%s: the input was stored %d times", name, stored.puts)
+		}
 	}
+}
+
+type countingContent struct{ puts int }
+
+func (c *countingContent) Put(context.Context, domain.RunID, int64, []byte) (string, error) {
+	c.puts++
+	return "content:x", nil
 }
 
 // What a run is about — a body, an ask, an event's context — never names its
