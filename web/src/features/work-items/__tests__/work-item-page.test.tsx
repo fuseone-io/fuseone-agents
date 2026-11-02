@@ -8,6 +8,7 @@ import { workItemPath } from "@/features/work-items/work-item-path";
 import type { WorkItemTrail } from "@/lib/api/client";
 
 const REF = "github:fuseone-io/fuseone-agents#204";
+const PR = "github:fuseone-io/fuseone-agents#240";
 
 const run = (runId: string, agentId: string, claimedAt: string) => ({
   runId,
@@ -18,6 +19,7 @@ const run = (runId: string, agentId: string, claimedAt: string) => ({
   endedAt: claimedAt,
   claimedAt,
   link: "claim" as const,
+  ref: REF,
 });
 
 const firstPage: WorkItemTrail = {
@@ -82,14 +84,51 @@ function open(path = workItemPath(REF)) {
 describe("a work item's trail", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("asks for the reference and says the view is of this reference only", async () => {
+  it("asks for the reference and says the issue and its linked pull requests are joined", async () => {
     const asked = serve({ "": firstPage });
     open();
 
     expect(await screen.findByText(REF)).toBeInTheDocument();
-    expect(screen.getByText(/somente desta referência/i)).toBeInTheDocument();
-    expect(screen.getByText(/issue e o pull request/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/a issue e os pull requests vinculados a ela/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/somente desta referência/i)).toBeNull();
     expect(asked[0]?.searchParams.get("ref")).toBe(REF);
+  });
+
+  it("marks a run that came by a linked pull request, and names that pull request", async () => {
+    serve({
+      "": {
+        ref: REF,
+        runs: [
+          run("run-dev", "developer", "2026-10-01T09:00:00Z"),
+          {
+            ...run("run-review", "reviewer", "2026-10-01T10:00:00Z"),
+            link: "alias" as const,
+            ref: PR,
+          },
+        ],
+        roles: [],
+      },
+    });
+    open();
+
+    const review = await screen.findByRole("row", { name: /run-review/ });
+    expect(within(review).getByText(/pull request/i)).toBeInTheDocument();
+    expect(within(review).getByText(PR)).toBeInTheDocument();
+    const dev = screen.getByRole("row", { name: /run-dev/ });
+    expect(within(dev).getByText(/assumiu/i)).toBeInTheDocument();
+    expect(within(dev).queryByText(PR)).toBeNull();
+  });
+
+  it("opened by a linked pull request, shows the card's trail and says where it came from", async () => {
+    serve({ "": { ...firstPage, resolvedFrom: PR } });
+    open(workItemPath(PR));
+
+    expect(await screen.findByText(REF)).toBeInTheDocument();
+    expect(
+      screen.getByText(/um pull request vinculado a este item/i),
+    ).toHaveTextContent(PR);
   });
 
   it("shows each role's approvals, and its cost only when the server sent one", async () => {

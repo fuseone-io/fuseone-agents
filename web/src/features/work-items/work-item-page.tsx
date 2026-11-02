@@ -17,11 +17,11 @@ import { WorkItemRoles } from "@/features/work-items/work-item-roles";
 import { WorkItemRuns } from "@/features/work-items/work-item-runs";
 
 /**
- * A card's trail: every run that claimed this reference, and per role what
- * those runs asked people and cost (#204).
+ * A card's trail: every run that claimed the card or a pull request linked to
+ * it, and per role what those runs asked people and cost (#204).
  *
- * It is a view of this reference only, and says so: an issue and the pull
- * request that answers it are two references until the platform links them.
+ * Opened by a linked pull request, it is the card's trail, headed by the card
+ * and saying which pull request was asked for.
  */
 export function WorkItemPage() {
   const { t } = useTranslation();
@@ -56,9 +56,14 @@ function Trail({ reference }: { reference: string }) {
       <Alert>
         <Info aria-hidden />
         <AlertTitle>
-          <Mono>{reference}</Mono>
+          <Mono>{trail.card ?? reference}</Mono>
         </AlertTitle>
-        <AlertDescription>{t("workItems.scopeNote")}</AlertDescription>
+        <AlertDescription>
+          {trail.resolvedFrom ? (
+            <p>{t("workItems.resolvedNote", { from: trail.resolvedFrom })}</p>
+          ) : null}
+          <p>{t("workItems.scopeNote")}</p>
+        </AlertDescription>
       </Alert>
       {trail.isLoading ? (
         <LoadingRows />
