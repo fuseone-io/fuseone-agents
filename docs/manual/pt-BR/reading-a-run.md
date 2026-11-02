@@ -92,8 +92,12 @@ execução, e uma linha por papel com as aprovações pedidas, quantas foram
 aprovadas e recusadas, as execuções que uma pessoa abandonou e quanto o papel
 custou. Você só vê as execuções das áreas que pode ler, e nada das outras
 entra em nenhum total; o custo só aparece onde você tem permissão para vê-lo
-e, fora disso, a tela diz que ele não está visível em vez de mostrar zero. É
-uma visão dessa referência apenas: por enquanto, a issue e o pull request que
-a resolve aparecem separadamente.
+e, fora disso, a tela diz que ele não está visível em vez de mostrar zero. A
+issue e os pull requests vinculados a ela aparecem juntos: uma execução que
+assumiu um pull request vinculado entra no histórico da issue, marcada como
+**Pull request**, com o pull request ao lado, e abrir o histórico de um pull
+request vinculado mostra o histórico da issue e avisa qual pull request você
+abriu. Um vínculo feito numa área que você não pode ler não junta nada para
+você.
 
 O que decide cada parada está em [O que a plataforma para antes de acontecer](what-the-gate-stops.md) e em [Políticas](policies.md).

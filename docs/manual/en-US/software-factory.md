@@ -33,8 +33,9 @@ and the role instructions live, reviewed like code, in
   comments and reviews.
 - **Every role at copilot**, with standing approvals forbidden. Every GitHub
   write a role proposes — a comment, a label, a review, a card move — waits
-  for a person. The card claim below is the one write that does not. See
-  [Draft, copilot and autonomous](autonomy-stages.md).
+  for a person. The card claim below, and the Developer's link of the pull
+  request it just opened, are the writes that do not, and neither writes to
+  GitHub. See [Draft, copilot and autonomous](autonomy-stages.md).
 - **A person merges.** No role merges.
 - **The board drives the work**, with five lanes: Triagem, Preparado, Doing,
   Travado and Done. Inside Doing, labels mark where a pull request is:
@@ -65,9 +66,16 @@ and the role instructions live, reviewed like code, in
   The Architect lists the Triagem lane, and the Developer the Doing lane,
   the same way, and both are told the same.
 - **A card's trail.** The claim's **Item** line in a run's trail links to
-  every run that claimed the same reference, with each role's approvals and
-  cost (see [Reading a run](reading-a-run.md)). An issue and its pull request
-  are two references, so for now each has its own trail.
+  every run that claimed the card, with each role's approvals and cost (see
+  [Reading a run](reading-a-run.md)). The issue and the pull requests linked
+  to it are joined: right after it opens a pull request, the Developer links
+  it to the issue it claimed with `$fuseone.work_item.link`, and from then on
+  the Reviewer's and QA's runs on that pull request are on the issue's trail,
+  marked **Pull request**. Opening the trail of a linked pull request shows
+  the issue's trail and says so. The link waits for no one when the run's own
+  `create_pull_request` named that pull request, and for a person otherwise;
+  a pull request belongs to one card for good, and a link you cannot read is
+  shown to you as no link at all.
 
 The repository is public, so issue and pull request text is untrusted: a run
 that read it can never take a destructive action, and its GitHub writes need

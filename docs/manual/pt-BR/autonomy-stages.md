@@ -28,7 +28,7 @@ O agente existe, tem versão publicada, e não abre execução real.
 
 ## Copiloto
 
-Executa de verdade. Toda escrita para e espera uma pessoa aprovar aquela chamada específica. A única exceção é o claim de work item (`$fuseone.work_item.claim`), que só registra na plataforma qual card um run reservou e passa sem aprovação, para que dois runs nunca esperem uma pessoa para reservar o mesmo card.
+Executa de verdade. Toda escrita para e espera uma pessoa aprovar aquela chamada específica. As exceções são o claim de work item (`$fuseone.work_item.claim`), que só registra na plataforma qual card um run reservou e passa sem aprovação, para que dois runs nunca esperem uma pessoa para reservar o mesmo card, e o vínculo de work item (`$fuseone.work_item.link`), que registra um pull request como parte do card do run e passa sem aprovação só quando o próprio `create_pull_request` do run citou aquele pull request. Um vínculo sem essa prova espera uma pessoa, como qualquer outra escrita.
 
 É o degrau onde se aprende o que o agente realmente faz com dado real — que nunca é exatamente o que o ensaio mostrou.
 
