@@ -247,9 +247,14 @@ the toolset only offers it. Each role's App needs:
 
 The Developer's App has **no Workflows permission**, so GitHub refuses any
 write it makes under `.github/workflows`; a change there is not Level 1.
-Contents: write reaches every branch, `main` included: the reference keeps the
-Developer to branches it creates under `factory/`, and the person approving
-each write sees the branch it names.
+Contents: write reaches every branch, `main` included. The reference keeps the
+Developer to branches it creates under `factory/` and off `factory/` and the
+`CLAUDE.md` files, two lines sealed in
+`internal/spec/factory_references_test.go`, and the person approving each
+write sees the branch it names. Neither is a mechanism, so **the ruleset on
+`main` of #207, which refuses a direct push, is a prerequisite for starting
+the Developer**, not a recommendation: until `main` carries it, the Developer
+stays paused.
 
 Submitting a review needs Pull requests: **write**, for QA as much as for the
 Reviewer: in v1 QA's verdict is a review, not a commit status, so QA needs no

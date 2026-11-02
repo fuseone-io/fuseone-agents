@@ -148,6 +148,31 @@ var developerLevelOneBoundary = []string{
 	"If the label cannot be set, comment on the issue that factory:needs-runtime is missing from the repository and move the card to Travado instead, so that no later run picks it again.",
 }
 
+// developerWriteFences are the Developer's two fences on what it writes. Its
+// App holds Contents: write, which reaches every branch, main included, and
+// every file, the rules every role follows included; these lines, the person
+// approving each write and the ruleset on main (#207) are what keep it to its
+// own branches and off the rules.
+var developerWriteFences = []string{
+	"Never write to main or to any branch you did not create under factory/.",
+	"Never change factory/, CLAUDE.md or web/CLAUDE.md: a change to the rules every role follows is a person's change, so move such a card to Travado.",
+}
+
+func TestFactoryReferences_developer_carriesItsWriteFencesOnce(t *testing.T) {
+	t.Parallel()
+
+	data, ok := factoryReferences(t)["developer"]
+	if !ok {
+		t.Fatal("there is no Developer reference")
+	}
+	lines := strings.Split(string(data), "\n")
+	for _, sentence := range developerWriteFences {
+		if count := countLines(lines, sentence); count != 1 {
+			t.Errorf("the Developer reference carries the line %q %d times, want 1", sentence, count)
+		}
+	}
+}
+
 func TestFactoryReferences_developer_carriesThePreClaimRuleBeforeItsClaim(t *testing.T) {
 	t.Parallel()
 

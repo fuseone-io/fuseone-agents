@@ -100,10 +100,16 @@ works, and give it only what its tools need:
 QA's verdict is a pull request review, so QA needs Pull requests: write just
 like the Reviewer. Do not give the Developer's App the Workflows permission:
 without it, GitHub refuses any change the Developer makes under
-`.github/workflows`. Contents: write reaches every branch, `main` included;
-the Developer is told to write only to branches it creates under `factory/`,
-and the person approving each write sees the branch it names. Generate a private key for each App and note its App id
+`.github/workflows`. Generate a private key for each App and note its App id
 and installation id.
+
+Contents: write reaches every branch, `main` included. The Developer is told to
+write only to branches it creates under `factory/`, and the person approving
+each write sees the branch it names, but neither stops a write. **Before you
+start the Developer, `main` must carry a ruleset that refuses a direct push**
+([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)). This is a
+prerequisite, not a recommendation: until the ruleset exists, leave the
+Developer paused.
 
 ## 3. Register the GitHub server once per role
 
@@ -183,7 +189,8 @@ frontmatter's fields, and the body as its instructions.
 
 Then publish it — a new agent is a paused draft — set its stage to
 **copilot** and start it. The stage is not in the file, so it is always set in
-the console.
+the console. Start the Developer only once `main` carries the ruleset that
+refuses a direct push (step 2).
 
 The console refuses to publish a tool the registered server does not offer, so
 a wrong tool name, or a missing toolset, is found here rather than at run

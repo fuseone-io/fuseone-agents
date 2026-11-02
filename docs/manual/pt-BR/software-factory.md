@@ -105,11 +105,17 @@ fábrica trabalha e dê a ele só o que as ferramentas do papel precisam:
 O veredito do QA é uma revisão de pull request, então o QA precisa de Pull
 requests: write, assim como o Revisor. Não dê a permissão Workflows ao App do
 Desenvolvedor: sem ela, o GitHub recusa qualquer mudança que o Desenvolvedor
-faça em `.github/workflows`. Contents: write alcança todos os branches,
-inclusive o `main`; o Desenvolvedor é instruído a escrever só nos branches
-que ele mesmo cria em `factory/`, e a pessoa que aprova cada escrita vê o
-branch que ela indica. Gere uma chave privada para cada App e
-anote o ID do App e o ID da instalação.
+faça em `.github/workflows`. Gere uma chave privada para cada App e anote o
+ID do App e o ID da instalação.
+
+Contents: write alcança todos os branches, inclusive o `main`. O
+Desenvolvedor é instruído a escrever só nos branches que ele mesmo cria em
+`factory/`, e a pessoa que aprova cada escrita vê o branch que ela indica, mas
+nenhum dos dois impede uma escrita. **Antes de iniciar o Desenvolvedor, o
+`main` precisa ter um ruleset que recuse push direto**
+([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)). Isso é um
+pré-requisito, não uma recomendação: enquanto o ruleset não existir, deixe o
+Desenvolvedor pausado.
 
 ## 3. Registre o servidor do GitHub uma vez por papel
 
@@ -193,7 +199,8 @@ frontmatter, e o corpo como instruções.
 
 Depois publique — um agente novo é um rascunho pausado —, ponha o estágio em
 **copiloto** e inicie. O estágio não está no arquivo, então ele sempre é
-definido no console.
+definido no console. Só inicie o Desenvolvedor depois que o `main` tiver o
+ruleset que recusa push direto (passo 2).
 
 O console recusa publicar uma ferramenta que o servidor registrado não
 oferece, então um nome de ferramenta errado, ou um toolset faltando, aparece
