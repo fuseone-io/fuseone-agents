@@ -205,6 +205,47 @@ func TestWorkItemClaim_withNoAgentOrAMalformedRef_refused(t *testing.T) {
 	})
 }
 
+/*
+A claim speaks for its run, under the run's own agent and scope (#204 review).
+
+The append seals any step's agent and scope as given, and the claim's
+projection used to copy them from the step. A claim naming another agent
+held the card against that agent's runs and released it from its own; one
+naming another scope put the run's card in an area it never ran in. The
+engine stamps every step with the run's identity, so a claim that differs
+was not written by the run, and is refused — nothing sealed, nothing
+projected.
+*/
+func TestWorkItemClaim_underAnotherAgentOrScopeThanItsRun_refused(t *testing.T) {
+	run(t, "a claim under another identity is refused", func(t *testing.T, s Store) {
+		openRunOf(t, s, "run-a", "triage")
+		before := headSeq(t, s, "run-a")
+		otherScope := claimStep(t, "run-a", "triage", card)
+		otherScope.Scope = domain.Scope{Company: "acme", Area: "factory"}
+		otherCompany := claimStep(t, "run-a", "triage", card)
+		otherCompany.Scope = domain.Scope{Company: "globex", Area: "cx"}
+		for name, st := range map[string]domain.Step{
+			"another agent":   claimStep(t, "run-a", "developer", card),
+			"another area":    otherScope,
+			"another company": otherCompany,
+		} {
+			if _, err := s.Append(context.Background(), st); !errors.Is(err, domain.ErrWorkItemInvalid) {
+				t.Errorf("%s: Append = %v, want ErrWorkItemInvalid", name, err)
+			}
+		}
+		if after := headSeq(t, s, "run-a"); after != before {
+			t.Fatalf("head moved %d -> %d: a refused claim was sealed", before, after)
+		}
+		trail, err := s.WorkItemTrail(context.Background(), domain.RunFilter{}, nil, card, domain.WorkItemPage{})
+		if err != nil || len(trail.Runs) != 0 {
+			t.Fatalf("trail = %+v, %v; a refused claim was projected", trail.Runs, err)
+		}
+		if err := claim(t, s, "run-a", "triage", card); err != nil {
+			t.Fatalf("the run's own claim: %v", err)
+		}
+	})
+}
+
 // Cost per card counts every run that claimed it, including one that failed
 // before its first write — the run nothing else would ever attribute.
 func TestWorkItemCost_includesARunThatFailedBeforeAnyWrite(t *testing.T) {

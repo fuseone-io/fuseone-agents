@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"encoding/json"
+	"slices"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -23,6 +24,10 @@ func (m *Memory) judgeWorkItem(s domain.Step) error {
 	if err != nil {
 		return err
 	}
+	agent, scope := projectedIdentity(m.runs[s.RunID], s)
+	if err := claimSpeaksForRun(s, agent, scope); err != nil {
+		return err
+	}
 	own, _, _ := claimOfRun(m.runs[s.RunID])
 	// A simulation rehearses the claim against its own trail only; see
 	// judgeSimulatedClaim for why it may neither hold nor be blocked.
@@ -41,6 +46,14 @@ func (m *Memory) judgeWorkItem(s domain.Step) error {
 		}
 	}
 	return judgeClaim(ref, own, heldElsewhere)
+}
+
+// projectedIdentity is the run's agent and scope as the Postgres projection
+// holds them once the step is folded in: the first non-empty value of each,
+// the incoming step included, as upsertRun keeps them.
+func projectedIdentity(steps []domain.Step, s domain.Step) (domain.AgentID, domain.Scope) {
+	who := identityOf(append(slices.Clip(steps), s))
+	return who.AgentID, who.Scope
 }
 
 // claimOfRun is the card a run holds and the agent that claimed it.

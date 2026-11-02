@@ -34,11 +34,14 @@ func recordWorkItemClaim(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 	if err != nil {
 		return err
 	}
-	simulated, err := runSimulated(ctx, tx, s.RunID)
+	run, err := claimingRun(ctx, tx, s.RunID)
 	if err != nil {
 		return err
 	}
-	if simulated {
+	if err := claimSpeaksForRun(s, run.agent, run.scope); err != nil {
+		return err
+	}
+	if run.simulated {
 		return judgeSimulatedClaim(ctx, tx, s, ref)
 	}
 	if _, err := tx.Exec(ctx,
@@ -130,14 +133,24 @@ Inside its own run the claim still behaves, judged from its own trail: the
 first claim succeeds, a retry of it succeeds, a second card is refused. Nothing
 is projected and no other run is consulted or blocked.
 */
-func runSimulated(ctx context.Context, tx pgx.Tx, runID domain.RunID) (bool, error) {
-	var simulated bool
+//
+// The same read gives the run's identity as the projection holds it, already
+// folded with this step by upsertRun: the agent and scope the claim must be
+// sealed under (claimSpeaksForRun).
+type claimRun struct {
+	agent     domain.AgentID
+	scope     domain.Scope
+	simulated bool
+}
+
+func claimingRun(ctx context.Context, tx pgx.Tx, runID domain.RunID) (claimRun, error) {
+	var r claimRun
 	if err := tx.QueryRow(ctx,
-		`select simulated from runs where run_id = $1`, string(runID),
-	).Scan(&simulated); err != nil {
-		return false, fmt.Errorf("read whether the run is simulated: %w", err)
+		`select agent_id, company_id, area_id, simulated from runs where run_id = $1`, string(runID),
+	).Scan(&r.agent, &r.scope.Company, &r.scope.Area, &r.simulated); err != nil {
+		return claimRun{}, fmt.Errorf("read the claiming run: %w", err)
 	}
-	return simulated, nil
+	return r, nil
 }
 
 func judgeSimulatedClaim(ctx context.Context, tx pgx.Tx, s domain.Step, ref domain.WorkItemRef) error {

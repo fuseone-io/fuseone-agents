@@ -39,6 +39,19 @@ func claimedRef(s domain.Step) (domain.WorkItemRef, error) {
 	return ref, nil
 }
 
+// claimSpeaksForRun refuses a claim sealed under another agent or scope than
+// its run's. The engine stamps every step with the run's identity, so a
+// claim that differs was not written by the run; projected, it would hold the
+// card for another agent and file the run's work under another area. Both
+// stores pass the run's identity as their projection holds it.
+func claimSpeaksForRun(s domain.Step, agent domain.AgentID, scope domain.Scope) error {
+	if s.AgentID != agent || s.Scope != scope {
+		return fmt.Errorf("%w: the claim names %s in %s, the run is %s in %s",
+			domain.ErrWorkItemInvalid, s.AgentID, s.Scope, agent, scope)
+	}
+	return nil
+}
+
 // judgeClaim is the decision both stores make once they know what this run
 // already holds and whether another open run of the agent holds the card.
 func judgeClaim(ref, own domain.WorkItemRef, heldElsewhere bool) error {
