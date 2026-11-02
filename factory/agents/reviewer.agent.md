@@ -33,7 +33,6 @@ steps:
       - github-reviewer.get_file_contents
       - github-reviewer.search_code
       - github-reviewer.get_commit
-    stops_when: the change cannot be judged without a decision only a person can make
   - name: Submit the verdict
     reaches:
       - github-reviewer.pull_request_read
@@ -43,6 +42,7 @@ steps:
       - github-reviewer.projects_list
       - github-reviewer.projects_get
       - github-reviewer.projects_write
+    stops_when: the change cannot be judged without a decision only a person can make, and that question is commented on the pull request and the card of the issue it closes is in Travado
 budget:
   micros: 2000000
   tool_calls: 80

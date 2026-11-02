@@ -29,7 +29,6 @@ steps:
       - github-qa.pull_request_read
       - github-qa.issue_read
       - github-qa.get_file_contents
-    stops_when: a criterion cannot be judged met or not met without a person
   - name: Submit the verdict
     reaches:
       - github-qa.pull_request_read
@@ -39,6 +38,7 @@ steps:
       - github-qa.projects_list
       - github-qa.projects_get
       - github-qa.projects_write
+    stops_when: a criterion cannot be judged met or not met without a person, and that question is commented on the pull request and the card of the issue it closes is in Travado
 budget:
   micros: 1000000
   tool_calls: 50

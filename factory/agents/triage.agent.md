@@ -28,12 +28,12 @@ steps:
       - github-triage.issue_read
       - github-triage.list_issues
       - github-triage.search_issues
-    stops_when: what is missing is something only a person can answer
   - name: Write the outcome back
     reaches:
       - github-triage.add_issue_comment
       - github-triage.issue_write
       - github-triage.projects_write
+    stops_when: what is missing is something only a person can answer, and that question is commented on the issue and the card is in Travado
 budget:
   micros: 500000
   tool_calls: 30

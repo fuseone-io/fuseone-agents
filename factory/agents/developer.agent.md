@@ -38,7 +38,6 @@ steps:
       - github-developer.get_file_contents
       - github-developer.search_code
       - github-developer.get_commit
-    stops_when: the card needs a build or a test run before its pull request, or a decision only a person can make
   - name: Write the change
     reaches:
       - github-developer.get_file_contents
@@ -52,6 +51,7 @@ steps:
       - github-developer.projects_list
       - github-developer.projects_get
       - github-developer.projects_write
+    stops_when: the card is left for a person, with its issue labelled factory:needs-runtime and the reason commented, or with the question commented and the card in Travado
 budget:
   micros: 3000000
   tool_calls: 100
