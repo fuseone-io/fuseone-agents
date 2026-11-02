@@ -31,6 +31,7 @@ export default function ConsoleRoutes() {
           <Route path="/agents/:agentId/simulate" element={<P.SimulationPage />} />
           <Route path="/runs" element={<P.RunsPage />} />
           <Route path="/runs/:runId" element={<P.RunDetailPage />} />
+          <Route path="/work-items" element={<P.WorkItemPage />} />
           <Route path="/runtime" element={<P.RuntimePage />} />
           <Route path="/approvals" element={<P.ApprovalsPage />} />
           <Route path="/cost" element={<P.CostPage />} />

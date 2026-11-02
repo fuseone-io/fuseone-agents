@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -23,6 +24,13 @@ func (m *Memory) judgeWorkItem(s domain.Step) error {
 	if err != nil {
 		return err
 	}
+	agent, scope, err := startedIdentity(m.runs[s.RunID])
+	if err != nil {
+		return err
+	}
+	if err := claimSpeaksForRun(s, agent, scope); err != nil {
+		return err
+	}
 	own, _, _ := claimOfRun(m.runs[s.RunID])
 	// A simulation rehearses the claim against its own trail only; see
 	// judgeSimulatedClaim for why it may neither hold nor be blocked.
@@ -34,13 +42,27 @@ func (m *Memory) judgeWorkItem(s domain.Step) error {
 		if id == s.RunID || simulatedRun(steps) {
 			continue
 		}
-		held, agent, ok := claimOfRun(steps)
-		if ok && agent == s.AgentID && held == ref && !terminalPhase(phaseOfRun(steps)) {
+		// The holder's agent is the run's own, not its claim step's: a
+		// legacy claim under another agent still holds for the run's agent.
+		held, _, ok := claimOfRun(steps)
+		if ok && identityOf(steps).AgentID == agent && held == ref && !terminalPhase(phaseOfRun(steps)) {
 			heldElsewhere = true
 			break
 		}
 	}
 	return judgeClaim(ref, own, heldElsewhere)
+}
+
+// startedIdentity is the run's agent and scope as they stood before the
+// claim — the incoming step excluded, as the Postgres store judges before
+// upsertRun — and refuses a run that has not started: no steps, or a first
+// step that is not its run_started.
+func startedIdentity(steps []domain.Step) (domain.AgentID, domain.Scope, error) {
+	if len(steps) == 0 || steps[0].Kind != domain.StepRunStarted {
+		return "", domain.Scope{}, fmt.Errorf("%w: the run has not started", domain.ErrWorkItemInvalid)
+	}
+	who := identityOf(steps)
+	return who.AgentID, who.Scope, nil
 }
 
 // claimOfRun is the card a run holds and the agent that claimed it.

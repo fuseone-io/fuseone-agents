@@ -871,6 +871,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/work-items/trail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The trail of one work item reference
+         * @description Every run that claimed the reference through
+         *     `$fuseone.work_item.claim`, oldest claim first, and per role what
+         *     those runs asked people and what they cost (#204).
+         *
+         *     A view of this reference only: an issue and the pull request that
+         *     answers it are two references with two trails until the platform
+         *     links them.
+         *
+         *     Narrowed on every page by the caller's own `run:read` and
+         *     `agent:read` scopes: a run the caller cannot read is absent, and its
+         *     approvals and cost count in no aggregate. A reference with no
+         *     readable run answers 200 with an empty trail, exactly as one nobody
+         *     ever claimed, so existence in a scope the caller cannot read is not
+         *     revealed. Counts and identifiers only: no tool arguments, no step
+         *     payloads, no approval reasons.
+         */
+        get: operations["getWorkItemTrail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{runId}": {
         parameters: {
             query?: never;
@@ -5261,6 +5295,61 @@ export interface components {
             items: components["schemas"]["Run"][];
             nextCursor?: string | null;
         };
+        WorkItemTrail: {
+            /** @description The reference in its canonical form. */
+            ref: string;
+            /** @description This page of runs, oldest claim first. */
+            runs: components["schemas"]["WorkItemRun"][];
+            /**
+             * @description One row per agent over every readable run of the reference, in
+             *     the order each first claimed it. Present on the first page only.
+             */
+            roles?: components["schemas"]["WorkItemRole"][];
+            /** @description Where the next page starts. Absent on the last page. */
+            nextCursor?: string;
+        };
+        WorkItemRun: {
+            runId: string;
+            agentId: string;
+            scope: components["schemas"]["Scope"];
+            phase: components["schemas"]["Phase"];
+            /** Format: date-time */
+            startedAt: string;
+            /**
+             * Format: date-time
+             * @description Absent while the run is going.
+             */
+            endedAt?: string;
+            /** Format: date-time */
+            claimedAt: string;
+            /**
+             * @description How the run came to be on the trail. A claim, for now.
+             * @enum {string}
+             */
+            link: "claim";
+        };
+        WorkItemRole: {
+            agentId: string;
+            runs: number;
+            approvalsRequested: number;
+            approved: number;
+            refused: number;
+            /** @description Runs of this role a person abandoned. */
+            abandoned: number;
+            /** Format: date-time */
+            firstClaimedAt: string;
+            /**
+             * Format: date-time
+             * @description Absent when none of the role's runs has ended.
+             */
+            lastEndedAt?: string;
+            /**
+             * Format: int64
+             * @description What the role's runs cost. Absent — never zero — unless the
+             *     caller holds cost:read over every one of them.
+             */
+            costMicros?: number;
+        };
         Step: {
             /** Format: int64 */
             seq: number;
@@ -6798,6 +6887,44 @@ export interface operations {
                     "application/json": components["schemas"]["DecisionPage"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getWorkItemTrail: {
+        parameters: {
+            query: {
+                /**
+                 * @description The work item reference, in the canonical form the claim takes:
+                 *     `github:<owner>/<repo>#<number>` or `ghproject:<node id>`.
+                 *     Normalised by the claim's own parser, so owner and repository
+                 *     fold to lower case. Missing, empty or not a reference is 400.
+                 */
+                ref: string;
+                /**
+                 * @description `nextCursor` from the previous page, verbatim. A position and
+                 *     nothing else: the caller's scopes and cost:read are applied to
+                 *     every page afresh. A token that is not a position is 400.
+                 */
+                cursor?: string;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the trail. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemTrail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

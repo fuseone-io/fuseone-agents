@@ -2962,5 +2962,32 @@
     "constrain": "restringir",
     "duplicate": "pular",
     "require_approval": "escalar"
+  },
+  "workItems": {
+    "columnAbandoned": "Abandonadas",
+    "columnApproved": "Aprovadas",
+    "columnArea": "Área",
+    "columnClaimed": "Assumida em",
+    "columnCost": "Custo",
+    "columnEnded": "Terminou",
+    "columnFirstClaim": "Primeira vez",
+    "columnLastEnd": "Último término",
+    "columnLink": "Ligada por",
+    "columnRefused": "Recusadas",
+    "columnRequested": "Aprovações pedidas",
+    "columnRole": "Papel",
+    "columnRuns": "Execuções",
+    "costHidden": "Custo não visível para você",
+    "empty": "Nenhuma execução que você pode ver assumiu esta referência",
+    "emptyHint": "Uma execução aparece aqui assim que assume o item com $fuseone.work_item.claim, numa área que você pode ler.",
+    "linkClaim": "Assumiu",
+    "noRef": "Nenhuma referência informada",
+    "noRefHint": "Abra um item de trabalho pelo registro de quem o assumiu no histórico de uma execução.",
+    "notEnded": "Ainda não",
+    "roles": "Por papel",
+    "scopeNote": "Visão somente desta referência: por enquanto, a issue e o pull request que a resolve aparecem separadamente, cada um com seu próprio histórico.",
+    "subtitle": "Todas as execuções que assumiram esta referência, e o que cada papel pediu e gastou.",
+    "timeline": "Execuções",
+    "title": "Item de trabalho"
   }
 }

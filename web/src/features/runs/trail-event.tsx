@@ -14,7 +14,14 @@ import { cn } from "@/lib/utils";
 import { formatTime, shortHash } from "@/lib/format";
 import { hasContent } from "@/features/runs/step-content-ref";
 import { RememberThisButton } from "@/features/runs/remember-this-button";
+import { WorkItemRefLink } from "@/features/work-items/work-item-ref-link";
 import type { Step } from "@/lib/api/client";
+
+/** The reference a claim step names, or "" for any other step. */
+function claimedRef(step: Step): string {
+  const ref = step.kind === "work_item_claimed" ? step.payload?.ref : undefined;
+  return typeof ref === "string" ? ref : "";
+}
 
 /**
  * One event in the trail.
@@ -70,7 +77,11 @@ export function TrailEvent({
       </div>
       {line(detailOf(step), t) && (
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {line(detailOf(step), t)}
+          {claimedRef(step) ? (
+            <WorkItemRefLink reference={claimedRef(step)} label={line(detailOf(step), t)} />
+          ) : (
+            line(detailOf(step), t)
+          )}
         </p>
       )}
     </>

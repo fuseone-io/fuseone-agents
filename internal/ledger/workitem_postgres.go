@@ -34,20 +34,25 @@ func recordWorkItemClaim(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 	if err != nil {
 		return err
 	}
-	simulated, err := runSimulated(ctx, tx, s.RunID)
+	run, err := claimingRun(ctx, tx, s.RunID)
 	if err != nil {
 		return err
 	}
-	if simulated {
+	if err := claimSpeaksForRun(s, run.agent, run.scope); err != nil {
+		return err
+	}
+	if run.simulated {
 		return judgeSimulatedClaim(ctx, tx, s, ref)
 	}
+	// Keyed on the run's own agent, the identity the holders are read by, so
+	// two claims of one card by the same agent always meet at this lock.
 	if _, err := tx.Exec(ctx,
 		`select pg_advisory_xact_lock(hashtextextended('work_item:' || $1::text || chr(31) || $2::text, 0))`,
-		string(s.AgentID), string(ref),
+		string(run.agent), string(ref),
 	); err != nil {
 		return fmt.Errorf("lock work item: %w", err)
 	}
-	own, heldElsewhere, err := claimHolders(ctx, tx, s, ref)
+	own, heldElsewhere, err := claimHolders(ctx, tx, s.RunID, run.agent, ref)
 	if err != nil {
 		return err
 	}
@@ -70,8 +75,12 @@ func recordWorkItemClaim(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 // claimHolders reads, once the lock is held, the card this run already holds
 // and whether another open run of the agent holds the one being claimed. The
 // phase is the runs projection's, so an ended run is simply not a holder.
+//
+// The holder's agent is the run's, from runs — never the claim row's: a row
+// an older release wrote under another agent must still hold the card for
+// the agent whose run it is.
 func claimHolders(
-	ctx context.Context, tx pgx.Tx, s domain.Step, ref domain.WorkItemRef,
+	ctx context.Context, tx pgx.Tx, runID domain.RunID, agent domain.AgentID, ref domain.WorkItemRef,
 ) (domain.WorkItemRef, bool, error) {
 	var own string
 	var heldElsewhere bool
@@ -80,9 +89,9 @@ func claimHolders(
 			coalesce((select ref from run_work_items where run_id = $1), ''),
 			exists (
 				select 1 from run_work_items c join runs r on r.run_id = c.run_id
-				where c.agent_id = $2 and c.ref = $3 and c.run_id <> $1
+				where r.agent_id = $2 and c.ref = $3 and c.run_id <> $1
 				  and r.phase not in ('finished', 'failed'))`,
-		string(s.RunID), string(s.AgentID), string(ref),
+		string(runID), string(agent), string(ref),
 	).Scan(&own, &heldElsewhere)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return "", false, fmt.Errorf("judge work item claim: %w", err)
@@ -130,14 +139,35 @@ Inside its own run the claim still behaves, judged from its own trail: the
 first claim succeeds, a retry of it succeeds, a second card is refused. Nothing
 is projected and no other run is consulted or blocked.
 */
-func runSimulated(ctx context.Context, tx pgx.Tx, runID domain.RunID) (bool, error) {
-	var simulated bool
-	if err := tx.QueryRow(ctx,
-		`select simulated from runs where run_id = $1`, string(runID),
-	).Scan(&simulated); err != nil {
-		return false, fmt.Errorf("read whether the run is simulated: %w", err)
+//
+// The same read gives the run's identity as the projection held it before
+// this step — the claim is judged before upsertRun folds it in — and so the
+// agent and scope the claim must be sealed under (claimSpeaksForRun). A run
+// with no row, or whose first step is not its run_started, has not started:
+// a claim there would create the run it claims to speak for.
+type claimRun struct {
+	agent     domain.AgentID
+	scope     domain.Scope
+	simulated bool
+}
+
+func claimingRun(ctx context.Context, tx pgx.Tx, runID domain.RunID) (claimRun, error) {
+	var r claimRun
+	var started bool
+	err := tx.QueryRow(ctx, `
+		select r.agent_id, r.company_id, r.area_id, r.simulated,
+		       exists (select 1 from run_steps s
+		               where s.run_id = r.run_id and s.seq = 1 and s.opened_at = r.started_at
+		                 and s.kind = 'run_started')
+		from runs r where r.run_id = $1`, string(runID),
+	).Scan(&r.agent, &r.scope.Company, &r.scope.Area, &r.simulated, &started)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows) || (err == nil && !started):
+		return claimRun{}, fmt.Errorf("%w: run %s has not started", domain.ErrWorkItemInvalid, runID)
+	case err != nil:
+		return claimRun{}, fmt.Errorf("read the claiming run: %w", err)
 	}
-	return simulated, nil
+	return r, nil
 }
 
 func judgeSimulatedClaim(ctx context.Context, tx pgx.Tx, s domain.Step, ref domain.WorkItemRef) error {

@@ -55,6 +55,9 @@ export type ApprovalEvidenceDetail =
   components["schemas"]["ApprovalEvidenceDetail"];
 export type CostRollup = components["schemas"]["CostRollup"];
 export type RunStats = components["schemas"]["RunStats"];
+export type WorkItemTrail = components["schemas"]["WorkItemTrail"];
+export type WorkItemRun = components["schemas"]["WorkItemRun"];
+export type WorkItemRole = components["schemas"]["WorkItemRole"];
 export type RuntimeHealth = components["schemas"]["RuntimeHealth"];
 export type RuntimeFailureBucket = components["schemas"]["RuntimeFailureBucket"];
 export type RuntimeToolFailureBucket = components["schemas"]["RuntimeToolFailureBucket"];

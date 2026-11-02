@@ -205,6 +205,121 @@ func TestWorkItemClaim_withNoAgentOrAMalformedRef_refused(t *testing.T) {
 	})
 }
 
+/*
+A claim speaks for its run, under the run's own agent and scope (#204 review).
+
+The append seals any step's agent and scope as given, and the claim's
+projection used to copy them from the step. A claim naming another agent
+held the card against that agent's runs and released it from its own; one
+naming another scope put the run's card in an area it never ran in. The
+engine stamps every step with the run's identity, so a claim that differs
+was not written by the run, and is refused — nothing sealed, nothing
+projected.
+*/
+func TestWorkItemClaim_underAnotherAgentOrScopeThanItsRun_refused(t *testing.T) {
+	run(t, "a claim under another identity is refused", func(t *testing.T, s Store) {
+		openRunOf(t, s, "run-a", "triage")
+		before := headSeq(t, s, "run-a")
+		otherScope := claimStep(t, "run-a", "triage", card)
+		otherScope.Scope = domain.Scope{Company: "acme", Area: "factory"}
+		otherCompany := claimStep(t, "run-a", "triage", card)
+		otherCompany.Scope = domain.Scope{Company: "globex", Area: "cx"}
+		for name, st := range map[string]domain.Step{
+			"another agent":   claimStep(t, "run-a", "developer", card),
+			"another area":    otherScope,
+			"another company": otherCompany,
+		} {
+			if _, err := s.Append(context.Background(), st); !errors.Is(err, domain.ErrWorkItemInvalid) {
+				t.Errorf("%s: Append = %v, want ErrWorkItemInvalid", name, err)
+			}
+		}
+		if after := headSeq(t, s, "run-a"); after != before {
+			t.Fatalf("head moved %d -> %d: a refused claim was sealed", before, after)
+		}
+		trail, err := s.WorkItemTrail(context.Background(), domain.RunFilter{}, nil, card, domain.WorkItemPage{})
+		if err != nil || len(trail.Runs) != 0 {
+			t.Fatalf("trail = %+v, %v; a refused claim was projected", trail.Runs, err)
+		}
+		if err := claim(t, s, "run-a", "triage", card); err != nil {
+			t.Fatalf("the run's own claim: %v", err)
+		}
+	})
+}
+
+/*
+A legacy claim recorded under another agent still holds the card for its
+run's own agent (review round 2).
+
+Rows written before the append refused divergent claims may say a run's card
+is held by spoofed-agent while the run is real-agent's. The judgement asks who
+holds the card by the run's own identity, so a second open run of
+real-agent is refused; asked by the claim row's agent, it would be let
+through and the card held twice.
+*/
+func TestWorkItemClaim_aLegacyClaimUnderAnotherAgent_stillHoldsForTheRunsAgent(t *testing.T) {
+	run(t, "legacy divergent claim holds for the run's agent", func(t *testing.T, s Store) {
+		openRunOf(t, s, "run-legacy", "real-agent")
+		if err := s.(planter).PlantWorkItemClaim(context.Background(), "run-legacy", "spoofed-agent",
+			domain.Scope{Company: "acme", Area: "cx"}, card); err != nil {
+			t.Fatalf("plant: %v", err)
+		}
+		openRunOf(t, s, "run-second", "real-agent")
+
+		if err := claim(t, s, "run-second", "real-agent", card); !errors.Is(err, domain.ErrWorkItemHeld) {
+			t.Fatalf("second claim by real-agent = %v, want ErrWorkItemHeld", err)
+		}
+	})
+}
+
+/*
+A claim speaks for a run that already started (review round 2).
+
+Judged against an identity that included the claim itself, a
+work_item_claimed sealed as the first step of a run nobody opened created
+its own run: it agreed with itself, was projected, and held the card for an
+agent with no run_started — a holder that would never finish. The claim
+needs the run's run_started before it, and is refused without one, leaving
+no step, no run and no holder.
+*/
+func TestWorkItemClaim_asTheFirstStepOfAnUnknownRun_refusedAndStoresNothing(t *testing.T) {
+	run(t, "a claim needs a started run", func(t *testing.T, s Store) {
+		if _, err := s.Append(context.Background(), claimStep(t, "run-ghost", "triage", card)); !errors.Is(err, domain.ErrWorkItemInvalid) {
+			t.Fatalf("claim on an unknown run = %v, want ErrWorkItemInvalid", err)
+		}
+		if steps, err := s.Read(context.Background(), "run-ghost", domain.FirstSeq); err == nil && len(steps) > 0 {
+			t.Fatalf("the refused claim left %d steps", len(steps))
+		}
+		listed, err := s.ListRuns(context.Background(), domain.RunFilter{}, "", 100)
+		if err != nil || len(listed) != 0 {
+			t.Fatalf("runs = %+v, %v; the refused claim created a run", listed, err)
+		}
+		openRunOf(t, s, "run-real", "triage")
+		if err := claim(t, s, "run-real", "triage", card); err != nil {
+			t.Fatalf("a real run's claim = %v; the refused claim left a holder", err)
+		}
+	})
+}
+
+// The identity the claim is judged against is the run's as it stood before
+// the claim: a run opened with no agent does not take the claim's, and a run
+// whose first step is not its run_started has not started.
+func TestWorkItemClaim_againstARunThatHasNoIdentityOrNoStart_refused(t *testing.T) {
+	run(t, "a claim does not give its run an identity", func(t *testing.T, s Store) {
+		openRunOf(t, s, "run-nameless", "")
+		mustAppend(t, s, step("run-unstarted", domain.StepPlanned))
+
+		for _, id := range []domain.RunID{"run-nameless", "run-unstarted"} {
+			before := headSeq(t, s, id)
+			if err := claim(t, s, id, "triage", card); !errors.Is(err, domain.ErrWorkItemInvalid) {
+				t.Errorf("%s: claim = %v, want ErrWorkItemInvalid", id, err)
+			}
+			if after := headSeq(t, s, id); after != before {
+				t.Errorf("%s: head moved %d -> %d; the refused claim was sealed", id, before, after)
+			}
+		}
+	})
+}
+
 // Cost per card counts every run that claimed it, including one that failed
 // before its first write — the run nothing else would ever attribute.
 func TestWorkItemCost_includesARunThatFailedBeforeAnyWrite(t *testing.T) {

@@ -82,4 +82,16 @@ identity. Completed reads may poll again, but three consecutive reads of one
 tool that produce the same complete result park as `investigation_stalled`
 before the money ceiling becomes the only stop.
 
+### Which runs worked on this card
+
+A run that claimed a card shows **Item: <reference>** in its trail. The
+reference is a link to the card's own trail: every run that claimed it,
+oldest first, each leading back to its run, and one row per role with the
+approvals it asked for, how many were approved and refused, the runs a person
+abandoned, and what the role cost. You see only the runs of areas you can
+read, and nothing of the others counts in any total; the cost appears only
+where you may read it, and otherwise says so instead of showing zero. It is a
+view of that one reference: for now an issue and the pull request that
+answers it show separately.
+
 What decides each stop is in [What the platform stops before it happens](what-the-gate-stops.md) and in [Policies](policies.md).

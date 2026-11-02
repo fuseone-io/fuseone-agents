@@ -31,6 +31,9 @@ export const RunsPage = lazy(() =>
 export const RunDetailPage = lazy(() =>
   import("@/features/runs/run-detail-page").then((m) => ({ default: m.RunDetailPage })),
 );
+export const WorkItemPage = lazy(() =>
+  import("@/features/work-items/work-item-page").then((m) => ({ default: m.WorkItemPage })),
+);
 export const RuntimePage = lazy(() =>
   import("@/features/runtime/runtime-page").then((m) => ({ default: m.RuntimePage })),
 );

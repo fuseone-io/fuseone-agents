@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -36,6 +37,51 @@ func MigrateBodies(ctx context.Context, pool *pgxpool.Pool, files []TestMigratio
 
 // MigrationDigest is the digest the runner records for a body.
 func MigrationDigest(body string) string { return digestBytes([]byte(body)) }
+
+// WorkItemRunsSQL and WorkItemRolesSQL are the trail's page and its role
+// summary, for the plan tests that hold them to the ref index, an aggregate
+// and partition pruning.
+var (
+	WorkItemRunsSQL  = workItemRunsSQL
+	WorkItemRolesSQL = workItemRolesSQL
+)
+
+// PlantWorkItemClaim records that a run claimed ref under an agent and scope
+// that need not be the run's own, bypassing the append's judgement — the
+// state an older release or a hand-written row could leave behind, which the
+// trail must still attribute to the run's own identity.
+func (p *Postgres) PlantWorkItemClaim(
+	ctx context.Context, runID domain.RunID, agent domain.AgentID, scope domain.Scope, ref domain.WorkItemRef,
+) error {
+	_, err := p.pool.Exec(ctx, `
+		insert into run_work_items (run_id, company_id, area_id, agent_id, ref, claimed_seq, claimed_at)
+		select run_id, $2, $3, $4, $5, last_seq, updated_at from runs where run_id = $1`,
+		string(runID), string(scope.Company), string(scope.Area), string(agent), string(ref))
+	return err
+}
+
+// PlantWorkItemClaim is the memory store's equivalent: a claim step under
+// that agent and scope, sealed onto the run without the claim's judgement.
+func (m *Memory) PlantWorkItemClaim(
+	ctx context.Context, runID domain.RunID, agent domain.AgentID, scope domain.Scope, ref domain.WorkItemRef,
+) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	steps := m.runs[runID]
+	if len(steps) == 0 {
+		return fmt.Errorf("no run %s", runID)
+	}
+	payload, err := json.Marshal(domain.WorkItemClaimedPayload{Ref: ref})
+	if err != nil {
+		return err
+	}
+	last := steps[len(steps)-1]
+	m.runs[runID] = append(steps, domain.Step{
+		RunID: runID, Seq: last.Seq + 1, Kind: domain.StepWorkItemClaimed,
+		Scope: scope, AgentID: agent, VersionID: last.VersionID, At: last.At, Payload: payload,
+	})
+	return nil
+}
 
 // FinishedSinceSQL is one page of the dispatcher's feed, for the same test.
 const FinishedSinceSQL = finishedSinceSQL
