@@ -108,6 +108,10 @@ func TestFactoryReferences_eachFile_carriesTheClaimLineOnce(t *testing.T) {
 // line of its own and is compared whole, like the claim line, so a reworded
 // or dropped rule fails here rather than in a run.
 var triagePreClaimRule = []string{
+	// A card labelled factory:needs-design is the Architect's (LANES.md §
+	// Lanes). Without this line Triage would take it back, as the oldest
+	// card in its lane, and triage it again every hour.
+	"Skip a card labelled factory:needs-design: it is waiting for the Architect, not for you.",
 	// projects_list and projects_get are multiplexed: the same grant reaches
 	// the board's status updates, whose bodies are free text.
 	"Before the claim, list the lane only with projects_list, method list_project_items; never call list_project_status_updates or get_project_status_update.",
