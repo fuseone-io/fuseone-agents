@@ -56,11 +56,14 @@ is judged by this test the day it is made.
 
 const triageReference = "../../factory/agents/triage.agent.md"
 
-// The hosted GitHub MCP server's sets, by the tool names the reference uses.
+// The hosted GitHub MCP server's sets, by the tool names the references use.
 // Its default does not include projects; only the header adds it.
 var hostedToolsets = map[string][]string{
 	"issues":   {"issue_read", "list_issues", "search_issues", "add_issue_comment", "issue_write"},
 	"projects": {"projects_list", "projects_get", "projects_write"},
+	"repos": {"get_file_contents", "search_code", "get_commit",
+		"create_branch", "create_or_update_file", "push_files"},
+	"pull_requests": {"search_pull_requests", "pull_request_read", "create_pull_request"},
 }
 
 // hostedGitHub is the hosted server as far as this journey needs it: a live
@@ -236,7 +239,8 @@ func (j *factoryJourney) classify(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("ListTools = %#v, %v", resp, err)
 	}
-	writes := []string{"add_issue_comment", "issue_write", "projects_write"}
+	writes := []string{"add_issue_comment", "issue_write", "projects_write",
+		"create_branch", "create_or_update_file", "push_files", "create_pull_request"}
 	for _, tool := range listed.Items {
 		name, ours := strings.CutPrefix(tool.ToolId, j.server+".")
 		if !ours {
