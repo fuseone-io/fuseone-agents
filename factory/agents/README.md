@@ -118,10 +118,13 @@ No role does: a role that lists its lane skips a card in Travado, and
 clearing what blocked it does not move the card. In v1 that is a
 person's standing job, given to whoever operates the board:
 
-The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane named on that comment's last line, Triagem or Doing, leaving its labels as they are.
+The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane named on that comment's last line, Triagem or Doing, leaving its labels as they are; that comment is the last one on the issue or pull request the role worked on, and a pull request is either the card itself or the one in the card's Linked pull requests field.
 
-Each role ends that comment with a fixed line naming the lane the card came
-from, a line sealed per role in `internal/spec/factory_references_test.go`:
+That comment is on the issue for Triage and the Architect, and on the pull
+request for the Reviewer, QA and the Developer answering a review; from the
+card, the pull request is the card itself or the one its Linked pull requests
+field lists. Each role ends that comment with a fixed line naming the lane the
+card came from, a line sealed per role in `internal/spec/factory_references_test.go`:
 `Return to: Triagem` from Triage and the Architect (a card still labelled
 `factory:needs-design` resumes with the Architect), `Return to: Doing` from
 the Developer, the Reviewer and QA (the pull request keeps its sub-state

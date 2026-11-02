@@ -325,9 +325,12 @@ Nenhum papel tira um card de Travado, e resolver o que o travou também não
 move o card. Na primeira versão isso é uma tarefa fixa de uma pessoa,
 dada a quem opera o board:
 
-Quem opera o board revisa a coluna Travado todo dia útil e, quando o bloqueio indicado no comentário que travou um card é resolvido, devolve o card para a coluna indicada na última linha desse comentário, Triagem ou Doing, sem mexer nos rótulos.
+Quem opera o board revisa a coluna Travado todo dia útil e, quando o bloqueio indicado no comentário que travou um card é resolvido, devolve o card para a coluna indicada na última linha desse comentário, Triagem ou Doing, sem mexer nos rótulos; esse comentário é o último da issue ou do pull request em que o papel trabalhou, e o pull request é o próprio card ou o que aparece no campo Linked pull requests do card.
 
-A última linha desse comentário é fixa: `Return to: Triagem` quando quem
+A Triagem e o Arquiteto escrevem esse comentário na issue do card; o
+Revisor, o QA e o Desenvolvedor, quando responde a uma revisão, escrevem no
+pull request, que é o próprio card ou o que aparece no campo **Linked pull
+requests** do card. A última linha desse comentário é fixa: `Return to: Triagem` quando quem
 travou o card foi a Triagem ou o Arquiteto, `Return to: Doing` quando foi o
 Desenvolvedor, o Revisor ou o QA. Um card que volta para Triagem ainda com
 `factory:needs-design` é retomado pelo Arquiteto; um card que volta para Doing
