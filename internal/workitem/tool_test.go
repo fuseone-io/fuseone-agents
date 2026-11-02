@@ -20,7 +20,7 @@ func (b *base) Effect(id domain.ToolID) (domain.Effect, bool) {
 	switch id {
 	case "github.add_comment":
 		return domain.EffectWrite, true
-	case domain.ToolWorkItemClaim:
+	case domain.ToolWorkItemClaim, domain.ToolWorkItemLink:
 		return domain.EffectRead, true
 	}
 	return domain.EffectUnknown, false
