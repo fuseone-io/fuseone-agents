@@ -92,6 +92,11 @@ func TestWorkItemTrail_aCardWithALongHistory_readsABoundedFirstPage(t *testing.T
 		t.Fatalf("WorkItemTrail: %v", err)
 	}
 	widest, most := counter.widestList(), counter.mostRows() // before take, which resets them
+	control := counter.controlSent()
+	if len(control) != 2 || !strings.Contains(strings.ToLower(control[0]), "repeatable read") ||
+		!strings.Contains(strings.ToLower(control[0]), "read only") {
+		t.Fatalf("transaction control = %q; want the first page in one read-only repeatable-read transaction", control)
+	}
 	asked := len(counter.take())
 
 	if len(got.Runs) != 50 || got.Next == nil {
@@ -121,7 +126,7 @@ func TestWorkItemTrail_plan_theRoleSummaryIsAnAggregatePrunedToTheCardsMonths(t 
 	factory := domain.RunFilter{Scopes: []domain.Scope{areaFactory}}
 
 	sql, args := ledger.WorkItemRolesSQL(factory, card)
-	plan := explainAnalyzeJSON(t, pool, sql, args...)
+	plan := explainInSnapshot(t, pool, sql, args...)
 
 	// Here the card is nearly the whole of run_work_items, so reading it whole
 	// is the right plan; the ref index is asserted where the card is a sliver

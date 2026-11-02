@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/fuseone/agents/internal/domain"
 )
 
@@ -31,17 +33,55 @@ func (p *Postgres) WorkItemTrail(
 	ctx context.Context, filter domain.RunFilter, cost *domain.RunFilter,
 	ref domain.WorkItemRef, page domain.WorkItemPage,
 ) (domain.WorkItemTrail, error) {
-	runs, err := p.workItemRuns(ctx, filter, ref, page.After, page.Size()+1)
+	if page.After != nil {
+		// A later page has no summary to agree with: one statement, its own
+		// snapshot.
+		runs, err := workItemRuns(ctx, p.pool, filter, ref, page.After, page.Size()+1)
+		if err != nil {
+			return domain.WorkItemTrail{}, err
+		}
+		return trailFrom(ref, runs, nil, cost, page), nil
+	}
+	runs, shares, err := p.workItemFirstPage(ctx, filter, ref, page.Size()+1)
 	if err != nil {
 		return domain.WorkItemTrail{}, err
 	}
-	var shares []domain.WorkItemRoleShare
-	if page.After == nil {
-		if shares, err = p.workItemShares(ctx, filter, ref); err != nil {
-			return domain.WorkItemTrail{}, err
-		}
-	}
 	return trailFrom(ref, runs, shares, cost, page), nil
+}
+
+/*
+workItemFirstPage reads the first page and the role summary in one
+read-only repeatable-read transaction, so both describe the same runs. Read
+in two snapshots, a run committed between them was counted by the summary —
+with its approvals and cost — and missing from a timeline that said it had
+ended, with no next page to reach it by.
+*/
+func (p *Postgres) workItemFirstPage(
+	ctx context.Context, filter domain.RunFilter, ref domain.WorkItemRef, limit int,
+) ([]domain.WorkItemRun, []domain.WorkItemRoleShare, error) {
+	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil, nil, fmt.Errorf("open the trail's snapshot: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	runs, err := workItemRuns(ctx, tx, filter, ref, nil, limit)
+	if err != nil {
+		return nil, nil, err
+	}
+	shares, err := workItemShares(ctx, tx, filter, ref)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, nil, fmt.Errorf("close the trail's snapshot: %w", err)
+	}
+	return runs, shares, nil
+}
+
+// trailQuerier is what the trail's reads run on: the pool, or the
+// transaction that holds the first page's snapshot.
+type trailQuerier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
 // workItemSource is the FROM of every trail statement: the card's claims
@@ -82,11 +122,11 @@ func workItemRunsSQL(
 	return sql, args
 }
 
-func (p *Postgres) workItemRuns(
-	ctx context.Context, filter domain.RunFilter, ref domain.WorkItemRef, after *domain.WorkItemCursor, limit int,
+func workItemRuns(
+	ctx context.Context, q trailQuerier, filter domain.RunFilter, ref domain.WorkItemRef, after *domain.WorkItemCursor, limit int,
 ) ([]domain.WorkItemRun, error) {
 	sql, args := workItemRunsSQL(filter, ref, after, limit)
-	rows, err := p.pool.Query(ctx, sql, args...)
+	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("read the work item's runs: %w", err)
 	}
@@ -110,11 +150,11 @@ func (p *Postgres) workItemRuns(
 }
 
 // workItemShares is the role summary, read in one statement.
-func (p *Postgres) workItemShares(
-	ctx context.Context, filter domain.RunFilter, ref domain.WorkItemRef,
+func workItemShares(
+	ctx context.Context, q trailQuerier, filter domain.RunFilter, ref domain.WorkItemRef,
 ) ([]domain.WorkItemRoleShare, error) {
 	sql, args := workItemRolesSQL(filter, ref)
-	rows, err := p.pool.Query(ctx, sql, args...)
+	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("read the work item's roles: %w", err)
 	}

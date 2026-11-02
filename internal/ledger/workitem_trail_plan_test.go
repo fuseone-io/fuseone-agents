@@ -85,8 +85,28 @@ func explainAnalyzeJSON(t *testing.T, pool *pgxpool.Pool, sql string, args ...an
 
 func explainWith(t *testing.T, pool *pgxpool.Pool, options, sql string, args ...any) planNode {
 	t.Helper()
+	return explainOn(t, pool, options, sql, args...)
+}
+
+// explainInSnapshot analyses the statement inside the read-only
+// repeatable-read transaction the first page is read in, so the plan checked
+// is the plan that runs there.
+func explainInSnapshot(t *testing.T, pool *pgxpool.Pool, sql string, args ...any) planNode {
+	t.Helper()
+	tx, err := pool.BeginTx(context.Background(), pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	return explainOn(t, tx, "analyze, format json", sql, args...)
+}
+
+func explainOn(t *testing.T, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, options, sql string, args ...any) planNode {
+	t.Helper()
 	var raw []byte
-	if err := pool.QueryRow(context.Background(), `explain (`+options+`) `+sql, args...).Scan(&raw); err != nil {
+	if err := q.QueryRow(context.Background(), `explain (`+options+`) `+sql, args...).Scan(&raw); err != nil {
 		t.Fatalf("explain: %v", err)
 	}
 	var plans []struct {
@@ -129,7 +149,7 @@ func TestWorkItemTrail_plan_runsByTheRefIndexAndStepsPrunedToTheirMonths(t *test
 	// The summary bounds run_steps by the span it computes itself, so the
 	// pruning happens while it runs: analysed, only the card's months execute.
 	sql, args := ledger.WorkItemRolesSQL(filter, card)
-	plan := explainAnalyzeJSON(t, pool, sql, args...)
+	plan := explainInSnapshot(t, pool, sql, args...)
 	read, pruned := runStepsPartitions(plan)
 	refIndex := false
 	for _, n := range planNodes(plan, nil) {
@@ -212,6 +232,8 @@ type queryCounter struct {
 	widest int
 	// most is the most rows any one statement returned.
 	most int64
+	// control is the transaction control sent: begin, commit, rollback.
+	control []string
 	// before, when set, runs just before each statement is sent, outside the
 	// lock: a test stages a concurrent commit at an exact point with it.
 	before func(sql string)
@@ -226,7 +248,14 @@ func (q *queryCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, d pgx.T
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	q.asked = append(q.asked, strings.Join(strings.Fields(d.SQL), " "))
+	stmt := strings.Join(strings.Fields(d.SQL), " ")
+	// Transaction control is not a read: it is recorded apart, so a count
+	// of statements is a count of what the trail asked the database.
+	if word := strings.ToLower(strings.SplitN(stmt+" ", " ", 2)[0]); word == "begin" || word == "commit" || word == "rollback" {
+		q.control = append(q.control, stmt)
+		return ctx
+	}
+	q.asked = append(q.asked, stmt)
 	for _, arg := range d.Args {
 		if v := reflect.ValueOf(arg); v.Kind() == reflect.Slice && v.Type().Elem().Kind() != reflect.Uint8 {
 			q.widest = max(q.widest, v.Len())
@@ -245,8 +274,15 @@ func (q *queryCounter) take() []string {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	out := q.asked
-	q.asked, q.widest, q.most = nil, 0, 0
+	q.asked, q.widest, q.most, q.control = nil, 0, 0, nil
 	return out
+}
+
+// controlSent is the transaction control sent since the last take.
+func (q *queryCounter) controlSent() []string {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return slices.Clone(q.control)
 }
 
 func (q *queryCounter) widestList() int {
