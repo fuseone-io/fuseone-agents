@@ -1,8 +1,8 @@
 ---
 title: Software factory
-summary: Run agent roles that triage issues, make small changes and review pull requests on a GitHub repository, each with its own GitHub App, every GitHub write approved by a person.
+summary: Run agent roles that triage issues, plan them, make small changes and review pull requests on a GitHub repository, each with its own GitHub App, every GitHub write approved by a person.
 section: integrations
-tags: factory, github, github app, roles, triage, developer, review, qa, copilot
+tags: factory, github, github app, roles, triage, architect, plan, developer, review, qa, copilot
 order: 22
 ---
 
@@ -21,8 +21,10 @@ and the role instructions live, reviewed like code, in
 
 ## What the first version is
 
-- **Four roles.** Triage turns a new issue into a prepared card; the
-  Developer makes a small change and opens its pull request; the Reviewer
+- **Five roles.** Triage turns a new issue into a prepared card, or hands it
+  to the Architect with `factory:needs-design` when it needs a plan; the
+  Architect verifies the change in the code and writes its plan and
+  acceptance criteria on the issue; the Developer makes a small change and opens its pull request; the Reviewer
   reviews a pull request; QA checks it against CI and the acceptance
   criteria. Each role is an agent created in the console or the Studio.
 - **One GitHub App per role.** Each role reaches GitHub only through its own
@@ -60,7 +62,8 @@ and the role instructions live, reviewed like code, in
   the run ends, and puts the run's cost on that card. It writes nothing to
   GitHub, and every GitHub write after it waits for a person. A tool that
   picks and claims a card in one step, hiding even the title, is deferred.
-  The Developer lists the Doing lane the same way and is told the same.
+  The Architect lists the Triagem lane, and the Developer the Doing lane,
+  the same way, and both are told the same.
 
 The repository is public, so issue and pull request text is untrusted: a run
 that read it can never take a destructive action, and its GitHub writes need
@@ -93,12 +96,15 @@ works, and give it only what its tools need:
 | Role | Repository permissions | Organisation permissions |
 |---|---|---|
 | Triage | Issues: write, Pull requests: read, Metadata: read | Projects: write |
+| Architect | Contents: read, Issues: write, Metadata: read | Projects: write |
 | Reviewer | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | Developer | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
 
 QA's verdict is a pull request review, so QA needs Pull requests: write just
-like the Reviewer. Do not give the Developer's App the Workflows permission:
+like the Reviewer. The Architect reads the code and writes only issues and the
+board: give its App Contents: **read**, never write, so GitHub refuses any
+file or branch it could be talked into writing. Do not give the Developer's App the Workflows permission:
 without it, GitHub refuses any change the Developer makes under
 `.github/workflows`. Generate a private key for each App and note its App id
 and installation id.
@@ -182,11 +188,18 @@ of the board's issues and pull requests even when asked for no fields (#220).
 
 | Classify as | Tools |
 |---|---|
-| read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `get_commit` |
+| read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `list_commits`, `get_commit` |
 | write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `projects_write`, `create_branch`, `create_or_update_file`, `push_files`, `create_pull_request` |
 
 Classify each tool on every role's server: `github-triage.projects_list` and
-`github-reviewer.projects_list` are separate entries.
+`github-reviewer.projects_list` are separate entries. `issue_write` is also how
+the Architect creates a sub-issue under the card's issue, so it stays a write
+on `github-architect` too.
+
+The Architect's `repos` toolset also offers file and branch writes, and no
+header removes them on the same server: `X-MCP-Readonly` would remove its
+issue writes as well. Its reference declares none of them, and its App's
+Contents: read refuses them.
 
 `projects_write` moves cards and can also remove an item. Classify it as a
 **write**, not destructive: a removed card can be added back, and a person
@@ -208,6 +221,7 @@ instead of spending:
 | Role | Schedule | Ceiling per run | Tool calls | Steps |
 |---|---|---|---|---|
 | Triage | every hour at :00 | 500,000 micros | 30 | 60 |
+| Architect | every hour at :20 | 2,000,000 micros | 80 | 160 |
 | Reviewer | every hour at :15 | 2,000,000 micros | 80 | 160 |
 | QA | every hour at :45 | 1,000,000 micros | 50 | 100 |
 | Developer | every hour at :30 | 3,000,000 micros | 100 | 200 |
@@ -221,6 +235,7 @@ For each role, create the agent in the Studio from its reference: the
 frontmatter's fields, and the body as its instructions.
 
 - [Triage](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/triage.agent.md)
+- [Architect](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/architect.agent.md)
 - [Reviewer](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/reviewer.agent.md)
 - [QA](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/qa.agent.md)
 - [Developer](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/developer.agent.md)
@@ -243,6 +258,29 @@ What the roles follow is in the same directory:
 (what done means for each lane and label). The
 [role references README](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/README.md)
 explains every line of a reference.
+
+## What the Architect does
+
+The Architect takes the oldest Triagem card labelled `factory:needs-design`,
+which Triage leaves to it. It checks every claim about the code in the code,
+with read tools only, and writes the plan and its acceptance criteria as a
+comment on the issue: the issue's body stays the requester's, and a later plan
+is a new comment rather than an edit. A large item is split into sub-issues,
+created under the card's issue. Then:
+
+- with no decision open, it removes `factory:needs-design` and moves the card
+  to Preparado, where a person pulls it into Doing;
+- when a decision belongs to the owner, it writes the plan so far and each
+  open decision as a question, and moves the card to Travado, keeping the
+  label, so the card comes back to it once a person answers and moves it back
+  to Triagem;
+- if a sub-issue, the label or the move cannot be written, it says which on
+  the issue and moves the card to Travado, so the card is not picked again
+  every hour.
+
+It never writes code, opens a branch or a pull request, or plans a change to
+`factory/` or the `CLAUDE.md` files. Its App needs no ruleset on `main`
+before it starts: with Contents: read it cannot write there.
 
 ## What the Developer does, and what waits
 
