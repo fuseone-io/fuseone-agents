@@ -119,14 +119,20 @@ Travado, with that as the last comment.
 
 Moved by **any role**, when only a person can unblock the card. Done when:
 
-- [ ] the **last comment** on the issue or pull request the role worked on
-      names what blocks the card and the action that clears it, as a question or a request addressed to the
+- [ ] the role's **blocking comment**, written by its GitHub App on the
+      issue or pull request it worked on, names what blocks the card and the
+      action that clears it, as a question or a request addressed to the
       person who can take it (the owner, for a product decision), never as a
       fact alone;
-- [ ] its **last line** names the lane the card returns to:
+- [ ] that comment's **last line** names the lane the card returns to:
       `Return to: Triagem` from Triage or the Architect,
       `Return to: Doing` from the Developer, the Reviewer or QA;
 - [ ] nothing the role wrote after that comment.
+
+Clearing the blocker almost always takes a person's comment, so by the time
+the card can return, the blocking comment is no longer the last one. The
+operator looks back for the most recent comment by the blocking role's App
+(its bot account) that ends with `Return to: …`, and that line is the lane.
 
 Triage and the Architect work the card's issue, so their comment is there.
 The Reviewer and QA work the pull request, and so does the Developer when it
@@ -140,7 +146,7 @@ no role acts on a card in Travado: a role that lists its lane skips it.
 Clearing the blocker moves nothing on the board, so in v1 the lane has an
 owner:
 
-The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane named on that comment's last line, Triagem or Doing, leaving its labels as they are; that comment is the last one on the issue or pull request the role worked on, and a pull request is either the card itself or the one in the card's Linked pull requests field.
+The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane that comment names, Triagem or Doing, leaving its labels as they are; that comment is the most recent one by the blocking role's GitHub App that ends with a Return to: line, on the issue or pull request the role worked on, where a pull request is either the card itself or the one in the card's Linked pull requests field.
 
 The lane comes from the role that blocked the card, and its comment says so
 on its last line:

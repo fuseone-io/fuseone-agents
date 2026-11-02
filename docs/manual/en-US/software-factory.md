@@ -312,7 +312,7 @@ No role moves a card out of Travado, and clearing what blocked it does not
 move it either. In the first version this is a person's standing
 job, given to whoever operates the board:
 
-The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane named on that comment's last line, Triagem or Doing, leaving its labels as they are; that comment is the last one on the issue or pull request the role worked on, and a pull request is either the card itself or the one in the card's Linked pull requests field.
+The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane that comment names, Triagem or Doing, leaving its labels as they are; that comment is the most recent one by the blocking role's GitHub App that ends with a Return to: line, on the issue or pull request the role worked on, where a pull request is either the card itself or the one in the card's Linked pull requests field.
 
 Triage and the Architect write that comment on the card's issue; the
 Reviewer, QA and the Developer answering a review write it on the pull
