@@ -236,6 +236,7 @@ func TestMigrate_theFeedIndexAfterACrashBeforeItsRecord_runsAgainCleanly(t *test
 		where finished_xid is not null and phase = 'finished' and not simulated`); err != nil {
 		t.Fatalf("leave the index behind: %v", err)
 	}
+	built := feedIndexOID(t, pool)
 
 	if err := ledger.Migrate(t.Context(), pool); err != nil {
 		t.Fatalf("migrate again: %v", err)
@@ -243,6 +244,21 @@ func TestMigrate_theFeedIndexAfterACrashBeforeItsRecord_runsAgainCleanly(t *test
 	if !feedIndexValid(t, pool) || !recorded(t, pool, "0094_runs_feed_idx") {
 		t.Fatal("runs_feed_idx is not valid and recorded after the re-run")
 	}
+	// A valid index is left alone: dropping and rebuilding it would be a
+	// second full scan of runs for nothing.
+	if again := feedIndexOID(t, pool); again != built {
+		t.Fatalf("runs_feed_idx was rebuilt (oid %d, then %d); a valid index is kept", built, again)
+	}
+}
+
+func feedIndexOID(t *testing.T, pool *pgxpool.Pool) uint32 {
+	t.Helper()
+	var oid uint32
+	if err := pool.QueryRow(context.Background(),
+		`select 'runs_feed_idx'::regclass::oid`).Scan(&oid); err != nil {
+		t.Fatalf("read the runs_feed_idx oid: %v", err)
+	}
+	return oid
 }
 
 // A concurrent build that died leaves an INVALID index of the same name, which
@@ -291,9 +307,9 @@ func TestMigrate_aNoTransactionFile_runsOnlyConcurrentIndexStatements(t *testing
 		"an update after an allowed statement": "-- fuseone:no-transaction\n" +
 			"create index concurrently if not exists probe_idx on probe (label);\n" +
 			"update probe set label = 'touched';\n",
-		"a generated update": "-- fuseone:no-transaction\n" +
-			"select 'create index concurrently if not exists probe_idx on probe (label)'\n" +
-			"union all select 'update probe set label = ''touched''';\n",
+		"a select after an allowed statement": "-- fuseone:no-transaction\n" +
+			"create index concurrently if not exists probe_idx on probe (label);\n" +
+			"select 'update probe set label = ''touched''';\n",
 	}
 	for name, marked := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -314,5 +330,30 @@ func TestMigrate_aNoTransactionFile_runsOnlyConcurrentIndexStatements(t *testing
 				t.Fatalf("label %q, indexed %v: the refused file ran part of itself", label, indexed)
 			}
 		})
+	}
+}
+
+/*
+A select runs functions, and functions have effects: setval moves a sequence
+for good, whatever the runner decides about the select's output afterwards.
+So a marked file may hold no select at all, and is refused before anything in
+it runs — with no record and no effect left behind.
+*/
+func TestMigrate_aNoTransactionFileWithASelect_isRefusedWithNoEffect(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_select")
+	marked := "-- fuseone:no-transaction\n" + "select setval('probe_seq', 42)::text;\n"
+	err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{
+		{Version: "0001_plain", Body: "create sequence probe_seq;\n"},
+		{Version: "0002_marked", Body: marked},
+	})
+
+	var last int64
+	var called bool
+	if qerr := pool.QueryRow(t.Context(), `select last_value, is_called from probe_seq`).Scan(&last, &called); qerr != nil {
+		t.Fatalf("read probe_seq: %v", qerr)
+	}
+	if err == nil || recorded(t, pool, "0002_marked") || last != 1 || called {
+		t.Fatalf("err %v, recorded %v, sequence at %d (called %v); want refused, unrecorded, untouched",
+			err, recorded(t, pool, "0002_marked"), last, called)
 	}
 }

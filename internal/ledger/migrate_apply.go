@@ -118,9 +118,11 @@ still under the migration lock, and records it only after every statement
 succeeded. A crash in between leaves the work done and unrecorded, so the
 file runs again on the next start and must be idempotent.
 
-A statement that is a select generates statements: each row it returns is
-run in turn. That is how a file says "drop this index concurrently if a
-failed build left it invalid", which plain DDL cannot make conditional.
+Before a "create index concurrently if not exists <name>", the runner drops
+an INVALID index of that name — what a concurrent build that died leaves
+behind, and what "if not exists" would otherwise accept as built. The check
+is the runner's own fixed query, not something the file runs: a marked file
+holds index statements and nothing else.
 */
 func applyOutsideTransaction(ctx context.Context, conn migrator, version string, body []byte, digest string) error {
 	statements, err := splitStatements(string(body))
@@ -136,31 +138,46 @@ func applyOutsideTransaction(ctx context.Context, conn migrator, version string,
 }
 
 func runStatement(ctx context.Context, conn migrator, statement string) error {
-	if !isGenerator(statement) {
-		_, err := conn.Exec(ctx, statement)
-		return err
-	}
-	rows, err := conn.Query(ctx, statement)
-	if err != nil {
-		return err
-	}
-	generated, err := pgx.CollectRows(rows, pgx.RowTo[string])
-	if err != nil {
-		return err
-	}
-	// Every generated statement is held to the same list, all of them before
-	// any runs: a select may compute what to drop, not decide to do more.
-	for _, one := range generated {
-		if err := allowedOutsideTransaction(one); err != nil {
-			return fmt.Errorf("generated statement: %w", err)
-		}
-	}
-	for _, one := range generated {
-		if _, err := conn.Exec(ctx, one); err != nil {
+	if name, ok := createIfNotExistsName(statement); ok {
+		if err := dropInvalidIndex(ctx, conn, name); err != nil {
 			return err
 		}
 	}
+	_, err := conn.Exec(ctx, statement)
+	return err
+}
+
+// dropInvalidIndex drops, concurrently, an index of that name in the current
+// schema that a failed concurrent build left INVALID. A valid one is kept.
+func dropInvalidIndex(ctx context.Context, conn migrator, name string) error {
+	rows, err := conn.Query(ctx, `select i.indisvalid from pg_index i
+		join pg_class c on c.oid = i.indexrelid
+		where c.relname = $1 and c.relnamespace = current_schema()::regnamespace`, name)
+	if err != nil {
+		return fmt.Errorf("check index %s: %w", name, err)
+	}
+	valid, err := pgx.CollectRows(rows, pgx.RowTo[bool])
+	if err != nil {
+		return fmt.Errorf("check index %s: %w", name, err)
+	}
+	if len(valid) == 0 || valid[0] {
+		return nil
+	}
+	if _, err := conn.Exec(ctx, `drop index concurrently `+pgx.Identifier{name}.Sanitize()); err != nil {
+		return fmt.Errorf("drop invalid index %s: %w", name, err)
+	}
 	return nil
+}
+
+// createIfNotExists captures the index a create-if-not-exists names.
+var createIfNotExists = regexp.MustCompile(`^create index concurrently if not exists ([a-z_][a-z0-9_]*) on `)
+
+func createIfNotExistsName(statement string) (string, bool) {
+	m := createIfNotExists.FindStringSubmatch(normalised(statement))
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
 }
 
 /*
@@ -175,12 +192,6 @@ func splitStatements(body string) ([]string, error) {
 		return nil, err
 	}
 	for _, statement := range statements {
-		if isGenerator(statement) {
-			if dollarQuote.MatchString(statement) {
-				return nil, errDollarQuote
-			}
-			continue
-		}
 		if err := allowedOutsideTransaction(statement); err != nil {
 			return nil, err
 		}
@@ -189,9 +200,10 @@ func splitStatements(body string) ([]string, error) {
 }
 
 /*
-The only statements a marked file may run, literally or generated: build or
-drop an index concurrently. That is the whole reason the opt-in exists;
-anything else keeps the transaction that makes a crash leave neither half.
+The only statements a marked file may hold: build or drop an index
+concurrently. That is the whole reason the opt-in exists. Nothing else runs —
+not a select either, since a select runs functions and functions have effects
+(setval, advisory locks) that no later refusal can take back.
 */
 var allowedNoTransaction = regexp.MustCompile(
 	`^(create index concurrently (if not exists )?|drop index concurrently (if exists )?)\S`)
@@ -206,11 +218,15 @@ func allowedOutsideTransaction(statement string) error {
 	if dollarQuote.MatchString(statement) {
 		return errDollarQuote
 	}
-	normal := strings.ToLower(strings.Join(strings.Fields(code(statement)), " "))
-	if !allowedNoTransaction.MatchString(normal) {
+	if normal := normalised(statement); !allowedNoTransaction.MatchString(normal) {
 		return fmt.Errorf("a no-transaction migration may only create or drop an index concurrently, not %q", normal)
 	}
 	return nil
+}
+
+// normalised is a statement's code, lower case, with runs of space as one.
+func normalised(statement string) string {
+	return strings.ToLower(strings.Join(strings.Fields(code(statement)), " "))
 }
 
 func cutStatements(body string) ([]string, error) {
@@ -229,11 +245,6 @@ func cutStatements(body string) ([]string, error) {
 		return nil, fmt.Errorf("a no-transaction migration ends in an unterminated statement")
 	}
 	return out, nil
-}
-
-// isGenerator reports whether a statement's code begins with select.
-func isGenerator(statement string) bool {
-	return strings.HasPrefix(strings.ToLower(code(statement)), "select")
 }
 
 // code is a statement without its comment lines.

@@ -18,8 +18,10 @@
 -- this runs while the previous release keeps appending runs, and a plain
 -- create index would hold every write to runs for the length of a scan of
 -- the whole table. Concurrently, writes carry on. The runner records the file
--- only after both statements succeed, so each is idempotent: a crash after
--- the build and before the record runs the file again harmlessly.
+-- only after the statement succeeds. Before running it, the runner drops an
+-- INVALID index of this name that a failed build left behind, which "if not
+-- exists" would otherwise accept as built. A crash after the build and before
+-- the record runs the file again harmlessly.
 --
 -- The 0092 index stays. It goes in a later migration, once nothing can roll
 -- back to 0.86 — whose feed ordered by the text form of the position, so it
@@ -27,17 +29,6 @@
 --
 -- Numbered 0094 because #231 takes 0093. The runner applies whatever is
 -- unapplied in filename order, so either may reach an installation first.
-
--- A concurrent build that died leaves an INVALID index under this name, which
--- "if not exists" would accept as built. Drop it, concurrently, so the next
--- statement builds it again. The select generates the drop only when needed.
-select format('drop index concurrently %I.%I', n.nspname, c.relname)
-  from pg_index i
-  join pg_class c on c.oid = i.indexrelid
-  join pg_namespace n on n.oid = c.relnamespace
- where c.relname = 'runs_feed_idx'
-   and n.nspname = current_schema()
-   and not i.indisvalid;
 
 create index concurrently if not exists runs_feed_idx on runs (finished_xid, run_id)
     where finished_xid is not null and phase = 'finished' and not simulated;
