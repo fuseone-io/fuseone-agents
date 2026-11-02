@@ -34,7 +34,6 @@ steps:
       - github-architect.search_code
       - github-architect.list_commits
       - github-architect.get_commit
-    stops_when: a decision the plan needs belongs to the owner
   - name: Write the plan back
     reaches:
       - github-architect.issue_read
@@ -43,6 +42,7 @@ steps:
       - github-architect.projects_list
       - github-architect.projects_get
       - github-architect.projects_write
+    stops_when: a decision the plan needs belongs to the owner, and each open decision is commented on the issue as a question to whoever decides and the card is in Travado
 budget:
   micros: 2000000
   tool_calls: 80
