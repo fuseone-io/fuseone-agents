@@ -95,8 +95,9 @@ func workItemRunsSQL(
 ) (string, []any) {
 	with, from, args := workItemSource(filter, ref)
 	page := `select c.run_id, r.agent_id, r.company_id, r.area_id, c.claimed_at,
-	               r.phase, r.started_at, r.ended_at, c.ref,
-	               case when c.ref = (select card from card_of) then 'claim' else 'alias' end as link` + from
+	               r.phase, r.started_at, r.ended_at, c.ref, ` + trailLinkSQL + ` as link,
+	               case when c.via <> 'claim' then w.ref end as claimed_ref,
+	               case when c.via = 'claim' then o.ref end as inherited_ref` + from
 	if after != nil {
 		args = append(args, after.ClaimedAt.UTC(), string(after.RunID))
 		page += fmt.Sprintf(` and (c.claimed_at, c.run_id) > ($%d, $%d)`, len(args)-1, len(args))
@@ -109,7 +110,8 @@ func workItemRunsSQL(
 	return `with ` + with + `, page as (` + page + `)
 		select k.card, k.resolved_from, p.run_id, coalesce(p.agent_id, ''), coalesce(p.company_id, ''),
 		       coalesce(p.area_id, ''), coalesce(p.claimed_at, 'epoch'), coalesce(p.phase, ''),
-		       coalesce(p.started_at, 'epoch'), p.ended_at, coalesce(p.ref, ''), coalesce(p.link, '')
+		       coalesce(p.started_at, 'epoch'), p.ended_at, coalesce(p.ref, ''), coalesce(p.link, ''),
+		       coalesce(p.claimed_ref, ''), coalesce(p.inherited_ref, '')
 		from card_of k left join page p on true
 		order by p.claimed_at, p.run_id`, args
 }
@@ -131,7 +133,8 @@ func workItemRuns(
 		var runID *domain.RunID
 		var ended *time.Time
 		if err := rows.Scan(&target.target, &target.from, &runID, &r.AgentID, &r.Scope.Company, &r.Scope.Area,
-			&r.ClaimedAt, &r.Phase, &r.StartedAt, &ended, &r.Ref, &r.Link); err != nil {
+			&r.ClaimedAt, &r.Phase, &r.StartedAt, &ended, &r.Ref, &r.Link,
+			&r.ClaimedRef, &r.InheritedRef); err != nil {
 			return trailRef{}, nil, fmt.Errorf("scan a work item's run: %w", err)
 		}
 		if runID == nil {

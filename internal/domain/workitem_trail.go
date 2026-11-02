@@ -47,8 +47,16 @@ type WorkItemRun struct {
 	EndedAt   time.Time
 	ClaimedAt time.Time
 	Link      WorkItemLink
-	// Ref is what the run claimed: the card, or the alias it came by.
+	// Ref is what the run claimed, or inherited: the card, or the alias it
+	// came by.
 	Ref WorkItemRef
+	// ClaimedRef is, on a run on the trail by its inheritance, the card it
+	// claimed itself, when it claimed one: the run is on that card's trail
+	// too (#204, slice 3).
+	ClaimedRef WorkItemRef
+	// InheritedRef is, on a run on the trail by its claim, the card it
+	// inherited by how it was opened, when it inherited one.
+	InheritedRef WorkItemRef
 }
 
 // WorkItemApprovals counts what a run, or a role's runs, asked of people:

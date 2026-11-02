@@ -17,10 +17,16 @@ import (
 // the phase its steps project. So this store cannot release a claim by
 // writing anything either.
 //
-// A link is judged here too; see judgeWorkItemLink.
+// A link is judged here too; see judgeWorkItemLink. So is a start's
+// inheritance, which holds nothing: it is only validated, and the trail reads
+// it from the start itself.
 func (m *Memory) judgeWorkItem(s domain.Step) error {
-	if s.Kind == domain.StepWorkItemLinked {
+	switch s.Kind {
+	case domain.StepWorkItemLinked:
 		return m.judgeWorkItemLink(s)
+	case domain.StepRunStarted:
+		_, _, err := inheritedWorkItem(s, len(m.runs[s.RunID]) == 0)
+		return err
 	}
 	if s.Kind != domain.StepWorkItemClaimed {
 		return nil

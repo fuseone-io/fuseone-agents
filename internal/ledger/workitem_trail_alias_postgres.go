@@ -40,12 +40,40 @@ func workItemSource(filter domain.RunFilter, ref domain.WorkItemRef) (with, from
 	aliases := `select company_id, ref from work_item_aliases
 		            where root_ref = (select card from card_of) and ` + readable
 	from = `
-		from run_work_items c
+		from (` + trailAttributions + `) c
 		join (select run_id, agent_id, company_id, area_id, phase, started_at, ended_at, cost_micros
 		      from runs ` + where + `) r
 		  on r.run_id = c.run_id
 		left join (` + aliases + `) a on a.company_id = c.company_id and a.ref = c.ref
+		left join run_work_items w on c.via <> 'claim' and w.run_id = c.run_id
+		left join run_work_item_origins o on c.via = 'claim' and o.run_id = c.run_id
 		where c.ref = any(array(select card from card_of union all select ref from (` + aliases + `) x))
-		  and (c.ref = (select card from card_of) or a.ref is not null)`
+		  and (c.ref = (select card from card_of) or a.ref is not null)
+		  and (c.via = 'claim' or w.run_id is null
+		       or (w.ref <> (select card from card_of)
+		           and not exists (select 1 from (` + aliases + `) wa
+		                           where wa.company_id = w.company_id and wa.ref = w.ref)))`
 	return with, from, args
 }
+
+/*
+trailAttributions is every way a run is on a card: its claim, from
+run_work_items, and its inheritance, from run_work_item_origins (#204,
+slice 3), as one relation both indexes on ref reach. via is "claim" for the
+first and the inheritance's source for the second; the moment is the claim's,
+or the run's opening for an inheritance.
+
+A run is on a trail once. workItemSource keeps an inheritance only when the
+run's claim — w, by run_work_items' primary key — is not on the same trail,
+so a run inherited and claimed on one card is there by its claim, counted
+once, and the keyset (moment, run) names one row. Each row carries the run's
+other attribution: w's ref on an inheritance, o's on a claim.
+*/
+const trailAttributions = `select run_id, company_id, ref, claimed_at, 'claim'::text as via from run_work_items
+		union all
+		select run_id, company_id, ref, started_at, source from run_work_item_origins`
+
+// trailLinkSQL is how a row is on the trail: its inheritance's source, or
+// the claim of the card itself, or of an alias.
+const trailLinkSQL = `case when c.via <> 'claim' then c.via
+	                    when c.ref = (select card from card_of) then 'claim' else 'alias' end`

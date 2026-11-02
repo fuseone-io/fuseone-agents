@@ -45,26 +45,23 @@ func (m *Memory) WorkItemTrail(
 
 // trailRunOf is one run and its role share when it is on the card's trail
 // and the filter reads it: it claimed the card, or a pull request linked to
-// the card in the run's own company by a link the caller may read.
+// the card in the run's own company by a link the caller may read — or it
+// inherited one of them by how it was opened (#204, slice 3).
 func trailRunOf(
 	steps []domain.Step, filter domain.RunFilter, target domain.WorkItemRef, links readableAliases,
 ) (domain.WorkItemRun, domain.WorkItemRoleShare, bool) {
-	claimed, ok := claimStepOf(steps)
-	if !ok || simulatedRun(steps) || !matches(steps[0], filter) {
+	if len(steps) == 0 || simulatedRun(steps) || !matches(steps[0], filter) {
 		return domain.WorkItemRun{}, domain.WorkItemRoleShare{}, false
 	}
 	// Who and where are the run's own, as the filter just judged them; the
-	// claim gives the card and the moment, nothing else.
+	// claim or the inheritance gives the card and the moment, nothing else.
 	summary := summarise(steps)
-	held, err := claimedRef(claimed)
-	link, on := trailLinkOf(held, links[aliasKey{summary.Scope.Company, held}], target)
-	if err != nil || !on {
-		return domain.WorkItemRun{}, domain.WorkItemRoleShare{}, false
-	}
 	run := domain.WorkItemRun{
 		RunID: summary.RunID, AgentID: summary.AgentID, Scope: summary.Scope,
 		Phase: summary.Phase, StartedAt: summary.StartedAt, EndedAt: summary.EndedAt,
-		ClaimedAt: claimed.At, Link: link, Ref: held,
+	}
+	if !placeOnTrail(&run, steps, target, links) {
+		return domain.WorkItemRun{}, domain.WorkItemRoleShare{}, false
 	}
 	return run, domain.WorkItemRoleShare{
 		AgentID: run.AgentID, Scope: run.Scope, Runs: 1, Approvals: approvalsOf(steps),

@@ -35,6 +35,13 @@ const (
 	WorkItemFromGitHubDelivery WorkItemOriginSource = "github_delivery"
 )
 
+// The links an inheritance puts a run on a trail by, beside the claim and the
+// alias: the inheritance's own source, so the trail says how the run came.
+const (
+	WorkItemLinkEvent          = WorkItemLink(WorkItemFromEvent)
+	WorkItemLinkGitHubDelivery = WorkItemLink(WorkItemFromGitHubDelivery)
+)
+
 // RunWorkItem is the inherited work item sealed on a run's opening step.
 type RunWorkItem struct {
 	Ref    WorkItemRef          `json:"ref"`
