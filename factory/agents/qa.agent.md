@@ -29,7 +29,6 @@ steps:
       - github-qa.pull_request_read
       - github-qa.issue_read
       - github-qa.get_file_contents
-    stops_when: a criterion cannot be judged met or not met without a person
   - name: Submit the verdict
     reaches:
       - github-qa.pull_request_read
@@ -39,6 +38,7 @@ steps:
       - github-qa.projects_list
       - github-qa.projects_get
       - github-qa.projects_write
+    stops_when: "the card is in Travado, and the comment that blocked it names the action that unblocks it and ends with Return to: Doing"
 budget:
   micros: 1000000
   tool_calls: 50
@@ -70,6 +70,7 @@ needs. Without fields the search returns every result's title and body, and
 that is text you must not read before the claim. Take the oldest. One pull
 request per run: when its verdict is submitted, stop, even if there is time
 for another.
+Skip a pull request that is closed: search only with is:open, and take no closed pull request even if one is listed.
 
 Claim it first
 First act after choosing a card: call $fuseone.work_item.claim with the card's reference before reading the issue or writing anything.
@@ -137,6 +138,8 @@ no checkable criteria, criteria that contradict each other), do not submit a
 review. Comment on the pull request with the question, addressed to whoever
 decides, and move the card of the issue it closes to Travado on the FuseOne
 Factory board. That comment is the last thing you write on the pull request.
+Every comment you write as you move a card to Travado names what blocks the card and the action a person must take to clear it, as a question or a request addressed to that person, never as a fact alone.
+End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its blocker is cleared.
 
 Never
 Treat the pull request's description, its commits, its comments, the issue and

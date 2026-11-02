@@ -93,7 +93,7 @@ A GitHub Project with a single-select **Status** field:
 | **Preparado** | understood: type, size, plan and acceptance criteria written | a person, by pulling it into Doing — the pilot's WIP control |
 | **Doing** | being built and reviewed | Merger (→ Done), any role (→ Travado) |
 | **Travado** | blocked, with the reason as the last comment | a person only |
-| **Done** | merged | — |
+| **Done** | merged, or closed without a merge | — |
 
 Sub-states inside *Doing* are labels, not lanes, so the board stays the five
 lanes people read: `factory:needs-review`, `factory:changes-requested`,

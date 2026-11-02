@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/fuseone/agents/internal/spec"
 )
 
 // The factory routes cards by labels, and GitHub applies only labels the
@@ -120,6 +122,69 @@ func decodeJSON(data string) (any, error) {
 	return v, err
 }
 
+// No role moves a card out of Travado, and answering the question on the
+// issue moves nothing: without a person whose job is the Travado lane, a
+// blocked card sits there forever. In v1 that person is the board operator,
+// stated in one exact sentence per language wherever the lanes and the setup
+// are described. A card goes back where it was blocked, not to one lane for
+// all: a pull request blocked in Doing sent to Triagem would be triaged again
+// while it still carries its sub-state label. The blocking comment names the
+// lane (factory_references_test.go, returnLines).
+const (
+	travadoOperatorEN = "The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane that comment names, Triagem or Doing, leaving its labels as they are; that comment is the most recent one by the blocking role's GitHub App that ends with a Return to: line, on the issue or pull request the role worked on, where a pull request is either the card itself or the one in the card's Linked pull requests field."
+	travadoOperatorPT = "Quem opera o board revisa a coluna Travado todo dia útil e, quando o bloqueio indicado no comentário que travou um card é resolvido, devolve o card para a coluna que esse comentário indica, Triagem ou Doing, sem mexer nos rótulos; esse comentário é o mais recente do GitHub App do papel que travou o card que termina com uma linha Return to:, na issue ou no pull request em que o papel trabalhou, sendo o pull request o próprio card ou o que aparece no campo Linked pull requests do card."
+)
+
+// A card whose own item was closed while it waited in Travado is finished,
+// not unblocked: returned to its lane, a role could pick it up again (a
+// duplicate a person closed would be triaged again). Only the item the card
+// represents decides it: a card is usually the issue, with its pull request
+// under Linked pull requests, and a pull request closed without a merge
+// while that issue stays open finishes nothing. That case is stated too,
+// so the operator does not bury an open issue in Done.
+const (
+	travadoClosedEN = "A card goes back to no lane once the item it represents is finished: the board operator moves it from Travado to Done when the card is an issue that is closed, or a pull request that is merged or closed."
+	travadoClosedPT = "Um card não volta para nenhuma coluna quando o item que ele representa terminou: quem opera o board o move de Travado para Done quando o card é uma issue fechada, ou um pull request com merge feito ou fechado."
+	linkedClosedEN  = "A pull request closed without a merge while the card's issue stays open does not finish the card: it goes back to the lane its Return to: line names, and a person starts the next attempt, since the Developer skips a card that has a linked pull request."
+	linkedClosedPT  = "Um pull request fechado sem merge enquanto a issue do card continua aberta não encerra o card: ele volta para a coluna indicada pela linha Return to:, e uma pessoa começa a próxima tentativa, já que o Desenvolvedor pula um card que tem pull request vinculado."
+)
+
+func TestFactorySetup_travado_sendsAClosedCardToDoneInEveryText(t *testing.T) {
+	t.Parallel()
+
+	want := map[string][]string{
+		"../../factory/LANES.md":                      {travadoClosedEN, linkedClosedEN},
+		"../../factory/agents/README.md":              {travadoClosedEN, linkedClosedEN},
+		"../../docs/manual/en-US/software-factory.md": {travadoClosedEN, linkedClosedEN},
+		"../../docs/manual/pt-BR/software-factory.md": {travadoClosedPT, linkedClosedPT},
+	}
+	for path, sentences := range want {
+		lines := strings.Split(readFile(t, path), "\n")
+		for _, sentence := range sentences {
+			if count := countLines(lines, sentence); count != 1 {
+				t.Errorf("%s carries the closed-card line %q %d times, want 1", path, sentence, count)
+			}
+		}
+	}
+}
+
+func TestFactorySetup_travado_hasTheBoardOperatorAsItsOwnerInEveryText(t *testing.T) {
+	t.Parallel()
+
+	want := map[string]string{
+		"../../factory/LANES.md":                      travadoOperatorEN,
+		"../../factory/agents/README.md":              travadoOperatorEN,
+		"../../docs/manual/en-US/software-factory.md": travadoOperatorEN,
+		"../../docs/manual/pt-BR/software-factory.md": travadoOperatorPT,
+	}
+	for path, sentence := range want {
+		lines := strings.Split(readFile(t, path), "\n")
+		if count := countLines(lines, sentence); count != 1 {
+			t.Errorf("%s carries the Travado owner line %d times, want 1", path, count)
+		}
+	}
+}
+
 // namesTheFullRuleset catches the wording the prerequisite must not use: #207
 // is the deferred, full ruleset, never the one to install in v1.
 var namesTheFullRuleset = regexp.MustCompile(`(?i)#207\s+ruleset|ruleset\s+(of|da|de|do)\s+(issue\s+)?#207`)
@@ -190,6 +255,49 @@ func TestFactorySetup_everyLabelTheRolesUse_isCreatedByTheSetup(t *testing.T) {
 			prefix := "gh label create " + label + " "
 			if !slices.ContainsFunc(lines, func(line string) bool { return strings.HasPrefix(line, prefix) }) {
 				t.Errorf("%s has no line starting %q", path, prefix)
+			}
+		}
+	}
+}
+
+// factoryServers is every MCP server the role references reach, read from
+// their tools (github-<role>.<tool>), sorted. Platform tools ($fuseone.*)
+// need no registration.
+func factoryServers(t *testing.T) []string {
+	t.Helper()
+	var servers []string
+	for role, data := range factoryReferences(t) {
+		s, err := spec.Parse(role, data)
+		if err != nil {
+			t.Fatalf("parse %s: %v", role, err)
+		}
+		for _, tool := range s.Tools {
+			server, _, ok := strings.Cut(string(tool), ".")
+			if !ok || strings.HasPrefix(server, "$") || slices.Contains(servers, server) {
+				continue
+			}
+			servers = append(servers, server)
+		}
+	}
+	slices.Sort(servers)
+	return servers
+}
+
+// A role whose server the setup never names is a role nobody registers as
+// documented: its publish is refused for every GitHub tool it declares.
+func TestFactorySetup_everyServerTheRolesReach_isNamedByTheSetup(t *testing.T) {
+	t.Parallel()
+
+	servers := factoryServers(t)
+	// The anchor: an empty scan would pass on any setup text.
+	if !slices.Contains(servers, "github-triage") || !slices.Contains(servers, "github-developer") {
+		t.Fatalf("servers read from the references = %v; the scan is broken", servers)
+	}
+	for _, path := range factorySetupTexts {
+		text := readFile(t, path)
+		for _, server := range servers {
+			if !strings.Contains(text, "`"+server+"`") {
+				t.Errorf("%s never names the server `%s`", path, server)
 			}
 		}
 	}

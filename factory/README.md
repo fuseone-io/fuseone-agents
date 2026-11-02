@@ -49,10 +49,17 @@ factory/
 | Role | Issue | Reference |
 |---|---|---|
 | Triage | #195 | [agents/triage.agent.md](agents/triage.agent.md) |
-| Architect | #196 | added by #196 |
+| Architect | #196 | [agents/architect.agent.md](agents/architect.agent.md) |
 | Reviewer | #197 | [agents/reviewer.agent.md](agents/reviewer.agent.md) |
 | QA | #198 | [agents/qa.agent.md](agents/qa.agent.md) |
 | Developer | #200 | [agents/developer.agent.md](agents/developer.agent.md), Level 1 |
+
+The Architect takes the Triagem cards Triage labelled `factory:needs-design`.
+It verifies the change in the code with read tools only, writes the plan and
+its acceptance criteria as a comment on the issue, splits a large item into
+sub-issues, and moves the card to Preparado, or to Travado when a decision is
+the owner's. It writes no code: its App reads the repository's contents and
+cannot change them.
 
 The Developer works at **Level 1** (#154): small, self-contained changes
 through the GitHub API, with no build and no test run before the pull request.
