@@ -105,11 +105,45 @@ and installation id.
 
 Contents: write reaches every branch, `main` included. The Developer is told to
 write only to branches it creates under `factory/`, and the person approving
-each write sees the branch it names, but neither stops a write. **Before you
-start the Developer, `main` must carry a ruleset that refuses a direct push**
-([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)). This is a
-prerequisite, not a recommendation: until the ruleset exists, leave the
-Developer paused.
+each write sees the branch it names, but neither stops a write. So a ruleset
+is a prerequisite, not a recommendation:
+
+Before the Developer is started, main must carry the minimal ruleset: a pull request required before merging, force pushes and deletions blocked, and no bypass for any factory GitHub App.
+
+Until it exists, leave the Developer paused. In the repository's Settings →
+Rules → Rulesets, create a branch ruleset with enforcement **Active**, target
+`refs/heads/main`, **Require a pull request before merging** (zero approvals
+is enough: a person still merges), **Block force pushes** and **Restrict
+deletions** ticked, and no bypass actors, so no factory App can skip it. Or
+through the API, replacing `<owner>/<name>`:
+
+```sh
+gh api --method POST repos/<owner>/<name>/rulesets --input - <<'EOF'
+{
+  "name": "main: pull request required",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "pull_request", "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false } },
+    { "type": "non_fast_forward" },
+    { "type": "deletion" }
+  ],
+  "bypass_actors": []
+}
+EOF
+```
+
+The rest of what `main` should eventually require — status checks pinned to
+their source, `factory/qa`, the authorised reviewers and the Merger's rules —
+is deferred
+([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)); none of it
+is needed in v1.
 
 ## 3. Register the GitHub server once per role
 
@@ -189,8 +223,8 @@ frontmatter's fields, and the body as its instructions.
 
 Then publish it — a new agent is a paused draft — set its stage to
 **copilot** and start it. The stage is not in the file, so it is always set in
-the console. Start the Developer only once `main` carries the ruleset that
-refuses a direct push (step 2).
+the console. Start the Developer only once `main` carries the minimal ruleset
+(step 2).
 
 The console refuses to publish a tool the registered server does not offer, so
 a wrong tool name, or a missing toolset, is found here rather than at run

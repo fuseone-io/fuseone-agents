@@ -111,11 +111,46 @@ ID do App e o ID da instalação.
 Contents: write alcança todos os branches, inclusive o `main`. O
 Desenvolvedor é instruído a escrever só nos branches que ele mesmo cria em
 `factory/`, e a pessoa que aprova cada escrita vê o branch que ela indica, mas
-nenhum dos dois impede uma escrita. **Antes de iniciar o Desenvolvedor, o
-`main` precisa ter um ruleset que recuse push direto**
-([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)). Isso é um
-pré-requisito, não uma recomendação: enquanto o ruleset não existir, deixe o
-Desenvolvedor pausado.
+nenhum dos dois impede uma escrita. Por isso um ruleset é pré-requisito, não
+recomendação:
+
+Antes de iniciar o Desenvolvedor, o main precisa ter o ruleset mínimo: pull request obrigatório antes do merge, force push e exclusão bloqueados, e nenhum bypass para os GitHub Apps da fábrica.
+
+Enquanto ele não existir, deixe o Desenvolvedor pausado. Em Settings → Rules →
+Rulesets do repositório, crie um ruleset de branch com enforcement **Active**,
+alvo `refs/heads/main`, marque **Require a pull request before merging** (zero
+aprovações bastam: uma pessoa continua fazendo o merge), **Block force
+pushes** e **Restrict deletions**, e não ponha ninguém na lista de bypass,
+para que nenhum App da fábrica consiga pular as regras. Ou pela API,
+trocando `<owner>/<name>`:
+
+```sh
+gh api --method POST repos/<owner>/<name>/rulesets --input - <<'EOF'
+{
+  "name": "main: pull request required",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "pull_request", "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false } },
+    { "type": "non_fast_forward" },
+    { "type": "deletion" }
+  ],
+  "bypass_actors": []
+}
+EOF
+```
+
+O resto do que o `main` deve exigir no futuro — status checks presos à sua
+origem, o `factory/qa`, os revisores autorizados e as regras do Merger — ficou
+para depois
+([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)); nada disso
+é necessário na v1.
 
 ## 3. Registre o servidor do GitHub uma vez por papel
 
@@ -200,7 +235,7 @@ frontmatter, e o corpo como instruções.
 Depois publique — um agente novo é um rascunho pausado —, ponha o estágio em
 **copiloto** e inicie. O estágio não está no arquivo, então ele sempre é
 definido no console. Só inicie o Desenvolvedor depois que o `main` tiver o
-ruleset que recusa push direto (passo 2).
+ruleset mínimo (passo 2).
 
 O console recusa publicar uma ferramenta que o servidor registrado não
 oferece, então um nome de ferramenta errado, ou um toolset faltando, aparece

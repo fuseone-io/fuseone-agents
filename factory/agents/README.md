@@ -251,10 +251,43 @@ Contents: write reaches every branch, `main` included. The reference keeps the
 Developer to branches it creates under `factory/` and off `factory/` and the
 `CLAUDE.md` files, two lines sealed in
 `internal/spec/factory_references_test.go`, and the person approving each
-write sees the branch it names. Neither is a mechanism, so **the ruleset on
-`main` of #207, which refuses a direct push, is a prerequisite for starting
-the Developer**, not a recommendation: until `main` carries it, the Developer
-stays paused.
+write sees the branch it names. Neither is a mechanism, so a ruleset is a
+prerequisite, not a recommendation:
+
+Before the Developer is started, main must carry the minimal ruleset: a pull request required before merging, force pushes and deletions blocked, and no bypass for any factory GitHub App.
+
+Until `main` carries it, the Developer stays paused. In the repository's
+Settings → Rules → Rulesets, that is a branch ruleset, enforcement Active,
+targeting `refs/heads/main`, with **Require a pull request before merging**
+(zero approvals is enough: a person still merges), **Block force pushes** and
+**Restrict deletions** ticked, and an empty bypass list, so no factory App can
+skip it. The same, through the API:
+
+```sh
+gh api --method POST repos/<owner>/<name>/rulesets --input - <<'EOF'
+{
+  "name": "main: pull request required",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "pull_request", "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false } },
+    { "type": "non_fast_forward" },
+    { "type": "deletion" }
+  ],
+  "bypass_actors": []
+}
+EOF
+```
+
+Everything else a ruleset on `main` should require is deferred to #207:
+required status checks pinned to their source, `factory/qa` (which does not
+exist in v1), the authorised reviewers, and the rules the Merger is held to.
 
 Submitting a review needs Pull requests: **write**, for QA as much as for the
 Reviewer: in v1 QA's verdict is a review, not a commit status, so QA needs no

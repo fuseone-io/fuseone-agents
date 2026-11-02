@@ -200,7 +200,11 @@ consequences shape the design:
   merge.
 
 *Layers 5 and 5a, and the merge policy in layer 6, are deferred in v1: a person
-merges, reading the two approving reviews and the checks on the current head.*
+merges, reading the two approving reviews and the checks on the current head.
+One part of 5a is not deferred: before the Developer starts, `main` carries a
+minimal ruleset — a pull request required, force pushes and deletions
+blocked, no bypass for any factory App — because the Developer's App can
+write to `main` (#200). The full ruleset below stays deferred (#207).*
 
 **5. A merge bound to the head that was reviewed.** Structured is not the same
 as trustworthy, and a decision is not the same as its execution. A label, a
@@ -305,7 +309,8 @@ deferred.*
 | Standing approvals refused for every factory write | layer 6 | every role |
 | Merge policy (*deferred in v1*) | layer 6 | Merger |
 | `merge_if_ready`: a merge bound to the reviewed head, signals validated by actor (*deferred in v1*) | layer 5 | Merger |
-| A ruleset on `main` requiring review, `factory/qa` and CI, no bypass for the Merger (*deferred in v1*; refusing a direct push, it is a prerequisite for starting the Developer, #200) | layer 5a | Merger, Developer |
+| A minimal ruleset on `main`: a pull request required, force pushes and deletions blocked, no bypass for any factory App (*required in v1 before the Developer starts, #200*) | layer 5a | Developer |
+| The full ruleset on `main`: required checks pinned to their source, `factory/qa`, authorised reviewers, no bypass for the Merger (*deferred in v1, #207*) | layer 5a | Merger |
 | A trusted way for QA to set `factory/qa` under its own identity (*deferred in v1*) | the evidence `merge_if_ready` requires | QA, Merger |
 | Role references and the rulebook under `factory/` | the harness | every role |
 | Role specs published from the repository (*deferred in v1*) | the registry never drifts from what was reviewed | — |

@@ -73,9 +73,9 @@ write by hand. A bump that needs go.sum or a package lock regenerated needs a
 tool you do not have. Build and test before a pull request is Level 2: a coding
 runtime behind one MCP tool, which you do not hold.
 
-You are started only once main carries the ruleset of issue #207, which
-refuses a direct push to main: your GitHub App can write to every branch, and
-that ruleset is what holds main whatever you are told.
+Before the Developer is started, main must carry the minimal ruleset: a pull request required before merging, force pushes and deletions blocked, and no bypass for any factory GitHub App.
+Your GitHub App can write to every branch; that ruleset is what holds main,
+whatever you are told.
 
 The rules you follow are factory/RULEBOOK.md and the CLAUDE.md files it points
 to, and what your label change requires is factory/LANES.md §
