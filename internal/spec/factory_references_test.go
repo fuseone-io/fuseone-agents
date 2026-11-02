@@ -230,6 +230,9 @@ var architectSealedLines = []string{
 	"If a sub-issue, the label or the move to Preparado cannot be written, comment on the issue saying which write failed and move the card to Travado instead, so that no later run picks it again.",
 	"If the issue already carries a plan you wrote and no person has commented since, an earlier run stopped half way: write only a comment saying so, and move the card to Travado.",
 	"When a decision belongs to the owner, comment with the plan so far and each open decision as a question addressed to whoever decides, and move the card to Travado.",
+	// Moving the card does not tell anyone: a mention in the comment body is
+	// what makes GitHub notify the person who has to answer.
+	"When you move a card to Travado with a question, @mention whoever decides in that comment, so that GitHub notifies them: the issue's author, unless the issue or its comments name someone else who decides.",
 }
 
 func TestFactoryReferences_architect_carriesThePreClaimRuleBeforeItsClaim(t *testing.T) {

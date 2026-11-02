@@ -282,9 +282,10 @@ card. Depois:
 - sem nenhuma decisão em aberto, ele tira o `factory:needs-design` e move o
   card para Preparado, de onde uma pessoa o puxa para Doing;
 - quando uma decisão cabe ao dono, ele escreve o plano até ali e cada decisão
-  em aberto como pergunta, e move o card para Travado mantendo o rótulo, para
-  que o card volte para ele quando uma pessoa responder e o devolver para
-  Triagem;
+  em aberto como pergunta, mencionando com @ quem decide para que o GitHub
+  avise essa pessoa, e move o card para Travado mantendo o rótulo, para que o
+  card volte para ele quando a pergunta for respondida e quem opera o board o
+  devolver para Triagem (abaixo);
 - se uma sub-issue, o rótulo ou a movimentação não puder ser gravado, ele diz
   qual na issue e move o card para Travado, para que o card não seja escolhido
   de novo a cada hora.
@@ -317,6 +318,18 @@ código atrás de uma única ferramenta MCP: o runtime previsto é o
 [FuseOne Forja](https://github.com/fuseone-io/fuseone-forja), um projeto à
 parte, ainda na fase 0 proposta, com `forja.implement` como ferramenta de
 escrita sob o Gate.
+
+## Quem tira um card de Travado
+
+Nenhum papel tira um card de Travado, e responder à pergunta na issue também
+não move o card. Na primeira versão isso é uma tarefa fixa de uma pessoa,
+dada a quem opera o board:
+
+Quem opera o board revisa a coluna Travado todo dia útil e, quando a pergunta de um card é respondida, devolve o card para Triagem, mantendo o factory:needs-design quando o Arquiteto deve retomar.
+
+O papel que travou o card menciona quem decide no último comentário, e o
+GitHub avisa essa pessoa; quem opera o board é quem percebe que a resposta
+chegou. Sem alguém nessa tarefa, um card travado fica esperando para sempre.
 
 ## Mudando um papel
 

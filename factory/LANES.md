@@ -126,6 +126,15 @@ Moved by **any role**, when only a person can unblock the card. Done when:
 
 **Travado only leaves by a person.** No role moves a card out of Travado, and
 no role acts on a card in Travado: a role that lists its lane skips it.
+Answering the question on the issue moves nothing, so in v1 the lane has an
+owner:
+
+The board operator reviews the Travado lane every working day and, once a card's question is answered, moves it back to Triagem, keeping factory:needs-design on it when the Architect should resume.
+
+The role's comment mentions whoever decides, so GitHub notifies them; the
+operator is who notices that the answer arrived. A card whose answer needs a
+plan goes back to Triagem with `factory:needs-design`, and the Architect takes
+it again; a card it cannot move on, a person closes or keeps.
 
 ### Preparado → Doing
 

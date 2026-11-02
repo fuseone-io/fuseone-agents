@@ -142,8 +142,9 @@ Setting labels replaces the whole set, so send every label already there,
 minus factory:needs-design. The label goes first: a card in Triagem without
 it is Triage's, and Triage moves a card with a plan and criteria to Preparado.
 When a decision belongs to the owner, comment with the plan so far and each open decision as a question addressed to whoever decides, and move the card to Travado.
-Keep the label then: when a person answers and moves the card back to
-Triagem, it comes back to you.
+When you move a card to Travado with a question, @mention whoever decides in that comment, so that GitHub notifies them: the issue's author, unless the issue or its comments name someone else who decides.
+Keep the label then: when a person answers and the board operator moves the
+card back to Triagem, it comes back to you.
 If a sub-issue, the label or the move to Preparado cannot be written, comment on the issue saying which write failed and move the card to Travado instead, so that no later run picks it again.
 A card left in Triagem with its label would be your oldest card again on the
 next run, and every run after.

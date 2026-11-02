@@ -271,9 +271,10 @@ created under the card's issue. Then:
 - with no decision open, it removes `factory:needs-design` and moves the card
   to Preparado, where a person pulls it into Doing;
 - when a decision belongs to the owner, it writes the plan so far and each
-  open decision as a question, and moves the card to Travado, keeping the
-  label, so the card comes back to it once a person answers and moves it back
-  to Triagem;
+  open decision as a question, @mentioning whoever decides so GitHub
+  notifies them, and moves the card to Travado, keeping the label, so the
+  card comes back to it once the question is answered and the board operator
+  moves it back to Triagem (below);
 - if a sub-issue, the label or the move cannot be written, it says which on
   the issue and moves the card to Travado, so the card is not picked again
   every hour.
@@ -304,6 +305,18 @@ MCP tool: the intended runtime is
 [FuseOne Forja](https://github.com/fuseone-io/fuseone-forja), a separate
 project still at its proposed phase 0, with `forja.implement` as a write tool
 under the Gate.
+
+## Who takes a card out of Travado
+
+No role moves a card out of Travado, and answering the question on the issue
+does not move it either. In the first version this is a person's standing
+job, given to whoever operates the board:
+
+The board operator reviews the Travado lane every working day and, once a card's question is answered, moves it back to Triagem, keeping factory:needs-design on it when the Architect should resume.
+
+The role that blocked the card mentions whoever decides in its last comment,
+so GitHub notifies them; the operator is who notices that the answer arrived.
+Without someone in this job, a blocked card waits forever.
 
 ## Changing a role
 

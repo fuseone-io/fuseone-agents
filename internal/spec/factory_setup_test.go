@@ -122,6 +122,33 @@ func decodeJSON(data string) (any, error) {
 	return v, err
 }
 
+// No role moves a card out of Travado, and answering the question on the
+// issue moves nothing: without a person whose job is the Travado lane, a
+// blocked card sits there forever. In v1 that person is the board operator,
+// stated in one exact sentence per language wherever the lanes and the setup
+// are described.
+const (
+	travadoOperatorEN = "The board operator reviews the Travado lane every working day and, once a card's question is answered, moves it back to Triagem, keeping factory:needs-design on it when the Architect should resume."
+	travadoOperatorPT = "Quem opera o board revisa a coluna Travado todo dia útil e, quando a pergunta de um card é respondida, devolve o card para Triagem, mantendo o factory:needs-design quando o Arquiteto deve retomar."
+)
+
+func TestFactorySetup_travado_hasTheBoardOperatorAsItsOwnerInEveryText(t *testing.T) {
+	t.Parallel()
+
+	want := map[string]string{
+		"../../factory/LANES.md":                      travadoOperatorEN,
+		"../../factory/agents/README.md":              travadoOperatorEN,
+		"../../docs/manual/en-US/software-factory.md": travadoOperatorEN,
+		"../../docs/manual/pt-BR/software-factory.md": travadoOperatorPT,
+	}
+	for path, sentence := range want {
+		lines := strings.Split(readFile(t, path), "\n")
+		if count := countLines(lines, sentence); count != 1 {
+			t.Errorf("%s carries the Travado owner line %d times, want 1", path, count)
+		}
+	}
+}
+
 // namesTheFullRuleset catches the wording the prerequisite must not use: #207
 // is the deferred, full ruleset, never the one to install in v1.
 var namesTheFullRuleset = regexp.MustCompile(`(?i)#207\s+ruleset|ruleset\s+(of|da|de|do)\s+(issue\s+)?#207`)

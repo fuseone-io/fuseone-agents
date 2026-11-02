@@ -88,8 +88,9 @@ The card leaves in one of three ways, each sealed as an exact line:
 - to **Preparado**, once the plan is written, removing
   `factory:needs-design` first (LANES.md § Triagem → `factory:needs-design`);
 - to **Travado**, with the plan so far and each open decision as a question
-  addressed to whoever decides, keeping the label so the card comes back to
-  the Architect when a person answers and moves it back to Triagem;
+  addressed to whoever decides, with an @mention so GitHub notifies them,
+  keeping the label so the card comes back to the Architect when the board
+  operator moves it back to Triagem (§ Who takes a card out of Travado);
 - to **Travado**, when a sub-issue, the label or the move cannot be
   written, or when the issue already carries a plan the Architect wrote with
   no person's comment after it (an earlier run stopped half way). A card left
@@ -109,6 +110,18 @@ copies from:
 3. Publish it. A new agent is a paused draft.
 4. Set its stage to **copilot** and start it. The stage is state beside the
    specification, not a field in it, so the file cannot carry it.
+
+### Who takes a card out of Travado
+
+No role does: a role that lists its lane skips a card in Travado, and
+answering the question on the issue does not move the card. In v1 that is a
+person's standing job, given to whoever operates the board:
+
+The board operator reviews the Travado lane every working day and, once a card's question is answered, moves it back to Triagem, keeping factory:needs-design on it when the Architect should resume.
+
+The role's last comment mentions whoever decides, so GitHub notifies them,
+and the operator sees the answer arrive. Without this, a blocked card waits
+forever.
 
 A change to a role is made here first, reviewed, and then copied into the
 console. The console is where the role runs; this directory is where its
