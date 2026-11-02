@@ -27,6 +27,55 @@ field" is a commit message.
 
 ---
 
+## [0.88.0] — 2026-11-02
+
+### Upgrade notes
+
+- **Every worker must run 0.88.0 before any later version that links a pull
+  request to a card is deployed.** This version teaches every reader the
+  `work_item_linked` step; nothing writes it yet. A worker older than 0.88.0
+  that meets that step fails the run. Finish rolling out 0.88.0 everywhere
+  first, then upgrade further.
+- **A software factory Developer needs a ruleset on `main` before it starts.**
+  The manual's software factory page gives it: a pull request required, force
+  pushes and deletion blocked, and no bypass for anyone, people included. With
+  it in place, a release's changelog cut also reaches `main` through a pull
+  request.
+
+### Added
+
+- **A card's trail.** `GET /api/v1/work-items/trail?ref=` and a console page
+  list every run that claimed a card, per role: runs, approvals asked,
+  approved and refused, and cost. A run claim in the run trail links to it.
+  Only runs the caller can read appear, and cost only with `cost:read`. Until
+  pull requests are linked to their issue, an issue and its pull request show
+  as separate trails.
+- **Reference definitions for a Developer (Level 1) and an Architect**, beside
+  Triage, Reviewer and QA in `factory/agents/`. The Developer makes small
+  changes through the GitHub API and leaves a card that needs a build labelled
+  `factory:needs-runtime`. The Architect writes a plan verified in the code
+  and acceptance criteria on the issue. The setup creates every `factory:*`
+  label the roles use.
+- **The run trail shows when a run linked a pull request to a card.**
+
+### Changed
+
+- **A factory role that blocks on a person now records the block before its
+  run ends.** Each role says in its last comment what unblocks the card and
+  which lane it returns to, and the board operator moves it back once that is
+  done. A closed card goes to Done instead.
+- **Factory roles list only open items on the board.**
+- **`make release` tags only a clean checkout of `origin/main`.** It refuses
+  staged, unstaged or untracked changes, and any commit that is not the merged
+  head of `main`.
+
+### Fixed
+
+- **A claim whose recorded agent or scope differed from its run's no longer
+  counts as another agent's.** Such a claim is now refused, and a card held
+  under an older one still blocks a second run of the same agent.
+- **A claim can no longer be recorded for a run that was never started.**
+
 ## [0.87.0] — 2026-11-01
 
 ### Upgrade notes
