@@ -70,9 +70,39 @@ func TestWorkItemOrigin_aRunOpenedWithAWorkItem_isOnTheCardsTrailAndCounted(t *t
 		if at := got.Runs[1].ClaimedAt; !at.Equal(trailStart.Add(5 * time.Minute)) {
 			t.Errorf("the inherited run joined at %v, want the moment it opened", at)
 		}
+		// Counted as a run of the role, with what it asked people — but its
+		// spend is the card it claimed, not this one: cost is additive.
 		reviewer := roleOf(t, got.Roles, "reviewer")
-		if reviewer.Runs != 1 || reviewer.Approvals.Approved != 1 || reviewer.CostMicros == nil || *reviewer.CostMicros != 40 {
-			t.Fatalf("reviewer role = %+v; the inherited run is not counted", reviewer)
+		if reviewer.Runs != 1 || reviewer.Approvals.Approved != 1 || reviewer.CostMicros == nil || *reviewer.CostMicros != 0 {
+			t.Fatalf("reviewer role = %+v; want the run and its approval counted, its cost not", reviewer)
+		}
+	})
+}
+
+/*
+A card's cost is what the runs attributed to it by a claim spent, so card
+totals add up: a run that inherits one card, claims another and spends 100
+is 100 on the card it claimed and 0 on the one it inherited — summed over
+both trails, its cost once.
+*/
+func TestWorkItemOrigin_costOverBothTrails_isTheRunsCostOnce(t *testing.T) {
+	run(t, "cost is additive across trails", func(t *testing.T, s Store) {
+		inheritIn(t, s, "run-x", "developer", areaFactory, 0, delivered(card))
+		other := claimStep(t, "run-x", "developer", otherCard)
+		other.Scope = areaFactory
+		mustAppend(t, s, other)
+		costed(t, s, "run-x", "developer", areaFactory, 100)
+
+		var total int64
+		for _, ref := range []domain.WorkItemRef{card, otherCard} {
+			role := roleOf(t, trailFor(t, s, domain.RunFilter{}, ref).Roles, "developer")
+			if role.CostMicros == nil {
+				t.Fatalf("%s: cost absent for a caller with cost:read everywhere", ref)
+			}
+			total += *role.CostMicros
+		}
+		if total != 100 {
+			t.Fatalf("cost summed over both trails = %d, want the run's 100 once", total)
 		}
 	})
 }

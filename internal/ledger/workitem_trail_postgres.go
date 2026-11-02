@@ -187,13 +187,18 @@ func workItemShares(
 // bound is not known when the statement is planned, so the months outside it
 // are pruned while it runs rather than when it is planned. The decision's
 // verdict is read here; no payload leaves the database.
+//
+// Cost sums only the runs on the trail by a claim — of the card or of an
+// alias (via 'claim') — never an inheritance: a run is spent on the card it
+// claimed, so card totals add up (#204, slice 3). An inherited run still
+// counts as a run of its role, with its approvals.
 func workItemRolesSQL(filter domain.RunFilter, ref domain.WorkItemRef) (string, []any) {
 	with, from, args := workItemSource(filter, ref)
 	return fmt.Sprintf(`
 		with %s,
 		trail as (
 			select r.run_id, r.agent_id, r.company_id, r.area_id, r.started_at, r.ended_at,
-			       r.cost_micros, c.claimed_at
+			       r.cost_micros, c.claimed_at, c.via
 			%s
 		),
 		asked as (
@@ -212,7 +217,7 @@ func workItemRolesSQL(filter domain.RunFilter, ref domain.WorkItemRef) (string, 
 			group by s.run_id
 		)
 		select t.agent_id, t.company_id, t.area_id, count(*)::int, min(t.claimed_at), max(t.ended_at),
-		       coalesce(sum(t.cost_micros), 0)::bigint,
+		       coalesce(sum(t.cost_micros) filter (where t.via = 'claim'), 0)::bigint,
 		       coalesce(sum(a.requested), 0)::int, coalesce(sum(a.approved), 0)::int,
 		       coalesce(sum(a.refused), 0)::int, coalesce(sum(a.abandoned), 0)::int
 		from trail t left join asked a on a.run_id = t.run_id

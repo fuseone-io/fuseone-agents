@@ -109,8 +109,11 @@ entrega trata, lidos do repositório e do número que o GitHub escreve, nunca
 de um título ou de um comentário: ela aparece marcada como **Entrega do
 GitHub**. A primeira linha da trilha da própria execução diz o que ela herdou
 e de onde. É só atribuição: um card herdado nunca fica preso à execução,
-então nunca impede que outra o assuma, e o custo do card no FinOps continua
-contando só quem o assumiu. Uma execução que herdou um card e assumiu outro
+então nunca impede que outra o assuma. Uma execução herdada conta como
+execução do seu papel, com as aprovações que pediu, mas o custo dela é do card
+que ela assumiu: o custo de um card, no histórico e no FinOps, soma só as
+execuções que assumiram o card ou um pull request vinculado a ele, e assim os
+custos de cards diferentes se somam sem repetir. Uma execução que herdou um card e assumiu outro
 aparece nos dois históricos, e cada linha cita o outro card; se herdou e
 assumiu o mesmo card, aparece uma vez só nesse histórico, como quem o
 assumiu.

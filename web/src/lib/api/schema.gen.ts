@@ -5386,8 +5386,12 @@ export interface components {
             lastEndedAt?: string;
             /**
              * Format: int64
-             * @description What the role's runs cost. Absent — never zero — unless the
-             *     caller holds cost:read over every one of them.
+             * @description What the role's runs cost this card: the runs here by a `claim`
+             *     or an `alias` only. A run here by an inheritance (`event`,
+             *     `github_delivery`) counts in `runs` and the approvals but not in
+             *     the cost, which belongs to the card it claimed, so card totals
+             *     add up. Absent — never zero — unless the caller holds cost:read
+             *     over every one of the role's runs.
              */
             costMicros?: number;
         };

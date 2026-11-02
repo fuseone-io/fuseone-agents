@@ -63,10 +63,14 @@ func trailRunOf(
 	if !placeOnTrail(&run, steps, target, links) {
 		return domain.WorkItemRun{}, domain.WorkItemRoleShare{}, false
 	}
-	return run, domain.WorkItemRoleShare{
+	share := domain.WorkItemRoleShare{
 		AgentID: run.AgentID, Scope: run.Scope, Runs: 1, Approvals: approvalsOf(steps),
-		FirstClaimedAt: run.ClaimedAt, LastEndedAt: run.EndedAt, CostMicros: summary.Cost.Micros,
-	}, true
+		FirstClaimedAt: run.ClaimedAt, LastEndedAt: run.EndedAt,
+	}
+	if run.Link.CountsCost() {
+		share.CostMicros = summary.Cost.Micros
+	}
+	return run, share, true
 }
 
 // claimStepOf is the run's first valid claim — the one the Postgres store

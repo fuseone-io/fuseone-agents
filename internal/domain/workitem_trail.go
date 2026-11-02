@@ -94,7 +94,10 @@ type WorkItemRoleShare struct {
 }
 
 // WorkItemRole is one agent's share of the trail. CostMicros is nil when the
-// caller may not read the cost of every one of the role's runs.
+// caller may not read the cost of every one of the role's runs. It sums only
+// the runs on the trail by a claim or an alias (WorkItemLink.CountsCost): an
+// inherited run counts in Runs and Approvals and costs this card nothing, so
+// card totals add up.
 type WorkItemRole struct {
 	AgentID        AgentID
 	Runs           int

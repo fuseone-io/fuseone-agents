@@ -42,6 +42,19 @@ const (
 	WorkItemLinkGitHubDelivery = WorkItemLink(WorkItemFromGitHubDelivery)
 )
 
+/*
+CountsCost reports whether a run on a trail by this link counts its cost
+there: a claim of the card or of an alias does; an inheritance does not.
+
+Cost is the card the run claimed. Counted on the card it inherited too, a run
+that inherits one card and claims another would show its spend on both, and
+card totals would stop adding up. An inherited run still counts as a run of
+its role, with what it asked people.
+*/
+func (l WorkItemLink) CountsCost() bool {
+	return l == WorkItemLinkClaim || l == WorkItemLinkAlias
+}
+
 // RunWorkItem is the inherited work item sealed on a run's opening step.
 type RunWorkItem struct {
 	Ref    WorkItemRef          `json:"ref"`
