@@ -12,9 +12,9 @@ import (
 /*
 The work-item link, as every reader of the ledger knows it (#204, slice 2a).
 
-Nothing writes a work_item_linked step yet. The kind and its payload ship one
-release ahead of the writer, so that a worker still on this release meets a
-link a newer worker sealed and reads it rather than failing the run.
+The kind and its payload shipped one release ahead of their writer (2b), so
+that a worker still on the older release meets a link a newer worker sealed
+and reads it rather than failing the run.
 */
 
 const (

@@ -27,7 +27,7 @@ const SystemWorker UserID = "system:worker"
 func (t ToolID) PlatformOwned() bool {
 	switch t {
 	case ToolContextRead, ToolTicketAnswer, ToolMemoryFind, ToolMemorySuggest,
-		ToolWorkItemClaim:
+		ToolWorkItemClaim, ToolWorkItemLink:
 		return true
 	}
 	return false
