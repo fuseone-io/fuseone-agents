@@ -16,7 +16,13 @@ import (
 // a run holds is its first work_item_claimed step, and whether it is open is
 // the phase its steps project. So this store cannot release a claim by
 // writing anything either.
+//
+// A link is judged here too, at the seq it would be sealed at: the run's
+// steps are contiguous from FirstSeq, so that is one past their count.
 func (m *Memory) judgeWorkItem(s domain.Step) error {
+	if err := judgeLink(s, int64(len(m.runs[s.RunID]))+domain.FirstSeq); err != nil {
+		return err
+	}
 	if s.Kind != domain.StepWorkItemClaimed {
 		return nil
 	}
