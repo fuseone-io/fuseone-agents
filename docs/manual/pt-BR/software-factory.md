@@ -321,11 +321,11 @@ escrita sob o Gate.
 
 ## Quem tira um card de Travado
 
-Nenhum papel tira um card de Travado, e responder à pergunta na issue também
-não move o card. Na primeira versão isso é uma tarefa fixa de uma pessoa,
+Nenhum papel tira um card de Travado, e resolver o que o travou também não
+move o card. Na primeira versão isso é uma tarefa fixa de uma pessoa,
 dada a quem opera o board:
 
-Quem opera o board revisa a coluna Travado todo dia útil e, quando a pergunta de um card é respondida, devolve o card para a coluna indicada na última linha do comentário que o travou, Triagem ou Doing, sem mexer nos rótulos.
+Quem opera o board revisa a coluna Travado todo dia útil e, quando o bloqueio indicado no comentário que travou um card é resolvido, devolve o card para a coluna indicada na última linha desse comentário, Triagem ou Doing, sem mexer nos rótulos.
 
 A última linha desse comentário é fixa: `Return to: Triagem` quando quem
 travou o card foi a Triagem ou o Arquiteto, `Return to: Doing` quando foi o
@@ -334,9 +334,15 @@ Desenvolvedor, o Revisor ou o QA. Um card que volta para Triagem ainda com
 mantém o rótulo do pull request, e o papel indicado por esse rótulo o
 retoma.
 
-O papel que travou o card menciona quem decide no último comentário, e o
-GitHub avisa essa pessoa; quem opera o board é quem percebe que a resposta
-chegou. Sem alguém nessa tarefa, um card travado fica esperando para sempre.
+O papel que travou o card diz nesse comentário o que bloqueia o card e o que
+uma pessoa precisa fazer para resolver — responder a uma pergunta, criar um
+rótulo que falta, dizer se um plano pela metade deve ser retomado ou
+descartado —, nunca só o que aconteceu. É essa ação que impede o papel de
+travar o card de novo no próximo run; quem opera o board é quem percebe que
+ela foi feita. O
+[LANES](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/LANES.md)
+lista cada caminho para Travado e a ação de cada um. Sem alguém nessa tarefa,
+um card travado fica esperando para sempre.
 
 ## Mudando um papel
 

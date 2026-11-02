@@ -131,8 +131,8 @@ func decodeJSON(data string) (any, error) {
 // while it still carries its sub-state label. The blocking comment names the
 // lane (factory_references_test.go, returnLines).
 const (
-	travadoOperatorEN = "The board operator reviews the Travado lane every working day and, once a card's question is answered, moves it back to the lane named on the last line of the comment that blocked it, Triagem or Doing, leaving its labels as they are."
-	travadoOperatorPT = "Quem opera o board revisa a coluna Travado todo dia útil e, quando a pergunta de um card é respondida, devolve o card para a coluna indicada na última linha do comentário que o travou, Triagem ou Doing, sem mexer nos rótulos."
+	travadoOperatorEN = "The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane named on that comment's last line, Triagem or Doing, leaving its labels as they are."
+	travadoOperatorPT = "Quem opera o board revisa a coluna Travado todo dia útil e, quando o bloqueio indicado no comentário que travou um card é resolvido, devolve o card para a coluna indicada na última linha desse comentário, Triagem ou Doing, sem mexer nos rótulos."
 )
 
 func TestFactorySetup_travado_hasTheBoardOperatorAsItsOwnerInEveryText(t *testing.T) {

@@ -115,10 +115,10 @@ copies from:
 ### Who takes a card out of Travado
 
 No role does: a role that lists its lane skips a card in Travado, and
-answering the question on the issue does not move the card. In v1 that is a
+clearing what blocked it does not move the card. In v1 that is a
 person's standing job, given to whoever operates the board:
 
-The board operator reviews the Travado lane every working day and, once a card's question is answered, moves it back to the lane named on the last line of the comment that blocked it, Triagem or Doing, leaving its labels as they are.
+The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane named on that comment's last line, Triagem or Doing, leaving its labels as they are.
 
 Each role ends that comment with a fixed line naming the lane the card came
 from, a line sealed per role in `internal/spec/factory_references_test.go`:
@@ -127,9 +127,13 @@ from, a line sealed per role in `internal/spec/factory_references_test.go`:
 the Developer, the Reviewer and QA (the pull request keeps its sub-state
 label, so the role it names resumes it).
 
-The role's last comment mentions whoever decides, so GitHub notifies them,
-and the operator sees the answer arrive. Without this, a blocked card waits
-forever.
+Every role's Travado comment names what blocks the card and the action a
+person must take to clear it, as a question or a request, never as a fact
+alone: a line sealed per role, beside the return line. The operator returns
+the card once that action is taken, and taking it is what keeps the role from
+blocking the card again: for the Architect's half-way rule, a person's comment
+after its plan. LANES.md § Any lane → Travado lists every way in and its
+action. Without an operator, a blocked card waits forever.
 
 A change to a role is made here first, reviewed, and then copied into the
 console. The console is where the role runs; this directory is where its

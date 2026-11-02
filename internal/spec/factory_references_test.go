@@ -149,7 +149,7 @@ var developerLevelOneBoundary = []string{
 	// The label is what takes the card out of the Developer's choice. If
 	// it cannot be set, the card must leave Doing some other way, or it is
 	// the oldest card again on the next run, and every run after.
-	"If the label cannot be set, comment on the issue that factory:needs-runtime is missing from the repository and move the card to Travado instead, so that no later run picks it again.",
+	"If the label cannot be set, comment on the issue that factory:needs-runtime is missing from the repository, asking a person to create it (factory/agents/README.md § The labels) and then return the card, and move the card to Travado instead, so that no later run picks it again.",
 }
 
 // developerWriteFences are the Developer's two fences on what it writes. Its
@@ -227,8 +227,11 @@ var architectSealedLines = []string{
 	"The only label you remove is factory:needs-design, and you add no label.",
 	"Never move a card anywhere but Preparado or Travado, and never move a card out of Travado, Preparado, Doing or Done.",
 	// Safe exits: a card that did not leave would be the oldest again.
-	"If a sub-issue, the label or the move to Preparado cannot be written, comment on the issue saying which write failed and move the card to Travado instead, so that no later run picks it again.",
-	"If the issue already carries a plan you wrote and no person has commented since, an earlier run stopped half way: write only a comment saying so, and move the card to Travado.",
+	"If a sub-issue, the label or the move to Preparado cannot be written, comment on the issue saying which write failed and asking a person to fix it (create the missing label, grant the missing permission) and then comment that it is fixed, and move the card to Travado instead, so that no later run picks it again.",
+	"If the issue already carries a plan you wrote and no person has commented since, an earlier run stopped half way: write only a comment asking whoever decides whether to resume or discard that plan, and move the card to Travado.",
+	// What breaks the half-way rule: without it, a card returned with no
+	// person's comment is sent straight back to Travado, every run.
+	"A person's comment after your plan is what lets the next run go on: on resume, or on a comment that a failed write is fixed, finish the writes that plan still lacks; on discard, or on an answer to a question, write a new plan that takes it into account.",
 	"When a decision belongs to the owner, comment with the plan so far and each open decision as a question addressed to whoever decides, and move the card to Travado.",
 	// Moving the card does not tell anyone: a mention in the comment body is
 	// what makes GitHub notify the person who has to answer.
@@ -297,11 +300,34 @@ func countLines(lines []string, sentence string) int {
 // Architect block cards in Triagem; the Developer, the Reviewer and QA block
 // them in Doing, where the pull request keeps its sub-state label.
 var returnLines = map[string]string{
-	"triage":    "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Triagem, the lane the card goes back to once its question is answered.",
-	"architect": "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Triagem, the lane the card goes back to once its question is answered.",
-	"developer": "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its question is answered.",
-	"reviewer":  "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its question is answered.",
-	"qa":        "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its question is answered.",
+	"triage":    "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Triagem, the lane the card goes back to once its blocker is cleared.",
+	"architect": "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Triagem, the lane the card goes back to once its blocker is cleared.",
+	"developer": "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its blocker is cleared.",
+	"reviewer":  "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its blocker is cleared.",
+	"qa":        "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its blocker is cleared.",
+}
+
+// unblockLine is what every role's Travado comment must carry besides its
+// return lane: the action that clears the block. A comment that only
+// records a fact ("the label failed", "an earlier run stopped") gives the
+// board operator nothing to wait for, and a card returned without that
+// action being taken is blocked again on the next run.
+const unblockLine = "Every comment you write as you move a card to Travado names what blocks the card and the action a person must take to clear it, as a question or a request addressed to that person, never as a fact alone."
+
+func TestFactoryReferences_eachRole_namesTheActionThatUnblocksItsTravadoCardsOnce(t *testing.T) {
+	t.Parallel()
+
+	refs := factoryReferences(t)
+	for _, role := range []string{"triage", "architect", "developer", "reviewer", "qa"} {
+		data, ok := refs[role]
+		if !ok {
+			t.Errorf("there is no %s reference", role)
+			continue
+		}
+		if count := countLines(strings.Split(string(data), "\n"), unblockLine); count != 1 {
+			t.Errorf("the %s reference carries the unblock line %d times, want 1", role, count)
+		}
+	}
 }
 
 func TestFactoryReferences_eachRole_namesItsReturnLaneOnce(t *testing.T) {

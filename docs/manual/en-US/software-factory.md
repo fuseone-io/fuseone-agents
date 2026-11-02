@@ -308,11 +308,11 @@ under the Gate.
 
 ## Who takes a card out of Travado
 
-No role moves a card out of Travado, and answering the question on the issue
-does not move it either. In the first version this is a person's standing
+No role moves a card out of Travado, and clearing what blocked it does not
+move it either. In the first version this is a person's standing
 job, given to whoever operates the board:
 
-The board operator reviews the Travado lane every working day and, once a card's question is answered, moves it back to the lane named on the last line of the comment that blocked it, Triagem or Doing, leaving its labels as they are.
+The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane named on that comment's last line, Triagem or Doing, leaving its labels as they are.
 
 The last line of that comment is fixed: `Return to: Triagem` when Triage or
 the Architect blocked the card, `Return to: Doing` when the Developer, the
@@ -320,9 +320,14 @@ Reviewer or QA did. A card back in Triagem that still carries
 `factory:needs-design` resumes with the Architect; a card back in Doing
 keeps its pull request's label, so the role that label names resumes it.
 
-The role that blocked the card mentions whoever decides in its last comment,
-so GitHub notifies them; the operator is who notices that the answer arrived.
-Without someone in this job, a blocked card waits forever.
+The role that blocked the card says in that comment what blocks it and what
+a person must do to clear it — answer a question, create a missing label,
+say whether to resume or discard a half-finished plan — never only what
+happened. Taking that action is what keeps the role from blocking the card
+again on its next run; the operator is who notices it was taken.
+[LANES](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/LANES.md)
+lists every way into Travado and its action. Without someone in this job, a
+blocked card waits forever.
 
 ## Changing a role
 

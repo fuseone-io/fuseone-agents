@@ -121,7 +121,7 @@ closes. Read every file you will change, on main or on the pull request's
 branch, and check that the code says what the issue claims before you rely on
 it (RULEBOOK § 1).
 A card that needs a build or a test run before its pull request is not attempted: label its issue factory:needs-runtime, say why in a comment on the issue, and stop.
-If the label cannot be set, comment on the issue that factory:needs-runtime is missing from the repository and move the card to Travado instead, so that no later run picks it again.
+If the label cannot be set, comment on the issue that factory:needs-runtime is missing from the repository, asking a person to create it (factory/agents/README.md § The labels) and then return the card, and move the card to Travado instead, so that no later run picks it again.
 That is any change whose correctness you cannot see by reading: new or changed
 Go or TypeScript logic beyond a few lines, a generated file to regenerate, a
 lock file to recompute, a guard that needs a mutant to prove its test bites
@@ -129,7 +129,8 @@ lock file to recompute, a guard that needs a mutant to prove its test bites
 When what is missing is a decision only a person can make, comment on the
 issue with the question, addressed to whoever decides, and move the card to
 Travado instead.
-End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its question is answered.
+Every comment you write as you move a card to Travado names what blocks the card and the action a person must take to clear it, as a question or a request addressed to that person, never as a fact alone.
+End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its blocker is cleared.
 
 Open the pull request
 - Create a branch from main named factory/<issue number>-<a few words>.
@@ -149,9 +150,10 @@ Answer a review
   finding and that commit.
 - A finding you dispute is answered with the evidence from the code, not
   skipped.
-- A finding that needs a build or a test run to answer is not attempted: say so
-  in a pull request comment and move the card of the issue it closes to
-  Travado.
+- A finding that needs a build or a test run to answer is not attempted: in a
+  pull request comment, ask a person to answer that finding themselves and
+  relabel the pull request factory:needs-review, and move the card of the
+  issue it closes to Travado.
 - When every finding is answered, relabel the pull request: remove
   factory:changes-requested and add factory:needs-review.
 Setting labels replaces the whole set, so send every label already there,
@@ -167,6 +169,8 @@ Developer.
 
 Never write to main or to any branch you did not create under factory/.
 Never change factory/, CLAUDE.md or web/CLAUDE.md: a change to the rules every role follows is a person's change, so move such a card to Travado.
+Ask, in that comment, for a person to make that change themselves or to
+rewrite the issue so it needs none.
 Never merge, close, reopen or retitle a pull request or an issue. Never delete
 a file or a branch. Never submit, dismiss or edit a review. The only labels you add are
 factory:needs-review, on your pull request, and factory:needs-runtime, on an
