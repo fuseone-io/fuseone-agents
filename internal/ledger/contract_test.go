@@ -59,6 +59,8 @@ type Store interface {
 	Agreement(ctx context.Context, since time.Time) ([]domain.Agreement, error)
 	Simulations() ledger.SimulationQueue
 	WorkItemCost(ctx context.Context, filter domain.RunFilter, ref domain.WorkItemRef) (domain.WorkItemCost, error)
+	WorkItemTrail(ctx context.Context, filter domain.RunFilter, cost *domain.RunFilter,
+		ref domain.WorkItemRef, page domain.WorkItemPage) (domain.WorkItemTrail, error)
 	StartsAndFinishes(ctx context.Context, runs []domain.RunSummary) (map[domain.RunID][]domain.Step, error)
 	FinishedSince(ctx context.Context, after domain.FinishCursor, limit int) ([]domain.FinishedRun, error)
 	EventCursor(ctx context.Context) (domain.FinishCursor, error)

@@ -37,6 +37,12 @@ func MigrateBodies(ctx context.Context, pool *pgxpool.Pool, files []TestMigratio
 // MigrationDigest is the digest the runner records for a body.
 func MigrationDigest(body string) string { return digestBytes([]byte(body)) }
 
+// WorkItemRunsSQL and WorkItemApprovalsSQL are the trail's two statements,
+// for the plan test that holds them to the ref index and partition pruning.
+var WorkItemRunsSQL = workItemRunsSQL
+
+const WorkItemApprovalsSQL = workItemApprovalsSQL
+
 // FinishedSinceSQL is one page of the dispatcher's feed, for the same test.
 const FinishedSinceSQL = finishedSinceSQL
 
