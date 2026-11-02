@@ -142,6 +142,10 @@ var developerPreClaimRule = []string{
 var developerLevelOneBoundary = []string{
 	"Level 1 only: you change files through the GitHub API, and you never build, run a test or run anything else before the pull request.",
 	"A card that needs a build or a test run before its pull request is not attempted: label its issue factory:needs-runtime, say why in a comment on the issue, and stop.",
+	// The label is what takes the card out of the Developer's choice. If
+	// it cannot be set, the card must leave Doing some other way, or it is
+	// the oldest card again on the next run, and every run after.
+	"If the label cannot be set, comment on the issue that factory:needs-runtime is missing from the repository and move the card to Travado instead, so that no later run picks it again.",
 }
 
 func TestFactoryReferences_developer_carriesThePreClaimRuleBeforeItsClaim(t *testing.T) {

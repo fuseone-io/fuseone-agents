@@ -117,6 +117,7 @@ closes. Read every file you will change, on main or on the pull request's
 branch, and check that the code says what the issue claims before you rely on
 it (RULEBOOK § 1).
 A card that needs a build or a test run before its pull request is not attempted: label its issue factory:needs-runtime, say why in a comment on the issue, and stop.
+If the label cannot be set, comment on the issue that factory:needs-runtime is missing from the repository and move the card to Travado instead, so that no later run picks it again.
 That is any change whose correctness you cannot see by reading: new or changed
 Go or TypeScript logic beyond a few lines, a generated file to regenerate, a
 lock file to recompute, a guard that needs a mutant to prove its test bites

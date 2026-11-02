@@ -58,7 +58,8 @@ In v1 the roles are **created in the console or the Studio**, not published
 from this repository (NT-013 § v1). These files are the reference a person
 copies from:
 
-1. Register the role's GitHub MCP server in the administration (below).
+1. Create the factory's labels, once per repository (below), and register
+   the role's GitHub MCP server in the administration (below).
 2. Create the agent in the Studio from the reference: the fields of the
    frontmatter, and the body as its instructions. A Studio that imports the
    file format can take the file as it is.
@@ -69,6 +70,28 @@ copies from:
 A change to a role is made here first, reviewed, and then copied into the
 console. The console is where the role runs; this directory is where its
 instructions are reviewed. When the two disagree, the console has drifted.
+
+### The labels
+
+Every `factory:*` label a role sets or reads must already exist in the
+repository: GitHub applies only labels the repository defines, so a role that
+sets a missing one fails at that write, and the card it meant to move stays
+where it was, to be picked again on the next run. Create them once, from a
+clone of the repository (or with `--repo <owner>/<name>`); `--force` makes
+each line safe to run again:
+
+```sh
+gh label create factory:needs-design --force --color fbca04 --description "Triage asks the Architect for a plan"
+gh label create factory:needs-review --force --color fbca04 --description "PR waits for the Reviewer"
+gh label create factory:changes-requested --force --color fbca04 --description "Reviewer or QA asked for changes"
+gh label create factory:needs-qa --force --color fbca04 --description "PR waits for QA"
+gh label create factory:ready-to-merge --force --color fbca04 --description "Review and QA approved the head; a person merges"
+gh label create factory:needs-runtime --force --color fbca04 --description "Needs a build or a test run before its PR; waits for Level 2"
+```
+
+`internal/spec/factory_setup_test.go` reads every `factory:*` label from the
+references and LANES.md and fails when this list, or the manual's, misses
+one, so a new label arrives with its line here.
 
 ## What every role's reference carries
 

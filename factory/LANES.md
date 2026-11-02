@@ -146,6 +146,11 @@ the Developer skips it from then on. Done when:
       built or run, and why reading the change is not enough;
 - [ ] no branch, commit or pull request was made for the card.
 
+If the label cannot be set — it was never created in the repository
+(factory/agents/README.md § The labels) — the card goes to **Travado**
+instead, with that as the last comment: left in *Doing* unlabelled, it would
+be the oldest card again on every run.
+
 The label waits for Level 2: build and test before a pull request, from a
 coding runtime behind one MCP tool (NT-013 § What the platform needs). The
 intended runtime is FuseOne Forja

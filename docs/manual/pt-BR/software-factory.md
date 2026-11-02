@@ -70,7 +70,27 @@ O repositório é público, então o texto de issues e pull requests não é
 confiável: um run que leu esse texto nunca pode executar uma ação destrutiva,
 e as escritas dele no GitHub precisam de uma pessoa.
 
-## 1. Crie os GitHub Apps
+## 1. Crie os rótulos
+
+O board encaminha pull requests e issues por rótulos, e o GitHub só aplica
+rótulos que o repositório já tem. Um papel que tenta pôr um rótulo que nunca
+foi criado falha nessa escrita, e o card fica onde estava, para ser escolhido
+de novo no próximo run. Crie todos os rótulos da fábrica uma vez, a partir de
+um clone do repositório em que a fábrica trabalha (ou acrescente
+`--repo <dono>/<nome>`). Com `--force`, cada linha pode ser rodada de novo sem
+problema:
+
+```sh
+gh label create factory:needs-design --force --color fbca04 --description "Triage asks the Architect for a plan"
+gh label create factory:needs-review --force --color fbca04 --description "PR waits for the Reviewer"
+gh label create factory:changes-requested --force --color fbca04 --description "Reviewer or QA asked for changes"
+gh label create factory:needs-qa --force --color fbca04 --description "PR waits for QA"
+gh label create factory:ready-to-merge --force --color fbca04 --description "Review and QA approved the head; a person merges"
+gh label create factory:needs-runtime --force --color fbca04 --description "Needs a build or a test run before its PR; waits for Level 2"
+```
+
+
+## 2. Crie os GitHub Apps
 
 Crie um GitHub App por papel, instale cada um só no repositório em que a
 fábrica trabalha e dê a ele só o que as ferramentas do papel precisam:
@@ -91,7 +111,7 @@ que ele mesmo cria em `factory/`, e a pessoa que aprova cada escrita vê o
 branch que ela indica. Gere uma chave privada para cada App e
 anote o ID do App e o ID da instalação.
 
-## 2. Registre o servidor do GitHub uma vez por papel
+## 3. Registre o servidor do GitHub uma vez por papel
 
 Na administração, registre o GitHub MCP hospedado
 (`https://api.githubcopilot.com/mcp/`) quatro vezes, uma por papel, com o id
@@ -115,7 +135,7 @@ O servidor hospedado ignora em silêncio um nome de toolset que não conhece,
 então um erro de digitação só aparece depois, como uma publicação recusada por
 falta de ferramentas.
 
-## 3. Classifique as ferramentas
+## 4. Classifique as ferramentas
 
 Com cada servidor respondendo, classifique todas as ferramentas que os papéis
 declaram (veja [O que a plataforma para antes de acontecer](what-the-gate-stops.md)).
@@ -140,7 +160,7 @@ e uma pessoa aprova toda escrita no GitHub. Classificado como destrutivo, ele se
 bloqueado de vez, e todo papel que lê texto de issue e move cards seria
 recusado na publicação.
 
-## 4. Crie a área da fábrica
+## 5. Crie a área da fábrica
 
 Crie uma área para a fábrica, para que custo, orçamento e concessões dela
 fiquem separados de todos os outros agentes, e dê um orçamento a ela (veja
@@ -161,7 +181,7 @@ em vez de gastar:
 Micros são milionésimos da moeda configurada na instalação. Trate esses
 valores como uma primeira calibração.
 
-## 5. Crie os papéis
+## 6. Crie os papéis
 
 Para cada papel, crie o agente no Studio a partir da referência: os campos do
 frontmatter, e o corpo como instruções.
@@ -204,8 +224,10 @@ commit e um comentário.
 
 Um card que precisa de um build ou de rodar testes antes do pull request não
 é tentado. O Desenvolvedor põe o rótulo `factory:needs-runtime` na issue,
-explica o motivo num comentário e deixa o card em Doing para uma pessoa. O
-**Nível 2**, build e testes antes do pull request, virá de um runtime de
+explica o motivo num comentário e deixa o card em Doing para uma pessoa. Se o
+rótulo não puder ser aplicado, porque nunca foi criado (passo 1), ele avisa e
+move o card para Travado, para que o card não seja escolhido de novo a cada
+hora. O **Nível 2**, build e testes antes do pull request, virá de um runtime de
 código atrás de uma única ferramenta MCP: o runtime previsto é o
 [FuseOne Forja](https://github.com/fuseone-io/fuseone-forja), um projeto à
 parte, ainda na fase 0 proposta, com `forja.implement` como ferramenta de

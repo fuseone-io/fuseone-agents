@@ -66,7 +66,26 @@ The repository is public, so issue and pull request text is untrusted: a run
 that read it can never take a destructive action, and its GitHub writes need
 a person.
 
-## 1. Create the GitHub Apps
+## 1. Create the labels
+
+The board routes pull requests and issues by labels, and GitHub applies only
+labels the repository already defines. A role that sets a label that was never
+created fails at that write, and the card stays where it was, to be picked
+again on the next run. Create every factory label once, from a clone of the
+repository the factory works (or add `--repo <owner>/<name>`). `--force`
+makes each line safe to run again:
+
+```sh
+gh label create factory:needs-design --force --color fbca04 --description "Triage asks the Architect for a plan"
+gh label create factory:needs-review --force --color fbca04 --description "PR waits for the Reviewer"
+gh label create factory:changes-requested --force --color fbca04 --description "Reviewer or QA asked for changes"
+gh label create factory:needs-qa --force --color fbca04 --description "PR waits for QA"
+gh label create factory:ready-to-merge --force --color fbca04 --description "Review and QA approved the head; a person merges"
+gh label create factory:needs-runtime --force --color fbca04 --description "Needs a build or a test run before its PR; waits for Level 2"
+```
+
+
+## 2. Create the GitHub Apps
 
 Create one GitHub App per role, install it only on the repository the factory
 works, and give it only what its tools need:
@@ -86,7 +105,7 @@ the Developer is told to write only to branches it creates under `factory/`,
 and the person approving each write sees the branch it names. Generate a private key for each App and note its App id
 and installation id.
 
-## 2. Register the GitHub server once per role
+## 3. Register the GitHub server once per role
 
 In the administration, register the hosted GitHub MCP server
 (`https://api.githubcopilot.com/mcp/`) four times, one per role, with the id
@@ -108,7 +127,7 @@ The hosted server's default toolsets do not include `projects`, so set the
 The hosted server silently ignores a toolset name it does not know, so a typo
 shows up later, as a publish refused for missing tools.
 
-## 3. Classify the tools
+## 4. Classify the tools
 
 Once each server is answering, classify every tool the roles declare (see
 [What the platform stops before it happens](what-the-gate-stops.md)).
@@ -131,7 +150,7 @@ approves every GitHub write. Classified destructive, it would be blocked outrigh
 and every role that reads issue text and moves cards would be refused at
 publish.
 
-## 4. Create the factory's area
+## 5. Create the factory's area
 
 Create an area for the factory, so its cost, budget and grants stay apart
 from every other agent, and give it a budget (see
@@ -152,7 +171,7 @@ instead of spending:
 Micros are millionths of the installation's configured currency. Treat these
 values as a first calibration.
 
-## 5. Create the roles
+## 6. Create the roles
 
 For each role, create the agent in the Studio from its reference: the
 frontmatter's fields, and the body as its instructions.
@@ -194,7 +213,9 @@ comment.
 
 A card that needs a build or a test run before its pull request is not
 attempted. The Developer labels its issue `factory:needs-runtime`, says why
-in a comment, and leaves the card in Doing for a person. **Level 2**, build
+in a comment, and leaves the card in Doing for a person. If the label cannot
+be set, because it was never created (step 1), it says so and moves the card
+to Travado instead, so the card is not picked again every hour. **Level 2**, build
 and test before a pull request, will come from a coding runtime behind one
 MCP tool: the intended runtime is
 [FuseOne Forja](https://github.com/fuseone-io/fuseone-forja), a separate
