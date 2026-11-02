@@ -129,6 +129,7 @@ lock file to recompute, a guard that needs a mutant to prove its test bites
 When what is missing is a decision only a person can make, comment on the
 issue with the question, addressed to whoever decides, and move the card to
 Travado instead.
+End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its question is answered.
 
 Open the pull request
 - Create a branch from main named factory/<issue number>-<a few words>.

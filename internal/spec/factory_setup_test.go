@@ -126,10 +126,13 @@ func decodeJSON(data string) (any, error) {
 // issue moves nothing: without a person whose job is the Travado lane, a
 // blocked card sits there forever. In v1 that person is the board operator,
 // stated in one exact sentence per language wherever the lanes and the setup
-// are described.
+// are described. A card goes back where it was blocked, not to one lane for
+// all: a pull request blocked in Doing sent to Triagem would be triaged again
+// while it still carries its sub-state label. The blocking comment names the
+// lane (factory_references_test.go, returnLines).
 const (
-	travadoOperatorEN = "The board operator reviews the Travado lane every working day and, once a card's question is answered, moves it back to Triagem, keeping factory:needs-design on it when the Architect should resume."
-	travadoOperatorPT = "Quem opera o board revisa a coluna Travado todo dia útil e, quando a pergunta de um card é respondida, devolve o card para Triagem, mantendo o factory:needs-design quando o Arquiteto deve retomar."
+	travadoOperatorEN = "The board operator reviews the Travado lane every working day and, once a card's question is answered, moves it back to the lane named on the last line of the comment that blocked it, Triagem or Doing, leaving its labels as they are."
+	travadoOperatorPT = "Quem opera o board revisa a coluna Travado todo dia útil e, quando a pergunta de um card é respondida, devolve o card para a coluna indicada na última linha do comentário que o travou, Triagem ou Doing, sem mexer nos rótulos."
 )
 
 func TestFactorySetup_travado_hasTheBoardOperatorAsItsOwnerInEveryText(t *testing.T) {

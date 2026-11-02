@@ -122,6 +122,9 @@ Moved by **any role**, when only a person can unblock the card. Done when:
 - [ ] the **last comment** on the issue is the reason, written as the question
       a person must answer, addressed to who decides (the owner, for a product
       decision);
+- [ ] its **last line** names the lane the card returns to:
+      `Return to: Triagem` from Triage or the Architect,
+      `Return to: Doing` from the Developer, the Reviewer or QA;
 - [ ] nothing the role wrote after that comment.
 
 **Travado only leaves by a person.** No role moves a card out of Travado, and
@@ -129,12 +132,22 @@ no role acts on a card in Travado: a role that lists its lane skips it.
 Answering the question on the issue moves nothing, so in v1 the lane has an
 owner:
 
-The board operator reviews the Travado lane every working day and, once a card's question is answered, moves it back to Triagem, keeping factory:needs-design on it when the Architect should resume.
+The board operator reviews the Travado lane every working day and, once a card's question is answered, moves it back to the lane named on the last line of the comment that blocked it, Triagem or Doing, leaving its labels as they are.
+
+The lane comes from the role that blocked the card, and its comment says so
+on its last line:
+
+- `Return to: Triagem` — Triage and the Architect. A card that still carries
+  `factory:needs-design` goes back to the Architect; one without it, to
+  Triage.
+- `Return to: Doing` — the Developer, the Reviewer and QA. The pull request
+  keeps its sub-state label (`factory:needs-review`, `factory:needs-qa`, …),
+  and the role that label names resumes it. Sent to Triagem instead, the card
+  would be triaged again while its pull request still waits in Doing.
 
 The role's comment mentions whoever decides, so GitHub notifies them; the
-operator is who notices that the answer arrived. A card whose answer needs a
-plan goes back to Triagem with `factory:needs-design`, and the Architect takes
-it again; a card it cannot move on, a person closes or keeps.
+operator is who notices that the answer arrived. A card nobody can move on, a
+person closes or keeps.
 
 ### Preparado → Doing
 

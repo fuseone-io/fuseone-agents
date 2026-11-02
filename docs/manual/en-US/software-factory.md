@@ -274,7 +274,7 @@ created under the card's issue. Then:
   open decision as a question, @mentioning whoever decides so GitHub
   notifies them, and moves the card to Travado, keeping the label, so the
   card comes back to it once the question is answered and the board operator
-  moves it back to Triagem (below);
+  returns it to Triagem, as its comment's last line says (below);
 - if a sub-issue, the label or the move cannot be written, it says which on
   the issue and moves the card to Travado, so the card is not picked again
   every hour.
@@ -312,7 +312,13 @@ No role moves a card out of Travado, and answering the question on the issue
 does not move it either. In the first version this is a person's standing
 job, given to whoever operates the board:
 
-The board operator reviews the Travado lane every working day and, once a card's question is answered, moves it back to Triagem, keeping factory:needs-design on it when the Architect should resume.
+The board operator reviews the Travado lane every working day and, once a card's question is answered, moves it back to the lane named on the last line of the comment that blocked it, Triagem or Doing, leaving its labels as they are.
+
+The last line of that comment is fixed: `Return to: Triagem` when Triage or
+the Architect blocked the card, `Return to: Doing` when the Developer, the
+Reviewer or QA did. A card back in Triagem that still carries
+`factory:needs-design` resumes with the Architect; a card back in Doing
+keeps its pull request's label, so the role that label names resumes it.
 
 The role that blocked the card mentions whoever decides in its last comment,
 so GitHub notifies them; the operator is who notices that the answer arrived.

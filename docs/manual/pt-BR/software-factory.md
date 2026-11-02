@@ -285,7 +285,7 @@ card. Depois:
   em aberto como pergunta, mencionando com @ quem decide para que o GitHub
   avise essa pessoa, e move o card para Travado mantendo o rótulo, para que o
   card volte para ele quando a pergunta for respondida e quem opera o board o
-  devolver para Triagem (abaixo);
+  devolver para Triagem, como diz a última linha do comentário (abaixo);
 - se uma sub-issue, o rótulo ou a movimentação não puder ser gravado, ele diz
   qual na issue e move o card para Travado, para que o card não seja escolhido
   de novo a cada hora.
@@ -325,7 +325,14 @@ Nenhum papel tira um card de Travado, e responder à pergunta na issue também
 não move o card. Na primeira versão isso é uma tarefa fixa de uma pessoa,
 dada a quem opera o board:
 
-Quem opera o board revisa a coluna Travado todo dia útil e, quando a pergunta de um card é respondida, devolve o card para Triagem, mantendo o factory:needs-design quando o Arquiteto deve retomar.
+Quem opera o board revisa a coluna Travado todo dia útil e, quando a pergunta de um card é respondida, devolve o card para a coluna indicada na última linha do comentário que o travou, Triagem ou Doing, sem mexer nos rótulos.
+
+A última linha desse comentário é fixa: `Return to: Triagem` quando quem
+travou o card foi a Triagem ou o Arquiteto, `Return to: Doing` quando foi o
+Desenvolvedor, o Revisor ou o QA. Um card que volta para Triagem ainda com
+`factory:needs-design` é retomado pelo Arquiteto; um card que volta para Doing
+mantém o rótulo do pull request, e o papel indicado por esse rótulo o
+retoma.
 
 O papel que travou o card menciona quem decide no último comentário, e o
 GitHub avisa essa pessoa; quem opera o board é quem percebe que a resposta

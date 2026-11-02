@@ -290,6 +290,41 @@ func countLines(lines []string, sentence string) int {
 	return count
 }
 
+// returnLines is the line each role's instructions carry about the comment
+// it writes as it moves a card to Travado: that comment ends naming the lane
+// the card came from, and the board operator returns it there once the
+// question is answered (LANES.md § Any lane → Travado). Triage and the
+// Architect block cards in Triagem; the Developer, the Reviewer and QA block
+// them in Doing, where the pull request keeps its sub-state label.
+var returnLines = map[string]string{
+	"triage":    "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Triagem, the lane the card goes back to once its question is answered.",
+	"architect": "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Triagem, the lane the card goes back to once its question is answered.",
+	"developer": "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its question is answered.",
+	"reviewer":  "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its question is answered.",
+	"qa":        "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its question is answered.",
+}
+
+func TestFactoryReferences_eachRole_namesItsReturnLaneOnce(t *testing.T) {
+	t.Parallel()
+
+	refs := factoryReferences(t)
+	for role := range refs {
+		if _, ok := returnLines[role]; !ok {
+			t.Errorf("the %s reference has no return line declared here; a role that moves cards to Travado needs one", role)
+		}
+	}
+	for role, line := range returnLines {
+		data, ok := refs[role]
+		if !ok {
+			t.Errorf("there is no %s reference", role)
+			continue
+		}
+		if count := countLines(strings.Split(string(data), "\n"), line); count != 1 {
+			t.Errorf("the %s reference carries its return line %q %d times, want 1", role, line, count)
+		}
+	}
+}
+
 func TestFactoryReferences_eachFile_forbidsStandingApprovals(t *testing.T) {
 	t.Parallel()
 
