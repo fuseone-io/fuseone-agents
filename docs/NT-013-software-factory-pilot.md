@@ -97,7 +97,10 @@ A GitHub Project with a single-select **Status** field:
 
 Sub-states inside *Doing* are labels, not lanes, so the board stays the five
 lanes people read: `factory:needs-review`, `factory:changes-requested`,
-`factory:needs-qa`, `factory:ready-to-merge`.
+`factory:needs-qa`, `factory:ready-to-merge`. One more sits on the issue
+rather than the PR, because no PR exists yet: `factory:needs-runtime`, a card
+the Level 1 Developer cannot do without a build or a test run, waiting for
+Level 2.
 
 The board holds the card's state. The platform has no case spanning several
 runs and agents today — tickets exist only for Slack support, and event
@@ -280,7 +283,9 @@ deferred.*
   job. The Reviewer ranks findings P1/P2/P3, gives a reproduction for each,
   verifies a claim in the code before stating it, and states a verdict per PR.
   The Developer answers each finding with a commit and a PR comment carrying
-  the red and the sabotage evidence.
+  the red and the sabotage evidence; at Level 1, which runs nothing, the red
+  is CI's run on the commit that holds only the test, and a finding that
+  needs a mutant waits for Level 2.
 - **Definitions of done per lane**, checked by the role that moves the card:
   Preparado needs type, size, plan and acceptance criteria; ready-to-merge
   needs an approving review, QA passed and every expected check green — all on
@@ -300,12 +305,12 @@ deferred.*
 | Standing approvals refused for every factory write | layer 6 | every role |
 | Merge policy (*deferred in v1*) | layer 6 | Merger |
 | `merge_if_ready`: a merge bound to the reviewed head, signals validated by actor (*deferred in v1*) | layer 5 | Merger |
-| A ruleset on `main` requiring review, `factory/qa` and CI, no bypass for the Merger (*deferred in v1*) | layer 5a | Merger |
+| A ruleset on `main` requiring review, `factory/qa` and CI, no bypass for the Merger (*deferred in v1*; refusing a direct push, it is a prerequisite for starting the Developer, #200) | layer 5a | Merger, Developer |
 | A trusted way for QA to set `factory/qa` under its own identity (*deferred in v1*) | the evidence `merge_if_ready` requires | QA, Merger |
 | Role references and the rulebook under `factory/` | the harness | every role |
 | Role specs published from the repository (*deferred in v1*) | the registry never drifts from what was reviewed | — |
-| A Level 1 developer: GitHub-API commits for small changes | #154 Level 1 | Developer |
-| A coding runtime behind one MCP tool | #154 Level 2: build and test before a PR | Developer and QA beyond chores |
+| A Level 1 developer: GitHub-API commits for small changes (*decided: the pilot starts here, #200*) | #154 Level 1 | Developer |
+| A coding runtime behind one MCP tool (*deferred: FuseOne Forja, `forja.implement` under the Gate*) | #154 Level 2: build and test before a PR | Developer and QA beyond chores |
 | A GitHub webhook adapter (signature, delivery id, event filter) | event-driven roles instead of polling | after the pilot |
 | A hop limit on event chains (*done, #203*) | agent-to-agent handoff | after the pilot |
 | A case spanning runs and agents | the card carried across event-opened runs, beyond the claim's key | after the pilot |
@@ -318,10 +323,19 @@ role missed. The pilot's question is whether each role, at copilot, is right
 often enough to be worth its approvals — answered per role, not for the
 factory as a whole.
 
+## Decided
+
+- **The Developer starts at Level 1** (#200): small, self-contained changes
+  through the GitHub API, with no build and no test run before the PR. A card
+  that needs either is labelled `factory:needs-runtime` and left for a person.
+  Level 2 — build and test before a PR — stays deferred: it comes from a
+  coding runtime behind one MCP tool, and the intended runtime is FuseOne
+  Forja ([fuseone-io/fuseone-forja](https://github.com/fuseone-io/fuseone-forja),
+  a separate repository, phase 0 proposed), with `forja.implement` as a write
+  tool under the Gate.
+
 ## Open questions
 
-- Does the Developer start at Level 1 (small changes through the GitHub API) or
-  wait for the coding runtime?
 - One factory area with its own scope budget, or the roles inside an existing
   area?
 - Should a card that bounced between Developer and Reviewer more than N times
