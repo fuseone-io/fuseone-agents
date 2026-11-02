@@ -178,7 +178,8 @@ func TestJourney_aSignedGitHubIssuesOpened_putsTheRunOnTheIssuesTrail(t *testing
 		t.Fatalf("Rotate: %v", err)
 	}
 	repo := "Journey-" + rig.run
-	body := `{"action":"opened","repository":{"full_name":"FuseOne-IO/` + repo + `"},` +
+	body := `{"action":"opened","repository":{"full_name":"FuseOne-IO/` + repo + `",` +
+		`"html_url":"https://github.com/FuseOne-IO/` + repo + `"},` +
 		`"issue":{"number":77,"title":"github:evil/elsewhere#1"}}`
 	mux := http.NewServeMux()
 	webhookDoor(pool, rig.store, v).Mount(mux)

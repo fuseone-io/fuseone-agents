@@ -2,7 +2,9 @@ package trigger
 
 import (
 	"encoding/json"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -43,13 +45,11 @@ func GitHubWorkItem(event string, body []byte) (domain.WorkItemRef, bool) {
 		return "", false
 	}
 	var envelope struct {
-		Repository struct {
-			FullName string `json:"full_name"`
-		} `json:"repository"`
-		Issue       *githubNumber `json:"issue"`
-		PullRequest *githubNumber `json:"pull_request"`
+		Repository  githubRepository `json:"repository"`
+		Issue       *githubNumber    `json:"issue"`
+		PullRequest *githubNumber    `json:"pull_request"`
 	}
-	if json.Unmarshal(body, &envelope) != nil {
+	if json.Unmarshal(body, &envelope) != nil || !envelope.Repository.onGitHubDotCom() {
 		return "", false
 	}
 	numbered := envelope.Issue
@@ -61,6 +61,34 @@ func GitHubWorkItem(event string, body []byte) (domain.WorkItemRef, bool) {
 	}
 	ref := "github:" + envelope.Repository.FullName + "#" + strconv.FormatUint(*numbered.Number, 10)
 	return domain.ParseWorkItemRef(ref)
+}
+
+/*
+githubRepository is the repository a delivery is about, as GitHub writes it.
+
+The github: reference grammar — the one claims use too — names no host, so
+it means github.com, and automatic attribution is github.com-only today. A
+GitHub Enterprise delivery carries the same full_name shape for a repository
+on another host; attributed by name and number alone, acme/r#42 on an
+Enterprise server would land on the github.com card acme/r#42. So a delivery
+names a card only when its signed html_url is exactly
+https://github.com/<full_name>: https, the host github.com with no port and
+no user, and the path the repository's own. Anything else opens the run with
+no work item. A host-qualified reference is a separate change, and it would
+reach claims as well.
+*/
+type githubRepository struct {
+	FullName string `json:"full_name"`
+	HTMLURL  string `json:"html_url"`
+}
+
+func (r githubRepository) onGitHubDotCom() bool {
+	u, err := url.Parse(r.HTMLURL)
+	if err != nil || r.FullName == "" {
+		return false
+	}
+	return u.Scheme == "https" && u.Host == "github.com" && u.User == nil &&
+		u.RawQuery == "" && u.Fragment == "" && strings.EqualFold(u.Path, "/"+r.FullName)
 }
 
 // githubNumber is the number of an issue or a pull request. An unsigned

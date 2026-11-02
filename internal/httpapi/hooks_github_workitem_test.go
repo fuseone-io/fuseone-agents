@@ -19,7 +19,7 @@ writes, only once the signature has proved the delivery, and without
 changing anything else the door does — the body stays untrusted.
 */
 
-const issueOpened = `{"action":"opened","repository":{"full_name":"O/R"},
+const issueOpened = `{"action":"opened","repository":{"full_name":"O/R","html_url":"https://github.com/O/R"},
 	"issue":{"number":12,"title":"github:evil/x#1"}}`
 
 // startOf is the opening step of the only run in the store.
@@ -98,6 +98,26 @@ func TestGitHubHook_anUnsignedIssuesDelivery_opensNothing(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized || runsIn(t, store) != 0 {
 		t.Fatalf("status = %d, runs = %d; want 401 and nothing", rec.Code, runsIn(t, store))
+	}
+}
+
+// A signed delivery from GitHub Enterprise opens its run, attributed to
+// nothing: the github: grammar means github.com, and the same owner, repo
+// and number there is another card.
+func TestGitHubHook_anEnterpriseDelivery_opensWithNoWorkItem(t *testing.T) {
+	t.Parallel()
+	mux, store, _ := ghServer(t)
+	body := `{"action":"opened","repository":{"full_name":"o/r","html_url":"https://ghe.example/o/r"},
+		"issue":{"number":12}}`
+
+	rec := ghPost(t, mux, ghDelivery{path: "gh/reviewer", event: "issues", delivery: "d-ghe",
+		signature: ghSign(ghSecret, body), body: body})
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d (%s), want 202", rec.Code, rec.Body)
+	}
+	if _, payload := startOf(t, store); payload.WorkItem != nil {
+		t.Fatalf("work item = %+v; an Enterprise repository was named as a github.com card", payload.WorkItem)
 	}
 }
 

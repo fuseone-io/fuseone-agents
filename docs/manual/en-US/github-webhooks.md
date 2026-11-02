@@ -118,3 +118,11 @@ signature checks; a title, a comment or a branch name that spells a reference
 is never looked at. It is attribution only: the run holds nothing by it, and
 a delivery of any other event opens its run on no card — see
 [Which runs worked on this card](reading-a-run.md).
+
+This attribution is **github.com only** today, as the `github:` reference
+grammar is — claims included: a reference names no host, so it means
+github.com. A delivery names a card only when the repository's `html_url` in
+the signed body is exactly `https://github.com/<owner>/<repo>`. A delivery
+from GitHub Enterprise still opens its run, with no card: the same owner,
+repository and number on another host is a different issue, and putting it
+on the github.com card would mix two histories.

@@ -120,3 +120,12 @@ de branch que escreva uma referência nunca é considerado. É só atribuição:
 execução não fica com nada preso por isso, e uma entrega de qualquer outro
 evento abre a execução sem card nenhum — veja
 [Quais execuções trabalharam neste card](reading-a-run.md).
+
+Hoje essa atribuição vale **só para o github.com**, assim como a gramática das
+referências `github:` — incluindo as de quem assume um card: uma referência
+não nomeia host, então ela significa github.com. Uma entrega só aponta um
+card quando o `html_url` do repositório no corpo assinado é exatamente
+`https://github.com/<owner>/<repo>`. Uma entrega do GitHub Enterprise continua
+abrindo a execução, sem card: o mesmo owner, repositório e número em outro
+host é outra issue, e colocá-la no card do github.com misturaria dois
+históricos.
