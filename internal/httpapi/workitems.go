@@ -11,7 +11,9 @@ import (
 
 /*
 GET /work-items/trail: a card's runs and, per role, what they asked people
-and what they cost (#204, slice 1).
+and what they cost (#204, slice 1) — the card's own and those of the pull
+requests linked to it (slice 2b). Asked by a linked pull request, the answer
+is the card's trail, with resolvedFrom naming what was asked.
 
 Every page derives the caller's access from the caller's own grants — never
 from the cursor, which is a position and nothing else. A run is read where
@@ -131,6 +133,9 @@ func badTrail(detail string) openapi.GetWorkItemTrail400ApplicationProblemPlusJS
 
 func toWorkItemTrail(t domain.WorkItemTrail) openapi.WorkItemTrail {
 	out := openapi.WorkItemTrail{Ref: string(t.Ref), Runs: make([]openapi.WorkItemRun, 0, len(t.Runs))}
+	if t.ResolvedFrom != "" {
+		out.ResolvedFrom = ptr(string(t.ResolvedFrom))
+	}
 	for _, r := range t.Runs {
 		out.Runs = append(out.Runs, toWorkItemRun(r))
 	}
@@ -152,7 +157,7 @@ func toWorkItemRun(r domain.WorkItemRun) openapi.WorkItemRun {
 		RunId: string(r.RunID), AgentId: string(r.AgentID),
 		Scope: openapi.Scope{Company: string(r.Scope.Company), Area: string(r.Scope.Area)},
 		Phase: openapi.Phase(r.Phase), StartedAt: r.StartedAt, ClaimedAt: r.ClaimedAt,
-		Link: openapi.WorkItemRunLink(r.Link),
+		Link: openapi.WorkItemRunLink(r.Link), Ref: string(r.Ref),
 	}
 	if !r.EndedAt.IsZero() {
 		run.EndedAt = ptr(r.EndedAt)

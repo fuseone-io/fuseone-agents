@@ -880,13 +880,18 @@ export interface paths {
         };
         /**
          * The trail of one work item reference
-         * @description Every run that claimed the reference through
-         *     `$fuseone.work_item.claim`, oldest claim first, and per role what
-         *     those runs asked people and what they cost (#204).
+         * @description Every run that claimed the card through `$fuseone.work_item.claim`,
+         *     or claimed a pull request linked to it through
+         *     `$fuseone.work_item.link`, oldest claim first, and per role what those
+         *     runs asked people and what they cost (#204).
          *
-         *     A view of this reference only: an issue and the pull request that
-         *     answers it are two references with two trails until the platform
-         *     links them.
+         *     Resolution is one level deep. Asked by a pull request linked to a
+         *     card, the answer is that card's trail: `ref` is the card and
+         *     `resolvedFrom` is the pull request asked for. Asked by a card, or by
+         *     a pull request nobody linked, `ref` is the reference itself and
+         *     `resolvedFrom` is absent. Links are read under the same scopes as
+         *     runs, by the linking run's company and area: a link the caller cannot
+         *     read neither joins a trail nor resolves one.
          *
          *     Narrowed on every page by the caller's own `run:read` and
          *     `agent:read` scopes: a run the caller cannot read is absent, and its
@@ -5296,8 +5301,16 @@ export interface components {
             nextCursor?: string | null;
         };
         WorkItemTrail: {
-            /** @description The reference in its canonical form. */
+            /**
+             * @description The card the trail is of, in canonical form: the reference asked
+             *     for, or the card it is linked to.
+             */
             ref: string;
+            /**
+             * @description The reference asked for, when it was a pull request linked to
+             *     `ref` and resolved to it. Absent otherwise.
+             */
+            resolvedFrom?: string;
             /** @description This page of runs, oldest claim first. */
             runs: components["schemas"]["WorkItemRun"][];
             /**
@@ -5323,10 +5336,13 @@ export interface components {
             /** Format: date-time */
             claimedAt: string;
             /**
-             * @description How the run came to be on the trail. A claim, for now.
+             * @description How the run came to be on the trail: `claim`, it claimed the card
+             *     itself; `alias`, it claimed a pull request linked to the card.
              * @enum {string}
              */
-            link: "claim";
+            link: "claim" | "alias";
+            /** @description The reference the run claimed, in canonical form. */
+            ref: string;
         };
         WorkItemRole: {
             agentId: string;
