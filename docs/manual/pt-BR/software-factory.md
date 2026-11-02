@@ -327,7 +327,9 @@ dada a quem opera o board:
 
 Quem opera o board revisa a coluna Travado todo dia útil e, quando o bloqueio indicado no comentário que travou um card é resolvido, devolve o card para a coluna que esse comentário indica, Triagem ou Doing, sem mexer nos rótulos; esse comentário é o mais recente do GitHub App do papel que travou o card que termina com uma linha Return to:, na issue ou no pull request em que o papel trabalhou, sendo o pull request o próprio card ou o que aparece no campo Linked pull requests do card.
 
-Um card cuja issue ou pull request está fechado não volta para nenhuma coluna: quem opera o board o move de Travado para Done.
+Um card não volta para nenhuma coluna quando o item que ele representa terminou: quem opera o board o move de Travado para Done quando o card é uma issue fechada, ou um pull request com merge feito ou fechado.
+
+Um pull request fechado sem merge enquanto a issue do card continua aberta não encerra o card: ele volta para a coluna indicada pela linha Return to:, e uma pessoa começa a próxima tentativa, já que o Desenvolvedor pula um card que tem pull request vinculado.
 
 A Triagem e o Arquiteto escrevem esse comentário na issue do card; o
 Revisor, o QA e o Desenvolvedor, quando responde a uma revisão, escrevem no

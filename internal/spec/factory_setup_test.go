@@ -135,27 +135,35 @@ const (
 	travadoOperatorPT = "Quem opera o board revisa a coluna Travado todo dia útil e, quando o bloqueio indicado no comentário que travou um card é resolvido, devolve o card para a coluna que esse comentário indica, Triagem ou Doing, sem mexer nos rótulos; esse comentário é o mais recente do GitHub App do papel que travou o card que termina com uma linha Return to:, na issue ou no pull request em que o papel trabalhou, sendo o pull request o próprio card ou o que aparece no campo Linked pull requests do card."
 )
 
-// A card whose issue or pull request was closed while it waited in Travado
-// is finished, not unblocked: returned to its lane, a role could pick it up
-// again (a duplicate a person closed would be triaged again).
+// A card whose own item was closed while it waited in Travado is finished,
+// not unblocked: returned to its lane, a role could pick it up again (a
+// duplicate a person closed would be triaged again). Only the item the card
+// represents decides it: a card is usually the issue, with its pull request
+// under Linked pull requests, and a pull request closed without a merge
+// while that issue stays open finishes nothing. That case is stated too,
+// so the operator does not bury an open issue in Done.
 const (
-	travadoClosedEN = "A card whose issue or pull request is closed goes back to no lane: the board operator moves it from Travado to Done."
-	travadoClosedPT = "Um card cuja issue ou pull request está fechado não volta para nenhuma coluna: quem opera o board o move de Travado para Done."
+	travadoClosedEN = "A card goes back to no lane once the item it represents is finished: the board operator moves it from Travado to Done when the card is an issue that is closed, or a pull request that is merged or closed."
+	travadoClosedPT = "Um card não volta para nenhuma coluna quando o item que ele representa terminou: quem opera o board o move de Travado para Done quando o card é uma issue fechada, ou um pull request com merge feito ou fechado."
+	linkedClosedEN  = "A pull request closed without a merge while the card's issue stays open does not finish the card: it goes back to the lane its Return to: line names, and a person starts the next attempt, since the Developer skips a card that has a linked pull request."
+	linkedClosedPT  = "Um pull request fechado sem merge enquanto a issue do card continua aberta não encerra o card: ele volta para a coluna indicada pela linha Return to:, e uma pessoa começa a próxima tentativa, já que o Desenvolvedor pula um card que tem pull request vinculado."
 )
 
 func TestFactorySetup_travado_sendsAClosedCardToDoneInEveryText(t *testing.T) {
 	t.Parallel()
 
-	want := map[string]string{
-		"../../factory/LANES.md":                      travadoClosedEN,
-		"../../factory/agents/README.md":              travadoClosedEN,
-		"../../docs/manual/en-US/software-factory.md": travadoClosedEN,
-		"../../docs/manual/pt-BR/software-factory.md": travadoClosedPT,
+	want := map[string][]string{
+		"../../factory/LANES.md":                      {travadoClosedEN, linkedClosedEN},
+		"../../factory/agents/README.md":              {travadoClosedEN, linkedClosedEN},
+		"../../docs/manual/en-US/software-factory.md": {travadoClosedEN, linkedClosedEN},
+		"../../docs/manual/pt-BR/software-factory.md": {travadoClosedPT, linkedClosedPT},
 	}
-	for path, sentence := range want {
+	for path, sentences := range want {
 		lines := strings.Split(readFile(t, path), "\n")
-		if count := countLines(lines, sentence); count != 1 {
-			t.Errorf("%s carries the closed-card line %d times, want 1", path, count)
+		for _, sentence := range sentences {
+			if count := countLines(lines, sentence); count != 1 {
+				t.Errorf("%s carries the closed-card line %q %d times, want 1", path, sentence, count)
+			}
 		}
 	}
 }

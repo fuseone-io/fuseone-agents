@@ -148,7 +148,9 @@ owner:
 
 The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane that comment names, Triagem or Doing, leaving its labels as they are; that comment is the most recent one by the blocking role's GitHub App that ends with a Return to: line, on the issue or pull request the role worked on, where a pull request is either the card itself or the one in the card's Linked pull requests field.
 
-A card whose issue or pull request is closed goes back to no lane: the board operator moves it from Travado to Done.
+A card goes back to no lane once the item it represents is finished: the board operator moves it from Travado to Done when the card is an issue that is closed, or a pull request that is merged or closed.
+
+A pull request closed without a merge while the card's issue stays open does not finish the card: it goes back to the lane its Return to: line names, and a person starts the next attempt, since the Developer skips a card that has a linked pull request.
 
 The lane comes from the role that blocked the card, and its comment says so
 on its last line:
@@ -194,8 +196,9 @@ into Doing.
 ### Done
 
 Reached when a person merges, below, or when the board operator moves a card
-whose issue or pull request is closed out of Travado. Nobody moves a card out
-of Done.
+out of Travado because the item it represents is finished: a closed issue, or
+a merged or closed pull request. A linked pull request closed without a merge
+does not finish an issue's card. Nobody moves a card out of Done.
 
 ## Sub-states inside Doing
 
