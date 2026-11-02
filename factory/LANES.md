@@ -40,8 +40,9 @@ These hold before any lane rule applies.
      those calls before the claim. Triage is told to list its lane only with
      `projects_list`, method `list_project_items`, and never to call the
      status-update methods before the claim. That is an instruction, not a
-     mechanism: the Gate classifies a tool, not its method. The Developer,
-     which lists the *Doing* lane, is told the same. The pilot accepts
+     mechanism: the Gate classifies a tool, not its method. The Architect,
+     which lists the same lane, and the Developer, which lists the *Doing*
+     lane, are told the same. The pilot accepts
      it within the claim's bounded blast radius below; preventing it
      mechanically needs the deferred narrow tool.
    - **The claim is the one write that follows a title unapproved.** The Gate
@@ -102,9 +103,17 @@ did). Done when the issue has:
 ### Triagem → `factory:needs-design`
 
 Added by **Triage** when the card is understood but has no plan or acceptance
-criteria and writing them needs design. The card stays in Triagem; the
-Architect takes it from there and removes the label when it moves the card.
-Done when the triage comment says what the design has to decide.
+criteria and writing them needs design. The card stays in Triagem; Triage
+skips it from then on, and the Architect takes it from there. Done when the
+triage comment says what the design has to decide.
+
+The **Architect** removes the label when it moves the card to Preparado, and
+removes it first: a card left in Triagem without it is Triage's again, which
+moves a card with a plan and criteria on, while a card left with it would be
+the Architect's oldest card on every run. A card it moves to Travado keeps the
+label, so a person who answers and moves it back to Triagem returns it to the
+Architect. If the label or the move cannot be written, the card goes to
+Travado, with that as the last comment.
 
 ### Any lane → Travado
 
