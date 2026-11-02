@@ -25,6 +25,58 @@ field" is a commit message.
 
 ---
 
+## [0.87.0] — 2026-11-01
+
+### Upgrade notes
+
+- **Tools of a `--mcp` server published before this version leave the
+  catalogue 24 hours after the upgrade**, unless a worker running this
+  version still runs that server and renews it. During the rolling update,
+  workers on the previous version keep serving their `--mcp` tools for that
+  grace period. Servers configured in the console are not affected.
+- **Migration 0094 builds the event feed's new index concurrently.** It does
+  not block writes to `runs` while it scans the table, so an upgrade does not
+  pause the workers still serving. The previous index stays, so rolling back
+  to 0.86 remains safe; a later version removes it.
+- **`pg_read_all_stats` is not needed, and we recommend not granting it.**
+  Without it, the Runtime page and the metrics say a transaction is holding
+  event dispatch back but not for how long. The grant is cluster-wide: it
+  exposes every session's queries in every database on the server. The
+  monitoring page of the manual describes a narrower alternative for an
+  operator's own monitoring role.
+
+### Added
+
+- **Event dispatch says how far behind it is.** The worker's metrics and the
+  Runtime page show how many finished runs are waiting, how long the oldest
+  has waited, and whether an open transaction is holding dispatch back. The
+  metrics are the `fuseone_event_dispatch_*` series. Dispatch shows as
+  degraded, never failing, after five minutes of lag, or when more than a
+  thousand runs are waiting. A new manual page, "Monitoring", covers it.
+- **A publish that closes an event cycle warns.** The version is still
+  published, and the Studio names every agent in the cycle and recalls that a
+  chain stops after eight hops. An agent the author cannot read appears as
+  "an agent outside your access". When the graph is too large to check in
+  full, the warning says so.
+
+### Changed
+
+- **Publishes and changes of an agent's current version run one at a time**,
+  so two publishes that only close a cycle together cannot both miss it.
+
+### Fixed
+
+- **A `--mcp` server's tools leave the catalogue once no worker runs it.**
+  Each worker renews a short lease on the `--mcp` servers it really has
+  connected. When the last one stops, or its session dies and cannot be
+  started again, the tools leave within about two and a half minutes. Their
+  classifications are kept for when the server comes back.
+- **A `--mcp` server that fails at startup is retried on every pass**, instead
+  of never again.
+- **Simulated runs no longer slow event dispatch.** The dispatcher's index now
+  holds only the runs it can offer, so a large number of simulations past its
+  position no longer makes every read walk through them.
+
 ## [0.86.0] — 2026-11-01
 
 ### Upgrade notes
