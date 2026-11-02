@@ -261,7 +261,11 @@ Settings → Rules → Rulesets, that is a branch ruleset, enforcement Active,
 targeting `refs/heads/main`, with **Require a pull request before merging**
 (zero approvals is enough: a person still merges), **Block force pushes** and
 **Restrict deletions** ticked, and an empty bypass list, so no factory App can
-skip it. The same, through the API:
+skip it. No bypass includes people: a maintainer's change reaches `main`
+through a pull request too, the release changelog cut included (a release
+branch, the changelog commit, its pull request and CI, the merge, then the
+tag on the merged commit; a ruleset on `refs/heads/main` does not touch
+tags). The same, through the API:
 
 ```sh
 gh api --method POST repos/<owner>/<name>/rulesets --input - <<'EOF'

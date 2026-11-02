@@ -121,8 +121,11 @@ Rulesets do repositório, crie um ruleset de branch com enforcement **Active**,
 alvo `refs/heads/main`, marque **Require a pull request before merging** (zero
 aprovações bastam: uma pessoa continua fazendo o merge), **Block force
 pushes** e **Restrict deletions**, e não ponha ninguém na lista de bypass,
-para que nenhum App da fábrica consiga pular as regras. Ou pela API,
-trocando `<owner>/<name>`:
+para que nenhum App da fábrica consiga pular as regras. Sem bypass vale
+também para pessoas: a mudança de uma pessoa, inclusive o commit de
+changelog de uma release, chega ao `main` por pull request, e a tag da
+release vai no commit do merge (o ruleset vale para `refs/heads/main`, não
+para tags). Ou pela API, trocando `<owner>/<name>`:
 
 ```sh
 gh api --method POST repos/<owner>/<name>/rulesets --input - <<'EOF'

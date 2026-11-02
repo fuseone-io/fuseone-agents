@@ -114,7 +114,10 @@ Until it exists, leave the Developer paused. In the repository's Settings →
 Rules → Rulesets, create a branch ruleset with enforcement **Active**, target
 `refs/heads/main`, **Require a pull request before merging** (zero approvals
 is enough: a person still merges), **Block force pushes** and **Restrict
-deletions** ticked, and no bypass actors, so no factory App can skip it. Or
+deletions** ticked, and no bypass actors, so no factory App can skip it. No
+bypass includes people: a person's change, a release's changelog commit
+included, reaches `main` through a pull request too, and the release tag goes
+on the merged commit (the ruleset targets `refs/heads/main`, not tags). Or
 through the API, replacing `<owner>/<name>`:
 
 ```sh
