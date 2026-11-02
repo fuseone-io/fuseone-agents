@@ -1,6 +1,7 @@
 package spec_test
 
 import (
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -65,6 +66,63 @@ func TestFactoryReferences_stopsWhen_isNeverFollowedByAStepThatWrites(t *testing
 					}
 				}
 			}
+		}
+	}
+}
+
+// stopsWhen is each role's exception, step by step, as the spec parses it.
+// The position test above only says a stops_when sits where no write
+// follows; it is safe there only because its text names the block as
+// already written — the question commented and the card moved. A text that
+// names only the situation ("a decision belongs to the owner") would end
+// the run on the last step before those writes, so the whole text is
+// compared, per role, and a new stops_when anywhere fails until it is added
+// here.
+var stopsWhen = map[string]map[string]string{
+	"triage": {
+		"Write the outcome back": "what is missing is something only a person can answer, and that question is commented on the issue and the card is in Travado",
+	},
+	"architect": {
+		"Write the plan back": "a decision the plan needs belongs to the owner, and each open decision is commented on the issue as a question to whoever decides and the card is in Travado",
+	},
+	"developer": {
+		"Write the change": "the card is left for a person, with its issue labelled factory:needs-runtime and the reason commented, or with the question commented and the card in Travado",
+	},
+	"reviewer": {
+		"Submit the verdict": "the change cannot be judged without a decision only a person can make, and that question is commented on the pull request and the card of the issue it closes is in Travado",
+	},
+	"qa": {
+		"Submit the verdict": "a criterion cannot be judged met or not met without a person, and that question is commented on the pull request and the card of the issue it closes is in Travado",
+	},
+}
+
+func TestFactoryReferences_stopsWhen_isExactlyTheTextThatNamesTheBlockAsWritten(t *testing.T) {
+	t.Parallel()
+
+	refs := factoryReferences(t)
+	for role, data := range refs {
+		s, err := spec.Parse(role, data)
+		if err != nil {
+			t.Fatalf("parse %s: %v", role, err)
+		}
+		got := map[string]string{}
+		for _, step := range s.Steps {
+			if step.StopsWhen != "" {
+				got[step.Name] = step.StopsWhen
+			}
+		}
+		want, ok := stopsWhen[role]
+		if !ok {
+			t.Errorf("the %s reference has no stops_when declared here", role)
+			continue
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("the %s reference's stops_when is\n%q\nwant\n%q", role, got, want)
+		}
+	}
+	for role := range stopsWhen {
+		if _, ok := refs[role]; !ok {
+			t.Errorf("there is no %s reference", role)
 		}
 	}
 }
