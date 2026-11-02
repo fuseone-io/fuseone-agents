@@ -1,7 +1,9 @@
 package spec_test
 
 import (
+	"encoding/json"
 	"os"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -67,17 +69,55 @@ const (
 	minimalRulesetPT = "Antes de iniciar o Desenvolvedor, o main precisa ter o ruleset mínimo: pull request obrigatório antes do merge, force push e exclusão bloqueados, e nenhum bypass para os GitHub Apps da fábrica."
 )
 
-// minimalRulesetCommand is the command, line for line, every setup text
-// gives for the minimal ruleset (POST /repos/{owner}/{repo}/rulesets).
-var minimalRulesetCommand = []string{
-	`gh api --method POST repos/<owner>/<name>/rulesets --input - <<'EOF'`,
-	`  "name": "main: pull request required",`,
-	`  "target": "branch",`,
-	`  "enforcement": "active",`,
-	`  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },`,
-	`    { "type": "non_fast_forward" },`,
-	`    { "type": "deletion" }`,
-	`  "bypass_actors": []`,
+// minimalRulesetHeredoc opens the command every setup text gives for the
+// minimal ruleset (POST /repos/{owner}/{repo}/rulesets); the payload follows
+// on the next lines, up to a line that is EOF alone.
+const minimalRulesetHeredoc = `gh api --method POST repos/<owner>/<name>/rulesets --input - <<'EOF'`
+
+// minimalRulesetPayload is what that command must send, compared as JSON
+// values rather than as text: the pull_request rule is the one that refuses
+// a direct push, and its five parameters are the ones GitHub requires.
+const minimalRulesetPayload = `{
+  "name": "main: pull request required",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "pull_request", "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false } },
+    { "type": "non_fast_forward" },
+    { "type": "deletion" }
+  ],
+  "bypass_actors": []
+}`
+
+// rulesetPayload returns the payload of the minimal ruleset command in text,
+// or fails when the text has no such command or it is not closed.
+func rulesetPayload(t *testing.T, path, text string) string {
+	t.Helper()
+	lines := strings.Split(text, "\n")
+	start := slices.Index(lines, minimalRulesetHeredoc)
+	if start < 0 {
+		t.Fatalf("%s has no line %q", path, minimalRulesetHeredoc)
+	}
+	end := slices.Index(lines[start+1:], "EOF")
+	if end < 0 {
+		t.Fatalf("%s never closes the minimal ruleset heredoc", path)
+	}
+	return strings.Join(lines[start+1:start+1+end], "\n")
+}
+
+// decodeJSON decodes into an untyped value on purpose: the comparison is of
+// the whole document, so a field or rule the expected payload lacks fails it
+// rather than being dropped by a struct that does not declare it.
+func decodeJSON(data string) (any, error) {
+	var v any
+	err := json.Unmarshal([]byte(data), &v)
+	return v, err
 }
 
 // namesTheFullRuleset catches the wording the prerequisite must not use: #207
@@ -99,12 +139,23 @@ func TestFactorySetup_minimalRuleset_isAPrerequisiteInEveryText(t *testing.T) {
 			t.Errorf("%s carries the prerequisite line %d times, want 1", path, count)
 		}
 	}
+}
+
+func TestFactorySetup_minimalRulesetCommand_sendsTheExpectedPayloadInEveryText(t *testing.T) {
+	t.Parallel()
+
+	want, err := decodeJSON(minimalRulesetPayload)
+	if err != nil {
+		t.Fatalf("the expected payload does not decode: %v", err)
+	}
 	for _, path := range factorySetupTexts {
-		lines := strings.Split(readFile(t, path), "\n")
-		for _, line := range minimalRulesetCommand {
-			if !slices.Contains(lines, line) {
-				t.Errorf("%s lacks the minimal ruleset command line %q", path, line)
-			}
+		got, err := decodeJSON(rulesetPayload(t, path, readFile(t, path)))
+		if err != nil {
+			t.Errorf("%s: the minimal ruleset payload is not JSON: %v", path, err)
+			continue
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: the minimal ruleset payload is\n%v\nwant\n%v", path, got, want)
 		}
 	}
 }
