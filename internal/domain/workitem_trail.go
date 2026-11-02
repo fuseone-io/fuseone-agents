@@ -11,9 +11,11 @@ import (
 The trail of one card (#204): every run that worked on it, and per role what
 those runs asked people and what they cost.
 
-It is a view "of this reference" and nothing wider. Until the platform links
-an issue to the pull request that answers it, each is its own reference with
-its own trail, and the screen says so.
+It is the view of one card: the issue and the pull requests linked to it
+(#204, slice 2b). Resolution is one level deep — the root of a reference is
+its alias's root, or the reference itself — so asked by a pull request, the
+trail is its root's and says what it resolved from. A pull request nobody
+linked is still its own reference with its own trail.
 
 What it carries is counts and identifiers only. The approvals a run asked for
 hold tool arguments, and the steps hold whatever the case holds; neither is
@@ -24,9 +26,14 @@ the trail would otherwise spread to everyone who can see the card.
 // WorkItemLink is how a run came to be on a card's trail.
 type WorkItemLink string
 
-// WorkItemLinkClaim is a run that claimed the card through
-// $fuseone.work_item.claim. It is the only link slice 1 knows.
-const WorkItemLinkClaim WorkItemLink = "claim"
+const (
+	// WorkItemLinkClaim is a run that claimed the card itself through
+	// $fuseone.work_item.claim.
+	WorkItemLinkClaim WorkItemLink = "claim"
+	// WorkItemLinkAlias is a run that claimed a pull request linked to the
+	// card through $fuseone.work_item.link.
+	WorkItemLinkAlias WorkItemLink = "alias"
+)
 
 // WorkItemRun is one run on the trail: who, where, how far it got, and when
 // it claimed the card. It is a summary, never the run's steps.
@@ -40,6 +47,8 @@ type WorkItemRun struct {
 	EndedAt   time.Time
 	ClaimedAt time.Time
 	Link      WorkItemLink
+	// Ref is what the run claimed: the card, or the alias it came by.
+	Ref WorkItemRef
 }
 
 // WorkItemApprovals counts what a run, or a role's runs, asked of people:
@@ -91,9 +100,13 @@ type WorkItemRole struct {
 // WorkItemTrail is one page of a card's trail. Roles cover every visible run
 // of the card and come with the first page only; later pages carry runs.
 type WorkItemTrail struct {
-	Ref   WorkItemRef
-	Runs  []WorkItemRun
-	Roles []WorkItemRole
+	// Ref is the card the trail is of: the reference asked for, or its root.
+	Ref WorkItemRef
+	// ResolvedFrom is the reference asked for when it was an alias the
+	// caller may read, resolved to Ref; empty otherwise.
+	ResolvedFrom WorkItemRef
+	Runs         []WorkItemRun
+	Roles        []WorkItemRole
 	// Next is where the following page starts; nil on the last page.
 	Next *WorkItemCursor
 }

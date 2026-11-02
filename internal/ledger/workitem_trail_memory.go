@@ -22,10 +22,12 @@ func (m *Memory) WorkItemTrail(
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	links := visibleAliases(m.aliasRows(), filter)
+	target, from := trailTarget(ref, links.rootsOf(ref))
 	var runs []domain.WorkItemRun
 	var shares []domain.WorkItemRoleShare
 	for _, steps := range m.runs {
-		run, share, ok := trailRunOf(steps, filter, ref)
+		run, share, ok := trailRunOf(steps, filter, target, links)
 		if !ok {
 			continue
 		}
@@ -38,28 +40,31 @@ func (m *Memory) WorkItemTrail(
 	if len(runs) > page.Size()+1 {
 		runs = runs[:page.Size()+1]
 	}
-	return trailFrom(ref, runs, shares, cost, page), nil
+	return trailFrom(trailRef{target, from}, runs, shares, cost, page), nil
 }
 
 // trailRunOf is one run and its role share when it is on the card's trail
-// and the filter reads it.
+// and the filter reads it: it claimed the card, or a pull request linked to
+// the card in the run's own company by a link the caller may read.
 func trailRunOf(
-	steps []domain.Step, filter domain.RunFilter, ref domain.WorkItemRef,
+	steps []domain.Step, filter domain.RunFilter, target domain.WorkItemRef, links readableAliases,
 ) (domain.WorkItemRun, domain.WorkItemRoleShare, bool) {
 	claimed, ok := claimStepOf(steps)
 	if !ok || simulatedRun(steps) || !matches(steps[0], filter) {
 		return domain.WorkItemRun{}, domain.WorkItemRoleShare{}, false
 	}
-	if held, err := claimedRef(claimed); err != nil || held != ref {
-		return domain.WorkItemRun{}, domain.WorkItemRoleShare{}, false
-	}
 	// Who and where are the run's own, as the filter just judged them; the
 	// claim gives the card and the moment, nothing else.
 	summary := summarise(steps)
+	held, err := claimedRef(claimed)
+	link, on := trailLinkOf(held, links[aliasKey{summary.Scope.Company, held}], target)
+	if err != nil || !on {
+		return domain.WorkItemRun{}, domain.WorkItemRoleShare{}, false
+	}
 	run := domain.WorkItemRun{
 		RunID: summary.RunID, AgentID: summary.AgentID, Scope: summary.Scope,
 		Phase: summary.Phase, StartedAt: summary.StartedAt, EndedAt: summary.EndedAt,
-		ClaimedAt: claimed.At, Link: domain.WorkItemLinkClaim,
+		ClaimedAt: claimed.At, Link: link, Ref: held,
 	}
 	return run, domain.WorkItemRoleShare{
 		AgentID: run.AgentID, Scope: run.Scope, Runs: 1, Approvals: approvalsOf(steps),

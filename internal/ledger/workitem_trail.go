@@ -21,10 +21,10 @@ The cursor the store was given is a position, applied after the caller's
 filter. Nothing in it reaches the filter.
 */
 func trailFrom(
-	ref domain.WorkItemRef, runs []domain.WorkItemRun, shares []domain.WorkItemRoleShare,
+	ref trailRef, runs []domain.WorkItemRun, shares []domain.WorkItemRoleShare,
 	cost *domain.RunFilter, page domain.WorkItemPage,
 ) domain.WorkItemTrail {
-	out := domain.WorkItemTrail{Ref: ref, Runs: []domain.WorkItemRun{}}
+	out := domain.WorkItemTrail{Ref: ref.target, ResolvedFrom: ref.from, Runs: []domain.WorkItemRun{}}
 	if page.After == nil {
 		for i := range shares {
 			shares[i].CostReadable = costAdmits(cost, shares[i].Scope)
