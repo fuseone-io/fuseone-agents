@@ -55,6 +55,7 @@ repository.
 Pick one card
 List the cards in the Triagem lane, oldest first, with the field name Labels.
 Skip a card labelled factory:needs-design: it is waiting for the Architect, not for you.
+Skip a card whose issue is closed: list only open items, with the query is:open, and take no closed card even if one is listed.
 Take the oldest card left. One card per run: when you are done with it, stop,
 even if there is time for another.
 Before the claim, list the lane only with projects_list, method list_project_items; never call list_project_status_updates or get_project_status_update.

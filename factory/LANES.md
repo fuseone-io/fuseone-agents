@@ -80,7 +80,7 @@ These hold before any lane rule applies.
 | **Preparado** | understood: type, size, plan and acceptance criteria written | a person, by pulling it into Doing |
 | **Doing** | being built and reviewed | a person, by merging (→ Done); any role (→ Travado) |
 | **Travado** | blocked, with the reason as the last comment | a person only |
-| **Done** | merged | nobody |
+| **Done** | merged, or closed without a merge | nobody |
 
 ### Triagem → Preparado
 
@@ -148,6 +148,8 @@ owner:
 
 The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane that comment names, Triagem or Doing, leaving its labels as they are; that comment is the most recent one by the blocking role's GitHub App that ends with a Return to: line, on the issue or pull request the role worked on, where a pull request is either the card itself or the one in the card's Linked pull requests field.
 
+A card whose issue or pull request is closed goes back to no lane: the board operator moves it from Travado to Done.
+
 The lane comes from the role that blocked the card, and its comment says so
 on its last line:
 
@@ -191,7 +193,9 @@ into Doing.
 
 ### Done
 
-Reached only when a person merges, below. Nobody moves a card out of Done.
+Reached when a person merges, below, or when the board operator moves a card
+whose issue or pull request is closed out of Travado. Nobody moves a card out
+of Done.
 
 ## Sub-states inside Doing
 

@@ -120,6 +120,8 @@ person's standing job, given to whoever operates the board:
 
 The board operator reviews the Travado lane every working day and, once the blocker named in the comment that blocked a card is cleared, moves the card back to the lane that comment names, Triagem or Doing, leaving its labels as they are; that comment is the most recent one by the blocking role's GitHub App that ends with a Return to: line, on the issue or pull request the role worked on, where a pull request is either the card itself or the one in the card's Linked pull requests field.
 
+A card whose issue or pull request is closed goes back to no lane: the board operator moves it from Travado to Done.
+
 That comment is on the issue for Triage and the Architect, and on the pull
 request for the Reviewer, QA and the Developer answering a review; from the
 card, the pull request is the card itself or the one its Linked pull requests

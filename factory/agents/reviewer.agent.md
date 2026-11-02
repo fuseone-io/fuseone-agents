@@ -71,6 +71,7 @@ the choice needs. Without fields the search returns every result's title and
 body, and that is text you must not read before the claim. Take the oldest.
 One pull request per run: when its verdict is submitted, stop, even if there
 is time for another.
+Skip a pull request that is closed: search only with is:open, and take no closed pull request even if one is listed.
 
 Claim it first
 First act after choosing a card: call $fuseone.work_item.claim with the card's reference before reading the issue or writing anything.

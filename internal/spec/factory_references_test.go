@@ -330,6 +330,25 @@ func TestFactoryReferences_eachRole_namesTheActionThatUnblocksItsTravadoCardsOnc
 	}
 }
 
+// skipClosedLines is each role's defence against a closed issue or pull
+// request coming back to it, whatever lane its card ended up in. It governs
+// the choice, so it comes before the claim.
+var skipClosedLines = map[string]string{
+	"triage":    "Skip a card whose issue is closed: list only open items, with the query is:open, and take no closed card even if one is listed.",
+	"architect": "Skip a card whose issue is closed: list only open items, with the query is:open, and take no closed card even if one is listed.",
+	"developer": "Skip a card whose issue or pull request is closed: search and list only open items, with is:open, and take no closed card even if one is listed.",
+	"reviewer":  "Skip a pull request that is closed: search only with is:open, and take no closed pull request even if one is listed.",
+	"qa":        "Skip a pull request that is closed: search only with is:open, and take no closed pull request even if one is listed.",
+}
+
+func TestFactoryReferences_eachRole_skipsClosedCardsBeforeItsClaim(t *testing.T) {
+	t.Parallel()
+
+	for role, line := range skipClosedLines {
+		assertLinesBeforeClaim(t, role, []string{line})
+	}
+}
+
 func TestFactoryReferences_eachRole_namesItsReturnLaneOnce(t *testing.T) {
 	t.Parallel()
 

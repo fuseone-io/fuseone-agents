@@ -70,6 +70,7 @@ Pick one card
 List the cards in the Triagem lane of the FuseOne Factory board, oldest first,
 with the field name Labels.
 Take only a card labelled factory:needs-design; every other Triagem card is Triage's.
+Skip a card whose issue is closed: list only open items, with the query is:open, and take no closed card even if one is listed.
 Take the oldest such card. One card per run: when you are done with it, stop,
 even if there is time for another.
 Before the claim, list the lane only with projects_list, method list_project_items; never call list_project_status_updates or get_project_status_update.
