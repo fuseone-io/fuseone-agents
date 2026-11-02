@@ -1,8 +1,8 @@
 ---
 title: Software factory
-summary: Run agent roles that triage issues and review pull requests on a GitHub repository, each with its own GitHub App, every GitHub write approved by a person.
+summary: Run agent roles that triage issues, make small changes and review pull requests on a GitHub repository, each with its own GitHub App, every GitHub write approved by a person.
 section: integrations
-tags: factory, github, github app, roles, triage, review, qa, copilot
+tags: factory, github, github app, roles, triage, developer, review, qa, copilot
 order: 22
 ---
 
@@ -21,8 +21,9 @@ and the role instructions live, reviewed like code, in
 
 ## What the first version is
 
-- **Three roles.** Triage turns a new issue into a prepared card; the
-  Reviewer reviews a pull request; QA checks it against CI and the acceptance
+- **Four roles.** Triage turns a new issue into a prepared card; the
+  Developer makes a small change and opens its pull request; the Reviewer
+  reviews a pull request; QA checks it against CI and the acceptance
   criteria. Each role is an agent created in the console or the Studio.
 - **One GitHub App per role.** Each role reaches GitHub only through its own
   registration of the GitHub server, authenticated as its own App. The App's
@@ -36,7 +37,9 @@ and the role instructions live, reviewed like code, in
 - **The board drives the work**, with five lanes: Triagem, Preparado, Doing,
   Travado and Done. Inside Doing, labels mark where a pull request is:
   `factory:needs-review`, `factory:changes-requested`, `factory:needs-qa` and
-  `factory:ready-to-merge`. Only a person takes a card out of Travado.
+  `factory:ready-to-merge`. A card the Developer cannot do without a build
+  carries `factory:needs-runtime` on its issue. Only a person takes a card out
+  of Travado.
 - **One card per run.** A role wakes on its schedule, chooses a card, claims
   it with `$fuseone.work_item.claim` and works only that card. The claim is
   recorded in the run's trail, and no other run of the same role can take a
@@ -57,12 +60,32 @@ and the role instructions live, reviewed like code, in
   the run ends, and puts the run's cost on that card. It writes nothing to
   GitHub, and every GitHub write after it waits for a person. A tool that
   picks and claims a card in one step, hiding even the title, is deferred.
+  The Developer lists the Doing lane the same way and is told the same.
 
 The repository is public, so issue and pull request text is untrusted: a run
 that read it can never take a destructive action, and its GitHub writes need
 a person.
 
-## 1. Create the GitHub Apps
+## 1. Create the labels
+
+The board routes pull requests and issues by labels, and GitHub applies only
+labels the repository already defines. A role that sets a label that was never
+created fails at that write, and the card stays where it was, to be picked
+again on the next run. Create every factory label once, from a clone of the
+repository the factory works (or add `--repo <owner>/<name>`). `--force`
+makes each line safe to run again:
+
+```sh
+gh label create factory:needs-design --force --color fbca04 --description "Triage asks the Architect for a plan"
+gh label create factory:needs-review --force --color fbca04 --description "PR waits for the Reviewer"
+gh label create factory:changes-requested --force --color fbca04 --description "Reviewer or QA asked for changes"
+gh label create factory:needs-qa --force --color fbca04 --description "PR waits for QA"
+gh label create factory:ready-to-merge --force --color fbca04 --description "Review and QA approved the head; a person merges"
+gh label create factory:needs-runtime --force --color fbca04 --description "Needs a build or a test run before its PR; waits for Level 2"
+```
+
+
+## 2. Create the GitHub Apps
 
 Create one GitHub App per role, install it only on the repository the factory
 works, and give it only what its tools need:
@@ -72,16 +95,65 @@ works, and give it only what its tools need:
 | Triage | Issues: write, Pull requests: read, Metadata: read | Projects: write |
 | Reviewer | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
+| Developer | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
 
 QA's verdict is a pull request review, so QA needs Pull requests: write just
-like the Reviewer. Generate a private key for each App and note its App id
+like the Reviewer. Do not give the Developer's App the Workflows permission:
+without it, GitHub refuses any change the Developer makes under
+`.github/workflows`. Generate a private key for each App and note its App id
 and installation id.
 
-## 2. Register the GitHub server once per role
+Contents: write reaches every branch, `main` included. The Developer is told to
+write only to branches it creates under `factory/`, and the person approving
+each write sees the branch it names, but neither stops a write. So a ruleset
+is a prerequisite, not a recommendation:
+
+Before the Developer is started, main must carry the minimal ruleset: a pull request required before merging, force pushes and deletions blocked, and no bypass for any factory GitHub App.
+
+Until it exists, leave the Developer paused. In the repository's Settings →
+Rules → Rulesets, create a branch ruleset with enforcement **Active**, target
+`refs/heads/main`, **Require a pull request before merging** (zero approvals
+is enough: a person still merges), **Block force pushes** and **Restrict
+deletions** ticked, and no bypass actors, so no factory App can skip it. No
+bypass includes people: a person's change, a release's changelog commit
+included, reaches `main` through a pull request too, and the release tag goes
+on the merged commit (the ruleset targets `refs/heads/main`, not tags). Or
+through the API, replacing `<owner>/<name>`:
+
+```sh
+gh api --method POST repos/<owner>/<name>/rulesets --input - <<'EOF'
+{
+  "name": "main: pull request required",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "pull_request", "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false } },
+    { "type": "non_fast_forward" },
+    { "type": "deletion" }
+  ],
+  "bypass_actors": []
+}
+EOF
+```
+
+The rest of what `main` should eventually require — status checks pinned to
+their source, `factory/qa`, the authorised reviewers and the Merger's rules —
+is deferred
+([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)); none of it
+is needed in v1.
+
+## 3. Register the GitHub server once per role
 
 In the administration, register the hosted GitHub MCP server
-(`https://api.githubcopilot.com/mcp/`) three times, one per role, with the id
-`github-<role>`: `github-triage`, `github-reviewer`, `github-qa`. Choose the
+(`https://api.githubcopilot.com/mcp/`) four times, one per role, with the id
+`github-<role>`: `github-triage`, `github-reviewer`, `github-qa`,
+`github-developer`. Choose the
 **GitHub App** credential and fill in that role's App (see
 [MCPs and credentials](mcp-and-credentials.md), section "GitHub App").
 
@@ -93,11 +165,12 @@ The hosted server's default toolsets do not include `projects`, so set the
 | Triage | `issues,projects` |
 | Reviewer | `pull_requests,repos,issues,projects` |
 | QA | `pull_requests,repos,issues,projects` |
+| Developer | `pull_requests,repos,issues,projects` |
 
 The hosted server silently ignores a toolset name it does not know, so a typo
 shows up later, as a publish refused for missing tools.
 
-## 3. Classify the tools
+## 4. Classify the tools
 
 Once each server is answering, classify every tool the roles declare (see
 [What the platform stops before it happens](what-the-gate-stops.md)).
@@ -109,7 +182,7 @@ of the board's issues and pull requests even when asked for no fields (#220).
 | Classify as | Tools |
 |---|---|
 | read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `get_commit` |
-| write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `projects_write` |
+| write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `projects_write`, `create_branch`, `create_or_update_file`, `push_files`, `create_pull_request` |
 
 Classify each tool on every role's server: `github-triage.projects_list` and
 `github-reviewer.projects_list` are separate entries.
@@ -120,7 +193,7 @@ approves every GitHub write. Classified destructive, it would be blocked outrigh
 and every role that reads issue text and moves cards would be refused at
 publish.
 
-## 4. Create the factory's area
+## 5. Create the factory's area
 
 Create an area for the factory, so its cost, budget and grants stay apart
 from every other agent, and give it a budget (see
@@ -136,11 +209,12 @@ instead of spending:
 | Triage | every hour at :00 | 500,000 micros | 30 | 60 |
 | Reviewer | every hour at :15 | 2,000,000 micros | 80 | 160 |
 | QA | every hour at :45 | 1,000,000 micros | 50 | 100 |
+| Developer | every hour at :30 | 3,000,000 micros | 100 | 200 |
 
 Micros are millionths of the installation's configured currency. Treat these
 values as a first calibration.
 
-## 5. Create the roles
+## 6. Create the roles
 
 For each role, create the agent in the Studio from its reference: the
 frontmatter's fields, and the body as its instructions.
@@ -148,10 +222,12 @@ frontmatter's fields, and the body as its instructions.
 - [Triage](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/triage.agent.md)
 - [Reviewer](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/reviewer.agent.md)
 - [QA](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/qa.agent.md)
+- [Developer](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/developer.agent.md)
 
 Then publish it — a new agent is a paused draft — set its stage to
 **copilot** and start it. The stage is not in the file, so it is always set in
-the console.
+the console. Start the Developer only once `main` carries the minimal ruleset
+(step 2).
 
 The console refuses to publish a tool the registered server does not offer, so
 a wrong tool name, or a missing toolset, is found here rather than at run
@@ -166,6 +242,29 @@ What the roles follow is in the same directory:
 (what done means for each lane and label). The
 [role references README](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/README.md)
 explains every line of a reference.
+
+## What the Developer does, and what waits
+
+The Developer works at **Level 1**: small, self-contained changes made
+through the GitHub API, with no build and no test run before the pull
+request — a docs or config fix, a mechanical rename, a single-file patch, a
+version pin whose lock file needs no tool to regenerate. Where code is
+involved it commits the test first and opens the pull request on that
+commit, so CI shows the test failing before the change. It labels its pull
+request `factory:needs-review`, and when the review sends it back with
+`factory:changes-requested` it answers each finding with a commit and a
+comment.
+
+A card that needs a build or a test run before its pull request is not
+attempted. The Developer labels its issue `factory:needs-runtime`, says why
+in a comment, and leaves the card in Doing for a person. If the label cannot
+be set, because it was never created (step 1), it says so and moves the card
+to Travado instead, so the card is not picked again every hour. **Level 2**, build
+and test before a pull request, will come from a coding runtime behind one
+MCP tool: the intended runtime is
+[FuseOne Forja](https://github.com/fuseone-io/fuseone-forja), a separate
+project still at its proposed phase 0, with `forja.implement` as a write tool
+under the Gate.
 
 ## Changing a role
 

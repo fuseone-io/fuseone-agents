@@ -11,6 +11,7 @@ like any other change:
 | Triage | [`triage.agent.md`](triage.agent.md) | the issue, in Triagem |
 | Reviewer | [`reviewer.agent.md`](reviewer.agent.md) | the pull request labelled `factory:needs-review` |
 | QA | [`qa.agent.md`](qa.agent.md) | the pull request labelled `factory:needs-qa` |
+| Developer | [`developer.agent.md`](developer.agent.md) | the pull request labelled `factory:changes-requested`, first; otherwise the issue of the oldest *Doing* card with no linked pull request |
 
 Triage works the board's cards. The Reviewer and QA work pull requests, so
 their claim reference is the pull request's own number
@@ -22,13 +23,43 @@ list), so the listing carries no title or body. That is an instruction to the
 model, not something the platform enforces: the tool's output is still
 classified as untrusted text.
 
+The Developer works both. A pull request sent back with
+`factory:changes-requested` comes first, claimed by its own number and listed
+by `number` and `created_at` like the Reviewer's. Otherwise it lists the
+*Doing* lane with `projects_list`, method `list_project_items`, asking for the
+Labels and Linked pull requests fields, and claims the oldest card's issue,
+skipping a card labelled `factory:needs-runtime` and a card that already has a
+linked pull request. It sees titles before the claim, like Triage, under the
+same rule; its pre-claim lines are sealed in
+`internal/spec/factory_references_test.go`.
+
+### The Developer's Level 1 boundary
+
+The Developer changes files through the GitHub API and runs nothing (#154
+Level 1): a docs or config fix, a mechanical rename, a single-file patch, a
+version pin whose lock or checksum file can be written by hand. Where code is
+involved the test is its own first commit, and the pull request is opened on
+it, so CI's run on that commit is the red the Developer cannot produce
+itself. A card that needs a build or a test run before its pull request is
+not attempted: the Developer labels its issue `factory:needs-runtime`
+(LANES.md), says why in a comment, and stops. Both sentences are sealed as
+exact lines in `internal/spec/factory_references_test.go`.
+
+Level 2, build and test before a pull request, will come from a coding
+runtime behind one MCP tool. The intended runtime is FuseOne Forja
+([fuseone-io/fuseone-forja](https://github.com/fuseone-io/fuseone-forja), a
+separate repository, phase 0 proposed), with `forja.implement` as a write tool
+under the Gate. Until it exists, a person takes a `factory:needs-runtime`
+card.
+
 ## How a role is created in v1
 
 In v1 the roles are **created in the console or the Studio**, not published
 from this repository (NT-013 § v1). These files are the reference a person
 copies from:
 
-1. Register the role's GitHub MCP server in the administration (below).
+1. Create the factory's labels, once per repository (below), and register
+   the role's GitHub MCP server in the administration (below).
 2. Create the agent in the Studio from the reference: the fields of the
    frontmatter, and the body as its instructions. A Studio that imports the
    file format can take the file as it is.
@@ -39,6 +70,28 @@ copies from:
 A change to a role is made here first, reviewed, and then copied into the
 console. The console is where the role runs; this directory is where its
 instructions are reviewed. When the two disagree, the console has drifted.
+
+### The labels
+
+Every `factory:*` label a role sets or reads must already exist in the
+repository: GitHub applies only labels the repository defines, so a role that
+sets a missing one fails at that write, and the card it meant to move stays
+where it was, to be picked again on the next run. Create them once, from a
+clone of the repository (or with `--repo <owner>/<name>`); `--force` makes
+each line safe to run again:
+
+```sh
+gh label create factory:needs-design --force --color fbca04 --description "Triage asks the Architect for a plan"
+gh label create factory:needs-review --force --color fbca04 --description "PR waits for the Reviewer"
+gh label create factory:changes-requested --force --color fbca04 --description "Reviewer or QA asked for changes"
+gh label create factory:needs-qa --force --color fbca04 --description "PR waits for QA"
+gh label create factory:ready-to-merge --force --color fbca04 --description "Review and QA approved the head; a person merges"
+gh label create factory:needs-runtime --force --color fbca04 --description "Needs a build or a test run before its PR; waits for Level 2"
+```
+
+`internal/spec/factory_setup_test.go` reads every `factory:*` label from the
+references and LANES.md and fails when this list, or the manual's, misses
+one, so a new label arrives with its line here.
 
 ## What every role's reference carries
 
@@ -153,7 +206,8 @@ per role, in the installation's administration:
   (below);
 - every tool classified by the Curator before the role can call it (NT-013 §
   Guardrails, layer 3). Reading issue, PR and comment text is a read marked
-  untrusted; comments, labels, reviews and card moves are writes.
+  untrusted; comments, labels, reviews and card moves are writes, and so are
+  the Developer's branches, file commits and pull requests.
 
 **Choosing the toolsets.** The roles use the hosted server
 (`https://api.githubcopilot.com/mcp/`), not the local one, so
@@ -170,11 +224,16 @@ credential:
 | Triage | `issues,projects` |
 | Reviewer | `pull_requests,repos,issues,projects` |
 | QA | `pull_requests,repos,issues,projects` |
+| Developer | `pull_requests,repos,issues,projects` |
 
 The Reviewer and QA need more than `pull_requests,repos`: a label on a pull
 request is set with `issue_write` and a comment with `add_issue_comment`, both
 in `issues`; and any role may move a card to Travado (LANES.md), which takes
-the `projects` tools.
+the `projects` tools. The Developer needs the same four for different tools:
+`repos` for `create_branch`, `create_or_update_file`, `push_files` and the
+reads around them, `pull_requests` for `create_pull_request`, `issues` for
+comments and labels, and `projects` to list *Doing* and move a card to
+Travado.
 
 **The GitHub App's permissions.** The App is what makes a tool call succeed;
 the toolset only offers it. Each role's App needs:
@@ -184,6 +243,55 @@ the toolset only offers it. Each role's App needs:
 | Triage | Issues: write, Pull requests: read, Metadata: read | Projects: write |
 | Reviewer | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
+| Developer | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
+
+The Developer's App has **no Workflows permission**, so GitHub refuses any
+write it makes under `.github/workflows`; a change there is not Level 1.
+Contents: write reaches every branch, `main` included. The reference keeps the
+Developer to branches it creates under `factory/` and off `factory/` and the
+`CLAUDE.md` files, two lines sealed in
+`internal/spec/factory_references_test.go`, and the person approving each
+write sees the branch it names. Neither is a mechanism, so a ruleset is a
+prerequisite, not a recommendation:
+
+Before the Developer is started, main must carry the minimal ruleset: a pull request required before merging, force pushes and deletions blocked, and no bypass for any factory GitHub App.
+
+Until `main` carries it, the Developer stays paused. In the repository's
+Settings → Rules → Rulesets, that is a branch ruleset, enforcement Active,
+targeting `refs/heads/main`, with **Require a pull request before merging**
+(zero approvals is enough: a person still merges), **Block force pushes** and
+**Restrict deletions** ticked, and an empty bypass list, so no factory App can
+skip it. No bypass includes people: a maintainer's change reaches `main`
+through a pull request too, the release changelog cut included (a release
+branch, the changelog commit, its pull request and CI, the merge, then the
+tag on the merged commit; a ruleset on `refs/heads/main` does not touch
+tags). The same, through the API:
+
+```sh
+gh api --method POST repos/<owner>/<name>/rulesets --input - <<'EOF'
+{
+  "name": "main: pull request required",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "pull_request", "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false } },
+    { "type": "non_fast_forward" },
+    { "type": "deletion" }
+  ],
+  "bypass_actors": []
+}
+EOF
+```
+
+Everything else a ruleset on `main` should require is deferred to #207:
+required status checks pinned to their source, `factory/qa` (which does not
+exist in v1), the authorised reviewers, and the rules the Merger is held to.
 
 Submitting a review needs Pull requests: **write**, for QA as much as for the
 Reviewer: in v1 QA's verdict is a review, not a commit status, so QA needs no
@@ -221,6 +329,17 @@ keeps it in check. Classified destructive, it would be blocked outright, and
 the publish check would refuse every role that reads issue text and moves
 cards. A narrower
 card-moving tool is deferred with the rest of the factory's own server.
+
+**The Developer's tools.** Every read it declares is untrusted:
+`search_pull_requests`, `projects_list`, `projects_get`, `issue_read`,
+`pull_request_read`, `get_file_contents`, `search_code`, `get_commit`. Its
+writes are `create_branch`, `create_or_update_file` and `push_files` (a
+branch and commits on it), `create_pull_request`, `add_issue_comment`,
+`issue_write` (labels) and `projects_write` (a card to Travado). None is
+destructive: a commit is undone by another commit, and a branch can be
+deleted. It does not declare `delete_file`, `update_pull_request`,
+`update_pull_request_branch`, `merge_pull_request` or
+`pull_request_review_write`.
 
 The tool names in the references are the GitHub MCP server's own. The console
 refuses to publish a tool the registered server does not offer, so a wrong name

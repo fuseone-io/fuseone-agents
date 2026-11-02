@@ -52,7 +52,16 @@ factory/
 | Architect | #196 | added by #196 |
 | Reviewer | #197 | [agents/reviewer.agent.md](agents/reviewer.agent.md) |
 | QA | #198 | [agents/qa.agent.md](agents/qa.agent.md) |
-| Developer | #200 | added by #200 |
+| Developer | #200 | [agents/developer.agent.md](agents/developer.agent.md), Level 1 |
+
+The Developer works at **Level 1** (#154): small, self-contained changes
+through the GitHub API, with no build and no test run before the pull request.
+A card that needs either is labelled `factory:needs-runtime` on its issue and
+left for **Level 2**, a coding runtime behind one MCP tool. The intended
+runtime is FuseOne Forja
+([fuseone-io/fuseone-forja](https://github.com/fuseone-io/fuseone-forja), a
+separate repository, phase 0 proposed), with `forja.implement` as a write tool
+under the Gate.
 
 There is no Merger in v1 (#199): a person merges a pull request once it is
 labelled `factory:ready-to-merge` (LANES.md).

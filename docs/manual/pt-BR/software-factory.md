@@ -1,8 +1,8 @@
 ---
 title: Fábrica de software
-summary: Rode papéis de agentes que fazem a triagem de issues e revisam pull requests num repositório do GitHub, cada um com o seu GitHub App e toda escrita no GitHub aprovada por uma pessoa.
+summary: Rode papéis de agentes que fazem a triagem de issues, fazem mudanças pequenas e revisam pull requests num repositório do GitHub, cada um com o seu GitHub App e toda escrita no GitHub aprovada por uma pessoa.
 section: integrations
-tags: fábrica, github, github app, papéis, triagem, revisão, qa, copiloto
+tags: fábrica, github, github app, papéis, triagem, desenvolvedor, revisão, qa, copiloto
 order: 22
 ---
 
@@ -22,7 +22,8 @@ e as instruções dos papéis ficam, revisadas como código, em
 
 ## O que é a primeira versão
 
-- **Três papéis.** A Triagem transforma uma issue nova num card preparado; o
+- **Quatro papéis.** A Triagem transforma uma issue nova num card preparado;
+  o Desenvolvedor faz uma mudança pequena e abre o pull request dela; o
   Revisor revisa um pull request; o QA confere o pull request contra o CI e os
   critérios de aceite. Cada papel é um agente criado no console ou no Studio.
 - **Um GitHub App por papel.** Cada papel só alcança o GitHub pelo seu próprio
@@ -38,8 +39,9 @@ e as instruções dos papéis ficam, revisadas como código, em
 - **O board guia o trabalho**, com cinco colunas: Triagem, Preparado, Doing,
   Travado e Done. Dentro de Doing, rótulos marcam em que ponto o pull request
   está: `factory:needs-review`, `factory:changes-requested`,
-  `factory:needs-qa` e `factory:ready-to-merge`. Só uma pessoa tira um card de
-  Travado.
+  `factory:needs-qa` e `factory:ready-to-merge`. Um card que o
+  Desenvolvedor não consegue fazer sem um build recebe `factory:needs-runtime`
+  na issue. Só uma pessoa tira um card de Travado.
 - **Um card por run.** Um papel acorda no seu horário, escolhe um card, faz o
   claim dele com `$fuseone.work_item.claim` e trabalha só nesse card. O claim
   fica registrado na trilha do run, e nenhum outro run do mesmo papel pode
@@ -61,13 +63,34 @@ e as instruções dos papéis ficam, revisadas como código, em
   o card quando o run termina e lança o custo do run nesse card. Ele não
   escreve nada no GitHub, e toda escrita no GitHub depois dele espera uma
   pessoa. Uma ferramenta que escolhe e faz o claim do card de uma vez,
-  escondendo até o título, ficou para depois.
+  escondendo até o título, ficou para depois. O Desenvolvedor lista a coluna
+  Doing do mesmo jeito e recebe a mesma instrução.
 
 O repositório é público, então o texto de issues e pull requests não é
 confiável: um run que leu esse texto nunca pode executar uma ação destrutiva,
 e as escritas dele no GitHub precisam de uma pessoa.
 
-## 1. Crie os GitHub Apps
+## 1. Crie os rótulos
+
+O board encaminha pull requests e issues por rótulos, e o GitHub só aplica
+rótulos que o repositório já tem. Um papel que tenta pôr um rótulo que nunca
+foi criado falha nessa escrita, e o card fica onde estava, para ser escolhido
+de novo no próximo run. Crie todos os rótulos da fábrica uma vez, a partir de
+um clone do repositório em que a fábrica trabalha (ou acrescente
+`--repo <dono>/<nome>`). Com `--force`, cada linha pode ser rodada de novo sem
+problema:
+
+```sh
+gh label create factory:needs-design --force --color fbca04 --description "Triage asks the Architect for a plan"
+gh label create factory:needs-review --force --color fbca04 --description "PR waits for the Reviewer"
+gh label create factory:changes-requested --force --color fbca04 --description "Reviewer or QA asked for changes"
+gh label create factory:needs-qa --force --color fbca04 --description "PR waits for QA"
+gh label create factory:ready-to-merge --force --color fbca04 --description "Review and QA approved the head; a person merges"
+gh label create factory:needs-runtime --force --color fbca04 --description "Needs a build or a test run before its PR; waits for Level 2"
+```
+
+
+## 2. Crie os GitHub Apps
 
 Crie um GitHub App por papel, instale cada um só no repositório em que a
 fábrica trabalha e dê a ele só o que as ferramentas do papel precisam:
@@ -77,16 +100,67 @@ fábrica trabalha e dê a ele só o que as ferramentas do papel precisam:
 | Triagem | Issues: write, Pull requests: read, Metadata: read | Projects: write |
 | Revisor | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
+| Desenvolvedor | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
 
 O veredito do QA é uma revisão de pull request, então o QA precisa de Pull
-requests: write, assim como o Revisor. Gere uma chave privada para cada App e
-anote o ID do App e o ID da instalação.
+requests: write, assim como o Revisor. Não dê a permissão Workflows ao App do
+Desenvolvedor: sem ela, o GitHub recusa qualquer mudança que o Desenvolvedor
+faça em `.github/workflows`. Gere uma chave privada para cada App e anote o
+ID do App e o ID da instalação.
 
-## 2. Registre o servidor do GitHub uma vez por papel
+Contents: write alcança todos os branches, inclusive o `main`. O
+Desenvolvedor é instruído a escrever só nos branches que ele mesmo cria em
+`factory/`, e a pessoa que aprova cada escrita vê o branch que ela indica, mas
+nenhum dos dois impede uma escrita. Por isso um ruleset é pré-requisito, não
+recomendação:
+
+Antes de iniciar o Desenvolvedor, o main precisa ter o ruleset mínimo: pull request obrigatório antes do merge, force push e exclusão bloqueados, e nenhum bypass para os GitHub Apps da fábrica.
+
+Enquanto ele não existir, deixe o Desenvolvedor pausado. Em Settings → Rules →
+Rulesets do repositório, crie um ruleset de branch com enforcement **Active**,
+alvo `refs/heads/main`, marque **Require a pull request before merging** (zero
+aprovações bastam: uma pessoa continua fazendo o merge), **Block force
+pushes** e **Restrict deletions**, e não ponha ninguém na lista de bypass,
+para que nenhum App da fábrica consiga pular as regras. Sem bypass vale
+também para pessoas: a mudança de uma pessoa, inclusive o commit de
+changelog de uma release, chega ao `main` por pull request, e a tag da
+release vai no commit do merge (o ruleset vale para `refs/heads/main`, não
+para tags). Ou pela API, trocando `<owner>/<name>`:
+
+```sh
+gh api --method POST repos/<owner>/<name>/rulesets --input - <<'EOF'
+{
+  "name": "main: pull request required",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "pull_request", "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false } },
+    { "type": "non_fast_forward" },
+    { "type": "deletion" }
+  ],
+  "bypass_actors": []
+}
+EOF
+```
+
+O resto do que o `main` deve exigir no futuro — status checks presos à sua
+origem, o `factory/qa`, os revisores autorizados e as regras do Merger — ficou
+para depois
+([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)); nada disso
+é necessário na v1.
+
+## 3. Registre o servidor do GitHub uma vez por papel
 
 Na administração, registre o GitHub MCP hospedado
-(`https://api.githubcopilot.com/mcp/`) três vezes, uma por papel, com o id
-`github-<papel>`: `github-triage`, `github-reviewer`, `github-qa`. Escolha a
+(`https://api.githubcopilot.com/mcp/`) quatro vezes, uma por papel, com o id
+`github-<papel>`: `github-triage`, `github-reviewer`, `github-qa`,
+`github-developer`. Escolha a
 credencial **GitHub App** e preencha o App daquele papel (veja
 [MCPs e credenciais](mcp-and-credentials.md), seção "GitHub App").
 
@@ -99,12 +173,13 @@ registros:
 | Triagem | `issues,projects` |
 | Revisor | `pull_requests,repos,issues,projects` |
 | QA | `pull_requests,repos,issues,projects` |
+| Desenvolvedor | `pull_requests,repos,issues,projects` |
 
 O servidor hospedado ignora em silêncio um nome de toolset que não conhece,
 então um erro de digitação só aparece depois, como uma publicação recusada por
 falta de ferramentas.
 
-## 3. Classifique as ferramentas
+## 4. Classifique as ferramentas
 
 Com cada servidor respondendo, classifique todas as ferramentas que os papéis
 declaram (veja [O que a plataforma para antes de acontecer](what-the-gate-stops.md)).
@@ -117,7 +192,7 @@ quando não se pede nenhum campo (#220).
 | Classifique como | Ferramentas |
 |---|---|
 | read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `get_commit` |
-| write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `projects_write` |
+| write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `projects_write`, `create_branch`, `create_or_update_file`, `push_files`, `create_pull_request` |
 
 Classifique cada ferramenta no servidor de cada papel:
 `github-triage.projects_list` e `github-reviewer.projects_list` são entradas
@@ -129,7 +204,7 @@ e uma pessoa aprova toda escrita no GitHub. Classificado como destrutivo, ele se
 bloqueado de vez, e todo papel que lê texto de issue e move cards seria
 recusado na publicação.
 
-## 4. Crie a área da fábrica
+## 5. Crie a área da fábrica
 
 Crie uma área para a fábrica, para que custo, orçamento e concessões dela
 fiquem separados de todos os outros agentes, e dê um orçamento a ela (veja
@@ -145,11 +220,12 @@ em vez de gastar:
 | Triagem | toda hora, aos :00 | 500.000 micros | 30 | 60 |
 | Revisor | toda hora, aos :15 | 2.000.000 micros | 80 | 160 |
 | QA | toda hora, aos :45 | 1.000.000 micros | 50 | 100 |
+| Desenvolvedor | toda hora, aos :30 | 3.000.000 micros | 100 | 200 |
 
 Micros são milionésimos da moeda configurada na instalação. Trate esses
 valores como uma primeira calibração.
 
-## 5. Crie os papéis
+## 6. Crie os papéis
 
 Para cada papel, crie o agente no Studio a partir da referência: os campos do
 frontmatter, e o corpo como instruções.
@@ -157,10 +233,12 @@ frontmatter, e o corpo como instruções.
 - [Triagem](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/triage.agent.md)
 - [Revisor](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/reviewer.agent.md)
 - [QA](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/qa.agent.md)
+- [Desenvolvedor](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/developer.agent.md)
 
 Depois publique — um agente novo é um rascunho pausado —, ponha o estágio em
 **copiloto** e inicie. O estágio não está no arquivo, então ele sempre é
-definido no console.
+definido no console. Só inicie o Desenvolvedor depois que o `main` tiver o
+ruleset mínimo (passo 2).
 
 O console recusa publicar uma ferramenta que o servidor registrado não
 oferece, então um nome de ferramenta errado, ou um toolset faltando, aparece
@@ -175,6 +253,30 @@ O que os papéis seguem está no mesmo diretório:
 (o que significa pronto em cada coluna e rótulo). O
 [README das referências](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/README.md)
 explica cada linha de uma referência.
+
+## O que o Desenvolvedor faz, e o que fica esperando
+
+O Desenvolvedor trabalha no **Nível 1**: mudanças pequenas e autocontidas,
+feitas pela API do GitHub, sem build e sem rodar testes antes do pull
+request — uma correção de documentação ou de configuração, uma renomeação
+mecânica, um patch num arquivo só, a versão fixada de uma dependência cujo
+arquivo de lock não precisa de ferramenta para ser gerado de novo. Quando há
+código envolvido, ele faz primeiro o commit do teste e abre o pull request
+nesse commit, para que o CI mostre o teste falhando antes da mudança. Ele
+põe o rótulo `factory:needs-review` no pull request e, quando a revisão o
+devolve com `factory:changes-requested`, responde a cada apontamento com um
+commit e um comentário.
+
+Um card que precisa de um build ou de rodar testes antes do pull request não
+é tentado. O Desenvolvedor põe o rótulo `factory:needs-runtime` na issue,
+explica o motivo num comentário e deixa o card em Doing para uma pessoa. Se o
+rótulo não puder ser aplicado, porque nunca foi criado (passo 1), ele avisa e
+move o card para Travado, para que o card não seja escolhido de novo a cada
+hora. O **Nível 2**, build e testes antes do pull request, virá de um runtime de
+código atrás de uma única ferramenta MCP: o runtime previsto é o
+[FuseOne Forja](https://github.com/fuseone-io/fuseone-forja), um projeto à
+parte, ainda na fase 0 proposta, com `forja.implement` como ferramenta de
+escrita sob o Gate.
 
 ## Mudando um papel
 
