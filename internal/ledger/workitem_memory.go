@@ -39,8 +39,10 @@ func (m *Memory) judgeWorkItem(s domain.Step) error {
 		if id == s.RunID || simulatedRun(steps) {
 			continue
 		}
-		held, agent, ok := claimOfRun(steps)
-		if ok && agent == s.AgentID && held == ref && !terminalPhase(phaseOfRun(steps)) {
+		// The holder's agent is the run's own, not its claim step's: a
+		// legacy claim under another agent still holds for the run's agent.
+		held, _, ok := claimOfRun(steps)
+		if ok && identityOf(steps).AgentID == agent && held == ref && !terminalPhase(phaseOfRun(steps)) {
 			heldElsewhere = true
 			break
 		}

@@ -44,13 +44,15 @@ func recordWorkItemClaim(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 	if run.simulated {
 		return judgeSimulatedClaim(ctx, tx, s, ref)
 	}
+	// Keyed on the run's own agent, the identity the holders are read by, so
+	// two claims of one card by the same agent always meet at this lock.
 	if _, err := tx.Exec(ctx,
 		`select pg_advisory_xact_lock(hashtextextended('work_item:' || $1::text || chr(31) || $2::text, 0))`,
-		string(s.AgentID), string(ref),
+		string(run.agent), string(ref),
 	); err != nil {
 		return fmt.Errorf("lock work item: %w", err)
 	}
-	own, heldElsewhere, err := claimHolders(ctx, tx, s, ref)
+	own, heldElsewhere, err := claimHolders(ctx, tx, s.RunID, run.agent, ref)
 	if err != nil {
 		return err
 	}
@@ -73,8 +75,12 @@ func recordWorkItemClaim(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 // claimHolders reads, once the lock is held, the card this run already holds
 // and whether another open run of the agent holds the one being claimed. The
 // phase is the runs projection's, so an ended run is simply not a holder.
+//
+// The holder's agent is the run's, from runs — never the claim row's: a row
+// an older release wrote under another agent must still hold the card for
+// the agent whose run it is.
 func claimHolders(
-	ctx context.Context, tx pgx.Tx, s domain.Step, ref domain.WorkItemRef,
+	ctx context.Context, tx pgx.Tx, runID domain.RunID, agent domain.AgentID, ref domain.WorkItemRef,
 ) (domain.WorkItemRef, bool, error) {
 	var own string
 	var heldElsewhere bool
@@ -83,9 +89,9 @@ func claimHolders(
 			coalesce((select ref from run_work_items where run_id = $1), ''),
 			exists (
 				select 1 from run_work_items c join runs r on r.run_id = c.run_id
-				where c.agent_id = $2 and c.ref = $3 and c.run_id <> $1
+				where r.agent_id = $2 and c.ref = $3 and c.run_id <> $1
 				  and r.phase not in ('finished', 'failed'))`,
-		string(s.RunID), string(s.AgentID), string(ref),
+		string(runID), string(agent), string(ref),
 	).Scan(&own, &heldElsewhere)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return "", false, fmt.Errorf("judge work item claim: %w", err)

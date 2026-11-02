@@ -246,6 +246,31 @@ func TestWorkItemClaim_underAnotherAgentOrScopeThanItsRun_refused(t *testing.T) 
 	})
 }
 
+/*
+A legacy claim recorded under another agent still holds the card for its
+run's own agent (review round 2).
+
+Rows written before the append refused divergent claims may say a run's card
+is held by spoofed-agent while the run is real-agent's. The judgement asks who
+holds the card by the run's own identity, so a second open run of
+real-agent is refused; asked by the claim row's agent, it would be let
+through and the card held twice.
+*/
+func TestWorkItemClaim_aLegacyClaimUnderAnotherAgent_stillHoldsForTheRunsAgent(t *testing.T) {
+	run(t, "legacy divergent claim holds for the run's agent", func(t *testing.T, s Store) {
+		openRunOf(t, s, "run-legacy", "real-agent")
+		if err := s.(planter).PlantWorkItemClaim(context.Background(), "run-legacy", "spoofed-agent",
+			domain.Scope{Company: "acme", Area: "cx"}, card); err != nil {
+			t.Fatalf("plant: %v", err)
+		}
+		openRunOf(t, s, "run-second", "real-agent")
+
+		if err := claim(t, s, "run-second", "real-agent", card); !errors.Is(err, domain.ErrWorkItemHeld) {
+			t.Fatalf("second claim by real-agent = %v, want ErrWorkItemHeld", err)
+		}
+	})
+}
+
 // Cost per card counts every run that claimed it, including one that failed
 // before its first write — the run nothing else would ever attribute.
 func TestWorkItemCost_includesARunThatFailedBeforeAnyWrite(t *testing.T) {
