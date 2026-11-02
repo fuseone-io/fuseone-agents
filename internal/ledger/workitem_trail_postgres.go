@@ -47,6 +47,12 @@ func (p *Postgres) WorkItemTrail(
 // workItemRunsSQL is the runs statement: the card's runs the filter reads,
 // past the cursor when there is one, in the trail's order, limited when a
 // limit is given.
+//
+// Who and where are the run's, from the runs projection the filter was
+// applied to — never the claim row's. run_work_items supplies the join, the
+// card and the moment of the claim, nothing else: a claim row that named
+// another agent or scope would otherwise move the run to an area, and its
+// cost under a cost:read, the caller was never judged against.
 func workItemRunsSQL(
 	filter domain.RunFilter, ref domain.WorkItemRef, after *domain.WorkItemCursor, limit int,
 ) (string, []any) {
@@ -54,10 +60,11 @@ func workItemRunsSQL(
 	where = whereAnd(where, realRuns)
 	args = append(args, string(ref))
 	sql := `
-		select c.run_id, c.agent_id, c.company_id, c.area_id, c.claimed_at,
+		select c.run_id, r.agent_id, r.company_id, r.area_id, c.claimed_at,
 		       r.phase, r.started_at, r.ended_at, r.cost_micros
 		from run_work_items c
-		join (select run_id, phase, started_at, ended_at, cost_micros from runs ` + where + `) r
+		join (select run_id, agent_id, company_id, area_id, phase, started_at, ended_at, cost_micros
+		      from runs ` + where + `) r
 		  on r.run_id = c.run_id
 		where c.ref = $` + fmt.Sprint(len(args))
 	if after != nil {

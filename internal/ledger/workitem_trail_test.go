@@ -264,4 +264,46 @@ func TestWorkItemTrail_anUnclaimedCard_isAnEmptyTrailNotAnError(t *testing.T) {
 	})
 }
 
+// planter is a store a test can plant a divergent claim into.
+type planter interface {
+	PlantWorkItemClaim(ctx context.Context, runID domain.RunID, agent domain.AgentID,
+		scope domain.Scope, ref domain.WorkItemRef) error
+}
+
+/*
+Identity and cost come from the run, never from its claim (review round 1).
+
+A claim recorded under another agent and scope than its run's — planted,
+since the append refuses one — must not move the run on the trail: it is the
+run's agent, the run's scope, and the run's scope that cost:read is judged
+against. Read from the claim, a run in acme/cx by real-agent would show as
+spoofed-agent in acme/factory, and its cost would be revealed to a caller
+with cost:read on factory alone.
+*/
+func TestWorkItemTrail_aClaimRecordedUnderAnotherIdentity_readsAsTheRunsOwn(t *testing.T) {
+	run(t, "identity from the run", func(t *testing.T, s Store) {
+		started := step("run-real", domain.StepRunStarted)
+		started.AgentID, started.Scope = "real-agent", areaCX
+		mustAppend(t, s, started)
+		costed(t, s, "run-real", "real-agent", areaCX, 987)
+		if err := s.(planter).PlantWorkItemClaim(context.Background(), "run-real", "spoofed-agent", areaFactory, card); err != nil {
+			t.Fatalf("plant: %v", err)
+		}
+		factoryCost := domain.RunFilter{Scopes: []domain.Scope{areaFactory}}
+
+		got := trailOf(t, s, domain.RunFilter{}, &factoryCost, domain.WorkItemPage{})
+
+		if len(got.Runs) != 1 || got.Runs[0].AgentID != "real-agent" || got.Runs[0].Scope != areaCX {
+			t.Fatalf("runs = %+v; want the run's own agent and scope", got.Runs)
+		}
+		if len(got.Roles) != 1 || got.Roles[0].AgentID != "real-agent" || got.Roles[0].CostMicros != nil {
+			t.Fatalf("roles = %+v; want real-agent with no cost (cost:read is on factory only)", got.Roles)
+		}
+		cx := trailOf(t, s, domain.RunFilter{Scopes: []domain.Scope{areaFactory}}, &factoryCost, domain.WorkItemPage{})
+		if len(cx.Runs) != 0 {
+			t.Fatalf("a factory reader sees %+v; the run is cx's", cx.Runs)
+		}
+	})
+}
+
 func ptrTo[T any](v T) *T { return &v }

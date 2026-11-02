@@ -45,10 +45,12 @@ func trailFactsOf(steps []domain.Step, filter domain.RunFilter, ref domain.WorkI
 	if held, err := claimedRef(claimed); err != nil || held != ref {
 		return domain.WorkItemRunFacts{}, false
 	}
+	// Who and where are the run's own, as the filter just judged them; the
+	// claim gives the card and the moment, nothing else.
 	summary := summarise(steps)
 	return domain.WorkItemRunFacts{
 		Run: domain.WorkItemRun{
-			RunID: summary.RunID, AgentID: claimed.AgentID, Scope: claimed.Scope,
+			RunID: summary.RunID, AgentID: summary.AgentID, Scope: summary.Scope,
 			Phase: summary.Phase, StartedAt: summary.StartedAt, EndedAt: summary.EndedAt,
 			ClaimedAt: claimed.At, Link: domain.WorkItemLinkClaim,
 		},
