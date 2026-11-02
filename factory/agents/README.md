@@ -197,7 +197,9 @@ step lists it.
 The official GitHub MCP server is the only tool server in v1. Register it once
 per role, in the installation's administration:
 
-- server id `github-<role>`;
+- server id `github-<role>`: `github-triage`, `github-architect`,
+  `github-developer`, `github-reviewer` and `github-qa`, the prefix every
+  GitHub tool in that role's reference carries;
 - its own **GitHub App**, installed only on `fuseone-io/fuseone-agents`, with
   only the permissions the role's tools need. Its identity is what signs the
   role's comments and reviews: the Reviewer's and QA's approvals are told apart
@@ -222,6 +224,7 @@ credential:
 | Role | `X-MCP-Toolsets` |
 |---|---|
 | Triage | `issues,projects` |
+| Architect | `issues,projects,repos` |
 | Reviewer | `pull_requests,repos,issues,projects` |
 | QA | `pull_requests,repos,issues,projects` |
 | Developer | `pull_requests,repos,issues,projects` |

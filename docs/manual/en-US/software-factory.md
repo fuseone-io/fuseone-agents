@@ -151,9 +151,9 @@ is needed in v1.
 ## 3. Register the GitHub server once per role
 
 In the administration, register the hosted GitHub MCP server
-(`https://api.githubcopilot.com/mcp/`) four times, one per role, with the id
-`github-<role>`: `github-triage`, `github-reviewer`, `github-qa`,
-`github-developer`. Choose the
+(`https://api.githubcopilot.com/mcp/`) five times, one per role, with the id
+`github-<role>`: `github-triage`, `github-architect`, `github-reviewer`,
+`github-qa`, `github-developer`. Choose the
 **GitHub App** credential and fill in that role's App (see
 [MCPs and credentials](mcp-and-credentials.md), section "GitHub App").
 
@@ -163,6 +163,7 @@ The hosted server's default toolsets do not include `projects`, so set the
 | Role | Toolsets |
 |---|---|
 | Triage | `issues,projects` |
+| Architect | `issues,projects,repos` |
 | Reviewer | `pull_requests,repos,issues,projects` |
 | QA | `pull_requests,repos,issues,projects` |
 | Developer | `pull_requests,repos,issues,projects` |

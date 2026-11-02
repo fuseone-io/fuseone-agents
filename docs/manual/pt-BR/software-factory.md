@@ -158,9 +158,9 @@ para depois
 ## 3. Registre o servidor do GitHub uma vez por papel
 
 Na administração, registre o GitHub MCP hospedado
-(`https://api.githubcopilot.com/mcp/`) quatro vezes, uma por papel, com o id
-`github-<papel>`: `github-triage`, `github-reviewer`, `github-qa`,
-`github-developer`. Escolha a
+(`https://api.githubcopilot.com/mcp/`) cinco vezes, uma por papel, com o id
+`github-<papel>`: `github-triage`, `github-architect`, `github-reviewer`,
+`github-qa`, `github-developer`. Escolha a
 credencial **GitHub App** e preencha o App daquele papel (veja
 [MCPs e credenciais](mcp-and-credentials.md), seção "GitHub App").
 
@@ -171,6 +171,7 @@ registros:
 | Papel | Toolsets |
 |---|---|
 | Triagem | `issues,projects` |
+| Arquiteto | `issues,projects,repos` |
 | Revisor | `pull_requests,repos,issues,projects` |
 | QA | `pull_requests,repos,issues,projects` |
 | Desenvolvedor | `pull_requests,repos,issues,projects` |
