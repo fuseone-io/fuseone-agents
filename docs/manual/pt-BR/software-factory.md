@@ -79,9 +79,11 @@ e as instruções dos papéis ficam, revisadas como código, em
   Abrir o histórico de um pull request vinculado mostra o histórico da issue
   e avisa isso. O vínculo não espera ninguém quando o próprio
   `create_pull_request` do run citou aquele pull request — respondido pelo
-  servidor hospedado do GitHub registrado com o GitHub App do papel, e
-  classificado como escrita cujo resultado não é untrusted — e espera uma
-  pessoa nos outros casos; um pull request pertence a um só card para sempre, e um
+  servidor hospedado do GitHub registrado com o GitHub App do papel — e espera
+  uma pessoa nos outros casos. Mantenha o resultado do `create_pull_request`
+  como **untrusted**, o padrão: o vínculo é provado pelo pull request que a
+  plataforma lê da resposta, não pela resposta, que continua marcando o run
+  como não confiável, e toda escrita seguinte continua esperando uma pessoa; um pull request pertence a um só card para sempre, e um
   vínculo que você não pode ler aparece para você como se não existisse.
 
 O repositório é público, então o texto de issues e pull requests não é

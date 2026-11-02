@@ -74,8 +74,11 @@ and the role instructions live, reviewed like code, in
   marked **Pull request**. Opening the trail of a linked pull request shows
   the issue's trail and says so. The link waits for no one when the run's own
   `create_pull_request` named that pull request — answered by the hosted GitHub
-  server registered with the role's GitHub App, and classified as a write whose
-  result is not untrusted — and for a person otherwise;
+  server registered with the role's GitHub App — and for a person otherwise.
+  Keep `create_pull_request`'s result **untrusted**, the default: the link is
+  proved by the pull request the platform reads out of the answer, not by the
+  answer, which goes on tainting the run so every later write still waits for
+  a person;
   a pull request belongs to one card for good, and a link you cannot read is
   shown to you as no link at all.
 

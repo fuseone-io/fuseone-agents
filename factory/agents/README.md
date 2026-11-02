@@ -55,9 +55,12 @@ card from the run's own claim. It is not held for approval when the run's own
 that against the run's record, and the Gate then treats the link like the
 claim (`internal/gate/coordination.go`). That answer counts only from the
 hosted GitHub MCP server (`https://api.githubcopilot.com/mcp/`) registered with
-the role's GitHub App, and only when the Curator rules `create_pull_request` a
-write whose result is **not** untrusted. Any other link waits for a person,
-like every write. A pull request has one card for good: linking it again is a
+the role's GitHub App. Keep `create_pull_request` a write whose result is
+**untrusted**, the default: the answer's content taints the run like any
+other, and every later write still waits for a person. What proves the link is
+not that content but the platform's own reading of it, one pull request
+reference under that registration's provenance. Any other link waits for a
+person, like every write. A pull request has one card for good: linking it again is a
 success with no effect, and linking one another card owns is refused with
 `work_item_linked_elsewhere`. The link writes nothing to GitHub. No other role
 declares it.
