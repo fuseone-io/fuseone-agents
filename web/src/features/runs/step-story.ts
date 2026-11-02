@@ -42,6 +42,7 @@ const TITLES: Record<StepKind, string> = {
   run_finished: "runs.storyFinished",
   model_fallback: "runs.storyFellBack",
   work_item_claimed: "runs.storyWorkItemClaimed",
+  work_item_linked: "runs.storyWorkItemLinked",
 };
 
 const VERDICT_CHIP: Record<string, { text: string; className: string }> = {
@@ -246,6 +247,16 @@ export function detailOf(step: Step): Line {
       return {
         key: "runs.storyWorkItemClaimedDetail",
         values: { ref: typeof payload.ref === "string" ? payload.ref : "" },
+      };
+
+    case "work_item_linked":
+      // A pull request recorded as another name of the claimed card (#204).
+      return {
+        key: "runs.storyWorkItemLinkedDetail",
+        values: {
+          alias: typeof payload.alias === "string" ? payload.alias : "",
+          root: typeof payload.root === "string" ? payload.root : "",
+        },
       };
 
     case "parked": {
