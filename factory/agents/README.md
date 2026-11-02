@@ -9,11 +9,15 @@ like any other change:
 | Role | Reference | Its card |
 |---|---|---|
 | Triage | [`triage.agent.md`](triage.agent.md) | the issue, in Triagem |
+| Architect | [`architect.agent.md`](architect.agent.md) | the issue, in Triagem, labelled `factory:needs-design` |
 | Reviewer | [`reviewer.agent.md`](reviewer.agent.md) | the pull request labelled `factory:needs-review` |
 | QA | [`qa.agent.md`](qa.agent.md) | the pull request labelled `factory:needs-qa` |
 | Developer | [`developer.agent.md`](developer.agent.md) | the pull request labelled `factory:changes-requested`, first; otherwise the issue of the oldest *Doing* card with no linked pull request |
 
-Triage works the board's cards. The Reviewer and QA work pull requests, so
+Triage works the board's cards, and leaves the ones labelled
+`factory:needs-design` to the Architect, which takes only those; both choose
+from the Triagem listing asked for the Labels field, and both lines are sealed
+in `internal/spec/factory_references_test.go`. The Reviewer and QA work pull requests, so
 their claim reference is the pull request's own number
 (`github:fuseone-io/fuseone-agents#<PR number>`): it is in the listing they
 choose from, while the issue a pull request closes is only known after reading
@@ -51,6 +55,45 @@ runtime behind one MCP tool. The intended runtime is FuseOne Forja
 separate repository, phase 0 proposed), with `forja.implement` as a write tool
 under the Gate. Until it exists, a person takes a `factory:needs-runtime`
 card.
+
+### The Architect's boundary
+
+The Architect plans and never builds: no branch, no commit, no file change,
+no pull request, and no plan that hands factory/, `CLAUDE.md` or
+`web/CLAUDE.md` to a role. It verifies every claim it writes down in the code,
+with read tools only (file contents, code search, commits), and treats code
+and commit messages as untrusted as issue text: the repository is public, and
+a comment in a file can carry an instruction as easily as an issue can.
+
+It writes the plan and the acceptance criteria as **a comment on the issue,
+not by editing its body**. The body is what the requester asked and stays
+theirs; a comment is signed by the role's App and dated, so the plan can be
+reviewed, answered and replaced by a later comment without losing the
+earlier one, and the latest plan the Architect wrote is the one in force.
+Triage writes comments the same way, and the Developer reads the issue and
+its comments. Issues #16 and #27 show the shape a plan takes in this
+repository; the reference points to them as examples, not as text to copy.
+
+A large item is split into sub-issues, each created under the parent in one
+write: `issue_write`, method `create`, with `parent_issue_number`. The hosted
+server's `issues` set also has `sub_issue_write`, which the Architect does
+not declare: it takes an issue's ID rather than its number, so attaching an
+issue after creating it is a second write that can fail on its own, and its
+`remove` and `replace_parent` methods detach issues from other parents.
+Sub-issues are not added to the board; a person pulls each one in with the
+work.
+
+The card leaves in one of three ways, each sealed as an exact line:
+
+- to **Preparado**, once the plan is written, removing
+  `factory:needs-design` first (LANES.md § Triagem → `factory:needs-design`);
+- to **Travado**, with the plan so far and each open decision as a question
+  addressed to whoever decides, keeping the label so the card comes back to
+  the Architect when a person answers and moves it back to Triagem;
+- to **Travado**, when a sub-issue, the label or the move cannot be
+  written, or when the issue already carries a plan the Architect wrote with
+  no person's comment after it (an earlier run stopped half way). A card left
+  in Triagem with its label would be the Architect's oldest card on every run.
 
 ## How a role is created in v1
 
@@ -208,8 +251,9 @@ per role, in the installation's administration:
   (below);
 - every tool classified by the Curator before the role can call it (NT-013 §
   Guardrails, layer 3). Reading issue, PR and comment text is a read marked
-  untrusted; comments, labels, reviews and card moves are writes, and so are
-  the Developer's branches, file commits and pull requests.
+  untrusted; comments, labels, reviews, card moves and new sub-issues are
+  writes, and so are the Developer's branches, file commits and pull
+  requests.
 
 **Choosing the toolsets.** The roles use the hosted server
 (`https://api.githubcopilot.com/mcp/`), not the local one, so
@@ -232,7 +276,19 @@ credential:
 The Reviewer and QA need more than `pull_requests,repos`: a label on a pull
 request is set with `issue_write` and a comment with `add_issue_comment`, both
 in `issues`; and any role may move a card to Travado (LANES.md), which takes
-the `projects` tools. The Developer needs the same four for different tools:
+the `projects` tools. The Architect needs `issues` for comments, the label and sub-issues,
+`projects` for the board, and `repos` for its reads (`get_file_contents`,
+`search_code`, `list_commits`, `get_commit`). The `repos` set also offers
+writes — `create_branch`, `create_or_update_file`, `push_files`,
+`delete_file`, `fork_repository`, `create_repository` among them — and no
+header narrows it on the same server: `X-MCP-Readonly` drops every write,
+`issue_write` and `projects_write` included, so it cannot be combined with
+the Architect's issue writes; `X-MCP-Tools` adds tools to the toolsets
+rather than narrowing them; and `X-MCP-Exclude-Tools` is not a header the
+registration accepts beside a GitHub App (below). So the Architect's
+reference declares none of those writes, the pack keeps it to what it
+declares, and its App holds Contents: **read**, so GitHub refuses each of them
+anyway. The Developer needs the same four for different tools:
 `repos` for `create_branch`, `create_or_update_file`, `push_files` and the
 reads around them, `pull_requests` for `create_pull_request`, `issues` for
 comments and labels, and `projects` to list *Doing* and move a card to
@@ -244,9 +300,16 @@ the toolset only offers it. Each role's App needs:
 | Role | Repository permissions | Organization permissions |
 |---|---|---|
 | Triage | Issues: write, Pull requests: read, Metadata: read | Projects: write |
+| Architect | Contents: read, Issues: write, Metadata: read | Projects: write |
 | Reviewer | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | Developer | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
+
+The Architect's App has Contents: **read** and no Pull requests permission,
+so the minimal ruleset on `main` below is not its prerequisite: that ruleset
+exists because the Developer's Contents: write reaches `main`, and the
+Architect's App cannot write a file or a branch anywhere, so GitHub refuses
+every contents write it could be steered into.
 
 The Developer's App has **no Workflows permission**, so GitHub refuses any
 write it makes under `.github/workflows`; a change there is not Level 1.
@@ -332,6 +395,15 @@ keeps it in check. Classified destructive, it would be blocked outright, and
 the publish check would refuse every role that reads issue text and moves
 cards. A narrower
 card-moving tool is deferred with the rest of the factory's own server.
+
+**The Architect's tools.** Every read it declares is untrusted:
+`projects_list`, `projects_get`, `issue_read`, `search_issues`,
+`get_file_contents`, `search_code`, `list_commits`, `get_commit`. Its writes
+are `add_issue_comment` (the plan, the questions), `issue_write` (the label
+removed, and sub-issues created under the parent) and `projects_write` (the
+card to Preparado or Travado, and the Size field). None is destructive. It
+does not declare `sub_issue_write`, `update_issue_comment`, or any `repos` or
+`pull_requests` write.
 
 **The Developer's tools.** Every read it declares is untrusted:
 `search_pull_requests`, `projects_list`, `projects_get`, `issue_read`,
