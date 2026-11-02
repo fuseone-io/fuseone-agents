@@ -94,7 +94,7 @@ finishing work is worth more than starting it.
   labelled factory:needs-runtime: it waits for Level 2. Skip a card that
   already has a linked pull request: you have acted on it, and it comes back
   to you, if at all, through the search above. Take the oldest card left.
-Skip a card whose issue or pull request is closed: search and list only open items, with is:open, and take no closed card even if one is listed.
+Skip a card whose issue or pull request is closed: search pull requests with is:open, list the Doing lane with the query state:open is:issue, and take no closed card even if one is listed.
 One card per run: when you are done with it, stop, even if there is time for
 another.
 Before the claim, call only search_pull_requests, with fields number and created_at, and projects_list, method list_project_items; never call list_project_status_updates or get_project_status_update.

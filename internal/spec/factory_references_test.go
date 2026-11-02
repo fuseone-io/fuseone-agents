@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -332,13 +333,47 @@ func TestFactoryReferences_eachRole_namesTheActionThatUnblocksItsTravadoCardsOnc
 
 // skipClosedLines is each role's defence against a closed issue or pull
 // request coming back to it, whatever lane its card ended up in. It governs
-// the choice, so it comes before the claim.
+// the choice, so it comes before the claim. Two query dialects meet here:
+// search_pull_requests takes GitHub search syntax, where is:open is the
+// state; the board's list_project_items takes the Projects item filter,
+// where is: is the type and the state is state:open (github-mcp-server,
+// pkg/github/toolset_instructions.go, "list_project_items query rules").
 var skipClosedLines = map[string]string{
-	"triage":    "Skip a card whose issue is closed: list only open items, with the query is:open, and take no closed card even if one is listed.",
-	"architect": "Skip a card whose issue is closed: list only open items, with the query is:open, and take no closed card even if one is listed.",
-	"developer": "Skip a card whose issue or pull request is closed: search and list only open items, with is:open, and take no closed card even if one is listed.",
+	"triage":    "Skip a card whose issue is closed: list only open issues, with the query state:open is:issue, and take no closed card even if one is listed.",
+	"architect": "Skip a card whose issue is closed: list only open issues, with the query state:open is:issue, and take no closed card even if one is listed.",
+	"developer": "Skip a card whose issue or pull request is closed: search pull requests with is:open, list the Doing lane with the query state:open is:issue, and take no closed card even if one is listed.",
 	"reviewer":  "Skip a pull request that is closed: search only with is:open, and take no closed pull request even if one is listed.",
 	"qa":        "Skip a pull request that is closed: search only with is:open, and take no closed pull request even if one is listed.",
+}
+
+// clauseSeparator splits instructions into the clauses a query belongs to.
+var clauseSeparator = regexp.MustCompile(`[.,;]\s`)
+
+// In the Projects item filter is:open is not a state, so a board listing
+// asked for it may return nothing or keep closed items. is:open belongs only
+// to a search: every clause that names it must be a search's, and none may
+// name the board listing.
+func TestFactoryReferences_isOpen_appearsOnlyInSearchesNeverInABoardListing(t *testing.T) {
+	t.Parallel()
+
+	for role, data := range factoryReferences(t) {
+		s, err := spec.Parse(role, data)
+		if err != nil {
+			t.Fatalf("parse %s: %v", role, err)
+		}
+		text := strings.Join(strings.Fields(s.Instructions), " ")
+		for _, clause := range clauseSeparator.Split(text, -1) {
+			if !strings.Contains(clause, "is:open") {
+				continue
+			}
+			lower := strings.ToLower(clause)
+			boardListing := strings.Contains(lower, "projects_list") || strings.Contains(lower, "lane") ||
+				strings.Contains(lower, "project item") || strings.Contains(lower, "list only")
+			if !strings.Contains(lower, "search") || boardListing {
+				t.Errorf("%s: %q uses is:open outside a pull request search; a board listing takes state:open is:issue", role, clause)
+			}
+		}
+	}
 }
 
 func TestFactoryReferences_eachRole_skipsClosedCardsBeforeItsClaim(t *testing.T) {
