@@ -205,14 +205,16 @@ func (r *Runner) answerLink(ctx context.Context, state State, call Call, answer 
 // back from the content store as the call returns, so the tool_returned step
 // can carry it as the proof a link is later judged by.
 //
-// Stamped only when the answer may prove anything: a live, successful,
-// trusted result from a server whose registration the catalogue established
-// as the hosted GitHub server reached as an App. An untrusted result, a
-// server nobody could vouch for, or an answer that cannot be read stamps
-// nothing, and a link of it then needs a person.
+// Stamped only when the answer may prove anything: a live, successful result
+// from a server whose registration the catalogue established as the hosted
+// GitHub server reached as an App, from which the strict parser reads one
+// pull request. The content's own label is not consulted and not changed: an
+// untrusted answer is stamped and still taints the run. A server nobody could
+// vouch for, or an answer that cannot be read, stamps nothing, and a link of
+// it then needs a person.
 func (r *Runner) pullRequestOf(ctx context.Context, tool domain.ToolID, result ToolResult) *domain.PullRequestStamp {
 	if !tool.CreatesPullRequest() || result.Failed || result.Cached || result.ResultRef == "" || r.deps.Content == nil ||
-		result.Labels.HasAny(domain.LabelUntrusted) || result.Provenance != domain.ProvenanceHostedGitHubApp {
+		result.Provenance != domain.ProvenanceHostedGitHubApp {
 		return nil
 	}
 	body, err := r.deps.Content.Get(ctx, result.ResultRef)

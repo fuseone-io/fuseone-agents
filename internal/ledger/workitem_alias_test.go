@@ -254,12 +254,13 @@ func TestWorkItemLink_proofThatDoesNotVerify_refused(t *testing.T) {
 			})
 			return linked(linkAlias, card, proof)
 		},
-		// The two halves of who answered (#239 review): a result labelled
-		// untrusted, and a stamp with no provenance, each prove nothing — so a
-		// forged stamp cannot pass at append either.
-		"an untrusted result": func(t *testing.T, s Store) domain.WorkItemLinkedPayload {
+		// A stamp with no provenance proves nothing (#239 review), so a forged
+		// stamp cannot pass at append either.
+		// Untrusted content carries no stamp of its own: one with no
+		// provenance is no trusted proof, whatever the content's label.
+		"an untrusted result with no provenance": func(t *testing.T, s Store) domain.WorkItemLinkedPayload {
 			proof := returnLabelled(t, s, "run-a", "developer", domain.ToolReturnedPayload{
-				Tool: "github-developer.create_pull_request", PullRequest: hosted(linkAlias),
+				Tool: "github-developer.create_pull_request", PullRequest: &domain.PullRequestStamp{Ref: linkAlias},
 			}, domain.NewLabels(domain.LabelUntrusted))
 			return linked(linkAlias, card, proof)
 		},
@@ -296,6 +297,21 @@ func TestWorkItemLink_proofThatDoesNotVerify_refused(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The trusted proof is the stamp, not the content (review round 2): a
+// create_pull_request whose answer is labelled untrusted — the default the
+// factory keeps — still proves the link its stamp names.
+func TestWorkItemLink_anUntrustedResultWithAHostedStamp_proves(t *testing.T) {
+	run(t, "an untrusted answer's stamp proves", func(t *testing.T, s Store) {
+		openClaimed(t, s, "run-a", "developer", card)
+		proof := returnLabelled(t, s, "run-a", "developer", domain.ToolReturnedPayload{
+			Tool: "github-developer.create_pull_request", PullRequest: hosted(linkAlias),
+		}, domain.NewLabels(domain.LabelUntrusted))
+		if err := linkWith(t, s, "run-a", "developer", linked(linkAlias, card, proof)); err != nil {
+			t.Fatalf("link proved by an untrusted answer's hosted stamp = %v, want it sealed", err)
+		}
+	})
 }
 
 // A proof cannot be a step that comes after the link: the shape refuses it.

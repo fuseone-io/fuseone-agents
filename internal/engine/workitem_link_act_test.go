@@ -155,14 +155,13 @@ func TestAdvance_failedOrOtherReturns_nameNoPullRequest(t *testing.T) {
 	}
 }
 
-// An answer that may not prove anything is not stamped, and the link of the
-// pull request it named parks for a person (#239 review): a result labelled
-// untrusted, or a server the catalogue established no provenance for.
+// An answer from a server the catalogue established no provenance for is not
+// stamped, and the link of the pull request it named parks for a person.
 func TestAdvance_linkAfterAnAnswerThatCannotProve_isNotStampedAndParks(t *testing.T) {
 	t.Parallel()
 	for name, set := range map[string]func(*countingTools){
-		"untrusted result": func(c *countingTools) { c.labels = domain.NewLabels(domain.LabelUntrusted) },
 		"no provenance":    func(c *countingTools) { c.provenance = "" },
+		"other provenance": func(c *countingTools) { c.provenance = "github_local" },
 	} {
 		h, start := linkHarness(t, claimProposal(linkRootCard), createPRProposal(), linkProposal(linkPR))
 		set(h.tools)
@@ -355,17 +354,49 @@ func TestEnvelope_declaredLink_isReachableAtEveryStep(t *testing.T) {
 	}
 }
 
-// A stamp is judged where it is folded, not only where it is written: one on
-// a step sealed untrusted — written by anything but this release's engine —
-// proves no link to the Gate.
-func TestFold_untrustedStampOrNoProvenance_provesNoLink(t *testing.T) {
+// The two trusts, as the run folds them (review round 2). An untrusted answer
+// with the hosted stamp is stamped, proves its link, and still taints the run:
+// the stamp is the trusted proof, the content keeps its label.
+func TestAdvance_untrustedHostedAnswer_isStampedProvesAndStillTaints(t *testing.T) {
+	t.Parallel()
+	h, start := linkHarness(t, claimProposal(linkRootCard), createPRProposal(), linkProposal(linkPR))
+	h.tools.labels = domain.NewLabels(domain.LabelUntrusted)
+	openPullRequest(t, h, start)
+	requestsBefore := len(h.stepsOf(t, "run-1", domain.StepApprovalRequested))
+
+	advance(t, h, start, 1)
+
+	returned := h.stepsOf(t, "run-1", domain.StepToolReturned)[1]
+	if !returned.Labels.HasAny(domain.LabelUntrusted) {
+		t.Fatalf("create_pull_request's return lost its taint: %v", returned.Labels)
+	}
+	if p := returnedPayloads(t, h)[1]; !p.PullRequest.TrustedProof() {
+		t.Fatalf("an untrusted hosted answer was not stamped: %+v", p.PullRequest)
+	}
+	if got := len(h.stepsOf(t, "run-1", domain.StepApprovalRequested)); got != requestsBefore || len(linkedPayloads(t, h)) != 1 {
+		t.Fatalf("the proven link did not pass unasked: %v", h.kinds(t))
+	}
+	all, err := h.ledger.Read(context.Background(), "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	state, err := Fold(all)
+	if err != nil || !state.Labels.HasAny(domain.LabelUntrusted) {
+		t.Fatalf("the run's folded taint = %v (%v); it must stay untrusted", state.Labels, err)
+	}
+}
+
+// A stamp is judged where it is folded, not only where it is written: one with
+// no hosted provenance proves no link to the Gate, whatever its labels.
+func TestFold_stampWithNoProvenance_provesNoLink(t *testing.T) {
 	t.Parallel()
 	for name, c := range map[string]struct {
 		labels domain.Labels
 		via    domain.ToolProvenance
 	}{
-		"an untrusted step": {domain.NewLabels(domain.LabelUntrusted), domain.ProvenanceHostedGitHubApp},
-		"no provenance":     {domain.Labels{}, ""},
+		"no provenance, untrusted": {domain.NewLabels(domain.LabelUntrusted), ""},
+		"no provenance":            {domain.Labels{}, ""},
+		"another provenance":       {domain.Labels{}, "github_local"},
 	} {
 		steps := []domain.Step{
 			{RunID: "run-1", Seq: 1, Kind: domain.StepRunStarted, Payload: mustJSON(domain.RunStartedPayload{Trigger: "cron"})},

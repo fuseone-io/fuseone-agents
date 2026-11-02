@@ -157,6 +157,9 @@ type journey struct {
 	store   Store
 	content engine.ContentStore
 	scope   domain.Scope
+	// stage is copilot when unset; pack adds tools beside the work-item ones.
+	stage domain.Stage
+	pack  []domain.ToolID
 }
 
 // journeyRunner is the worker's own deps — the Gate, the store, the content
@@ -177,13 +180,23 @@ func journeyRunner(t *testing.T, store Store, github *fakeGitHub, scope domain.S
 	return journey{runner: engine.NewRunner(deps), store: store, content: content, scope: scope}
 }
 
-func (j journey) open(t *testing.T, id domain.RunID, agent domain.AgentID) engine.Start {
+// open starts a run with labels, or — given none — tainted by an untrusted
+// read, the shape a factory run has.
+func (j journey) open(t *testing.T, id domain.RunID, agent domain.AgentID, labels ...domain.Labels) engine.Start {
 	t.Helper()
+	stage := j.stage
+	if stage == "" {
+		stage = domain.StageCopilot
+	}
+	opened := domain.ScopeLabels(j.scope).Union(domain.NewLabels(domain.LabelUntrusted))
+	if len(labels) > 0 {
+		opened = labels[0]
+	}
 	start := engine.Start{
 		RunID: id, Scope: j.scope, AgentID: agent, VersionID: "v1",
-		Pack:   gate.NewPack(domain.ToolWorkItemClaim, domain.ToolWorkItemLink, createPullRequest),
+		Pack:   gate.NewPack(append([]domain.ToolID{domain.ToolWorkItemClaim, domain.ToolWorkItemLink, createPullRequest}, j.pack...)...),
 		Budget: domain.Budget{Micros: 1_000_000, ToolCalls: 20, Steps: 50},
-		Stage:  domain.StageCopilot,
+		Stage:  stage,
 	}
 	input, err := j.content.Put(context.Background(), id, domain.FirstSeq, []byte("pick a card"))
 	if err != nil {
@@ -191,7 +204,7 @@ func (j journey) open(t *testing.T, id domain.RunID, agent domain.AgentID) engin
 	}
 	if _, err := j.store.Append(context.Background(), domain.Step{
 		RunID: id, Kind: domain.StepRunStarted, Scope: j.scope, AgentID: agent, VersionID: "v1",
-		Labels:  domain.ScopeLabels(j.scope).Union(domain.NewLabels(domain.LabelUntrusted)),
+		Labels:  opened,
 		Payload: mustJSONBytes(t, domain.RunStartedPayload{Trigger: "cron", InputRef: input}),
 	}); err != nil {
 		t.Fatalf("open %s: %v", id, err)

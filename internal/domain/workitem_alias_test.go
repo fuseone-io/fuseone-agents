@@ -94,20 +94,28 @@ func returnedPR() domain.ToolReturnedPayload {
 func TestJudgePullRequestProof_theRunsOwnSuccessfulCreate_proves(t *testing.T) {
 	t.Parallel()
 
-	if err := domain.JudgePullRequestProof(returnedPR(), domain.Labels{}, linkAlias); err != nil {
-		t.Fatalf("JudgePullRequestProof = %v, want the proof accepted", err)
+	if err := domain.JudgeTrustedPullRequestProof(returnedPR(), linkAlias); err != nil {
+		t.Fatalf("JudgeTrustedPullRequestProof = %v, want the proof accepted", err)
 	}
 }
 
-// An answer labelled untrusted proves nothing, whatever it names and however
-// it was stamped: a server classified untrusted can name a pull request it
-// never opened.
-func TestJudgePullRequestProof_anUntrustedResult_unproven(t *testing.T) {
+// The stamp is the trusted proof, and the provenance alone makes it one.
+func TestPullRequestStamp_trustedProof_isTheHostedProvenanceAlone(t *testing.T) {
 	t.Parallel()
 
-	untrusted := domain.NewLabels(domain.LabelUntrusted)
-	if err := domain.JudgePullRequestProof(returnedPR(), untrusted, linkAlias); !errors.Is(err, domain.ErrWorkItemLinkUnproven) {
-		t.Fatalf("JudgePullRequestProof(untrusted) = %v, want ErrWorkItemLinkUnproven", err)
+	var none *domain.PullRequestStamp
+	for name, c := range map[string]struct {
+		stamp *domain.PullRequestStamp
+		want  bool
+	}{
+		"hosted":        {&domain.PullRequestStamp{Ref: linkAlias, Via: domain.ProvenanceHostedGitHubApp}, true},
+		"no provenance": {&domain.PullRequestStamp{Ref: linkAlias}, false},
+		"other":         {&domain.PullRequestStamp{Ref: linkAlias, Via: "github_local"}, false},
+		"no stamp":      {none, false},
+	} {
+		if got := c.stamp.TrustedProof(); got != c.want {
+			t.Errorf("%s: TrustedProof = %v, want %v", name, got, c.want)
+		}
 	}
 }
 
@@ -128,8 +136,8 @@ func TestJudgePullRequestProof_anyPartMissing_unproven(t *testing.T) {
 	for name, mutate := range cases {
 		p := returnedPR()
 		mutate(&p)
-		if err := domain.JudgePullRequestProof(p, domain.Labels{}, linkAlias); !errors.Is(err, domain.ErrWorkItemLinkUnproven) {
-			t.Errorf("%s: JudgePullRequestProof = %v, want ErrWorkItemLinkUnproven", name, err)
+		if err := domain.JudgeTrustedPullRequestProof(p, linkAlias); !errors.Is(err, domain.ErrWorkItemLinkUnproven) {
+			t.Errorf("%s: JudgeTrustedPullRequestProof = %v, want ErrWorkItemLinkUnproven", name, err)
 		}
 	}
 }

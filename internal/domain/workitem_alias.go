@@ -107,12 +107,21 @@ func pullRequestRef(raw json.RawMessage) (WorkItemRef, bool) {
 	return ParseWorkItemRef("github:" + m[1] + "/" + m[2] + "#" + m[3])
 }
 
-// JudgePullRequestProof holds a returned call — its payload and the labels its
-// step was sealed with — to being the proof of a link to alias:
-// create_pull_request, answered by the server for this run rather than from a
-// cache, not failed, not labelled untrusted, stamped by the engine with the
-// hosted GitHub provenance, and naming exactly that pull request.
-func JudgePullRequestProof(returned ToolReturnedPayload, labels Labels, alias WorkItemRef) error {
+/*
+JudgeTrustedPullRequestProof holds a returned call to being the trusted proof of
+a link to alias: create_pull_request, answered by the server for this run
+rather than from a cache, not failed, and carrying the engine's stamp — the
+pull request the strict parser read from the answer, under the hosted GitHub
+provenance — naming exactly that pull request.
+
+Two trusts, and this is only the second. The answer's content keeps whatever
+label the Curator gave it — untrusted, by default and by the factory's own
+instruction — and that label goes on tainting the run, so every later write
+still waits for a person. It is not consulted here: what is judged is the
+stamp, whose trust comes from the provenance the catalogue established and the
+parser that read one address out of the answer, never from the content.
+*/
+func JudgeTrustedPullRequestProof(returned ToolReturnedPayload, alias WorkItemRef) error {
 	stamp := returned.PullRequest
 	switch {
 	case !returned.Tool.CreatesPullRequest():
@@ -121,9 +130,7 @@ func JudgePullRequestProof(returned ToolReturnedPayload, labels Labels, alias Wo
 		return fmt.Errorf("%w: the create_pull_request it names failed", ErrWorkItemLinkUnproven)
 	case returned.Cached:
 		return fmt.Errorf("%w: the create_pull_request it names was answered from a cache", ErrWorkItemLinkUnproven)
-	case labels.HasAny(LabelUntrusted):
-		return fmt.Errorf("%w: the create_pull_request it names returned an untrusted result", ErrWorkItemLinkUnproven)
-	case stamp == nil || stamp.Via != ProvenanceHostedGitHubApp:
+	case !stamp.TrustedProof():
 		return fmt.Errorf("%w: the create_pull_request it names was not answered by the hosted GitHub server as an App",
 			ErrWorkItemLinkUnproven)
 	case stamp.Ref != alias:
