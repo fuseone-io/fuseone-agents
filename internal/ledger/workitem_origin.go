@@ -120,10 +120,11 @@ func placeOnTrail(
 }
 
 // originOfRun is the inheritance a run's opening step carries, as the
-// memory store reads it from the steps rather than a projection. Simulations
-// inherit nothing durable.
+// memory store reads it from the steps rather than a projection. The trail
+// turns simulations away before it asks (trailRunOf), as Postgres never
+// projects one.
 func originOfRun(steps []domain.Step) *domain.RunWorkItem {
-	if len(steps) == 0 || simulatedRun(steps) {
+	if len(steps) == 0 {
 		return nil
 	}
 	item, _, err := inheritedWorkItem(steps[0], true)
