@@ -246,12 +246,13 @@ chart:
 ## release: tag a version, which is what publishes it.
 ## Nothing is released by merging: the tag is the act, and CI builds the image
 ## and chart that carry its version, then creates the GitHub Release from the
-## changelog. Refuses a dirty tree, an unreleased changelog and a tag that
-## already exists — each of the three has shipped somebody a version that does
-## not match what they can read.
+## changelog. Refuses a dirty tree, a HEAD that is not origin/main, an
+## unreleased changelog and a tag that already exists — each has shipped, or
+## would ship, somebody a version that does not match what they can read.
+## Run it on main at the merged commit of the changelog pull request.
 release:
 	@test -n "$(V)" || { echo "usage: make release V=0.2.0"; exit 1; }
-	@git diff --quiet || { echo "the tree is dirty; a tag must name a commit somebody can check out"; exit 1; }
+	@./scripts/release-guard.sh
 	@git rev-parse "v$(V)" >/dev/null 2>&1 && { echo "v$(V) already exists"; exit 1; } || true
 	@grep -q "^## \[$(V)\]" CHANGELOG.md || { \
 		echo "CHANGELOG.md has no '## [$(V)]' section."; \

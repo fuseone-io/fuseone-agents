@@ -211,10 +211,22 @@ Installing, operating and proving it to an auditor:
 
 ## Releases
 
-A release is a `v`-prefixed tag. `make release V=x.y.z` refuses a dirty tree,
-runs the full local gate, creates the tag, and lets CI publish the versioned
-image, `latest`, the OCI Helm chart, and a GitHub Release whose notes come from
-the matching `CHANGELOG.md` section.
+A release is a `v`-prefixed tag. `make release V=x.y.z` refuses a dirty tree
+(staged, unstaged or untracked) and any HEAD that is not `origin/main`, runs
+the full local gate, creates the tag, and lets CI publish the versioned image,
+`latest`, the OCI Helm chart, and a GitHub Release whose notes come from the
+matching `CHANGELOG.md` section.
+
+`main` only takes pull requests, so a release goes:
+
+1. a release branch off `main`;
+2. one commit, `docs(changelog): cut X.Y.Z`, renaming `[Unreleased]`;
+3. a pull request, and CI green on it;
+4. merge;
+5. on `main`, at the merged commit, `make release V=X.Y.Z`.
+
+Tagging on the release branch would name a commit a squash merge never puts on
+`main`, which is why step 5 refuses to run anywhere else.
 
 ## Running it locally
 
