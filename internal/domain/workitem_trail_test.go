@@ -24,32 +24,36 @@ func trailRun(id domain.RunID, agent domain.AgentID, claimedMin int) domain.Work
 	}
 }
 
-func TestWorkItemRoles_foldsRunsOfOneAgentIntoOneRow(t *testing.T) {
+func share(agent domain.AgentID, runs, claimedMin int, micros int64, readable bool) domain.WorkItemRoleShare {
+	return domain.WorkItemRoleShare{
+		AgentID: agent, Scope: domain.Scope{Company: "acme", Area: "factory"}, Runs: runs,
+		FirstClaimedAt: trailT0.Add(time.Duration(claimedMin) * time.Minute),
+		CostMicros:     micros, CostReadable: readable,
+	}
+}
+
+// One role's shares — its runs in each scope it ran in — fold into one row.
+func TestWorkItemRoles_foldsTheSharesOfOneAgentIntoOneRow(t *testing.T) {
 	t.Parallel()
 
 	ended := trailT0.Add(3 * time.Hour)
-	facts := []domain.WorkItemRunFacts{
-		{Run: trailRun("run-b", "developer", 30), CostMicros: 700, CostReadable: true,
-			Approvals: domain.WorkItemApprovals{Requested: 2, Approved: 1, Refused: 1}},
-		{Run: trailRun("run-a", "triage", 0), CostMicros: 100, CostReadable: true,
-			Approvals: domain.WorkItemApprovals{Requested: 1, Approved: 1}},
-		{Run: func() domain.WorkItemRun {
-			r := trailRun("run-c", "developer", 10)
-			r.EndedAt = ended
-			return r
-		}(), CostMicros: 300, CostReadable: true,
-			Approvals: domain.WorkItemApprovals{Abandoned: 1}},
-	}
+	devFactory := share("developer", 1, 30, 700, true)
+	devFactory.Approvals = domain.WorkItemApprovals{Requested: 2, Approved: 1, Refused: 1}
+	triage := share("triage", 1, 0, 100, true)
+	triage.Approvals = domain.WorkItemApprovals{Requested: 1, Approved: 1}
+	devCX := share("developer", 2, 10, 300, true)
+	devCX.Scope.Area, devCX.LastEndedAt = "cx", ended
+	devCX.Approvals = domain.WorkItemApprovals{Abandoned: 1}
 
-	roles := domain.WorkItemRoles(facts)
+	roles := domain.WorkItemRoles([]domain.WorkItemRoleShare{devFactory, triage, devCX})
 
 	if len(roles) != 2 || roles[0].AgentID != "triage" || roles[1].AgentID != "developer" {
 		t.Fatalf("roles = %+v; want triage then developer, in the order each first claimed", roles)
 	}
 	dev := roles[1]
 	want := domain.WorkItemApprovals{Requested: 2, Approved: 1, Refused: 1, Abandoned: 1}
-	if dev.Runs != 2 || dev.Approvals != want {
-		t.Errorf("developer = %d runs, %+v; want 2 runs, %+v", dev.Runs, dev.Approvals, want)
+	if dev.Runs != 3 || dev.Approvals != want {
+		t.Errorf("developer = %d runs, %+v; want 3 runs, %+v", dev.Runs, dev.Approvals, want)
 	}
 	if !dev.FirstClaimedAt.Equal(trailT0.Add(10*time.Minute)) || !dev.LastEndedAt.Equal(ended) {
 		t.Errorf("developer first claimed %v, last ended %v", dev.FirstClaimedAt, dev.LastEndedAt)
@@ -61,13 +65,13 @@ func TestWorkItemRoles_foldsRunsOfOneAgentIntoOneRow(t *testing.T) {
 
 // A role's cost is the whole of its runs or nothing: a sum that left out the
 // runs the caller may not cost would be a wrong number, not a smaller one.
-func TestWorkItemRoles_aRunWhoseCostIsNotReadable_omitsTheRolesCostNotZeroes(t *testing.T) {
+func TestWorkItemRoles_aShareWhoseCostIsNotReadable_omitsTheRolesCostNotZeroes(t *testing.T) {
 	t.Parallel()
 
-	roles := domain.WorkItemRoles([]domain.WorkItemRunFacts{
-		{Run: trailRun("run-a", "triage", 0), CostMicros: 100, CostReadable: true},
-		{Run: trailRun("run-b", "triage", 1), CostMicros: 200, CostReadable: false},
-		{Run: trailRun("run-c", "developer", 2), CostMicros: 0, CostReadable: false},
+	roles := domain.WorkItemRoles([]domain.WorkItemRoleShare{
+		share("triage", 1, 0, 100, true),
+		share("triage", 1, 1, 200, false),
+		share("developer", 1, 2, 0, false),
 	})
 
 	for _, role := range roles {
@@ -80,7 +84,7 @@ func TestWorkItemRoles_aRunWhoseCostIsNotReadable_omitsTheRolesCostNotZeroes(t *
 func TestWorkItemRoles_noRunHasEnded_leavesLastEndedZero(t *testing.T) {
 	t.Parallel()
 
-	roles := domain.WorkItemRoles([]domain.WorkItemRunFacts{{Run: trailRun("run-a", "triage", 0)}})
+	roles := domain.WorkItemRoles([]domain.WorkItemRoleShare{share("triage", 1, 0, 0, false)})
 	if len(roles) != 1 || !roles[0].LastEndedAt.IsZero() {
 		t.Fatalf("roles = %+v; want one row with no end", roles)
 	}

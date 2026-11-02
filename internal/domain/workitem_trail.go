@@ -60,14 +60,20 @@ func (a WorkItemApprovals) plus(b WorkItemApprovals) WorkItemApprovals {
 	}
 }
 
-// WorkItemRunFacts is what a store reads about one visible run so the roles
-// can be folded from it. CostReadable is whether the caller may read this
-// run's cost; the store decides it from the caller's cost scopes.
-type WorkItemRunFacts struct {
-	Run          WorkItemRun
-	CostMicros   int64
-	CostReadable bool
-	Approvals    WorkItemApprovals
+// WorkItemRoleShare is part of one role's runs on a trail, all in one scope:
+// the unit a store aggregates, so the summary over a card with thousands of
+// runs is a handful of rows rather than the runs themselves. CostReadable is
+// whether the caller may read this scope's cost; the store decides it from
+// the caller's cost scopes.
+type WorkItemRoleShare struct {
+	AgentID        AgentID
+	Scope          Scope
+	Runs           int
+	Approvals      WorkItemApprovals
+	FirstClaimedAt time.Time
+	LastEndedAt    time.Time
+	CostMicros     int64
+	CostReadable   bool
 }
 
 // WorkItemRole is one agent's share of the trail. CostMicros is nil when the
@@ -92,32 +98,32 @@ type WorkItemTrail struct {
 	Next *WorkItemCursor
 }
 
-// WorkItemRoles folds the facts of a card's visible runs into one row per
+// WorkItemRoles folds the shares of a card's visible runs into one row per
 // agent, in the order each agent first claimed it.
 //
 // A role's cost is all of its runs or absent. Summing only the runs whose
 // cost the caller may read would print a smaller number that looks complete.
-func WorkItemRoles(facts []WorkItemRunFacts) []WorkItemRole {
+func WorkItemRoles(shares []WorkItemRoleShare) []WorkItemRole {
 	byAgent := map[AgentID]*WorkItemRole{}
 	costly := map[AgentID]bool{}
 	var order []AgentID
-	for _, f := range facts {
-		role, ok := byAgent[f.Run.AgentID]
+	for _, s := range shares {
+		role, ok := byAgent[s.AgentID]
 		if !ok {
-			role = &WorkItemRole{AgentID: f.Run.AgentID, FirstClaimedAt: f.Run.ClaimedAt, CostMicros: new(int64)}
-			byAgent[f.Run.AgentID], costly[f.Run.AgentID] = role, true
-			order = append(order, f.Run.AgentID)
+			role = &WorkItemRole{AgentID: s.AgentID, FirstClaimedAt: s.FirstClaimedAt, CostMicros: new(int64)}
+			byAgent[s.AgentID], costly[s.AgentID] = role, true
+			order = append(order, s.AgentID)
 		}
-		role.Runs++
-		role.Approvals = role.Approvals.plus(f.Approvals)
-		if f.Run.ClaimedAt.Before(role.FirstClaimedAt) {
-			role.FirstClaimedAt = f.Run.ClaimedAt
+		role.Runs += s.Runs
+		role.Approvals = role.Approvals.plus(s.Approvals)
+		if s.FirstClaimedAt.Before(role.FirstClaimedAt) {
+			role.FirstClaimedAt = s.FirstClaimedAt
 		}
-		if f.Run.EndedAt.After(role.LastEndedAt) {
-			role.LastEndedAt = f.Run.EndedAt
+		if s.LastEndedAt.After(role.LastEndedAt) {
+			role.LastEndedAt = s.LastEndedAt
 		}
-		costly[f.Run.AgentID] = costly[f.Run.AgentID] && f.CostReadable
-		*role.CostMicros += f.CostMicros
+		costly[s.AgentID] = costly[s.AgentID] && s.CostReadable
+		*role.CostMicros += s.CostMicros
 	}
 	out := make([]WorkItemRole, 0, len(order))
 	for _, agent := range order {

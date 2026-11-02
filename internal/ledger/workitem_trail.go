@@ -1,51 +1,49 @@
 package ledger
 
 import (
-	"slices"
-
 	"github.com/fuseone/agents/internal/domain"
 )
 
 /*
 A card's trail, as both stores assemble it (#204, slice 1).
 
-Each store reads the facts of the card's runs the caller may read — already
-narrowed by the caller's own filter, simulations excluded — and hands them
-here in the trail's order. What happens next is the same for both, so it is
-written once: whether each run's cost is readable, the roles (first page
-only, over every visible run of the card), and the page with its cursor.
+Each store reads, already narrowed by the caller's own filter and stripped
+of simulations, at most one page of the card's runs plus one past it, in the
+trail's order, and — on the first page only — the role shares: the card's
+runs aggregated per agent and scope. What happens next is the same for both,
+so it is written once: whether each share's cost is readable, the roles, and
+the page with its cursor.
+
+Nothing about a page grows with the card's history but the shares, and
+those grow with its agents and areas, not its runs.
 
 The cursor the store was given is a position, applied after the caller's
 filter. Nothing in it reaches the filter.
 */
-
-// trailFrom assembles one page from the visible runs of a card, sorted in
-// the trail's order. On the first page facts are every visible run of the
-// card; on a later one they are the runs past the cursor, at most one more
-// than a page so the store knows whether another follows.
 func trailFrom(
-	ref domain.WorkItemRef, facts []domain.WorkItemRunFacts, cost *domain.RunFilter, page domain.WorkItemPage,
+	ref domain.WorkItemRef, runs []domain.WorkItemRun, shares []domain.WorkItemRoleShare,
+	cost *domain.RunFilter, page domain.WorkItemPage,
 ) domain.WorkItemTrail {
 	out := domain.WorkItemTrail{Ref: ref, Runs: []domain.WorkItemRun{}}
-	for i := range facts {
-		facts[i].CostReadable = costAdmits(cost, facts[i].Run.Scope)
-	}
 	if page.After == nil {
-		out.Roles = domain.WorkItemRoles(facts)
+		for i := range shares {
+			shares[i].CostReadable = costAdmits(cost, shares[i].Scope)
+		}
+		out.Roles = domain.WorkItemRoles(shares)
 	}
 	size := page.Size()
-	for i, f := range facts {
+	for i, r := range runs {
 		if i == size {
-			out.Next = domain.WorkItemCursorAt(facts[size-1].Run)
+			out.Next = domain.WorkItemCursorAt(runs[size-1])
 			break
 		}
-		out.Runs = append(out.Runs, f.Run)
+		out.Runs = append(out.Runs, r)
 	}
 	return out
 }
 
-// costAdmits reports whether the caller's cost:read filter reaches a run's
-// scope. No filter is no cost:read anywhere, and admits nothing.
+// costAdmits reports whether the caller's cost:read filter reaches a scope.
+// No filter is no cost:read anywhere, and admits nothing.
 func costAdmits(cost *domain.RunFilter, scope domain.Scope) bool {
 	switch {
 	case cost == nil:
@@ -58,11 +56,4 @@ func costAdmits(cost *domain.RunFilter, scope domain.Scope) bool {
 		return false
 	}
 	return true
-}
-
-// sortTrail puts facts in the trail's order.
-func sortTrail(facts []domain.WorkItemRunFacts) {
-	slices.SortFunc(facts, func(a, b domain.WorkItemRunFacts) int {
-		return domain.CompareWorkItemRuns(a.Run, b.Run)
-	})
 }

@@ -3,13 +3,15 @@ package ledger
 import (
 	"context"
 	"encoding/json"
+	"slices"
 
 	"github.com/fuseone/agents/internal/domain"
 )
 
 // WorkItemTrail holds the Postgres contract over the steps themselves: the
 // runs whose first claim names the card, narrowed by the same filter every
-// other read applies, never a simulation, in the trail's order.
+// other read applies, never a simulation, in the trail's order — a page of
+// them plus one, and on the first page a share per run for the roles.
 func (m *Memory) WorkItemTrail(
 	ctx context.Context, filter domain.RunFilter, cost *domain.RunFilter,
 	ref domain.WorkItemRef, page domain.WorkItemPage,
@@ -20,42 +22,48 @@ func (m *Memory) WorkItemTrail(
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var facts []domain.WorkItemRunFacts
+	var runs []domain.WorkItemRun
+	var shares []domain.WorkItemRoleShare
 	for _, steps := range m.runs {
-		f, ok := trailFactsOf(steps, filter, ref)
-		if !ok || !page.After.Precedes(f.Run) {
+		run, share, ok := trailRunOf(steps, filter, ref)
+		if !ok {
 			continue
 		}
-		facts = append(facts, f)
+		shares = append(shares, share)
+		if page.After.Precedes(run) {
+			runs = append(runs, run)
+		}
 	}
-	sortTrail(facts)
-	if page.After != nil && len(facts) > page.Size()+1 {
-		facts = facts[:page.Size()+1]
+	slices.SortFunc(runs, domain.CompareWorkItemRuns)
+	if len(runs) > page.Size()+1 {
+		runs = runs[:page.Size()+1]
 	}
-	return trailFrom(ref, facts, cost, page), nil
+	return trailFrom(ref, runs, shares, cost, page), nil
 }
 
-// trailFactsOf is one run's facts when it is on the card's trail and the
-// filter reads it.
-func trailFactsOf(steps []domain.Step, filter domain.RunFilter, ref domain.WorkItemRef) (domain.WorkItemRunFacts, bool) {
+// trailRunOf is one run and its role share when it is on the card's trail
+// and the filter reads it.
+func trailRunOf(
+	steps []domain.Step, filter domain.RunFilter, ref domain.WorkItemRef,
+) (domain.WorkItemRun, domain.WorkItemRoleShare, bool) {
 	claimed, ok := claimStepOf(steps)
 	if !ok || simulatedRun(steps) || !matches(steps[0], filter) {
-		return domain.WorkItemRunFacts{}, false
+		return domain.WorkItemRun{}, domain.WorkItemRoleShare{}, false
 	}
 	if held, err := claimedRef(claimed); err != nil || held != ref {
-		return domain.WorkItemRunFacts{}, false
+		return domain.WorkItemRun{}, domain.WorkItemRoleShare{}, false
 	}
 	// Who and where are the run's own, as the filter just judged them; the
 	// claim gives the card and the moment, nothing else.
 	summary := summarise(steps)
-	return domain.WorkItemRunFacts{
-		Run: domain.WorkItemRun{
-			RunID: summary.RunID, AgentID: summary.AgentID, Scope: summary.Scope,
-			Phase: summary.Phase, StartedAt: summary.StartedAt, EndedAt: summary.EndedAt,
-			ClaimedAt: claimed.At, Link: domain.WorkItemLinkClaim,
-		},
-		CostMicros: summary.Cost.Micros,
-		Approvals:  approvalsOf(steps),
+	run := domain.WorkItemRun{
+		RunID: summary.RunID, AgentID: summary.AgentID, Scope: summary.Scope,
+		Phase: summary.Phase, StartedAt: summary.StartedAt, EndedAt: summary.EndedAt,
+		ClaimedAt: claimed.At, Link: domain.WorkItemLinkClaim,
+	}
+	return run, domain.WorkItemRoleShare{
+		AgentID: run.AgentID, Scope: run.Scope, Runs: 1, Approvals: approvalsOf(steps),
+		FirstClaimedAt: run.ClaimedAt, LastEndedAt: run.EndedAt, CostMicros: summary.Cost.Micros,
 	}, true
 }
 

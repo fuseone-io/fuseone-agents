@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -112,19 +113,25 @@ func TestWorkItemTrail_plan_runsByTheRefIndexAndStepsPrunedToTheirMonths(t *test
 	at := &domain.WorkItemCursor{ClaimedAt: first, RunID: "run-card-0"}
 	requireRefIndex(t, pool, "a later page", filter, at, domain.DefaultWorkItemPage+1)
 
-	trail, err := s.WorkItemTrail(context.Background(), filter, nil, card, domain.WorkItemPage{})
-	if err != nil || len(trail.Runs) != 3 {
-		t.Fatalf("trail = %d runs, %v; want the card's 3", len(trail.Runs), err)
+	// The bounds the store reads before the summary: the card's first and
+	// last opening moment.
+	sql, args := ledger.WorkItemRolesSQL(filter, card, first, second.Add(time.Hour))
+	plan := explainJSON(t, pool, sql, args...)
+	var read []string
+	for _, r := range scannedRelations(plan) {
+		if strings.HasPrefix(r, "run_steps") {
+			read = append(read, r)
+		}
 	}
-	ids, opened := make([]string, 0, 3), make([]time.Time, 0, 3)
-	for _, r := range trail.Runs {
-		ids, opened = append(ids, string(r.RunID)), append(opened, r.StartedAt)
+	refIndex := false
+	for _, n := range planNodes(plan, nil) {
+		refIndex = refIndex || n.Index == "run_work_items_ref_idx"
 	}
-	read := scannedRelations(explainJSON(t, pool, ledger.WorkItemApprovalsSQL, ids, opened))
 	want := []string{partitionOf(first), partitionOf(second)}
-	t.Logf("the approvals statement reads %v", read)
-	if !slices.Equal(read, want) {
-		t.Errorf("the approvals statement reads %v; want only the card's months %v", read, want)
+	t.Logf("the role summary reads %v, ref index %v", read, refIndex)
+	if !slices.Equal(read, want) || !refIndex {
+		t.Errorf("the role summary reads %v (ref index %v); want only the card's months %v, by the ref index",
+			read, refIndex, want)
 	}
 }
 
@@ -189,34 +196,59 @@ func TestWorkItemTrail_aSimulatedRunWithAProjectedClaim_staysOffTheTrail(t *test
 	}
 }
 
-// queryCounter counts the statements a pool is asked to run.
+// queryCounter counts the statements a pool is asked to run, and the widest
+// list any of them was handed as an argument.
 type queryCounter struct {
-	mu    sync.Mutex
-	asked []string
+	mu     sync.Mutex
+	asked  []string
+	widest int
+	// most is the most rows any one statement returned.
+	most int64
 }
 
 func (q *queryCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, d pgx.TraceQueryStartData) context.Context {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.asked = append(q.asked, strings.Join(strings.Fields(d.SQL), " "))
+	for _, arg := range d.Args {
+		if v := reflect.ValueOf(arg); v.Kind() == reflect.Slice && v.Type().Elem().Kind() != reflect.Uint8 {
+			q.widest = max(q.widest, v.Len())
+		}
+	}
 	return ctx
 }
 
-func (q *queryCounter) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
+func (q *queryCounter) TraceQueryEnd(_ context.Context, _ *pgx.Conn, d pgx.TraceQueryEndData) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.most = max(q.most, d.CommandTag.RowsAffected())
+}
 
 func (q *queryCounter) take() []string {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	out := q.asked
-	q.asked = nil
+	q.asked, q.widest, q.most = nil, 0, 0
 	return out
+}
+
+func (q *queryCounter) widestList() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.widest
+}
+
+func (q *queryCounter) mostRows() int64 {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.most
 }
 
 // countedLedger is the Postgres ledger over a pool that reports every
 // statement it runs.
-func countedLedger(t *testing.T) (*ledger.Postgres, *queryCounter) {
+func countedLedger(t *testing.T) (*ledger.Postgres, *pgxpool.Pool, *queryCounter) {
 	t.Helper()
-	feedPool(t) // migrated and emptied
+	_, plain := feedPool(t) // migrated and emptied
 	cfg, err := pgxpool.ParseConfig(testdb.DSN(t))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -228,13 +260,14 @@ func countedLedger(t *testing.T) (*ledger.Postgres, *queryCounter) {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(pool.Close)
-	return ledger.NewPostgres(pool), counter
+	return ledger.NewPostgres(pool), plain, counter
 }
 
-// Ten runs, each with approvals: the first page is two statements and a
-// later one is one. A read per run would be eleven.
+// Ten runs, each with approvals: the first page is three statements (the
+// page, the card's bounds, the role summary) and a later one is one. A read
+// per run would be twelve.
 func TestWorkItemTrail_statementsPerPage_doNotGrowWithTheRuns(t *testing.T) {
-	s, counter := countedLedger(t)
+	s, _, counter := countedLedger(t)
 	for i := range 10 {
 		id := domain.RunID(fmt.Sprintf("run-%02d", i))
 		agent := domain.AgentID(fmt.Sprintf("role-%02d", i))
@@ -247,8 +280,8 @@ func TestWorkItemTrail_statementsPerPage_doNotGrowWithTheRuns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first page: %v", err)
 	}
-	if asked := counter.take(); len(asked) != 2 {
-		t.Errorf("the first page ran %d statements, want 2 (runs, then approvals): %q", len(asked), asked)
+	if asked := counter.take(); len(asked) != 3 {
+		t.Errorf("the first page ran %d statements, want 3 (page, bounds, roles): %q", len(asked), asked)
 	}
 	if _, err := s.WorkItemTrail(context.Background(), domain.RunFilter{}, nil, card,
 		domain.WorkItemPage{Limit: 4, After: first.Next}); err != nil {

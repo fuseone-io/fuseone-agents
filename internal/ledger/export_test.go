@@ -38,11 +38,13 @@ func MigrateBodies(ctx context.Context, pool *pgxpool.Pool, files []TestMigratio
 // MigrationDigest is the digest the runner records for a body.
 func MigrationDigest(body string) string { return digestBytes([]byte(body)) }
 
-// WorkItemRunsSQL and WorkItemApprovalsSQL are the trail's two statements,
-// for the plan test that holds them to the ref index and partition pruning.
-var WorkItemRunsSQL = workItemRunsSQL
-
-const WorkItemApprovalsSQL = workItemApprovalsSQL
+// WorkItemRunsSQL and WorkItemRolesSQL are the trail's page and its role
+// summary, for the plan tests that hold them to the ref index, an aggregate
+// and partition pruning.
+var (
+	WorkItemRunsSQL  = workItemRunsSQL
+	WorkItemRolesSQL = workItemRolesSQL
+)
 
 // PlantWorkItemClaim records that a run claimed ref under an agent and scope
 // that need not be the run's own, bypassing the append's judgement — the
