@@ -1,3 +1,4 @@
+import { formatDurationMs } from "@/lib/format";
 import type { RuntimeHealth } from "@/lib/api/client";
 
 export type RuntimeAttentionKind =
@@ -6,6 +7,7 @@ export type RuntimeAttentionKind =
   | "tool"
   | "channel"
   | "egress"
+  | "dispatch"
   | "queue";
 
 export interface RuntimeAttentionItem {
@@ -31,6 +33,7 @@ export function runtimeAttention(health: RuntimeHealth): RuntimeAttentionItem[] 
   collectTools(items, health);
   collectChannels(items, health);
   collectEgress(items, health);
+  collectDispatch(items, health);
   return items.sort(compareAttention);
 }
 
@@ -113,6 +116,20 @@ function collectEgress(items: RuntimeAttentionItem[], health: RuntimeHealth) {
       },
     });
   }
+}
+
+// Only a degraded dispatcher needs attention: a backlog a sweep is about to
+// clear is the dispatcher working, not a signal.
+function collectDispatch(items: RuntimeAttentionItem[], health: RuntimeHealth) {
+  const dispatch = health.eventDispatch;
+  if (!dispatch || dispatch.status !== "degraded") return;
+  items.push({
+    id: "dispatch:event_dispatch_degraded",
+    kind: "dispatch",
+    code: "event_dispatch_degraded",
+    count: dispatch.ready + dispatch.heldByXmin,
+    values: { lag: formatDurationMs(dispatch.lagSeconds * 1000) },
+  });
 }
 
 function queueItem(code: string, count: number): RuntimeAttentionItem {

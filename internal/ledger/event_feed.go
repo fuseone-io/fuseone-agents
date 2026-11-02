@@ -26,14 +26,8 @@ dispatch, never skips it.
 func (p *Postgres) FinishedSince(
 	ctx context.Context, after domain.FinishCursor, limit int,
 ) ([]domain.FinishedRun, error) {
-	rows, err := p.pool.Query(ctx, `select`+runColumns+`, finished_xid::text
-		from runs
-		where finished_xid is not null
-		  and (finished_xid, run_id) > ($1::xid8, $2)
-		  and finished_xid < pg_snapshot_xmin(pg_current_snapshot())
-		  and phase = 'finished' and `+realRuns+`
-		order by finished_xid, run_id
-		limit $3`, strconv.FormatUint(after.Xid, 10), string(after.Run), limitOrDefault(limit))
+	rows, err := p.pool.Query(ctx, finishedSinceSQL,
+		strconv.FormatUint(after.Xid, 10), string(after.Run), limitOrDefault(limit))
 	if err != nil {
 		return nil, fmt.Errorf("read finished runs: %w", err)
 	}
@@ -54,6 +48,17 @@ func (p *Postgres) FinishedSince(
 	}
 	return out, rows.Err()
 }
+
+// finishedSinceSQL is one page of the feed: real finished runs after the
+// cursor ($1, $2), below xmin, in the feed's order, at most $3.
+const finishedSinceSQL = `select` + runColumns + `, finished_xid::text as feed_position
+		from runs
+		where finished_xid is not null
+		  and (finished_xid, run_id) > ($1::xid8, $2)
+		  and finished_xid < pg_snapshot_xmin(pg_current_snapshot())
+		  and phase = 'finished' and ` + realRuns + `
+		order by finished_xid, run_id
+		limit $3`
 
 // EventCursor is where the dispatcher has got to; the start when no replica
 // has moved it yet.

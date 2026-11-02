@@ -1,0 +1,34 @@
+-- fuseone:no-transaction
+--
+-- The event feed's index holds only what the feed can ever offer (#228).
+--
+-- 0092 indexed every run with a finished_xid. Simulations get one too — the
+-- trigger stamps whoever reaches 'finished' — but the feed never offers them,
+-- so the cursor never moves past them. Behind fifty thousand simulations the
+-- next real run was fifty thousand index entries away, and every feed page
+-- and every backlog reading walked all of them, filtering after the walk, for
+-- as long as the simulations stayed there: for ever.
+--
+-- The predicate is the feed's own, word for word — finished_xid is not null,
+-- phase = 'finished', not simulated — so the planner can prove both the
+-- feed page (FinishedSince) and the backlog reading are covered by it, and
+-- the limit counts real finished runs and nothing else.
+--
+-- Built concurrently, outside a transaction (the marker on the first line):
+-- this runs while the previous release keeps appending runs, and a plain
+-- create index would hold every write to runs for the length of a scan of
+-- the whole table. Concurrently, writes carry on. The runner records the file
+-- only after the statement succeeds. Before running it, the runner drops an
+-- INVALID index of this name that a failed build left behind, which "if not
+-- exists" would otherwise accept as built. A crash after the build and before
+-- the record runs the file again harmlessly.
+--
+-- The 0092 index stays. It goes in a later migration, once nothing can roll
+-- back to 0.86 — whose feed ordered by the text form of the position, so it
+-- could use neither index for its order and would not miss either.
+--
+-- Numbered 0094 because #231 takes 0093. The runner applies whatever is
+-- unapplied in filename order, so either may reach an installation first.
+
+create index concurrently if not exists runs_feed_idx on runs (finished_xid, run_id)
+    where finished_xid is not null and phase = 'finished' and not simulated;

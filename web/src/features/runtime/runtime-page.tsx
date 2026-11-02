@@ -20,6 +20,7 @@ import { PHASE_LABELS } from "@/features/runs/phase-badge";
 import { useRuntimeHealth } from "@/features/runtime/api";
 import { ChannelFailuresPanel } from "@/features/runtime/channel-failures-panel";
 import { EgressDenialsPanel } from "@/features/runtime/egress-denials-panel";
+import { EventDispatchPanel } from "@/features/runtime/event-dispatch-panel";
 import { failureLabel } from "@/features/runtime/failure-labels";
 import { RuntimeAttentionPanel } from "@/features/runtime/runtime-attention-panel";
 import { ToolFailuresPanel } from "@/features/runtime/tool-failures-panel";
@@ -68,6 +69,7 @@ function RuntimeBody({ health }: { health: RuntimeHealth }) {
       <ToolFailuresPanel failures={health.toolFailures} />
       <ChannelFailuresPanel failures={health.channelFailures} />
       <EgressDenialsPanel denials={health.egressDenials} />
+      {health.eventDispatch && <EventDispatchPanel dispatch={health.eventDispatch} />}
       <PhasePanel health={health} />
     </div>
   );

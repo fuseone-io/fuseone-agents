@@ -1,5 +1,6 @@
 export const FAILURE_LABELS: Record<string, string> = {
   dedupe_in_flight: "runtime.failureDedupeInFlight",
+  event_dispatch_degraded: "runtime.attentionEventDispatchDegraded",
   model_provider_overloaded: "runtime.failureModelProviderOverloaded",
   model_rate_limited: "runtime.failureModelRateLimited",
   model_auth_failed: "runtime.failureModelAuthFailed",

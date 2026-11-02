@@ -81,6 +81,10 @@ type RuntimeHealth struct {
 	ToolFailures    []RuntimeToolFailureBucket
 	ChannelFailures []RuntimeChannelFailureBucket
 	EgressDenials   []RuntimeEgressDenialBucket
+	// EventDispatch is what the event dispatcher has not reached. Nil when
+	// the caller cannot read the installation-wide view: the cursor is one
+	// for the installation, and its backlog counts every scope's runs.
+	EventDispatch *EventDispatchBacklog
 }
 
 type RuntimeQueue struct {

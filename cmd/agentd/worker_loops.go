@@ -126,7 +126,7 @@ func (p *workerParts) startLoops(
 		// reaches the run the first one opened.
 		go dispatchEvents(ctx, trigger.NewDispatcher(
 			p.registry, p.store, p.opener(), engine.SystemClock{}, slog.Default(),
-		))
+		), trigger.NewBacklogWatch(p.store, metrics, engine.SystemClock{}))
 	}
 }
 

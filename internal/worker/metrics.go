@@ -29,6 +29,7 @@ type MetricsRegistry struct {
 	stdioEgressDenials     map[string]uint64
 	memoryFinds            map[memoryFindMetric]memoryFindCounters
 	sqlRuntime             map[sqlRuntimeMetric]uint64
+	eventDispatch          eventDispatchGauges
 }
 
 func NewMetricsRegistry() *MetricsRegistry {
@@ -77,6 +78,7 @@ func (r *MetricsRegistry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	renderStdioEgressMetrics(w, snap)
 	renderMemoryMetrics(w, snap)
 	renderSQLRuntimeMetrics(w, snap)
+	renderEventDispatchMetrics(w, r.eventDispatch.snapshot())
 }
 
 func renderWorkerMetrics(w http.ResponseWriter, snap []poolSnapshot) {

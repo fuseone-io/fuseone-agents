@@ -1,0 +1,517 @@
+package ledger_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/fuseone/agents/internal/ledger"
+)
+
+/*
+A migration may opt out of the transaction the runner wraps around every
+other one (#228). The opt-in is a first line of exactly
+`-- fuseone:no-transaction`, and it exists for one kind of change: an index
+built with create index concurrently, which PostgreSQL refuses inside a
+transaction and which is the only way to index a large live table without
+holding its writes for the length of the build. Such a file runs one
+statement at a time, still under the migration lock, and is recorded only
+after every statement succeeded — so it must be idempotent, and the tests
+below hold the feed's index (0094) to that.
+*/
+
+const beforeFeedIndex = "0092_event_dispatch_cursor"
+
+func feedIndexValid(t *testing.T, pool *pgxpool.Pool) bool {
+	t.Helper()
+	var valid bool
+	err := pool.QueryRow(context.Background(), `select i.indisvalid from pg_index i
+		join pg_class c on c.oid = i.indexrelid where c.relname = 'runs_feed_idx'`).Scan(&valid)
+	if err != nil {
+		t.Fatalf("read runs_feed_idx: %v", err)
+	}
+	return valid
+}
+
+func recorded(t *testing.T, pool *pgxpool.Pool, version string) bool {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(context.Background(),
+		`select count(*) from schema_migrations where version = $1`, version).Scan(&n); err != nil {
+		t.Fatalf("read schema_migrations: %v", err)
+	}
+	return n == 1
+}
+
+func TestMigrate_aNoTransactionFile_runsEachStatementOnItsOwn_andAPlainOneInOne(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_probe")
+	plain := "create table probe (label text, xid text);\n" +
+		"insert into probe values ('plain', pg_current_xact_id()::text);\n" +
+		"insert into probe values ('plain', pg_current_xact_id()::text);\n"
+	// Two concurrent builds in one file: PostgreSQL refuses either inside a
+	// transaction block, implicit multi-statement ones included, so both
+	// succeed only if each statement runs on its own.
+	marked := "-- fuseone:no-transaction\n" +
+		"create index concurrently if not exists probe_label_idx on probe (label);\n" +
+		"create index concurrently if not exists probe_xid_idx on probe (xid);\n" +
+		"drop index concurrently if exists probe_never_idx;\n"
+	if err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{
+		{Version: "0001_plain", Body: plain}, {Version: "0002_marked", Body: marked},
+	}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	var plainXids, built int
+	if err := pool.QueryRow(t.Context(), `select
+		(select count(distinct xid) from probe),
+		(select count(*) from pg_index i join pg_class c on c.oid = i.indexrelid
+		  where c.relname in ('probe_label_idx', 'probe_xid_idx') and i.indisvalid)`).
+		Scan(&plainXids, &built); err != nil {
+		t.Fatalf("read probe: %v", err)
+	}
+	if plainXids != 1 || built != 2 {
+		t.Fatalf("plain file in %d transactions, %d concurrent builds valid; want 1 and 2", plainXids, built)
+	}
+	var digest string
+	if err := pool.QueryRow(t.Context(),
+		`select digest from schema_migrations where version = '0002_marked'`).Scan(&digest); err != nil ||
+		digest != ledger.MigrationDigest(marked) {
+		t.Fatalf("recorded digest %q, %v; want the digest of the whole file", digest, err)
+	}
+}
+
+/*
+A failed statement leaves no record, so the next start runs the file again;
+a record written first would mark as done a migration that never happened.
+*/
+func TestMigrate_aNoTransactionFileThatFails_isNotRecorded(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_fail")
+	marked := "-- fuseone:no-transaction\n" +
+		"create index concurrently if not exists missing_idx on no_such_table (id);\n"
+	err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{{Version: "0001_marked", Body: marked}})
+	if err == nil {
+		t.Fatal("a migration over a missing table succeeded")
+	}
+	if recorded(t, pool, "0001_marked") {
+		t.Fatal("the failed migration was recorded; it would never run again")
+	}
+}
+
+// stallBuild opens a write to runs and keeps it open: a concurrent index build
+// waits for every writer that started before it, so the build stays in flight
+// until the returned transaction ends.
+func stallBuild(t *testing.T, pool *pgxpool.Pool) pgx.Tx {
+	t.Helper()
+	tx, err := pool.Begin(t.Context())
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+	if _, err := tx.Exec(t.Context(), `insert into runs
+		(run_id, company_id, area_id, agent_id, version_id, phase, last_seq, started_at, updated_at)
+		values ('run-stall', 'acme', 'cx', 'triage', 'v3', 'running', 1, now(), now())`); err != nil {
+		t.Fatalf("open a writer: %v", err)
+	}
+	return tx
+}
+
+// migrateInBackground runs the full migration set on its own pool.
+func migrateInBackground(t *testing.T, dsn string) <-chan error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() {
+		own, err := pgxpool.New(context.Background(), dsn)
+		if err != nil {
+			done <- err
+			return
+		}
+		defer own.Close()
+		done <- ledger.Migrate(context.Background(), own)
+	}()
+	return done
+}
+
+// awaitBuild waits until some session holds the lock a concurrent build
+// takes on runs, and fails if any session holds or asks for the share lock a
+// plain build would.
+func awaitBuild(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		var concurrent, plain int
+		if err := pool.QueryRow(t.Context(), `select
+			count(*) filter (where mode = 'ShareUpdateExclusiveLock' and granted),
+			count(*) filter (where mode = 'ShareLock')
+			from pg_locks where relation = 'runs'::regclass`).Scan(&concurrent, &plain); err != nil {
+			t.Fatalf("read pg_locks: %v", err)
+		}
+		if plain > 0 {
+			t.Fatalf("a session holds or awaits ShareLock on runs: a plain build, which blocks every write")
+		}
+		if concurrent > 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("no concurrent build of runs_feed_idx started")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func upgradeDSN(t *testing.T, pool *pgxpool.Pool) string {
+	t.Helper()
+	return pool.Config().ConnString()
+}
+
+/*
+While the feed's index builds, a run can still be appended. The build is held
+open by an earlier writer; a plain create index would queue a share lock
+behind it, and every insert after would queue behind that.
+*/
+func TestMigrate_theFeedIndexBuild_doesNotBlockWritesToRuns(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_writes")
+	if err := ledger.MigrateThrough(t.Context(), pool, beforeFeedIndex); err != nil {
+		t.Fatalf("migrate through %s: %v", beforeFeedIndex, err)
+	}
+	stall := stallBuild(t, pool)
+	done := migrateInBackground(t, upgradeDSN(t, pool))
+	awaitBuild(t, pool)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	if _, err := pool.Exec(ctx, `insert into runs
+		(run_id, company_id, area_id, agent_id, version_id, phase, last_seq, started_at, updated_at)
+		values ('run-during-build', 'acme', 'cx', 'triage', 'v3', 'running', 1, now(), now())`); err != nil {
+		t.Fatalf("append a run while the index builds: %v", err)
+	}
+
+	if err := stall.Commit(t.Context()); err != nil {
+		t.Fatalf("end the writer: %v", err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if !feedIndexValid(t, pool) || !recorded(t, pool, "0094_runs_feed_idx") {
+		t.Fatal("runs_feed_idx is not built and recorded")
+	}
+}
+
+/*
+A second process starting while the build runs waits its turn and succeeds.
+Waiting inside pg_advisory_lock would hold a snapshot the concurrent build
+must outlive, and PostgreSQL resolves that cycle by killing one of them.
+*/
+func TestMigrate_aProcessWaitingOnTheFeedIndexBuild_doesNotDeadlock(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_wait")
+	if err := ledger.MigrateThrough(t.Context(), pool, beforeFeedIndex); err != nil {
+		t.Fatalf("migrate through %s: %v", beforeFeedIndex, err)
+	}
+	stall := stallBuild(t, pool)
+	first := migrateInBackground(t, upgradeDSN(t, pool))
+	awaitBuild(t, pool)
+	second := migrateInBackground(t, upgradeDSN(t, pool))
+	// Past deadlock_timeout (1s), so a cycle would have been found and broken.
+	time.Sleep(1500 * time.Millisecond)
+
+	if err := stall.Commit(t.Context()); err != nil {
+		t.Fatalf("end the writer: %v", err)
+	}
+	for i, done := range []<-chan error{first, second} {
+		if err := <-done; err != nil {
+			t.Errorf("process %d: %v", i+1, err)
+		}
+	}
+}
+
+// A crash after the build and before the record: the index is there, the
+// record is not. The next start runs the file again and must succeed.
+func TestMigrate_theFeedIndexAfterACrashBeforeItsRecord_runsAgainCleanly(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_crash")
+	if err := ledger.MigrateThrough(t.Context(), pool, beforeFeedIndex); err != nil {
+		t.Fatalf("migrate through %s: %v", beforeFeedIndex, err)
+	}
+	if _, err := pool.Exec(t.Context(), `create index runs_feed_idx on runs (finished_xid, run_id)
+		where finished_xid is not null and phase = 'finished' and not simulated`); err != nil {
+		t.Fatalf("leave the index behind: %v", err)
+	}
+	built := feedIndexOID(t, pool)
+
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate again: %v", err)
+	}
+	if !feedIndexValid(t, pool) || !recorded(t, pool, "0094_runs_feed_idx") {
+		t.Fatal("runs_feed_idx is not valid and recorded after the re-run")
+	}
+	// A valid index is left alone: dropping and rebuilding it would be a
+	// second full scan of runs for nothing.
+	if again := feedIndexOID(t, pool); again != built {
+		t.Fatalf("runs_feed_idx was rebuilt (oid %d, then %d); a valid index is kept", built, again)
+	}
+}
+
+func feedIndexOID(t *testing.T, pool *pgxpool.Pool) uint32 {
+	t.Helper()
+	var oid uint32
+	if err := pool.QueryRow(context.Background(),
+		`select 'runs_feed_idx'::regclass::oid`).Scan(&oid); err != nil {
+		t.Fatalf("read the runs_feed_idx oid: %v", err)
+	}
+	return oid
+}
+
+// A concurrent build that died leaves an INVALID index of the same name, which
+// create index if not exists would accept as done. It is dropped and rebuilt.
+func TestMigrate_anInvalidFeedIndexLeftByAFailedBuild_isRebuilt(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_invalid")
+	if err := ledger.MigrateThrough(t.Context(), pool, beforeFeedIndex); err != nil {
+		t.Fatalf("migrate through %s: %v", beforeFeedIndex, err)
+	}
+	for _, id := range []string{"run-a", "run-b"} {
+		if _, err := pool.Exec(t.Context(), `insert into runs
+			(run_id, company_id, area_id, agent_id, version_id, phase, last_seq, started_at, updated_at)
+			values ($1, 'acme', 'cx', 'triage', 'v3', 'running', 1, now(), now())`, id); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	// Two runs share a phase, so a unique concurrent build fails part-way and
+	// leaves its index INVALID under the name the migration uses.
+	if _, err := pool.Exec(t.Context(), `create unique index concurrently runs_feed_idx on runs (phase)`); err == nil {
+		t.Fatal("the failing build succeeded")
+	}
+	if feedIndexValid(t, pool) {
+		t.Fatal("the failed build left a valid index; the test stages nothing")
+	}
+
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if !feedIndexValid(t, pool) {
+		t.Fatal("runs_feed_idx is still INVALID: the leftover was taken as built")
+	}
+}
+
+/*
+The opt-in is for concurrent index builds and nothing else, and only in forms
+that are safe to run twice: create index concurrently if not exists <name> on
+…, and drop index concurrently if exists <name>, with a plain name — unquoted,
+unqualified — that the runner can check for an INVALID leftover. Anything
+else, and any dollar quote, is refused before any statement of the file runs:
+each case below puts an allowed build first and asserts it never happened.
+*/
+// allowedThen is a marked file whose first statement is allowed and whose
+// second is the one under test.
+func allowedThen(statement string) string {
+	return "-- fuseone:no-transaction\n" +
+		"create index concurrently if not exists probe_idx on probe (label);\n" + statement + "\n"
+}
+
+func TestMigrate_aNoTransactionFile_runsOnlyConcurrentIndexStatements(t *testing.T) {
+	plain := "create table probe (label text);\ninsert into probe values ('untouched');\n"
+	cases := map[string]string{
+		"a named dollar quote": "-- fuseone:no-transaction\n" +
+			"select $body$create index concurrently if not exists probe_idx on probe (label)$body$;\n",
+		"an update after an allowed statement": "-- fuseone:no-transaction\n" +
+			"create index concurrently if not exists probe_idx on probe (label);\n" +
+			"update probe set label = 'touched';\n",
+		"a select after an allowed statement": "-- fuseone:no-transaction\n" +
+			"create index concurrently if not exists probe_idx on probe (label);\n" +
+			"select 'update probe set label = ''touched''';\n",
+		"a quoted name":                  allowedThen(`create index concurrently if not exists "ProbeIdx" on probe (label);`),
+		"a create without if not exists": allowedThen("create index concurrently probe_label_idx on probe (label);"),
+		"a drop without if exists":       allowedThen("drop index concurrently probe_old_idx;"),
+		"a schema-qualified create": allowedThen(
+			"create index concurrently if not exists public.probe_label_idx on probe (label);"),
+		"a schema-qualified drop": allowedThen("drop index concurrently if exists public.probe_old_idx;"),
+		// Refused rather than handled: a unique build that fails leaves an
+		// INVALID index that still enforces uniqueness on writes, and nothing
+		// here needs one.
+		"a unique index": allowedThen("create unique index concurrently if not exists probe_label_idx on probe (label);"),
+		// The index's schema is its table's: a table that does not resolve
+		// leaves nowhere to look for an INVALID leftover.
+		"a table that does not resolve": allowedThen(
+			"create index concurrently if not exists probe_label_idx on no_such_table (label);"),
+	}
+	for name, marked := range cases {
+		t.Run(name, func(t *testing.T) {
+			pool := freshDatabase(t, "ledger/migrate_notx_fence")
+			err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{
+				{Version: "0001_plain", Body: plain}, {Version: "0002_marked", Body: marked},
+			})
+			if err == nil {
+				t.Fatal("the marked file ran")
+			}
+			var label string
+			var indexed bool
+			if err := pool.QueryRow(t.Context(), `select label, to_regclass('probe_idx') is not null from probe`).
+				Scan(&label, &indexed); err != nil {
+				t.Fatalf("read probe: %v", err)
+			}
+			if label != "untouched" || indexed || recorded(t, pool, "0002_marked") {
+				t.Fatalf("label %q, indexed %v: the refused file ran part of itself", label, indexed)
+			}
+		})
+	}
+}
+
+/*
+A select runs functions, and functions have effects: setval moves a sequence
+for good, whatever the runner decides about the select's output afterwards.
+So a marked file may hold no select at all, and is refused before anything in
+it runs — with no record and no effect left behind.
+*/
+func TestMigrate_aNoTransactionFileWithASelect_isRefusedWithNoEffect(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_select")
+	marked := "-- fuseone:no-transaction\n" + "select setval('probe_seq', 42)::text;\n"
+	err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{
+		{Version: "0001_plain", Body: "create sequence probe_seq;\n"},
+		{Version: "0002_marked", Body: marked},
+	})
+
+	var last int64
+	var called bool
+	if qerr := pool.QueryRow(t.Context(), `select last_value, is_called from probe_seq`).Scan(&last, &called); qerr != nil {
+		t.Fatalf("read probe_seq: %v", qerr)
+	}
+	if err == nil || recorded(t, pool, "0002_marked") || last != 1 || called {
+		t.Fatalf("err %v, recorded %v, sequence at %d (called %v); want refused, unrecorded, untouched",
+			err, recorded(t, pool, "0002_marked"), last, called)
+	}
+}
+
+// makeInvalidIndex leaves an INVALID index named as given on probe: a unique
+// concurrent build over duplicate labels fails part-way.
+func makeInvalidIndex(t *testing.T, pool *pgxpool.Pool, quoted string) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `create table probe (label text);
+		insert into probe values ('same'), ('same')`); err != nil {
+		t.Fatalf("seed probe: %v", err)
+	}
+	if _, err := pool.Exec(t.Context(),
+		`create unique index concurrently `+quoted+` on probe (label)`); err == nil {
+		t.Fatal("the failing build succeeded")
+	}
+}
+
+/*
+A quoted name is refused, so an INVALID index under a name the runner cannot
+check never ends up recorded as built: "if not exists" would have skipped the
+rebuild while the record said done.
+*/
+func TestMigrate_anInvalidIndexUnderAQuotedName_isNeverRecordedAsBuilt(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_quoted")
+	makeInvalidIndex(t, pool, `"ProbeIdx"`)
+	marked := "-- fuseone:no-transaction\n" +
+		`create index concurrently if not exists "ProbeIdx" on probe (label);` + "\n"
+
+	err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{{Version: "0001_marked", Body: marked}})
+	if err == nil || recorded(t, pool, "0001_marked") {
+		t.Fatalf("err %v, recorded %v; want the quoted name refused and nothing recorded",
+			err, recorded(t, pool, "0001_marked"))
+	}
+}
+
+/*
+Keywords and an unquoted name are matched as PostgreSQL reads them: Probe_Idx
+unquoted is probe_idx. The runner checks the name the statement will create,
+so a mixed-case spelling still finds and rebuilds the INVALID leftover.
+*/
+func TestMigrate_anInvalidLeftoverNamedInMixedCase_isRebuilt(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_case")
+	makeInvalidIndex(t, pool, "probe_idx")
+	if _, err := pool.Exec(t.Context(), `delete from probe where ctid = (select min(ctid) from probe)`); err != nil {
+		t.Fatalf("make the labels distinct: %v", err)
+	}
+	marked := "-- fuseone:no-transaction\n" +
+		"CREATE INDEX CONCURRENTLY IF NOT EXISTS Probe_Idx ON probe (label);\n"
+
+	if err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{{Version: "0001_marked", Body: marked}}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	var valid bool
+	if err := pool.QueryRow(t.Context(), `select indisvalid from pg_index
+		where indexrelid = 'probe_idx'::regclass`).Scan(&valid); err != nil || !valid {
+		t.Fatalf("probe_idx valid = %v, %v; want the leftover rebuilt", valid, err)
+	}
+}
+
+// invalidIndexIn leaves an INVALID probe_idx on schema.probe, then makes the
+// labels distinct so a rebuild can succeed.
+func invalidIndexIn(t *testing.T, pool *pgxpool.Pool, schema string) {
+	t.Helper()
+	for _, stmt := range []string{
+		// The database is reused across runs and only public is emptied.
+		`drop schema if exists ` + schema + ` cascade`,
+		`create schema ` + schema,
+		`create table ` + schema + `.probe (label text)`,
+		`insert into ` + schema + `.probe values ('same'), ('same')`,
+	} {
+		if _, err := pool.Exec(t.Context(), stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+	if _, err := pool.Exec(t.Context(),
+		`create unique index concurrently probe_idx on `+schema+`.probe (label)`); err == nil {
+		t.Fatal("the failing build succeeded")
+	}
+	if _, err := pool.Exec(t.Context(),
+		`delete from `+schema+`.probe where ctid = (select min(ctid) from `+schema+`.probe)`); err != nil {
+		t.Fatalf("make the labels distinct: %v", err)
+	}
+}
+
+// requireValidIn asserts schema.probe_idx exists and is valid.
+func requireValidIn(t *testing.T, pool *pgxpool.Pool, schema string) {
+	t.Helper()
+	var valid bool
+	if err := pool.QueryRow(t.Context(), `select indisvalid from pg_index
+		where indexrelid = to_regclass($1)`, schema+".probe_idx").Scan(&valid); err != nil || !valid {
+		t.Fatalf("%s.probe_idx valid = %v, %v; want the leftover rebuilt where the table lives", schema, valid, err)
+	}
+}
+
+/*
+An index lives in its table's schema, not in current_schema(). Over an
+INVALID other.probe_idx, a build on other.probe must find that leftover and
+rebuild it there — never be recorded with the index still invalid.
+*/
+func TestMigrate_anInvalidLeftoverOnAQualifiedTable_isRebuiltInItsSchema(t *testing.T) {
+	pool := freshDatabase(t, "ledger/migrate_notx_schema")
+	invalidIndexIn(t, pool, "other")
+	marked := "-- fuseone:no-transaction\n" +
+		"create index concurrently if not exists probe_idx on other.probe (label);\n"
+
+	if err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{{Version: "0001_marked", Body: marked}}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	requireValidIn(t, pool, "other")
+}
+
+/*
+An unqualified table resolves through search_path, possibly to a schema past
+the first. With search_path = lacks, other and probe only in other, the build
+lands in other, so the leftover is looked for — and rebuilt — there.
+*/
+func TestMigrate_anInvalidLeftoverOnATableFoundThroughSearchPath_isRebuiltInItsSchema(t *testing.T) {
+	admin := freshDatabase(t, "ledger/migrate_notx_search_path")
+	invalidIndexIn(t, admin, "other")
+	if _, err := admin.Exec(t.Context(), `drop schema if exists lacks cascade; create schema lacks`); err != nil {
+		t.Fatalf("create lacks: %v", err)
+	}
+	cfg := admin.Config().Copy()
+	cfg.ConnConfig.RuntimeParams["search_path"] = "lacks, other"
+	pool, err := pgxpool.NewWithConfig(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("connect with search_path: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	marked := "-- fuseone:no-transaction\n" +
+		"create index concurrently if not exists probe_idx on probe (label);\n"
+
+	if err := ledger.MigrateBodies(t.Context(), pool, []ledger.TestMigration{{Version: "0001_marked", Body: marked}}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	requireValidIn(t, admin, "other")
+}

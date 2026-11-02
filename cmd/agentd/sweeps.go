@@ -93,15 +93,21 @@ func watchBudgets(ctx context.Context, watcher *budget.Watcher) {
 // this; every pass is one indexed query when nothing emits.
 const eventSweep = 15 * time.Second
 
-func dispatchEvents(ctx context.Context, dispatcher *trigger.Dispatcher) {
+// dispatchEvents sweeps, and once a minute reads what the sweep could not
+// reach (#228): after the sweep, so the backlog it reports is what is left,
+// not what the sweep was about to clear.
+func dispatchEvents(ctx context.Context, dispatcher *trigger.Dispatcher, backlog *trigger.BacklogWatch) {
 	ticker := time.NewTicker(eventSweep)
 	defer ticker.Stop()
 
-	for {
+	for sweep := 0; ; sweep++ {
 		if opened, err := dispatcher.Sweep(ctx, trigger.Page); err != nil {
 			slog.Error("event dispatch failed", "err", err)
 		} else if opened > 0 {
 			slog.Info("events opened runs", "runs", opened)
+		}
+		if backlogDue(sweep) {
+			observeBacklog(ctx, backlog)
 		}
 
 		select {
@@ -186,3 +192,18 @@ func refreshRulings(ctx context.Context, catalog *tools.Catalog, curator *admin.
 		}
 	}
 }
+
+// backlogEvery is how many sweeps pass between two backlog readings: a
+// minute's worth. The reading is bounded, but every replica takes it, and a
+// gauge a minute old is still the answer to "is dispatch stuck".
+const backlogEvery = 4
+
+func observeBacklog(ctx context.Context, backlog *trigger.BacklogWatch) {
+	if err := backlog.Observe(ctx); err != nil && ctx.Err() == nil {
+		slog.Warn("could not read the event dispatch backlog", "err", err)
+	}
+}
+
+// backlogDue reports whether the backlog is read after this sweep: the first,
+// so a worker that just started says where dispatch stands, then once a minute.
+func backlogDue(sweep int) bool { return sweep%backlogEvery == 0 }

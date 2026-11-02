@@ -31,27 +31,23 @@ func feedIDs(runs []domain.FinishedRun) []domain.RunID {
 
 func TestFinishedSince_pagesFinishedRunsInFinishingOrderAfterTheCursor(t *testing.T) {
 	run(t, "finished runs in the order they finished", func(t *testing.T, s Store) {
-		ctx := context.Background()
+		var want []domain.FinishCursor
 		for _, id := range []domain.RunID{"run-c", "run-a", "run-b"} {
 			finishRunIn(t, s, id)
+			want = append(want, positionOf(t, s, id))
 		}
 		mustAppend(t, s, step("run-open", domain.StepRunStarted))
+		settle(t, s, want...)
 
-		first, err := s.FinishedSince(ctx, domain.FinishCursor{}, 2)
-		if err != nil {
-			t.Fatalf("FinishedSince: %v", err)
+		// The order they finished in; a run still going is never offered.
+		first, w := readFeed(t, s, domain.FinishCursor{}, 2)
+		requireFeedPrefix(t, first, w, want, 2)
+		if len(first) < 2 {
+			return
 		}
-		if got := feedIDs(first); len(got) != 2 || got[0] != "run-c" || got[1] != "run-a" {
-			t.Fatalf("first page = %v, want [run-c run-a]: the order they finished in", got)
-		}
-		second, err := s.FinishedSince(ctx, first[1].At, 2)
-		if err != nil {
-			t.Fatalf("FinishedSince: %v", err)
-		}
-		if got := feedIDs(second); len(got) != 1 || got[0] != "run-b" {
-			t.Fatalf("second page = %v, want [run-b]; a run still going is not offered", got)
-		}
-		if !first[1].At.Before(second[0].At) {
+		second, w := readFeed(t, s, first[1].At, 2)
+		requireFeedPrefix(t, second, w, want[2:], 2)
+		if len(second) == 1 && !first[1].At.Before(second[0].At) {
 			t.Fatalf("cursor %+v is not before %+v", first[1].At, second[0].At)
 		}
 	})
@@ -76,24 +72,21 @@ func TestAdvanceEventCursor_onlyMovesForward(t *testing.T) {
 		ctx := context.Background()
 		finishRunIn(t, s, "run-a")
 		finishRunIn(t, s, "run-b")
-		page, err := s.FinishedSince(ctx, domain.FinishCursor{}, 10)
-		if err != nil || len(page) != 2 {
-			t.Fatalf("FinishedSince = %v, %v", feedIDs(page), err)
-		}
+		a, b := positionOf(t, s, "run-a"), positionOf(t, s, "run-b")
 
-		if err := s.AdvanceEventCursor(ctx, page[1].At); err != nil {
+		if err := s.AdvanceEventCursor(ctx, b); err != nil {
 			t.Fatalf("advance: %v", err)
 		}
 		// A replica that finished an earlier page later must not move it back.
-		if err := s.AdvanceEventCursor(ctx, page[0].At); err != nil {
+		if err := s.AdvanceEventCursor(ctx, a); err != nil {
 			t.Fatalf("advance back: %v", err)
 		}
 		got, err := s.EventCursor(ctx)
 		if err != nil {
 			t.Fatalf("EventCursor: %v", err)
 		}
-		if got != page[1].At {
-			t.Fatalf("cursor = %+v, want the furthest %+v", got, page[1].At)
+		if got != b {
+			t.Fatalf("cursor = %+v, want the furthest %+v", got, b)
 		}
 	})
 }

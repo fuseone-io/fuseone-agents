@@ -80,8 +80,8 @@ func migrateSet(
 
 	// Waits rather than fails. The second process wanted the schema migrated,
 	// and by the time it wakes it is.
-	if _, err := conn.Exec(ctx, `select pg_advisory_lock($1)`, migrationLock); err != nil {
-		return fmt.Errorf("take the migration lock: %w", err)
+	if err := takeMigrationLock(ctx, conn); err != nil {
+		return err
 	}
 	defer func() {
 		// Released on a fresh context: a cancelled migration must still hand
@@ -106,21 +106,6 @@ func migrateSet(
 		return err
 	}
 	return applyPending(ctx, conn, migrations, applied)
-}
-
-// applyPending runs, in order, each migration not yet recorded.
-func applyPending(
-	ctx context.Context, conn migrator, migrations []embeddedMigration, applied map[string]appliedMigration,
-) error {
-	for _, migration := range migrations {
-		if _, done := applied[migration.version]; done {
-			continue
-		}
-		if err := applyOne(ctx, conn, migration.version, migration.body, migration.digest); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // bootstrapSchemaMigrations creates the table that records progress. It
@@ -152,26 +137,6 @@ type migrator interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	Begin(ctx context.Context) (pgx.Tx, error)
-}
-
-// applyOne runs a migration and records it in the same transaction, so a
-// crash mid-migration leaves neither half applied.
-func applyOne(ctx context.Context, conn migrator, version string, body []byte, digest string) error {
-	tx, err := conn.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin %s: %w", version, err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if _, err := tx.Exec(ctx, string(body)); err != nil {
-		return fmt.Errorf("apply %s: %w", version, err)
-	}
-	if _, err := tx.Exec(ctx,
-		`insert into schema_migrations (version, digest, digest_source)
-		 values ($1, $2, 'applied')`, version, digest); err != nil {
-		return fmt.Errorf("record %s: %w", version, err)
-	}
-	return tx.Commit(ctx)
 }
 
 func appliedVersions(ctx context.Context, conn migrator) (map[string]appliedMigration, error) {

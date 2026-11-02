@@ -62,6 +62,7 @@ export type RuntimeChannelFailureBucket =
   components["schemas"]["RuntimeChannelFailureBucket"];
 export type RuntimeEgressDenialBucket =
   components["schemas"]["RuntimeEgressDenialBucket"];
+export type RuntimeEventDispatch = components["schemas"]["RuntimeEventDispatch"];
 export type Cost = components["schemas"]["Cost"];
 export type Agent = components["schemas"]["Agent"];
 export type AgentTrust = components["schemas"]["AgentTrust"];

@@ -7672,9 +7672,12 @@ components:
       description: |
         Present when the published version takes part in a cycle of the static
         event graph: its events, through the agents listening to them, come
-        back to start it again. A warning, never a refusal — a review loop is
-        a cycle on purpose — and at run time the chain stops hopLimit hops
-        from the run that started it.
+        back to start it again. Also present, with no cycles and truncated
+        true, when the graph was too large to check in full for this version:
+        unchecked is not clear, so the absence of a cycle is never reported
+        from a search that stopped short. A warning, never a refusal — a
+        review loop is a cycle on purpose — and at run time the chain stops
+        hopLimit hops from the run that started it.
       required: [cycles, truncated, hopLimit]
       properties:
         cycles:
@@ -7907,6 +7910,65 @@ components:
             arguments are not included. This global signal is empty when the
             caller cannot read the installation-wide runtime view.
           items: { $ref: '#/components/schemas/RuntimeEgressDenialBucket' }
+        eventDispatch:
+          $ref: '#/components/schemas/RuntimeEventDispatch'
+
+    RuntimeEventDispatch:
+      type: object
+      description: |
+        What the event dispatcher has not reached yet. It reads finished runs
+        forward from one cursor for the installation, and only below the
+        oldest transaction still in flight, so a long transaction anywhere in
+        the database delays dispatch while it is open — it never skips a run.
+        Counts and ages only: no run, agent or transaction id. Absent when the
+        caller cannot read the installation-wide runtime view.
+      required: [status, ready, heldByXmin, readyCapped, heldCapped, countCap, lagSeconds, xactOpen, xactAgeKnown, degradedAfterSeconds]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+          x-enum-varnames: [EventDispatchOk, EventDispatchDegraded]
+          description: Degraded once the oldest waiting run has waited past degradedAfterSeconds, or whenever a count is capped (the lag is then read from a sample and is only a lower bound). Never failing.
+        ready:
+          type: integer
+          format: int64
+          description: Finished runs past the cursor the dispatcher can read on its next sweep.
+        heldByXmin:
+          type: integer
+          format: int64
+          description: Finished runs past the cursor that committed after the oldest open transaction began; they wait for it to end.
+        readyCapped:
+          type: boolean
+          description: The ready count stopped at countCap, so it is at least that. Counting stops there so reading the backlog cannot grow with it.
+        heldCapped:
+          type: boolean
+          description: The held count stopped at countCap, so it is at least that.
+        countCap:
+          type: integer
+          format: int64
+          description: Where ready and heldByXmin stop counting.
+        lagSeconds:
+          type: integer
+          format: int64
+          description: How long the earliest-finished run past the cursor has waited, by the clock that stamped its finish. Zero when caught up; a lower bound when a count is capped.
+        oldestFinishedAt:
+          type: string
+          format: date-time
+          description: When the oldest finished run past the cursor finished. Absent when caught up.
+        xactOpen:
+          type: boolean
+          description: A transaction holding an id is open somewhere in the database.
+        xactAgeKnown:
+          type: boolean
+          description: False when a transaction is open and the platform's database role may not see when it began (it lacks pg_read_all_stats).
+        xactAgeSeconds:
+          type: integer
+          format: int64
+          description: Age of the oldest open transaction holding an id. Absent when none is open or its age is unknown.
+        degradedAfterSeconds:
+          type: integer
+          format: int64
+          description: The lag past which status becomes degraded.
 
     RuntimeQueue:
       type: object
