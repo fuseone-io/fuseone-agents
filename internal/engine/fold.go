@@ -252,6 +252,9 @@ func (s *State) applyKind(step domain.Step) error {
 	case domain.StepModelFallback:
 		return s.applyFallback(step)
 
+	case domain.StepWorkItemLinked:
+		return s.applyWorkItemLink(step)
+
 	case domain.StepCompensationStarted, domain.StepCompensated, domain.StepWorkItemClaimed:
 		// Recorded for the trail; they carry no state transition of their own.
 		// A claim least of all: the ledger judges every attempt (#206).

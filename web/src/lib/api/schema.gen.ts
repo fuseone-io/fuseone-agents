@@ -2846,7 +2846,7 @@ export interface components {
          */
         ToolEffect: "unknown" | "read" | "write" | "destructive" | "financial";
         /** @enum {string} */
-        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "effect_reconciled" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensation_started" | "compensated" | "failed" | "parked" | "run_finished" | "model_fallback" | "work_item_claimed";
+        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "effect_reconciled" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensation_started" | "compensated" | "failed" | "parked" | "run_finished" | "model_fallback" | "work_item_claimed" | "work_item_linked";
         /**
          * @description Whether a grant given ahead of time may release a call of this agent
          *     (#192). Forbidden refuses a new grant for an agent whose current
@@ -5363,12 +5363,43 @@ export interface components {
              * @description Kind-specific detail. Bulky content is not inlined: payloads carry
              *     a reference into object storage plus a digest, because arguments
              *     and results routinely contain personal data.
+             *
+             *     A `work_item_linked` step carries a WorkItemLinkedPayload.
              */
             payload?: {
                 [key: string]: unknown;
             };
             /** @description Hex-encoded SHA-256 sealing this step to the previous one. */
             hash: string;
+        };
+        /**
+         * @description A pull request recorded as another name of the card a run claimed
+         *     (#204). Every field is required and none is free text.
+         */
+        WorkItemLinkedPayload: {
+            /**
+             * @description The pull request linked, as github:owner/repo#number in canonical
+             *     form. The one thing the run supplies.
+             */
+            alias: string;
+            /**
+             * @description The card the alias becomes another name for: the run's own claim,
+             *     in the same owner and repository as the alias.
+             */
+            root: string;
+            proof: components["schemas"]["WorkItemLinkProof"];
+        };
+        /**
+         * @description The earlier step of the same run that warrants the link. A
+         *     `tool_returned` is the result of the run's own create_pull_request
+         *     that named the alias; an `approval_decided` is a person who approved
+         *     the link instead.
+         */
+        WorkItemLinkProof: {
+            /** @enum {string} */
+            kind: "tool_returned" | "approval_decided";
+            /** Format: int64 */
+            seq: number;
         };
         StepContent: {
             /** Format: int64 */

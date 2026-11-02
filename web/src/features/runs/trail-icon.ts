@@ -3,6 +3,7 @@ import {
   CircleDollarSign,
   Flag,
   Hand,
+  Link2,
   Play,
   PlayCircle,
   RefreshCw,
@@ -60,6 +61,7 @@ const ICONS: Record<StepKind, LucideIcon> = {
   run_finished: Flag,
   model_fallback: Shuffle,
   work_item_claimed: Bookmark,
+  work_item_linked: Link2,
 };
 
 const VERDICT_TONE: Record<string, TileTone> = {

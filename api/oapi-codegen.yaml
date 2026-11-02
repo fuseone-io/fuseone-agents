@@ -19,4 +19,4 @@ output-options:
   # null" distinction this API never needs and costs a wrapper at every
   # assignment.
   nullable-type: false
-  skip-prune: false
+  skip-prune: true

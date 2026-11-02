@@ -3,6 +3,7 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -37,6 +38,10 @@ const (
 	// it under a lock when it is appended, and projects it into
 	// run_work_items, so a refused claim never becomes a step.
 	StepWorkItemClaimed StepKind = "work_item_claimed"
+	// StepWorkItemLinked records a pull request as an alias of the card the
+	// run claimed. Known to every reader one release before anything writes
+	// it (#204); see WorkItemLinkedPayload.
+	StepWorkItemLinked StepKind = "work_item_linked"
 )
 
 var stepKinds = map[StepKind]bool{
@@ -47,10 +52,21 @@ var stepKinds = map[StepKind]bool{
 	StepApprovalDecided: true, StepResumed: true, StepAbandoned: true,
 	StepCompensationStarted: true, StepCompensated: true, StepFailed: true,
 	StepParked: true, StepRunFinished: true, StepModelFallback: true,
-	StepWorkItemClaimed: true,
+	StepWorkItemClaimed: true, StepWorkItemLinked: true,
 }
 
 func (k StepKind) Valid() bool { return stepKinds[k] }
+
+// StepKinds is the closed set, sorted, so that a projection which must know
+// every kind — the API's enum, the console's maps — can be held to it.
+func StepKinds() []StepKind {
+	out := make([]StepKind, 0, len(stepKinds))
+	for k := range stepKinds {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return out
+}
 
 // Terminal reports whether the kind ends the run.
 func (k StepKind) Terminal() bool {
