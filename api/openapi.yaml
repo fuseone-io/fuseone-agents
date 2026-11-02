@@ -1295,6 +1295,55 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /work-items/trail:
+    get:
+      tags: [runs]
+      operationId: getWorkItemTrail
+      summary: The trail of one work item reference
+      description: |
+        Every run that claimed the reference through
+        `$fuseone.work_item.claim`, oldest claim first, and per role what
+        those runs asked people and what they cost (#204).
+
+        A view of this reference only: an issue and the pull request that
+        answers it are two references with two trails until the platform
+        links them.
+
+        Narrowed on every page by the caller's own `run:read` and
+        `agent:read` scopes: a run the caller cannot read is absent, and its
+        approvals and cost count in no aggregate. A reference with no
+        readable run answers 200 with an empty trail, exactly as one nobody
+        ever claimed, so existence in a scope the caller cannot read is not
+        revealed. Counts and identifiers only: no tool arguments, no step
+        payloads, no approval reasons.
+      parameters:
+        - name: ref
+          in: query
+          required: true
+          description: |
+            The work item reference, in the canonical form the claim takes:
+            `github:<owner>/<repo>#<number>` or `ghproject:<node id>`.
+            Normalised by the claim's own parser, so owner and repository
+            fold to lower case. Missing, empty or not a reference is 400.
+          schema: { type: string, maxLength: 512 }
+        - name: cursor
+          in: query
+          description: |
+            `nextCursor` from the previous page, verbatim. A position and
+            nothing else: the caller's scopes and cost:read are applied to
+            every page afresh. A token that is not a position is 400.
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: One page of the trail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkItemTrail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /runs/{runId}:
     get:
       tags: [runs]
@@ -8142,6 +8191,70 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Run' }
         nextCursor: { type: string, nullable: true }
+
+    WorkItemTrail:
+      type: object
+      required: [ref, runs]
+      properties:
+        ref:
+          type: string
+          description: The reference in its canonical form.
+        runs:
+          type: array
+          description: This page of runs, oldest claim first.
+          items: { $ref: '#/components/schemas/WorkItemRun' }
+        roles:
+          type: array
+          description: |
+            One row per agent over every readable run of the reference, in
+            the order each first claimed it. Present on the first page only.
+          items: { $ref: '#/components/schemas/WorkItemRole' }
+        nextCursor:
+          type: string
+          description: Where the next page starts. Absent on the last page.
+
+    WorkItemRun:
+      type: object
+      required: [runId, agentId, scope, phase, startedAt, claimedAt, link]
+      properties:
+        runId: { type: string }
+        agentId: { type: string }
+        scope: { $ref: '#/components/schemas/Scope' }
+        phase: { $ref: '#/components/schemas/Phase' }
+        startedAt: { type: string, format: date-time }
+        endedAt:
+          type: string
+          format: date-time
+          description: Absent while the run is going.
+        claimedAt: { type: string, format: date-time }
+        link:
+          type: string
+          enum: [claim]
+          description: How the run came to be on the trail. A claim, for now.
+
+    WorkItemRole:
+      type: object
+      required: [agentId, runs, approvalsRequested, approved, refused, abandoned, firstClaimedAt]
+      properties:
+        agentId: { type: string }
+        runs: { type: integer }
+        approvalsRequested: { type: integer }
+        approved: { type: integer }
+        refused: { type: integer }
+        abandoned:
+          type: integer
+          description: Runs of this role a person abandoned.
+        firstClaimedAt: { type: string, format: date-time }
+        lastEndedAt:
+          type: string
+          format: date-time
+          description: Absent when none of the role's runs has ended.
+        costMicros:
+          type: integer
+          format: int64
+          description: |
+            What the role's runs cost. Absent — never zero — unless the
+            caller holds cost:read over every one of them.
 
     Step:
       type: object
