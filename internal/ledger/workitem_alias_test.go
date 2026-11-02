@@ -275,6 +275,13 @@ func TestWorkItemLink_proofThatDoesNotVerify_refused(t *testing.T) {
 		"a refusal of the link": func(t *testing.T, s Store) domain.WorkItemLinkedPayload {
 			return approvalProof(t, s, domain.ToolWorkItemLink, false)
 		},
+		// Review round 1, P2: an approval of one pull request proves no
+		// link of another.
+		"an approval of another pull request": func(t *testing.T, s Store) domain.WorkItemLinkedPayload {
+			p := approvalProofOf(t, s, domain.ToolWorkItemLink, otherAlias, true)
+			p.Alias = linkAlias
+			return p
+		},
 	}
 	for name, build := range cases {
 		run(t, "a link with "+name, func(t *testing.T, s Store) {
@@ -313,12 +320,19 @@ func TestWorkItemLink_approvedByAPerson_sealed(t *testing.T) {
 	})
 }
 
-// approvalProof records a request for tool and a person's decision on it, and
-// returns a link of linkAlias to card that names that decision.
+// approvalProof records a request for tool, with the link of linkAlias as its
+// arguments, and a person's decision on it, and returns a link of linkAlias to
+// card that names that decision.
 func approvalProof(t *testing.T, s Store, tool domain.ToolID, approved bool) domain.WorkItemLinkedPayload {
 	t.Helper()
+	return approvalProofOf(t, s, tool, linkAlias, approved)
+}
+
+// approvalProofOf is approvalProof for a request that approved alias.
+func approvalProofOf(t *testing.T, s Store, tool domain.ToolID, alias domain.WorkItemRef, approved bool) domain.WorkItemLinkedPayload {
+	t.Helper()
 	requested := withPayload(t, step("run-a", domain.StepApprovalRequested),
-		domain.ApprovalRequestedPayload{Tool: tool, Effect: domain.EffectWrite})
+		domain.ApprovalRequestedPayload{Tool: tool, Effect: domain.EffectWrite, ArgsDigest: domain.LinkArgsDigest(alias)})
 	requested.AgentID = "developer"
 	at := mustAppendSeq(t, s, requested)
 	decided := withPayload(t, step("run-a", domain.StepApprovalDecided),

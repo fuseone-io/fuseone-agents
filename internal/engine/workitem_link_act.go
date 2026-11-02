@@ -81,6 +81,23 @@ func proposedLink(state State, args []byte) (domain.WorkItemLinkedPayload, linkA
 	return p, linkAnswer{}, true
 }
 
+// canonicalLink puts a link the model proposed into its one canonical form,
+// {"ref":alias}, before anything is ruled on or recorded: what the Gate sees,
+// what a person approves, and the args_digest a store binds the decision to
+// are then the link of that alias and nothing else. A link whose reference
+// does not parse is left as it came; the Gate refuses it.
+func canonicalLink(p Proposal) Proposal {
+	if p.Tool != domain.ToolWorkItemLink {
+		return p
+	}
+	var a claimArgs
+	_ = json.Unmarshal(p.Args, &a)
+	if alias, ok := domain.ParseWorkItemRef(a.Ref); ok {
+		p.Args = domain.LinkArgs(alias)
+	}
+	return p
+}
+
 // linkStanding is what the Gate is told about a proposal: whether a link is
 // proven, and why one can never be made. Nothing for any other tool.
 func linkStanding(state State, p Proposal) (proven bool, refusal string) {

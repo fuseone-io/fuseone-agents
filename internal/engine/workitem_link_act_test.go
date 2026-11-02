@@ -207,6 +207,39 @@ func TestAdvance_unprovenLink_parksThenLinksWithTheDecisionAsProof(t *testing.T)
 	}
 }
 
+// What a person approves is the link in its canonical arguments, so the
+// decision the ledger binds to the alias is the one recorded: a reference the
+// model spelled differently, with a field the link ignores, still links once
+// approved — and the request names exactly the alias (#239 review, P2).
+func TestAdvance_unprovenLinkSpelledLoosely_isApprovedAsItsCanonicalArguments(t *testing.T) {
+	t.Parallel()
+	loose := Proposal{Tool: domain.ToolWorkItemLink,
+		Args: []byte(`{"root":"github:fuseone-io/fuseone-agents#7","ref":" github:FuseOne-IO/fuseone-agents#240 "}`)}
+	h, start := linkHarness(t, claimProposal(linkRootCard), loose)
+
+	advance(t, h, start, 2)
+	requested := h.stepsOf(t, "run-1", domain.StepApprovalRequested)
+	var asked domain.ApprovalRequestedPayload
+	if len(requested) != 1 || json.Unmarshal(requested[0].Payload, &asked) != nil ||
+		asked.ArgsDigest != domain.LinkArgsDigest(linkPR) {
+		t.Fatalf("approval requested = %+v; want one, for the link of %s in canonical arguments", asked, linkPR)
+	}
+	approveRequest(t, h, true)
+	advance(t, h, start, 1)
+
+	if links := linkedPayloads(t, h); len(links) != 1 || links[0].Alias != linkPR || links[0].Root != linkRootCard {
+		t.Fatalf("links = %+v; want %s to %s", links, linkPR, linkRootCard)
+	}
+}
+
+// The digest the ledger binds an approval to is the one the engine records.
+func TestLinkArgsDigest_isTheDigestTheEngineRecords(t *testing.T) {
+	t.Parallel()
+	if got, want := domain.LinkArgsDigest(linkPR), digest(domain.LinkArgs(linkPR)); got != want {
+		t.Fatalf("domain.LinkArgsDigest = %s, engine digest = %s", got, want)
+	}
+}
+
 // A create_pull_request whose answer named another pull request proves
 // nothing about this one.
 func TestAdvance_linkOfAPullRequestTheRunDidNotOpen_parks(t *testing.T) {

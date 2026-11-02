@@ -157,8 +157,8 @@ func TestJudgeApprovalProof_onlyAnApprovalOfTheLinkProves(t *testing.T) {
 	t.Parallel()
 
 	approved := domain.ApprovalDecidedPayload{Approved: true, By: "ana", AtSeq: 7}
-	link := domain.ApprovalRequestedPayload{Tool: domain.ToolWorkItemLink}
-	if err := domain.JudgeApprovalProof(approved, link, 8); err != nil {
+	link := domain.ApprovalRequestedPayload{Tool: domain.ToolWorkItemLink, ArgsDigest: domain.LinkArgsDigest(linkAlias)}
+	if err := domain.JudgeApprovalProof(approved, link, 8, linkAlias); err != nil {
 		t.Fatalf("an approval of the link = %v, want it accepted", err)
 	}
 	refused := approved
@@ -171,12 +171,18 @@ func TestJudgeApprovalProof_onlyAnApprovalOfTheLinkProves(t *testing.T) {
 		decided   domain.ApprovalDecidedPayload
 		requested domain.ApprovalRequestedPayload
 	}{
-		"a refusal":              {refused, link},
-		"a decision on nothing":  {unanchored, link},
-		"a request not before":   {later, link},
-		"an approval of a write": {approved, domain.ApprovalRequestedPayload{Tool: "github.issue_write"}},
+		"a refusal":             {refused, link},
+		"a decision on nothing": {unanchored, link},
+		"a request not before":  {later, link},
+		"an approval of a write": {approved, domain.ApprovalRequestedPayload{Tool: "github.issue_write",
+			ArgsDigest: domain.LinkArgsDigest(linkAlias)}},
+		// Review round 1, P2: the decision approved one pull request, and
+		// proves a link of that one alone.
+		"an approval of another pull request": {approved, domain.ApprovalRequestedPayload{Tool: domain.ToolWorkItemLink,
+			ArgsDigest: domain.LinkArgsDigest("github:fuseone-io/fuseone-agents#241")}},
+		"an approval naming no arguments": {approved, domain.ApprovalRequestedPayload{Tool: domain.ToolWorkItemLink}},
 	} {
-		if err := domain.JudgeApprovalProof(c.decided, c.requested, 8); !errors.Is(err, domain.ErrWorkItemLinkUnproven) {
+		if err := domain.JudgeApprovalProof(c.decided, c.requested, 8, linkAlias); !errors.Is(err, domain.ErrWorkItemLinkUnproven) {
 			t.Errorf("%s: JudgeApprovalProof = %v, want ErrWorkItemLinkUnproven", name, err)
 		}
 	}

@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -131,9 +133,27 @@ func JudgePullRequestProof(returned ToolReturnedPayload, labels Labels, alias Wo
 	return nil
 }
 
-// JudgeApprovalProof holds a decision to being the proof of a link: a person
-// approved the request at requestedSeq, and that request was for the link.
-func JudgeApprovalProof(decided ApprovalDecidedPayload, requested ApprovalRequestedPayload, decidedSeq int64) error {
+// LinkArgs is a link's arguments in their one canonical form, {"ref":alias}:
+// what the engine proposes, and so what a person approves, for every link.
+func LinkArgs(alias WorkItemRef) []byte {
+	raw, _ := json.Marshal(map[string]WorkItemRef{"ref": alias})
+	return raw
+}
+
+// LinkArgsDigest is the digest an approval request records for the link of
+// alias — the same form as every args_digest the engine writes — so a store
+// can bind a decision to the one pull request it approved without reading the
+// arguments themselves.
+func LinkArgsDigest(alias WorkItemRef) string {
+	sum := sha256.Sum256(LinkArgs(alias))
+	return "sha256:" + hex.EncodeToString(sum[:])[:16]
+}
+
+// JudgeApprovalProof holds a decision to being the proof of a link to alias: a
+// person approved the request at requestedSeq, that request was for the link,
+// and its arguments named exactly alias. So one decision proves one link: the
+// same link again, and no other.
+func JudgeApprovalProof(decided ApprovalDecidedPayload, requested ApprovalRequestedPayload, decidedSeq int64, alias WorkItemRef) error {
 	switch {
 	case !decided.Approved:
 		return fmt.Errorf("%w: the decision it names refused", ErrWorkItemLinkUnproven)
@@ -141,6 +161,8 @@ func JudgeApprovalProof(decided ApprovalDecidedPayload, requested ApprovalReques
 		return fmt.Errorf("%w: the decision names no earlier request (at seq %d)", ErrWorkItemLinkUnproven, decided.AtSeq)
 	case requested.Tool != ToolWorkItemLink:
 		return fmt.Errorf("%w: the approval was for %q, not the link", ErrWorkItemLinkUnproven, requested.Tool)
+	case requested.ArgsDigest != LinkArgsDigest(alias):
+		return fmt.Errorf("%w: the approval was for another pull request than %q", ErrWorkItemLinkUnproven, alias)
 	}
 	return nil
 }

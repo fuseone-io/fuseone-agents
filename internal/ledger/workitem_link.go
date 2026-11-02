@@ -78,7 +78,7 @@ judgeLinkProof holds the proof to the steps it names. The kind the payload
 claims must be the kind of the step at that seq; a returned call must be the
 run's own trusted create_pull_request, stamped with the hosted GitHub
 provenance and naming the alias; a decision must approve a request, earlier in
-the run, for the link itself.
+the run, for the link of exactly this alias — so it proves no other.
 */
 func judgeLinkProof(p domain.WorkItemLinkedPayload, read stepAt) error {
 	proof, found, err := read(p.Proof.Seq)
@@ -110,5 +110,5 @@ func judgeLinkProof(p domain.WorkItemLinkedPayload, read stepAt) error {
 			_ = json.Unmarshal(request.Payload, &requested)
 		}
 	}
-	return domain.JudgeApprovalProof(decided, requested, proof.Seq)
+	return domain.JudgeApprovalProof(decided, requested, proof.Seq, p.Alias)
 }

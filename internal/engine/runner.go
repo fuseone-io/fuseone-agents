@@ -205,7 +205,7 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		return r.park(ctx, state, start, "no_finish_action")
 	}
 
-	return r.act(ctx, state, start, proposal)
+	return r.act(ctx, state, start, canonicalLink(proposal))
 }
 
 func (r *Runner) storeArtifacts(
