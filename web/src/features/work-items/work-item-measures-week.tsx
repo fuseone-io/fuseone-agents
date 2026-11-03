@@ -44,7 +44,14 @@ const weekLabel = (week: string) =>
   }).format(new Date(week));
 
 /** One ISO week, a row per role that ran in it. */
-export function WorkItemMeasuresWeek({ week }: { week: MeasureWeek }) {
+export function WorkItemMeasuresWeek({
+  week,
+  forbidsStanding,
+}: {
+  week: MeasureWeek;
+  /** Agents whose own policy forbids standing approvals. */
+  forbidsStanding: ReadonlySet<string>;
+}) {
   const { t } = useTranslation();
   const heading = useId();
   return (
@@ -72,7 +79,11 @@ export function WorkItemMeasuresWeek({ week }: { week: MeasureWeek }) {
         </TableHeader>
         <TableBody>
           {week.rows.map((row) => (
-            <WorkItemMeasuresRow key={row.agentId} row={row} />
+            <WorkItemMeasuresRow
+              key={row.agentId}
+              row={row}
+              forbidsStanding={forbidsStanding.has(row.agentId)}
+            />
           ))}
         </TableBody>
       </Table>

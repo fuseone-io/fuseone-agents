@@ -62,7 +62,11 @@ export function WorkItemMeasuresPanel() {
             </div>
           ) : (
             shown.map((week) => (
-              <WorkItemMeasuresWeek key={week.week} week={week} />
+              <WorkItemMeasuresWeek
+                key={week.week}
+                week={week}
+                forbidsStanding={choices.forbidsStanding}
+              />
             ))
           )}
           <Separator />

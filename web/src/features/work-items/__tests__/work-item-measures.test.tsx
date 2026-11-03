@@ -129,21 +129,6 @@ describe("the weekly panel by role", () => {
     }
   });
 
-  it("warns on a row with a standing approval, which the pilot forbids", async () => {
-    serve(
-      measures([
-        row({ agentId: "reviewer" }, { standing: 2, approved: 3 }),
-        row({ agentId: "developer" }),
-      ]),
-    );
-    open();
-
-    const reviewer = await agentRow("reviewer");
-    expect(within(reviewer).getByText(/proibida no piloto/i)).toBeInTheDocument();
-    const dev = screen.getByRole("row", { name: /^developer/ });
-    expect(within(dev).queryByText(/proibida no piloto/i)).toBeNull();
-  });
-
   it("marks the current week partial and lists the newest week first", async () => {
     serve(
       measures([

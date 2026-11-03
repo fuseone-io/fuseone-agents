@@ -3025,7 +3025,6 @@
       "openRuns_other": "{{count}} abertas",
       "noWhole": "sem base para a taxa",
       "noCards": "nenhum item assumido",
-      "standingForbidden": "Proibida no piloto",
       "empty": "Nenhuma execução que você pode ver nestas semanas",
       "emptyHint": "Uma linha aparece aqui para cada papel com uma execução aberta na semana, numa área que você pode ler. Escolha mais semanas ou outra área.",
       "unavailableTitle": "Fora destas contas",
@@ -3038,7 +3037,8 @@
       "reasonBoardOnly_one": "vem do quadro (CLI da fábrica)",
       "reasonBoardOnly_other": "vêm do quadro (CLI da fábrica)",
       "reasonOther_one": "indisponível",
-      "reasonOther_other": "indisponíveis"
+      "reasonOther_other": "indisponíveis",
+      "standingAgainstPolicy": "A política do agente proíbe aprovações permanentes"
     }
   }
 }

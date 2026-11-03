@@ -3025,7 +3025,6 @@
       "openRuns_other": "{{count}} open",
       "noWhole": "no base for a rate",
       "noCards": "no card claimed",
-      "standingForbidden": "Forbidden in the pilot",
       "empty": "No run you can see in these weeks",
       "emptyHint": "A row appears here for each role with a run opened in the week, in an area you can read. Pick more weeks or another area.",
       "unavailableTitle": "Not in these counts",
@@ -3038,7 +3037,8 @@
       "reasonBoardOnly_one": "comes from the board (factory CLI)",
       "reasonBoardOnly_other": "come from the board (factory CLI)",
       "reasonOther_one": "unavailable",
-      "reasonOther_other": "unavailable"
+      "reasonOther_other": "unavailable",
+      "standingAgainstPolicy": "The agent's policy forbids standing approvals"
     }
   }
 }

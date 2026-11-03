@@ -16,8 +16,17 @@ const NUM = "text-right font-mono text-xs tabular-nums";
 /**
  * One role's week. Every rate sits beside the count it is a share of, so a
  * reader never has to trust a percentage of a number they cannot see.
+ *
+ * Standing approvals are a warning only where the agent's own policy forbids
+ * them; anywhere else they are a count, which an agent may legitimately have.
  */
-export function WorkItemMeasuresRow({ row }: { row: WorkItemMeasureRow }) {
+export function WorkItemMeasuresRow({
+  row,
+  forbidsStanding,
+}: {
+  row: WorkItemMeasureRow;
+  forbidsStanding: boolean;
+}) {
   const { t } = useTranslation();
   const p = row.proposals;
   const rates = rowRatios(row);
@@ -42,10 +51,10 @@ export function WorkItemMeasuresRow({ row }: { row: WorkItemMeasureRow }) {
       <Counted count={p.repeatedAfterRefusal} share={rates.repeated} />
       <TableCell className={NUM}>
         {p.standing}
-        {p.standing > 0 && (
+        {forbidsStanding && p.standing > 0 && (
           <Badge className="ml-1.5 h-5 bg-warning-surface text-warning">
             <TriangleAlert aria-hidden />
-            {t("workItems.measures.standingForbidden")}
+            {t("workItems.measures.standingAgainstPolicy")}
           </Badge>
         )}
       </TableCell>

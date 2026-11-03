@@ -28,7 +28,15 @@ export function useMeasureChoices(filters: MeasureFilters) {
       filters.agentId && agents.includes(filters.agentId)
         ? filters.agentId
         : undefined;
-    return { areas, agents, filters: { area, agentId } };
+    // The policy the agent's published spec declares. The list holds the
+    // current version, so this is what the agent forbids now; an agent the
+    // list does not name, or one that never said, is not warned about.
+    const forbidsStanding = new Set(
+      items
+        .filter((a) => a.standingApprovals === "forbidden")
+        .map((a) => a.agentId),
+    );
+    return { areas, agents, filters: { area, agentId }, forbidsStanding };
   }, [data, filters.area, filters.agentId]);
 }
 

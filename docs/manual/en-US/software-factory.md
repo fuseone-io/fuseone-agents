@@ -457,8 +457,11 @@ Each row is one role in one week, counting the runs that opened that week:
 - **Revised after refusal** and **Repeated after refusal**: refusals after
   which the same run proposed the same tool again with other arguments, or
   with the same ones, beside their share of the refusals.
-- **Standing**: approvals a standing approval gave. The pilot forbids them, so
-  this should be 0; a row with any is marked **Forbidden in the pilot**.
+- **Standing**: approvals a standing approval gave. Every factory role declares
+  `standing_approvals: forbidden`, so for them this should be 0. A row with
+  any, for an agent whose published definition forbids them, is marked **The
+  agent's policy forbids standing approvals**. For an agent that allows them
+  it is only a count.
 - **On cards**, **Inherited**, **Off card**: where the cost went — runs that
   claimed a card, runs on a card only by how they were opened, and runs on no
   card. **Per card** is the cost on cards over the cards.

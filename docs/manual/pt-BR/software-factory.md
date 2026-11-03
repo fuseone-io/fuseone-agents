@@ -481,9 +481,11 @@ Cada linha é um papel numa semana, contando os runs abertos naquela semana:
 - **Revisadas após recusa** e **Repetidas após recusa**: recusas depois das
   quais o mesmo run propôs a mesma ferramenta de novo com outros argumentos,
   ou com os mesmos, ao lado da parte delas entre as recusas.
-- **Permanentes**: aprovações dadas por uma aprovação permanente. O piloto
-  proíbe isso, então o número deve ser 0; uma linha com alguma vem marcada
-  como **Proibida no piloto**.
+- **Permanentes**: aprovações dadas por uma aprovação permanente. Todo papel
+  da fábrica declara `standing_approvals: forbidden`, então para eles o número
+  deve ser 0. Uma linha com alguma, de um agente cuja definição publicada as
+  proíbe, vem marcada com **A política do agente proíbe aprovações
+  permanentes**. Para um agente que as permite, é só uma contagem.
 - **Em itens**, **Herdado**, **Fora de item**: para onde foi o custo — runs
   que assumiram um card, runs que só estão num card pela forma como foram
   abertos, e runs sem card. **Por item** é o custo em itens dividido pelos
