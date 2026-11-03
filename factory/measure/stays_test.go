@@ -170,6 +170,58 @@ func TestStays_doingOwner_byWhetherThePullRequestExistsYet(t *testing.T) {
 	}
 }
 
+// Only an open pull request's sub-state owns Doing time. Once every attempt
+// is closed or merged, the time is a person's: a pull request closed without
+// a merge leaves the next attempt to a person (factory/LANES.md).
+func TestStays_doingOwner_onlyOpenPullRequestsOwnTime(t *testing.T) {
+	t.Parallel()
+	h := time.Hour
+	issue := &Item{Number: 10, OnBoard: true, Events: []Event{
+		move(t, "2026-10-05T10:00:00Z", "Travado", "Doing", person),
+		move(t, "2026-10-05T20:00:00Z", "Doing", "Done", person),
+	}}
+	pr := func(n int, created string, events ...Event) *Item {
+		return &Item{Number: n, IsPR: true, Linked: []int{10}, Created: at(t, created), Events: events}
+	}
+	ev := func(k Kind, when string) Event { return Event{Kind: k, At: at(t, when), Actor: person} }
+	for _, tc := range []struct {
+		name string
+		prs  []*Item
+		want []Segment
+	}{
+		{"a closed attempt still labelled needs-review", []*Item{pr(11, "2026-10-05T07:00:00Z",
+			label(t, "2026-10-05T07:00:00Z", true, labelNeedsReview, devBot),
+			ev(KindClosed, "2026-10-05T09:00:00Z"))},
+			[]Segment{{OwnerPerson, 10 * h}}},
+		{"merged, then more Doing time", []*Item{pr(11, "2026-10-05T07:00:00Z",
+			label(t, "2026-10-05T07:00:00Z", true, labelNeedsQA, revBot),
+			ev(KindMerged, "2026-10-05T14:00:00Z"), ev(KindClosed, "2026-10-05T14:00:00Z"))},
+			[]Segment{{OwnerQA, 4 * h}, {OwnerPerson, 6 * h}}},
+		{"closed, then reopened", []*Item{pr(11, "2026-10-05T07:00:00Z",
+			label(t, "2026-10-05T07:00:00Z", true, labelNeedsReview, devBot),
+			ev(KindClosed, "2026-10-05T09:00:00Z"), ev(KindReopened, "2026-10-05T15:00:00Z"))},
+			[]Segment{{OwnerPerson, 5 * h}, {OwnerReviewer, 5 * h}}},
+		{"a second attempt after the first was closed", []*Item{
+			pr(11, "2026-10-05T07:00:00Z", label(t, "2026-10-05T07:00:00Z", true, labelNeedsReview, devBot),
+				ev(KindClosed, "2026-10-05T12:00:00Z")),
+			pr(12, "2026-10-05T14:00:00Z", label(t, "2026-10-05T14:00:00Z", true, labelNeedsReview, devBot))},
+			[]Segment{{OwnerReviewer, 2 * h}, {OwnerPerson, 2 * h}, {OwnerReviewer, 6 * h}}},
+		{"one open, one closed with a newer stale label", []*Item{
+			pr(11, "2026-10-05T07:00:00Z", label(t, "2026-10-05T07:00:00Z", true, labelNeedsQA, revBot)),
+			pr(12, "2026-10-05T06:00:00Z", ev(KindClosed, "2026-10-05T08:00:00Z"),
+				label(t, "2026-10-05T11:00:00Z", true, labelNeedsReview, devBot))},
+			[]Segment{{OwnerQA, 10 * h}}},
+	} {
+		var got []Segment
+		for _, s := range laneStays(snapshot(append([]*Item{issue}, tc.prs...)...), project) {
+			got = append(got, s.Segments...)
+		}
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s:\n got %v\nwant %v", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestWeekStart_sundayLastInstant_staysInItsWeek(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ at, want string }{

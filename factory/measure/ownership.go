@@ -50,15 +50,21 @@ func ownerAt(s Snapshot, card *Item, lane string, t time.Time) Owner {
 	return OwnerUnattributed
 }
 
-// doingOwner is who a Doing card waits on at t:
+// doingOwner is who a Doing card waits on at t, the first rule that applies:
 //
 //   - while the issue carries factory:needs-runtime, a person: the Developer
 //     skips it and a person takes it (factory/LANES.md);
 //   - before any pull request linked to the issue was opened, the Developer;
-//   - once one exists, the role its sub-state label names; with no
-//     recognised sub-state label, nobody, an inconsistent state not guessed at.
+//   - with at least one linked pull request open, the role the sub-state
+//     label of the open ones names, last applied wins; with no recognised
+//     sub-state label, nobody, an inconsistent state not guessed at. Labels
+//     on closed or merged pull requests count for nothing;
+//   - after an attempt, while every linked pull request is closed or merged,
+//     a person: a pull request closed without a merge leaves the next attempt
+//     to a person, and a merged one leaves the card to a person too.
 //
-// A pull request card exists from the start, so only its label decides.
+// A pull request card exists from the start of its stay; while it is open its
+// own label decides, and once it is closed or merged the time is a person's.
 func doingOwner(s Snapshot, card *Item, t time.Time) Owner {
 	prs := []*Item{card}
 	if !card.IsPR {
@@ -70,7 +76,43 @@ func doingOwner(s Snapshot, card *Item, t time.Time) Owner {
 			return OwnerDeveloper
 		}
 	}
-	return subStateAt(prs, t)
+	open := openAt(prs, t)
+	if len(open) == 0 {
+		return OwnerPerson
+	}
+	return subStateAt(open, t)
+}
+
+// openAt is the pull requests open at t: not closed or merged at t, or
+// reopened since their last close. Events at t itself count.
+func openAt(prs []*Item, t time.Time) []*Item {
+	var out []*Item
+	for _, pr := range prs {
+		open := true
+		for _, e := range sortedEvents(pr.Events) {
+			switch {
+			case e.At.After(t):
+			case e.Kind == KindClosed || e.Kind == KindMerged:
+				open = false
+			case e.Kind == KindReopened:
+				open = true
+			}
+		}
+		if open {
+			out = append(out, pr)
+		}
+	}
+	return out
+}
+
+// changesHands says whether an event can change who owns Doing time: a label
+// change, or a pull request closed, merged or reopened.
+func changesHands(e Event) bool {
+	switch e.Kind {
+	case KindLabeled, KindUnlabeled, KindClosed, KindMerged, KindReopened:
+		return true
+	}
+	return false
 }
 
 // openedBy is the pull requests already opened at t. One whose opening time

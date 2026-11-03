@@ -174,23 +174,29 @@ In Doing, the first rule that applies decides:
    **person's**. The Developer skips the card, and a person takes it.
 2. **Before any pull request linked to the issue was opened**, the time is the
    **Developer's**: the card waits for it to open one.
-3. Once a linked pull request exists, the time follows the pull request's
-   sub-state label: `factory:needs-review` → **Reviewer**, `factory:needs-qa` →
-   **QA**, `factory:changes-requested` → **Developer**,
-   `factory:ready-to-merge` → a **person**. With several sub-state labels on
-   at once, across every linked pull request opened by then (closed ones
-   included, since a closed attempt keeps its labels), the one applied last
-   decides.
-4. A pull request that exists but carries no recognised sub-state label is an
+3. **While at least one linked pull request is open**, the time follows the
+   sub-state label of the **open** pull requests only:
+   `factory:needs-review` → **Reviewer**, `factory:needs-qa` → **QA**,
+   `factory:changes-requested` → **Developer**, `factory:ready-to-merge` → a
+   **person**. With several on at once among the open ones, the one applied
+   last decides. A closed or merged pull request keeps its labels on GitHub,
+   but they count for nothing here.
+4. An open pull request with no recognised sub-state label is an
    inconsistent state. The time is **unattributed**, and no owner is guessed.
+5. **After an attempt, while every linked pull request is closed or merged**,
+   the time is a **person's**. A pull request closed without a merge leaves
+   the next attempt to a person, since the Developer skips a card with a
+   linked pull request ([LANES.md](../LANES.md)). A merged one leaves the card
+   to a person to finish.
 
-The stay is split at the instant the linked pull request was opened, its
-`createdAt`. Before that instant, rule 2 applies. After it, rule 3 or 4. A pull
-request opened after the stay ended plays no part. A pull request card exists
-from the start of its stay, so only its own label decides (rules 3 and 4).
-A linked pull request whose `createdAt` was not read counts as already
-open, so the Developer is never given time a pull request may already have
-existed in.
+A pull request is open from its `createdAt` until a `ClosedEvent` or
+`MergedEvent` on its timeline, and open again from a `ReopenedEvent`. The stay
+is split at every one of those instants on its linked pull requests, and at
+every label change, and each piece is judged by the rules above at its start.
+A pull request opened after the stay ended plays no part. A pull request card
+is judged by its own open state and label (rules 3 to 5). A linked pull
+request whose `createdAt` was not read counts as already opened, so the
+Developer is never given time a pull request may already have existed in.
 
 The per-role table gives each owner's share of the closed stays that ended
 that week, and the board moves it made that week.

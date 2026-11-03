@@ -93,7 +93,7 @@ func segments(s Snapshot, card *Item, st Stay) []Segment {
 			cuts = append(cuts, it.Created) // Doing changes hands when the pull request opens
 		}
 		for _, e := range it.Events {
-			if isLabelEvent(e) && inside(e.At) {
+			if changesHands(e) && inside(e.At) {
 				cuts = append(cuts, e.At)
 			}
 		}
@@ -112,5 +112,3 @@ func segments(s Snapshot, card *Item, st Stay) []Segment {
 	}
 	return out
 }
-
-func isLabelEvent(e Event) bool { return e.Kind == KindLabeled || e.Kind == KindUnlabeled }
