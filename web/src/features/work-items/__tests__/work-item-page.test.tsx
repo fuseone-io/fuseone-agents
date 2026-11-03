@@ -268,12 +268,15 @@ describe("a work item's trail", () => {
     ).toBeInTheDocument();
   });
 
-  it("asks nothing of the server without a reference", () => {
+  it("asks for no trail without a reference: the weekly panel is shown instead", async () => {
     const asked = serve({});
     open("/work-items");
 
-    expect(screen.getByText(/nenhuma referência/i)).toBeInTheDocument();
-    expect(asked).toHaveLength(0);
+    expect(
+      screen.getByRole("heading", { name: "Por papel, por semana" }),
+    ).toBeInTheDocument();
+    await vi.waitFor(() => expect(asked.length).toBeGreaterThan(0));
+    expect(asked.some((u) => u.pathname.endsWith("/trail"))).toBe(false);
   });
 });
 
