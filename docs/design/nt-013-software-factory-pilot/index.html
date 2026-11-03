@@ -91,9 +91,11 @@ the console or the Studio, from the reference text under <code dir="auto">factor
 rulebook, the review format, the lane definitions of done, and one reference
 specification per role). The repository holds what is reviewed; the console
 holds what runs.</li>
-<li><strong>The official GitHub MCP server is the only tool server</strong>, registered once
+<li><strong>The official GitHub MCP server is the GitHub tool server</strong>, registered once
 per role, each registration with its own GitHub App installed only on this
-repository. The App’s identity is what signs a role’s comments and reviews.</li>
+repository. The App’s identity is what signs a role’s comments and reviews.
+Beside it, since 2026-11-03, each role registers the factory’s own server
+with the same App (below).</li>
 <li><strong>Copilot everywhere, and a person merges.</strong> Every role runs at copilot with
 <code dir="auto">standing_approvals: forbidden</code>, and once it has chosen a card from the board
 its first act is the work-item claim, before it reads the issue or writes.
@@ -110,19 +112,31 @@ wrong claim only holds that card for this role while the run is open,
 releases when the run ends and puts the run’s cost on that card; it writes
 nothing to GitHub, and every GitHub write after it waits for a person. An
 atomic pick-and-claim tool that would hide the title is deferred.
-The Reviewer’s and QA’s verdicts are both pull-request reviews on the head
-SHA they read (APPROVE or REQUEST_CHANGES), under their own Apps. A person
-merges once both approve the current head and its checks are green. Cards
-move with the GitHub MCP server’s projects tool, classified as a write, so
-every move is a proposal a person approves.</li>
+The Reviewer’s verdict is a pull-request review on the head SHA it read
+(APPROVE or REQUEST_CHANGES), under its own App; QA’s is the <code dir="auto">factory/qa</code>
+commit status on the head SHA it checked (amended below). A person merges
+once the Reviewer approves the current head, <code dir="auto">factory/qa</code> on it is
+<code dir="auto">success</code> and its checks are green.</li>
 </ul>
+<p>Amended 2026-11-03 (#213). <strong>The factory’s own MCP server is part of the
+factory.</strong> <code dir="auto">factory/mcp</code> runs as a sidecar in every worker pod, on the pod’s
+loopback, holding no credential: each role registers it as <code dir="auto">factory-&#x3C;role></code>
+with the same GitHub App as its <code dir="auto">github-&#x3C;role></code>, and the server serves only
+the tools of the bot behind each request’s App token. It carries the narrow
+board tools — <code dir="auto">move_card</code>, which changes only a card’s Status along the
+calling role’s transitions, never out of Travado or Done, and
+<code dir="auto">set_card_fields</code>, which sets only Work type and Size, only in Triagem — and
+QA’s <code dir="auto">record_qa_verdict</code>, which sets <code dir="auto">factory/qa</code> on exactly the head SHA QA
+checked. All three are writes a person approves, with no internal exemption,
+and their results are structured state, not untrusted text. <strong>No role holds
+<code dir="auto">projects_write</code></strong>: it is in no pack, outside every registration’s surface,
+and left unclassified, so it never executes. The roles are still created in
+the console and still run at copilot; a person still merges.</p>
 <p><strong>Deferred</strong> until the pilot’s data justifies automating the merge: the merge
-wrapper (<code dir="auto">merge_if_ready</code>) and the Merger role, the <code dir="auto">factory/qa</code> commit status
-(<code dir="auto">record_qa_verdict</code>), the ruleset pinning each signal to its producer, a
-narrow <code dir="auto">move_card</code> tool, and publishing role specifications from the
+wrapper (<code dir="auto">merge_if_ready</code>) and the Merger role, the ruleset pinning each
+signal to its producer, and publishing role specifications from the
 repository. The sections below that describe them are kept, marked
-<em>deferred in v1</em>, as the design to return to. The factory’s own MCP server
-(<code dir="auto">factory/mcp</code>, #211) exists in the repository and is not used in v1.</p>
+<em>deferred in v1</em>, as the design to return to.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="roles">Roles</h2><a class="sl-anchor-link" href="#roles"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Roles”</span></a></div>
 <p>Each role is one agent specification, versioned in this repository and
 published like any other agent. A role is defined by four things: the lanes it
@@ -189,7 +203,7 @@ its work good — the harness, below.</p>
 
 
 
-<table><thead><tr><th>Role</th><th>Reads</th><th>Does</th><th>Writes</th><th>Stage in the pilot</th></tr></thead><tbody><tr><td><strong>Triage</strong></td><td>lane <em>Triagem</em></td><td>classifies type and size, finds duplicates, asks what is missing</td><td>issue comment, labels, card status</td><td>copilot</td></tr><tr><td><strong>Architect</strong></td><td><em>Triagem</em> items marked <code dir="auto">factory:needs-design</code></td><td>writes the plan and acceptance criteria, splits large items</td><td>issue comment, sub-issues, card status</td><td>copilot</td></tr><tr><td><strong>Developer</strong></td><td>lane <em>Doing</em></td><td>implements, opens the PR, answers review findings</td><td>branch, commits, PR</td><td>copilot (Level 1 only)</td></tr><tr><td><strong>Reviewer</strong></td><td>PRs labelled <code dir="auto">factory:needs-review</code></td><td>reviews the diff; findings ranked P1–P3, each with a reproduction</td><td>a pull-request review — APPROVE or REQUEST_CHANGES — on the head SHA it read; labels</td><td>copilot</td></tr><tr><td><strong>QA</strong></td><td>PRs labelled <code dir="auto">factory:needs-qa</code></td><td>checks every acceptance criterion against the PR and its CI</td><td>its verdict as a commit status <code dir="auto">factory/qa</code> on the head SHA, under its own identity; labels. <em>In v1: a pull-request review on the head SHA, like the Reviewer’s</em></td><td>copilot</td></tr><tr><td><strong>Merger</strong> (<em>deferred in v1: a person merges</em>)</td><td>PRs labelled <code dir="auto">factory:ready-to-merge</code></td><td>proposes <code dir="auto">merge_if_ready</code> for the PR’s current head; the wrapper re-checks review, QA and checks on that SHA when it runs</td><td>merge (through the wrapper), card status</td><td>copilot, merge always human-approved</td></tr><tr><td><strong>Release</strong> (later)</td><td>merged work since the last tag</td><td>cuts the changelog, tags, bumps the platform repo</td><td>changelog commit, tag</td><td>not in the pilot</td></tr></tbody></table>
+<table><thead><tr><th>Role</th><th>Reads</th><th>Does</th><th>Writes</th><th>Stage in the pilot</th></tr></thead><tbody><tr><td><strong>Triage</strong></td><td>lane <em>Triagem</em></td><td>classifies type and size, finds duplicates, asks what is missing</td><td>issue comment, labels, card status</td><td>copilot</td></tr><tr><td><strong>Architect</strong></td><td><em>Triagem</em> items marked <code dir="auto">factory:needs-design</code></td><td>writes the plan and acceptance criteria, splits large items</td><td>issue comment, sub-issues, card status</td><td>copilot</td></tr><tr><td><strong>Developer</strong></td><td>lane <em>Doing</em></td><td>implements, opens the PR, answers review findings</td><td>branch, commits, PR</td><td>copilot (Level 1 only)</td></tr><tr><td><strong>Reviewer</strong></td><td>PRs labelled <code dir="auto">factory:needs-review</code></td><td>reviews the diff; findings ranked P1–P3, each with a reproduction</td><td>a pull-request review — APPROVE or REQUEST_CHANGES — on the head SHA it read; labels</td><td>copilot</td></tr><tr><td><strong>QA</strong></td><td>PRs labelled <code dir="auto">factory:needs-qa</code></td><td>checks every acceptance criterion against the PR and its CI</td><td>its verdict as a commit status <code dir="auto">factory/qa</code> on the head SHA, under its own identity, through <code dir="auto">record_qa_verdict</code> (since 2026-11-03), with the per-criterion evidence in a comment; labels</td><td>copilot</td></tr><tr><td><strong>Merger</strong> (<em>deferred in v1: a person merges</em>)</td><td>PRs labelled <code dir="auto">factory:ready-to-merge</code></td><td>proposes <code dir="auto">merge_if_ready</code> for the PR’s current head; the wrapper re-checks review, QA and checks on that SHA when it runs</td><td>merge (through the wrapper), card status</td><td>copilot, merge always human-approved</td></tr><tr><td><strong>Release</strong> (later)</td><td>merged work since the last tag</td><td>cuts the changelog, tags, bumps the platform repo</td><td>changelog commit, tag</td><td>not in the pilot</td></tr></tbody></table>
 <p>Reviewer and QA are separate on purpose. In this repository’s history the
 independent review is what found the defects that tests written by the author
 did not — a race in an image cleanup, an idempotent retry that stopped finding
@@ -301,6 +315,15 @@ a single set; <code dir="auto">factory/agents/README.md</code> § Setting up a r
 has the per-role table. Triage cannot push; only the Merger’s credential
 can merge. A prompt injection that talks a role into an action meets a token
 that cannot perform it.</p>
+<p><em>Amended 2026-11-03.</em> The factory’s own server is part of this layer. Each
+role’s <code dir="auto">factory-&#x3C;role></code> registration carries the same App as its
+<code dir="auto">github-&#x3C;role></code>, and the server reads the role from that App’s bot id, so a
+role’s token reaches only its own row: <code dir="auto">move_card</code> along its transitions,
+<code dir="auto">set_card_fields</code> for Triage and the Architect, <code dir="auto">record_qa_verdict</code> for QA.
+And each <code dir="auto">github-&#x3C;role></code>’s surface is exactly the tools its reference
+declares, so <code dir="auto">projects_write</code> does not exist for any role, whatever the
+<code dir="auto">projects</code> toolset offers. The hosted server can also be narrowed at its end
+with <code dir="auto">X-MCP-Tools</code> and no <code dir="auto">X-MCP-Toolsets</code>.</p>
 <p><strong>2. The capability pack and steps.</strong> A role’s <code dir="auto">tools</code> lists only what it
 needs; steps narrow it further, and a step can no longer reach past the pack.</p>
 <p><strong>3. Classification.</strong> The GitHub MCP server’s tools enter unclassified and are
@@ -310,6 +333,12 @@ PR and comment text is a read marked <strong>untrusted</strong>. Some GitHub too
 several actions behind one name (<code dir="auto">projects_write</code> adds, updates and deletes
 items); the classification takes the most dangerous action the tool can
 perform.</p>
+<p><em>Amended 2026-11-03.</em> <code dir="auto">projects_write</code> is held by no role and stays
+unclassified, so it never executes. The board’s writes are the factory
+server’s <code dir="auto">move_card</code> and <code dir="auto">set_card_fields</code>, and QA’s verdict its
+<code dir="auto">record_qa_verdict</code>: writes, each answering structured state only, so their
+results are not untrusted; each waits for a person like every factory write,
+and none has a coordination exemption.</p>
 <p><strong>4. Taint.</strong> This repository is public: anyone can write an issue or a
 comment, so their text is untrusted, and a run that read it is tainted for the
 rest of the run. A tainted run needs a person for every write — except the
@@ -326,7 +355,8 @@ how many proposals were right, how many were edited, how many refused.</li>
 merge.</li>
 </ul>
 <p><em>Layers 5 and 5a, and the merge policy in layer 6, are deferred in v1: a person
-merges, reading the two approving reviews and the checks on the current head.
+merges, reading the Reviewer’s approving review, QA’s <code dir="auto">factory/qa</code> status
+and the checks on the current head.
 One part of 5a is not deferred: before the Developer starts, <code dir="auto">main</code> carries a
 minimal ruleset — a pull request required, force pushes and deletions
 blocked, no bypass for any factory App — because the Developer’s App can
@@ -508,7 +538,12 @@ measured, as for any agent.</li>
 
 
 
-<table><thead><tr><th>Need</th><th>Why</th><th>Blocks</th></tr></thead><tbody><tr><td>GitHub Project board and labels</td><td>the lanes and sub-states above</td><td>everything</td></tr><tr><td>GitHub MCP per role, classified</td><td>layers 1 and 3</td><td>every role</td></tr><tr><td>A durable work-item claim, recorded in the ledger</td><td>no two runs of a role on one card; cost per card</td><td>every role</td></tr><tr><td>Standing approvals refused for every factory write</td><td>layer 6</td><td>every role</td></tr><tr><td>Merge policy (<em>deferred in v1</em>)</td><td>layer 6</td><td>Merger</td></tr><tr><td><code dir="auto">merge_if_ready</code>: a merge bound to the reviewed head, signals validated by actor (<em>deferred in v1</em>)</td><td>layer 5</td><td>Merger</td></tr><tr><td>A minimal ruleset on <code dir="auto">main</code>: a pull request required, force pushes and deletions blocked, no bypass for any factory App (<em>required in v1 before the Developer starts, #200</em>)</td><td>layer 5a</td><td>Developer</td></tr><tr><td>The full ruleset on <code dir="auto">main</code>: required checks pinned to their source, <code dir="auto">factory/qa</code>, authorised reviewers, no bypass for the Merger (<em>deferred in v1, #207</em>)</td><td>layer 5a</td><td>Merger</td></tr><tr><td>A trusted way for QA to set <code dir="auto">factory/qa</code> under its own identity (<em>deferred in v1</em>)</td><td>the evidence <code dir="auto">merge_if_ready</code> requires</td><td>QA, Merger</td></tr><tr><td>Role references and the rulebook under <code dir="auto">factory/</code></td><td>the harness</td><td>every role</td></tr><tr><td>Role specs published from the repository (<em>deferred in v1</em>)</td><td>the registry never drifts from what was reviewed</td><td>—</td></tr><tr><td>A Level 1 developer: GitHub-API commits for small changes (<em>decided: the pilot starts here, #200</em>)</td><td>#154 Level 1</td><td>Developer</td></tr><tr><td>A coding runtime behind one MCP tool (<em>deferred: FuseOne Forja, <code dir="auto">forja.implement</code> under the Gate</em>)</td><td>#154 Level 2: build and test before a PR</td><td>Developer and QA beyond chores</td></tr><tr><td>A GitHub webhook adapter (signature, delivery id, event filter)</td><td>event-driven roles instead of polling</td><td>after the pilot</td></tr><tr><td>A hop limit on event chains (<em>done, #203</em>)</td><td>agent-to-agent handoff</td><td>after the pilot</td></tr><tr><td>A case spanning runs and agents</td><td>the card carried across event-opened runs, beyond the claim’s key</td><td>after the pilot</td></tr></tbody></table>
+
+
+
+
+
+<table><thead><tr><th>Need</th><th>Why</th><th>Blocks</th></tr></thead><tbody><tr><td>GitHub Project board and labels</td><td>the lanes and sub-states above</td><td>everything</td></tr><tr><td>GitHub MCP per role, classified</td><td>layers 1 and 3</td><td>every role</td></tr><tr><td>A durable work-item claim, recorded in the ledger</td><td>no two runs of a role on one card; cost per card</td><td>every role</td></tr><tr><td>Standing approvals refused for every factory write</td><td>layer 6</td><td>every role</td></tr><tr><td>Merge policy (<em>deferred in v1</em>)</td><td>layer 6</td><td>Merger</td></tr><tr><td><code dir="auto">merge_if_ready</code>: a merge bound to the reviewed head, signals validated by actor (<em>deferred in v1</em>)</td><td>layer 5</td><td>Merger</td></tr><tr><td>A minimal ruleset on <code dir="auto">main</code>: a pull request required, force pushes and deletions blocked, no bypass for any factory App (<em>required in v1 before the Developer starts, #200</em>)</td><td>layer 5a</td><td>Developer</td></tr><tr><td>The full ruleset on <code dir="auto">main</code>: required checks pinned to their source, <code dir="auto">factory/qa</code>, authorised reviewers, no bypass for the Merger (<em>deferred in v1, #207</em>)</td><td>layer 5a</td><td>Merger</td></tr><tr><td>A trusted way for QA to set <code dir="auto">factory/qa</code> under its own identity (<em>done, #213: <code dir="auto">record_qa_verdict</code></em>)</td><td>the evidence <code dir="auto">merge_if_ready</code> requires</td><td>QA, Merger</td></tr><tr><td>Narrow board tools, <code dir="auto">move_card</code> and <code dir="auto">set_card_fields</code> (<em>done, #213</em>)</td><td>no role holds <code dir="auto">projects_write</code></td><td>every role</td></tr><tr><td>Role references and the rulebook under <code dir="auto">factory/</code></td><td>the harness</td><td>every role</td></tr><tr><td>Role specs published from the repository (<em>deferred in v1</em>)</td><td>the registry never drifts from what was reviewed</td><td>—</td></tr><tr><td>A Level 1 developer: GitHub-API commits for small changes (<em>decided: the pilot starts here, #200</em>)</td><td>#154 Level 1</td><td>Developer</td></tr><tr><td>A coding runtime behind one MCP tool (<em>deferred: FuseOne Forja, <code dir="auto">forja.implement</code> under the Gate</em>)</td><td>#154 Level 2: build and test before a PR</td><td>Developer and QA beyond chores</td></tr><tr><td>A GitHub webhook adapter (signature, delivery id, event filter)</td><td>event-driven roles instead of polling</td><td>after the pilot</td></tr><tr><td>A hop limit on event chains (<em>done, #203</em>)</td><td>agent-to-agent handoff</td><td>after the pilot</td></tr><tr><td>A case spanning runs and agents</td><td>the card carried across event-opened runs, beyond the claim’s key</td><td>after the pilot</td></tr></tbody></table>
 <div class="sl-heading-wrapper level-h2"><h2 id="measured-during-the-pilot">Measured during the pilot</h2><a class="sl-anchor-link" href="#measured-during-the-pilot"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Measured during the pilot”</span></a></div>
 <p>Per role: proposals made, approved as-is, edited, refused; cost per card,
 joined through the work-item key the claim records; time in each lane; review findings that a later stage or a person caught and the
