@@ -35,6 +35,7 @@ const (
 	ToolRecordQAVerdict = "record_qa_verdict"
 	ToolMergeIfReady    = "merge_if_ready"
 	ToolSendBack        = "send_back"
+	ToolListReadyPRs    = "list_ready_prs"
 )
 
 // ToolsFor is the role's surface: exactly the tools a caller with that role
@@ -48,7 +49,7 @@ func ToolsFor(r Role) []string {
 	case RoleQA:
 		return []string{ToolMoveCard, ToolRecordQAVerdict}
 	case RoleMerger:
-		return []string{ToolMoveCard, ToolMergeIfReady, ToolSendBack}
+		return []string{ToolMoveCard, ToolListReadyPRs, ToolMergeIfReady, ToolSendBack}
 	}
 	return nil
 }

@@ -84,6 +84,24 @@ func (m *Merger) MergeIfReady(ctx context.Context, in MergeInput) (MergeResult, 
 	return m.merge(ctx, res)
 }
 
+// prejudge is merge_if_ready without the merge: the reason it would refuse
+// the head now, and the failing check, or "" when it would merge.
+func (m *Merger) prejudge(ctx context.Context, number int, head string) (Reason, string, error) {
+	pr, err := m.gh.pullRequest(ctx, number)
+	if err != nil {
+		return "", "", err
+	}
+	if r := checkPullRequest(m.target, pr, head); r != "" {
+		return r, "", nil
+	}
+	sig, err := m.gh.readSignals(ctx, number, m.target.base, head)
+	if err != nil {
+		return "", "", err
+	}
+	r, check := m.judge(pr, sig, head)
+	return r, check, nil
+}
+
 // judge applies the remaining conditions in order, returning the first that
 // fails and, for a check, which one.
 func (m *Merger) judge(pr pullRequest, sig signals, head string) (Reason, string) {
