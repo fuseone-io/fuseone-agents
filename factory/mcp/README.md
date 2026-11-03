@@ -254,6 +254,122 @@ A non-loopback address without TLS, a certificate without its key, or (in
 `GET /healthz` answers `ok` without a credential, for a readiness probe. It
 says the process is listening, nothing about GitHub, and carries no secret.
 
+`factory-mcp healthcheck` is that probe for a loopback listener: it GETs
+`/healthz` on `FACTORY_MCP_ADDR` from inside the container and exits non-zero
+unless it answers `ok`. The kubelet cannot reach a loopback listener itself:
+it sends an `httpGet` probe to the pod IP, or with `host: 127.0.0.1` to the
+node's own loopback, and the image has no shell or curl to exec. Off loopback
+the command refuses, because the server then speaks TLS and an `httpGet`
+probe with `scheme: HTTPS` reaches it.
+
+## As a worker sidecar
+
+The deployment the factory runs: one pass-through instance in every worker
+pod, on the pod's loopback. The worker is the only process that connects to
+MCP servers, so a server on `127.0.0.1` in its pod is reachable from exactly
+the process that calls it, and the traffic never leaves the pod: no TLS, no
+Service, no network policy rule. The server holds no credential, so the pod
+gains no secret by carrying it.
+
+The image is `ghcr.io/fuseone-io/fuseone-agents-factory-mcp`, published with
+agentd from the same commits and with the same tags (`X.Y.Z`, `X.Y`, `X`,
+`latest`, `main`, `sha-<short>`), the same provenance, SBOM and cosign
+signature. Pin it to the same version as the agentd release the chart runs;
+the first release that publishes it is the one after 0.89.0.
+
+The chart knows nothing about it: `worker.extraContainers`
+(`deploy/helm/fuseone-agents/values.yaml`) renders these containers verbatim.
+In the installation's values:
+
+```yaml
+worker:
+  extraContainers:
+    - name: factory-mcp
+      image: ghcr.io/fuseone-io/fuseone-agents-factory-mcp:0.90.0
+      imagePullPolicy: IfNotPresent
+      env:
+        - { name: FACTORY_MCP_ADDR, value: "127.0.0.1:8091" }
+        - { name: FACTORY_MCP_AUTH, value: github-app-token }
+      envFrom:
+        - configMapRef: { name: factory-mcp }
+      # exec, not httpGet: the kubelet's httpGet never reaches the pod's
+      # loopback. A sidecar that is not ready holds the worker pod out of
+      # Ready, and with maxSurge 0 that stops a rollout on a broken image
+      # before it replaces the next worker.
+      readinessProbe:
+        exec: { command: ["/factory-mcp", "healthcheck"] }
+        periodSeconds: 10
+        timeoutSeconds: 5
+      # /healthz touches nothing outside the process, so a failure is this
+      # process wedged, never GitHub down: safe to restart for.
+      livenessProbe:
+        exec: { command: ["/factory-mcp", "healthcheck"] }
+        initialDelaySeconds: 10
+        periodSeconds: 20
+        timeoutSeconds: 5
+        failureThreshold: 3
+      # The worker's own, stated again because the chart adds nothing to an
+      # extra container. Nothing is written to disk, so no volume either.
+      securityContext:
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: { drop: ["ALL"] }
+      resources:
+        requests: { cpu: 10m, memory: 32Mi }
+        limits: { memory: 128Mi }
+```
+
+The resources: idle and under a burst of 200 rejected requests the process
+holds about 12 MiB, and each call is one or two small GitHub requests waiting
+on the network, so `10m` and `32Mi` reserve what it uses with room, and a
+`128Mi` limit is ten times that, enough for a slow GitHub to stack up
+requests and low enough that a leak is killed before it starves the worker
+beside it. No CPU limit, like the worker's own: throttling a process that
+waits on GitHub only adds latency to a tool call the run is waiting for.
+
+The environment the guard decides with comes from a ConfigMap. **None of it
+is a secret**: project, field and option ids, bot user ids and a repository
+name are identifiers GitHub shows to anyone who can see the board, and they
+grant nothing. The sidecar's GitHub credential is each request's bearer,
+minted by the platform per role, never stored here. The values below are
+**this repository's board** (`fuseone-io` projects/2, see [the factory
+board's ids](#the-factory-boards-ids)); another installation uses its own:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: factory-mcp
+  # the namespace the chart is released into
+data:
+  FACTORY_ROLE_BOTS: triage=<id>,architect=<id>,developer=<id>,reviewer=<id>,qa=<id>
+  FACTORY_REPOSITORY: fuseone-io/fuseone-agents
+  FACTORY_BASE_BRANCH: main
+  FACTORY_PROJECT_ID: PVT_kwDOCda0tM4BpgXe
+  FACTORY_STATUS_FIELD_ID: PVTSSF_lADOCda0tM4BpgXezhn7tpM
+  FACTORY_LANES: Triagem=b6cc2db9,Preparado=81accba4,Doing=487fcd52,Travado=074ad6eb,Done=f46d8bb8
+  FACTORY_WORKTYPE_FIELD_ID: PVTSSF_lADOCda0tM4BpgXezhn7uD4
+  FACTORY_WORKTYPES: bug=c63ed0ce,feature=121ff620,chore=b5bce747,docs=bf073d82
+  FACTORY_SIZE_FIELD_ID: PVTSSF_lADOCda0tM4BpgXezhn7uD8
+  FACTORY_SIZES: S=4e5305ec,M=53fc9302,L=81761912
+```
+
+Each `<id>` is the role App's bot user id (`gh api
+'/users/<app-slug>%5Bbot%5D' --jq .id`). `FACTORY_BASE_BRANCH` is there
+because `qa` is listed and `record_qa_verdict` needs it; listing `merger`
+too also needs `FACTORY_REVIEWERS`, `FACTORY_CHECKS` and
+`FACTORY_CHECKS_APP_ID` (see [Environment](#environment)). A missing or
+malformed value stops the sidecar at start, naming the variable, and the
+readiness probe keeps the pod out of Ready.
+
+Each role's MCP registration then points at `http://127.0.0.1:8091/` with
+that role's GitHub App. The platform accepts plain `http://` for a GitHub App
+registration only to a loopback host (`internal/githubapp/tls.go`), for this
+case. The worker and the sidecar start together; a first discovery that
+reaches the sidecar before it listens fails and is retried by the worker's
+reconciler, like any server that is briefly down.
+
 ## Environment
 
 Nothing the guard decides with has a default. An unset or malformed variable
