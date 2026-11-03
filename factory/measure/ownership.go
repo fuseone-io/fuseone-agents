@@ -52,6 +52,10 @@ func ownerAt(s Snapshot, card *Item, lane string, t time.Time) Owner {
 
 // doingOwner is who a Doing card waits on at t, the first rule that applies:
 //
+//   - while a merged pull request still carries factory:ready-to-merge, the
+//     Merger: it finishes what list_ready_prs lists under merged before any
+//     other pull request, and close_merged reads no issue label, so this
+//     outranks an open pull request and factory:needs-runtime alike;
 //   - while the issue carries factory:needs-runtime, a person: the Developer
 //     skips it and a person takes it (factory/LANES.md);
 //   - before any pull request linked to the issue was opened, the Developer;
@@ -59,30 +63,31 @@ func ownerAt(s Snapshot, card *Item, lane string, t time.Time) Owner {
 //     label of the open ones names, last applied wins; with no recognised
 //     sub-state label, nobody, an inconsistent state not guessed at. Labels
 //     on closed or merged pull requests count for nothing;
-//   - after an attempt, while every linked pull request is closed or merged:
-//     the Merger while a merged one still carries factory:ready-to-merge,
-//     because close_merged drops that label only once the card reached Done;
-//     a person otherwise. A pull request closed without a merge leaves the
-//     next attempt to a person.
+//   - after an attempt, while every linked pull request is closed or merged,
+//     a person: a pull request closed without a merge leaves the next attempt
+//     to a person, and a merged one close_merged finished leaves the card to
+//     a person too.
 //
 // A pull request card exists from the start of its stay; while it is open its
 // own label decides, and once it is closed or merged the time is a person's.
 func doingOwner(s Snapshot, card *Item, t time.Time) Owner {
 	prs := []*Item{card}
 	if !card.IsPR {
+		prs = openedBy(linkedPRs(s, card), t)
+	}
+	if mergedStillReady(prs, t) {
+		return OwnerMerger
+	}
+	if !card.IsPR {
 		if _, on := labelsAt(card, t)[labelNeedsRuntime]; on {
 			return OwnerPerson
 		}
-		prs = openedBy(linkedPRs(s, card), t)
 		if len(prs) == 0 {
 			return OwnerDeveloper
 		}
 	}
 	open := openAt(prs, t)
 	if len(open) == 0 {
-		if mergedStillReady(prs, t) {
-			return OwnerMerger
-		}
 		return OwnerPerson
 	}
 	return subStateAt(open, t)

@@ -213,6 +213,21 @@ func TestStays_doingOwner_onlyOpenPullRequestsOwnTime(t *testing.T) {
 			label(t, "2026-10-05T07:00:00Z", true, labelReadyToMerge, qaBot),
 			ev(KindClosed, "2026-10-05T14:00:00Z"))},
 			[]Segment{{OwnerMerger, 4 * h}, {OwnerPerson, 6 * h}}},
+		// The Merger takes what list_ready_prs lists under merged before any
+		// other pull request, so a merged one still labelled owns the time
+		// even beside an open one, whatever that one's sub-state.
+		{"merged and still ready, beside an open one under review", []*Item{
+			pr(11, "2026-10-05T07:00:00Z", label(t, "2026-10-05T07:00:00Z", true, labelReadyToMerge, qaBot),
+				ev(KindMerged, "2026-10-05T12:00:00Z"),
+				label(t, "2026-10-05T18:00:00Z", false, labelReadyToMerge, mrgBot)),
+			pr(12, "2026-10-05T08:00:00Z", label(t, "2026-10-05T08:00:00Z", true, labelNeedsReview, devBot))},
+			// Both open until 12:00: the label applied last, needs-review, decides.
+			[]Segment{{OwnerReviewer, 2 * h}, {OwnerMerger, 6 * h}, {OwnerReviewer, 2 * h}}},
+		{"merged and still ready, beside an open one with no sub-state", []*Item{
+			pr(11, "2026-10-05T07:00:00Z", label(t, "2026-10-05T07:00:00Z", true, labelReadyToMerge, qaBot),
+				ev(KindMerged, "2026-10-05T12:00:00Z")),
+			pr(12, "2026-10-05T08:00:00Z")},
+			[]Segment{{OwnerMerger, 10 * h}}},
 		{"closed, then reopened", []*Item{pr(11, "2026-10-05T07:00:00Z",
 			label(t, "2026-10-05T07:00:00Z", true, labelNeedsReview, devBot),
 			ev(KindClosed, "2026-10-05T09:00:00Z"), ev(KindReopened, "2026-10-05T15:00:00Z"))},
@@ -264,5 +279,27 @@ func TestPercentile_nearestRank(t *testing.T) {
 	}
 	if got := percentile(d[:1], 90); got != 1*h {
 		t.Errorf("p90 of one = %s, want 1h", got)
+	}
+}
+
+// close_merged reads no issue label: a merged pull request still labelled is
+// the Merger's to finish even while its issue carries factory:needs-runtime.
+func TestStays_doingOwner_mergedStillReady_outranksNeedsRuntime(t *testing.T) {
+	t.Parallel()
+	issue := &Item{Number: 10, OnBoard: true, Events: []Event{
+		move(t, "2026-10-05T10:00:00Z", "Preparado", "Doing", person),
+		label(t, "2026-10-05T10:00:00Z", true, labelNeedsRuntime, devBot),
+		move(t, "2026-10-05T14:00:00Z", "Doing", "Done", mrgBot),
+	}}
+	merged := &Item{Number: 11, IsPR: true, Linked: []int{10}, Created: at(t, "2026-10-05T07:00:00Z"), Events: []Event{
+		label(t, "2026-10-05T07:00:00Z", true, labelReadyToMerge, qaBot),
+		{Kind: KindMerged, At: at(t, "2026-10-05T09:00:00Z"), Actor: person},
+	}}
+	var got []Segment
+	for _, st := range laneStays(snapshot(issue, merged), project) {
+		got = append(got, st.Segments...)
+	}
+	if want := []Segment{{OwnerMerger, 4 * time.Hour}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("segments %v, want %v", got, want)
 	}
 }
