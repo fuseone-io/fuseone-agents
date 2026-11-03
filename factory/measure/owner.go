@@ -12,6 +12,7 @@ const (
 	OwnerDeveloper Owner = "developer"
 	OwnerReviewer  Owner = "reviewer"
 	OwnerQA        Owner = "qa"
+	OwnerMerger    Owner = "merger"
 	OwnerPerson    Owner = "person"
 	// OwnerUnattributed is time or a signal no rule gives to anyone, such as
 	// Doing with no sub-state label on its pull request.
@@ -23,7 +24,7 @@ const (
 // roles is the closed set the bot map must list, in the order the factory's
 // flow meets them.
 func roles() []Owner {
-	return []Owner{OwnerTriage, OwnerArchitect, OwnerDeveloper, OwnerReviewer, OwnerQA}
+	return []Owner{OwnerTriage, OwnerArchitect, OwnerDeveloper, OwnerReviewer, OwnerQA, OwnerMerger}
 }
 
 // owners is every owner a report row can carry, in print order.

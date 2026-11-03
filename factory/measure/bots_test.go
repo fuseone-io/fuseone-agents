@@ -12,6 +12,7 @@ const validBots = `bots:
   developer: d-app[bot]
   reviewer: r-app[bot]
   qa: q-app[bot]
+  merger: m-app[bot]
 `
 
 func TestParseBots_placeholderLeft_reportRefuses(t *testing.T) {
@@ -33,7 +34,7 @@ func TestParseBots_shippedMap_parsesAndNamesItsPlaceholders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(m.placeholders(), ","); got != "architect,developer" {
+	if got := strings.Join(m.placeholders(), ","); got != "architect,developer,merger" {
 		t.Fatalf("placeholders = %q, want the two Apps not found on GitHub", got)
 	}
 }
@@ -41,7 +42,7 @@ func TestParseBots_shippedMap_parsesAndNamesItsPlaceholders(t *testing.T) {
 func TestParseBots_malformed_refused(t *testing.T) {
 	t.Parallel()
 	for name, doc := range map[string]string{
-		"unknown role":   validBots + "  merger: m-app[bot]\n",
+		"unknown role":   validBots + "  publisher: p-app[bot]\n",
 		"missing role":   strings.Replace(validBots, "  qa: q-app[bot]\n", "", 1),
 		"not a bot":      strings.Replace(validBots, "q-app[bot]", "q-app", 1),
 		"shared login":   strings.Replace(validBots, "q-app[bot]", "r-app[bot]", 1),

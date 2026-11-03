@@ -30,18 +30,21 @@ board moves it made that week. **Caught later**: the signals that week against w
 | 2026-10-19 (partial) | developer | 0.0 | 0 | 0 |
 | 2026-10-19 (partial) | reviewer | 0.0 | 0 | 0 |
 | 2026-10-19 (partial) | qa | 0.0 | 0 | 1 |
+| 2026-10-19 (partial) | merger | 0.0 | 0 | 0 |
 | 2026-10-19 (partial) | person | 163.0 | 1 | 0 |
 | 2026-10-12 | triage | 6.0 | 1 | 0 |
 | 2026-10-12 | architect | 0.0 | 0 | 0 |
 | 2026-10-12 | developer | 0.0 | 0 | 0 |
 | 2026-10-12 | reviewer | 0.0 | 0 | 2 |
 | 2026-10-12 | qa | 0.0 | 0 | 0 |
+| 2026-10-12 | merger | 0.0 | 0 | 0 |
 | 2026-10-12 | person | 0.0 | 1 | 0 |
 | 2026-10-05 | triage | 3.0 | 0 | 0 |
 | 2026-10-05 | architect | 26.0 | 2 | 1 |
 | 2026-10-05 | developer | 0.0 | 0 | 1 |
 | 2026-10-05 | reviewer | 0.0 | 0 | 0 |
 | 2026-10-05 | qa | 0.0 | 0 | 0 |
+| 2026-10-05 | merger | 0.0 | 0 | 0 |
 | 2026-10-05 | person | 44.0 | 3 | 0 |
 
 ## Caught-later signals

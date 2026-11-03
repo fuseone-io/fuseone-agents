@@ -15,6 +15,7 @@ var (
 	devBot   = Actor{"Bot", "d-app[bot]"}
 	revBot   = Actor{"Bot", "r-app[bot]"}
 	qaBot    = Actor{"Bot", "q-app[bot]"}
+	mrgBot   = Actor{"Bot", "m-app[bot]"}
 	strayBot = Actor{"Bot", "stray-app[bot]"}
 )
 
@@ -118,7 +119,7 @@ func TestStays_ownership_separatesAPersonsTimeFromARolesTime(t *testing.T) {
 		"Triagem":   {{OwnerTriage, 2 * h}, {OwnerArchitect, 3 * h}, {OwnerTriage, 1 * h}},
 		"Preparado": {{OwnerPerson, 4 * h}},
 		"Doing": {{OwnerUnattributed, 2 * h}, {OwnerReviewer, 3 * h}, {OwnerDeveloper, 1 * h},
-			{OwnerQA, 12 * h}, {OwnerPerson, 6 * h}},
+			{OwnerQA, 12 * h}, {OwnerMerger, 6 * h}},
 		"Travado": {{OwnerPerson, 2 * h}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -171,8 +172,9 @@ func TestStays_doingOwner_byWhetherThePullRequestExistsYet(t *testing.T) {
 }
 
 // Only an open pull request's sub-state owns Doing time. Once every attempt
-// is closed or merged, the time is a person's: a pull request closed without
-// a merge leaves the next attempt to a person (factory/LANES.md).
+// is closed or merged, the time is a person's — a pull request closed without
+// a merge leaves the next attempt to a person (factory/LANES.md) — except
+// while a merged one still carries ready-to-merge: the Merger's to finish.
 func TestStays_doingOwner_onlyOpenPullRequestsOwnTime(t *testing.T) {
 	t.Parallel()
 	h := time.Hour
@@ -197,6 +199,20 @@ func TestStays_doingOwner_onlyOpenPullRequestsOwnTime(t *testing.T) {
 			label(t, "2026-10-05T07:00:00Z", true, labelNeedsQA, revBot),
 			ev(KindMerged, "2026-10-05T14:00:00Z"), ev(KindClosed, "2026-10-05T14:00:00Z"))},
 			[]Segment{{OwnerQA, 4 * h}, {OwnerPerson, 6 * h}}},
+		// The Merger merges and then finishes the card with close_merged, which
+		// moves it to Done and only then drops ready-to-merge: while a merged
+		// pull request still carries the label, the card waits on the Merger.
+		{"merged while ready, until close_merged drops the label", []*Item{pr(11, "2026-10-05T07:00:00Z",
+			label(t, "2026-10-05T07:00:00Z", true, labelReadyToMerge, qaBot),
+			ev(KindMerged, "2026-10-05T14:00:00Z"), ev(KindClosed, "2026-10-05T14:00:00Z"),
+			label(t, "2026-10-05T16:00:00Z", false, labelReadyToMerge, mrgBot))},
+			[]Segment{{OwnerMerger, 6 * h}, {OwnerPerson, 4 * h}}},
+		// A pull request closed without a merge is a person's, labelled or not:
+		// close_merged finishes only merged ones.
+		{"closed unmerged while ready", []*Item{pr(11, "2026-10-05T07:00:00Z",
+			label(t, "2026-10-05T07:00:00Z", true, labelReadyToMerge, qaBot),
+			ev(KindClosed, "2026-10-05T14:00:00Z"))},
+			[]Segment{{OwnerMerger, 4 * h}, {OwnerPerson, 6 * h}}},
 		{"closed, then reopened", []*Item{pr(11, "2026-10-05T07:00:00Z",
 			label(t, "2026-10-05T07:00:00Z", true, labelNeedsReview, devBot),
 			ev(KindClosed, "2026-10-05T09:00:00Z"), ev(KindReopened, "2026-10-05T15:00:00Z"))},
