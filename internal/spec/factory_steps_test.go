@@ -37,8 +37,10 @@ func factoryReadTools(t *testing.T) map[string]bool {
 	for _, m := range backticked.FindAllStringSubmatch(row[1], -1) {
 		reads[m[1]] = true
 	}
-	// The anchor: a broken scan would make every tool a write, or none.
-	if !reads["issue_read"] || reads["issue_write"] {
+	// The anchor: a broken scan would make every tool a write, or none. The
+	// factory server's tools are never in the row, so a step that reaches
+	// move_card counts as a step that writes.
+	if !reads["issue_read"] || reads["issue_write"] || reads["move_card"] {
 		t.Fatalf("reads parsed from the manual = %v; the scan is broken", reads)
 	}
 	return reads
