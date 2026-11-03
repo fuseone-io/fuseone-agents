@@ -220,6 +220,11 @@ their source, <code dir="auto">factory/qa</code>, the authorised reviewers and t
 is deferred
 (<a href="https://github.com/fuseone-io/fuseone-agents/issues/207">#207</a>); none of it
 is needed in v1.</p>
+<p>Before the Merger is activated, two lists must be applied and kept identical:
+the ruleset’s required checks and the Merger’s <code dir="auto">FACTORY_CHECKS</code>. Both are every
+job of the <code dir="auto">check</code> workflow, by the names GitHub reports:
+<code dir="auto">go</code>, <code dir="auto">postgres</code>, <code dir="auto">console</code>, <code dir="auto">chart</code>, <code dir="auto">factory-mcp-image</code>, <code dir="auto">artifact</code>. The
+ruleset part is #207; <code dir="auto">FACTORY_CHECKS</code> is described in <code dir="auto">factory/mcp/README.md</code>.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="3-register-the-github-server-once-per-role">3. Register the GitHub server once per role</h2><a class="sl-anchor-link" href="#3-register-the-github-server-once-per-role"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “3. Register the GitHub server once per role”</span></a></div>
 <p>In the administration, register the hosted GitHub MCP server
 (<code dir="auto">https://api.githubcopilot.com/mcp/</code>) five times, one per role, with the id
