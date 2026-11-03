@@ -165,7 +165,7 @@ jobs:
   # image itself is started: a wrong entrypoint or a binary for another
   # platform passes every Go test.
   factory-mcp-image:
-    name: factory-mcp image
+    name: factory-mcp-image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

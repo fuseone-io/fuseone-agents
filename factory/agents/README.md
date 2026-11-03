@@ -538,3 +538,12 @@ ids, lanes, `FACTORY_ROLE_BOTS` and `FACTORY_REPOSITORY`; **none of it is a
 secret**, only identifiers that grant nothing. Its contents, with this
 repository's board as the example, are in
 [`factory/mcp/README.md`](../mcp/README.md#as-a-worker-sidecar).
+
+Its image is checked on every pull request by the `factory-mcp-image` job,
+which is one of the checks the Merger requires: `FACTORY_CHECKS` lists every
+job of `check.yml` (`go,postgres,console,chart,factory-mcp-image,artifact`),
+and the `main` ruleset's required checks must be that same list. Applying
+both is a prerequisite before the Merger is activated; the ruleset is
+configured on GitHub, and its required checks are part of
+[#207](https://github.com/fuseone-io/fuseone-agents/issues/207). See
+[the expected checks](../mcp/README.md#the-expected-checks-and-why-build-is-not-one).

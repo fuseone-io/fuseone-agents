@@ -392,7 +392,7 @@ when a served role uses it.
 | `FACTORY_BASE_BRANCH` | qa, merger | yes | The only base it accepts: `main`. |
 | `FACTORY_QA_BOT_ID` | qa, merger | in `app` mode; see the cell | Numeric **user id of the QA App's bot account** (see below). The Merger accepts `factory/qa` only from it; the QA instance checks it created the status under it. In `github-app-token` mode there is **one QA identity**: the id is derived from the `qa` entry of `FACTORY_ROLE_BOTS`, and a `FACTORY_QA_BOT_ID` that is also set must equal it, or the server refuses to start. If the Merger is served and `qa` is not listed (QA served elsewhere), `FACTORY_QA_BOT_ID` must name the QA bot explicitly; without either, the server refuses to start rather than run a Merger with no QA identity to trust. |
 | `FACTORY_REVIEWERS` | merger | yes | Comma-separated GitHub logins whose approval counts. **The same list the ruleset requires (#207).** Compared case-insensitively. |
-| `FACTORY_CHECKS` | merger | yes | Comma-separated check-run names required on the head, `go,postgres,console,chart,artifact`. **Not `build`**: see below. |
+| `FACTORY_CHECKS` | merger | yes | Comma-separated check-run names required on the head, `go,postgres,console,chart,factory-mcp-image,artifact`: every job of `check.yml`, and **identical to the `main` ruleset's required checks** (see below). **Not `build`**. |
 | `FACTORY_CHECKS_APP_ID` | merger | yes | The app that must have emitted them: GitHub Actions, `15368`. |
 | `FACTORY_MERGE_METHOD` | merger | no | `squash` (default), `merge` or `rebase`. |
 | `GITHUB_APP_ID` | `app` mode | yes | This instance's GitHub App id. |
@@ -431,15 +431,30 @@ Each role's bot user id, for `FACTORY_ROLE_BOTS`:
 gh api '/users/<app-slug>%5Bbot%5D' --jq .id
 ```
 
-### Why `build` is not an expected check
+### The expected checks, and why `build` is not one
+
+The expected set is every job of `.github/workflows/check.yml`, which runs on
+every pull request: `go`, `postgres`, `console`, `chart`, `factory-mcp-image`,
+`artifact`, by the check-run names GitHub reports. `factory-mcp-image` builds
+and starts the sidecar's image (#213); a Merger that did not require it would
+merge a PR whose sidecar image no longer builds. When a job is added to
+`check.yml`, it joins this list: `TestReadme_factoryChecksExample_namesEveryJobOfEveryPullRequest`
+(`factory/mcp/checks_doc_test.go`) fails until the example above names every
+job of `check.yml` and nothing else.
 
 `build` is the job in `.github/workflows/docs.yml`, which runs only on pull
 requests that touch `docs/**` or that workflow. On every other PR it never
 runs, so requiring it would refuse every non-docs PR with `check_missing`, and
-the ruleset would block them the same way. The expected set is the jobs that
-run on every PR, from `check.yml`: `go`, `postgres`, `console`, `chart`,
-`artifact`. #207 was corrected the same way. Keep `FACTORY_CHECKS` and the
-ruleset's required checks the same list.
+the ruleset would block them the same way. #207 was corrected the same way.
+
+**`FACTORY_CHECKS` and the `main` ruleset's required checks must be the same
+list, and applying both is a prerequisite before the Merger is activated.**
+A check the ruleset requires and `FACTORY_CHECKS` omits makes GitHub refuse a
+merge the Merger judged ready (`merge_refused`); a check `FACTORY_CHECKS`
+requires and the ruleset omits leaves a person's own merge less guarded than
+the Merger's. The ruleset is configured on GitHub, not from this repository:
+its required checks are part of the full ruleset deferred to
+[#207](https://github.com/fuseone-io/fuseone-agents/issues/207).
 
 ### In `app` mode: why App credentials, not a token
 

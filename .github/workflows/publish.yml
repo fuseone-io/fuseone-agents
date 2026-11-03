@@ -123,7 +123,7 @@ jobs:
   # bill of materials and signature as agentd: a sidecar in the worker's pod
   # is as much inside the perimeter as the worker.
   factory-mcp-image:
-    name: factory-mcp image
+    name: factory-mcp-image
     needs: check
     runs-on: ubuntu-latest
     permissions:
