@@ -459,6 +459,47 @@ ela foi feita. O
 lista cada caminho para Travado e a ação de cada um. Sem alguém nessa tarefa,
 um card travado fica esperando para sempre.
 
+## Por papel, por semana
+
+A tela **Item de trabalho** (`/work-items`), aberta sem nenhum card, mostra
+**Por papel, por semana**: o que o registro das execuções sabe sobre o
+trabalho da fábrica, uma tabela por semana ISO (segunda-feira, 00:00 UTC), a
+mais recente primeiro. A semana atual vem marcada como **parcial**. Escolha 4,
+8, 12 ou 26 semanas e, se quiser, uma só área ou um só papel. O histórico de
+um card continua abrindo pelo link **Item** de um claim.
+
+Cada linha é um papel numa semana, contando os runs abertos naquela semana:
+
+- **Execuções**: os runs abertos, com quantos ainda estão em andamento ao lado.
+- **Itens**: os cards distintos que os runs assumiram, com um pull request
+  vinculado contado como a sua issue. Um run que só está num card porque um
+  evento ou uma entrega do GitHub o abriu não acrescenta card.
+- **Aprovações pedidas**, **Aprovadas**, **Recusadas**, **Pendentes**,
+  **Abandonadas**: o que os runs pediram às pessoas e como elas responderam.
+  Ao lado de **Aprovadas** e **Recusadas** fica a parte delas entre as
+  decididas (aprovadas mais recusadas).
+- **Revisadas após recusa** e **Repetidas após recusa**: recusas depois das
+  quais o mesmo run propôs a mesma ferramenta de novo com outros argumentos,
+  ou com os mesmos, ao lado da parte delas entre as recusas.
+- **Permanentes**: aprovações dadas por uma aprovação permanente. O piloto
+  proíbe isso, então o número deve ser 0; uma linha com alguma vem marcada
+  como **Proibida no piloto**.
+- **Em itens**, **Herdado**, **Fora de item**: para onde foi o custo — runs
+  que assumiram um card, runs que só estão num card pela forma como foram
+  abertos, e runs sem card. **Por item** é o custo em itens dividido pelos
+  itens.
+
+Uma taxa sem base mostra um traço, nunca 0 %, e o mesmo vale para **Por item**
+numa semana sem card. Sem `cost:read` sobre a linha, todo custo mostra um
+traço, nunca R$ 0.
+
+Abaixo das tabelas, **Fora destas contas** diz em palavras o que este painel
+não consegue medir. A edição de propostas não é registrada pela plataforma:
+uma decisão aprova ou recusa a proposta como ela foi pedida, então as
+contagens de revisadas e repetidas são o que o registro tem no lugar. O tempo
+em lane e os achados posteriores vêm do quadro do projeto e são lidos pela CLI
+da fábrica, não por esta tela.
+
 ## Mudando um papel
 
 Uma mudança num papel é feita primeiro na referência, revisada por pull

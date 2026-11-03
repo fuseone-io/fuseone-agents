@@ -437,6 +437,42 @@ again on its next run; the operator is who notices it was taken.
 lists every way into Travado and its action. Without someone in this job, a
 blocked card waits forever.
 
+## Per role, per week
+
+The **Work item** screen (`/work-items`) opened with no card shows **Per role,
+per week**: what the run ledger knows about the factory's work, one table per
+ISO week (Monday 00:00 UTC), newest first. The current week is marked
+**partial**. Pick 4, 8, 12 or 26 weeks, and narrow to one area or one role. A
+card's own trail still opens when you follow a claim's **Item** link.
+
+Each row is one role in one week, counting the runs that opened that week:
+
+- **Runs**: the runs that opened, with how many are still open beside them.
+- **Cards**: the distinct cards the runs claimed, a linked pull request
+  counted as its issue. A run on a card only because an event or a GitHub
+  delivery opened it adds no card.
+- **Approvals asked**, **Approved**, **Refused**, **Pending**, **Abandoned**:
+  what the runs asked people and how people answered. Beside **Approved** and
+  **Refused** is their share of the decided ones (approved plus refused).
+- **Revised after refusal** and **Repeated after refusal**: refusals after
+  which the same run proposed the same tool again with other arguments, or
+  with the same ones, beside their share of the refusals.
+- **Standing**: approvals a standing approval gave. The pilot forbids them, so
+  this should be 0; a row with any is marked **Forbidden in the pilot**.
+- **On cards**, **Inherited**, **Off card**: where the cost went — runs that
+  claimed a card, runs on a card only by how they were opened, and runs on no
+  card. **Per card** is the cost on cards over the cards.
+
+A share with nothing under it shows a dash, never 0 %, and so does **Per card**
+in a week with no card. Without `cost:read` over the row every cost shows a
+dash, never R$ 0.
+
+Under the tables, **Not in these counts** says in words what this panel cannot
+measure. Proposal edits are not recorded by the platform: a decision approves
+or refuses a proposal as it was asked, so the revised and repeated counts are
+what the ledger has instead. Lane time and findings caught later come from the
+project board and are read by the factory CLI, not by this screen.
+
 ## Changing a role
 
 A change to a role is made in the reference first, reviewed by pull request,
