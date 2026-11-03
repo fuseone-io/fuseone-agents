@@ -32,6 +32,12 @@ type RequesterEmails interface {
 	EmailOf(context.Context, domain.UserID) (string, error)
 }
 
+// AccountEmails reads the email a Slack account's own profile shows, on the
+// connection the account belongs to.
+type AccountEmails interface {
+	AccountEmail(ctx context.Context, connection, account string) (string, error)
+}
+
 type GraviteeTicketStore interface {
 	Current(context.Context, domain.TicketKey) (ticket.Ticket, error)
 	RecordInspection(context.Context, ticket.InspectionInput) (ticket.Ticket, bool, error)
@@ -56,12 +62,13 @@ type GraviteeSnapshot struct {
 }
 
 type GraviteeInspector struct {
-	access  GraviteeAccesses
-	remote  GraviteeRemote
-	people  RequesterEmails
-	content engine.ContentStore
-	tickets GraviteeTicketStore
-	now     func() time.Time
+	access   GraviteeAccesses
+	remote   GraviteeRemote
+	people   RequesterEmails
+	accounts AccountEmails
+	content  engine.ContentStore
+	tickets  GraviteeTicketStore
+	now      func() time.Time
 }
 
 func NewGraviteeInspector(
@@ -89,7 +96,7 @@ func (g *GraviteeInspector) Inspect(
 	if err != nil {
 		return engine.ToolResult{}, err
 	}
-	email, err := g.people.EmailOf(ctx, ticketState.RequestedBy)
+	email, err := g.requesterEmail(ctx, ticketState)
 	if err != nil {
 		return engine.ToolResult{}, ErrGraviteeRequester
 	}
@@ -165,6 +172,24 @@ func validGraviteeSnapshot(snapshot GraviteeSnapshot, ref domain.TicketRef) bool
 func validSnapshotOwner(email string) bool {
 	parsed, err := mail.ParseAddress(email)
 	return err == nil && parsed.Address == email && strings.TrimSpace(email) == email && len(email) <= 320
+}
+
+// WithAccountEmails lets requesters nobody bound be compared by the email
+// their Slack profile shows. Without it such a requester owns nothing.
+func (g *GraviteeInspector) WithAccountEmails(accounts AccountEmails) *GraviteeInspector {
+	g.accounts = accounts
+	return g
+}
+
+func (g *GraviteeInspector) requesterEmail(ctx context.Context, held ticket.Ticket) (string, error) {
+	account, ok := domain.SlackAccountOf(held.RequestedBy)
+	if !ok {
+		return g.people.EmailOf(ctx, held.RequestedBy)
+	}
+	if g.accounts == nil {
+		return "", ErrGraviteeRequester
+	}
+	return g.accounts.AccountEmail(ctx, held.Origin.Connection, account)
 }
 
 // Mailbox local-parts are compared exactly: broad case folding would widen an

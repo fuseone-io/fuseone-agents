@@ -530,6 +530,9 @@ func channelFrom(
 				closes := append([]string(nil), conv.Ticket.ClosesOn...)
 				item.Ticket.ClosesOn = &closes
 			}
+			if conv.Ticket.SlackRequesters {
+				item.Ticket.SlackRequesters = ptr(true)
+			}
 		}
 		if conv.ThreadContext {
 			item.ThreadContext = ptr(true)
@@ -565,6 +568,9 @@ func ticketRuleOf(rule *openapi.TicketRule) *channel.TicketRule {
 	}
 	if rule.ClosesOn != nil {
 		out.ClosesOn = append([]string(nil), *rule.ClosesOn...)
+	}
+	if rule.SlackRequesters != nil {
+		out.SlackRequesters = *rule.SlackRequesters
 	}
 	return out
 }

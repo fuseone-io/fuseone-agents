@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -54,7 +55,11 @@ type TicketRule struct {
 	// puts one on the request. Empty means nothing closes a ticket by
 	// reaction, which is how every installation behaved before this existed.
 	ClosesOn []string `json:"closesOn,omitempty"`
-	Patterns []string `json:"patterns"`
+	// SlackRequesters opens a ticket for a requester whose Slack account nobody
+	// bound, under the account itself. A bound account is still its person.
+	// False refuses the unbound, which is how every room behaved before this.
+	SlackRequesters bool     `json:"slackRequesters,omitempty"`
+	Patterns        []string `json:"patterns"`
 }
 
 func (r *TicketRoutes) matcher(
@@ -63,6 +68,7 @@ func (r *TicketRoutes) matcher(
 	fingerprint := sha256.Sum256([]byte(rule.OpenFrom + "\x00" + rule.AddressFrom +
 		"\x00" + rule.RootFrom + "\x00" + rule.ReviewIn + "\x00" +
 		strings.Join(rule.ClosesOn, "\x00") + "\x00" +
+		strconv.FormatBool(rule.SlackRequesters) + "\x00" +
 		strings.Join(rule.Patterns, "\x00")))
 	r.mu.RLock()
 	held, ok := r.compiled[key]

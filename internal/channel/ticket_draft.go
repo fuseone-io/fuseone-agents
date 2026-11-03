@@ -21,14 +21,17 @@ type ticketDraft struct {
 }
 
 type ticketDraftMessage struct {
-	Ref  string        `json:"ref"`
-	By   domain.UserID `json:"by"`
-	Text string        `json:"text"`
+	Ref string        `json:"ref"`
+	By  domain.UserID `json:"by"`
+	// Name is what the vendor calls an author nobody bound, so the agent can
+	// address them. Empty for a bound person and when the vendor would not say.
+	Name string `json:"name,omitempty"`
+	Text string `json:"text"`
 }
 
-func firstTicketDraft(ref string, by domain.UserID, text string) ([]byte, error) {
+func firstTicketDraft(ref string, by domain.UserID, name, text string) ([]byte, error) {
 	return encodeTicketDraft(ticketDraft{Messages: []ticketDraftMessage{{
-		Ref: ref, By: by, Text: strings.TrimSpace(text),
+		Ref: ref, By: by, Name: name, Text: strings.TrimSpace(text),
 	}}})
 }
 

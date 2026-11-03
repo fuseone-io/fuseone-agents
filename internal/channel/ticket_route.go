@@ -54,6 +54,9 @@ type TicketIntent struct {
 	Review   bool   `json:"review,omitempty"`
 	// Close says this arrival ends the ticket rather than adding to it.
 	Close bool `json:"close,omitempty"`
+	// SlackRequesters travels with a decision that opens a ticket: an unbound
+	// requester opens it under their Slack account instead of being refused.
+	SlackRequesters bool `json:"slack_requesters,omitempty"`
 }
 
 func (i TicketIntent) Valid() bool {
@@ -63,7 +66,7 @@ func (i TicketIntent) Valid() bool {
 	if !i.Root {
 		return i.Scope == (domain.Scope{}) && i.Agent == "" && i.RunAs == "" &&
 			i.AddressedBy == "" && !i.Marked && i.RootFrom == "" && i.ReviewIn == "" &&
-			!(i.Review && i.Close)
+			!i.SlackRequesters && !(i.Review && i.Close)
 	}
 	// A decision that opens a ticket names no room it came from: the room is
 	// opened later, and nothing has replied in it yet.
@@ -192,8 +195,9 @@ func (r *TicketRoutes) root(
 	return TicketIntent{
 		Key: key, Root: true, Scope: admitted.scope,
 		Agent: admitted.value.Agent, RunAs: admitted.value.RunAs,
-		AddressedBy: admitted.compiled.rule.AddressFrom,
-		ReviewIn:    admitted.compiled.rule.ReviewIn,
+		AddressedBy:     admitted.compiled.rule.AddressFrom,
+		ReviewIn:        admitted.compiled.rule.ReviewIn,
+		SlackRequesters: admitted.compiled.rule.SlackRequesters,
 	}, true, nil
 }
 

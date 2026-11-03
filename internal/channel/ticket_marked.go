@@ -56,11 +56,11 @@ func (h *TicketHandler) openMarked(ctx context.Context, arrival Claimed) (Ticket
 			Reason: "ticket_requester_unnamed",
 		}}, nil
 	}
-	who, linked, err := h.bindings.PrincipalFor(ctx, arrival.Channel, account)
+	who, known, err := h.requesterFor(ctx, arrival, account)
 	if err != nil {
 		return TicketResult{}, fmt.Errorf("channel: resolve marked ticket requester: %w", err)
 	}
-	if !linked {
+	if !known {
 		return unboundRequester(), nil
 	}
 	return h.open(ctx, arrival, who, root.Ref, root.Text)

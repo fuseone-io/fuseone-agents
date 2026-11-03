@@ -41,6 +41,7 @@ type TicketHandler struct {
 	deciders  TicketDeciders
 	runs      TicketRuns
 	threads   ThreadReader
+	accounts  AccountReader
 	now       func() time.Time
 }
 
@@ -123,11 +124,11 @@ func (h *TicketHandler) openRoot(ctx context.Context, arrival Claimed) (TicketRe
 	if arrival.Ticket.Marked {
 		return h.openMarked(ctx, arrival)
 	}
-	who, linked, err := h.bindings.PrincipalFor(ctx, arrival.Channel, arrival.Source.User)
+	who, known, err := h.requesterFor(ctx, arrival, arrival.Source.User)
 	if err != nil {
 		return TicketResult{}, fmt.Errorf("channel: resolve ticket requester: %w", err)
 	}
-	if !linked {
+	if !known {
 		return unboundRequester(), nil
 	}
 	return h.open(ctx, arrival, who, arrival.Message, arrival.Text)
@@ -139,7 +140,7 @@ func (h *TicketHandler) openRoot(ctx context.Context, arrival Claimed) (TicketRe
 func (h *TicketHandler) open(
 	ctx context.Context, arrival Claimed, who domain.UserID, ref, text string,
 ) (TicketResult, error) {
-	raw, err := firstTicketDraft(ref, who, text)
+	raw, err := firstTicketDraft(ref, who, h.requesterName(ctx, arrival.Channel, who), text)
 	if err != nil {
 		return ticketContextRefusal(err), nil
 	}
@@ -219,7 +220,11 @@ func (h *TicketHandler) handleReply(ctx context.Context, arrival Claimed) (Ticke
 	if err != nil {
 		return TicketResult{}, fmt.Errorf("channel: resolve ticket reply author: %w", err)
 	}
-	if !linked || who != held.RequestedBy {
+	switch {
+	case linked && who == held.RequestedBy:
+	case held.RequestedBy == domain.SlackRequester(arrival.Source.User):
+		who = held.RequestedBy
+	default:
 		return handled("ticket_author_ignored"), nil
 	}
 	if held.Review.Open() {

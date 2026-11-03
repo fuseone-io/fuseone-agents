@@ -320,3 +320,55 @@ func TestCompileTicketPatterns_eachMissingPieceIsNamedAndBlamedOnTheCaller(t *te
 		})
 	}
 }
+
+/*
+A room may accept requesters nobody bound. The decision that opens a ticket
+says so, because the handler resolves the requester later and must not read a
+rule that may have changed since; a decision that opens nothing never does.
+*/
+func TestTicketRoutes_aRoomThatAcceptsSlackRequesters_saysSoOnTheDecision(t *testing.T) {
+	_, channels, settingsStore := configuredChannelsWithStore(t)
+	routes := channel.NewTicketRoutes(settingsStore, ticket.NewMemory())
+	for _, room := range []struct {
+		id   string
+		rule channel.TicketRule
+		at   channel.TicketCandidate
+	}{
+		{"C-tickets", channel.TicketRule{
+			OpenFrom: channel.TicketOpenLinkedUsers, AddressFrom: "bot:B-approvals",
+			Patterns: []string{`api[ -]?key`}, SlackRequesters: true,
+		}, channel.TicketCandidate{Message: "171.1", Thread: "171.1",
+			Text: "Please create an API key", Source: channel.Source{User: "U-unbound"}}},
+		{"C-help", channel.TicketRule{
+			OpenFrom: channel.TicketOpenMarkedThreads, RootFrom: "bot:B-forms",
+			AddressFrom: "bot:B-triage", Patterns: []string{`\[team-sre\]`}, SlackRequesters: true,
+		}, channel.TicketCandidate{Message: "171.2", Thread: "171.1",
+			Text: "[team-sre]", Source: channel.Source{User: "U-triage", Bot: "B-triage"}}},
+	} {
+		putSlackRequesterRoom(t, channels, room.id, room.rule)
+		candidate := room.at
+		candidate.Connection, candidate.Conversation, candidate.Kind = "acme-slack", room.id, "message"
+		intent, ok, err := routes.Route(t.Context(), candidate)
+		if err != nil || !ok || !intent.Root || !intent.SlackRequesters {
+			t.Fatalf("%s: intent=%+v ok=%v err=%v, want a root accepting Slack requesters",
+				room.id, intent, ok, err)
+		}
+	}
+	reply := channel.TicketIntent{Key: "k", SlackRequesters: true}
+	if reply.Valid() {
+		t.Error("a decision that opens nothing carried how requesters are resolved")
+	}
+}
+
+func putSlackRequesterRoom(t *testing.T, channels *admin.Channels, id string, rule channel.TicketRule) {
+	t.Helper()
+	err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: id, Label: "#" + id, Enabled: true,
+		Scope: domain.Scope{Company: "acme", Area: "platform"},
+		Mode:  channel.ConversationTicket, Agent: "ticketito", RunAs: "usr_platform",
+		Ticket: &rule,
+	}, "usr_admin")
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+}

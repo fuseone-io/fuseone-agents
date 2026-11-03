@@ -103,6 +103,18 @@ type ThreadReader interface {
 	Thread(ctx context.Context, channel, conversation, thread, before string) (ThreadContext, error)
 }
 
+// AccountReader reads what a vendor says about one of its accounts.
+type AccountReader interface {
+	Account(ctx context.Context, channel, account string) (Account, error)
+}
+
+// Account is a vendor account's own profile: evidence of who it is, never a
+// binding to a person. Email is empty when the vendor did not share it.
+type Account struct {
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email,omitempty"`
+}
+
 // ThreadContext is the bounded evidence read from a vendor thread.
 type ThreadContext struct {
 	Conversation string          `json:"conversation,omitempty"`

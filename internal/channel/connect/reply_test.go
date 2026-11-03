@@ -51,6 +51,10 @@ func (s *spoke) Thread(
 	return channel.ThreadContext{}, nil
 }
 
+func (s *spoke) Account(_ context.Context, account string) (channel.Account, error) {
+	return channel.Account{Name: s.token + "/" + account, Email: account + "@" + s.token}, nil
+}
+
 func (s *spoke) OpenReview(
 	_ context.Context, opening channel.ReviewOpening,
 ) (string, error) {

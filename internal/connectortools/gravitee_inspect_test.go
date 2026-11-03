@@ -189,6 +189,11 @@ func TestGraviteeInspector_aStaleTicketReachesNoAuthority(t *testing.T) {
 
 func inspectedTicket(t *testing.T) (*ticket.Memory, domain.TicketContext) {
 	t.Helper()
+	return inspectedTicketBy(t, "usr_dev")
+}
+
+func inspectedTicketBy(t *testing.T, requester domain.UserID) (*ticket.Memory, domain.TicketContext) {
+	t.Helper()
 	store := ticket.NewMemory()
 	key, err := ticket.Key("slack", "C-support", "1700.1")
 	if err != nil {
@@ -198,7 +203,7 @@ func inspectedTicket(t *testing.T) (*ticket.Memory, domain.TicketContext) {
 		Key: key, Origin: ticket.Origin{
 			Connection: "slack", Conversation: "C-support", Root: "1700.1",
 		}, Scope: area("acme", "platform"), Agent: "gateway-support", RunAs: "usr_gateway",
-		RequestedBy: "usr_dev",
+		RequestedBy: requester,
 		AddressedBy: "slack-bot", EventID: "event-1",
 		Draft: ticket.ContentRef{Ref: "draft://1", Digest: "digest-1"}, At: graviteeNow.Add(-time.Hour),
 	})

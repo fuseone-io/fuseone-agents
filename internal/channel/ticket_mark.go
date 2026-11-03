@@ -61,6 +61,7 @@ func (r *TicketRoutes) mark(
 		Key: key, Root: true, Marked: true, Scope: admitted.scope,
 		Agent: admitted.value.Agent, RunAs: admitted.value.RunAs,
 		AddressedBy: rule.AddressFrom, RootFrom: rule.RootFrom, ReviewIn: rule.ReviewIn,
+		SlackRequesters: rule.SlackRequesters,
 	}, true, nil
 }
 

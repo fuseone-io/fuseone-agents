@@ -35,6 +35,7 @@ type Driver interface {
 	Say(ctx context.Context, conversation, thread, text string) error
 	SayOutcome(ctx context.Context, conversation, thread, text string) error
 	Thread(ctx context.Context, conversation, thread, before string) (channel.ThreadContext, error)
+	Account(ctx context.Context, account string) (channel.Account, error)
 	OpenReview(ctx context.Context, opening channel.ReviewOpening) (string, error)
 }
 
@@ -112,6 +113,22 @@ func (d *Drivers) Thread(
 		return channel.ThreadContext{}, err
 	}
 	return driver.Thread(ctx, conversation, thread, before)
+}
+
+// Account reads an account's profile from the connection it belongs to.
+func (d *Drivers) Account(ctx context.Context, name, account string) (channel.Account, error) {
+	driver, err := d.driver(ctx, name)
+	if err != nil {
+		return channel.Account{}, err
+	}
+	return driver.Account(ctx, account)
+}
+
+// AccountEmail is the email an account's profile shows; empty when the vendor
+// did not share it.
+func (d *Drivers) AccountEmail(ctx context.Context, name, account string) (string, error) {
+	profile, err := d.Account(ctx, name, account)
+	return profile.Email, err
 }
 
 func (d *Drivers) driver(ctx context.Context, name string) (Driver, error) {

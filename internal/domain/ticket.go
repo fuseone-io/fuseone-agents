@@ -32,3 +32,26 @@ type TicketContext struct {
 func (c TicketContext) Valid() bool {
 	return c.Ref.Valid() && strings.TrimSpace(string(c.RequestedBy)) != ""
 }
+
+const slackRequesterPrefix = "slack:"
+
+/*
+SlackRequester names a requester nobody bound to a person: the Slack account
+itself, on the connection the ticket came from.
+
+It is evidence of who asked and never a principal. No grant, approval or
+binding is ever looked up under it, and person ids are `usr_…`, so it cannot
+be mistaken for somebody's account.
+*/
+func SlackRequester(account string) UserID {
+	return UserID(slackRequesterPrefix + account)
+}
+
+// SlackAccountOf reads the account back from a SlackRequester.
+func SlackAccountOf(id UserID) (string, bool) {
+	account, found := strings.CutPrefix(string(id), slackRequesterPrefix)
+	if !found || account == "" || strings.ContainsAny(account, " \t\r\n") {
+		return "", false
+	}
+	return account, true
+}

@@ -208,7 +208,7 @@ func (p *workerParts) consumeAsks(ctx context.Context, owner string, metrics *wo
 			tickets, p.durable, channel.FromTrigger(p.opener()),
 			people, admin.NewTicketAddresses(p.settings), auth.NewPostgres(pool),
 			p.store, time.Now,
-		).WithThreads(drivers))
+		).WithThreads(drivers).WithAccounts(drivers))
 	go channelSweepLoop(ctx, askSweep, channel.MetricTaskAsksOpened, "asks opened", metrics, func() (int, error) {
 		return consumer.Sweep(ctx, askLease, 20)
 	})

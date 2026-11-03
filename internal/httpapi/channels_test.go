@@ -493,6 +493,46 @@ func TestPutConversation_carriesTheRootSourceOfAMarkedThreadRule(t *testing.T) {
 	}
 }
 
+// Whether the unbound are refused is the room's call. A contract that dropped
+// it would store a room that refuses everybody nobody bound, silently.
+func TestPutConversation_carriesWhetherSlackRequestersAreAccepted(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+	mode := openapi.Ticket
+	if _, err := s.PutConversation(as(domain.RoleCurator), openapi.PutConversationRequestObject{
+		Name: "acme-slack", Conversation: "C-help",
+		Body: &openapi.PutConversationJSONRequestBody{
+			Company: "acme", Area: ptr("platform"), Mode: &mode,
+			Agent: ptr("ticketito"), RunAs: ptr("usr_ana"),
+			Ticket: &openapi.TicketRule{
+				OpenFrom: openapi.MarkedThreads, RootFrom: ptr("bot:B-forms"),
+				AddressFrom: "bot:B-triage", Patterns: []string{`\[team-sre\]`},
+				SlackRequesters: ptr(true),
+			},
+		},
+	}); err != nil || spy.putConv.Ticket == nil || !spy.putConv.Ticket.SlackRequesters {
+		t.Fatalf("PutConversation: err=%v conversation=%+v", err, spy.putConv)
+	}
+
+	listed := NewServer(ledger.NewMemory(), "test").WithChannels(&channelSpy{
+		listed: []admin.Channel{{Name: "acme-slack", Kind: "slack", Enabled: true,
+			Conversations: []admin.Conversation{{
+				ID: "C-help", Scope: domain.Scope{Company: "acme", Area: "platform"},
+				Mode: channel.ConversationTicket, Enabled: true, Ticket: spy.putConv.Ticket,
+			}},
+		}},
+	}, nil).WithChannelListing(&listerSpy{kinds: []string{"slack"}})
+	page, err := listed.ListChannels(as(domain.RoleCurator), openapi.ListChannelsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListChannels: %v", err)
+	}
+	got := page.(openapi.ListChannels200JSONResponse).Items[0].Conversations[0].Ticket
+	if got == nil || got.SlackRequesters == nil || !*got.SlackRequesters {
+		t.Fatalf("ticket = %+v, want Slack requesters accepted as stored", got)
+	}
+}
+
 func TestPutConversation_mentionsModeCanIncludeThreadContext(t *testing.T) {
 	t.Parallel()
 	spy := &channelSpy{}

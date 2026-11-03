@@ -11,6 +11,7 @@ import (
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/auth"
+	"github.com/fuseone/agents/internal/channel/connect"
 	"github.com/fuseone/agents/internal/connectortools"
 	"github.com/fuseone/agents/internal/contextshare"
 	effectdedupe "github.com/fuseone/agents/internal/dedupe"
@@ -147,7 +148,7 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 		graviteeInspector := connectortools.NewGraviteeInspector(
 			graviteeAccess, graviteeRemote, auth.NewPostgres(parts.configPool),
 			parts.content, graviteeTickets,
-		)
+		).WithAccountEmails(connect.New(parts.settings))
 		parts.graviteeRuntime = connectortools.NewGraviteeAcceptRuntime(
 			graviteeAccess, graviteeRemote, parts.content,
 			graviteeTickets, parts.graviteeAttempts,
