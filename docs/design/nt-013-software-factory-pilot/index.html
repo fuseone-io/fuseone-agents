@@ -550,6 +550,24 @@ joined through the work-item key the claim records; time in each lane; review fi
 role missed. The pilot’s question is whether each role, at copilot, is right
 often enough to be worth its approvals — answered per role, not for the
 factory as a whole.</p>
+<p>Where each measure is read (#201):</p>
+<ul>
+<li><strong>From the run ledger</strong>: proposals, approvals asked and how they were
+answered, cost per card. <code dir="auto">GET /api/v1/work-items/measures</code> reports them per
+role and per ISO week, and the console shows them on the <strong>Work item</strong>
+screen as <strong>Per role, per week</strong>
+(<a href="manual/en-US/software-factory.md#per-role-per-week">manual</a>).</li>
+<li><strong>From the board</strong>: time in each lane, who owned it, and the signals that a
+later stage or a person caught what a role passed. The API lists both under
+<code dir="auto">unavailable[]</code> as <code dir="auto">board_only</code>, and
+<a href="../factory/measure/README.md"><code dir="auto">factory/measure</code></a> reads them from the
+issue and pull request timelines. It is read-only, and its canary has to pass
+before its numbers are relied on.</li>
+<li><strong>“Edited” is not recorded.</strong> An approval approves the proposal as it was
+asked, and the engine refuses arguments whose digest differs from the
+approved ones. An approval with changes does not exist. The ledger reports
+proposals revised or repeated after a refusal instead.</li>
+</ul>
 <div class="sl-heading-wrapper level-h2"><h2 id="decided">Decided</h2><a class="sl-anchor-link" href="#decided"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Decided”</span></a></div>
 <ul>
 <li><strong>The Developer starts at Level 1</strong> (#200): small, self-contained changes

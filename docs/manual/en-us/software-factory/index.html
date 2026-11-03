@@ -594,6 +594,14 @@ measure. Proposal edits are not recorded by the platform: a decision approves
 or refuses a proposal as it was asked, so the revised and repeated counts are
 what the ledger has instead. Lane time and findings caught later come from the
 project board and are read by the factory CLI, not by this screen.</p>
+<p>That CLI is
+<a href="https://github.com/fuseone-io/fuseone-agents/blob/main/factory/measure/README.md"><code dir="auto">factory/measure</code></a>.
+It reads the board and the timelines of its issues and pull requests, writes
+nothing to GitHub, and prints the same weeks as markdown: each lane’s median
+and p90 hours, the time each role and each person owned, and the signals
+caught later. Run its canary with the token you will use before trusting a
+report. Until it passes, nobody has confirmed that GitHub shows a role’s moves
+as that role’s App.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="changing-a-role">Changing a role</h2><a class="sl-anchor-link" href="#changing-a-role"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Changing a role”</span></a></div>
 <p>A change to a role is made in the reference first, reviewed by pull request,
 and then copied into the console. When the console and the reference
