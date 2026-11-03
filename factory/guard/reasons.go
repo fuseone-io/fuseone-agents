@@ -44,6 +44,30 @@ const (
 
 	ReasonStatusRefused Reason = "status_refused"
 	ReasonWrongIdentity Reason = "wrong_identity"
+
+	// The board tools' vocabulary, in the order the refusals are judged.
+	ReasonMoved             Reason = "moved"
+	ReasonAlreadyInLane     Reason = "already_in_lane"
+	ReasonItemNotFound      Reason = "item_not_found"
+	ReasonWrongProject      Reason = "wrong_project"
+	ReasonItemArchived      Reason = "item_archived"
+	ReasonLaneUnknown       Reason = "lane_unknown"
+	ReasonTravadoIsHuman    Reason = "travado_is_human"
+	ReasonDoneIsFinal       Reason = "done_is_final"
+	ReasonTransitionRefused Reason = "transition_refused"
+	// ReasonMoveRefused: GitHub answered the update with errors[], a non-2xx
+	// status or no updated item. ReasonMoveNotSent: the update never left
+	// the process; known not to have happened.
+	ReasonMoveRefused Reason = "move_refused"
+	ReasonMoveNotSent Reason = "move_not_sent"
+
+	// ReasonFieldsLocked: the card has left Triagem, and its Work type and
+	// Size are no longer an agent's to change.
+	ReasonFieldsLocked  Reason = "fields_locked"
+	ReasonUpdated       Reason = "updated"
+	ReasonAlreadySet    Reason = "already_set"
+	ReasonUpdateRefused Reason = "update_refused"
+	ReasonUpdateNotSent Reason = "update_not_sent"
 )
 
 // QAContext is the commit-status context the QA verdict lives under, and the

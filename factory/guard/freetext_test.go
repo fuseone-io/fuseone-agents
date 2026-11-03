@@ -80,3 +80,70 @@ func TestMergeResult_stringFields_areOnlyReasonsSHAsAndConfiguredNames(t *testin
 		}
 	}
 }
+
+// The same guarantee for the board tools, over the GraphQL fake: titles,
+// content, text values and every error message carry the canary.
+func TestBoardTools_noResultCarriesFreeTextFromGitHub(t *testing.T) {
+	t.Parallel()
+
+	scenarios := map[string]func(f *fakeGraphQL){
+		"all valid":          func(*fakeGraphQL) {},
+		"wrong project":      func(f *fakeGraphQL) { f.items[testItem].ProjectID = otherProjectID },
+		"archived":           func(f *fakeGraphQL) { f.items[testItem].Archived = true },
+		"not found":          func(f *fakeGraphQL) { delete(f.items, testItem) },
+		"lane unknown":       func(f *fakeGraphQL) { f.items[testItem].Status = "opt-backlog" },
+		"in travado":         func(f *fakeGraphQL) { f.items[testItem].Status = "opt-travado" },
+		"update errors":      func(f *fakeGraphQL) { f.refuseField = testStatusField },
+		"size errors":        func(f *fakeGraphQL) { f.refuseField = testSizeField },
+		"update http status": func(f *fakeGraphQL) { f.mutationStatus = 403 },
+		"update answer lost": func(f *fakeGraphQL) { f.dropMutation = true },
+		"read refused":       func(f *fakeGraphQL) { f.readErrors = true },
+		"moved before update": func(f *fakeGraphQL) {
+			f.beforeMutation = func(f *fakeGraphQL) { f.items[testItem].Status = "opt-travado" }
+		},
+	}
+	calls := map[string]map[string]any{
+		ToolMoveCard:      {"item_id": testItem, "lane": "Preparado"},
+		ToolSetCardFields: {"item_id": testItem, "work_type": "bug", "size": "M"},
+	}
+	for name, mutate := range scenarios {
+		for tool, args := range calls {
+			t.Run(name+"/"+tool, func(t *testing.T) {
+				t.Parallel()
+				h := newBoardHarness(t, LaneTriagem)
+				h.edit(mutate)
+				raw, err := json.Marshal(mustCall(t, h.session(RoleTriage), tool, args))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if strings.Contains(string(raw), canary) || strings.Contains(string(raw), "canary") {
+					t.Fatalf("result carries GitHub's free text: %s", raw)
+				}
+			})
+		}
+	}
+}
+
+// Every string a move result can carry is a closed reason, the validated
+// item id, or a lane from the closed set.
+func TestMoveResult_stringFields_areOnlyReasonsIDsAndLanes(t *testing.T) {
+	t.Parallel()
+
+	h := newBoardHarness(t, LaneTriagem)
+	raw, _ := json.Marshal(h.move(RoleTriage, "Travado"))
+	var fields map[string]any
+	_ = json.Unmarshal(raw, &fields)
+	for key, v := range fields {
+		s, ok := v.(string)
+		if !ok {
+			continue
+		}
+		_, lane := member(Lanes(), s)
+		allowed := (key == "reason" && Reason(s) == ReasonMoved) ||
+			(key == "item_id" && s == testItem) ||
+			((key == "from" || key == "to") && lane)
+		if !allowed {
+			t.Fatalf("field %q = %q is not a reason, the item id or a lane", key, s)
+		}
+	}
+}
