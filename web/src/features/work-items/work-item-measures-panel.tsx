@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Panel } from "@/components/shared/panel";
 import { Separator } from "@/components/ui/separator";
@@ -9,14 +9,10 @@ import {
 } from "@/components/shared/states";
 import { useWorkItemMeasures } from "@/features/work-items/api";
 import { weeksNewestFirst } from "@/features/work-items/measure-ratios";
-import {
-  WorkItemMeasuresFilters,
-  type MeasureView,
-} from "@/features/work-items/work-item-measures-filters";
+import { useMeasureView } from "@/features/work-items/use-measure-view";
+import { WorkItemMeasuresFilters } from "@/features/work-items/work-item-measures-filters";
 import { WorkItemMeasuresWeek } from "@/features/work-items/work-item-measures-week";
 import { WorkItemUnavailable } from "@/features/work-items/work-item-unavailable";
-
-const DEFAULT_VIEW: MeasureView = { weeks: 8 };
 
 /**
  * Per role, per week: what the ledger knows about the factory's work (#201).
@@ -25,9 +21,8 @@ const DEFAULT_VIEW: MeasureView = { weeks: 8 };
  */
 export function WorkItemMeasuresPanel() {
   const { t } = useTranslation();
-  const [view, setView] = useState<MeasureView>(DEFAULT_VIEW);
-  const { weeks, ...filters } = view;
-  const measures = useWorkItemMeasures(weeks, filters);
+  const { weeks, choices, setView } = useMeasureView();
+  const measures = useWorkItemMeasures(weeks, choices.filters);
   const shown = useMemo(
     () => weeksNewestFirst(measures.data?.rows ?? []),
     [measures.data],
@@ -36,7 +31,13 @@ export function WorkItemMeasuresPanel() {
   return (
     <Panel
       title={t("workItems.measures.title")}
-      action={<WorkItemMeasuresFilters view={view} onChange={setView} />}
+      action={
+        <WorkItemMeasuresFilters
+          weeks={weeks}
+          choices={choices}
+          onChange={setView}
+        />
+      }
       flush
     >
       {measures.isLoading ? (

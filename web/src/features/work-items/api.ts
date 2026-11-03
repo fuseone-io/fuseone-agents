@@ -10,14 +10,20 @@ import { useScopeFilter } from "@/features/scope/use-scope-filter";
 export const workItemKeys = {
   all: ["work-items"] as const,
   trail: (ref: string) => [...workItemKeys.all, "trail", ref] as const,
-  measures: (scope: string, weeks: number, filters: MeasureFilters) =>
-    [...workItemKeys.all, "measures", scope, weeks, filters] as const,
+  measures: (scope: string, query: MeasureQuery) =>
+    [...workItemKeys.all, "measures", scope, query] as const,
 };
 
 /** Narrower than the active scope: one area of it, one agent. Empty is all. */
 export interface MeasureFilters {
   area?: string;
   agentId?: string;
+}
+
+/** Exactly what is sent, which is also what the cache is keyed by. */
+interface MeasureQuery extends MeasureFilters {
+  weeks: number;
+  company?: string;
 }
 
 /**
@@ -58,26 +64,24 @@ export function useWorkItemTrail(ref: string) {
  * The ledger's weekly measures per role (#201), for the `weeks` whole weeks
  * ending with the current one.
  *
- * The active scope travels as it does everywhere; an area picked here narrows
- * it further. The rows come back as the server sent them, oldest week first:
- * the order they are shown in is the panel's business.
+ * The active scope travels as it does everywhere, and it prevails: an area
+ * picked here only narrows a scope that names none, and is never sent beside
+ * an area the scope already chose. The rows come back as the server sent
+ * them, oldest week first: the order they are shown in is the panel's.
  */
 export function useWorkItemMeasures(weeks: number, filters: MeasureFilters) {
   const scope = useScopeFilter();
+  const query = {
+    weeks,
+    company: scope.params.company,
+    area: scope.params.area ?? (filters.area || undefined),
+    agentId: filters.agentId || undefined,
+  };
   return useQuery({
-    queryKey: workItemKeys.measures(scope.key, weeks, filters),
+    queryKey: workItemKeys.measures(scope.key, query),
     queryFn: async () =>
       unwrap(
-        await api.GET("/work-items/measures", {
-          params: {
-            query: {
-              weeks,
-              company: scope.params.company,
-              area: filters.area || scope.params.area,
-              agentId: filters.agentId || undefined,
-            },
-          },
-        }),
+        await api.GET("/work-items/measures", { params: { query } }),
       ) as WorkItemMeasures,
   });
 }
