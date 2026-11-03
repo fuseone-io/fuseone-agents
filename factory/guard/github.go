@@ -28,10 +28,11 @@ type TokenSource interface {
 
 // ClientOptions configure a Client.
 type ClientOptions struct {
-	APIURL string
-	Repo   Repo
-	HTTP   *http.Client
-	Tokens TokenSource
+	APIURL     string
+	GraphQLURL string // the board tools' endpoint; REST paths never use it
+	Repo       Repo
+	HTTP       *http.Client
+	Tokens     TokenSource
 }
 
 // Client is a deliberately small REST client: the endpoints the two tools need
@@ -61,11 +62,13 @@ func (c *Client) repoPath(format string, args ...any) string {
 	return fmt.Sprintf("/repos/%s/%s", c.opts.Repo.Owner, c.opts.Repo.Name) + fmt.Sprintf(format, args...)
 }
 
-// apiRequest is one REST call. Body and Out are `any` because they are what
+// apiRequest is one call. Body and Out are `any` because they are what
 // encoding/json takes: a request struct to encode, a pointer to decode into.
+// URL, when set, replaces APIURL+Path; Path then only names the call in
+// errors.
 type apiRequest struct {
-	Method, Path string
-	Body, Out    any
+	Method, Path, URL string
+	Body, Out         any
 }
 
 // build prepares a request without sending it. Every failure here is
@@ -83,7 +86,11 @@ func (c *Client) build(ctx context.Context, r apiRequest) (*http.Request, error)
 		}
 		reader = bytes.NewReader(raw)
 	}
-	req, err := http.NewRequestWithContext(ctx, r.Method, c.opts.APIURL+r.Path, reader)
+	url := c.opts.APIURL + r.Path
+	if r.URL != "" {
+		url = r.URL
+	}
+	req, err := http.NewRequestWithContext(ctx, r.Method, url, reader)
 	if err != nil {
 		return nil, fmt.Errorf("%w: github %s %s: %w", ErrNotSent, r.Method, r.Path, err)
 	}
