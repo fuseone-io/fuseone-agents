@@ -642,9 +642,12 @@ otherwise:
   signal repaired or a head pushed since the listing writes nothing;
 - `merge_refused` and `outcome_unknown` cannot be rebuilt by reading, so they
   must be what this process's own `merge_if_ready` returned for that head,
-  within the hour. That record is the process's memory only: a run resumed on
-  another instance finds none, `send_back` refuses, and the next run proposes
-  the merge again. The comment goes first
+  within the hour, and that refusal proves **one** `send_back`: it is spent
+  when used, so a second call, or one after a person cleared the cause and
+  returned the card, writes nothing. A comment known not to have been written
+  gives it back for a retry. The record is the process's memory only: a run
+  resumed on another instance finds none, `send_back` refuses, and the next
+  run proposes the merge again. The comment goes first
 and the labels after (the new one added before `ready-to-merge` comes off),
 so a failure between the writes leaves the pull request still ready to merge
 and the next `send_back` repairs it; its one cost is a repeated comment.
