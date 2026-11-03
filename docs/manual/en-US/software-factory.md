@@ -476,6 +476,15 @@ or refuses a proposal as it was asked, so the revised and repeated counts are
 what the ledger has instead. Lane time and findings caught later come from the
 project board and are read by the factory CLI, not by this screen.
 
+That CLI is
+[`factory/measure`](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/measure/README.md).
+It reads the board and the timelines of its issues and pull requests, writes
+nothing to GitHub, and prints the same weeks as markdown: each lane's median
+and p90 hours, the time each role and each person owned, and the signals
+caught later. Run its canary with the token you will use before trusting a
+report. Until it passes, nobody has confirmed that GitHub shows a role's moves
+as that role's App.
+
 ## Changing a role
 
 A change to a role is made in the reference first, reviewed by pull request,

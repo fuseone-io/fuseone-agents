@@ -1,0 +1,19 @@
+# Role -> the login of that role's GitHub App bot, `<app-slug>[bot]`.
+#
+# factory-measure attributes a board move, a comment, a review, a commit or a
+# commit status to a role only when its actor is a Bot whose login is listed
+# here. Any other Bot is reported as an unmapped actor, never guessed. A User
+# is a person.
+#
+# triage, reviewer and qa were checked to exist as Bot users on 2026-11-03
+# (gh api '/users/<login with [ as %5B and ] as %5D>' --jq .type). No App was
+# found under fuseone-factory-architect or fuseone-factory-developer, so those
+# two are placeholders: the operator fills them in with the slugs of the Apps
+# the roles actually run under. `factory-measure report` refuses to run while
+# any value below contains PLACEHOLDER.
+bots:
+  triage: fuseone-factory-triage[bot]
+  architect: PLACEHOLDER-architect-app-slug[bot]
+  developer: PLACEHOLDER-developer-app-slug[bot]
+  reviewer: fuseone-factory-reviewer[bot]
+  qa: fuseone-factory-qa[bot]

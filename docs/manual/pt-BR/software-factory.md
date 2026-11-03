@@ -502,6 +502,15 @@ contagens de revisadas e repetidas são o que o registro tem no lugar. O tempo
 em lane e os achados posteriores vêm do quadro do projeto e são lidos pela CLI
 da fábrica, não por esta tela.
 
+Essa CLI é a
+[`factory/measure`](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/measure/README.md).
+Ela lê o quadro e as timelines das issues e dos pull requests dele, não grava
+nada no GitHub e imprime as mesmas semanas em markdown: a mediana e o p90 de
+horas de cada lane, o tempo que ficou com cada papel e com cada pessoa, e os
+sinais pegos depois. Antes de confiar em um relatório, rode o canary dela com
+o token que você vai usar. Enquanto ele não passa, ninguém confirmou que o
+GitHub mostra os movimentos de um papel como sendo do App desse papel.
+
 ## Mudando um papel
 
 Uma mudança num papel é feita primeiro na referência, revisada por pull

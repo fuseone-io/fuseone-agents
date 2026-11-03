@@ -48,6 +48,8 @@ factory/
   guard/, mcp/           the factory MCP server: move_card, set_card_fields
                          and record_qa_verdict, used in v1 (#213);
                          merge_if_ready, deferred with the Merger (#211)
+  measure/               factory-measure: lane time and caught-later signals
+                         read from the board, read-only (#201)
 ```
 
 ## Roles
