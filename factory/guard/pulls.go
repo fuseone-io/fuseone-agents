@@ -5,13 +5,17 @@ import (
 	"strings"
 )
 
-// pullRequest holds the PR fields a decision reads. Title, body, labels and
-// every other text field are left undecoded on purpose: what is never read
-// cannot leak into a result.
+// pullRequest holds the PR fields a decision reads. Title, body and every
+// other text field are left undecoded on purpose: what is never read cannot
+// leak into a result. Label names are decoded only to be compared against
+// this package's own constants (hasLabel); none is ever returned.
 type pullRequest struct {
-	State     string `json:"state"`
-	Merged    bool   `json:"merged"`
-	Mergeable *bool  `json:"mergeable"`
+	State  string `json:"state"`
+	Labels []struct {
+		Name string `json:"name"`
+	} `json:"labels"`
+	Merged    bool  `json:"merged"`
+	Mergeable *bool `json:"mergeable"`
 	// MergeCommitSHA is passed on only after validSHA accepts it.
 	MergeCommitSHA string `json:"merge_commit_sha"`
 	Head           struct {
@@ -23,6 +27,16 @@ type pullRequest struct {
 			FullName string `json:"full_name"`
 		} `json:"repo"`
 	} `json:"base"`
+}
+
+// hasLabel reports whether the PR carries one of this package's labels.
+func (pr pullRequest) hasLabel(name string) bool {
+	for _, l := range pr.Labels {
+		if l.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Client) pullRequest(ctx context.Context, number int) (pullRequest, error) {

@@ -34,6 +34,7 @@ func TestTools_noResultCarriesFreeTextFromGitHub(t *testing.T) {
 		args  map[string]any
 	}{
 		ToolMergeIfReady: {RoleMerger, "merger-token", map[string]any{"pr": testPR, "head_sha": headA}},
+		ToolSendBack:     {RoleMerger, "merger-token", map[string]any{"pr": testPR, "head_sha": headA, "reason": "review_stale"}},
 		ToolRecordQAVerdict: {RoleQA, "qa-token", map[string]any{
 			"pr": testPR, "head_sha": headA, "verdict": "success", "summary": "ok"}},
 	}

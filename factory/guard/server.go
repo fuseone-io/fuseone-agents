@@ -30,6 +30,8 @@ func NewServer(cfg Config, role Role, gh *Client) (*mcp.Server, error) {
 			registerQA(server, NewQA(cfg, gh))
 		case ToolMergeIfReady:
 			registerMerger(server, NewMerger(cfg, gh))
+		case ToolSendBack:
+			registerSendBack(server, NewSendBack(cfg, gh))
 		}
 	}
 	return server, nil
@@ -61,5 +63,21 @@ func registerQA(server *mcp.Server, qa *QA) {
 			return nil, VerdictResult{}, err
 		}
 		return &mcp.CallToolResult{IsError: !res.Recorded}, res, nil
+	})
+}
+
+func registerSendBack(server *mcp.Server, s *SendBack) {
+	mcp.AddTool(server, &mcp.Tool{
+		Name: ToolSendBack,
+		Description: "Write back why the Merger did not merge a pull request still labelled " +
+			"factory:ready-to-merge: a closed-text comment, then the label of the role whose signal " +
+			"is missing. For a reason only a person can clear it keeps the label and answers " +
+			"travado, and the Merger moves the card to Travado. Returns structured state only.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in SendBackInput) (*mcp.CallToolResult, SendBackResult, error) {
+		res, err := s.SendBack(callContext(ctx, req), in)
+		if err != nil {
+			return nil, SendBackResult{}, err
+		}
+		return &mcp.CallToolResult{IsError: !res.SentBack}, res, nil
 	})
 }
