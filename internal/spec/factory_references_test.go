@@ -50,7 +50,7 @@ func TestFactoryReferences_roleFiles_areExactlyTheRolesWithAReference(t *testing
 	}
 	slices.Sort(roles)
 	// A new role arrives with its issue and its review; this list moves with it.
-	if want := []string{"architect", "developer", "qa", "reviewer", "triage"}; !slices.Equal(roles, want) {
+	if want := []string{"architect", "developer", "merger", "qa", "reviewer", "triage"}; !slices.Equal(roles, want) {
 		t.Errorf("role references = %v, want %v", roles, want)
 	}
 }
@@ -306,6 +306,9 @@ var returnLines = map[string]string{
 	"developer": "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its blocker is cleared.",
 	"reviewer":  "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its blocker is cleared.",
 	"qa":        "End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its blocker is cleared.",
+	// The Merger writes no comment of its own: send_back writes it, from
+	// closed text, so its line says who writes it.
+	"merger": "Every comment that blocks a card is written by send_back and ends with a line of its own that reads Return to: Doing, the lane the card goes back to once its blocker is cleared.",
 }
 
 // unblockLine is what every role's Travado comment must carry besides its
@@ -344,6 +347,7 @@ var skipClosedLines = map[string]string{
 	"developer": "Skip a card whose issue or pull request is closed: search pull requests with is:open, list the Doing lane with the query state:open is:issue, and take no closed card even if one is listed.",
 	"reviewer":  "Skip a pull request that is closed: search only with is:open, and take no closed pull request even if one is listed.",
 	"qa":        "Skip a pull request that is closed: search only with is:open, and take no closed pull request even if one is listed.",
+	"merger":    "Take only a pull request list_ready_prs lists: it lists only open pull requests whose card is in Doing, and take no other even if you know of one.",
 }
 
 // clauseSeparator splits instructions into the clauses a query belongs to.

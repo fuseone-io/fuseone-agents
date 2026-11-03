@@ -33,6 +33,7 @@ var factorySurface = map[string][]string{
 	"developer": {"move_card"},
 	"reviewer":  {"move_card"},
 	"qa":        {"move_card", "record_qa_verdict"},
+	"merger":    {"list_ready_prs", "merge_if_ready", "move_card", "send_back"},
 }
 
 func parsedReferences(t *testing.T) map[string]spec.Spec {

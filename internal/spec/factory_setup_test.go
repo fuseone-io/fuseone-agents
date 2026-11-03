@@ -304,3 +304,105 @@ func TestFactorySetup_everyServerTheRolesReach_isNamedByTheSetup(t *testing.T) {
 		}
 	}
 }
+
+// The Merger is the one role that merges, so before it starts main must also
+// require the checks merge_if_ready waits for, from GitHub Actions and from
+// nothing else: a check run's name proves nothing, since anyone who can write
+// checks can publish one, so each is pinned to the app that emits it (15368,
+// github-actions). The list is FACTORY_CHECKS, the jobs of check.yml
+// (factory/mcp/checks_doc_test.go), and nobody bypasses it. factory/qa and
+// the Reviewer's approval stay outside: requiring them with no bypass would
+// block every pull request that does not go through the factory, and a
+// ruleset cannot name a GitHub App as a required reviewer. merge_if_ready
+// requires both on the head.
+const (
+	checksRulesetEN = "Before the Merger is started, main must also carry the checks ruleset: the six checks of the check workflow required from GitHub Actions on an up-to-date head, and no bypass for anyone."
+	checksRulesetPT = "Antes de iniciar o Merger, o main precisa ter também o ruleset de checks: os seis checks do workflow check exigidos do GitHub Actions num head atualizado, e nenhum bypass para ninguém."
+)
+
+const checksRulesetHeredoc = `gh api --method POST repos/<owner>/<name>/rulesets --input - <<'CHECKS'`
+
+const checksRulesetPayload = `{
+  "name": "main: checks required",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "required_status_checks", "parameters": {
+        "strict_required_status_checks_policy": true,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          { "context": "go", "integration_id": 15368 },
+          { "context": "postgres", "integration_id": 15368 },
+          { "context": "console", "integration_id": 15368 },
+          { "context": "chart", "integration_id": 15368 },
+          { "context": "factory-mcp-image", "integration_id": 15368 },
+          { "context": "artifact", "integration_id": 15368 }
+        ] } }
+  ],
+  "bypass_actors": []
+}`
+
+// factoryChecks is FACTORY_CHECKS as factory/mcp/README.md states it, the
+// list its own test ties to check.yml.
+var factoryChecks = regexp.MustCompile("(?m)^\\| `FACTORY_CHECKS` \\|[^\\n]*?`([a-z-]+(?:,[a-z-]+)+)`")
+
+func TestFactorySetup_checksRuleset_isTheMergersPrerequisiteInEveryText(t *testing.T) {
+	t.Parallel()
+
+	want := map[string]string{
+		"../../factory/agents/merger.agent.md":        checksRulesetEN,
+		"../../factory/agents/README.md":              checksRulesetEN,
+		"../../docs/manual/en-US/software-factory.md": checksRulesetEN,
+		"../../docs/manual/pt-BR/software-factory.md": checksRulesetPT,
+	}
+	for path, sentence := range want {
+		if count := countLines(strings.Split(readFile(t, path), "\n"), sentence); count != 1 {
+			t.Errorf("%s carries the checks ruleset line %d times, want 1", path, count)
+		}
+	}
+}
+
+func TestFactorySetup_checksRulesetCommand_requiresExactlyFactoryChecksFromActions(t *testing.T) {
+	t.Parallel()
+
+	want, err := decodeJSON(checksRulesetPayload)
+	if err != nil {
+		t.Fatalf("the expected payload does not decode: %v", err)
+	}
+	// The payload's contexts are FACTORY_CHECKS, in its order: the Merger's
+	// list and the ruleset's must be one list.
+	m := factoryChecks.FindStringSubmatch(readFile(t, "../../factory/mcp/README.md"))
+	if m == nil {
+		t.Fatal("factory/mcp/README.md states no FACTORY_CHECKS")
+	}
+	var contexts []string
+	for _, c := range want.(map[string]any)["rules"].([]any)[0].(map[string]any)["parameters"].(map[string]any)["required_status_checks"].([]any) {
+		contexts = append(contexts, c.(map[string]any)["context"].(string))
+	}
+	if strings.Join(contexts, ",") != m[1] {
+		t.Fatalf("the checks ruleset requires %v, but FACTORY_CHECKS is %s", contexts, m[1])
+	}
+	for _, path := range factorySetupTexts {
+		text := readFile(t, path)
+		lines := strings.Split(text, "\n")
+		start := slices.Index(lines, checksRulesetHeredoc)
+		if start < 0 {
+			t.Errorf("%s has no line %q", path, checksRulesetHeredoc)
+			continue
+		}
+		end := slices.Index(lines[start+1:], "CHECKS")
+		if end < 0 {
+			t.Errorf("%s never closes the checks ruleset heredoc", path)
+			continue
+		}
+		got, err := decodeJSON(strings.Join(lines[start+1:start+1+end], "\n"))
+		if err != nil {
+			t.Errorf("%s: the checks ruleset payload is not JSON: %v", path, err)
+			continue
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: the checks ruleset payload is\n%v\nwant\n%v", path, got, want)
+		}
+	}
+}
