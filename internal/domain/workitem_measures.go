@@ -16,8 +16,10 @@ how people answered, and where their cost went.
 
 A week starts on Monday at 00:00 UTC, whatever zone the instant was read in.
 A run belongs to the week it opened in, and everything it asked counts there,
-however late it was answered — so a closed week does not change when an old
-run is decided.
+however late it was answered. The rows are computed when they are read, not
+frozen when a week ends: a run that opened in a closed week and is decided,
+abandoned or finished later moves that week's approved, refused, pending and
+open counts. Only which week a run belongs to never changes.
 
 Counts, identifiers and instants only. What a proposal carried — its
 arguments, its reasons, the note on its decision — never leaves the store.
