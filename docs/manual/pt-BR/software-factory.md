@@ -121,7 +121,7 @@ gh label create factory:needs-design --force --color fbca04 --description "Triag
 gh label create factory:needs-review --force --color fbca04 --description "PR waits for the Reviewer"
 gh label create factory:changes-requested --force --color fbca04 --description "Reviewer or QA asked for changes"
 gh label create factory:needs-qa --force --color fbca04 --description "PR waits for QA"
-gh label create factory:ready-to-merge --force --color fbca04 --description "Review and QA approved the head; a person merges"
+gh label create factory:ready-to-merge --force --color fbca04 --description "Review and QA approved the head; the Merger proposes the merge"
 gh label create factory:needs-runtime --force --color fbca04 --description "Needs a build or a test run before its PR; waits for Level 2"
 ```
 
