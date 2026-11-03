@@ -202,19 +202,46 @@ func TestUnavailableWorkItemMeasures_namesEditedOnceAndTheBoardMeasures(t *testi
 	}
 }
 
-func TestIsStandingDecision_onlyAnApprovalTheEngineWroteForAGrant(t *testing.T) {
+// Provenance is structural: the grant the engine names on the decision. The
+// note is free text an approver types, so a note that reads like a standing
+// approval proves nothing — and a legacy standing decision, written before
+// the field existed, carries the grant owner's own name in By and cannot be
+// told from a person's: it is not counted as standing.
+func TestIsStandingDecision_onlyAnApprovalNamingItsGrant(t *testing.T) {
 	t.Parallel()
+	prefixed := domain.StandingApprovalNotePrefix + "sa_1: nightly"
 	cases := []struct {
+		name string
 		d    domain.ApprovalDecidedPayload
 		want bool
 	}{
-		{domain.ApprovalDecidedPayload{Approved: true, Note: domain.StandingApprovalNotePrefix + "sa_1: nightly"}, true},
-		{domain.ApprovalDecidedPayload{Approved: true, Note: "looks fine"}, false},
-		{domain.ApprovalDecidedPayload{Approved: false, Note: domain.StandingApprovalNotePrefix + "sa_1: x"}, false},
+		{"the engine's standing approval", domain.ApprovalDecidedPayload{
+			Approved: true, By: "usr_ana", Note: prefixed, StandingGrant: "sa_1"}, true},
+		{"a person's approval", domain.ApprovalDecidedPayload{Approved: true, By: "usr_ana", Note: "looks fine"}, false},
+		{"a person's note that reads like one", domain.ApprovalDecidedPayload{
+			Approved: true, By: "usr_ana", Note: prefixed}, false},
+		{"a legacy standing approval, note only", domain.ApprovalDecidedPayload{
+			Approved: true, By: "usr_ana", Note: prefixed}, false},
+		{"a refusal naming a grant", domain.ApprovalDecidedPayload{Approved: false, StandingGrant: "sa_1"}, false},
 	}
 	for _, c := range cases {
 		if got := domain.IsStandingDecision(c.d); got != c.want {
-			t.Errorf("IsStandingDecision(%+v) = %v, want %v", c.d, got, c.want)
+			t.Errorf("%s: IsStandingDecision(%+v) = %v, want %v", c.name, c.d, got, c.want)
+		}
+	}
+}
+
+func TestReservedApprovalNote_isTheStandingPrefixHoweverItIsCased(t *testing.T) {
+	t.Parallel()
+	for note, want := range map[string]bool{
+		"standing approval sa_1: x":   true,
+		"  Standing Approval sa_1: x": true,
+		"standing approvals are nice": false,
+		"looks fine":                  false,
+		"":                            false,
+	} {
+		if got := domain.ReservedApprovalNote(note); got != want {
+			t.Errorf("ReservedApprovalNote(%q) = %v, want %v", note, got, want)
 		}
 	}
 }

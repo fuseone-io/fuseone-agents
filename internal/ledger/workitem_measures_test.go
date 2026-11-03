@@ -211,21 +211,31 @@ func TestWorkItemMeasures_aProposalInAnotherRun_revisesNothing(t *testing.T) {
 	})
 }
 
+// Standing is the grant the engine names on the decision, never the note: a
+// person's note — or a legacy standing decision, which names no grant and
+// carries the grant owner's own name in By — counts as approved, not standing.
 func TestWorkItemMeasures_aStandingApproval_countsAsStandingAndApproved(t *testing.T) {
 	run(t, "standing approvals", func(t *testing.T, s Store) {
+		const tool = domain.ToolID("github.issue_write")
+		prefixed := domain.StandingApprovalNotePrefix + "sa_1: nightly"
 		openAt(t, s, "run-1", "developer", areaFactory, trailStart)
 		decide(t, s, "run-1", "developer", areaFactory, domain.ApprovalDecidedPayload{
-			Approved: true, By: "ana", Note: domain.StandingApprovalNotePrefix + "sa_1: nightly",
-			AtSeq: propose(t, s, "run-1", "developer", areaFactory, "github.issue_write", "d1"),
+			Approved: true, By: "ana", Note: prefixed, StandingGrant: "sa_1",
+			AtSeq: propose(t, s, "run-1", "developer", areaFactory, tool, "d1"),
 		})
 		decide(t, s, "run-1", "developer", areaFactory, domain.ApprovalDecidedPayload{
-			Approved: true, AtSeq: propose(t, s, "run-1", "developer", areaFactory, "github.issue_write", "d2"),
+			Approved: true, AtSeq: propose(t, s, "run-1", "developer", areaFactory, tool, "d2"),
+		})
+		// A person's note that reads like one, or a legacy standing decision.
+		decide(t, s, "run-1", "developer", areaFactory, domain.ApprovalDecidedPayload{
+			Approved: true, By: "ana", Note: prefixed,
+			AtSeq: propose(t, s, "run-1", "developer", areaFactory, tool, "d3"),
 		})
 
 		p := weekRow(t, measuresOf(t, s, domain.RunFilter{}, everyCost), trailWeek, "developer").Proposals
 
-		if p.Standing != 1 || p.Approved != 2 {
-			t.Fatalf("proposals = %+v; want standing 1 counted in approved 2", p)
+		if p.Standing != 1 || p.Approved != 3 {
+			t.Fatalf("proposals = %+v; want standing 1, by its grant alone, counted in approved 3", p)
 		}
 	})
 }

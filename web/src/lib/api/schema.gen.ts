@@ -5455,7 +5455,14 @@ export interface components {
              *     the same arguments again. Each refusal counts at most once.
              */
             repeatedAfterRefusal: number;
-            /** @description Approvals a standing approval gave on a person's behalf; also in `approved`. */
+            /**
+             * @description Approvals a standing approval gave on a person's behalf; also in
+             *     `approved`. Counted by the grant the engine records on the
+             *     decision, never by its note. A standing approval recorded before
+             *     the grant was recorded on it cannot be told from a
+             *     person's — its approver is the grant's owner and its note is the
+             *     only trace — so it counts in `approved` and not here.
+             */
             standing: number;
         };
         UnavailableMeasure: {
@@ -5808,6 +5815,12 @@ export interface components {
              *     later step already superseded.
              */
             atSeq: number;
+            /**
+             * @description Free text recorded with the decision. A note starting with
+             *     `standing approval ` (in any case, after leading space) is 400:
+             *     that prefix is reserved for the decisions the engine writes under
+             *     a standing approval.
+             */
             note?: string;
         };
         CostBucket: {
@@ -7564,6 +7577,7 @@ export interface operations {
                     "application/json": components["schemas"]["Run"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

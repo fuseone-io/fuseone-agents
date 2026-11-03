@@ -85,10 +85,10 @@ func workItemMeasuresSQL(filter domain.RunFilter, window domain.WorkItemWindow) 
 	where, args := runFilterSQL(measuresFilter(filter, window))
 	where = whereAnd(where, realRuns)
 	readable, args := aliasScopeSQL(aliasReader(filter), args)
-	args = append(args, window.From.UTC(), window.To.UTC(), domain.StandingApprovalNotePrefix)
-	from, to, standing := len(args)-2, len(args)-1, len(args)
+	args = append(args, window.From.UTC(), window.To.UTC())
+	from, to := len(args)-1, len(args)
 	return `with ` + fmt.Sprintf(measuresRunsSQL, where, readable) + `,
-		` + fmt.Sprintf(measuresAskedSQL, from, to, standing) + `,
+		` + fmt.Sprintf(measuresAskedSQL, from, to) + `,
 		` + measuresRefusalsSQL + measuresRowsSQL, args
 }
 
@@ -122,14 +122,15 @@ const measuresRunsSQL = `x as materialized (
 		)`
 
 // measuresAskedSQL is asked and per_run, given the parameters that hold the
-// window's bounds and the standing approval's note prefix.
+// window's bounds. A standing approval is one naming its grant
+// (domain.IsStandingDecision), never one whose note reads like it.
 const measuresAskedSQL = `asked as (
 			select s.run_id, s.seq, s.kind,
 			       coalesce(s.payload->>'tool', '') as tool,
 			       coalesce(s.payload->>'args_digest', '') as digest,
 			       coalesce((s.payload->>'approved')::boolean, false) as approved,
 			       (s.payload->>'at_seq')::bigint as at_seq,
-			       starts_with(coalesce(s.payload->>'note', ''), $%[3]d) as standing
+			       coalesce(s.payload->>'standing_grant', '') <> '' as standing
 			from run_steps s
 			join r on r.run_id = s.run_id and r.started_at = s.opened_at
 			where s.opened_at >= $%[1]d and s.opened_at < $%[2]d

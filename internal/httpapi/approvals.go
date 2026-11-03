@@ -103,6 +103,16 @@ func (s *Server) DecideApproval(ctx context.Context, req openapi.DecideApprovalR
 		}, nil
 	}
 
+	// The standing-approval prefix is the engine's. A person's note that
+	// carried it would read, to everybody after, as a grant's decision.
+	if domain.ReservedApprovalNote(valueOr(req.Body.Note)) {
+		return openapi.DecideApproval400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(
+				"a note may not start with \"" + domain.StandingApprovalNotePrefix +
+					"\": that prefix is reserved for decisions a standing approval makes")),
+		}, nil
+	}
+
 	// atSeq is required by the contract so a stale tab cannot answer an
 	// approval that a later step already superseded.
 	switch {

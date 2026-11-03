@@ -283,6 +283,8 @@ func (r *Runner) standingDecide(
 			By:       grant.By,
 			Note:     domain.StandingApprovalNotePrefix + grant.ID + ": " + grant.Reason,
 			AtSeq:    atSeq,
+			// The provenance the measures count by; the note is for people.
+			StandingGrant: grant.ID,
 		}),
 	})
 	if err != nil {

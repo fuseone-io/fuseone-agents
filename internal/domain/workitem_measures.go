@@ -68,13 +68,29 @@ func MeasureWindow(now time.Time, weeks int) (WorkItemWindow, error) {
 }
 
 // StandingApprovalNotePrefix opens the note of a decision the engine wrote
-// under a standing approval, on a person's behalf (#192).
+// under a standing approval, on a person's behalf (#192). It is reserved: a
+// person's note may not start with it (ReservedApprovalNote).
 const StandingApprovalNotePrefix = "standing approval "
 
-// IsStandingDecision reports whether a decision is an approval a standing
-// grant gave.
+/*
+IsStandingDecision reports whether a decision is an approval a standing
+grant gave: one naming its grant, which only the engine writes.
+
+Never the note. It is free text an approver types, so reading it would let
+anybody count a hand approval as standing. A standing decision written
+before StandingGrant existed is not counted either: its note is the only
+trace, and its By is the grant owner — a person's name, the same as on a
+hand approval — so nothing tells the two apart. It counts as approved.
+*/
 func IsStandingDecision(d ApprovalDecidedPayload) bool {
-	return d.Approved && strings.HasPrefix(d.Note, StandingApprovalNotePrefix)
+	return d.Approved && d.StandingGrant != ""
+}
+
+// ReservedApprovalNote reports whether a person's note starts with the
+// standing-approval prefix, however cased or indented, which only the
+// engine may write.
+func ReservedApprovalNote(note string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(note)), StandingApprovalNotePrefix)
 }
 
 // WorkItemProposals is what a week's runs asked people and how they were

@@ -1741,6 +1741,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Run' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -8374,7 +8375,13 @@ components:
             the same arguments again. Each refusal counts at most once.
         standing:
           type: integer
-          description: Approvals a standing approval gave on a person's behalf; also in `approved`.
+          description: |
+            Approvals a standing approval gave on a person's behalf; also in
+            `approved`. Counted by the grant the engine records on the
+            decision, never by its note. A standing approval recorded before
+            the grant was recorded on it cannot be told from a
+            person's — its approver is the grant's owner and its note is the
+            only trace — so it counts in `approved` and not here.
 
     UnavailableMeasure:
       type: object
@@ -8845,7 +8852,13 @@ components:
             Sequence number of the approval_requested step being answered.
             Required so a stale browser tab cannot approve an action that a
             later step already superseded.
-        note: { type: string }
+        note:
+          type: string
+          description: |
+            Free text recorded with the decision. A note starting with
+            `standing approval ` (in any case, after leading space) is 400:
+            that prefix is reserved for the decisions the engine writes under
+            a standing approval.
 
     CostBucket:
       type: object
