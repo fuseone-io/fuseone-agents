@@ -7,7 +7,7 @@ general-purpose GitHub server:
 | Tool | What it does |
 |---|---|
 | `move_card(item_id, lane)` | Changes only the Status of a card in the factory's project, and only along the calling role's row of the transition table. Never out of Travado or Done (#213). |
-| `set_card_fields(item_id, work_type, size)` | Sets only a card's Work type and Size. Refused on a card in Travado or Done. Idempotent (#213). |
+| `set_card_fields(item_id, work_type, size)` | Sets only a card's Work type and Size, and only while the card is in Triagem. Idempotent (#213). |
 | `record_qa_verdict(pr, head_sha, verdict, summary[, comment_id])` | Sets the commit status `factory/qa` (`success` or `failure`) on exactly `head_sha`, under the QA GitHub App's identity. Refuses if `head_sha` is no longer the PR's head (#208). |
 | `merge_if_ready(pr, head_sha)` | When it executes, re-reads GitHub and fails closed unless every signal is on `head_sha` and came from its authorised actor or app. Then it merges with `sha` set to `head_sha` (#193). |
 
@@ -89,8 +89,13 @@ does not try to detect it.
 
 `work_type` is one of `bug`, `feature`, `chore`, `docs`, and `size` one of
 `S`, `M`, `L`, exactly; `item_id` as for `move_card`. Strict decoding as for
-`move_card`. The same item read and the same first four refusals, then a card
-in Travado (`travado_is_human`) or Done (`done_is_final`) is refused.
+`move_card`. The same item read and the same first four refusals, then
+**only a card in Triagem** is accepted. Work type and Size are the
+classification triage decides on the way to Preparado (`factory/LANES.md`);
+once a card has left Triagem they are locked, so no agent rewrites them
+during construction or after it. A card in Preparado or Doing is
+`fields_locked`, in Travado `travado_is_human`, in Done `done_is_final`, and
+nothing is sent.
 
 Each field is then compared with what the card holds: a field already
 holding the value is reported in `already_set` and not written; each other

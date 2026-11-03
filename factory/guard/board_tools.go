@@ -42,8 +42,9 @@ func registerMoveCard(server *mcp.Server, b *Board) {
 func registerSetCardFields(server *mcp.Server, b *Board) {
 	server.AddTool(&mcp.Tool{
 		Name: ToolSetCardFields,
-		Description: "Set a factory card's Work type and Size, and nothing else. Refused on a card " +
-			"in Travado or Done. A field already holding the value is not written. Returns structured state only.",
+		Description: "Set a factory card's Work type and Size, and nothing else. Only on a card in " +
+			"Triagem; refused in any other lane. A field already holding the value is not written. " +
+			"Returns structured state only.",
 		InputSchema: objectSchema(map[string]propertySchema{
 			"item_id":   {Type: "string", Pattern: itemPattern.String(), Description: "the card's project item node id (PVTI_...)"},
 			"work_type": {Type: "string", Enum: names(WorkTypes()), Description: "the board's Work type"},

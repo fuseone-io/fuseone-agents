@@ -61,6 +61,9 @@ const (
 	ReasonMoveRefused Reason = "move_refused"
 	ReasonMoveNotSent Reason = "move_not_sent"
 
+	// ReasonFieldsLocked: the card has left Triagem, and its Work type and
+	// Size are no longer an agent's to change.
+	ReasonFieldsLocked  Reason = "fields_locked"
 	ReasonUpdated       Reason = "updated"
 	ReasonAlreadySet    Reason = "already_set"
 	ReasonUpdateRefused Reason = "update_refused"

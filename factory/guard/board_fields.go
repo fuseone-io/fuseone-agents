@@ -24,8 +24,8 @@ type FieldsResult struct {
 	HTTPStatus int         `json:"http_status,omitempty"`
 }
 
-// SetFields sets a card's Work type and Size, and nothing else. It refuses a
-// card in Travado or Done, which belong to a person. It is idempotent: a field
+// SetFields sets a card's Work type and Size, and nothing else, and only on a
+// card in Triagem. It is idempotent: a field
 // already holding the value is reported as already set and not written, so a
 // retry after a partial failure writes only what is still missing. Each
 // remaining field is one mutation, in a fixed order; the first that does not
@@ -66,8 +66,11 @@ func (b *Board) SetFields(ctx context.Context, in FieldsInput) (FieldsResult, er
 	return res, nil
 }
 
-// judgeFieldsCard applies move_card's item checks, then keeps a card in
-// Travado or Done out of an agent's hands.
+// judgeFieldsCard applies move_card's item checks, then allows only a card
+// in Triagem. Work type and Size are the classification triage decides on
+// the way to Preparado (LANES.md); once a card has left Triagem they are
+// locked, so no agent rewrites them during construction or after it. Travado
+// and Done keep their own reasons.
 func (b *Board) judgeFieldsCard(item projectItem) Reason {
 	lane, reason := b.judgeItem(item)
 	switch {
@@ -77,6 +80,8 @@ func (b *Board) judgeFieldsCard(item projectItem) Reason {
 		return ReasonTravadoIsHuman
 	case lane == LaneDone:
 		return ReasonDoneIsFinal
+	case lane != LaneTriagem:
+		return ReasonFieldsLocked
 	}
 	return ""
 }

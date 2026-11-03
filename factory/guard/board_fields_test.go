@@ -32,11 +32,18 @@ func TestSetCardFields_validValues_setBothWithTheConfiguredFields(t *testing.T) 
 	}
 }
 
-// A card in Travado or Done belongs to a person: its fields are not touched.
-func TestSetCardFields_cardInTravadoOrDone_refusedWithoutMutation(t *testing.T) {
+// Work type and Size are set on the way out of Triagem. A card in any other
+// lane is refused and nothing is sent: in Preparado and Doing they are
+// locked, and Travado and Done belong to a person. The values asked for are
+// ones the card does not hold, so a tool that let the call through would
+// write.
+func TestSetCardFields_cardOutsideTriagem_refusedWithoutMutation(t *testing.T) {
 	t.Parallel()
 
-	for lane, want := range map[Lane]Reason{LaneTravado: ReasonTravadoIsHuman, LaneDone: ReasonDoneIsFinal} {
+	for lane, want := range map[Lane]Reason{
+		LanePreparado: ReasonFieldsLocked, LaneDoing: ReasonFieldsLocked,
+		LaneTravado: ReasonTravadoIsHuman, LaneDone: ReasonDoneIsFinal,
+	} {
 		t.Run(string(lane), func(t *testing.T) {
 			t.Parallel()
 			h := newBoardHarness(t, lane)
