@@ -11,8 +11,10 @@ order: 22
 Uma fábrica de software é um conjunto de agentes, cada um num **papel**, que
 levam as issues de um repositório da triagem até um pull request pronto para
 merge, guiados por um board do GitHub Projects. A plataforma roda isso só com
-configuração: os papéis são agentes comuns, o servidor MCP oficial do GitHub é
-o único servidor de ferramentas deles, e o Gate governa cada chamada que fazem.
+configuração: os papéis são agentes comuns, as ferramentas deles vêm do
+servidor MCP oficial do GitHub e do servidor MCP da própria fábrica, que move
+os cards do board e registra o veredito do QA, e o Gate governa cada chamada
+que fazem.
 
 Esta página é o caminho de quem opera. O raciocínio por trás está na nota de
 desenho
@@ -28,10 +30,17 @@ e as instruções dos papéis ficam, revisadas como código, em
   plano e os critérios de aceite na issue; o Desenvolvedor faz uma mudança pequena e abre o pull request dela; o
   Revisor revisa um pull request; o QA confere o pull request contra o CI e os
   critérios de aceite. Cada papel é um agente criado no console ou no Studio.
-- **Um GitHub App por papel.** Cada papel só alcança o GitHub pelo seu próprio
-  registro do servidor do GitHub, autenticado como o seu próprio App. As
-  permissões do App são o primeiro limite, e o nome dele é o que assina os
-  comentários e revisões do papel.
+- **Um GitHub App por papel.** Cada papel só alcança o GitHub pelos seus
+  próprios registros, o do servidor do GitHub e o do servidor da fábrica, os
+  dois autenticados como o seu próprio App. As permissões do App são o
+  primeiro limite, e o nome dele é o que assina os comentários e revisões do
+  papel e o status `factory/qa` do QA.
+- **Ferramentas de board estreitas.** Os cards andam com o `move_card` do
+  servidor da fábrica, só pelas transições do próprio papel (a Triagem e o
+  Arquiteto de Triagem para Preparado ou Travado; o Desenvolvedor, o Revisor e
+  o QA de Doing para Travado), e nada sai de Travado. A Triagem e o Arquiteto
+  preenchem Work type e Size com o `set_card_fields`, só em Triagem. Nenhum
+  papel tem o `projects_write` do servidor do GitHub.
 - **Todos os papéis em copiloto**, com aprovações permanentes proibidas. Toda
   escrita no GitHub que um papel propõe — comentário, rótulo, revisão, card
   movido — espera uma pessoa. O claim do card, descrito abaixo, e o vínculo
@@ -120,11 +129,13 @@ fábrica trabalha e dê a ele só o que as ferramentas do papel precisam:
 | Triagem | Issues: write, Pull requests: read, Metadata: read | Projects: write |
 | Arquiteto | Contents: read, Issues: write, Metadata: read | Projects: write |
 | Revisor | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
-| QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
+| QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write |
 | Desenvolvedor | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
 
-O veredito do QA é uma revisão de pull request, então o QA precisa de Pull
-requests: write, assim como o Revisor. O Arquiteto lê o código e só escreve
+O veredito do QA é o status de commit `factory/qa` no head que ele conferiu,
+então o App dele precisa de Commit statuses: write; ele ainda comenta o
+veredito e troca os rótulos do pull request, então continua com Pull
+requests: write. O Arquiteto lê o código e só escreve
 em issues e no board: dê ao App dele Contents: **read**, nunca write, para que
 o GitHub recuse qualquer arquivo ou branch que tentem convencê-lo a escrever. Não dê a permissão Workflows ao App do
 Desenvolvedor: sem ela, o GitHub recusa qualquer mudança que o Desenvolvedor
@@ -184,7 +195,7 @@ todos os jobs do workflow `check`, com os nomes que o GitHub mostra:
 `go`, `postgres`, `console`, `chart`, `factory-mcp-image`, `artifact`. A parte do
 ruleset é a #207; o `FACTORY_CHECKS` está descrito em `factory/mcp/README.md`.
 
-## 3. Registre o servidor do GitHub uma vez por papel
+## 3. Registre os servidores de ferramentas uma vez por papel
 
 Na administração, registre o GitHub MCP hospedado
 (`https://api.githubcopilot.com/mcp/`) cinco vezes, uma por papel, com o id
@@ -209,6 +220,71 @@ O servidor hospedado ignora em silêncio um nome de toolset que não conhece,
 então um erro de digitação só aparece depois, como uma publicação recusada por
 falta de ferramentas.
 
+Os toolsets oferecem mais do que um papel declara — o conjunto `projects`
+também oferece o `projects_write`, que altera qualquer campo de qualquer card
+e apaga cards, e que nenhum papel tem. Assim que um servidor responder, abra
+a página **Ferramentas e superfície** dele e traga exatamente estas
+ferramentas, nada além. Uma ferramenta deixada fora da superfície não existe
+para os agentes: um papel que a cita é recusado na publicação, e uma chamada a
+ela é recusada.
+
+| Servidor | Ferramentas dele |
+|---|---|
+| `github-triage` | `projects_list,projects_get,issue_read,list_issues,search_issues,add_issue_comment,issue_write` |
+| `github-architect` | `projects_list,projects_get,issue_read,search_issues,get_file_contents,search_code,list_commits,get_commit,add_issue_comment,issue_write` |
+| `github-reviewer` | `search_pull_requests,pull_request_read,issue_read,get_file_contents,search_code,get_commit,pull_request_review_write,issue_write,add_issue_comment,projects_list,projects_get` |
+| `github-qa` | `search_pull_requests,pull_request_read,issue_read,get_file_contents,issue_write,add_issue_comment,projects_list,projects_get` |
+| `github-developer` | `search_pull_requests,projects_list,projects_get,issue_read,pull_request_read,get_file_contents,search_code,get_commit,create_branch,create_or_update_file,push_files,create_pull_request,add_issue_comment,issue_write` |
+
+O servidor hospedado também pode ser estreitado do lado dele: o header
+`X-MCP-Tools` com uma linha acima, e **sem** `X-MCP-Toolsets`, faz ele listar
+só essas ferramentas (com os dois preenchidos, as ferramentas são somadas aos
+conjuntos). O painel do App no console só preenche Toolsets, então esse header
+é gravado pela API de administração; a superfície é obrigatória de qualquer
+jeito.
+
+### O servidor da própria fábrica
+
+O servidor da fábrica roda como sidecar em cada pod do worker, em
+`http://127.0.0.1:8091/`, sem credencial própria: o token de App de cada
+requisição diz qual papel está chamando, e ele só serve as ferramentas desse
+papel. Como implantá-lo, e o ConfigMap que ele lê, estão em
+[`factory/mcp/README.md`](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/mcp/README.md#as-a-worker-sidecar).
+Antes do primeiro worker subir com ele, confira que a imagem pode ser baixada
+sem credencial:
+
+```sh
+gh api /orgs/fuseone-io/packages/container/fuseone-agents-factory-mcp --jq .visibility
+```
+
+A resposta precisa ser `public`; se não for, dê ao worker um pull secret do
+GHCR.
+
+Depois registre-o mais cinco vezes, com o id `factory-<papel>`:
+`factory-triage`, `factory-architect`, `factory-reviewer`, `factory-qa`,
+`factory-developer`. A URL é `http://127.0.0.1:8091/` (`http://` sem TLS só é
+aceito ao lado de um GitHub App para loopback), a credencial é **GitHub App**,
+e o App é **o mesmo** do `github-<papel>` daquele papel. Não preencha
+toolsets. Cada registro então oferece as ferramentas do seu papel:
+
+| Servidor | Ferramentas |
+|---|---|
+| `factory-triage`, `factory-architect` | `move_card`, `set_card_fields` |
+| `factory-developer`, `factory-reviewer` | `move_card` |
+| `factory-qa` | `move_card`, `record_qa_verdict` |
+
+Um registro que não oferece nada, ou que oferece outra linha, recebeu o App
+errado.
+
+**Rode o canário do operador antes de iniciar qualquer papel.** Nenhum teste
+prova o que o GitHub faz com um token restrito a um repositório, então, uma
+vez por App de papel, com um token assim, rode as três chamadas do
+[canário de setup](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/mcp/README.md#setup-canary-one-real-query-and-one-real-mutation)
+contra um card descartável: a consulta `viewer { databaseId }` precisa
+responder o id do bot daquele papel, a consulta do item precisa devolver o
+projeto e o Status do card, e a mutação que move precisa responder o item sem
+erros. Um papel cujo canário falha continua parado.
+
 ## 4. Classifique as ferramentas
 
 Com cada servidor respondendo, classifique todas as ferramentas que os papéis
@@ -222,7 +298,8 @@ quando não se pede nenhum campo (#220).
 | Classifique como | Ferramentas |
 |---|---|
 | read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `list_commits`, `get_commit` |
-| write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `projects_write`, `create_branch`, `create_or_update_file`, `push_files`, `create_pull_request` |
+| write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `create_branch`, `create_or_update_file`, `push_files`, `create_pull_request` |
+| write, resultado **não** untrusted | `move_card`, `set_card_fields`, `record_qa_verdict`, nos servidores `factory-<papel>` |
 
 Classifique cada ferramenta no servidor de cada papel:
 `github-triage.projects_list` e `github-reviewer.projects_list` são entradas
@@ -234,11 +311,15 @@ e nenhum header tira essas ferramentas no mesmo servidor: o `X-MCP-Readonly`
 tiraria também as escritas em issues. A referência dele não declara nenhuma
 delas, e o Contents: read do App dele as recusa.
 
-O `projects_write` move cards e também pode remover um item. Classifique como
-**write**, não como destructive: um card removido pode ser adicionado de novo,
-e uma pessoa aprova toda escrita no GitHub. Classificado como destrutivo, ele seria
-bloqueado de vez, e todo papel que lê texto de issue e move cards seria
-recusado na publicação.
+As ferramentas da fábrica só respondem estado estruturado — motivos de um
+conjunto fechado, nomes de coluna e de campo, números, SHAs de commit —, nunca
+texto que alguém escreveu no GitHub, então o resultado delas não é untrusted.
+Mesmo assim são escritas: uma pessoa aprova cada card movido, cada campo e
+cada veredito do QA.
+
+Deixe o `projects_write` **sem classificação**. Nenhum papel o declara, ele
+fica fora de todas as superfícies, e uma ferramenta sem classificação nunca
+executa.
 
 ## 5. Crie a área da fábrica
 
