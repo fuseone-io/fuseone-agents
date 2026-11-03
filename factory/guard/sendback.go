@@ -195,13 +195,19 @@ func (s *SendBack) comment(ctx context.Context, pr int, body string) (int64, Rea
 		Method: http.MethodPost, Path: s.gh.repoPath("/issues/%d/comments", pr),
 		Body: map[string]string{"body": body}, Out: &out,
 	})
+	// Only a request that never left, or a 4xx GitHub answered itself, proves
+	// no comment exists. A 5xx can come from a proxy after the backend posted
+	// it, and a 2xx without a usable id is no answer either: both are
+	// outcome_unknown, which never gives a refusal back for a second comment.
 	switch {
 	case errors.Is(err, ErrNotSent):
 		return 0, ReasonCommentNotSent, 0
 	case err != nil:
 		return 0, ReasonOutcomeUnknown, 0
-	case code != http.StatusCreated || out.ID <= 0:
+	case code/100 == 4:
 		return 0, ReasonCommentRefused, code
+	case code != http.StatusCreated || out.ID <= 0:
+		return 0, ReasonOutcomeUnknown, code
 	}
 	return out.ID, "", 0
 }

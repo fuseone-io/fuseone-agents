@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
@@ -325,12 +326,42 @@ func TestSendBack_unrebuildableCause_commentRefused_retryStillProves(t *testing.
 	if res, _ := merger.MergeIfReady(t.Context(), MergeInput{PR: testPR, HeadSHA: headA}); res.Reason != ReasonMergeRefused {
 		t.Fatalf("merge_if_ready = %+v", res)
 	}
-	h.edit(func(f *fakeGitHub) { f.mergeError, f.writeError = 0, 502 })
+	h.edit(func(f *fakeGitHub) { f.mergeError, f.writeError = 0, 403 })
 	if res := h.sendBackWith(s, ReasonMergeRefused); res.Reason != ReasonCommentRefused {
 		t.Fatalf("first send_back %+v, want comment_refused", res)
 	}
 	h.edit(func(f *fakeGitHub) { f.writeError = 0 })
 	if res := h.sendBackWith(s, ReasonMergeRefused); !res.SentBack {
 		t.Fatalf("retry %+v, want sent back", res)
+	}
+}
+
+// A 5xx does not prove the comment was not created: a proxy can answer 502
+// after the backend posted it. The refusal is not given back, so a retry
+// writes no second comment.
+func TestSendBack_commentAnswered5xx_isUnknownAndNotRetried(t *testing.T) {
+	t.Parallel()
+
+	for _, status := range []int{500, 502, 503, http.StatusCreated} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			t.Parallel()
+			h := newHarness(t)
+			merger, s := h.mergerTools(nil)
+			h.edit(causes[ReasonMergeRefused])
+			if res, _ := merger.MergeIfReady(t.Context(), MergeInput{PR: testPR, HeadSHA: headA}); res.Reason != ReasonMergeRefused {
+				t.Fatalf("merge_if_ready = %+v", res)
+			}
+			h.edit(func(f *fakeGitHub) { f.mergeError, f.commentLost = 0, status })
+			if res := h.sendBackWith(s, ReasonMergeRefused); res.SentBack || res.Reason != ReasonOutcomeUnknown {
+				t.Fatalf("first send_back %+v, want outcome_unknown", res)
+			}
+			h.edit(func(f *fakeGitHub) { f.commentLost = 0 })
+			if res := h.sendBackWith(s, ReasonMergeRefused); res.Reason != ReasonCauseNotObserved {
+				t.Fatalf("retry %+v, want cause_not_observed", res)
+			}
+			if len(h.fake.comments) != 1 {
+				t.Fatalf("%d comments, want exactly one", len(h.fake.comments))
+			}
+		})
 	}
 }

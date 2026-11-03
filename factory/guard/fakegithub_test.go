@@ -107,6 +107,7 @@ type fakeGitHub struct {
 	comments    []fakeComment       // every comment posted, in order
 	labelOps    []string            // "+name" or "-name", in order
 	writeError  int                 // forces a status on comment and label writes
+	commentLost int                 // records the comment, then answers this status
 }
 
 // fakeComment is one comment posted on an issue or pull request.
@@ -268,6 +269,10 @@ func (f *fakeGitHub) createComment(w http.ResponseWriter, r *http.Request, who g
 	}
 	f.nextID++
 	f.comments = append(f.comments, fakeComment{ID: f.nextID, Issue: n, Author: who, Body: in.Body})
+	if f.commentLost != 0 {
+		writeJSON(w, f.commentLost, map[string]string{"message": canary})
+		return
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id": f.nextID, "body": canary, "html_url": "https://example.test/" + canary,
 		"user": map[string]any{"login": who.Login, "bio": canary},
