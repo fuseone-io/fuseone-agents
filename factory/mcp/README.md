@@ -491,8 +491,8 @@ organisation permission for Projects: a repository-restricted installation
 token keeps its `organization_projects` permission (GitHub's documentation;
 verified once more by the setup canary below). The table is what this
 server's tools need; each App also holds what its role's GitHub-server tools
-need, in `factory/agents/README.md` (QA's App, for one, keeps Pull requests:
-write for its verdict comment and labels).
+need, in `factory/agents/README.md` (QA's App keeps Pull requests: read and
+adds Issues: write, through which it comments and labels the pull request).
 
 | App | Repository permissions | Organisation permissions | Why |
 |---|---|---|---|
@@ -544,8 +544,24 @@ else.
          value: {singleSelectOptionId: $option}}) { projectV2Item { id } } }'
    ```
 
-If any of the three fails for a role, that role is not activated: the board
-tools would answer `move_refused` or fail the read on every call.
+4. **QA only:** a comment and a label on a pull request through the Issues
+   API, which is all QA writes on a pull request: its App holds Pull
+   requests: **read** and Issues: write, and this proves Issues: write
+   covers both on a pull request. Use a throwaway pull request. Expect `201`
+   for the comment and `200` with the label for the label, then remove both:
+
+   ```
+   GH_TOKEN=<QA installation token> gh api repos/fuseone-io/fuseone-agents/issues/<throwaway PR>/comments \
+     -f body='QA canary: a comment through Issues: write.' --jq .id
+   GH_TOKEN=<QA installation token> gh api repos/fuseone-io/fuseone-agents/issues/<throwaway PR>/labels \
+     -f 'labels[]=factory:needs-qa' --jq '.[].name'
+   GH_TOKEN=<QA installation token> gh api --method DELETE repos/fuseone-io/fuseone-agents/issues/<throwaway PR>/labels/factory:needs-qa
+   GH_TOKEN=<QA installation token> gh api --method DELETE repos/fuseone-io/fuseone-agents/issues/comments/<comment id>
+   ```
+
+If any of these fails for a role, that role is not activated: the board
+tools would answer `move_refused` or fail the read on every call, and a QA
+that cannot comment or label would record a verdict it cannot route.
 
 ## Registering in FuseOne
 

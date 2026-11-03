@@ -129,13 +129,14 @@ fábrica trabalha e dê a ele só o que as ferramentas do papel precisam:
 | Triagem | Issues: write, Pull requests: read, Metadata: read | Projects: write |
 | Arquiteto | Contents: read, Issues: write, Metadata: read | Projects: write |
 | Revisor | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
-| QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write |
+| QA | Pull requests: read, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write |
 | Desenvolvedor | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
 
 O veredito do QA é o status de commit `factory/qa` no head que ele conferiu,
-então o App dele precisa de Commit statuses: write; ele ainda comenta o
-veredito e troca os rótulos do pull request, então continua com Pull
-requests: write. O Arquiteto lê o código e só escreve
+então o App dele precisa de Commit statuses: write. Ele não envia revisão,
+então só precisa de Pull requests: read: comenta o veredito e troca os
+rótulos do pull request pela API de Issues, que o Issues: write cobre (o
+canário do passo 3 comprova isso). O Arquiteto lê o código e só escreve
 em issues e no board: dê ao App dele Contents: **read**, nunca write, para que
 o GitHub recuse qualquer arquivo ou branch que tentem convencê-lo a escrever. Não dê a permissão Workflows ao App do
 Desenvolvedor: sem ela, o GitHub recusa qualquer mudança que o Desenvolvedor
@@ -283,7 +284,10 @@ vez por App de papel, com um token assim, rode as três chamadas do
 contra um card descartável: a consulta `viewer { databaseId }` precisa
 responder o id do bot daquele papel, a consulta do item precisa devolver o
 projeto e o Status do card, e a mutação que move precisa responder o item sem
-erros. Um papel cujo canário falha continua parado.
+erros. Com o token do QA, comente e coloque um rótulo também num pull request
+descartável pela API de Issues (o quarto passo do canário): o App do QA só tem
+Pull requests: read, e é isso que comprova que o Issues: write basta para o
+que o QA escreve ali. Um papel cujo canário falha continua parado.
 
 ## 4. Classifique as ferramentas
 

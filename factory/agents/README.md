@@ -400,7 +400,7 @@ the toolset only offers it. Each role's App needs:
 | Triage | Issues: write, Pull requests: read, Metadata: read | Projects: write |
 | Architect | Contents: read, Issues: write, Metadata: read | Projects: write |
 | Reviewer | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
-| QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write |
+| QA | Pull requests: read, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write |
 | Developer | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
 
 The Architect's App has Contents: **read** and no Pull requests permission,
@@ -459,10 +459,12 @@ App, the authorised reviewers, and the rules the Merger is held to.
 
 QA's verdict is the `factory/qa` commit status, set by `record_qa_verdict`
 under QA's App, so QA's App needs Commit statuses: **write**. It submits no
-review, but it still writes the verdict comment and relabels the pull
-request, so it keeps Pull requests: write beside Issues: write. The
-Reviewer's verdict is a review and needs Pull requests: write; it reads
-statuses, never sets one.
+review, so it holds Pull requests: **read** only: it reads the pull request,
+and its verdict comment and labels go through the Issues API
+(`add_issue_comment`, `issue_write`), which Issues: write covers on a pull
+request too. The setup canary proves that with QA's own token before QA
+starts. The Reviewer's verdict is a review and needs Pull requests: write; it
+reads statuses, never sets one.
 
 Without the header from the start, Triage's server never discovers its
 `projects_*` tools, and the console refuses to publish the Triage reference,
@@ -640,4 +642,8 @@ once per role's App, with a token minted restricted to this repository,
 against a throwaway card: `viewer { databaseId }` must answer the id listed
 for that role in `FACTORY_ROLE_BOTS`, the item read must return the project
 and the Status option, and the `updateProjectV2ItemFieldValue` mutation must
-answer the item with no `errors`. A role whose canary fails is not activated.
+answer the item with no `errors`. With QA's token, also comment on and label
+a throwaway pull request through the Issues API (the canary's fourth step):
+QA's App holds Pull requests: read, so this is what proves Issues: write
+covers what QA writes on a pull request. A role whose canary fails is not
+activated.

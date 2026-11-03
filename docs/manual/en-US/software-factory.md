@@ -123,12 +123,14 @@ works, and give it only what its tools need:
 | Triage | Issues: write, Pull requests: read, Metadata: read | Projects: write |
 | Architect | Contents: read, Issues: write, Metadata: read | Projects: write |
 | Reviewer | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
-| QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write |
+| QA | Pull requests: read, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write |
 | Developer | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
 
 QA's verdict is the `factory/qa` commit status on the head it checked, so its
-App needs Commit statuses: write; it still comments its verdict and relabels
-the pull request, so it keeps Pull requests: write. The Architect reads the code and writes only issues and the
+App needs Commit statuses: write. It submits no review, so it needs only Pull
+requests: read: it comments its verdict and relabels the pull request through
+the Issues API, which Issues: write covers (the canary in step 3 proves it).
+The Architect reads the code and writes only issues and the
 board: give its App Contents: **read**, never write, so GitHub refuses any
 file or branch it could be talked into writing. Do not give the Developer's App the Workflows permission:
 without it, GitHub refuses any change the Developer makes under
@@ -267,8 +269,11 @@ App, with such a token, run the three calls of the
 [setup canary](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/mcp/README.md#setup-canary-one-real-query-and-one-real-mutation)
 against a throwaway card: the `viewer { databaseId }` query must answer that
 role's bot id, the item query must return the project and the card's Status,
-and the move mutation must answer the item with no errors. A role whose
-canary fails stays stopped.
+and the move mutation must answer the item with no errors. With QA's token,
+also comment on and label a throwaway pull request through the Issues API
+(the canary's fourth step): QA's App has Pull requests: read only, and this
+proves Issues: write is enough for what QA writes there. A role whose canary
+fails stays stopped.
 
 ## 4. Classify the tools
 

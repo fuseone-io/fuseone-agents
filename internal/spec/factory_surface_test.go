@@ -101,3 +101,69 @@ func TestFactorySetup_classification_leavesProjectsWriteUnclassifiedAndRulesTheB
 		}
 	}
 }
+
+// appPermissionsRow is one row of a setup text's GitHub App table: the role,
+// its repository permissions (Metadata: read is mandatory, so every row
+// names it), and its organisation permissions.
+var appPermissionsRow = regexp.MustCompile(`(?m)^\| (\S+) \| ([^|]*Metadata: read[^|]*) \| ([^|]+) \|$`)
+
+// appPermissions is what each role's App holds, least privilege: what its
+// tools need on both of its servers, and nothing more. QA reads pull requests
+// and writes none: its comments and labels go through the Issues API, and its
+// verdict is a commit status.
+var appPermissions = map[string]string{
+	"triage":    "Issues: write, Pull requests: read, Metadata: read | Projects: write",
+	"architect": "Contents: read, Issues: write, Metadata: read | Projects: write",
+	"reviewer":  "Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write",
+	"qa":        "Pull requests: read, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write",
+	"developer": "Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write",
+}
+
+// roleNames is how each setup text names the roles in its App table.
+var roleNames = map[string]map[string]string{
+	"en": {"Triage": "triage", "Architect": "architect", "Reviewer": "reviewer", "QA": "qa", "Developer": "developer"},
+	"pt": {"Triagem": "triage", "Arquiteto": "architect", "Revisor": "reviewer", "QA": "qa", "Desenvolvedor": "developer"},
+}
+
+// permissionSet splits "A: x, B: y | C: z" into its sorted grants.
+func permissionSet(row string) []string {
+	var out []string
+	for _, part := range strings.FieldsFunc(row, func(r rune) bool { return r == ',' || r == '|' }) {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+func TestFactorySetup_eachRolesAppPermissions_areExactlyItsLeastPrivilegeInEveryText(t *testing.T) {
+	t.Parallel()
+
+	texts := map[string]string{
+		"../../factory/agents/README.md":              "en",
+		"../../docs/manual/en-US/software-factory.md": "en",
+		"../../docs/manual/pt-BR/software-factory.md": "pt",
+	}
+	for path, lang := range texts {
+		got := map[string][]string{}
+		for _, row := range appPermissionsRow.FindAllStringSubmatch(readFile(t, path), -1) {
+			role, ok := roleNames[lang][row[1]]
+			if !ok {
+				continue
+			}
+			if _, twice := got[role]; twice {
+				t.Errorf("%s gives the %s App two permission rows", path, role)
+			}
+			got[role] = permissionSet(row[2] + "|" + row[3])
+		}
+		for role, want := range appPermissions {
+			if !slices.Equal(got[role], permissionSet(want)) {
+				t.Errorf("%s gives the %s App %v, want %v", path, role, got[role], permissionSet(want))
+			}
+		}
+		if slices.Contains(got["qa"], "Pull requests: write") {
+			t.Errorf("%s gives the QA App Pull requests: write; it submits no review", path)
+		}
+	}
+}
