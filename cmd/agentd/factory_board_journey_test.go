@@ -219,8 +219,15 @@ func TestFactoryBoard_xMCPToolsWithoutToolsets_neverDiscoversProjectsWrite(t *te
 	j.discover(t)
 	j.classify(t)
 
-	if _, listed := j.listed(t)["github-triage.projects_write"]; listed {
-		t.Error("github-triage.projects_write was discovered; X-MCP-Tools alone should list only the tools it names")
+	discovered := ofServer(j.listed(t), "github-triage")
+	slices.Sort(discovered)
+	var named []string
+	for _, name := range strings.Split(tools, ",") {
+		named = append(named, "github-triage."+name)
+	}
+	slices.Sort(named)
+	if !slices.Equal(discovered, named) {
+		t.Errorf("github-triage offers %v; X-MCP-Tools alone should list exactly %v", discovered, named)
 	}
 	assertPublishesAsTheReference(t, j, reference, "")
 	j.hosted.mu.Lock()

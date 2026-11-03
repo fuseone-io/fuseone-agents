@@ -108,7 +108,8 @@ listed. A name the server does not have fails the request (ErrUnknownTools,
 answered 400), so ok is false.
 */
 func hostedTools(toolsetsHeader, toolsHeader string) (names []string, ok bool) {
-	sets := []string{"issues"}
+	// Upstream's default sets include these three, and not projects.
+	sets := []string{"repos", "issues", "pull_requests"}
 	switch {
 	case toolsetsHeader != "":
 		sets = strings.Split(toolsetsHeader, ",")
@@ -188,9 +189,14 @@ func newInstallation(t *testing.T, server string) *factoryJourney {
 	// The catalogue and its rulings are installation-wide and outlive a
 	// journey — a ruling is kept on purpose when its tool leaves — so a
 	// journey starts from an installation that has never discovered or ruled
-	// on a tool, whatever an earlier run or another journey left behind.
+	// on a tool, whatever an earlier run or another journey left behind. The
+	// factory's registrations go too: a stored server keeps its surface when a
+	// later registration names none, so one journey's surface would otherwise
+	// narrow the next.
 	if _, err := pool.Exec(t.Context(),
-		`delete from settings where kind in ('tool', 'tool_classification'); delete from tool_server_leases; delete from tool_server_grace`); err != nil {
+		`delete from settings where kind in ('tool', 'tool_classification');
+		 delete from settings where kind = 'mcp_server' and (name like 'github-%' or name like 'factory-%');
+		 delete from tool_server_leases; delete from tool_server_grace`); err != nil {
 		t.Fatalf("reset the catalogue: %v", err)
 	}
 	v, err := vault.New(make([]byte, 32), "test")
