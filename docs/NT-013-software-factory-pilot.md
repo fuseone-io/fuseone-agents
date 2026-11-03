@@ -362,6 +362,24 @@ role missed. The pilot's question is whether each role, at copilot, is right
 often enough to be worth its approvals — answered per role, not for the
 factory as a whole.
 
+Where each measure is read (#201):
+
+- **From the run ledger**: proposals, approvals asked and how they were
+  answered, cost per card. `GET /api/v1/work-items/measures` reports them per
+  role and per ISO week, and the console shows them on the **Work item**
+  screen as **Per role, per week**
+  ([manual](manual/en-US/software-factory.md#per-role-per-week)).
+- **From the board**: time in each lane, who owned it, and the signals that a
+  later stage or a person caught what a role passed. The API lists both under
+  `unavailable[]` as `board_only`, and
+  [`factory/measure`](../factory/measure/README.md) reads them from the
+  issue and pull request timelines. It is read-only, and its canary has to pass
+  before its numbers are relied on.
+- **"Edited" is not recorded.** An approval approves the proposal as it was
+  asked, and the engine refuses arguments whose digest differs from the
+  approved ones. An approval with changes does not exist. The ledger reports
+  proposals revised or repeated after a refusal instead.
+
 ## Decided
 
 - **The Developer starts at Level 1** (#200): small, self-contained changes
