@@ -73,11 +73,12 @@ rest of `factory/`.
   report's *Unmapped actors* section, and none of its acts count for a role.
   Nothing is matched by a near name.
 
-The map must list `triage`, `architect`, `developer`, `reviewer` and `qa`, each
-with its own login. On 2026-11-03, `fuseone-factory-triage[bot]`,
+The map must list `triage`, `architect`, `developer`, `reviewer`, `qa` and
+`merger`, each with its own login. On 2026-11-03, `fuseone-factory-triage[bot]`,
 `fuseone-factory-reviewer[bot]` and `fuseone-factory-qa[bot]` existed on GitHub
-as Bot users. No App was found for the Architect or the Developer, so those
-two are **placeholders**, and `report` refuses to run until they are filled in.
+as Bot users. No App was found for the Architect, the Developer or the Merger,
+so those three are **placeholders**, and `report` refuses to run until they are
+filled in.
 To check a slug:
 
 ```sh
@@ -170,31 +171,36 @@ and each piece goes to whoever had to move the card then:
 
 In Doing, the first rule that applies decides:
 
-1. While the issue carries `factory:needs-runtime`, the time is a
+1. **While a merged pull request still carries `factory:ready-to-merge`**,
+   the time is the **Merger's**. `close_merged` drops that label only once
+   the card reached Done, and the Merger finishes what `list_ready_prs` lists
+   under merged before any other pull request, reading no issue label. So
+   this rule outranks every other, an open pull request and
+   `factory:needs-runtime` included.
+2. While the issue carries `factory:needs-runtime`, the time is a
    **person's**. The Developer skips the card, and a person takes it.
-2. **Before any pull request linked to the issue was opened**, the time is the
+3. **Before any pull request linked to the issue was opened**, the time is the
    **Developer's**: the card waits for it to open one.
-3. **While at least one linked pull request is open**, the time follows the
+4. **While at least one linked pull request is open**, the time follows the
    sub-state label of the **open** pull requests only:
    `factory:needs-review` → **Reviewer**, `factory:needs-qa` → **QA**,
-   `factory:changes-requested` → **Developer**, `factory:ready-to-merge` → a
-   **person**. With several on at once among the open ones, the one applied
-   last decides. A closed or merged pull request keeps its labels on GitHub,
-   but they count for nothing here.
-4. An open pull request with no recognised sub-state label is an
+   `factory:changes-requested` → **Developer**, `factory:ready-to-merge` →
+   **Merger**. With several on at once among the open ones, the one applied
+   last decides. Apart from rule 1, a closed or merged pull request's labels
+   count for nothing here.
+5. An open pull request with no recognised sub-state label is an
    inconsistent state. The time is **unattributed**, and no owner is guessed.
-5. **After an attempt, while every linked pull request is closed or merged**,
+6. **After an attempt, while every linked pull request is closed or merged**,
    the time is a **person's**. A pull request closed without a merge leaves
    the next attempt to a person, since the Developer skips a card with a
-   linked pull request ([LANES.md](../LANES.md)). A merged one leaves the card
-   to a person to finish.
+   linked pull request ([LANES.md](../LANES.md)).
 
 A pull request is open from its `createdAt` until a `ClosedEvent` or
 `MergedEvent` on its timeline, and open again from a `ReopenedEvent`. The stay
 is split at every one of those instants on its linked pull requests, and at
 every label change, and each piece is judged by the rules above at its start.
 A pull request opened after the stay ended plays no part. A pull request card
-is judged by its own open state and label (rules 3 to 5). A linked pull
+is judged by its own open state and label (rules 1 and 4 to 6). A linked pull
 request whose `createdAt` was not read counts as already opened, so the
 Developer is never given time a pull request may already have existed in.
 

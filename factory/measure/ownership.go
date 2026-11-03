@@ -22,7 +22,7 @@ func subStateOwner(label string) (Owner, bool) {
 	case labelChangesRequested:
 		return OwnerDeveloper, true
 	case labelReadyToMerge:
-		return OwnerPerson, true
+		return OwnerMerger, true
 	}
 	return "", false
 }
@@ -31,9 +31,9 @@ func subStateOwner(label string) (Owner, bool) {
 //
 //   - Triagem: the Architect while the issue carries factory:needs-design,
 //     Triage otherwise.
-//   - Doing: the role the pull request's sub-state label names; a person for
-//     factory:ready-to-merge. With several sub-state labels present, the one
-//     applied last decides. With none, nobody: unattributed.
+//   - Doing: the role the pull request's sub-state label names, the Merger
+//     for factory:ready-to-merge. With several sub-state labels present, the
+//     one applied last decides. With none, nobody: unattributed.
 //   - Preparado and Travado: a person; no role moves a card out of them.
 func ownerAt(s Snapshot, card *Item, lane string, t time.Time) Owner {
 	switch lane {
@@ -52,6 +52,10 @@ func ownerAt(s Snapshot, card *Item, lane string, t time.Time) Owner {
 
 // doingOwner is who a Doing card waits on at t, the first rule that applies:
 //
+//   - while a merged pull request still carries factory:ready-to-merge, the
+//     Merger: it finishes what list_ready_prs lists under merged before any
+//     other pull request, and close_merged reads no issue label, so this
+//     outranks an open pull request and factory:needs-runtime alike;
 //   - while the issue carries factory:needs-runtime, a person: the Developer
 //     skips it and a person takes it (factory/LANES.md);
 //   - before any pull request linked to the issue was opened, the Developer;
@@ -61,17 +65,23 @@ func ownerAt(s Snapshot, card *Item, lane string, t time.Time) Owner {
 //     on closed or merged pull requests count for nothing;
 //   - after an attempt, while every linked pull request is closed or merged,
 //     a person: a pull request closed without a merge leaves the next attempt
-//     to a person, and a merged one leaves the card to a person too.
+//     to a person, and a merged one close_merged finished leaves the card to
+//     a person too.
 //
 // A pull request card exists from the start of its stay; while it is open its
 // own label decides, and once it is closed or merged the time is a person's.
 func doingOwner(s Snapshot, card *Item, t time.Time) Owner {
 	prs := []*Item{card}
 	if !card.IsPR {
+		prs = openedBy(linkedPRs(s, card), t)
+	}
+	if mergedStillReady(prs, t) {
+		return OwnerMerger
+	}
+	if !card.IsPR {
 		if _, on := labelsAt(card, t)[labelNeedsRuntime]; on {
 			return OwnerPerson
 		}
-		prs = openedBy(linkedPRs(s, card), t)
 		if len(prs) == 0 {
 			return OwnerDeveloper
 		}
@@ -103,6 +113,26 @@ func openAt(prs []*Item, t time.Time) []*Item {
 		}
 	}
 	return out
+}
+
+// mergedStillReady says whether a pull request merged by t still carries
+// factory:ready-to-merge at t: a merge close_merged has not finished.
+func mergedStillReady(prs []*Item, t time.Time) bool {
+	for _, pr := range prs {
+		if _, on := labelsAt(pr, t)[labelReadyToMerge]; on && mergedBy(pr, t) {
+			return true
+		}
+	}
+	return false
+}
+
+func mergedBy(pr *Item, t time.Time) bool {
+	for _, e := range pr.Events {
+		if e.Kind == KindMerged && !e.At.After(t) {
+			return true
+		}
+	}
+	return false
 }
 
 // changesHands says whether an event can change who owns Doing time: a label

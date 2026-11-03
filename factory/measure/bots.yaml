@@ -7,8 +7,8 @@
 #
 # triage, reviewer and qa were checked to exist as Bot users on 2026-11-03
 # (gh api '/users/<login with [ as %5B and ] as %5D>' --jq .type). No App was
-# found under fuseone-factory-architect or fuseone-factory-developer, so those
-# two are placeholders: the operator fills them in with the slugs of the Apps
+# found under fuseone-factory-architect, fuseone-factory-developer or
+# fuseone-factory-merger, so those three are placeholders: the operator fills them in with the slugs of the Apps
 # the roles actually run under. `factory-measure report` refuses to run while
 # any value below contains PLACEHOLDER.
 bots:
@@ -17,3 +17,4 @@ bots:
   developer: PLACEHOLDER-developer-app-slug[bot]
   reviewer: fuseone-factory-reviewer[bot]
   qa: fuseone-factory-qa[bot]
+  merger: PLACEHOLDER-merger-app-slug[bot]

@@ -200,7 +200,7 @@ gh label create factory:needs-design --force --color fbca04 --description "Triag
 gh label create factory:needs-review --force --color fbca04 --description "PR waits for the Reviewer"
 gh label create factory:changes-requested --force --color fbca04 --description "Reviewer or QA asked for changes"
 gh label create factory:needs-qa --force --color fbca04 --description "PR waits for QA"
-gh label create factory:ready-to-merge --force --color fbca04 --description "Review and QA approved the head; a person merges"
+gh label create factory:ready-to-merge --force --color fbca04 --description "Review and QA approved the head; the Merger proposes the merge"
 gh label create factory:needs-runtime --force --color fbca04 --description "Needs a build or a test run before its PR; waits for Level 2"
 ```
 
@@ -221,7 +221,7 @@ one, so a new label arrives with its line here.
 | no `projects_write` | cards move with `move_card`, fields are set with `set_card_fields`, both on the factory's own server (#213); sealed in `internal/spec/factory_board_test.go` |
 | `standing_approvals: forbidden` | a grant given ahead of time would release a factory write without a person, and count as an approval nobody gave (#192) |
 | `reply_locale: en-US` | everything a role writes in this repository is in English (RULEBOOK § 7) |
-| no `merge_pull_request` | a person merges in v1 |
+| no `merge_pull_request` | no role merges directly: the Merger's one merge is `merge_if_ready`, which a person approves on every call |
 
 ### Waking on GitHub instead of a schedule
 
