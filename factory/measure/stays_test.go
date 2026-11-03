@@ -1,0 +1,156 @@
+package main
+
+import (
+	"reflect"
+	"testing"
+	"time"
+)
+
+const project = 2
+
+var (
+	person   = Actor{"User", "alice"}
+	triBot   = Actor{"Bot", "t-app[bot]"}
+	archBot  = Actor{"Bot", "a-app[bot]"}
+	devBot   = Actor{"Bot", "d-app[bot]"}
+	revBot   = Actor{"Bot", "r-app[bot]"}
+	qaBot    = Actor{"Bot", "q-app[bot]"}
+	strayBot = Actor{"Bot", "stray-app[bot]"}
+)
+
+func at(t *testing.T, s string) time.Time {
+	t.Helper()
+	v, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func move(t *testing.T, when, from, to string, who Actor) Event {
+	return Event{Kind: KindStatus, At: at(t, when), Actor: who, Project: project, From: from, To: to}
+}
+
+func label(t *testing.T, when string, on bool, name string, who Actor) Event {
+	k := KindUnlabeled
+	if on {
+		k = KindLabeled
+	}
+	return Event{Kind: k, At: at(t, when), Actor: who, Label: name}
+}
+
+func testBots(t *testing.T) Bots {
+	t.Helper()
+	b, err := parseBots([]byte(validBots))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func snapshot(items ...*Item) Snapshot {
+	s := Snapshot{Items: map[int]*Item{}}
+	for _, it := range items {
+		s.Items[it.Number] = it
+	}
+	return s
+}
+
+func TestStays_statusEvents_becomeStaysEndingAtTheNextMove(t *testing.T) {
+	t.Parallel()
+	card := &Item{Number: 10, OnBoard: true, Events: []Event{
+		move(t, "2026-10-05T08:00:00Z", "", "Triagem", person),
+		{Kind: KindStatus, At: at(t, "2026-10-05T09:00:00Z"), Actor: person, Project: 7, From: "Triagem", To: "Doing"},
+		move(t, "2026-10-05T10:00:00Z", "Triagem", "Preparado", triBot),
+		move(t, "2026-10-06T10:00:00Z", "Preparado", "Doing", person),
+		move(t, "2026-10-07T10:00:00Z", "Doing", "Done", person),
+		move(t, "2026-10-08T10:00:00Z", "Done", "Travado", person),
+	}}
+	got := laneStays(snapshot(card), project)
+	want := []string{
+		"Triagem 2026-10-05T08:00:00Z..2026-10-05T10:00:00Z",
+		"Preparado 2026-10-05T10:00:00Z..2026-10-06T10:00:00Z",
+		"Doing 2026-10-06T10:00:00Z..2026-10-07T10:00:00Z",
+		"Travado 2026-10-08T10:00:00Z..open",
+	}
+	if s := describeStays(got); !reflect.DeepEqual(s, want) {
+		t.Fatalf("stays:\n got %q\nwant %q", s, want)
+	}
+}
+
+func describeStays(st []Stay) []string {
+	var out []string
+	for _, s := range st {
+		end := "open"
+		if !s.Open {
+			end = s.End.Format(time.RFC3339)
+		}
+		out = append(out, s.Lane+" "+s.Start.Format(time.RFC3339)+".."+end)
+	}
+	return out
+}
+
+func TestStays_ownership_separatesAPersonsTimeFromARolesTime(t *testing.T) {
+	t.Parallel()
+	issue := &Item{Number: 10, OnBoard: true, Events: []Event{
+		move(t, "2026-10-05T00:00:00Z", "", "Triagem", person),
+		label(t, "2026-10-05T02:00:00Z", true, "factory:needs-design", triBot),
+		label(t, "2026-10-05T05:00:00Z", false, "factory:needs-design", archBot),
+		move(t, "2026-10-05T06:00:00Z", "Triagem", "Preparado", archBot),
+		move(t, "2026-10-05T10:00:00Z", "Preparado", "Doing", person),
+		move(t, "2026-10-06T10:00:00Z", "Doing", "Travado", qaBot),
+		move(t, "2026-10-06T12:00:00Z", "Travado", "Done", person),
+	}}
+	pr := &Item{Number: 11, IsPR: true, Linked: []int{10}, Events: []Event{
+		label(t, "2026-10-05T12:00:00Z", true, "factory:needs-review", devBot),
+		label(t, "2026-10-05T15:00:00Z", false, "factory:needs-review", revBot),
+		label(t, "2026-10-05T15:00:00Z", true, "factory:changes-requested", revBot),
+		label(t, "2026-10-05T16:00:00Z", false, "factory:changes-requested", devBot),
+		label(t, "2026-10-05T16:00:00Z", true, "factory:needs-qa", devBot),
+		label(t, "2026-10-06T04:00:00Z", true, "factory:ready-to-merge", qaBot),
+	}}
+	got := map[string][]Segment{}
+	for _, s := range laneStays(snapshot(issue, pr), project) {
+		got[s.Lane] = s.Segments
+	}
+	h := time.Hour
+	want := map[string][]Segment{
+		"Triagem":   {{OwnerTriage, 2 * h}, {OwnerArchitect, 3 * h}, {OwnerTriage, 1 * h}},
+		"Preparado": {{OwnerPerson, 4 * h}},
+		"Doing": {{OwnerUnattributed, 2 * h}, {OwnerReviewer, 3 * h}, {OwnerDeveloper, 1 * h},
+			{OwnerQA, 12 * h}, {OwnerPerson, 6 * h}},
+		"Travado": {{OwnerPerson, 2 * h}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("segments:\n got %v\nwant %v", got, want)
+	}
+}
+
+func TestWeekStart_sundayLastInstant_staysInItsWeek(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ at, want string }{
+		{"2026-10-11T23:59:59.999Z", "2026-10-05T00:00:00Z"},
+		{"2026-10-12T00:00:00Z", "2026-10-12T00:00:00Z"},
+		{"2026-10-12T01:00:00+03:00", "2026-10-05T00:00:00Z"}, // Sunday 22:00 UTC
+		{"2026-10-07T12:00:00Z", "2026-10-05T00:00:00Z"},
+	} {
+		if got := weekStart(at(t, tc.at)); !got.Equal(at(t, tc.want)) {
+			t.Errorf("weekStart(%s) = %s, want %s", tc.at, got, tc.want)
+		}
+	}
+}
+
+func TestPercentile_nearestRank(t *testing.T) {
+	t.Parallel()
+	h := time.Hour
+	d := []time.Duration{1 * h, 2 * h, 3 * h, 4 * h, 5 * h, 6 * h, 7 * h, 8 * h, 9 * h, 10 * h}
+	if got := percentile(d, 50); got != 5*h {
+		t.Errorf("p50 = %s, want 5h", got)
+	}
+	if got := percentile(d, 90); got != 9*h {
+		t.Errorf("p90 = %s, want 9h", got)
+	}
+	if got := percentile(d[:1], 90); got != 1*h {
+		t.Errorf("p90 of one = %s, want 1h", got)
+	}
+}
