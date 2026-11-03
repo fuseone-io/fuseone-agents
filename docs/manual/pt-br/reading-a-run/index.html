@@ -161,4 +161,21 @@ assumiu um pull request vinculado entra no histórico da issue, marcada como
 request vinculado mostra o histórico da issue e avisa qual pull request você
 abriu. Um vínculo feito numa área que você não pode ler não junta nada para
 você.</p>
+<p>Uma execução também pode entrar num card sem assumi-lo, pela forma como foi
+aberta. Uma execução aberta por um evento herda o card que a execução de
+origem assumiu ou, quando a origem não assumiu nenhum, o card que a própria
+origem herdou: ela aparece marcada como <strong>Evento</strong>. Uma execução aberta por
+uma entrega assinada do GitHub herda a issue ou o pull request de que a
+entrega trata, lidos do repositório e do número que o GitHub escreve, nunca
+de um título ou de um comentário: ela aparece marcada como <strong>Entrega do
+GitHub</strong>. A primeira linha da trilha da própria execução diz o que ela herdou
+e de onde. É só atribuição: um card herdado nunca fica preso à execução,
+então nunca impede que outra o assuma. Uma execução herdada conta como
+execução do seu papel, com as aprovações que pediu, mas o custo dela é do card
+que ela assumiu: o custo de um card, no histórico e no FinOps, soma só as
+execuções que assumiram o card ou um pull request vinculado a ele, e assim os
+custos de cards diferentes se somam sem repetir. Uma execução que herdou um card e assumiu outro
+aparece nos dois históricos, e cada linha cita o outro card; se herdou e
+assumiu o mesmo card, aparece uma vez só nesse histórico, como quem o
+assumiu.</p>
 <p>O que decide cada parada está em <a href="../what-the-gate-stops/">O que a plataforma para antes de acontecer</a> e em <a href="../policies/">Políticas</a>.</p></div><footer class="sl-flex astro-xhxjzfa7"><div class="meta sl-flex astro-xhxjzfa7"></div><div class="pagination-links print:hidden astro-jgq3vlii" dir="ltr"><a href="/fuseone-agents/docs/manual/pt-br/approving/" rel="prev" class="astro-jgq3vlii"><svg aria-hidden="true" class="astro-jgq3vlii astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z"/></svg><span class="astro-jgq3vlii">Previous<br class="astro-jgq3vlii"><span class="link-title astro-jgq3vlii">Aprovar uma ação</span></span></a><a href="/fuseone-agents/docs/manual/pt-br/data-barriers/" rel="next" class="astro-jgq3vlii"><svg aria-hidden="true" class="astro-jgq3vlii astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17.92 11.62a1.001 1.001 0 0 0-.21-.33l-5-5a1.003 1.003 0 1 0-1.42 1.42l3.3 3.29H7a1 1 0 0 0 0 2h7.59l-3.3 3.29a1.002 1.002 0 0 0 .325 1.639 1 1 0 0 0 1.095-.219l5-5a1 1 0 0 0 .21-.33 1 1 0 0 0 0-.76Z"/></svg><span class="astro-jgq3vlii">Next<br class="astro-jgq3vlii"><span class="link-title astro-jgq3vlii">Labels e barreiras de dados</span></span></a></div></footer></div></div></main></div></div></div></div></body></html>
