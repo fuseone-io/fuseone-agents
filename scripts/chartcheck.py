@@ -26,7 +26,7 @@ SIDECAR = {
     "name": "sidecar",
     "image": "example.com/sidecar:1",
     "env": [{"name": "LISTEN", "value": "127.0.0.1:9000"}],
-    "readinessProbe": {"httpGet": {"path": "/healthz", "port": 9000, "host": "127.0.0.1"}},
+    "readinessProbe": {"exec": {"command": ["/sidecar", "healthcheck"]}},
 }
 HOOK = ["--set-json", "worker.extraContainers=" + json.dumps([SIDECAR])]
 

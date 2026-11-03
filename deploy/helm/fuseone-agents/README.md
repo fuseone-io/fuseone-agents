@@ -103,7 +103,9 @@ server registered at `http://127.0.0.1:<port>/`. Only the worker connects to
 MCP servers — discovery, probes and tool calls all run there; `serve` records a
 probe request and a worker carries it out — so the hook is on the worker
 alone. A sidecar scales with the worker's replicas and shares its network
-policy and service account.
+policy and service account. Probe a loopback-only sidecar with `exec`: the
+kubelet sends an `httpGet` probe to the pod IP, or with `host: 127.0.0.1` to
+the node's own loopback, never to the pod's.
 
 ## First sign-in
 

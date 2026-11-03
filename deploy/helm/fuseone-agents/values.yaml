@@ -80,12 +80,16 @@ worker:
   # tool calls all run there), so the hook is on the worker alone. A sidecar
   # shares the worker pod's replicas, network policy and service account.
   #
+  # Probe a loopback-only sidecar with `exec`, not `httpGet`: the kubelet sends
+  # an httpGet probe to the pod IP (or, with `host: 127.0.0.1`, to the node's
+  # own loopback), so it never reaches a listener on the pod's 127.0.0.1.
+  #
   #   extraContainers:
   #     - name: my-sidecar
   #       image: registry.example.com/my-sidecar:1.2.3
   #       env: [{ name: LISTEN_ADDR, value: "127.0.0.1:8091" }]
   #       readinessProbe:
-  #         httpGet: { host: 127.0.0.1, path: /healthz, port: 8091 }
+  #         exec: { command: ["/my-sidecar", "healthcheck"] }
   #       securityContext:
   #         allowPrivilegeEscalation: false
   #         readOnlyRootFilesystem: true
