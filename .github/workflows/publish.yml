@@ -2,7 +2,8 @@
 #
 # Two artefacts and they travel together: the image, and the chart that knows
 # how to run it. Publishing one without the other leaves a customer holding
-# something they cannot install.
+# something they cannot install. A third, the factory's MCP sidecar image,
+# rides along from the same Dockerfile; nothing in the chart refers to it.
 #
 # Both go to this repository's own registry, which is what the chart already
 # defaults to. Nothing is published from a pull request — a fork must not be
@@ -116,6 +117,66 @@ jobs:
       - name: sign the digest
         run: cosign sign --yes ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
 
+  # The software factory's MCP server, run as a sidecar beside the worker.
+  # Its own image, so an installation that does not run the factory never
+  # pulls it, published from the same commits with the same tags, provenance,
+  # bill of materials and signature as agentd: a sidecar in the worker's pod
+  # is as much inside the perimeter as the worker.
+  factory-mcp-image:
+    name: factory-mcp image
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      FACTORY_IMAGE: ghcr.io/${{ github.repository }}-factory-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The same tag set as agentd's, so `0.90.0` of one names the commit
+      # `0.90.0` of the other was built from.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.FACTORY_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=sha,format=short,prefix=sha-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: factory-mcp
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Its own cache scope: sharing agentd's default one in mode=max, the
+          # two builds would evict each other's layers on every push.
+          cache-from: type=gha,scope=factory-mcp
+          cache-to: type=gha,scope=factory-mcp,mode=max
+          provenance: mode=max
+          sbom: true
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: sign the digest
+        run: cosign sign --yes ${{ env.FACTORY_IMAGE }}@${{ steps.push.outputs.digest }}
+
   chart:
     name: chart
     needs: image
@@ -159,7 +220,8 @@ jobs:
 
   release:
     name: github release
-    needs: chart
+    # Announced only once every image the release names exists.
+    needs: [chart, factory-mcp-image]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

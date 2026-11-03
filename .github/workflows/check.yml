@@ -140,6 +140,33 @@ jobs:
             | kubeconform -strict -summary -kubernetes-version 1.31.0 \
                 -schema-location default
 
+  # The factory's MCP image, built the way publish.yml builds it and never
+  # pushed. publish.yml only runs after a merge, so without this a broken
+  # target would first fail on main, after review, and a release tag would
+  # publish agentd without its sidecar. Built for amd64 and loaded so the
+  # image itself is started: a wrong entrypoint or a binary for another
+  # platform passes every Go test.
+  factory-mcp-image:
+    name: factory-mcp image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: factory-mcp
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: factory-mcp:check
+          cache-from: type=gha,scope=factory-mcp
+
+      - name: the image answers /healthz
+        run: ./scripts/factory-mcp-smoke.sh factory-mcp:check
+
   artifact:
     name: artifact
     runs-on: ubuntu-latest

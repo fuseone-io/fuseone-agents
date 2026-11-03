@@ -49,6 +49,37 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     -ldflags "-s -w -X main.version=${VERSION}" \
     -o /out/agentd ./cmd/agentd
 
+# --- the factory's MCP server -----------------------------------------------
+# A second artefact from the same module: the software factory's own tooling
+# (factory/mcp), run as a sidecar beside the worker. agentd does not import
+# it, so it builds without the console and ships without agentd. Built with
+# `--target factory-mcp`; these stages sit above agentd's so that a plain
+# `docker build` still produces agentd, the last stage.
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS factory-mcp-build
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags "-s -w" \
+    -o /out/factory-mcp ./factory/mcp
+
+# The same base as agentd: a static binary, its certificates (it calls
+# api.github.com), no shell. It holds no credential in pass-through mode, so
+# the image carries nothing an operator has to keep private.
+FROM gcr.io/distroless/static-debian12:nonroot AS factory-mcp
+
+COPY --from=factory-mcp-build /out/factory-mcp /factory-mcp
+
+USER nonroot:nonroot
+EXPOSE 8091
+
+ENTRYPOINT ["/factory-mcp"]
+
 # --- what ships -------------------------------------------------------------
 FROM gcr.io/distroless/static-debian12:nonroot
 
