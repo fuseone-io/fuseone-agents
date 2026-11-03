@@ -68,7 +68,7 @@ func TestSnapshot_linkedItems_followedAndOtherRepositoriesIgnored(t *testing.T) 
 	f := newFakeGitHub(t)
 	old := at(t, "2026-09-01T00:00:00Z")
 	f.add(10, &fakeThing{onBoard: true, linked: []int{11}})
-	f.add(11, &fakeThing{isPR: true, updatedAt: old, linked: []int{10}})
+	f.add(11, &fakeThing{isPR: true, updatedAt: old, linked: []int{10}, created: at(t, "2026-08-30T12:00:00Z")})
 	f.add(12, &fakeThing{isPR: true, updatedAt: at(t, "2026-10-06T00:00:00Z"), linked: []int{13}})
 	f.add(13, &fakeThing{})
 	f.add(14, &fakeThing{isPR: true, updatedAt: old}) // neither recent nor linked
@@ -83,6 +83,9 @@ func TestSnapshot_linkedItems_followedAndOtherRepositoriesIgnored(t *testing.T) 
 	}
 	if !s.Items[10].OnBoard || s.Items[13].OnBoard || !s.Items[11].IsPR || s.Items[13].IsPR {
 		t.Errorf("item kinds lost: %+v %+v", s.Items[10], s.Items[13])
+	}
+	if got := s.Items[11].Created; !got.Equal(at(t, "2026-08-30T12:00:00Z")) {
+		t.Errorf("#11 opened at %s, want when GitHub says it was created", got)
 	}
 }
 

@@ -90,9 +90,10 @@ type Item struct {
 	Number   int
 	IsPR     bool
 	OnBoard  bool
-	Author   Actor // pull requests
-	Merged   bool  // pull requests
-	Linked   []int // issue: the pull requests that close it; pull request: the issues it closes
+	Author   Actor     // pull requests
+	Merged   bool      // pull requests
+	Created  time.Time // pull requests: when it was opened; zero when not read
+	Linked   []int     // issue: the pull requests that close it; pull request: the issues it closes
 	Events   []Event
 	Statuses []Status // pull requests: factory/qa statuses on the SHAs it carried
 }

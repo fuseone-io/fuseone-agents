@@ -27,6 +27,7 @@ type fakeThing struct {
 	isPR      bool
 	onBoard   bool
 	updatedAt time.Time
+	created   time.Time // pull requests: createdAt
 	author    map[string]any
 	merged    bool
 	linked    []int
@@ -220,7 +221,7 @@ func (f *fakeGitHub) timelinePage(th *fakeThing, after any, first, refsFirst int
 	got, info := page(nodes, after, first)
 	out := map[string]any{"timelineItems": map[string]any{"pageInfo": info, "nodes": got}}
 	if th.isPR {
-		out["merged"], out["author"] = th.merged, th.author
+		out["merged"], out["author"], out["createdAt"] = th.merged, th.author, th.created.Format(time.RFC3339)
 	}
 	out[refsField(th)] = f.refsPage(th, nil, refsFirst)
 	return out

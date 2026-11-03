@@ -165,16 +165,35 @@ and each piece goes to whoever had to move the card then:
 | Lane | Owner |
 |---|---|
 | Triagem | the **Architect** while the issue carries `factory:needs-design`, **Triage** otherwise |
-| Doing | from the pull request's sub-state label: `factory:needs-review` → **Reviewer**, `factory:needs-qa` → **QA**, `factory:changes-requested` → **Developer**, `factory:ready-to-merge` → a **person** |
+| Doing | see below |
 | Preparado, Travado | a **person**: no role moves a card out of them |
 
-In Doing, an issue card reads the labels of its linked pull requests. A pull
-request card reads its own. With several sub-state labels on at once, the one
-applied last decides. With none, the time is **unattributed**. That covers a
-card in Doing before its pull request exists, and a card labelled
-`factory:needs-runtime`. No rule above names an owner for either, so none is
-guessed. The per-role table gives each owner's share of the closed stays that
-ended that week, and the board moves it made that week.
+In Doing, the first rule that applies decides:
+
+1. While the issue carries `factory:needs-runtime`, the time is a
+   **person's**. The Developer skips the card, and a person takes it.
+2. **Before any pull request linked to the issue was opened**, the time is the
+   **Developer's**: the card waits for it to open one.
+3. Once a linked pull request exists, the time follows the pull request's
+   sub-state label: `factory:needs-review` → **Reviewer**, `factory:needs-qa` →
+   **QA**, `factory:changes-requested` → **Developer**,
+   `factory:ready-to-merge` → a **person**. With several sub-state labels on
+   at once, across every linked pull request opened by then (closed ones
+   included, since a closed attempt keeps its labels), the one applied last
+   decides.
+4. A pull request that exists but carries no recognised sub-state label is an
+   inconsistent state. The time is **unattributed**, and no owner is guessed.
+
+The stay is split at the instant the linked pull request was opened, its
+`createdAt`. Before that instant, rule 2 applies. After it, rule 3 or 4. A pull
+request opened after the stay ended plays no part. A pull request card exists
+from the start of its stay, so only its own label decides (rules 3 and 4).
+A linked pull request whose `createdAt` was not read counts as already
+open, so the Developer is never given time a pull request may already have
+existed in.
+
+The per-role table gives each owner's share of the closed stays that ended
+that week, and the board moves it made that week.
 
 ### Caught later
 

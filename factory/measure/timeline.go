@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // batchSize is how many timelines one query asks for, each as its own alias
@@ -32,7 +33,7 @@ const (
 	// timeline page; links.go reads the rest.
 	refNodes  = `{ pageInfo { hasNextPage endCursor } nodes { number repository { nameWithOwner } } }`
 	issueMeta = `closedByPullRequestsReferences(first: 10, includeClosedPrs: true) ` + refNodes
-	prMeta    = `merged author ` + actorSel + ` closingIssuesReferences(first: 10) ` + refNodes
+	prMeta    = `merged createdAt author ` + actorSel + ` closingIssuesReferences(first: 10) ` + refNodes
 )
 
 // target is a timeline still to read: from its start, or from cursor.
@@ -50,6 +51,7 @@ type rawItem struct {
 		Nodes    []rawNode `json:"nodes"`
 	} `json:"timelineItems"`
 	Merged    bool      `json:"merged"`
+	CreatedAt time.Time `json:"createdAt"`
 	Author    *rawActor `json:"author"`
 	Closing   *rawRefs  `json:"closingIssuesReferences"`
 	ClosingBy *rawRefs  `json:"closedByPullRequestsReferences"`
@@ -131,7 +133,7 @@ func (r reader) absorb(s Snapshot, t target, raw *rawItem) (target, bool) {
 	more := false
 	it := s.Items[t.number]
 	if it == nil {
-		it = &Item{Number: t.number, IsPR: t.isPR, Merged: raw.Merged, Author: raw.Author.actor()}
+		it = &Item{Number: t.number, IsPR: t.isPR, Merged: raw.Merged, Created: raw.CreatedAt, Author: raw.Author.actor()}
 		s.Items[t.number] = it
 		refs := raw.refs()
 		r.addLinks(it, refs)

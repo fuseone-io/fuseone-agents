@@ -87,9 +87,13 @@ func cardStays(s Snapshot, card *Item, project int) []Stay {
 // changed, and gives each piece to the owner at its start.
 func segments(s Snapshot, card *Item, st Stay) []Segment {
 	cuts := []time.Time{st.Start, st.End}
+	inside := func(t time.Time) bool { return t.After(st.Start) && t.Before(st.End) }
 	for _, it := range append([]*Item{card}, linkedPRs(s, card)...) {
+		if it != card && inside(it.Created) {
+			cuts = append(cuts, it.Created) // Doing changes hands when the pull request opens
+		}
 		for _, e := range it.Events {
-			if isLabelEvent(e) && e.At.After(st.Start) && e.At.Before(st.End) {
+			if isLabelEvent(e) && inside(e.At) {
 				cuts = append(cuts, e.At)
 			}
 		}

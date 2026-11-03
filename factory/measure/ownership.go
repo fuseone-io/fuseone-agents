@@ -9,6 +9,7 @@ const (
 	labelNeedsQA          = "factory:needs-qa"
 	labelChangesRequested = "factory:changes-requested"
 	labelReadyToMerge     = "factory:ready-to-merge"
+	labelNeedsRuntime     = "factory:needs-runtime"
 )
 
 // subStateOwner is who a Doing sub-state label waits on.
@@ -49,11 +50,45 @@ func ownerAt(s Snapshot, card *Item, lane string, t time.Time) Owner {
 	return OwnerUnattributed
 }
 
+// doingOwner is who a Doing card waits on at t:
+//
+//   - while the issue carries factory:needs-runtime, a person: the Developer
+//     skips it and a person takes it (factory/LANES.md);
+//   - before any pull request linked to the issue was opened, the Developer;
+//   - once one exists, the role its sub-state label names; with no
+//     recognised sub-state label, nobody, an inconsistent state not guessed at.
+//
+// A pull request card exists from the start, so only its label decides.
 func doingOwner(s Snapshot, card *Item, t time.Time) Owner {
 	prs := []*Item{card}
 	if !card.IsPR {
-		prs = linkedPRs(s, card)
+		if _, on := labelsAt(card, t)[labelNeedsRuntime]; on {
+			return OwnerPerson
+		}
+		prs = openedBy(linkedPRs(s, card), t)
+		if len(prs) == 0 {
+			return OwnerDeveloper
+		}
 	}
+	return subStateAt(prs, t)
+}
+
+// openedBy is the pull requests already opened at t. One whose opening time
+// was not read counts as opened: the Developer is never credited with time a
+// pull request may already have existed in.
+func openedBy(prs []*Item, t time.Time) []*Item {
+	var out []*Item
+	for _, pr := range prs {
+		if !pr.Created.After(t) {
+			out = append(out, pr)
+		}
+	}
+	return out
+}
+
+// subStateAt is the owner the sub-state label applied last names, across
+// prs, at t; unattributed when none carries one.
+func subStateAt(prs []*Item, t time.Time) Owner {
 	owner, latest := OwnerUnattributed, labelMark{}
 	for _, pr := range prs {
 		for name, mark := range labelsAt(pr, t) {

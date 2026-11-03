@@ -126,6 +126,50 @@ func TestStays_ownership_separatesAPersonsTimeFromARolesTime(t *testing.T) {
 	}
 }
 
+// Doing before any linked pull request exists waits on the Developer; with
+// factory:needs-runtime on the issue it waits on a person; with a pull
+// request but no sub-state label it is nobody's, an inconsistent state.
+func TestStays_doingOwner_byWhetherThePullRequestExistsYet(t *testing.T) {
+	t.Parallel()
+	h := time.Hour
+	doing := func(extra ...Event) *Item {
+		return &Item{Number: 10, OnBoard: true, Events: append([]Event{
+			move(t, "2026-10-05T10:00:00Z", "Preparado", "Doing", person),
+			move(t, "2026-10-05T20:00:00Z", "Doing", "Done", person),
+		}, extra...)}
+	}
+	pr := func(created string, events ...Event) *Item {
+		return &Item{Number: 11, IsPR: true, Linked: []int{10}, Created: at(t, created), Events: events}
+	}
+	for _, tc := range []struct {
+		name  string
+		items []*Item
+		want  []Segment
+	}{
+		{"no pull request yet", []*Item{doing()}, []Segment{{OwnerDeveloper, 10 * h}}},
+		{"the stay spans the pull request's creation", []*Item{doing(),
+			pr("2026-10-05T13:00:00Z", label(t, "2026-10-05T13:00:00Z", true, labelNeedsReview, devBot))},
+			[]Segment{{OwnerDeveloper, 3 * h}, {OwnerReviewer, 7 * h}}},
+		{"a pull request with no sub-state", []*Item{doing(), pr("2026-10-05T13:00:00Z")},
+			[]Segment{{OwnerDeveloper, 3 * h}, {OwnerUnattributed, 7 * h}}},
+		{"needs-runtime on the issue", []*Item{doing(
+			label(t, "2026-10-05T12:00:00Z", true, labelNeedsRuntime, devBot),
+			label(t, "2026-10-05T18:00:00Z", false, labelNeedsRuntime, person))},
+			[]Segment{{OwnerDeveloper, 2 * h}, {OwnerPerson, 6 * h}, {OwnerDeveloper, 2 * h}}},
+		{"a pull request opened in another card's time is not this one's", []*Item{doing(),
+			pr("2026-10-05T21:00:00Z", label(t, "2026-10-05T21:00:00Z", true, labelNeedsReview, devBot))},
+			[]Segment{{OwnerDeveloper, 10 * h}}},
+	} {
+		var got []Segment
+		for _, s := range laneStays(snapshot(tc.items...), project) {
+			got = append(got, s.Segments...)
+		}
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s:\n got %v\nwant %v", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestWeekStart_sundayLastInstant_staysInItsWeek(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ at, want string }{
