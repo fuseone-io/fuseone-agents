@@ -6,14 +6,17 @@ import (
 	"net/http"
 )
 
-// readyQuery lists the open pull requests on the protected base carrying
-// factory:ready-to-merge, oldest first, with the project items of each and of
-// the issues it closes. It asks for numbers, SHAs and ids only: no title, no
-// body, no label text. The label and the base travel as variables.
+// readyQuery lists the open and the merged pull requests on the protected
+// base carrying factory:ready-to-merge, oldest first, with the project items
+// of each and of the issues it closes. A merged one still labelled is one
+// close_merged has not finished: the label is dropped only once its card
+// reached Done, so the merged part stays small. It asks for numbers, SHAs,
+// states and ids only: no title, no body, no label text. The label and the
+// base travel as variables.
 const readyQuery = `query($owner: String!, $name: String!, $base: String!, $label: String!) { ` +
-	`repository(owner: $owner, name: $name) { pullRequests(states: OPEN, baseRefName: $base, ` +
+	`repository(owner: $owner, name: $name) { pullRequests(states: [OPEN, MERGED], baseRefName: $base, ` +
 	`labels: [$label], first: 50, orderBy: {field: CREATED_AT, direction: ASC}) { ` +
-	`pageInfo { hasNextPage } nodes { number headRefOid ` +
+	`pageInfo { hasNextPage } nodes { number headRefOid state ` +
 	`projectItems(first: 20) { pageInfo { hasNextPage } nodes { id isArchived project { id } } } ` +
 	`closingIssuesReferences(first: 10) { pageInfo { hasNextPage } nodes { ` +
 	`projectItems(first: 20) { pageInfo { hasNextPage } nodes { id isArchived project { id } } } } } } } } }`
@@ -34,6 +37,7 @@ type itemConn struct {
 type readyNode struct {
 	Number       int      `json:"number"`
 	HeadRefOid   string   `json:"headRefOid"`
+	State        string   `json:"state"`
 	ProjectItems itemConn `json:"projectItems"`
 	Closing      struct {
 		PageInfo pageInfo `json:"pageInfo"`
@@ -86,7 +90,7 @@ func (c *Client) readyPullRequests(ctx context.Context, base string) ([]readyNod
 	}
 	nodes := out.Data.Repository.PullRequests.Nodes
 	for _, n := range nodes {
-		if !n.complete() || n.Number <= 0 || !validSHA(n.HeadRefOid) {
+		if !n.complete() || n.Number <= 0 || !validSHA(n.HeadRefOid) || (n.State != "OPEN" && n.State != "MERGED") {
 			return nil, fmt.Errorf("%w: POST graphql: ready listing: pull request %d incomplete", ErrGitHub, n.Number)
 		}
 	}

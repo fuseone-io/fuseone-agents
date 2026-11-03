@@ -35,6 +35,8 @@ func NewServer(cfg Config, role Role, gh *Client) (*mcp.Server, error) {
 			registerSendBack(server, sendBack)
 		case ToolListReadyPRs:
 			registerListReady(server, NewReadyLister(cfg, gh))
+		case ToolCloseMerged:
+			registerCloseMerged(server, NewReadyLister(cfg, gh))
 		}
 	}
 	return server, nil
@@ -93,12 +95,28 @@ func registerListReady(server *mcp.Server, l *ReadyLister) {
 		Name: ToolListReadyPRs,
 		Description: "List the open pull requests labelled factory:ready-to-merge whose one card is in " +
 			"Doing, oldest first, each with its head SHA, its card's item id and whether merge_if_ready " +
-			"would merge it now (and if not, why). Numbers, SHAs, ids and closed reasons only.",
+			"would merge it now (and if not, why); and, under merged, the merged ones still labelled, " +
+			"which close_merged finishes. Numbers, SHAs, ids and closed reasons only.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ readyInput) (*mcp.CallToolResult, ReadyList, error) {
 		res, err := l.List(callContext(ctx, req))
 		if err != nil {
 			return nil, ReadyList{}, err
 		}
 		return &mcp.CallToolResult{}, res, nil
+	})
+}
+
+func registerCloseMerged(server *mcp.Server, l *ReadyLister) {
+	mcp.AddTool(server, &mcp.Tool{
+		Name: ToolCloseMerged,
+		Description: "Finish a merged pull request still labelled factory:ready-to-merge: move its card " +
+			"from Doing to Done, then drop the label. Refuses a pull request that is not merged, or whose " +
+			"card is in another lane. Returns structured state only.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in CloseInput) (*mcp.CallToolResult, CloseResult, error) {
+		res, err := l.CloseMerged(callContext(ctx, req), in)
+		if err != nil {
+			return nil, CloseResult{}, err
+		}
+		return &mcp.CallToolResult{IsError: !res.Closed}, res, nil
 	})
 }

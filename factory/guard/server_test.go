@@ -97,7 +97,7 @@ var roleSurface = map[Role][]string{
 	RoleDeveloper: {ToolMoveCard},
 	RoleReviewer:  {ToolMoveCard},
 	RoleQA:        {ToolMoveCard, ToolRecordQAVerdict},
-	RoleMerger:    {ToolMoveCard, ToolMergeIfReady, ToolSendBack, ToolListReadyPRs},
+	RoleMerger:    {ToolMoveCard, ToolMergeIfReady, ToolSendBack, ToolListReadyPRs, ToolCloseMerged},
 }
 
 func listedNames(t *testing.T, cs *mcp.ClientSession) []string {

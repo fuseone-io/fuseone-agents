@@ -54,6 +54,7 @@ type fakeGQLPR struct {
 	Head    string
 	Base    string
 	Open    bool
+	Merged  bool
 	Labels  []string
 	Items   []string
 	Closing [][]string
@@ -69,19 +70,28 @@ func (f *fakeGraphQL) itemsJSON(ids []string) map[string]any {
 	return map[string]any{"pageInfo": map[string]any{"hasNextPage": false}, "nodes": nodes}
 }
 
-// listReady answers the open pull requests on the base that carry the label,
-// oldest first, as GitHub's filtered connection does.
-func (f *fakeGraphQL) listReady(w http.ResponseWriter, v map[string]string) {
+// listReady answers the open and the merged pull requests on the base that
+// carry the label, oldest first, as GitHub's connection filtered by states
+// OPEN and MERGED does: one closed without a merge is in neither.
+//
+// The states are read from the query itself, as GitHub reads them: a query
+// that asks for OPEN only is answered with no merged pull request.
+func (f *fakeGraphQL) listReady(w http.ResponseWriter, q string, v map[string]string) {
+	open, merged := statesAsked(q)
 	nodes := []map[string]any{}
 	for _, pr := range f.prs {
-		if !pr.Open || pr.Base != v["base"] || !contains(pr.Labels, v["label"]) {
+		if !(open && pr.Open || merged && pr.Merged) || pr.Base != v["base"] || !contains(pr.Labels, v["label"]) {
 			continue
+		}
+		state := "OPEN"
+		if pr.Merged {
+			state = "MERGED"
 		}
 		closing := []map[string]any{}
 		for _, ids := range pr.Closing {
 			closing = append(closing, map[string]any{"title": canary, "projectItems": f.itemsJSON(ids)})
 		}
-		nodes = append(nodes, map[string]any{"number": pr.Number, "headRefOid": pr.Head, "title": canary,
+		nodes = append(nodes, map[string]any{"number": pr.Number, "headRefOid": pr.Head, "state": state, "title": canary,
 			"body": canary, "projectItems": f.itemsJSON(pr.Items),
 			"closingIssuesReferences": map[string]any{"pageInfo": map[string]any{"hasNextPage": false}, "nodes": closing}})
 	}
@@ -116,7 +126,7 @@ func (f *fakeGraphQL) serve(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(q, "mutation"):
 		f.update(w, token, body.Variables)
 	case strings.Contains(q, "pullRequests("):
-		f.listReady(w, body.Variables)
+		f.listReady(w, q, body.Variables)
 	case strings.Contains(q, "viewer"):
 		f.viewerCalls++
 		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{
@@ -213,4 +223,13 @@ func (f *fakeGraphQL) update(w http.ResponseWriter, token string, v map[string]s
 	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"updateProjectV2ItemFieldValue": map[string]any{
 		"projectV2Item": map[string]any{"id": item.ID, "title": canary},
 	}}})
+}
+
+// statesAsked reads the states argument of the pullRequests connection.
+func statesAsked(q string) (open, merged bool) {
+	_, args, _ := strings.Cut(q, "pullRequests(")
+	args, _, _ = strings.Cut(args, ")")
+	_, states, _ := strings.Cut(args, "states:")
+	states, _, _ = strings.Cut(states, ", baseRefName")
+	return strings.Contains(states, "OPEN"), strings.Contains(states, "MERGED")
 }

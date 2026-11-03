@@ -36,6 +36,7 @@ const (
 	ToolMergeIfReady    = "merge_if_ready"
 	ToolSendBack        = "send_back"
 	ToolListReadyPRs    = "list_ready_prs"
+	ToolCloseMerged     = "close_merged"
 )
 
 // ToolsFor is the role's surface: exactly the tools a caller with that role
@@ -49,7 +50,7 @@ func ToolsFor(r Role) []string {
 	case RoleQA:
 		return []string{ToolMoveCard, ToolRecordQAVerdict}
 	case RoleMerger:
-		return []string{ToolMoveCard, ToolListReadyPRs, ToolMergeIfReady, ToolSendBack}
+		return []string{ToolMoveCard, ToolListReadyPRs, ToolMergeIfReady, ToolSendBack, ToolCloseMerged}
 	}
 	return nil
 }
@@ -90,8 +91,10 @@ func roleMoves(r Role, from, to Lane) bool {
 		return from == LaneDoing && to == LaneTravado
 	case RoleMerger:
 		// Travado is the Merger's exit when only a person can unblock a merge:
-		// a base the head is behind, a conflict, a refusal GitHub gave.
-		return from == LaneDoing && (to == LaneDone || to == LaneTravado)
+		// a base the head is behind, a conflict, a refusal GitHub gave. Done
+		// is not on this row: only close_merged moves a card there, and only
+		// for a pull request GitHub reports merged.
+		return from == LaneDoing && to == LaneTravado
 	}
 	return false
 }

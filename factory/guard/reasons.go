@@ -81,6 +81,13 @@ const (
 	ReasonCommentNotSent   Reason = "comment_not_sent"
 	ReasonLabelRefused     Reason = "label_refused"
 	ReasonLabelNotSent     Reason = "label_not_sent"
+
+	// close_merged's vocabulary. ReasonPRNotMerged: the pull request is still
+	// open. ReasonCardNotClosable: its card is in a lane other than Doing or
+	// Done, or it has two, so a person finishes it.
+	ReasonClosedOut       Reason = "closed_out"
+	ReasonPRNotMerged     Reason = "pr_not_merged"
+	ReasonCardNotClosable Reason = "card_not_closable"
 )
 
 // QAContext is the commit-status context the QA verdict lives under, and the
