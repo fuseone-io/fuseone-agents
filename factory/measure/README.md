@@ -124,7 +124,10 @@ report will use.
 - every pull request updated since the window's first Monday;
 - every issue or pull request those link to, followed until nothing new:
   `closingIssuesReferences` on a pull request, and
-  `closedByPullRequestsReferences` (closed ones included) on an issue;
+  `closedByPullRequestsReferences` (closed ones included) on an issue. Both
+  are paged connections. Their first page of 10 comes with the item's first
+  timeline page, and every later page is read with `first: 100` and its
+  cursor, so an issue with many pull request attempts loses none;
 - their timelines through GraphQL, in batches of 20 aliases, each `first: 100`
   and followed by cursor to its last page: status changes, comments, labels,
   reopen, close and merge events, and, on pull requests, reviews (with their

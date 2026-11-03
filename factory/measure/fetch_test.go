@@ -152,6 +152,33 @@ func TestClient_refusesAnythingButAQuery(t *testing.T) {
 	}
 }
 
+// Closing references are a paged connection: an issue with eleven pull
+// requests, after several attempts, and a pull request closing eleven
+// issues, are followed to the last one.
+func TestSnapshot_moreThanTenLinks_followedToTheLast(t *testing.T) {
+	t.Parallel()
+	f := newFakeGitHub(t)
+	old := at(t, "2026-09-01T00:00:00Z")
+	issue := f.add(1, &fakeThing{onBoard: true})
+	pr := f.add(200, &fakeThing{isPR: true, updatedAt: at(t, "2026-10-06T00:00:00Z")})
+	for i := 1; i <= 11; i++ {
+		f.add(100+i, &fakeThing{isPR: true, updatedAt: old, linked: []int{1},
+			nodes: []map[string]any{nComment(since, "attempt", person)}})
+		issue.linked = append(issue.linked, 100+i)
+		f.add(300+i, &fakeThing{nodes: []map[string]any{nComment(since, "closed by 200", person)}})
+		pr.linked = append(pr.linked, 300+i)
+	}
+	s := read(t, f)
+	for _, n := range []int{111, 311} {
+		if s.Items[n] == nil || countKind(s.Items[n], KindComment) != 1 {
+			t.Errorf("#%d, the eleventh link, was not read", n)
+		}
+	}
+	if len(s.Items[1].Linked) != 11 || len(s.Items[200].Linked) != 11 || s.Items[9999] != nil {
+		t.Errorf("links: #1 %v, #200 %v; want eleven each, and no other repository's", s.Items[1].Linked, s.Items[200].Linked)
+	}
+}
+
 // A dismissal is read with the review it dismissed, so an approval QA failed
 // before it was taken away still counts as an approval at that instant.
 func TestSnapshot_reviewDismissal_readWithTheReviewItDismissed(t *testing.T) {

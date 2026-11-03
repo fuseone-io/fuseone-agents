@@ -114,8 +114,10 @@ func (f *fakeGitHub) graphql(w http.ResponseWriter, q string, vars map[string]an
 		f.board(w, vars)
 	case strings.Contains(q, "pullRequests("):
 		f.pulls(w, vars)
-	default:
+	case strings.Contains(q, "timelineItems("):
 		f.timelines(w, q, vars)
+	default:
+		f.refPages(w, q, vars)
 	}
 }
 
@@ -183,12 +185,16 @@ func (f *fakeGitHub) timelines(w http.ResponseWriter, q string, vars map[string]
 		writeJSON(w, http.StatusOK, fakeGQLError(f.failTypes, "Resource not accessible by integration"))
 		return
 	}
+	refsFirst := 0
+	if m := refsFirstRE.FindStringSubmatch(q); m != nil {
+		refsFirst, _ = strconv.Atoi(m[1])
+	}
 	repo := map[string]any{}
 	for _, m := range aliasRE.FindAllStringSubmatch(q, -1) {
 		n, _ := strconv.Atoi(m[3])
 		first, _ := strconv.Atoi(m[4])
 		th := f.things[n]
-		if first > 100 {
+		if first > 100 || refsFirst > 100 || refsFirst < 1 {
 			writeJSON(w, http.StatusOK, fakeGQLError("MAX_PAGE_SIZE_EXCEEDED", "first must be at most 100"))
 			return
 		}
@@ -196,7 +202,7 @@ func (f *fakeGitHub) timelines(w http.ResponseWriter, q string, vars map[string]
 			repo[m[1]] = nil
 			continue
 		}
-		repo[m[1]] = f.timelinePage(n, th, vars[m[5]], first, strings.Split(m[6], ", "))
+		repo[m[1]] = f.timelinePage(th, vars[m[5]], first, refsFirst, strings.Split(m[6], ", "))
 	}
 	if len(repo) == 0 {
 		f.t.Errorf("the fake understood no alias in %q", q)
@@ -204,7 +210,7 @@ func (f *fakeGitHub) timelines(w http.ResponseWriter, q string, vars map[string]
 	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"repository": repo}})
 }
 
-func (f *fakeGitHub) timelinePage(n int, th *fakeThing, after any, first int, types []string) map[string]any {
+func (f *fakeGitHub) timelinePage(th *fakeThing, after any, first, refsFirst int, types []string) map[string]any {
 	var nodes []map[string]any
 	for _, node := range th.nodes {
 		if slices.Contains(types, itemType(node["__typename"].(string))) {
@@ -212,14 +218,54 @@ func (f *fakeGitHub) timelinePage(n int, th *fakeThing, after any, first int, ty
 		}
 	}
 	got, info := page(nodes, after, first)
-	refs := map[string]any{"nodes": f.refs(th.linked)}
 	out := map[string]any{"timelineItems": map[string]any{"pageInfo": info, "nodes": got}}
 	if th.isPR {
-		out["merged"], out["author"], out["closingIssuesReferences"] = th.merged, th.author, refs
-	} else {
-		out["closedByPullRequestsReferences"] = refs
+		out["merged"], out["author"] = th.merged, th.author
 	}
+	out[refsField(th)] = f.refsPage(th, nil, refsFirst)
 	return out
+}
+
+var (
+	refsFirstRE = regexp.MustCompile(`References\(first: (\d+)`)
+	refAliasRE  = regexp.MustCompile(`(r\d+): (issue|pullRequest)\(number: (\d+)\) \{ (closingIssuesReferences|closedByPullRequestsReferences)\(first: (\d+), after: \$(r\d+)`)
+)
+
+func refsField(th *fakeThing) string {
+	if th.isPR {
+		return "closingIssuesReferences"
+	}
+	return "closedByPullRequestsReferences"
+}
+
+// refsPage is one page of a closing-references connection, paged like any
+// other GitHub connection.
+func (f *fakeGitHub) refsPage(th *fakeThing, after any, first int) map[string]any {
+	got, info := page(f.refs(th.linked), after, first)
+	return map[string]any{"pageInfo": info, "nodes": got}
+}
+
+// refPages answers a query for the later pages of reference connections.
+func (f *fakeGitHub) refPages(w http.ResponseWriter, q string, vars map[string]any) {
+	repo := map[string]any{}
+	for _, m := range refAliasRE.FindAllStringSubmatch(q, -1) {
+		n, _ := strconv.Atoi(m[3])
+		first, _ := strconv.Atoi(m[5])
+		th := f.things[n]
+		switch {
+		case first > 100:
+			writeJSON(w, http.StatusOK, fakeGQLError("MAX_PAGE_SIZE_EXCEEDED", "first must be at most 100"))
+			return
+		case th == nil || th.isPR != (m[2] == "pullRequest") || refsField(th) != m[4]:
+			repo[m[1]] = nil
+		default:
+			repo[m[1]] = map[string]any{m[4]: f.refsPage(th, vars[m[6]], first)}
+		}
+	}
+	if len(repo) == 0 {
+		f.t.Errorf("the fake understood no alias in %q", q)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"repository": repo}})
 }
 
 func (f *fakeGitHub) shaped(node map[string]any) map[string]any {

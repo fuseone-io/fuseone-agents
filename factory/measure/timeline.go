@@ -28,9 +28,11 @@ const (
 ... on ReviewDismissedEvent { createdAt previousReviewState actor ` + actorSel + ` review { id } }
 ... on PullRequestCommit { commit { oid committedDate author { email user { login } } } }`
 
-	refSel    = `(first: 10) { nodes { number repository { nameWithOwner } } }`
-	issueMeta = `closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { nodes { number repository { nameWithOwner } } }`
-	prMeta    = `merged author ` + actorSel + ` closingIssuesReferences` + refSel
+	// The first page of each item's links rides along with its first
+	// timeline page; links.go reads the rest.
+	refNodes  = `{ pageInfo { hasNextPage endCursor } nodes { number repository { nameWithOwner } } }`
+	issueMeta = `closedByPullRequestsReferences(first: 10, includeClosedPrs: true) ` + refNodes
+	prMeta    = `merged author ` + actorSel + ` closingIssuesReferences(first: 10) ` + refNodes
 )
 
 // target is a timeline still to read: from its start, or from cursor.
@@ -54,44 +56,49 @@ type rawItem struct {
 }
 
 type rawRefs struct {
-	Nodes []rawRef `json:"nodes"`
+	PageInfo pageInfo `json:"pageInfo"`
+	Nodes    []rawRef `json:"nodes"`
 }
 
 // timelines reads each target's whole timeline into s, in batches of
-// aliases, following every alias's cursor until its last page.
+// aliases, following every alias's cursor until its last page, and then every
+// page of each item's links.
 func (r reader) timelines(ctx context.Context, s Snapshot, targets []target) error {
+	var links []target
 	for len(targets) > 0 {
 		n := min(batchSize, len(targets))
-		next, err := r.timelineBatch(ctx, s, targets[:n])
+		next, moreLinks, err := r.timelineBatch(ctx, s, targets[:n])
 		if err != nil {
 			return err
 		}
 		targets = append(targets[n:], next...)
+		links = append(links, moreLinks...)
 	}
-	return nil
+	return r.linkPages(ctx, s, links)
 }
 
-func (r reader) timelineBatch(ctx context.Context, s Snapshot, batch []target) ([]target, error) {
+func (r reader) timelineBatch(ctx context.Context, s Snapshot, batch []target) (more, links []target, err error) {
 	doc, vars := timelineQuery(batch)
 	vars["owner"], vars["name"] = r.owner, r.name
 	var res struct {
 		Repository map[string]*rawItem `json:"repository"`
 	}
 	if err := r.c.query(ctx, doc, vars, &res); err != nil {
-		return nil, fmt.Errorf("timelines: %w", err)
+		return nil, nil, fmt.Errorf("timelines: %w", err)
 	}
-	var more []target
 	for i, t := range batch {
 		raw := res.Repository[fmt.Sprintf("t%d", i)]
 		if raw == nil {
-			return nil, fmt.Errorf("%w: #%d is not readable", errGitHub, t.number)
+			return nil, nil, fmt.Errorf("%w: #%d is not readable", errGitHub, t.number)
 		}
-		r.absorb(s, t, raw)
+		if link, ok := r.absorb(s, t, raw); ok {
+			links = append(links, link)
+		}
 		if p := raw.TimelineItems.PageInfo; p.HasNextPage {
 			more = append(more, target{number: t.number, isPR: t.isPR, cursor: p.EndCursor})
 		}
 	}
-	return more, nil
+	return more, links, nil
 }
 
 func timelineQuery(batch []target) (string, map[string]any) {
@@ -116,30 +123,26 @@ func timelineQuery(batch []target) (string, map[string]any) {
 	return doc, vars
 }
 
-// absorb adds one page to the item, creating it on its first page.
-func (r reader) absorb(s Snapshot, t target, raw *rawItem) {
+// absorb adds one page to the item, creating it on its first page. On that
+// page it also takes the first page of links, and says where the next one
+// starts when there is one.
+func (r reader) absorb(s Snapshot, t target, raw *rawItem) (target, bool) {
+	var next target
+	more := false
 	it := s.Items[t.number]
 	if it == nil {
 		it = &Item{Number: t.number, IsPR: t.isPR, Merged: raw.Merged, Author: raw.Author.actor()}
-		for _, refs := range []*rawRefs{raw.Closing, raw.ClosingBy} {
-			for _, ref := range refsOf(refs) {
-				if r.ours(ref) && !contains(it.Linked, ref.Number) {
-					it.Linked = append(it.Linked, ref.Number)
-				}
-			}
-		}
 		s.Items[t.number] = it
+		refs := raw.refs()
+		r.addLinks(it, refs)
+		if more = refs.PageInfo.HasNextPage; more {
+			next = target{number: t.number, isPR: t.isPR, cursor: refs.PageInfo.EndCursor}
+		}
 	}
 	for _, n := range raw.TimelineItems.Nodes {
 		if e, ok := n.event(); ok {
 			it.Events = append(it.Events, e)
 		}
 	}
-}
-
-func refsOf(r *rawRefs) []rawRef {
-	if r == nil {
-		return nil
-	}
-	return r.Nodes
+	return next, more
 }
