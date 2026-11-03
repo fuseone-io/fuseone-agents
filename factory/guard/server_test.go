@@ -2,6 +2,7 @@ package guard
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -11,24 +12,27 @@ import (
 // SDK's in-memory transport, with token as the GitHub credential.
 func (h *harness) session(role Role, token string) *mcp.ClientSession {
 	h.t.Helper()
-	cfg := h.cfg
-	cfg.Role = role
-	server, err := NewServer(cfg, h.client(token))
+	server, err := NewServer(h.cfg, role, h.client(token))
 	if err != nil {
 		h.t.Fatalf("new server: %v", err)
 	}
+	return connect(h.t, server)
+}
+
+func connect(t *testing.T, server *mcp.Server) *mcp.ClientSession {
+	t.Helper()
 	clientT, serverT := mcp.NewInMemoryTransports()
-	ss, err := server.Connect(h.t.Context(), serverT, nil)
+	ss, err := server.Connect(t.Context(), serverT, nil)
 	if err != nil {
-		h.t.Fatalf("connect server: %v", err)
+		t.Fatalf("connect server: %v", err)
 	}
-	h.t.Cleanup(func() { _ = ss.Close() })
+	t.Cleanup(func() { _ = ss.Close() })
 	client := mcp.NewClient(&mcp.Implementation{Name: "fuseone", Version: "test"}, nil)
-	cs, err := client.Connect(h.t.Context(), clientT, nil)
+	cs, err := client.Connect(t.Context(), clientT, nil)
 	if err != nil {
-		h.t.Fatalf("connect client: %v", err)
+		t.Fatalf("connect client: %v", err)
 	}
-	h.t.Cleanup(func() { _ = cs.Close() })
+	t.Cleanup(func() { _ = cs.Close() })
 	return cs
 }
 
@@ -85,25 +89,44 @@ func TestRecordQAVerdictTool_refused_isAnErrorWithStructuredReason(t *testing.T)
 	}
 }
 
-// Each role's registration exposes only its own tool (#193, #208): QA can
-// never merge, and the Merger can never vouch for QA.
-func TestNewServer_eachRole_exposesOnlyItsOwnTool(t *testing.T) {
+// roleSurface is #213's role table written out by hand, independently of
+// ToolsFor: what each role lists, and nothing more.
+var roleSurface = map[Role][]string{
+	RoleTriage:    {ToolMoveCard, ToolSetCardFields},
+	RoleArchitect: {ToolMoveCard, ToolSetCardFields},
+	RoleDeveloper: {ToolMoveCard},
+	RoleReviewer:  {ToolMoveCard},
+	RoleQA:        {ToolMoveCard, ToolRecordQAVerdict},
+	RoleMerger:    {ToolMoveCard, ToolMergeIfReady},
+}
+
+func listedNames(t *testing.T, cs *mcp.ClientSession) []string {
+	t.Helper()
+	listed, err := cs.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("list tools: %v", err)
+	}
+	var names []string
+	for _, tool := range listed.Tools {
+		names = append(names, tool.Name)
+	}
+	slices.Sort(names)
+	return names
+}
+
+// Each role's server exposes exactly its surface (#193, #208, #213): QA can
+// never merge, the Merger can never vouch for QA, and only Triage and the
+// Architect set a card's fields.
+func TestNewServer_eachRole_exposesExactlyItsSurface(t *testing.T) {
 	t.Parallel()
 
-	for role, want := range map[Role]string{RoleQA: ToolRecordQAVerdict, RoleMerger: ToolMergeIfReady} {
+	for role, want := range roleSurface {
 		t.Run(string(role), func(t *testing.T) {
 			t.Parallel()
 			h := newHarness(t)
-			listed, err := h.session(role, "merger-token").ListTools(t.Context(), nil)
-			if err != nil {
-				t.Fatalf("list tools: %v", err)
-			}
-			if len(listed.Tools) != 1 || listed.Tools[0].Name != want {
-				names := []string{}
-				for _, tool := range listed.Tools {
-					names = append(names, tool.Name)
-				}
-				t.Fatalf("%s exposes %v, want only %s", role, names, want)
+			want = slices.Sorted(slices.Values(want))
+			if got := listedNames(t, h.session(role, "merger-token")); !slices.Equal(got, want) {
+				t.Fatalf("%s exposes %v, want exactly %v", role, got, want)
 			}
 		})
 	}
@@ -113,9 +136,7 @@ func TestNewServer_unknownRole_refused(t *testing.T) {
 	t.Parallel()
 
 	h := newHarness(t)
-	cfg := h.cfg
-	cfg.Role = "reviewer"
-	if _, err := NewServer(cfg, h.client("merger-token")); err == nil {
+	if _, err := NewServer(h.cfg, "curator", h.client("merger-token")); err == nil {
 		t.Fatal("a server was built for an unknown role")
 	}
 }

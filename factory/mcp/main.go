@@ -37,7 +37,7 @@ func run(ctx context.Context) error {
 		return err
 	}
 	gh := guard.NewClient(guard.ClientOptions{APIURL: cfg.APIURL, Repo: cfg.Repo, Tokens: tokens})
-	server, err := guard.NewServer(cfg, gh)
+	server, err := guard.NewServer(cfg, cfg.Role, gh)
 	if err != nil {
 		return err
 	}

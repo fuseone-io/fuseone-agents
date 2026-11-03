@@ -10,18 +10,27 @@ import (
 // Version is reported to MCP clients in the implementation info.
 const Version = "0.2.0"
 
-// NewServer builds the MCP server for the configured role. Each role's
-// instance offers exactly one tool: the QA instance cannot merge, and the
-// Merger's instance cannot set a QA verdict.
-func NewServer(cfg Config, gh *Client) (*mcp.Server, error) {
+// NewServer builds the MCP server for one role: exactly the tools of its
+// surface (ToolsFor), so QA cannot merge, the Merger cannot vouch for QA,
+// and only Triage and the Architect can set a card's fields.
+func NewServer(cfg Config, role Role, gh *Client) (*mcp.Server, error) {
+	tools := ToolsFor(role)
+	if len(tools) == 0 {
+		return nil, fmt.Errorf("%w: unknown role %q", ErrConfig, role)
+	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "factory", Version: Version}, nil)
-	switch cfg.Role {
-	case RoleQA:
-		registerQA(server, NewQA(cfg, gh))
-	case RoleMerger:
-		registerMerger(server, NewMerger(cfg, gh))
-	default:
-		return nil, fmt.Errorf("%w: unknown role %q", ErrConfig, cfg.Role)
+	board := NewBoard(cfg.Board, role, gh)
+	for _, tool := range tools {
+		switch tool {
+		case ToolMoveCard:
+			registerMoveCard(server, board)
+		case ToolSetCardFields:
+			registerSetCardFields(server, board)
+		case ToolRecordQAVerdict:
+			registerQA(server, NewQA(cfg, gh))
+		case ToolMergeIfReady:
+			registerMerger(server, NewMerger(cfg, gh))
+		}
 	}
 	return server, nil
 }

@@ -40,6 +40,7 @@ func newHarness(t *testing.T) *harness {
 		Checks:      []string{"go", "postgres"},
 		ChecksAppID: actionsAppID,
 		MergeMethod: "squash",
+		Board:       testBoardConfig(),
 	}
 	yes := true
 	fake.prs[testPR] = &fakePR{
@@ -70,9 +71,7 @@ func (h *harness) client(token string) *Client {
 }
 
 func (h *harness) qa(token string) *QA {
-	cfg := h.cfg
-	cfg.Role = RoleQA
-	return NewQA(cfg, h.client(token))
+	return NewQA(h.cfg, h.client(token))
 }
 
 // edit changes the fake's state under its lock.
