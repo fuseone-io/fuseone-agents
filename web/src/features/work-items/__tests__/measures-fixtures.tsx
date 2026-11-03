@@ -102,7 +102,7 @@ export function open(path = "/work-items") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
+  const rendered = render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
@@ -111,6 +111,8 @@ export function open(path = "/work-items") {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  // The cache, for a test that refetches something the screen already read.
+  return { ...rendered, client };
 }
 
 /** The cell of `row` under the column headed `column`, in that row's table. */
