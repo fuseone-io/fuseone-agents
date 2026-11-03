@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // The factory's sub-state labels on a pull request (factory/LANES.md).
@@ -114,11 +115,16 @@ func (s *SendBack) SendBack(ctx context.Context, in SendBackInput) (SendBackResu
 	if res.Reason = s.judge(pr); res.Reason != "" {
 		return res, nil
 	}
-	if res.Reason, err = s.observe(ctx, pr, in.PR, in.HeadSHA, res.Cause); err != nil || res.Reason != "" {
+	var taken time.Time
+	if res.Reason, taken, err = s.observe(ctx, pr, in.PR, in.HeadSHA, res.Cause); err != nil || res.Reason != "" {
 		return res, err
 	}
 	res.Travado = route.to == ""
 	if res.CommentID, res.Reason, res.HTTPStatus = s.comment(ctx, in.PR, commentBody(res.Cause, in.HeadSHA, route)); res.Reason != "" {
+		if !taken.IsZero() && (res.Reason == ReasonCommentNotSent || res.Reason == ReasonCommentRefused) {
+			// Known not written: the refusal still proves a retry.
+			s.merger.refusals.restore(in.PR, in.HeadSHA, res.Cause, taken)
+		}
 		return res, nil
 	}
 	if route.to != "" {
@@ -147,22 +153,28 @@ func (s *SendBack) judge(pr pullRequest) Reason {
 
 // observe answers "" when the server sees cause on head right now, and
 // cause_not_observed otherwise: a head that moved, a signal repaired in the
-// meantime, a cause the caller made up.
-func (s *SendBack) observe(ctx context.Context, pr pullRequest, number int, head string, cause Reason) (Reason, error) {
+// meantime, a cause the caller made up. For merge_refused and outcome_unknown
+// it spends the refusal merge_if_ready recorded, and reports when that was
+// observed so a write known not to have happened can give it back.
+func (s *SendBack) observe(ctx context.Context, pr pullRequest, number int, head string, cause Reason) (Reason, time.Time, error) {
 	if unrebuildable(cause) {
-		if pr.Head.SHA != head || !s.merger.refusals.observed(number, head, cause) {
-			return ReasonCauseNotObserved, nil
+		if pr.Head.SHA != head {
+			return ReasonCauseNotObserved, time.Time{}, nil
 		}
-		return "", nil
+		at, ok := s.merger.refusals.take(number, head, cause)
+		if !ok {
+			return ReasonCauseNotObserved, time.Time{}, nil
+		}
+		return "", at, nil
 	}
 	now, _, err := s.merger.prejudge(ctx, number, head)
 	if err != nil {
-		return "", fmt.Errorf("send_back: %w", err)
+		return "", time.Time{}, fmt.Errorf("send_back: %w", err)
 	}
 	if now != cause {
-		return ReasonCauseNotObserved, nil
+		return ReasonCauseNotObserved, time.Time{}, nil
 	}
-	return "", nil
+	return "", time.Time{}, nil
 }
 
 // commentBody is closed text: the reason, the judged head and the action,

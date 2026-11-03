@@ -283,3 +283,54 @@ func TestSendBack_unrebuildableCause_needsTheServersOwnObservation(t *testing.T)
 		})
 	}
 }
+
+// The refusal is evidence for one send_back: a second call with the same
+// pull request, head and reason writes nothing, so a card a person cleared
+// and returned is not blocked again on the old refusal.
+func TestSendBack_unrebuildableCause_isSpentByOneSendBack(t *testing.T) {
+	t.Parallel()
+
+	for _, cause := range []Reason{ReasonMergeRefused, ReasonOutcomeUnknown} {
+		t.Run(string(cause), func(t *testing.T) {
+			t.Parallel()
+			h := newHarness(t)
+			merger, s := h.mergerTools(nil)
+			h.edit(causes[cause])
+			if res, _ := merger.MergeIfReady(t.Context(), MergeInput{PR: testPR, HeadSHA: headA}); res.Reason != cause {
+				t.Fatalf("merge_if_ready = %+v", res)
+			}
+			h.edit(func(f *fakeGitHub) { f.mergeError, f.mergeFault = 0, "" })
+			if first := h.sendBackWith(s, cause); !first.SentBack || !first.Travado {
+				t.Fatalf("first send_back %+v, want sent back to Travado", first)
+			}
+			second := h.sendBackWith(s, cause)
+			if second.SentBack || second.Reason != ReasonCauseNotObserved {
+				t.Fatalf("second send_back %+v, want cause_not_observed", second)
+			}
+			if len(h.fake.comments) != 1 {
+				t.Fatalf("%d comments, want the first call's only", len(h.fake.comments))
+			}
+		})
+	}
+}
+
+// A comment GitHub refused wrote nothing, so the refusal is given back and a
+// retry still proves it; once a send_back completes it is spent.
+func TestSendBack_unrebuildableCause_commentRefused_retryStillProves(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	merger, s := h.mergerTools(nil)
+	h.edit(causes[ReasonMergeRefused])
+	if res, _ := merger.MergeIfReady(t.Context(), MergeInput{PR: testPR, HeadSHA: headA}); res.Reason != ReasonMergeRefused {
+		t.Fatalf("merge_if_ready = %+v", res)
+	}
+	h.edit(func(f *fakeGitHub) { f.mergeError, f.writeError = 0, 502 })
+	if res := h.sendBackWith(s, ReasonMergeRefused); res.Reason != ReasonCommentRefused {
+		t.Fatalf("first send_back %+v, want comment_refused", res)
+	}
+	h.edit(func(f *fakeGitHub) { f.writeError = 0 })
+	if res := h.sendBackWith(s, ReasonMergeRefused); !res.SentBack {
+		t.Fatalf("retry %+v, want sent back", res)
+	}
+}

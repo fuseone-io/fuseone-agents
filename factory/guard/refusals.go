@@ -58,14 +58,32 @@ func (r *refusals) record(pr int, head string, reason Reason) {
 	r.seen[refusalKey{pr, head, reason}] = now
 }
 
-func (r *refusals) observed(pr int, head string, reason Reason) bool {
+// take spends the refusal: it is evidence for one send_back, not for every
+// call within the hour, so a second call, or one after a person cleared the
+// cause and returned the card, finds none. It reports when the refusal was
+// observed, for restore.
+func (r *refusals) take(pr int, head string, reason Reason) (time.Time, bool) {
 	if r == nil {
-		return false
+		return time.Time{}, false
+	}
+	key := refusalKey{pr, head, reason}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	at, ok := r.seen[key]
+	delete(r.seen, key)
+	return at, ok && r.clock.Now().Sub(at) < refusalTTL
+}
+
+// restore gives back a refusal whose send_back is known to have written
+// nothing, so a retry can still prove it. It keeps the original moment, so
+// a restore never extends the hour.
+func (r *refusals) restore(pr int, head string, reason Reason, at time.Time) {
+	if r == nil {
+		return
 	}
 	r.mu.Lock()
-	at, ok := r.seen[refusalKey{pr, head, reason}]
-	r.mu.Unlock()
-	return ok && r.clock.Now().Sub(at) < refusalTTL
+	defer r.mu.Unlock()
+	r.seen[refusalKey{pr, head, reason}] = at
 }
 
 // unrebuildable is a cause only the merge itself can show: GitHub refused
