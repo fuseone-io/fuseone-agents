@@ -691,11 +691,35 @@ like every GitHub write; no standing approval covers them (layer 6), and
 unclassified on every `github-<role>`.
 
 The Merger's tools are ruled the same way, with two of their own:
-`merge_if_ready` is **destructive**, and an authored policy escalates it to
-approval (a destructive call is blocked outright by default); `list_ready_prs`
-is a **read** whose result is **not untrusted**. Left at the untrusted default,
-that read would taint every Merger run before its merge, and the Gate would
-block every merge. `send_back` and `move_card` are writes.
+`merge_if_ready` is **destructive**, and `list_ready_prs` is a **read** whose
+result is **not untrusted**. Left at the untrusted default, that read would
+taint every Merger run before its merge, and the Gate would block every
+merge. `send_back` and `move_card` are writes.
+
+A destructive call is blocked outright by default, and an approval never
+releases a block, so `merge_if_ready` needs one authored policy, stored in
+the console's Policies or through the API, exactly this narrow (a tool of
+`*`, or the whole installation as reach, would make every destructive tool
+approvable):
+
+```http
+PUT /api/v1/policies/FACTORY-MERGE
+Content-Type: application/json
+
+{
+  "name": "A person approves every factory merge",
+  "reason": "The Merger only proposes a merge: a person approves it, and merge_if_ready re-checks the review, QA and the checks on the head before it merges.",
+  "resource": "factory-merger.merge_if_ready",
+  "effects": ["destructive"],
+  "reach": "agents",
+  "agents": ["factory-merger"],
+  "effect": "escalate",
+  "mode": "enforce",
+  "enabled": true
+}
+```
+
+Start the Merger only once the FACTORY-MERGE policy is stored and enforced; without it, the Gate blocks every merge and no approval releases it.
 
 ### The operator canary, before activating the roles
 

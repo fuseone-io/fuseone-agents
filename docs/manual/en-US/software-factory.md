@@ -354,10 +354,37 @@ The Merger's two rows matter more than any other. `list_ready_prs` must be
 ruled **not** untrusted: it is the Merger's one read, and left at the
 untrusted default it would taint every Merger run before its merge, and the
 Gate never lets an irreversible effect derive from untrusted data, so every
-merge would be blocked. `merge_if_ready` is destructive, which the Gate
-blocks by default: author a policy that escalates it to approval, so a
-person approves each merge (see
-[Policies](policies.md)).
+merge would be blocked.
+
+`merge_if_ready` is **destructive**, which the Gate blocks by default, and a
+person's approval never releases a block. Store this policy before the
+Merger starts, in the console's **Policies** — code `FACTORY-MERGE`, tool
+`factory-merger.merge_if_ready`, effect destructive, reach the agent
+`factory-merger`, action escalate, mode enforce — or through the API with the
+same fields:
+
+```http
+PUT /api/v1/policies/FACTORY-MERGE
+Content-Type: application/json
+
+{
+  "name": "A person approves every factory merge",
+  "reason": "The Merger only proposes a merge: a person approves it, and merge_if_ready re-checks the review, QA and the checks on the head before it merges.",
+  "resource": "factory-merger.merge_if_ready",
+  "effects": ["destructive"],
+  "reach": "agents",
+  "agents": ["factory-merger"],
+  "effect": "escalate",
+  "mode": "enforce",
+  "enabled": true
+}
+```
+
+Keep it exactly this narrow: a tool of `*`, or a reach of the whole
+installation, would make every destructive tool approvable, not only this one
+(see [Policies](policies.md)).
+
+Start the Merger only once the FACTORY-MERGE policy is stored and enforced; without it, the Gate blocks every merge and no approval releases it.
 
 Leave `projects_write` **unclassified**. No role declares it, it is outside
 every surface, and an unclassified tool never executes.

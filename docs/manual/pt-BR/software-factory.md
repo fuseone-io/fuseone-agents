@@ -372,10 +372,37 @@ As duas linhas do Merger importam mais que todas as outras. O
 `list_ready_prs` precisa ser classificado como **não** untrusted: é a única
 leitura do Merger, e no padrão untrusted ela contaminaria todo run do Merger
 antes do merge, e o Gate nunca deixa um efeito irreversível derivar de dado
-não confiável, então todo merge seria bloqueado. O `merge_if_ready` é
-destructive, que o Gate bloqueia por padrão: escreva uma política que o
-escale para aprovação, para que uma pessoa aprove cada merge (veja
-[Políticas](policies.md)).
+não confiável, então todo merge seria bloqueado.
+
+O `merge_if_ready` é **destructive**, o que o Gate bloqueia por padrão, e a
+aprovação de uma pessoa nunca libera um bloqueio. Salve esta política antes
+de o Merger começar, em **Políticas** no console — código `FACTORY-MERGE`,
+ferramenta `factory-merger.merge_if_ready`, efeito destructive, alcance o
+agente `factory-merger`, ação escalate, modo enforce — ou pela API, com os
+mesmos campos:
+
+```http
+PUT /api/v1/policies/FACTORY-MERGE
+Content-Type: application/json
+
+{
+  "name": "A person approves every factory merge",
+  "reason": "The Merger only proposes a merge: a person approves it, and merge_if_ready re-checks the review, QA and the checks on the head before it merges.",
+  "resource": "factory-merger.merge_if_ready",
+  "effects": ["destructive"],
+  "reach": "agents",
+  "agents": ["factory-merger"],
+  "effect": "escalate",
+  "mode": "enforce",
+  "enabled": true
+}
+```
+
+Mantenha-a exatamente assim, estreita: uma ferramenta `*`, ou um alcance da
+instalação inteira, tornaria aprovável toda ferramenta destrutiva, não só
+esta (veja [Políticas](policies.md)).
+
+Inicie o Merger só depois que a política FACTORY-MERGE estiver salva e em enforce; sem ela, o Gate bloqueia todo merge e nenhuma aprovação o libera.
 
 Deixe o `projects_write` **sem classificação**. Nenhum papel o declara, ele
 fica fora de todas as superfícies, e uma ferramenta sem classificação nunca
