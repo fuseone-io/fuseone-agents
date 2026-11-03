@@ -10,7 +10,7 @@ import (
 // mergerEnv is a complete Merger configuration. Each test removes or changes
 // one variable, so a failure names exactly the variable it is about.
 func mergerEnv() map[string]string {
-	return map[string]string{
+	return withBoard(map[string]string{
 		"FACTORY_ROLE":                "merger",
 		"FACTORY_REPOSITORY":          "fuseone-io/fuseone-agents",
 		"FACTORY_BASE_BRANCH":         "main",
@@ -21,11 +21,11 @@ func mergerEnv() map[string]string {
 		"GITHUB_APP_ID":               "123",
 		"GITHUB_APP_INSTALLATION_ID":  "456",
 		"GITHUB_APP_PRIVATE_KEY_FILE": "/run/secrets/key.pem",
-	}
+	})
 }
 
 func qaEnv() map[string]string {
-	return map[string]string{
+	return withBoard(map[string]string{
 		"FACTORY_ROLE":                "qa",
 		"FACTORY_REPOSITORY":          "fuseone-io/fuseone-agents",
 		"FACTORY_BASE_BRANCH":         "main",
@@ -33,7 +33,7 @@ func qaEnv() map[string]string {
 		"GITHUB_APP_ID":               "777",
 		"GITHUB_APP_INSTALLATION_ID":  "888",
 		"GITHUB_APP_PRIVATE_KEY_FILE": "/run/secrets/key.pem",
-	}
+	})
 }
 
 func load(env map[string]string) (Config, error) {
@@ -123,7 +123,7 @@ func TestLoadConfig_invalidValue_refused(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
-		"FACTORY_ROLE":          "reviewer",
+		"FACTORY_ROLE":          "curator",
 		"FACTORY_REPOSITORY":    "fuseone-agents",
 		"FACTORY_QA_BOT_ID":     "qa",
 		"FACTORY_CHECKS_APP_ID": "-1",

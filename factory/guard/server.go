@@ -8,13 +8,7 @@ import (
 )
 
 // Version is reported to MCP clients in the implementation info.
-const Version = "0.1.0"
-
-// Tool names. FuseOne addresses a tool as <registered server name>.<tool>.
-const (
-	ToolRecordQAVerdict = "record_qa_verdict"
-	ToolMergeIfReady    = "merge_if_ready"
-)
+const Version = "0.2.0"
 
 // NewServer builds the MCP server for the configured role. Each role's
 // instance offers exactly one tool: the QA instance cannot merge, and the
