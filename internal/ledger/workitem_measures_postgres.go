@@ -15,10 +15,11 @@ transaction, so the runs, their links and their approvals are one snapshot.
 
 The runs come from the projection by the caller's filter and the window, on
 the opening moment the (company, area, started_at) and (agent, started_at)
-indexes lead with. Their approval steps are read from run_steps joined on
-(run_id, opened_at), with opened_at bounded by the window as parameters: the
-months outside it are pruned when the statement is planned, not while it
-runs. No list of runs leaves the database or comes back into it.
+indexes lead with. Their approval steps are read from run_steps with
+opened_at bounded by the window as parameters: the months outside it are
+pruned when the statement is planned, not while it runs. No list of runs
+leaves the database or comes back into it, and nothing is read once per
+refusal.
 */
 func (p *Postgres) WorkItemMeasures(
 	ctx context.Context, filter domain.RunFilter, cost *domain.RunFilter, window domain.WorkItemWindow,
@@ -71,15 +72,13 @@ func scanMeasureShares(rows pgx.Rows) ([]domain.WorkItemWeekShare, error) {
 /*
 workItemMeasuresSQL is the measures' one statement.
 
-  - r: the runs the filter reads, real, opened inside the window, each with
-    its link — a claim (of a card or a pull request, resolved through a
+  - x, r: the runs the filter reads, real, opened inside the window, each
+    with its link — a claim (of a card or a pull request, resolved through a
     readable alias in the run's own company to its root), else an
     inheritance, else none — and its ISO week in UTC.
-  - asked: the window's approval steps of those runs, by (run_id, opened_at),
-    carrying the verdict, the request a decision answers, the tool and the
-    digest of the arguments: never the arguments, a reason or a note.
-  - refusals: each refusal that names its request, with whether the same run
-    later proposed the same tool with other arguments, or with the same ones.
+  - asked: the window's approval steps of those runs, each with the tool and
+    args digest it is compared by.
+  - per_run: each run's counts, and what followed its refusals, in one pass.
 */
 func workItemMeasuresSQL(filter domain.RunFilter, window domain.WorkItemWindow) (string, []any) {
 	where, args := runFilterSQL(measuresFilter(filter, window))
@@ -89,7 +88,7 @@ func workItemMeasuresSQL(filter domain.RunFilter, window domain.WorkItemWindow) 
 	from, to := len(args)-1, len(args)
 	return `with ` + fmt.Sprintf(measuresRunsSQL, where, readable) + `,
 		` + fmt.Sprintf(measuresAskedSQL, from, to) + `,
-		` + measuresRefusalsSQL + measuresRowsSQL, args
+		` + measuresPerRunSQL + measuresRowsSQL, args
 }
 
 // measuresRunsSQL is r: the runs, given the filter's WHERE and the
@@ -121,45 +120,72 @@ const measuresRunsSQL = `x as materialized (
 			from x
 		)`
 
-// measuresAskedSQL is asked and per_run, given the parameters that hold the
-// window's bounds. A standing approval is one naming its grant
-// (domain.IsStandingDecision), never one whose note reads like it.
+/*
+measuresAskedSQL is asked, given the parameters that hold the window's
+bounds: the window's approval steps of the runs in r, never the arguments,
+a reason or a note. Each carries the tool and args digest it is compared by
+— a request its own, a decision those of the request it answers, found by
+run_steps' primary key, and none for a legacy decision naming no request.
+
+The steps are joined to r by run_id alone: every step of a run shares its
+opening, and bounding opened_at by the window's parameters prunes the months
+when the statement is planned. Joined on (run_id, opened_at) as well, the
+planner multiplies two selectivities that are one fact, expects a single
+row, and nests every join after it.
+
+A standing approval is one naming its grant (domain.IsStandingDecision),
+never one whose note reads like it.
+*/
 const measuresAskedSQL = `asked as (
 			select s.run_id, s.seq, s.kind,
-			       coalesce(s.payload->>'tool', '') as tool,
-			       coalesce(s.payload->>'args_digest', '') as digest,
 			       coalesce((s.payload->>'approved')::boolean, false) as approved,
-			       (s.payload->>'at_seq')::bigint as at_seq,
-			       coalesce(s.payload->>'standing_grant', '') <> '' as standing
+			       coalesce(s.payload->>'standing_grant', '') <> '' as standing,
+			       case when s.kind <> 'approval_decided' then coalesce(s.payload->>'tool', '')
+			            when q.run_id is not null then coalesce(q.payload->>'tool', '') end as tool,
+			       case when s.kind <> 'approval_decided' then coalesce(s.payload->>'args_digest', '')
+			            when q.run_id is not null then coalesce(q.payload->>'args_digest', '') end as digest
 			from run_steps s
-			join r on r.run_id = s.run_id and r.started_at = s.opened_at
+			join r on r.run_id = s.run_id
+			left join run_steps q
+			  on s.kind = 'approval_decided' and q.run_id = s.run_id and q.opened_at = s.opened_at
+			 and q.seq = (s.payload->>'at_seq')::bigint and q.kind = 'approval_requested'
+			 and q.opened_at >= $%[1]d and q.opened_at < $%[2]d
 			where s.opened_at >= $%[1]d and s.opened_at < $%[2]d
 			  and s.kind in ('approval_requested', 'approval_decided', 'abandoned')
-		),
-		per_run as (
+		)`
+
+/*
+measuresPerRunSQL is per_run: each run's approval counts and what followed
+its refusals, in one sorted pass over asked — no join, no subquery.
+
+A refusal sits in the partitions of the request it answers. Over the rows
+after it by seq, later_tool counts the run's requests of the same tool and
+later_args those with the same digest too: the refusal was repeated when
+later_args > 0, and revised when later_tool > later_args — a later request
+of the tool with another digest. A refusal is one row, so it counts at most
+once in each; a legacy refusal has no tool and is never counted.
+*/
+const measuresPerRunSQL = `per_run as (
 			select run_id,
 			       count(*) filter (where kind = 'approval_requested') as requested,
 			       count(*) filter (where kind = 'approval_decided' and approved) as approved,
 			       count(*) filter (where kind = 'approval_decided' and not approved) as refused,
 			       count(*) filter (where kind = 'abandoned') as abandoned,
-			       count(*) filter (where kind = 'approval_decided' and approved and standing) as standing
-			from asked group by run_id
-		)`
-
-// measuresRefusalsSQL is refusals: per run, the refusals naming their
-// request that the same run followed with the same tool, by digest.
-const measuresRefusalsSQL = `refusals as (
-			select d.run_id,
-			       count(*) filter (where exists (
-			           select 1 from asked n where n.run_id = d.run_id and n.kind = 'approval_requested'
-			             and n.seq > d.seq and n.tool = q.tool and n.digest <> q.digest)) as revised,
-			       count(*) filter (where exists (
-			           select 1 from asked n where n.run_id = d.run_id and n.kind = 'approval_requested'
-			             and n.seq > d.seq and n.tool = q.tool and n.digest = q.digest)) as repeated
-			from asked d
-			join asked q on q.run_id = d.run_id and q.seq = d.at_seq and q.kind = 'approval_requested'
-			where d.kind = 'approval_decided' and not d.approved and d.at_seq is not null
-			group by d.run_id
+			       count(*) filter (where kind = 'approval_decided' and approved and standing) as standing,
+			       count(*) filter (where refusal and later_tool > later_args) as revised,
+			       count(*) filter (where refusal and later_args > 0) as repeated
+			from (
+				select run_id, kind, approved, standing,
+				       kind = 'approval_decided' and not approved and tool is not null as refusal,
+				       count(*) filter (where kind = 'approval_requested') over (
+				           partition by run_id, tool order by seq
+				           rows between 1 following and unbounded following) as later_tool,
+				       count(*) filter (where kind = 'approval_requested') over (
+				           partition by run_id, tool, digest order by seq
+				           rows between 1 following and unbounded following) as later_args
+				from asked
+			) followed
+			group by run_id
 		)`
 
 // measuresRowsSQL is the shares: one row per week, agent and scope.
@@ -169,12 +195,11 @@ const measuresRowsSQL = `
 		       coalesce(sum(p.requested), 0)::int, coalesce(sum(p.approved), 0)::int,
 		       coalesce(sum(p.refused), 0)::int, coalesce(sum(p.abandoned), 0)::int,
 		       count(*) filter (where r.pending)::int,
-		       coalesce(sum(f.revised), 0)::int, coalesce(sum(f.repeated), 0)::int,
+		       coalesce(sum(p.revised), 0)::int, coalesce(sum(p.repeated), 0)::int,
 		       coalesce(sum(p.standing), 0)::int,
 		       coalesce(sum(r.cost_micros) filter (where r.link = 'claimed'), 0)::bigint,
 		       coalesce(sum(r.cost_micros) filter (where r.link = 'inherited'), 0)::bigint,
 		       coalesce(sum(r.cost_micros) filter (where r.link = 'none'), 0)::bigint
 		from r
 		left join per_run p on p.run_id = r.run_id
-		left join refusals f on f.run_id = r.run_id
 		group by r.week, r.agent_id, r.company_id, r.area_id`

@@ -31,8 +31,12 @@ type planNode struct {
 	ActualLoops    float64 `json:"Actual Loops"`
 	RemovedByFiltr float64 `json:"Rows Removed by Filter"`
 	// SubplansRemoved is how many partitions an Append pruned while it ran.
-	SubplansRemoved int        `json:"Subplans Removed"`
-	Plans           []planNode `json:"Plans"`
+	SubplansRemoved int `json:"Subplans Removed"`
+	// CTEName names the CTE a CTE Scan reads; ParentRelationship is
+	// "SubPlan" on a node a subquery runs once per outer row.
+	CTEName            string     `json:"CTE Name"`
+	ParentRelationship string     `json:"Parent Relationship"`
+	Plans              []planNode `json:"Plans"`
 }
 
 // runsScans collects every node of the plan that reads the runs table.
