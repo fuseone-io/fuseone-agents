@@ -90,6 +90,21 @@ to *seed* an installation from a repository, not the way to run one: what it
 holds is published at start-up and then lives in the registry like everything
 else.
 
+## Containers beside the worker
+
+`worker.extraContainers` adds containers to every worker pod, rendered verbatim
+after the worker's own. The chart adds nothing to them, so each states its own
+image, probes, resources and security context; the commented example in
+`values.yaml` shows the shape. Unset, the pod is exactly what it was without
+the key.
+
+The use is a sidecar the worker reaches over the pod's loopback, such as an MCP
+server registered at `http://127.0.0.1:<port>/`. Only the worker connects to
+MCP servers — discovery, probes and tool calls all run there; `serve` records a
+probe request and a worker carries it out — so the hook is on the worker
+alone. A sidecar scales with the worker's replicas and shares its network
+policy and service account.
+
 ## First sign-in
 
 The API prints a setup token once at start-up. The first person to use it

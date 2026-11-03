@@ -11,12 +11,25 @@ ConfigMap, so it was present in the case somebody would think to check and
 absent in the default.
 """
 
+import json
 import subprocess
 import sys
 
 import yaml
 
 CHART = "deploy/helm/fuseone-agents"
+
+# What an operator puts in worker.extraContainers. Deliberately nothing the
+# chart knows about: the hook carries the operator's container verbatim, and a
+# chart that recognised its contents would have stopped being generic.
+SIDECAR = {
+    "name": "sidecar",
+    "image": "example.com/sidecar:1",
+    "env": [{"name": "LISTEN", "value": "127.0.0.1:9000"}],
+    "readinessProbe": {"httpGet": {"path": "/healthz", "port": 9000, "host": "127.0.0.1"}},
+}
+HOOK = ["--set-json", "worker.extraContainers=" + json.dumps([SIDECAR])]
+
 COMBINATIONS = [
     [],
     ["--set", "worker.specs.configMap=specs"],
@@ -26,6 +39,8 @@ COMBINATIONS = [
     ["--set", "worker.stdioEgress.networkPolicy.enforced=true"],
     ["--set", "networkPolicy.enabled=true", "--set", "worker.stdioEgress.networkPolicy.enforced=true"],
     ["--set", "topologySpread.enabled=false"],
+    HOOK,
+    [*HOOK, "--set", "worker.specs.configMap=specs", "--set", "networkPolicy.enabled=true"],
 ]
 CARRIES_PODS = ("Deployment", "Job", "StatefulSet", "DaemonSet")
 
@@ -112,6 +127,43 @@ def master_key_reaches_only_what_unseals(extra, docs):
         yield f"{' '.join(extra) or 'defaults'} — nothing ending in {suffix} was rendered"
 
 
+# A `- null` or a bare string in a containers list is valid YAML and a pod
+# the API server refuses; every other check assumes mappings, so this one
+# runs first and stops the combination.
+def containers_are_mappings(extra, docs):
+    for doc in docs:
+        if not doc or doc.get("kind") not in CARRIES_PODS:
+            continue
+        spec = doc["spec"]["template"]["spec"]
+        for container in spec.get("containers", []) + spec.get("initContainers", []):
+            if not isinstance(container, dict):
+                yield f"{' '.join(extra) or 'defaults'} — {doc['metadata']['name']}: container {container!r} is not a mapping"
+
+
+def containers_of(docs, suffix):
+    for doc in docs:
+        if doc and doc.get("kind") == "Deployment" and doc["metadata"]["name"].endswith(suffix):
+            return doc["spec"]["template"]["spec"]["containers"]
+    return None
+
+
+# The extra containers are the operator's, rendered exactly as given and only
+# in the worker's pod. Unset, the worker has its one container and nothing
+# stray: an empty default that rendered `- null` or `[]` would change every
+# installation that never asked for a sidecar.
+def extra_containers_are_verbatim(extra, docs):
+    where = " ".join(extra) or "defaults"
+    want = [SIDECAR] if HOOK[1] in extra else []
+    worker = containers_of(docs, "-worker")
+    if worker is None:
+        yield f"{where} — worker deployment was not rendered"
+    elif [c.get("name") for c in worker[:1]] != ["worker"] or worker[1:] != want:
+        yield f"{where} — worker containers {worker[1:]!r} after its own, want {want!r}"
+    serve = containers_of(docs, "-serve")
+    if serve is not None and [c.get("name") for c in serve] != ["serve"]:
+        yield f"{where} — serve containers {[c.get('name') for c in serve]}: the hook is the worker's"
+
+
 def main():
     problems = []
     for extra in COMBINATIONS:
@@ -123,10 +175,15 @@ def main():
             problems.append(f"{' '.join(extra) or 'defaults'}: {rendered.stderr.strip().splitlines()[-1]}")
             continue
         docs = list(yaml.safe_load_all(rendered.stdout))
-        problem = network_policy_declaration_matches(extra, docs)
+        malformed = list(containers_are_mappings(extra, docs))
+        if malformed:
+            problems.extend(malformed)
+            continue
+        problem =network_policy_declaration_matches(extra, docs)
         if problem:
             problems.append(problem)
         problems.extend(master_key_reaches_only_what_unseals(extra, docs))
+        problems.extend(extra_containers_are_verbatim(extra, docs))
         for doc in docs:
             if doc and doc.get("kind") in CARRIES_PODS:
                 problems.extend(f"{' '.join(extra) or 'defaults'} — {p}" for p in mounts_resolve(doc))

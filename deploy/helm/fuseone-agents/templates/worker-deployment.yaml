@@ -97,6 +97,12 @@ spec:
           # answering. Probing it would make observability look like liveness.
           securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           resources: {{- toYaml .Values.worker.resources | nindent 12 }}
+        {{- /* The operator's containers, verbatim. The chart neither reads nor
+               completes them: what they run is the installation's business,
+               and a chart that knew would stop being generic. */}}
+        {{- with .Values.worker.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       volumes:
         # Always, because the container always mounts it. Rendered inside the
         # specs conditional, an installation without a specs ConfigMap got a

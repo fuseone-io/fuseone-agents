@@ -140,6 +140,24 @@ jobs:
             | kubeconform -strict -summary -kubernetes-version 1.31.0 \
                 -schema-location default
 
+      # The same, with an operator's container in worker.extraContainers: the
+      # hook renders it verbatim, so what it renders has to be a pod spec.
+      - name: manifests with an extra worker container are valid Kubernetes
+        run: |
+          helm template fuseone-agents deploy/helm/fuseone-agents \
+            --set secret.existingSecret=x \
+            --set-json 'worker.extraContainers=[{"name":"sidecar","image":"example.com/sidecar:1","ports":[{"containerPort":8091}]}]' \
+            | kubeconform -strict -summary -kubernetes-version 1.31.0 \
+                -schema-location default
+
+      # What renders and still will not run: mounts that resolve, the master
+      # key's holders, and the extra containers rendered verbatim on the worker
+      # and nowhere else when unset. `make check` has run it; CI now does too.
+      - name: chartcheck
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y python3-yaml
+          python3 scripts/chartcheck.py
+
   # The factory's MCP image, built the way publish.yml builds it and never
   # pushed. publish.yml only runs after a merge, so without this a broken
   # target would first fail on main, after review, and a release tag would

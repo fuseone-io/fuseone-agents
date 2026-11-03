@@ -68,6 +68,32 @@ worker:
       # (rendered by this chart or installed separately). The console uses this
       # to say that proxied stdio MCP servers have deployment-level containment.
       enforced: false
+  # More containers in every worker pod, rendered verbatim after the worker's
+  # own: Kubernetes container specs, exactly as you would write them under
+  # `spec.containers`. The chart adds nothing to them — no image, no security
+  # context, no resources, no probes — so each one states its own.
+  #
+  # The use is a sidecar the worker reaches over the pod's loopback, such as an
+  # MCP server registered at `http://127.0.0.1:<port>/`: traffic that never
+  # leaves the pod needs no TLS, no Service and no network policy rule. The
+  # worker is the process that connects to MCP servers (discovery, probes and
+  # tool calls all run there), so the hook is on the worker alone. A sidecar
+  # shares the worker pod's replicas, network policy and service account.
+  #
+  #   extraContainers:
+  #     - name: my-sidecar
+  #       image: registry.example.com/my-sidecar:1.2.3
+  #       env: [{ name: LISTEN_ADDR, value: "127.0.0.1:8091" }]
+  #       readinessProbe:
+  #         httpGet: { host: 127.0.0.1, path: /healthz, port: 8091 }
+  #       securityContext:
+  #         allowPrivilegeEscalation: false
+  #         readOnlyRootFilesystem: true
+  #         capabilities: { drop: ["ALL"] }
+  #       resources:
+  #         requests: { cpu: 10m, memory: 32Mi }
+  #         limits: { memory: 128Mi }
+  extraContainers: []
 
 # Migrations run as a job before the pods that need them. It takes an advisory
 # lock, so a second one waits rather than racing — but a hook gives a clear
