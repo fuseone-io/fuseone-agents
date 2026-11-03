@@ -3,7 +3,7 @@
 One file per role: `<role>.agent.md`, in the platform's own agent format
 (frontmatter for the contract, Markdown body for the instructions, the format
 `spec.Parse` reads in `internal/spec/spec.go`). Each role's reference is added
-by that role's issue (#195, #196, #197, #198, #200), in a pull request reviewed
+by that role's issue (#195, #196, #197, #198, #199, #200), in a pull request reviewed
 like any other change:
 
 | Role | Reference | Its card |
@@ -13,6 +13,7 @@ like any other change:
 | Reviewer | [`reviewer.agent.md`](reviewer.agent.md) | the pull request labelled `factory:needs-review` |
 | QA | [`qa.agent.md`](qa.agent.md) | the pull request labelled `factory:needs-qa` |
 | Developer | [`developer.agent.md`](developer.agent.md) | the pull request labelled `factory:changes-requested`, first; otherwise the issue of the oldest *Doing* card with no linked pull request |
+| Merger | [`merger.agent.md`](merger.agent.md) | the pull request labelled `factory:ready-to-merge` whose card is in Doing |
 
 Triage works the board's cards, and leaves the ones labelled
 `factory:needs-design` to the Architect, which takes only those; both choose
@@ -36,6 +37,17 @@ skipping a card labelled `factory:needs-runtime` and a card that already has a
 linked pull request. It sees titles before the claim, like Triage, under the
 same rule; its pre-claim lines are sealed in
 `internal/spec/factory_references_test.go`.
+
+The Merger reads nothing anyone wrote. It proposes `merge_if_ready`, which is
+destructive, and the Gate blocks an irreversible effect outright in a run that
+read untrusted data: no approval releases it. So it holds no GitHub server at
+all. Its one read is the factory server's `list_ready_prs`, which answers the
+ready pull requests' numbers, head SHAs, card item ids and `merge_if_ready`'s
+verdict on each, and the merged ones whose card never reached Done, and
+nothing else; it refuses or blocks through `send_back`, which writes comments
+of fixed text, and finishes a merge with `close_merged`, its only way to
+Done. Its lines are sealed in
+`internal/spec/factory_merger_test.go`.
 
 ### The Developer's link line
 
@@ -402,6 +414,12 @@ the toolset only offers it. Each role's App needs:
 | Reviewer | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | QA | Pull requests: read, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write |
 | Developer | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
+| Merger | Contents: write, Pull requests: write, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
+
+The Merger's App merges (Contents: write), reads the reviews, and writes its
+fixed-text comments and labels on the pull request (Pull requests: write); it
+reads checks and statuses and holds no Issues permission. The setup canary
+proves with its own token that Pull requests: write covers those writes.
 
 The Architect's App has Contents: **read** and no Pull requests permission,
 so the minimal ruleset on `main` below is not its prerequisite: that ruleset
@@ -453,9 +471,49 @@ gh api --method POST repos/<owner>/<name>/rulesets --input - <<'EOF'
 EOF
 ```
 
-Everything else a ruleset on `main` should require is deferred to #207:
-required status checks pinned to their source, `factory/qa` pinned to the QA
-App, the authorised reviewers, and the rules the Merger is held to.
+The Merger merges, so before it starts `main` also requires the checks
+`merge_if_ready` waits for (#207):
+
+Before the Merger is started, main must also carry the checks ruleset: the six checks of the check workflow required from GitHub Actions on an up-to-date head, and no bypass for anyone.
+
+It is a second ruleset beside the minimal one, so each can change on its own:
+the six jobs of `check.yml`, exactly `FACTORY_CHECKS`, each pinned to GitHub
+Actions (app id 15368), since a check's name proves nothing (anyone who can
+write checks can publish one by any name); strict, so the head must contain
+the current base, which is what `merge_if_ready`'s `base_behind` already
+requires; and no bypass actors:
+
+```sh
+gh api --method POST repos/<owner>/<name>/rulesets --input - <<'CHECKS'
+{
+  "name": "main: checks required",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "required_status_checks", "parameters": {
+        "strict_required_status_checks_policy": true,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          { "context": "go", "integration_id": 15368 },
+          { "context": "postgres", "integration_id": 15368 },
+          { "context": "console", "integration_id": 15368 },
+          { "context": "chart", "integration_id": 15368 },
+          { "context": "factory-mcp-image", "integration_id": 15368 },
+          { "context": "artifact", "integration_id": 15368 }
+        ] } }
+  ],
+  "bypass_actors": []
+}
+CHECKS
+```
+
+Two of the Merger's conditions stay outside any ruleset, and `merge_if_ready`
+alone requires them on the head. `factory/qa`: required with no bypass, it
+would block every pull request that never goes through the factory, a
+person's own and every release's changelog cut. And the Reviewer's approval:
+a ruleset requires reviews by count, code owners or teams, and a GitHub App
+can be none of those, so the Reviewer's bot cannot be named.
 
 QA's verdict is the `factory/qa` commit status, set by `record_qa_verdict`
 under QA's App, so QA's App needs Commit statuses: **write**. It submits no
@@ -601,8 +659,8 @@ It must answer `public`; otherwise give the worker's service account an
 Register the factory server once per role, beside that role's GitHub server:
 
 - server id `factory-<role>`: `factory-triage`, `factory-architect`,
-  `factory-developer`, `factory-reviewer` and `factory-qa`, the prefix the
-  board tools in that role's reference carry;
+  `factory-developer`, `factory-reviewer`, `factory-qa` and `factory-merger`,
+  the prefix the board tools in that role's reference carry;
 - URL `http://127.0.0.1:8091/`, transport HTTP;
 - the **GitHub App** credential, with **the same App** as `github-<role>`:
   the token the platform mints for it is what the server reads the role
@@ -620,6 +678,7 @@ Each registration then shows exactly its role's row of
 | `factory-developer` | `move_card` |
 | `factory-reviewer` | `move_card` |
 | `factory-qa` | `move_card`, `record_qa_verdict` |
+| `factory-merger` | `list_ready_prs`, `merge_if_ready`, `send_back`, `move_card`, `close_merged` |
 
 A registration that shows no tools, or another row, has the wrong App, or an
 App whose bot id is missing from `FACTORY_ROLE_BOTS`.
@@ -633,6 +692,37 @@ like every GitHub write; no standing approval covers them (layer 6), and
 `record_qa_verdict` has no internal exemption. `projects_write` stays
 unclassified on every `github-<role>`.
 
+The Merger's tools are ruled the same way, with two of their own:
+`merge_if_ready` is **destructive**, and `list_ready_prs` is a **read** whose
+result is **not untrusted**. Left at the untrusted default, that read would
+taint every Merger run before its merge, and the Gate would block every
+merge. `send_back`, `move_card` and `close_merged` are writes.
+
+A destructive call is blocked outright by default, and an approval never
+releases a block, so `merge_if_ready` needs one authored policy, stored in
+the console's Policies or through the API, exactly this narrow (a tool of
+`*`, or the whole installation as reach, would make every destructive tool
+approvable):
+
+```http
+PUT /api/v1/policies/FACTORY-MERGE
+Content-Type: application/json
+
+{
+  "name": "A person approves every factory merge",
+  "reason": "The Merger only proposes a merge: a person approves it, and merge_if_ready re-checks the review, QA and the checks on the head before it merges.",
+  "resource": "factory-merger.merge_if_ready",
+  "effects": ["destructive"],
+  "reach": "agents",
+  "agents": ["factory-merger"],
+  "effect": "escalate",
+  "mode": "enforce",
+  "enabled": true
+}
+```
+
+Start the Merger only once the FACTORY-MERGE policy is stored and enforced; without it, the Gate blocks every merge and no approval releases it.
+
 ### The operator canary, before activating the roles
 
 No test here can prove what real GitHub does with a repository-restricted
@@ -645,5 +735,7 @@ and the Status option, and the `updateProjectV2ItemFieldValue` mutation must
 answer the item with no `errors`. With QA's token, also comment on and label
 a throwaway pull request through the Issues API (the canary's fourth step):
 QA's App holds Pull requests: read, so this is what proves Issues: write
-covers what QA writes on a pull request. A role whose canary fails is not
-activated.
+covers what QA writes on a pull request. With the Merger's token, label and
+comment on a throwaway pull request too: its App holds no Issues permission,
+so this proves Pull requests: write covers what `send_back` writes. A role
+whose canary fails is not activated.

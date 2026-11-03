@@ -10,8 +10,9 @@ general-purpose GitHub server:
 | `set_card_fields(item_id, work_type, size)` | Sets only a card's Work type and Size, and only while the card is in Triagem. Idempotent (#213). |
 | `record_qa_verdict(pr, head_sha, verdict, summary[, comment_id])` | Sets the commit status `factory/qa` (`success` or `failure`) on exactly `head_sha`, under the QA GitHub App's identity. Refuses if `head_sha` is no longer the PR's head (#208). |
 | `merge_if_ready(pr, head_sha)` | When it executes, re-reads GitHub and fails closed unless every signal is on `head_sha` and came from its authorised actor or app. Then it merges with `sha` set to `head_sha` (#193). |
-| `list_ready_prs()` | Lists the open pull requests on the base labelled `factory:ready-to-merge` whose one card is in Doing, oldest first, each with its head SHA, its card's item id and `merge_if_ready`'s verdict on it now. Numbers, SHAs, ids and closed reasons only: it is the Merger's one read, and no text GitHub holds reaches the run (#199). |
+| `list_ready_prs()` | Lists the open pull requests on the base labelled `factory:ready-to-merge` whose one card is in Doing, oldest first, each with its head SHA, its card's item id and `merge_if_ready`'s verdict on it now; and, under `merged`, the merged pull requests still labelled whose card is in Doing or Done, or that have none: the ones `close_merged` has not finished. Numbers, SHAs, ids and closed reasons only: it is the Merger's one read, and no text GitHub holds reaches the run (#199). |
 | `send_back(pr, head_sha, reason)` | Writes a refused merge back to a pull request still labelled `factory:ready-to-merge`: a comment of closed text naming the reason, the head and the next action, then the label of the role whose signal is missing. A reason only a person can clear keeps the label, ends the comment with `Return to: Doing`, and answers `travado` (#199). |
+| `close_merged(pr)` | Finishes a merged pull request still labelled `factory:ready-to-merge`, judged again from `list_ready_prs`'s own listing: moves its card from Doing to Done, then drops the label. The Merger's only way to Done, and the repair for a run that ended between its merge and that move (#199). |
 
 This is the factory's tooling, not part of the platform. It lives in this
 module so it is built and tested with the repository, but `agentd` does not
@@ -29,7 +30,7 @@ Each role sees exactly its surface, and nothing more:
 | `developer` | `move_card` | Doing → Travado |
 | `reviewer` | `move_card` | Doing → Travado |
 | `qa` | `move_card`, `record_qa_verdict` | Doing → Travado |
-| `merger` | `move_card`, `list_ready_prs`, `merge_if_ready`, `send_back` | Doing → Done, Doing → Travado |
+| `merger` | `move_card`, `list_ready_prs`, `merge_if_ready`, `send_back`, `close_merged` | Doing → Travado (Done only through `close_merged`) |
 
 For every role:
 
@@ -345,7 +346,7 @@ metadata:
   name: factory-mcp
   # the namespace the chart is released into
 data:
-  FACTORY_ROLE_BOTS: triage=<id>,architect=<id>,developer=<id>,reviewer=<id>,qa=<id>
+  FACTORY_ROLE_BOTS: triage=<id>,architect=<id>,developer=<id>,reviewer=<id>,qa=<id>,merger=<id>
   FACTORY_REPOSITORY: fuseone-io/fuseone-agents
   FACTORY_BASE_BRANCH: main
   FACTORY_PROJECT_ID: PVT_kwDOCda0tM4BpgXe
@@ -355,13 +356,18 @@ data:
   FACTORY_WORKTYPES: bug=c63ed0ce,feature=121ff620,chore=b5bce747,docs=bf073d82
   FACTORY_SIZE_FIELD_ID: PVTSSF_lADOCda0tM4BpgXezhn7uD8
   FACTORY_SIZES: S=4e5305ec,M=53fc9302,L=81761912
+  FACTORY_REVIEWERS: <reviewer-app-slug>[bot]
+  FACTORY_CHECKS: go,postgres,console,chart,factory-mcp-image,artifact
+  FACTORY_CHECKS_APP_ID: "15368"
 ```
 
 Each `<id>` is the role App's bot user id (`gh api
 '/users/<app-slug>%5Bbot%5D' --jq .id`). `FACTORY_BASE_BRANCH` is there
-because `qa` is listed and `record_qa_verdict` needs it; listing `merger`
-too also needs `FACTORY_REVIEWERS`, `FACTORY_CHECKS` and
-`FACTORY_CHECKS_APP_ID` (see [Environment](#environment)). A missing or
+because `qa` is listed and `record_qa_verdict` needs it; `merger` is listed,
+so `FACTORY_REVIEWERS`, `FACTORY_CHECKS` and `FACTORY_CHECKS_APP_ID` are set
+too (see [Environment](#environment)): the Reviewer App's bot login, the
+check workflow's jobs, and GitHub Actions. Until the Merger App exists, leave
+`merger` and those three out; the other roles do not need them. A missing or
 malformed value stops the sidecar at start, naming the variable, and the
 readiness probe keeps the pod out of Ready.
 
@@ -393,7 +399,7 @@ when a served role uses it.
 | `FACTORY_REPOSITORY` | qa, merger; every role in `app` mode | yes | The only repository it acts on: `fuseone-io/fuseone-agents`. In `app` mode, also the one repository the minted tokens are restricted to. |
 | `FACTORY_BASE_BRANCH` | qa, merger | yes | The only base it accepts: `main`. |
 | `FACTORY_QA_BOT_ID` | qa, merger | in `app` mode; see the cell | Numeric **user id of the QA App's bot account** (see below). The Merger accepts `factory/qa` only from it; the QA instance checks it created the status under it. In `github-app-token` mode there is **one QA identity**: the id is derived from the `qa` entry of `FACTORY_ROLE_BOTS`, and a `FACTORY_QA_BOT_ID` that is also set must equal it, or the server refuses to start. If the Merger is served and `qa` is not listed (QA served elsewhere), `FACTORY_QA_BOT_ID` must name the QA bot explicitly; without either, the server refuses to start rather than run a Merger with no QA identity to trust. |
-| `FACTORY_REVIEWERS` | merger | yes | Comma-separated GitHub logins whose approval counts. **The same list the ruleset requires (#207).** Compared case-insensitively. |
+| `FACTORY_REVIEWERS` | merger | yes | Comma-separated GitHub logins whose approval counts: the Reviewer App's bot, `<slug>[bot]`. No ruleset requires reviewers; `merge_if_ready` alone does. Compared case-insensitively. |
 | `FACTORY_CHECKS` | merger | yes | Comma-separated check-run names required on the head, `go,postgres,console,chart,factory-mcp-image,artifact`: every job of `check.yml`, and **identical to the `main` ruleset's required checks** (see below). **Not `build`**. |
 | `FACTORY_CHECKS_APP_ID` | merger | yes | The app that must have emitted them: GitHub Actions, `15368`. |
 | `FACTORY_MERGE_METHOD` | merger | no | `squash` (default), `merge` or `rebase`. |
@@ -455,7 +461,8 @@ A check the ruleset requires and `FACTORY_CHECKS` omits makes GitHub refuse a
 merge the Merger judged ready (`merge_refused`); a check `FACTORY_CHECKS`
 requires and the ruleset omits leaves a person's own merge less guarded than
 the Merger's. The ruleset is configured on GitHub, not from this repository:
-its required checks are part of the full ruleset deferred to
+it is the checks ruleset, applied with the command in
+[factory/agents/README.md](../agents/README.md) and named in
 [#207](https://github.com/fuseone-io/fuseone-agents/issues/207).
 
 ### In `app` mode: why App credentials, not a token
@@ -612,6 +619,7 @@ The Curator classifies:
 | `move_card` | **write** | no (structured state only) | none |
 | `set_card_fields` | **write** | no (structured state only) | none |
 | `send_back` | **write** | no (structured state only) | none |
+| `close_merged` | **write** | no (structured state only) | none |
 | `list_ready_prs` | **read** | **no** (structured state only) | none |
 
 `list_ready_prs` must be ruled **not** untrusted. Every imported tool starts
@@ -651,6 +659,29 @@ otherwise:
 and the labels after (the new one added before `ready-to-merge` comes off),
 so a failure between the writes leaves the pull request still ready to merge
 and the next `send_back` repairs it; its one cost is a repeated comment.
+
+### `close_merged`: the merge and the card are two calls
+
+A merge and its card's move to Done are two calls, each approved by a
+person, and a run can end between them: it stopped, the approval was refused
+or never given, the move's answer was lost. The pull request is then merged
+with its card in Doing, and a listing of open pull requests would never show
+it again. So `list_ready_prs` asks GitHub for the open **and the merged**
+pull requests carrying the label, and lists a merged one under `merged`.
+`close_merged` finishes it:
+
+- it reads that same listing again; a pull request not in it answers
+  `not_ready_to_merge`, an open one `pr_not_merged`, and one whose card is in
+  another lane, or that has two, `card_not_closable`: a person's;
+- a card in Doing moves to Done with one mutation; a card already in Done,
+  or no card, moves nothing;
+- only then is `factory:ready-to-merge` dropped. A failure at any point
+  leaves the label, so the pull request stays listed and the next run
+  finishes it; once the label is gone it is never listed again, which keeps
+  the merged part of the listing small.
+
+A pull request a person merged by hand, still labelled, is finished the same
+way.
 
 Then, per NT-013 § Guardrails:
 

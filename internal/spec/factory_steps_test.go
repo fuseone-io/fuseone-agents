@@ -124,6 +124,9 @@ var stopsWhen = map[string]map[string]string{
 	"qa": {
 		"Submit the verdict": "the card is in Travado, and the comment that blocked it names the action that unblocks it and ends with Return to: Doing",
 	},
+	"merger": {
+		"Write the outcome": "the card is in Travado, and the comment that blocked it names the action that unblocks it and ends with Return to: Doing",
+	},
 }
 
 func TestFactoryReferences_stopsWhen_isExactlyTheTextThatNamesTheBlockAsWritten(t *testing.T) {

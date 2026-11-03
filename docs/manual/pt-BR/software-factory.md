@@ -1,8 +1,8 @@
 ---
 title: Fábrica de software
-summary: Rode papéis de agentes que fazem a triagem de issues, planejam, fazem mudanças pequenas e revisam pull requests num repositório do GitHub, cada um com o seu GitHub App e toda escrita no GitHub aprovada por uma pessoa.
+summary: Rode papéis de agentes que fazem a triagem de issues, planejam, fazem mudanças pequenas, revisam pull requests e fazem o merge deles num repositório do GitHub, cada um com o seu GitHub App e toda escrita no GitHub aprovada por uma pessoa.
 section: integrations
-tags: fábrica, github, github app, papéis, triagem, arquiteto, plano, desenvolvedor, revisão, qa, copiloto
+tags: fábrica, github, github app, papéis, triagem, arquiteto, plano, desenvolvedor, revisão, qa, merger, copiloto
 order: 22
 ---
 
@@ -24,12 +24,13 @@ e as instruções dos papéis ficam, revisadas como código, em
 
 ## O que é a primeira versão
 
-- **Cinco papéis.** A Triagem transforma uma issue nova num card preparado,
+- **Seis papéis.** A Triagem transforma uma issue nova num card preparado,
   ou passa o card para o Arquiteto com `factory:needs-design` quando ele
   precisa de um plano; o Arquiteto confere a mudança no código e escreve o
   plano e os critérios de aceite na issue; o Desenvolvedor faz uma mudança pequena e abre o pull request dela; o
   Revisor revisa um pull request; o QA confere o pull request contra o CI e os
-  critérios de aceite. Cada papel é um agente criado no console ou no Studio.
+  critérios de aceite; o Merger propõe o merge de um pull request pronto para
+  isso, ou o devolve. Cada papel é um agente criado no console ou no Studio.
 - **Um GitHub App por papel.** Cada papel só alcança o GitHub pelos seus
   próprios registros, o do servidor do GitHub e o do servidor da fábrica, os
   dois autenticados como o seu próprio App. As permissões do App são o
@@ -38,7 +39,8 @@ e as instruções dos papéis ficam, revisadas como código, em
 - **Ferramentas de board estreitas.** Os cards andam com o `move_card` do
   servidor da fábrica, só pelas transições do próprio papel (a Triagem e o
   Arquiteto de Triagem para Preparado ou Travado; o Desenvolvedor, o Revisor e
-  o QA de Doing para Travado), e nada sai de Travado. A Triagem e o Arquiteto
+  o QA de Doing para Travado, assim como o Merger; o Merger só chega a Done
+  pelo `close_merged`, para uma PR mergeada), e nada sai de Travado. A Triagem e o Arquiteto
   preenchem Work type e Size com o `set_card_fields`, só em Triagem. Nenhum
   papel tem o `projects_write` do servidor do GitHub.
 - **Todos os papéis em copiloto**, com aprovações permanentes proibidas. Toda
@@ -47,7 +49,12 @@ e as instruções dos papéis ficam, revisadas como código, em
   que o Desenvolvedor faz do pull request que acabou de abrir são as escritas
   que não esperam, e nenhuma das duas escreve no GitHub. Veja
   [Rascunho, copiloto e autônomo](autonomy-stages.md).
-- **Uma pessoa faz o merge.** Nenhum papel faz merge.
+- **O Merger propõe, uma pessoa aprova.** O `merge_if_ready` do Merger relê o
+  GitHub depois que uma pessoa aprova e só faz o merge quando a aprovação do
+  Revisor, o `factory/qa` do QA e todos os checks esperados estão no head. O
+  Merger não lê nada que alguém escreveu, então um texto de issue nunca
+  consegue conduzir o run dele. Uma pessoa continua podendo fazer o merge à
+  mão.
 - **O board guia o trabalho**, com cinco colunas: Triagem, Preparado, Doing,
   Travado e Done. Dentro de Doing, rótulos marcam em que ponto o pull request
   está: `factory:needs-review`, `factory:changes-requested`,
@@ -131,8 +138,11 @@ fábrica trabalha e dê a ele só o que as ferramentas do papel precisam:
 | Revisor | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | QA | Pull requests: read, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write |
 | Desenvolvedor | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
+| Merger | Contents: write, Pull requests: write, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 
-O veredito do QA é o status de commit `factory/qa` no head que ele conferiu,
+O App do Merger faz o merge e escreve os comentários de texto fixo e os
+rótulos dele no pull request com Pull requests: write; ele não tem permissão
+de Issues (o canário do passo 3 comprova que isso basta). O veredito do QA é o status de commit `factory/qa` no head que ele conferiu,
 então o App dele precisa de Commit statuses: write. Ele não envia revisão,
 então só precisa de Pull requests: read: comenta o veredito e troca os
 rótulos do pull request pela API de Issues, que o Issues: write cobre (o
@@ -184,17 +194,48 @@ gh api --method POST repos/<owner>/<name>/rulesets --input - <<'EOF'
 EOF
 ```
 
-O resto do que o `main` deve exigir no futuro — status checks presos à sua
-origem, o `factory/qa`, os revisores autorizados e as regras do Merger — ficou
-para depois
-([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)); nada disso
-é necessário na v1.
+O Merger faz merge, então antes de ele começar o `main` exige também os
+checks que o `merge_if_ready` dele espera
+([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)):
 
-Antes de ativar o Merger, duas listas precisam estar aplicadas e ser idênticas:
-os checks obrigatórios do ruleset e o `FACTORY_CHECKS` do Merger. As duas trazem
-todos os jobs do workflow `check`, com os nomes que o GitHub mostra:
-`go`, `postgres`, `console`, `chart`, `factory-mcp-image`, `artifact`. A parte do
-ruleset é a #207; o `FACTORY_CHECKS` está descrito em `factory/mcp/README.md`.
+Antes de iniciar o Merger, o main precisa ter também o ruleset de checks: os seis checks do workflow check exigidos do GitHub Actions num head atualizado, e nenhum bypass para ninguém.
+
+É um segundo ruleset, ao lado do mínimo. Ele exige os seis jobs do workflow
+`check`, com os nomes que o GitHub mostra — `go`, `postgres`, `console`,
+`chart`, `factory-mcp-image`, `artifact`, exatamente o `FACTORY_CHECKS` do
+Merger —, cada um vindo do GitHub Actions (app id 15368), porque só o nome de
+um check não prova nada; em modo strict, para que o head contenha a base
+atual; e ninguém tem bypass:
+
+```sh
+gh api --method POST repos/<owner>/<name>/rulesets --input - <<'CHECKS'
+{
+  "name": "main: checks required",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "required_status_checks", "parameters": {
+        "strict_required_status_checks_policy": true,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          { "context": "go", "integration_id": 15368 },
+          { "context": "postgres", "integration_id": 15368 },
+          { "context": "console", "integration_id": 15368 },
+          { "context": "chart", "integration_id": 15368 },
+          { "context": "factory-mcp-image", "integration_id": 15368 },
+          { "context": "artifact", "integration_id": 15368 }
+        ] } }
+  ],
+  "bypass_actors": []
+}
+CHECKS
+```
+
+O `factory/qa` e a aprovação do Revisor não estão em nenhum ruleset: o
+`merge_if_ready` exige os dois no head. Exigido sem bypass, o `factory/qa`
+bloquearia todo pull request que não passa pela fábrica, e um ruleset não
+consegue apontar um GitHub App como revisor obrigatório.
 
 ## 3. Registre os servidores de ferramentas uma vez por papel
 
@@ -261,9 +302,9 @@ gh api /orgs/fuseone-io/packages/container/fuseone-agents-factory-mcp --jq .visi
 A resposta precisa ser `public`; se não for, dê ao worker um pull secret do
 GHCR.
 
-Depois registre-o mais cinco vezes, com o id `factory-<papel>`:
+Depois registre-o mais seis vezes, com o id `factory-<papel>`:
 `factory-triage`, `factory-architect`, `factory-reviewer`, `factory-qa`,
-`factory-developer`. A URL é `http://127.0.0.1:8091/` (`http://` sem TLS só é
+`factory-developer`, `factory-merger`. A URL é `http://127.0.0.1:8091/` (`http://` sem TLS só é
 aceito ao lado de um GitHub App para loopback), a credencial é **GitHub App**,
 e o App é **o mesmo** do `github-<papel>` daquele papel. Não preencha
 toolsets. Cada registro então oferece as ferramentas do seu papel:
@@ -273,6 +314,7 @@ toolsets. Cada registro então oferece as ferramentas do seu papel:
 | `factory-triage`, `factory-architect` | `move_card`, `set_card_fields` |
 | `factory-developer`, `factory-reviewer` | `move_card` |
 | `factory-qa` | `move_card`, `record_qa_verdict` |
+| `factory-merger` | `list_ready_prs`, `merge_if_ready`, `send_back`, `move_card`, `close_merged` |
 
 Um registro que não oferece nada, ou que oferece outra linha, recebeu o App
 errado.
@@ -287,7 +329,10 @@ projeto e o Status do card, e a mutação que move precisa responder o item sem
 erros. Com o token do QA, comente e coloque um rótulo também num pull request
 descartável pela API de Issues (o quarto passo do canário): o App do QA só tem
 Pull requests: read, e é isso que comprova que o Issues: write basta para o
-que o QA escreve ali. Um papel cujo canário falha continua parado.
+que o QA escreve ali. Com o token do Merger, coloque um rótulo e comente
+também num pull request descartável: o App dele não tem permissão de Issues,
+e isso comprova que o Pull requests: write basta para o que o `send_back`
+escreve. Um papel cujo canário falha continua parado.
 
 ## 4. Classifique as ferramentas
 
@@ -303,7 +348,9 @@ quando não se pede nenhum campo (#220).
 |---|---|
 | read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `list_commits`, `get_commit` |
 | write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `create_branch`, `create_or_update_file`, `push_files`, `create_pull_request` |
-| write, resultado **não** untrusted | `move_card`, `set_card_fields`, `record_qa_verdict`, nos servidores `factory-<papel>` |
+| write, resultado **não** untrusted | `move_card`, `set_card_fields`, `record_qa_verdict`, `send_back`, `close_merged`, nos servidores `factory-<papel>` |
+| read, resultado **não** untrusted | `list_ready_prs`, no `factory-merger` |
+| **destructive** | `merge_if_ready`, no `factory-merger` |
 
 Classifique cada ferramenta no servidor de cada papel:
 `github-triage.projects_list` e `github-reviewer.projects_list` são entradas
@@ -320,6 +367,42 @@ conjunto fechado, nomes de coluna e de campo, números, SHAs de commit —, nunc
 texto que alguém escreveu no GitHub, então o resultado delas não é untrusted.
 Mesmo assim são escritas: uma pessoa aprova cada card movido, cada campo e
 cada veredito do QA.
+
+As duas linhas do Merger importam mais que todas as outras. O
+`list_ready_prs` precisa ser classificado como **não** untrusted: é a única
+leitura do Merger, e no padrão untrusted ela contaminaria todo run do Merger
+antes do merge, e o Gate nunca deixa um efeito irreversível derivar de dado
+não confiável, então todo merge seria bloqueado.
+
+O `merge_if_ready` é **destructive**, o que o Gate bloqueia por padrão, e a
+aprovação de uma pessoa nunca libera um bloqueio. Salve esta política antes
+de o Merger começar, em **Políticas** no console — código `FACTORY-MERGE`,
+ferramenta `factory-merger.merge_if_ready`, efeito destructive, alcance o
+agente `factory-merger`, ação escalate, modo enforce — ou pela API, com os
+mesmos campos:
+
+```http
+PUT /api/v1/policies/FACTORY-MERGE
+Content-Type: application/json
+
+{
+  "name": "A person approves every factory merge",
+  "reason": "The Merger only proposes a merge: a person approves it, and merge_if_ready re-checks the review, QA and the checks on the head before it merges.",
+  "resource": "factory-merger.merge_if_ready",
+  "effects": ["destructive"],
+  "reach": "agents",
+  "agents": ["factory-merger"],
+  "effect": "escalate",
+  "mode": "enforce",
+  "enabled": true
+}
+```
+
+Mantenha-a exatamente assim, estreita: uma ferramenta `*`, ou um alcance da
+instalação inteira, tornaria aprovável toda ferramenta destrutiva, não só
+esta (veja [Políticas](policies.md)).
+
+Inicie o Merger só depois que a política FACTORY-MERGE estiver salva e em enforce; sem ela, o Gate bloqueia todo merge e nenhuma aprovação o libera.
 
 Deixe o `projects_write` **sem classificação**. Nenhum papel o declara, ele
 fica fora de todas as superfícies, e uma ferramenta sem classificação nunca
@@ -343,6 +426,7 @@ em vez de gastar:
 | Revisor | toda hora, aos :15 | 2.000.000 micros | 80 | 160 |
 | QA | toda hora, aos :45 | 1.000.000 micros | 50 | 100 |
 | Desenvolvedor | toda hora, aos :30 | 3.000.000 micros | 100 | 200 |
+| Merger | toda hora, aos :55 | 200.000 micros | 12 | 24 |
 
 Micros são milionésimos da moeda configurada na instalação. Trate esses
 valores como uma primeira calibração.
@@ -357,11 +441,13 @@ frontmatter, e o corpo como instruções.
 - [Revisor](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/reviewer.agent.md)
 - [QA](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/qa.agent.md)
 - [Desenvolvedor](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/developer.agent.md)
+- [Merger](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/merger.agent.md)
 
 Depois publique — um agente novo é um rascunho pausado —, ponha o estágio em
 **copiloto** e inicie. O estágio não está no arquivo, então ele sempre é
 definido no console. Só inicie o Desenvolvedor depois que o `main` tiver o
-ruleset mínimo (passo 2).
+ruleset mínimo, e o Merger depois que ele tiver também o ruleset de checks e a
+configuração do sidecar listar o Merger (passo 2; `factory/mcp/README.md`).
 
 O console recusa publicar uma ferramenta que o servidor registrado não
 oferece, então um nome de ferramenta errado, ou um toolset faltando, aparece

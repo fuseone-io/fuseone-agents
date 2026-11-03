@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 )
@@ -212,8 +211,7 @@ func (s *SendBack) comment(ctx context.Context, pr int, body string) (int64, Rea
 	return out.ID, "", 0
 }
 
-// relabel adds the sub-state label, then removes ready-to-merge. A remove
-// answered 404 means the label is already gone: done.
+// relabel adds the sub-state label, then removes ready-to-merge.
 func (s *SendBack) relabel(ctx context.Context, pr int, to string) (Reason, int) {
 	code, err := s.gh.send(ctx, apiRequest{
 		Method: http.MethodPost, Path: s.gh.repoPath("/issues/%d/labels", pr),
@@ -222,27 +220,5 @@ func (s *SendBack) relabel(ctx context.Context, pr int, to string) (Reason, int)
 	if r := labelReason(err, code, http.StatusOK); r != "" {
 		return r, code
 	}
-	code, err = s.gh.send(ctx, apiRequest{
-		Method: http.MethodDelete,
-		Path:   s.gh.repoPath("/issues/%d/labels/%s", pr, url.PathEscape(LabelReadyToMerge)),
-	})
-	if code == http.StatusNotFound {
-		return "", 0
-	}
-	if r := labelReason(err, code, http.StatusOK); r != "" {
-		return r, code
-	}
-	return "", 0
-}
-
-func labelReason(err error, code, want int) Reason {
-	switch {
-	case errors.Is(err, ErrNotSent):
-		return ReasonLabelNotSent
-	case err != nil:
-		return ReasonOutcomeUnknown
-	case code != want:
-		return ReasonLabelRefused
-	}
-	return ""
+	return s.gh.dropReadyLabel(ctx, pr)
 }

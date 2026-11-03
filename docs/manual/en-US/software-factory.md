@@ -1,8 +1,8 @@
 ---
 title: Software factory
-summary: Run agent roles that triage issues, plan them, make small changes and review pull requests on a GitHub repository, each with its own GitHub App, every GitHub write approved by a person.
+summary: Run agent roles that triage issues, plan them, make small changes, review pull requests and merge them on a GitHub repository, each with its own GitHub App, every GitHub write approved by a person.
 section: integrations
-tags: factory, github, github app, roles, triage, architect, plan, developer, review, qa, copilot
+tags: factory, github, github app, roles, triage, architect, plan, developer, review, qa, merger, copilot
 order: 22
 ---
 
@@ -22,12 +22,13 @@ and the role instructions live, reviewed like code, in
 
 ## What the first version is
 
-- **Five roles.** Triage turns a new issue into a prepared card, or hands it
+- **Six roles.** Triage turns a new issue into a prepared card, or hands it
   to the Architect with `factory:needs-design` when it needs a plan; the
   Architect verifies the change in the code and writes its plan and
   acceptance criteria on the issue; the Developer makes a small change and opens its pull request; the Reviewer
   reviews a pull request; QA checks it against CI and the acceptance
-  criteria. Each role is an agent created in the console or the Studio.
+  criteria; the Merger proposes the merge of a pull request ready for it, or
+  sends it back. Each role is an agent created in the console or the Studio.
 - **One GitHub App per role.** Each role reaches GitHub only through its own
   registrations, of the GitHub server and of the factory's server, both
   authenticated as its own App. The App's permissions are the first limit,
@@ -36,7 +37,8 @@ and the role instructions live, reviewed like code, in
 - **Narrow board tools.** Cards move with the factory server's `move_card`,
   only along the role's own transitions (Triage and the Architect from
   Triagem to Preparado or Travado; the Developer, the Reviewer and QA from
-  Doing to Travado), and nothing leaves Travado. Triage and the Architect set
+  Doing to Travado, as the Merger does; the Merger reaches Done only through
+  `close_merged`, for a merged pull request), and nothing leaves Travado. Triage and the Architect set
   Work type and Size with `set_card_fields`, only in Triagem. No role holds
   the GitHub server's `projects_write`.
 - **Every role at copilot**, with standing approvals forbidden. Every GitHub
@@ -44,7 +46,11 @@ and the role instructions live, reviewed like code, in
   for a person. The card claim below, and the Developer's link of the pull
   request it just opened, are the writes that do not, and neither writes to
   GitHub. See [Draft, copilot and autonomous](autonomy-stages.md).
-- **A person merges.** No role merges.
+- **The Merger proposes, a person approves.** The Merger's `merge_if_ready`
+  re-reads GitHub after a person approves it and merges only when the
+  Reviewer's approval, QA's `factory/qa` and every expected check are on the
+  head. The Merger reads nothing anyone wrote, so its run can never be
+  steered by an issue's text. A person can still merge by hand.
 - **The board drives the work**, with five lanes: Triagem, Preparado, Doing,
   Travado and Done. Inside Doing, labels mark where a pull request is:
   `factory:needs-review`, `factory:changes-requested`, `factory:needs-qa` and
@@ -125,8 +131,11 @@ works, and give it only what its tools need:
 | Reviewer | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 | QA | Pull requests: read, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write |
 | Developer | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
+| Merger | Contents: write, Pull requests: write, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
 
-QA's verdict is the `factory/qa` commit status on the head it checked, so its
+The Merger's App merges and writes its fixed-text comments and labels on the
+pull request with Pull requests: write; it has no Issues permission (the
+canary in step 3 proves that is enough). QA's verdict is the `factory/qa` commit status on the head it checked, so its
 App needs Commit statuses: write. It submits no review, so it needs only Pull
 requests: read: it comments its verdict and relabels the pull request through
 the Issues API, which Issues: write covers (the canary in step 3 proves it).
@@ -176,17 +185,48 @@ gh api --method POST repos/<owner>/<name>/rulesets --input - <<'EOF'
 EOF
 ```
 
-The rest of what `main` should eventually require — status checks pinned to
-their source, `factory/qa`, the authorised reviewers and the Merger's rules —
-is deferred
-([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)); none of it
-is needed in v1.
+The Merger merges, so before it starts `main` also requires the checks its
+`merge_if_ready` waits for
+([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)):
 
-Before the Merger is activated, two lists must be applied and kept identical:
-the ruleset's required checks and the Merger's `FACTORY_CHECKS`. Both are every
-job of the `check` workflow, by the names GitHub reports:
-`go`, `postgres`, `console`, `chart`, `factory-mcp-image`, `artifact`. The
-ruleset part is #207; `FACTORY_CHECKS` is described in `factory/mcp/README.md`.
+Before the Merger is started, main must also carry the checks ruleset: the six checks of the check workflow required from GitHub Actions on an up-to-date head, and no bypass for anyone.
+
+It is a second ruleset beside the minimal one. It requires the six jobs of the
+`check` workflow, by the names GitHub reports — `go`, `postgres`, `console`,
+`chart`, `factory-mcp-image`, `artifact`, exactly the Merger's
+`FACTORY_CHECKS` — each from GitHub Actions (app id 15368), since a check's
+name alone proves nothing; strict, so the head must contain the current base;
+and nobody bypasses it:
+
+```sh
+gh api --method POST repos/<owner>/<name>/rulesets --input - <<'CHECKS'
+{
+  "name": "main: checks required",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "required_status_checks", "parameters": {
+        "strict_required_status_checks_policy": true,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          { "context": "go", "integration_id": 15368 },
+          { "context": "postgres", "integration_id": 15368 },
+          { "context": "console", "integration_id": 15368 },
+          { "context": "chart", "integration_id": 15368 },
+          { "context": "factory-mcp-image", "integration_id": 15368 },
+          { "context": "artifact", "integration_id": 15368 }
+        ] } }
+  ],
+  "bypass_actors": []
+}
+CHECKS
+```
+
+`factory/qa` and the Reviewer's approval are not in any ruleset:
+`merge_if_ready` requires both on the head. Required with no bypass,
+`factory/qa` would block every pull request that never goes through the
+factory, and a ruleset cannot name a GitHub App as a required reviewer.
 
 ## 3. Register the tool servers once per role
 
@@ -248,9 +288,9 @@ gh api /orgs/fuseone-io/packages/container/fuseone-agents-factory-mcp --jq .visi
 
 It must answer `public`; otherwise give the worker a GHCR pull secret.
 
-Then register it five more times, with the id `factory-<role>`:
+Then register it six more times, with the id `factory-<role>`:
 `factory-triage`, `factory-architect`, `factory-reviewer`, `factory-qa`,
-`factory-developer`. The URL is `http://127.0.0.1:8091/` (plain `http://` is
+`factory-developer`, `factory-merger`. The URL is `http://127.0.0.1:8091/` (plain `http://` is
 accepted beside a GitHub App only to loopback), the credential is **GitHub
 App**, and the App is **the same one** as that role's `github-<role>`. Set no
 toolsets. Each registration then offers its role's tools:
@@ -260,6 +300,7 @@ toolsets. Each registration then offers its role's tools:
 | `factory-triage`, `factory-architect` | `move_card`, `set_card_fields` |
 | `factory-developer`, `factory-reviewer` | `move_card` |
 | `factory-qa` | `move_card`, `record_qa_verdict` |
+| `factory-merger` | `list_ready_prs`, `merge_if_ready`, `send_back`, `move_card`, `close_merged` |
 
 One that offers nothing, or another row, was given the wrong App.
 
@@ -272,8 +313,10 @@ role's bot id, the item query must return the project and the card's Status,
 and the move mutation must answer the item with no errors. With QA's token,
 also comment on and label a throwaway pull request through the Issues API
 (the canary's fourth step): QA's App has Pull requests: read only, and this
-proves Issues: write is enough for what QA writes there. A role whose canary
-fails stays stopped.
+proves Issues: write is enough for what QA writes there. With the Merger's
+token, label and comment on a throwaway pull request too: its App has no
+Issues permission, and this proves Pull requests: write is enough for what
+`send_back` writes. A role whose canary fails stays stopped.
 
 ## 4. Classify the tools
 
@@ -288,7 +331,9 @@ of the board's issues and pull requests even when asked for no fields (#220).
 |---|---|
 | read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `list_commits`, `get_commit` |
 | write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `create_branch`, `create_or_update_file`, `push_files`, `create_pull_request` |
-| write, result **not** untrusted | `move_card`, `set_card_fields`, `record_qa_verdict`, on the `factory-<role>` servers |
+| write, result **not** untrusted | `move_card`, `set_card_fields`, `record_qa_verdict`, `send_back`, `close_merged`, on the `factory-<role>` servers |
+| read, result **not** untrusted | `list_ready_prs`, on `factory-merger` |
+| **destructive** | `merge_if_ready`, on `factory-merger` |
 
 Classify each tool on every role's server: `github-triage.projects_list` and
 `github-reviewer.projects_list` are separate entries. `issue_write` is also how
@@ -304,6 +349,42 @@ The factory's tools answer only structured state — closed reasons, lane and
 field names, numbers, commit SHAs — never text anyone wrote on GitHub, so
 their results are not untrusted. They are still writes: a person approves
 every move, every field and every QA verdict.
+
+The Merger's two rows matter more than any other. `list_ready_prs` must be
+ruled **not** untrusted: it is the Merger's one read, and left at the
+untrusted default it would taint every Merger run before its merge, and the
+Gate never lets an irreversible effect derive from untrusted data, so every
+merge would be blocked.
+
+`merge_if_ready` is **destructive**, which the Gate blocks by default, and a
+person's approval never releases a block. Store this policy before the
+Merger starts, in the console's **Policies** — code `FACTORY-MERGE`, tool
+`factory-merger.merge_if_ready`, effect destructive, reach the agent
+`factory-merger`, action escalate, mode enforce — or through the API with the
+same fields:
+
+```http
+PUT /api/v1/policies/FACTORY-MERGE
+Content-Type: application/json
+
+{
+  "name": "A person approves every factory merge",
+  "reason": "The Merger only proposes a merge: a person approves it, and merge_if_ready re-checks the review, QA and the checks on the head before it merges.",
+  "resource": "factory-merger.merge_if_ready",
+  "effects": ["destructive"],
+  "reach": "agents",
+  "agents": ["factory-merger"],
+  "effect": "escalate",
+  "mode": "enforce",
+  "enabled": true
+}
+```
+
+Keep it exactly this narrow: a tool of `*`, or a reach of the whole
+installation, would make every destructive tool approvable, not only this one
+(see [Policies](policies.md)).
+
+Start the Merger only once the FACTORY-MERGE policy is stored and enforced; without it, the Gate blocks every merge and no approval releases it.
 
 Leave `projects_write` **unclassified**. No role declares it, it is outside
 every surface, and an unclassified tool never executes.
@@ -326,6 +407,7 @@ instead of spending:
 | Reviewer | every hour at :15 | 2,000,000 micros | 80 | 160 |
 | QA | every hour at :45 | 1,000,000 micros | 50 | 100 |
 | Developer | every hour at :30 | 3,000,000 micros | 100 | 200 |
+| Merger | every hour at :55 | 200,000 micros | 12 | 24 |
 
 Micros are millionths of the installation's configured currency. Treat these
 values as a first calibration.
@@ -340,11 +422,13 @@ frontmatter's fields, and the body as its instructions.
 - [Reviewer](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/reviewer.agent.md)
 - [QA](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/qa.agent.md)
 - [Developer](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/developer.agent.md)
+- [Merger](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/agents/merger.agent.md)
 
 Then publish it — a new agent is a paused draft — set its stage to
 **copilot** and start it. The stage is not in the file, so it is always set in
-the console. Start the Developer only once `main` carries the minimal ruleset
-(step 2).
+the console. Start the Developer only once `main` carries the minimal ruleset,
+and the Merger only once it also carries the checks ruleset and its sidecar
+configuration lists the Merger (step 2; `factory/mcp/README.md`).
 
 The console refuses to publish a tool the registered server does not offer, so
 a wrong tool name, or a missing toolset, is found here rather than at run

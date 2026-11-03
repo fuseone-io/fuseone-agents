@@ -10,7 +10,7 @@ var allowedMoves = map[Role][][2]Lane{
 	RoleDeveloper: {{LaneDoing, LaneTravado}},
 	RoleReviewer:  {{LaneDoing, LaneTravado}},
 	RoleQA:        {{LaneDoing, LaneTravado}},
-	RoleMerger:    {{LaneDoing, LaneDone}, {LaneDoing, LaneTravado}},
+	RoleMerger:    {{LaneDoing, LaneTravado}},
 }
 
 func allowed(r Role, from, to Lane) bool {

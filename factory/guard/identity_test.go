@@ -218,7 +218,8 @@ func TestPassThrough_transitions_followTheIdentitysRow(t *testing.T) {
 		{RoleQA, LaneDoing, LaneDone, ReasonTransitionRefused},
 		{RoleTriage, LanePreparado, LaneTravado, ReasonTransitionRefused},
 		{RoleReviewer, LaneTravado, LaneDoing, ReasonTravadoIsHuman},
-		{RoleMerger, LaneDoing, LaneDone, ReasonMoved},
+		{RoleMerger, LaneDoing, LaneDone, ReasonTransitionRefused},
+		{RoleMerger, LaneDoing, LaneTravado, ReasonMoved},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.role), func(t *testing.T) {

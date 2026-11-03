@@ -16,11 +16,22 @@ type ReadyPR struct {
 	Check   string `json:"check,omitempty"`
 }
 
+// MergedPR is a merged pull request still labelled ready-to-merge: the one
+// close_merged finishes. Its card is in Doing or Done, or it has none.
+type MergedPR struct {
+	PR     int    `json:"pr"`
+	ItemID string `json:"item_id,omitempty"`
+	Lane   Lane   `json:"lane,omitempty"`
+}
+
 // ReadySkipped counts the labelled pull requests left out, and why.
+// MergedHeld is a merged one whose card is in another lane, or that has
+// more than one: a person's.
 type ReadySkipped struct {
 	NoCard     int `json:"no_card"`
 	ManyCards  int `json:"many_cards"`
 	NotInDoing int `json:"not_in_doing"`
+	MergedHeld int `json:"merged_held"`
 }
 
 // ReadyList is list_ready_prs' answer: numbers, SHAs, item ids and closed
@@ -28,6 +39,7 @@ type ReadySkipped struct {
 // it may be text a person or GitHub wrote.
 type ReadyList struct {
 	PRs     []ReadyPR    `json:"prs"`
+	Merged  []MergedPR   `json:"merged"`
 	Skipped ReadySkipped `json:"skipped"`
 }
 
@@ -49,12 +61,18 @@ func NewReadyLister(cfg Config, gh *Client) *ReadyLister {
 // merge_if_ready would judge it now. A card in any other lane is no
 // Merger's: Travado is a person's, and the label alone never makes it so.
 func (l *ReadyLister) List(ctx context.Context) (ReadyList, error) {
-	out := ReadyList{PRs: []ReadyPR{}}
+	out := ReadyList{PRs: []ReadyPR{}, Merged: []MergedPR{}}
 	nodes, err := l.gh.readyPullRequests(ctx, l.base)
 	if err != nil {
 		return out, fmt.Errorf("list_ready_prs: %w", err)
 	}
 	for _, n := range nodes {
+		if n.State == "MERGED" {
+			if err := l.addMerged(ctx, &out, n); err != nil {
+				return out, fmt.Errorf("list_ready_prs: %w", err)
+			}
+			continue
+		}
 		cards := l.cardsOf(n)
 		switch {
 		case len(cards) == 0:
@@ -109,4 +127,42 @@ func (l *ReadyLister) judge(ctx context.Context, n readyNode, card string) (Read
 		return ReadyPR{}, false, err
 	}
 	return ReadyPR{PR: n.Number, HeadSHA: n.HeadRefOid, ItemID: card, Ready: reason == "", Reason: reason, Check: check}, true, nil
+}
+
+func (l *ReadyLister) addMerged(ctx context.Context, out *ReadyList, n readyNode) error {
+	m, ok, err := l.closable(ctx, n)
+	switch {
+	case err != nil:
+		return err
+	case ok:
+		out.Merged = append(out.Merged, m)
+	default:
+		out.Skipped.MergedHeld++
+	}
+	return nil
+}
+
+// closable judges a merged pull request: with no card, or its one card in
+// Doing or Done, close_merged may finish it. A card anywhere else, or two,
+// is a person's.
+func (l *ReadyLister) closable(ctx context.Context, n readyNode) (MergedPR, bool, error) {
+	m := MergedPR{PR: n.Number}
+	cards := l.cardsOf(n)
+	switch len(cards) {
+	case 0:
+		return m, true, nil
+	case 1:
+	default:
+		return m, false, nil
+	}
+	item, err := l.gh.readItem(ctx, cards[0])
+	if err != nil {
+		return m, false, err
+	}
+	lane, reason := l.board.judgeItem(item)
+	if reason != "" || (lane != LaneDoing && lane != LaneDone) {
+		return m, false, nil
+	}
+	m.ItemID, m.Lane = cards[0], lane
+	return m, true, nil
 }

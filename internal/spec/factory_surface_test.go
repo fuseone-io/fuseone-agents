@@ -94,7 +94,7 @@ func TestFactorySetup_classification_leavesProjectsWriteUnclassifiedAndRulesTheB
 		if writes["projects_write"] {
 			t.Errorf("%s classifies projects_write as a write; it stays unclassified", path)
 		}
-		for _, tool := range []string{"move_card", "set_card_fields", "record_qa_verdict", "issue_write"} {
+		for _, tool := range []string{"move_card", "set_card_fields", "record_qa_verdict", "send_back", "close_merged", "issue_write"} {
 			if !writes[tool] {
 				t.Errorf("%s does not classify %s as a write", path, tool)
 			}
@@ -117,12 +117,16 @@ var appPermissions = map[string]string{
 	"reviewer":  "Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write",
 	"qa":        "Pull requests: read, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write",
 	"developer": "Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write",
+	// The Merger merges (Contents: write), reads reviews and writes its
+	// comments and labels on the pull request (Pull requests: write), and
+	// reads checks and statuses; it has no Issues permission.
+	"merger": "Contents: write, Pull requests: write, Checks: read, Commit statuses: read, Metadata: read | Projects: write",
 }
 
 // roleNames is how each setup text names the roles in its App table.
 var roleNames = map[string]map[string]string{
-	"en": {"Triage": "triage", "Architect": "architect", "Reviewer": "reviewer", "QA": "qa", "Developer": "developer"},
-	"pt": {"Triagem": "triage", "Arquiteto": "architect", "Revisor": "reviewer", "QA": "qa", "Desenvolvedor": "developer"},
+	"en": {"Triage": "triage", "Architect": "architect", "Reviewer": "reviewer", "QA": "qa", "Developer": "developer", "Merger": "merger"},
+	"pt": {"Triagem": "triage", "Arquiteto": "architect", "Revisor": "reviewer", "QA": "qa", "Desenvolvedor": "developer", "Merger": "merger"},
 }
 
 // permissionSet splits "A: x, B: y | C: z" into its sorted grants.
@@ -164,6 +168,36 @@ func TestFactorySetup_eachRolesAppPermissions_areExactlyItsLeastPrivilegeInEvery
 		}
 		if slices.Contains(got["qa"], "Pull requests: write") {
 			t.Errorf("%s gives the QA App Pull requests: write; it submits no review", path)
+		}
+	}
+}
+
+// destructiveRow and structuredReadRow are the two rows the Merger's tools
+// need: merge_if_ready is destructive, and list_ready_prs is a read whose
+// result is not untrusted. Left at the untrusted default, list_ready_prs
+// would taint every Merger run before its merge, and the Gate would block
+// every merge outright.
+var (
+	destructiveRow    = regexp.MustCompile("(?m)^\\| \\*\\*destructive\\*\\*[^|]*\\|(.*)\\|$")
+	structuredReadRow = regexp.MustCompile("(?m)^\\| read, (?:result \\*\\*not\\*\\*|resultado \\*\\*não\\*\\*) untrusted \\|(.*)\\|$")
+)
+
+func TestFactorySetup_classification_rulesTheMergersToolsSoAMergeCanHappen(t *testing.T) {
+	t.Parallel()
+
+	for _, path := range []string{
+		"../../docs/manual/en-US/software-factory.md",
+		"../../docs/manual/pt-BR/software-factory.md",
+	} {
+		text := readFile(t, path)
+		for name, row := range map[string]*regexp.Regexp{"merge_if_ready": destructiveRow, "list_ready_prs": structuredReadRow} {
+			m := row.FindStringSubmatch(text)
+			if m == nil || !strings.Contains(m[1], "`"+name+"`") {
+				t.Errorf("%s does not classify %s in its row %q", path, name, row)
+			}
+		}
+		if m := factoryReadsRow.FindStringSubmatch(text); m != nil && strings.Contains(m[1], "`list_ready_prs`") {
+			t.Errorf("%s classifies list_ready_prs as untrusted; every merge would then be blocked", path)
 		}
 	}
 }
