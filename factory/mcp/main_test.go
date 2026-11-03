@@ -24,19 +24,25 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func testServer() *mcp.Server {
-	return mcp.NewServer(&mcp.Implementation{Name: "factory", Version: "test"}, nil)
+func testHandler() http.Handler {
+	server := mcp.NewServer(&mcp.Implementation{Name: "factory", Version: "test"}, nil)
+	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
 }
 
 // startHTTP runs serveHTTP until the test ends and returns the bound address.
 // A refusal to start is returned instead, with an empty address.
 func startHTTP(t *testing.T, opts httpOptions) (string, error) {
 	t.Helper()
+	return startHandler(t, testHandler(), opts)
+}
+
+func startHandler(t *testing.T, handler http.Handler, opts httpOptions) (string, error) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
 	bound := make(chan string, 1)
 	opts.onListen = func(a net.Addr) { bound <- a.String() }
 	errs := make(chan error, 1)
-	go func() { errs <- serveHTTP(ctx, testServer(), opts) }()
+	go func() { errs <- serveHTTP(ctx, handler, opts) }()
 	t.Cleanup(func() {
 		cancel()
 		<-errs

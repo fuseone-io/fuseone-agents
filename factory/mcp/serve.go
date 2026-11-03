@@ -13,12 +13,15 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/factory/guard"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // httpOptions configure the streamable HTTP transport.
 type httpOptions struct {
 	Addr, Token string
+	// PassThrough is FACTORY_MCP_AUTH=github-app-token: each bearer is the
+	// calling role's GitHub token, checked by the handler itself against
+	// GitHub. Token is then empty and never compared.
+	PassThrough bool
 	// CertFile and KeyFile turn on TLS. Without them the server binds only to
 	// a loopback address, for a sidecar behind a TLS-terminating proxy.
 	CertFile, KeyFile string
@@ -29,11 +32,12 @@ type httpOptions struct {
 	onListen     func(net.Addr) // tests learn the bound port
 }
 
-// serveHTTP serves the tools over HTTP behind a bearer token. Over a network
+// serveHTTP serves the MCP handler over HTTP behind a bearer. Over a network
 // the bearer must travel inside TLS: anyone who reads it can call the tools
-// directly, skipping the platform's approval. So plaintext is refused on any
-// address but loopback, and the server refuses to start rather than warn.
-func serveHTTP(ctx context.Context, server *mcp.Server, opts httpOptions) error {
+// directly, skipping the platform's approval, and in pass-through mode it is
+// a GitHub token. So plaintext is refused on any address but loopback, in
+// both modes, and the server refuses to start rather than warn.
+func serveHTTP(ctx context.Context, handler http.Handler, opts httpOptions) error {
 	ln, err := listen(opts)
 	if err != nil {
 		return err
@@ -41,8 +45,10 @@ func serveHTTP(ctx context.Context, server *mcp.Server, opts httpOptions) error 
 	if opts.onListen != nil {
 		opts.onListen(ln.Addr())
 	}
-	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
-	srv := &http.Server{Handler: requireBearer(opts.Token, handler), ReadHeaderTimeout: 10 * time.Second}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", healthz)
+	mux.Handle("/", authenticate(opts, handler))
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	errs := make(chan error, 1)
 	go func() { errs <- srv.Serve(ln) }()
 	fmt.Fprintf(os.Stderr, "factory-mcp listening on %s\n", ln.Addr())
@@ -66,7 +72,7 @@ func serveHTTP(ctx context.Context, server *mcp.Server, opts httpOptions) error 
 // listen validates the transport and opens the listener, TLS-wrapped when
 // configured.
 func listen(opts httpOptions) (net.Listener, error) {
-	if opts.Token == "" {
+	if opts.Token == "" && !opts.PassThrough {
 		return nil, fmt.Errorf("%w: FACTORY_MCP_TOKEN is required when FACTORY_MCP_ADDR is set", guard.ErrConfig)
 	}
 	cfg, err := opts.tlsConfig()
@@ -127,6 +133,22 @@ func loopbackOnly(addr string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+// healthz answers readiness probes. It carries no secret and no state: it
+// says the process is listening, nothing about GitHub.
+func healthz(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	_, _ = w.Write([]byte("ok\n"))
+}
+
+// authenticate puts the shared bearer in front of the tools. In pass-through
+// mode the handler authenticates each request by its GitHub identity.
+func authenticate(opts httpOptions, next http.Handler) http.Handler {
+	if opts.PassThrough {
+		return next
+	}
+	return requireBearer(opts.Token, next)
 }
 
 func requireBearer(want string, next http.Handler) http.Handler {
