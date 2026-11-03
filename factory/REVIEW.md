@@ -5,9 +5,10 @@ It is the format this repository's review rounds already use: the rounds on
 #185, #186, #189, #205 and #209 are the model. This file takes their
 structure, not their content.
 
-QA (#198) submits its verdict the same way, as a pull-request review on the
-head SHA it checked (§ Submitting the verdict). Its body is the per-criterion
-check of LANES.md § `factory:needs-qa`, not a code review.
+QA (#198) does not submit a review. Its verdict is the `factory/qa` commit
+status on the head SHA it checked, set with `record_qa_verdict` and linking a
+comment that holds the per-criterion check of LANES.md § `factory:needs-qa`
+(§ Recording QA's verdict).
 
 ## What the Reviewer reads, and what it does not
 
@@ -117,20 +118,36 @@ head SHA the review was written against (`pull_request_review_write` with
 method `create`), event
 `APPROVE` or `REQUEST_CHANGES`, with the whole review above as its body.
 
-- **Not a comment, not a label.** The person who merges reads two approving
-  reviews on the PR's current head, the Reviewer's and QA's, each from that
-  role's own GitHub App, and each that role's latest decision (LANES.md §
-  `factory:ready-to-merge` → Done): an earlier approval does not survive a
-  later request for changes or a dismissal. A comment that says "approved" proves nothing, and a
-  label survives a new push. A review carries the SHA it was written against,
-  so a review of an older commit is visibly stale.
+- **Not a comment, not a label.** The person who merges reads, on the PR's
+  current head, the Reviewer's approving review, from the Reviewer's own
+  GitHub App and its latest decision, and QA's `factory/qa` status, below
+  (LANES.md § `factory:ready-to-merge` → Done): an earlier approval does not
+  survive a later request for changes or a dismissal. A comment that says
+  "approved" proves nothing, and a label survives a new push. A review
+  carries the SHA it was written against, so a review of an older commit is
+  visibly stale.
 - **If the head moved while reviewing**, the review is about a commit that is no
   longer the PR. Do not submit it against the new head: start again on the new
   SHA.
-- Then label the PR: the Reviewer `factory:changes-requested` or
-  `factory:needs-qa`, QA `factory:changes-requested` or
-  `factory:ready-to-merge` (LANES.md). The label routes the card; the review is
-  the evidence.
+- Then label the PR: `factory:changes-requested` or `factory:needs-qa`
+  (LANES.md). The label routes the card; the review is the evidence.
+
+## Recording QA's verdict
+
+QA's verdict is a **commit status**, `factory/qa`, on the head SHA it
+checked, set through `record_qa_verdict` under the QA GitHub App: `success`
+when every criterion is met and every expected check passed, `failure`
+otherwise. A status is bound to its commit, so a new push leaves the new head
+with no verdict, and its creator is the App's bot, which the Merger's
+`merge_if_ready` and, later, the ruleset (#207) check. The tool refuses when
+the SHA is no longer the PR's head (`head_moved`): then no verdict stands,
+and QA checks the head again on its next run.
+
+The evidence, one row per acceptance criterion with the diff, the test and
+the check, is a comment on the PR that QA writes first; the status's link
+points to it. Then QA labels the PR `factory:ready-to-merge` or
+`factory:changes-requested`. QA's App submits no review, so among the
+factory's Apps only the Reviewer's reviews decide anything.
 
 The rounds on the PRs above were delivered outside GitHub: those PRs carry the
 author's replies but no review objects. That is exactly what the factory

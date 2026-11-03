@@ -11,8 +11,9 @@ order: 22
 A software factory is a set of agents, each in one **role**, that take a
 repository's issues from triage to a pull request ready to merge, driven by a
 GitHub Project board. The platform runs it with nothing but configuration:
-the roles are ordinary agents, the official GitHub MCP server is their only
-tool server, and the Gate governs every call they make.
+the roles are ordinary agents, their tools come from the official GitHub MCP
+server and from the factory's own MCP server, which moves the board's cards
+and records QA's verdict, and the Gate governs every call they make.
 
 This page is the operator's path. The reasoning behind it is design note
 [NT-013](https://github.com/fuseone-io/fuseone-agents/blob/main/docs/NT-013-software-factory-pilot.md),
@@ -28,9 +29,16 @@ and the role instructions live, reviewed like code, in
   reviews a pull request; QA checks it against CI and the acceptance
   criteria. Each role is an agent created in the console or the Studio.
 - **One GitHub App per role.** Each role reaches GitHub only through its own
-  registration of the GitHub server, authenticated as its own App. The App's
-  permissions are the first limit, and its name is what signs the role's
-  comments and reviews.
+  registrations, of the GitHub server and of the factory's server, both
+  authenticated as its own App. The App's permissions are the first limit,
+  and its name is what signs the role's comments, reviews and QA's
+  `factory/qa` status.
+- **Narrow board tools.** Cards move with the factory server's `move_card`,
+  only along the role's own transitions (Triage and the Architect from
+  Triagem to Preparado or Travado; the Developer, the Reviewer and QA from
+  Doing to Travado), and nothing leaves Travado. Triage and the Architect set
+  Work type and Size with `set_card_fields`, only in Triagem. No role holds
+  the GitHub server's `projects_write`.
 - **Every role at copilot**, with standing approvals forbidden. Every GitHub
   write a role proposes — a comment, a label, a review, a card move — waits
   for a person. The card claim below, and the Developer's link of the pull
@@ -115,11 +123,14 @@ works, and give it only what its tools need:
 | Triage | Issues: write, Pull requests: read, Metadata: read | Projects: write |
 | Architect | Contents: read, Issues: write, Metadata: read | Projects: write |
 | Reviewer | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
-| QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
+| QA | Pull requests: read, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write |
 | Developer | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
 
-QA's verdict is a pull request review, so QA needs Pull requests: write just
-like the Reviewer. The Architect reads the code and writes only issues and the
+QA's verdict is the `factory/qa` commit status on the head it checked, so its
+App needs Commit statuses: write. It submits no review, so it needs only Pull
+requests: read: it comments its verdict and relabels the pull request through
+the Issues API, which Issues: write covers (the canary in step 3 proves it).
+The Architect reads the code and writes only issues and the
 board: give its App Contents: **read**, never write, so GitHub refuses any
 file or branch it could be talked into writing. Do not give the Developer's App the Workflows permission:
 without it, GitHub refuses any change the Developer makes under
@@ -177,7 +188,7 @@ job of the `check` workflow, by the names GitHub reports:
 `go`, `postgres`, `console`, `chart`, `factory-mcp-image`, `artifact`. The
 ruleset part is #207; `FACTORY_CHECKS` is described in `factory/mcp/README.md`.
 
-## 3. Register the GitHub server once per role
+## 3. Register the tool servers once per role
 
 In the administration, register the hosted GitHub MCP server
 (`https://api.githubcopilot.com/mcp/`) five times, one per role, with the id
@@ -200,6 +211,70 @@ The hosted server's default toolsets do not include `projects`, so set the
 The hosted server silently ignores a toolset name it does not know, so a typo
 shows up later, as a publish refused for missing tools.
 
+The toolsets offer more than a role declares — the `projects` set also
+offers `projects_write`, which edits any field of any card and deletes cards,
+and which no role holds. Once a server answers, open its **Tools and
+surface** page and bring in exactly these tools, nothing else. A tool left
+outside the surface does not exist for agents: a role naming it is refused at
+publish, and a call to it is refused.
+
+| Server | Its tools |
+|---|---|
+| `github-triage` | `projects_list,projects_get,issue_read,list_issues,search_issues,add_issue_comment,issue_write` |
+| `github-architect` | `projects_list,projects_get,issue_read,search_issues,get_file_contents,search_code,list_commits,get_commit,add_issue_comment,issue_write` |
+| `github-reviewer` | `search_pull_requests,pull_request_read,issue_read,get_file_contents,search_code,get_commit,pull_request_review_write,issue_write,add_issue_comment,projects_list,projects_get` |
+| `github-qa` | `search_pull_requests,pull_request_read,issue_read,get_file_contents,issue_write,add_issue_comment,projects_list,projects_get` |
+| `github-developer` | `search_pull_requests,projects_list,projects_get,issue_read,pull_request_read,get_file_contents,search_code,get_commit,create_branch,create_or_update_file,push_files,create_pull_request,add_issue_comment,issue_write` |
+
+The hosted server can also be narrowed at its end: the `X-MCP-Tools` header
+set to a row above, with **no** `X-MCP-Toolsets`, makes it list only those
+tools (with both set, the tools are added to the sets instead). The console's
+App panel only sets Toolsets, so that header is written through the
+administration API; the surface is required either way.
+
+### The factory's own server
+
+The factory's server runs as a sidecar in every worker pod, on
+`http://127.0.0.1:8091/`, holding no credential of its own: each request's
+App token tells it which role is calling, and it serves only that role's
+tools. How to deploy it, and the ConfigMap it reads, are in
+[`factory/mcp/README.md`](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/mcp/README.md#as-a-worker-sidecar).
+Before the first worker runs it, check that its image can be pulled without a
+credential:
+
+```sh
+gh api /orgs/fuseone-io/packages/container/fuseone-agents-factory-mcp --jq .visibility
+```
+
+It must answer `public`; otherwise give the worker a GHCR pull secret.
+
+Then register it five more times, with the id `factory-<role>`:
+`factory-triage`, `factory-architect`, `factory-reviewer`, `factory-qa`,
+`factory-developer`. The URL is `http://127.0.0.1:8091/` (plain `http://` is
+accepted beside a GitHub App only to loopback), the credential is **GitHub
+App**, and the App is **the same one** as that role's `github-<role>`. Set no
+toolsets. Each registration then offers its role's tools:
+
+| Server | Tools |
+|---|---|
+| `factory-triage`, `factory-architect` | `move_card`, `set_card_fields` |
+| `factory-developer`, `factory-reviewer` | `move_card` |
+| `factory-qa` | `move_card`, `record_qa_verdict` |
+
+One that offers nothing, or another row, was given the wrong App.
+
+**Run the operator canary before starting any role.** No test can prove what
+GitHub does with a token restricted to one repository, so once per role's
+App, with such a token, run the three calls of the
+[setup canary](https://github.com/fuseone-io/fuseone-agents/blob/main/factory/mcp/README.md#setup-canary-one-real-query-and-one-real-mutation)
+against a throwaway card: the `viewer { databaseId }` query must answer that
+role's bot id, the item query must return the project and the card's Status,
+and the move mutation must answer the item with no errors. With QA's token,
+also comment on and label a throwaway pull request through the Issues API
+(the canary's fourth step): QA's App has Pull requests: read only, and this
+proves Issues: write is enough for what QA writes there. A role whose canary
+fails stays stopped.
+
 ## 4. Classify the tools
 
 Once each server is answering, classify every tool the roles declare (see
@@ -212,7 +287,8 @@ of the board's issues and pull requests even when asked for no fields (#220).
 | Classify as | Tools |
 |---|---|
 | read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `list_commits`, `get_commit` |
-| write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `projects_write`, `create_branch`, `create_or_update_file`, `push_files`, `create_pull_request` |
+| write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `create_branch`, `create_or_update_file`, `push_files`, `create_pull_request` |
+| write, result **not** untrusted | `move_card`, `set_card_fields`, `record_qa_verdict`, on the `factory-<role>` servers |
 
 Classify each tool on every role's server: `github-triage.projects_list` and
 `github-reviewer.projects_list` are separate entries. `issue_write` is also how
@@ -224,11 +300,13 @@ header removes them on the same server: `X-MCP-Readonly` would remove its
 issue writes as well. Its reference declares none of them, and its App's
 Contents: read refuses them.
 
-`projects_write` moves cards and can also remove an item. Classify it as a
-**write**, not destructive: a removed card can be added back, and a person
-approves every GitHub write. Classified destructive, it would be blocked outright,
-and every role that reads issue text and moves cards would be refused at
-publish.
+The factory's tools answer only structured state — closed reasons, lane and
+field names, numbers, commit SHAs — never text anyone wrote on GitHub, so
+their results are not untrusted. They are still writes: a person approves
+every move, every field and every QA verdict.
+
+Leave `projects_write` **unclassified**. No role declares it, it is outside
+every surface, and an unclassified tool never executes.
 
 ## 5. Create the factory's area
 

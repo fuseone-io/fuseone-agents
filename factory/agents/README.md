@@ -205,7 +205,8 @@ one, so a new label arrives with its line here.
 | `triggers: [{ type: cron, schedule: "…" }]`, and no other trigger | a role is woken by its schedule; nothing else starts it (NT-013 § How a role is woken) |
 | `$fuseone.work_item.claim` in `tools`, and the claim line in the body | once it has chosen a card from the board, a run's first act is claiming it (#206); see below |
 | `budget.micros`, `budget.steps` and `budget.tool_calls` | a per-run ceiling, so a looping role parks instead of spending |
-| every MCP tool on `github-<role>` | each role reaches GitHub only through its own registration, with its own GitHub App (NT-013 § Guardrails, layer 1) |
+| every GitHub tool on `github-<role>`, every board tool on `factory-<role>` | each role reaches GitHub only through its own registrations, both with its own GitHub App (NT-013 § Guardrails, layer 1) |
+| no `projects_write` | cards move with `move_card`, fields are set with `set_card_fields`, both on the factory's own server (#213); sealed in `internal/spec/factory_board_test.go` |
 | `standing_approvals: forbidden` | a grant given ahead of time would release a factory write without a person, and count as an approval nobody gave (#192) |
 | `reply_locale: en-US` | everything a role writes in this repository is in English (RULEBOOK § 7) |
 | no `merge_pull_request` | a person merges in v1 |
@@ -299,8 +300,10 @@ step lists it.
 
 ## Setting up a role's GitHub server
 
-The official GitHub MCP server is the only tool server in v1. Register it once
-per role, in the installation's administration:
+Each role reaches two tool servers: the official GitHub MCP server for
+issues, pull requests, code and the board's reads, and the factory's own
+server for the board's writes and QA's verdict (below). Register the GitHub
+server once per role, in the installation's administration:
 
 - server id `github-<role>`: `github-triage`, `github-architect`,
   `github-developer`, `github-reviewer` and `github-qa`, the prefix every
@@ -311,11 +314,13 @@ per role, in the installation's administration:
   by it;
 - its own toolsets, chosen by an `X-MCP-Toolsets` header on the registration
   (below);
+- its surface: exactly the tools the role's reference declares on it, and
+  nothing else the toolsets offer (below);
 - every tool classified by the Curator before the role can call it (NT-013 §
   Guardrails, layer 3). Reading issue, PR and comment text is a read marked
-  untrusted; comments, labels, reviews, card moves and new sub-issues are
-  writes, and so are the Developer's branches, file commits and pull
-  requests.
+  untrusted; comments, labels, reviews and new sub-issues are writes, and so
+  are the Developer's branches, file commits and pull requests.
+  `projects_write` is left **unclassified**.
 
 **Choosing the toolsets.** The roles use the hosted server
 (`https://api.githubcopilot.com/mcp/`), not the local one, so
@@ -337,24 +342,55 @@ credential:
 
 The Reviewer and QA need more than `pull_requests,repos`: a label on a pull
 request is set with `issue_write` and a comment with `add_issue_comment`, both
-in `issues`; and any role may move a card to Travado (LANES.md), which takes
-the `projects` tools. The Architect needs `issues` for comments, the label and sub-issues,
-`projects` for the board, and `repos` for its reads (`get_file_contents`,
-`search_code`, `list_commits`, `get_commit`). The `repos` set also offers
-writes — `create_branch`, `create_or_update_file`, `push_files`,
-`delete_file`, `fork_repository`, `create_repository` among them — and no
-header narrows it on the same server: `X-MCP-Readonly` drops every write,
-`issue_write` and `projects_write` included, so it cannot be combined with
-the Architect's issue writes; `X-MCP-Tools` adds tools to the toolsets
-rather than narrowing them; and `X-MCP-Exclude-Tools` is not a header the
-registration accepts beside a GitHub App (below). So the Architect's
-reference declares none of those writes, the pack keeps it to what it
-declares, and its App holds Contents: **read**, so GitHub refuses each of them
-anyway. The Developer needs the same four for different tools:
+in `issues`; and any role may move a card to Travado (LANES.md), which needs
+the card's item id from the `projects` reads. The Architect needs `issues` for
+comments, the label and sub-issues, `projects` for the board's reads, and
+`repos` for its reads (`get_file_contents`, `search_code`, `list_commits`,
+`get_commit`). The `repos` set also offers writes — `create_branch`,
+`create_or_update_file`, `push_files`, `delete_file`, `fork_repository`,
+`create_repository` among them — and the `projects` set offers
+`projects_write`. The Developer needs the same four for different tools:
 `repos` for `create_branch`, `create_or_update_file`, `push_files` and the
 reads around them, `pull_requests` for `create_pull_request`, `issues` for
-comments and labels, and `projects` to list *Doing* and move a card to
-Travado.
+comments and labels, and `projects` to list *Doing*.
+
+**Choosing the surface.** A toolset offers more than a role declares, and
+`projects_write` is the one that matters: it updates any field of any item
+and deletes items, and no role holds it any more (#213). So on each
+`github-<role>` server's **Tools and surface** page, bring in exactly the
+tools below and nothing else. A tool outside the surface does not exist for
+the installation's agents: the publish check refuses a reference that names
+it, and a call to it is refused as an unknown tool (`internal/tools/invoke.go`),
+whatever the hosted server offers. A tool the server adds later starts
+outside the surface. Each row is also the value `X-MCP-Tools` takes (below):
+
+| Server | Its tools |
+|---|---|
+| `github-triage` | `projects_list,projects_get,issue_read,list_issues,search_issues,add_issue_comment,issue_write` |
+| `github-architect` | `projects_list,projects_get,issue_read,search_issues,get_file_contents,search_code,list_commits,get_commit,add_issue_comment,issue_write` |
+| `github-reviewer` | `search_pull_requests,pull_request_read,issue_read,get_file_contents,search_code,get_commit,pull_request_review_write,issue_write,add_issue_comment,projects_list,projects_get` |
+| `github-qa` | `search_pull_requests,pull_request_read,issue_read,get_file_contents,issue_write,add_issue_comment,projects_list,projects_get` |
+| `github-developer` | `search_pull_requests,projects_list,projects_get,issue_read,pull_request_read,get_file_contents,search_code,get_commit,create_branch,create_or_update_file,push_files,create_pull_request,add_issue_comment,issue_write` |
+
+`internal/spec/factory_surface_test.go` fails when a row stops being exactly
+what its reference declares.
+
+**Narrowing the hosted server itself.** The same list can narrow what the
+hosted server offers, before the platform sees it: `X-MCP-Tools` set to a row
+above, with **no** `X-MCP-Toolsets`, makes the server list those tools and
+nothing else. Upstream, `InventoryFiltersForRequest`
+(`pkg/http/handler.go` in github/github-mcp-server) disables every toolset
+when the request names tools and no toolset, and registers only the tools
+named; an unknown name fails the request instead of being ignored. With
+`X-MCP-Toolsets` also set, the tools are added to the sets instead, which is
+why the two must not be combined. The registration accepts `X-MCP-Tools`
+beside a GitHub App (`internal/githubapp/headers.go`), but the console's App
+panel writes only the Toolsets field, so today it is set through the
+administration API's server route (`PUT /admin/integrations/mcp-servers/{name}`,
+`headers`). The surface above is required either way: it is the platform's
+own fence, and it does not depend on the hosted server honouring a header.
+`X-MCP-Readonly` cannot do this job (it also drops `issue_write`), and
+`X-MCP-Exclude-Tools` is not accepted beside a GitHub App.
 
 **The GitHub App's permissions.** The App is what makes a tool call succeed;
 the toolset only offers it. Each role's App needs:
@@ -364,7 +400,7 @@ the toolset only offers it. Each role's App needs:
 | Triage | Issues: write, Pull requests: read, Metadata: read | Projects: write |
 | Architect | Contents: read, Issues: write, Metadata: read | Projects: write |
 | Reviewer | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
-| QA | Pull requests: write, Issues: write, Contents: read, Checks: read, Commit statuses: read, Metadata: read | Projects: write |
+| QA | Pull requests: read, Issues: write, Contents: read, Checks: read, Commit statuses: write, Metadata: read | Projects: write |
 | Developer | Contents: write, Pull requests: write, Issues: write, Metadata: read | Projects: write |
 
 The Architect's App has Contents: **read** and no Pull requests permission,
@@ -418,12 +454,17 @@ EOF
 ```
 
 Everything else a ruleset on `main` should require is deferred to #207:
-required status checks pinned to their source, `factory/qa` (which does not
-exist in v1), the authorised reviewers, and the rules the Merger is held to.
+required status checks pinned to their source, `factory/qa` pinned to the QA
+App, the authorised reviewers, and the rules the Merger is held to.
 
-Submitting a review needs Pull requests: **write**, for QA as much as for the
-Reviewer: in v1 QA's verdict is a review, not a commit status, so QA needs no
-Commit statuses: write.
+QA's verdict is the `factory/qa` commit status, set by `record_qa_verdict`
+under QA's App, so QA's App needs Commit statuses: **write**. It submits no
+review, so it holds Pull requests: **read** only: it reads the pull request,
+and its verdict comment and labels go through the Issues API
+(`add_issue_comment`, `issue_write`), which Issues: write covers on a pull
+request too. The setup canary proves that with QA's own token before QA
+starts. The Reviewer's verdict is a review and needs Pull requests: write; it
+reads statuses, never sets one.
 
 Without the header from the start, Triage's server never discovers its
 `projects_*` tools, and the console refuses to publish the Triage reference,
@@ -447,23 +488,21 @@ documented configuration headers (`X-MCP-Toolsets`, `X-MCP-Tools`,
 `Authorization` included, is refused, because the App credential is the only
 identity the server may see.
 
-**Moving a card.** Cards move with the server's projects tool
-(`projects_write`). It is classified as a **write**, so a copilot run proposes
-the move and a person approves it, like any other GitHub write. NT-013 classifies a
-bundled tool by its most dangerous action, and `projects_write` can also remove
-an item. The v1 decision (NT-013 § v1) is to classify it as a write anyway: a
-removed card can be added back, and a person approving every GitHub write is what
-keeps it in check. Classified destructive, it would be blocked outright, and
-the publish check would refuse every role that reads issue text and moves
-cards. A narrower
-card-moving tool is deferred with the rest of the factory's own server.
+**Moving a card.** Cards move with the factory server's `move_card`, and
+Triage and the Architect set Work type and Size with `set_card_fields` (next
+section). The hosted server's `projects_write` is in no reference, and it
+stays **unclassified**: an unclassified tool never executes
+(`internal/domain/effect.go`, `EffectUnknown`), so even a registration that
+still offers it lends a steered run nothing. It is the second fence behind
+the surface above, not a substitute for it.
 
 **The Architect's tools.** Every read it declares is untrusted:
 `projects_list`, `projects_get`, `issue_read`, `search_issues`,
 `get_file_contents`, `search_code`, `list_commits`, `get_commit`. Its writes
 are `add_issue_comment` (the plan, the questions), `issue_write` (the label
-removed, and sub-issues created under the parent) and `projects_write` (the
-card to Preparado or Travado, and the Size field). None is destructive. It
+removed, and sub-issues created under the parent), and on `factory-architect`
+`move_card` (the card to Preparado or Travado) and `set_card_fields` (the
+Size field). None is destructive. It
 does not declare `sub_issue_write`, `update_issue_comment`, or any `repos` or
 `pull_requests` write.
 
@@ -472,7 +511,8 @@ does not declare `sub_issue_write`, `update_issue_comment`, or any `repos` or
 `pull_request_read`, `get_file_contents`, `search_code`, `get_commit`. Its
 writes are `create_branch`, `create_or_update_file` and `push_files` (a
 branch and commits on it), `create_pull_request`, `add_issue_comment`,
-`issue_write` (labels) and `projects_write` (a card to Travado). None is
+`issue_write` (labels) and, on `factory-developer`, `move_card` (a card to
+Travado). None is
 destructive: a commit is undone by another commit, and a branch can be
 deleted. It does not declare `delete_file`, `update_pull_request`,
 `update_pull_request_branch`, `merge_pull_request` or
@@ -490,11 +530,8 @@ The board tools (`move_card`, `set_card_fields`) and QA's
 every worker pod, in pass-through mode on the pod's loopback: it holds no
 credential, each role's registration sends that role's GitHub App token as
 the bearer, and the server serves only the surface of the bot behind it.
-Each role registers it at `http://127.0.0.1:8091/` with its own GitHub App;
-the platform accepts plain `http://` beside a GitHub App only to a loopback
-host. Moving the references off `projects_write` and onto these tools is
-the third pull request of #213; until then the references below still name
-`projects_write`.
+The platform accepts plain `http://` beside a GitHub App only to a loopback
+host.
 
 The chart carries it through its generic `worker.extraContainers` hook, so
 the platform knows nothing about the factory. The values, with the image
@@ -547,3 +584,66 @@ both is a prerequisite before the Merger is activated; the ruleset is
 configured on GitHub, and its required checks are part of
 [#207](https://github.com/fuseone-io/fuseone-agents/issues/207). See
 [the expected checks](../mcp/README.md#the-expected-checks-and-why-build-is-not-one).
+
+Before the first worker runs it, check that the image can be pulled without a
+credential: GitHub creates a container package private, and a private one
+leaves the sidecar in `ImagePullBackOff` and the worker pod out of Ready.
+
+```sh
+gh api /orgs/fuseone-io/packages/container/fuseone-agents-factory-mcp --jq .visibility
+```
+
+It must answer `public`; otherwise give the worker's service account an
+`imagePullSecret` for GHCR.
+
+### Registering it once per role
+
+Register the factory server once per role, beside that role's GitHub server:
+
+- server id `factory-<role>`: `factory-triage`, `factory-architect`,
+  `factory-developer`, `factory-reviewer` and `factory-qa`, the prefix the
+  board tools in that role's reference carry;
+- URL `http://127.0.0.1:8091/`, transport HTTP;
+- the **GitHub App** credential, with **the same App** as `github-<role>`:
+  the token the platform mints for it is what the server reads the role
+  from, so a registration with another role's App serves that role's tools;
+- no toolsets and no other header: the server serves the bot's surface
+  whatever the request says.
+
+Each registration then shows exactly its role's row of
+[the server's table](../mcp/README.md#roles-and-their-surfaces):
+
+| Server | Tools it offers |
+|---|---|
+| `factory-triage` | `move_card`, `set_card_fields` |
+| `factory-architect` | `move_card`, `set_card_fields` |
+| `factory-developer` | `move_card` |
+| `factory-reviewer` | `move_card` |
+| `factory-qa` | `move_card`, `record_qa_verdict` |
+
+A registration that shows no tools, or another row, has the wrong App, or an
+App whose bot id is missing from `FACTORY_ROLE_BOTS`.
+
+The Curator classifies `move_card`, `set_card_fields` and `record_qa_verdict`
+as **writes** whose result is **not untrusted**: each answers only closed
+reasons, lane and field names from closed sets, numbers and hex SHAs, never
+text anyone wrote on GitHub, and `factory/guard`'s free-text canary tests
+hold it to that. A copilot run proposes each call and a person approves it,
+like every GitHub write; no standing approval covers them (layer 6), and
+`record_qa_verdict` has no internal exemption. `projects_write` stays
+unclassified on every `github-<role>`.
+
+### The operator canary, before activating the roles
+
+No test here can prove what real GitHub does with a repository-restricted
+installation token. Before any role is started on these tools, run the three
+calls of [the setup canary](../mcp/README.md#setup-canary-one-real-query-and-one-real-mutation)
+once per role's App, with a token minted restricted to this repository,
+against a throwaway card: `viewer { databaseId }` must answer the id listed
+for that role in `FACTORY_ROLE_BOTS`, the item read must return the project
+and the Status option, and the `updateProjectV2ItemFieldValue` mutation must
+answer the item with no `errors`. With QA's token, also comment on and label
+a throwaway pull request through the Issues API (the canary's fourth step):
+QA's App holds Pull requests: read, so this is what proves Issues: write
+covers what QA writes on a pull request. A role whose canary fails is not
+activated.

@@ -289,8 +289,10 @@ func TestFactorySetup_everyServerTheRolesReach_isNamedByTheSetup(t *testing.T) {
 	t.Parallel()
 
 	servers := factoryServers(t)
-	// The anchor: an empty scan would pass on any setup text.
-	if !slices.Contains(servers, "github-triage") || !slices.Contains(servers, "github-developer") {
+	// The anchor: an empty scan would pass on any setup text. Each role
+	// reaches two servers, the hosted GitHub one and the factory's own.
+	if !slices.Contains(servers, "github-triage") || !slices.Contains(servers, "github-developer") ||
+		!slices.Contains(servers, "factory-triage") || !slices.Contains(servers, "factory-qa") {
 		t.Fatalf("servers read from the references = %v; the scan is broken", servers)
 	}
 	for _, path := range factorySetupTexts {

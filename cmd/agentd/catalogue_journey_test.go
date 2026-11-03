@@ -72,7 +72,7 @@ func TestCatalogue_toolsetsNarrowedAfterADiscovery_stopOfferingTheDroppedTools(t
 		t.Error("github-triage.issue_read disappeared, though the narrowed toolsets still offer it")
 	}
 	refused, ok := j.publish(t, readTriageReference(t)).(openapi.PublishAgent400ApplicationProblemPlusJSONResponse)
-	if !ok || refused.Detail == nil || !strings.Contains(*refused.Detail, "github-triage.projects_write") {
+	if !ok || refused.Detail == nil || !strings.Contains(*refused.Detail, "github-triage.projects_list") {
 		t.Fatalf("publishing the Triage reference answered %#v; want it refused for the dropped tools", refused)
 	}
 }
@@ -85,9 +85,9 @@ func TestCatalogue_toolsetsWidenedAgain_bringBackTheRulingsTheToolsHad(t *testin
 
 	j.narrow(t, triageToolsets)
 
-	tool, back := j.listed(t)["github-triage.projects_write"]
-	if !back || tool.Effect != openapi.ToolEffect(domain.EffectWrite.String()) {
-		t.Fatalf("projects_write reads %+v (listed %v); want it back with the write ruling it had", tool, back)
+	tool, back := j.listed(t)["github-triage.projects_list"]
+	if !back || tool.Effect != openapi.ToolEffect(domain.EffectRead.String()) {
+		t.Fatalf("projects_list reads %+v (listed %v); want it back with the read ruling it had", tool, back)
 	}
 }
 
@@ -136,9 +136,9 @@ func TestCatalogue_aServerRegisteredAgainAfterRemoval_findsItsRulings(t *testing
 	j.register(t, j.remote, triageToolsets)
 	j.discover(t)
 
-	tool, back := j.listed(t)["github-triage.projects_write"]
-	if !back || tool.Effect != openapi.ToolEffect(domain.EffectWrite.String()) {
-		t.Fatalf("projects_write reads %+v (listed %v); want the write ruling it had", tool, back)
+	tool, back := j.listed(t)["github-triage.projects_list"]
+	if !back || tool.Effect != openapi.ToolEffect(domain.EffectRead.String()) {
+		t.Fatalf("projects_list reads %+v (listed %v); want the read ruling it had", tool, back)
 	}
 }
 

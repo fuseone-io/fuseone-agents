@@ -20,7 +20,8 @@ tools:
   - github-architect.get_commit
   - github-architect.add_issue_comment
   - github-architect.issue_write
-  - github-architect.projects_write
+  - factory-architect.move_card
+  - factory-architect.set_card_fields
 steps:
   - name: Pick the card
     reaches:
@@ -41,7 +42,8 @@ steps:
       - github-architect.issue_write
       - github-architect.projects_list
       - github-architect.projects_get
-      - github-architect.projects_write
+      - factory-architect.move_card
+      - factory-architect.set_card_fields
     stops_when: "the card is in Travado, and the comment that blocked it names the action that unblocks it and ends with Return to: Triagem"
 budget:
   micros: 2000000
@@ -141,6 +143,13 @@ label factory:needs-design from the issue, then move the card to Preparado.
 Setting labels replaces the whole set, so send every label already there,
 minus factory:needs-design. The label goes first: a card in Triagem without
 it is Triage's, and Triage moves a card with a plan and criteria to Preparado.
+Move a card only with move_card; never call projects_write.
+Set Work type and Size only with set_card_fields.
+Both take the card's item id (PVTI_ followed by letters and digits) from the
+board listing. Call set_card_fields with the card's Work type as Triage set it
+and the Size the design calls for, while the card is still in Triagem: it
+refuses a card that has left it. Call move_card with the lane, Preparado or
+Travado.
 When a decision belongs to the owner, comment with the plan so far and each open decision as a question addressed to whoever decides, and move the card to Travado.
 When you move a card to Travado with a question, @mention whoever decides in that comment, so that GitHub notifies them: the issue's author, unless the issue or its comments name someone else who decides.
 Every comment you write as you move a card to Travado names what blocks the card and the action a person must take to clear it, as a question or a request addressed to that person, never as a fact alone.

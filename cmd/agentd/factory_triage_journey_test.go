@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -38,8 +39,10 @@ import (
 The factory's Triage reference stays publishable.
 
 factory/agents/triage.agent.md is copied into the Studio by a person, after
-registering the role's GitHub server the way factory/agents/README.md says:
-as a GitHub App, with X-MCP-Toolsets naming the sets the role needs. Nothing
+registering the role's servers the way factory/agents/README.md says: the
+GitHub server as a GitHub App, with X-MCP-Toolsets naming the sets the role
+needs and a surface of the tools it declares, and the factory's own server
+beside it with the same App (factory_board_journey_test.go). Nothing
 else in CI holds the two together, and each half moves on its own: the
 reference gains a tool, the hosted server renames one, the App mode drops the
 header, the publish check changes what it compares. Any of those leaves a
@@ -63,18 +66,20 @@ var hostedToolsets = map[string][]string{
 	"projects": {"projects_list", "projects_get", "projects_write"},
 	"repos": {"get_file_contents", "search_code", "get_commit", "list_commits",
 		"create_branch", "create_or_update_file", "push_files"},
-	"pull_requests": {"search_pull_requests", "pull_request_read", "create_pull_request"},
+	"pull_requests": {"search_pull_requests", "pull_request_read", "create_pull_request",
+		"pull_request_review_write"},
 }
 
 // hostedGitHub is the hosted server as far as this journey needs it: a live
-// installation token or nothing, and the tools of the sets the request names.
+// installation token or nothing, and the tools the request's headers choose.
 type hostedGitHub struct {
 	github *githubapptest.Fake
 
 	handler http.Handler
 
 	mu       sync.Mutex
-	toolsets []string
+	toolsets []string // X-MCP-Toolsets, one per request served
+	tools    []string // X-MCP-Tools, one per request served
 	refused  int
 }
 
@@ -88,23 +93,62 @@ func (h *hostedGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.toolsets = append(h.toolsets, r.Header.Get("X-MCP-Toolsets"))
+	h.tools = append(h.tools, r.Header.Get("X-MCP-Tools"))
 	h.mu.Unlock()
 	h.handler.ServeHTTP(w, r)
 }
 
-func toolsetServer(header string) *mcp.Server {
-	server := mcp.NewServer(&mcp.Implementation{Name: "github", Version: "test"}, nil)
-	sets := []string{"issues"}
-	if header != "" {
-		sets = strings.Split(header, ",")
+/*
+hostedTools is what the hosted server lists for a request's two headers, the
+way github/github-mcp-server's InventoryFiltersForRequest
+(pkg/http/handler.go) decides it: X-MCP-Toolsets names the sets, the default
+when absent; X-MCP-Tools adds tools to those sets, and alone — with no
+X-MCP-Toolsets — it disables every set, so only the tools it names are
+listed. A name the server does not have fails the request (ErrUnknownTools,
+answered 400), so ok is false.
+*/
+func hostedTools(toolsetsHeader, toolsHeader string) (names []string, ok bool) {
+	// Upstream's default sets include these three, and not projects.
+	sets := []string{"repos", "issues", "pull_requests"}
+	switch {
+	case toolsetsHeader != "":
+		sets = strings.Split(toolsetsHeader, ",")
+	case toolsHeader != "":
+		sets = nil
 	}
 	for _, set := range sets {
-		for _, name := range hostedToolsets[strings.TrimSpace(set)] {
-			mcp.AddTool(server, &mcp.Tool{Name: name},
-				func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
-					return &mcp.CallToolResult{}, nil, nil
-				})
+		names = append(names, hostedToolsets[strings.TrimSpace(set)]...)
+	}
+	if toolsHeader == "" {
+		return names, true
+	}
+	for _, name := range strings.Split(toolsHeader, ",") {
+		name = strings.TrimSpace(name)
+		if !slices.ContainsFunc(slices.Collect(maps.Values(hostedToolsets)), func(set []string) bool {
+			return slices.Contains(set, name)
+		}) {
+			return nil, false
 		}
+		if !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names, true
+}
+
+// toolsetServer is the hosted server for one request; nil, which the SDK's
+// handler answers 400, for a request naming a tool it does not have.
+func toolsetServer(toolsetsHeader, toolsHeader string) *mcp.Server {
+	names, ok := hostedTools(toolsetsHeader, toolsHeader)
+	if !ok {
+		return nil
+	}
+	server := mcp.NewServer(&mcp.Implementation{Name: "github", Version: "test"}, nil)
+	for _, name := range names {
+		mcp.AddTool(server, &mcp.Tool{Name: name},
+			func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
+				return &mcp.CallToolResult{}, nil, nil
+			})
 	}
 	return server
 }
@@ -112,7 +156,8 @@ func toolsetServer(header string) *mcp.Server {
 // factoryJourney is one installation: the console's server and the worker's
 // reconciler over the same database, as serve and worker are deployed.
 type factoryJourney struct {
-	server       string // the role's registration, github-<role>
+	server       string     // the role's registration, github-<role>
+	board        *boardStub // its factory-<role> registration, when made
 	pool         *pgxpool.Pool
 	api          *httpapi.Server
 	worker       *reconciler
@@ -131,13 +176,27 @@ func newFactoryJourney(t *testing.T, toolsets string) *factoryJourney {
 // newRoleJourney is newFactoryJourney for the role registered as server.
 func newRoleJourney(t *testing.T, server, toolsets string) *factoryJourney {
 	t.Helper()
+	j := newInstallation(t, server)
+	j.register(t, j.remote, toolsets)
+	return j
+}
+
+// newInstallation is the installation with nothing registered yet, and the
+// hosted server the role's registration will reach.
+func newInstallation(t *testing.T, server string) *factoryJourney {
+	t.Helper()
 	pool := testdb.Pool(t)
 	// The catalogue and its rulings are installation-wide and outlive a
 	// journey — a ruling is kept on purpose when its tool leaves — so a
 	// journey starts from an installation that has never discovered or ruled
-	// on a tool, whatever an earlier run or another journey left behind.
+	// on a tool, whatever an earlier run or another journey left behind. The
+	// factory's registrations go too: a stored server keeps its surface when a
+	// later registration names none, so one journey's surface would otherwise
+	// narrow the next.
 	if _, err := pool.Exec(t.Context(),
-		`delete from settings where kind in ('tool', 'tool_classification'); delete from tool_server_leases; delete from tool_server_grace`); err != nil {
+		`delete from settings where kind in ('tool', 'tool_classification');
+		 delete from settings where kind = 'mcp_server' and (name like 'github-%' or name like 'factory-%');
+		 delete from tool_server_leases; delete from tool_server_grace`); err != nil {
 		t.Fatalf("reset the catalogue: %v", err)
 	}
 	v, err := vault.New(make([]byte, 32), "test")
@@ -167,18 +226,16 @@ func newRoleJourney(t *testing.T, server, toolsets string) *factoryJourney {
 	hosted := &hostedGitHub{
 		github: githubapptest.New(t, 5550564, 177087947),
 		handler: mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-			return toolsetServer(r.Header.Get("X-MCP-Toolsets"))
+			return toolsetServer(r.Header.Get("X-MCP-Toolsets"), r.Header.Get("X-MCP-Tools"))
 		}, &mcp.StreamableHTTPOptions{Stateless: true}),
 	}
 	remote := httptest.NewServer(hosted)
 	t.Cleanup(remote.Close)
 
-	j := &factoryJourney{
+	return &factoryJourney{
 		server: server, pool: pool, api: api, worker: worker, catalog: catalog, hosted: hosted,
 		curator: curator, integrations: integrations, remote: remote.URL + "/mcp/",
 	}
-	j.register(t, j.remote, toolsets)
-	return j
 }
 
 // installer holds what setting the factory up takes: configuring servers and
@@ -201,20 +258,28 @@ const triageToolsets = "issues,projects"
 // toolsets beside it.
 func (j *factoryJourney) register(t *testing.T, url, toolsets string) {
 	t.Helper()
+	j.registerAs(t, j.server, url, map[string]string{"X-MCP-Toolsets": toolsets}, nil)
+}
+
+// registerAs is the administration form for any server reached as the
+// role's App: the same App for each of the role's registrations, the
+// configuration headers beside it, and the surface when one is chosen.
+func (j *factoryJourney) registerAs(t *testing.T, server, url string, headers map[string]string, surface *[]string) {
+	t.Helper()
 	github := j.hosted.github
-	headers := map[string]string{"X-MCP-Toolsets": toolsets}
-	resp, err := j.api.PutMCPServer(installer(t), openapi.PutMCPServerRequestObject{
-		Name: j.server,
-		Body: &openapi.PutMCPServerJSONRequestBody{
-			Transport: ptrTo(openapi.TransportHttp), Url: &url, Headers: &headers,
-			GithubApp: &openapi.MCPGitHubApp{
-				AppId: &github.AppID, InstallationId: &github.InstallationID,
-				PrivateKey: ptrTo(github.PKCS1()), ApiBaseURL: ptrTo(github.Base()),
-			},
+	body := &openapi.PutMCPServerJSONRequestBody{
+		Transport: ptrTo(openapi.TransportHttp), Url: &url, Surface: surface,
+		GithubApp: &openapi.MCPGitHubApp{
+			AppId: &github.AppID, InstallationId: &github.InstallationID,
+			PrivateKey: ptrTo(github.PKCS1()), ApiBaseURL: ptrTo(github.Base()),
 		},
-	})
+	}
+	if headers != nil {
+		body.Headers = &headers
+	}
+	resp, err := j.api.PutMCPServer(installer(t), openapi.PutMCPServerRequestObject{Name: server, Body: body})
 	if _, ok := resp.(openapi.PutMCPServer204Response); err != nil || !ok {
-		t.Fatalf("register %s = %#v, %v; want 204", j.server, resp, err)
+		t.Fatalf("register %s = %#v, %v; want 204", server, resp, err)
 	}
 }
 
@@ -225,13 +290,26 @@ func (j *factoryJourney) discover(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	j.worker.reconcile(ctx)
-	if !j.catalog.Connected(j.server) {
-		t.Fatalf("%s did not connect; the publish below would prove nothing", j.server)
+	servers := []string{j.server}
+	if j.board != nil {
+		servers = append(servers, j.board.server)
+	}
+	for _, server := range servers {
+		if !j.catalog.Connected(server) {
+			t.Fatalf("%s did not connect; the publish below would prove nothing", server)
+		}
 	}
 }
 
-// classify rules on every discovered tool the way README says: every read is
-// untrusted, and the tools that change GitHub are writes.
+// githubWrites are the GitHub tools the setup texts rule writes. projects_write
+// is not one: it stays unclassified (factory/agents/README.md § Moving a card).
+var githubWrites = []string{"add_issue_comment", "issue_write", "pull_request_review_write",
+	"create_branch", "create_or_update_file", "push_files", "create_pull_request"}
+
+// classify rules on every discovered tool the way README says: every GitHub
+// read is untrusted, the GitHub tools that change GitHub are writes, the
+// factory server's tools are writes whose results are not untrusted, and
+// projects_write is left without a ruling.
 func (j *factoryJourney) classify(t *testing.T) {
 	t.Helper()
 	resp, err := j.api.ListTools(installer(t), openapi.ListToolsRequestObject{})
@@ -239,22 +317,37 @@ func (j *factoryJourney) classify(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("ListTools = %#v, %v", resp, err)
 	}
-	writes := []string{"add_issue_comment", "issue_write", "projects_write",
-		"create_branch", "create_or_update_file", "push_files", "create_pull_request"}
 	for _, tool := range listed.Items {
-		name, ours := strings.CutPrefix(tool.ToolId, j.server+".")
-		if !ours {
+		body := j.ruling(tool)
+		if body == nil {
 			continue
-		}
-		body := &openapi.ClassifyToolJSONRequestBody{
-			Effect: openapi.EffectRead, Untrusted: ptrTo(true), Digest: tool.Digest,
-		}
-		if slices.Contains(writes, name) {
-			body = &openapi.ClassifyToolJSONRequestBody{Effect: openapi.EffectWrite, Digest: tool.Digest}
 		}
 		got, err := j.api.ClassifyTool(installer(t), openapi.ClassifyToolRequestObject{ToolId: tool.ToolId, Body: body})
 		if _, ok := got.(openapi.ClassifyTool204Response); err != nil || !ok {
 			t.Fatalf("classify %s = %#v, %v", tool.ToolId, got, err)
+		}
+	}
+}
+
+// ruling is the Curator's decision on one listed tool, or nil for a tool of
+// another server or one the setup leaves unclassified.
+func (j *factoryJourney) ruling(tool openapi.Tool) *openapi.ClassifyToolJSONRequestBody {
+	if j.board != nil {
+		if _, ours := strings.CutPrefix(tool.ToolId, j.board.server+"."); ours {
+			return &openapi.ClassifyToolJSONRequestBody{
+				Effect: openapi.EffectWrite, Untrusted: ptrTo(false), Digest: tool.Digest,
+			}
+		}
+	}
+	name, ours := strings.CutPrefix(tool.ToolId, j.server+".")
+	switch {
+	case !ours || name == "projects_write":
+		return nil
+	case slices.Contains(githubWrites, name):
+		return &openapi.ClassifyToolJSONRequestBody{Effect: openapi.EffectWrite, Digest: tool.Digest}
+	default:
+		return &openapi.ClassifyToolJSONRequestBody{
+			Effect: openapi.EffectRead, Untrusted: ptrTo(true), Digest: tool.Digest,
 		}
 	}
 }
@@ -353,7 +446,7 @@ func differingFields(got, want spec.Spec) []string {
 // Neither journey is parallel: the catalogue is installation-wide, and two in
 // one database would each publish against the other's tools.
 func TestFactoryTriage_referenceRegisteredAsDocumented_publishesFromTheStudio(t *testing.T) {
-	j := newFactoryJourney(t, triageToolsets)
+	j := newDocumentedJourney(t, "triage")
 	j.discover(t)
 	j.classify(t)
 
@@ -362,7 +455,7 @@ func TestFactoryTriage_referenceRegisteredAsDocumented_publishesFromTheStudio(t 
 
 // assertPublishesAsTheReference publishes reference through the Studio's form,
 // and requires what was published to be the reference, judged against the
-// role's server reached as its App with the role's toolsets.
+// role's servers reached as its App, the GitHub one with the role's toolsets.
 func assertPublishesAsTheReference(t *testing.T, j *factoryJourney, reference spec.Spec, toolsets string) {
 	t.Helper()
 	resp := j.publish(t, reference)
@@ -392,6 +485,9 @@ func assertPublishesAsTheReference(t *testing.T, j *factoryJourney, reference sp
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("published version differs from the reference in %v", differingFields(got, want))
+	}
+	if j.board != nil {
+		j.board.assertReachedAsTheApp(t)
 	}
 	// And the server it was judged against was reached as the App, with the
 	// role's toolsets.
@@ -425,7 +521,7 @@ func TestFactoryTriage_toolsetsWithoutProjects_publishNamesTheMissingProjectTool
 	if !ok || refused.Detail == nil {
 		t.Fatalf("publish answered %#v; want it refused for the missing tools", resp)
 	}
-	for _, missing := range []string{"projects_list", "projects_get", "projects_write"} {
+	for _, missing := range []string{"projects_list", "projects_get"} {
 		if !strings.Contains(*refused.Detail, "github-triage."+missing) {
 			t.Errorf("refusal %q does not name github-triage.%s", *refused.Detail, missing)
 		}

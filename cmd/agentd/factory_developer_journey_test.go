@@ -25,7 +25,7 @@ const developerReference = "../../factory/agents/developer.agent.md"
 const developerToolsets = "pull_requests,repos,issues,projects"
 
 func TestFactoryDeveloper_referenceRegisteredAsDocumented_publishesFromTheStudio(t *testing.T) {
-	j := newRoleJourney(t, "github-developer", developerToolsets)
+	j := newDocumentedJourney(t, "developer")
 	j.discover(t)
 	j.classify(t)
 

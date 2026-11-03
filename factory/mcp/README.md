@@ -489,7 +489,10 @@ One App per role, each installed on the organisation and **restricted to this
 repository**. Every role also moves cards, which needs the separate
 organisation permission for Projects: a repository-restricted installation
 token keeps its `organization_projects` permission (GitHub's documentation;
-verified once more by the setup canary below).
+verified once more by the setup canary below). The table is what this
+server's tools need; each App also holds what its role's GitHub-server tools
+need, in `factory/agents/README.md` (QA's App keeps Pull requests: read and
+adds Issues: write, through which it comments and labels the pull request).
 
 | App | Repository permissions | Organisation permissions | Why |
 |---|---|---|---|
@@ -541,20 +544,40 @@ else.
          value: {singleSelectOptionId: $option}}) { projectV2Item { id } } }'
    ```
 
-If any of the three fails for a role, that role is not activated: the board
-tools would answer `move_refused` or fail the read on every call.
+4. **QA only:** a comment and a label on a pull request through the Issues
+   API, which is all QA writes on a pull request: its App holds Pull
+   requests: **read** and Issues: write, and this proves Issues: write
+   covers both on a pull request. Use a throwaway pull request. Expect `201`
+   for the comment and `200` with the label for the label, then remove both:
+
+   ```
+   GH_TOKEN=<QA installation token> gh api repos/fuseone-io/fuseone-agents/issues/<throwaway PR>/comments \
+     -f body='QA canary: a comment through Issues: write.' --jq .id
+   GH_TOKEN=<QA installation token> gh api repos/fuseone-io/fuseone-agents/issues/<throwaway PR>/labels \
+     -f 'labels[]=factory:needs-qa' --jq '.[].name'
+   GH_TOKEN=<QA installation token> gh api --method DELETE repos/fuseone-io/fuseone-agents/issues/<throwaway PR>/labels/factory:needs-qa
+   GH_TOKEN=<QA installation token> gh api --method DELETE repos/fuseone-io/fuseone-agents/issues/comments/<comment id>
+   ```
+
+If any of these fails for a role, that role is not activated: the board
+tools would answer `move_refused` or fail the read on every call, and a QA
+that cannot comment or label would record a verdict it cannot route.
 
 ## Registering in FuseOne
 
 ### Pass-through (`github-app-token`)
 
-Register **one** MCP server, e.g. `factory`, with the instance's URL (an
-`https://` address, or the sidecar's loopback `http://127.0.0.1:<port>`),
-and set the platform's GitHub App mode (#216) so each role's run sends its
-own App's installation token as the bearer. A tool is addressed as
-`<server name>.<tool>`: `factory.move_card`, `factory.set_card_fields`,
-`factory.record_qa_verdict`, `factory.merge_if_ready`. Which of them a run
-can actually call is decided by the token it sends, whatever its pack says.
+Register the instance **once per role**, `factory-<role>`, every
+registration with the same URL (an `https://` address, or the sidecar's
+loopback `http://127.0.0.1:8091/`) and the platform's GitHub App mode (#216)
+with **that role's App**, the same one as its `github-<role>`. A registration
+holds one App, so it is the registration that decides which token a run
+sends, and one registration per role is what gives each role its own
+identity. A tool is addressed as `<server name>.<tool>`:
+`factory-triage.move_card`, `factory-architect.set_card_fields`,
+`factory-qa.record_qa_verdict`. Which of them a run can actually call is
+decided by the token it sends, whatever its pack says.
+`factory/agents/README.md` § Registering it once per role has the steps.
 
 ### Own App (`app`)
 

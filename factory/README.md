@@ -6,14 +6,19 @@ a GitHub Project board, under this platform's Gate. The design is
 [NT-013](../docs/NT-013-software-factory-pilot.md); the board is
 [FuseOne Factory](https://github.com/orgs/fuseone-io/projects/2).
 
-## v1: no factory code
+## v1: the platform, plus the factory's own MCP server
 
-The pilot's first version runs entirely inside the platform (NT-013 § v1):
+The pilot's first version runs inside the platform (NT-013 § v1, amended
+2026-11-03):
 
 - every role is an agent **created in the console or the Studio**, from the
   reference text in this directory;
-- the official **GitHub MCP server** is the only tool server, registered once per
-  role with that role's own GitHub App;
+- each role reaches two tool servers, both registered with that role's own
+  GitHub App: the official **GitHub MCP server** (`github-<role>`), and the
+  factory's own server (`factory-<role>`, [`mcp/`](mcp/README.md)), a worker
+  sidecar that serves the narrow board tools `move_card` and
+  `set_card_fields`, and QA's `record_qa_verdict`, under each role's App
+  token. No role holds the GitHub server's `projects_write`;
 - every role runs at **copilot** with `standing_approvals: forbidden`, so every
   GitHub write it proposes waits for a person, and that is the measurement.
   The one write that does not is the work-item claim, a coordination
@@ -35,13 +40,14 @@ does not invent one. Where a rule here and `CLAUDE.md` seem to disagree,
 factory/
   README.md              this file
   RULEBOOK.md            the rules every role follows
-  REVIEW.md              the review format the Reviewer and QA submit
+  REVIEW.md              the Reviewer's review format, and how QA records factory/qa
   LANES.md               definition of done per lane and sub-state label
   agents/
     README.md            how a role is created in the console from a reference
     <role>.agent.md      the reference specification of one role
-  guard/, mcp/           the factory MCP server (merge_if_ready,
-                         record_qa_verdict, #211): deferred, not used in v1
+  guard/, mcp/           the factory MCP server: move_card, set_card_fields
+                         and record_qa_verdict, used in v1 (#213);
+                         merge_if_ready, deferred with the Merger (#211)
 ```
 
 ## Roles

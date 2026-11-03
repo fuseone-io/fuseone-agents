@@ -26,9 +26,11 @@ platform, with no code written for the factory:
   rulebook, the review format, the lane definitions of done, and one reference
   specification per role). The repository holds what is reviewed; the console
   holds what runs.
-- **The official GitHub MCP server is the only tool server**, registered once
+- **The official GitHub MCP server is the GitHub tool server**, registered once
   per role, each registration with its own GitHub App installed only on this
   repository. The App's identity is what signs a role's comments and reviews.
+  Beside it, since 2026-11-03, each role registers the factory's own server
+  with the same App (below).
 - **Copilot everywhere, and a person merges.** Every role runs at copilot with
   `standing_approvals: forbidden`, and once it has chosen a card from the board
   its first act is the work-item claim, before it reads the issue or writes.
@@ -45,19 +47,32 @@ platform, with no code written for the factory:
   releases when the run ends and puts the run's cost on that card; it writes
   nothing to GitHub, and every GitHub write after it waits for a person. An
   atomic pick-and-claim tool that would hide the title is deferred.
-  The Reviewer's and QA's verdicts are both pull-request reviews on the head
-  SHA they read (APPROVE or REQUEST_CHANGES), under their own Apps. A person
-  merges once both approve the current head and its checks are green. Cards
-  move with the GitHub MCP server's projects tool, classified as a write, so
-  every move is a proposal a person approves.
+  The Reviewer's verdict is a pull-request review on the head SHA it read
+  (APPROVE or REQUEST_CHANGES), under its own App; QA's is the `factory/qa`
+  commit status on the head SHA it checked (amended below). A person merges
+  once the Reviewer approves the current head, `factory/qa` on it is
+  `success` and its checks are green.
+
+Amended 2026-11-03 (#213). **The factory's own MCP server is part of the
+factory.** `factory/mcp` runs as a sidecar in every worker pod, on the pod's
+loopback, holding no credential: each role registers it as `factory-<role>`
+with the same GitHub App as its `github-<role>`, and the server serves only
+the tools of the bot behind each request's App token. It carries the narrow
+board tools — `move_card`, which changes only a card's Status along the
+calling role's transitions, never out of Travado or Done, and
+`set_card_fields`, which sets only Work type and Size, only in Triagem — and
+QA's `record_qa_verdict`, which sets `factory/qa` on exactly the head SHA QA
+checked. All three are writes a person approves, with no internal exemption,
+and their results are structured state, not untrusted text. **No role holds
+`projects_write`**: it is in no pack, outside every registration's surface,
+and left unclassified, so it never executes. The roles are still created in
+the console and still run at copilot; a person still merges.
 
 **Deferred** until the pilot's data justifies automating the merge: the merge
-wrapper (`merge_if_ready`) and the Merger role, the `factory/qa` commit status
-(`record_qa_verdict`), the ruleset pinning each signal to its producer, a
-narrow `move_card` tool, and publishing role specifications from the
+wrapper (`merge_if_ready`) and the Merger role, the ruleset pinning each
+signal to its producer, and publishing role specifications from the
 repository. The sections below that describe them are kept, marked
-*deferred in v1*, as the design to return to. The factory's own MCP server
-(`factory/mcp`, #211) exists in the repository and is not used in v1.
+*deferred in v1*, as the design to return to.
 
 ## Roles
 
@@ -72,7 +87,7 @@ its work good — the harness, below.
 | **Architect** | *Triagem* items marked `factory:needs-design` | writes the plan and acceptance criteria, splits large items | issue comment, sub-issues, card status | copilot |
 | **Developer** | lane *Doing* | implements, opens the PR, answers review findings | branch, commits, PR | copilot (Level 1 only) |
 | **Reviewer** | PRs labelled `factory:needs-review` | reviews the diff; findings ranked P1–P3, each with a reproduction | a pull-request review — APPROVE or REQUEST_CHANGES — on the head SHA it read; labels | copilot |
-| **QA** | PRs labelled `factory:needs-qa` | checks every acceptance criterion against the PR and its CI | its verdict as a commit status `factory/qa` on the head SHA, under its own identity; labels. *In v1: a pull-request review on the head SHA, like the Reviewer's* | copilot |
+| **QA** | PRs labelled `factory:needs-qa` | checks every acceptance criterion against the PR and its CI | its verdict as a commit status `factory/qa` on the head SHA, under its own identity, through `record_qa_verdict` (since 2026-11-03), with the per-criterion evidence in a comment; labels | copilot |
 | **Merger** (*deferred in v1: a person merges*) | PRs labelled `factory:ready-to-merge` | proposes `merge_if_ready` for the PR's current head; the wrapper re-checks review, QA and checks on that SHA when it runs | merge (through the wrapper), card status | copilot, merge always human-approved |
 | **Release** (later) | merged work since the last tag | cuts the changelog, tags, bumps the platform repo | changelog commit, tag | not in the pilot |
 
@@ -173,6 +188,16 @@ has the per-role table. Triage cannot push; only the Merger's credential
 can merge. A prompt injection that talks a role into an action meets a token
 that cannot perform it.
 
+*Amended 2026-11-03.* The factory's own server is part of this layer. Each
+role's `factory-<role>` registration carries the same App as its
+`github-<role>`, and the server reads the role from that App's bot id, so a
+role's token reaches only its own row: `move_card` along its transitions,
+`set_card_fields` for Triage and the Architect, `record_qa_verdict` for QA.
+And each `github-<role>`'s surface is exactly the tools its reference
+declares, so `projects_write` does not exist for any role, whatever the
+`projects` toolset offers. The hosted server can also be narrowed at its end
+with `X-MCP-Tools` and no `X-MCP-Toolsets`.
+
 **2. The capability pack and steps.** A role's `tools` lists only what it
 needs; steps narrow it further, and a step can no longer reach past the pack.
 
@@ -183,6 +208,13 @@ PR and comment text is a read marked **untrusted**. Some GitHub tools bundle
 several actions behind one name (`projects_write` adds, updates and deletes
 items); the classification takes the most dangerous action the tool can
 perform.
+
+*Amended 2026-11-03.* `projects_write` is held by no role and stays
+unclassified, so it never executes. The board's writes are the factory
+server's `move_card` and `set_card_fields`, and QA's verdict its
+`record_qa_verdict`: writes, each answering structured state only, so their
+results are not untrusted; each waits for a person like every factory write,
+and none has a coordination exemption.
 
 **4. Taint.** This repository is public: anyone can write an issue or a
 comment, so their text is untrusted, and a run that read it is tainted for the
@@ -200,7 +232,8 @@ consequences shape the design:
   merge.
 
 *Layers 5 and 5a, and the merge policy in layer 6, are deferred in v1: a person
-merges, reading the two approving reviews and the checks on the current head.
+merges, reading the Reviewer's approving review, QA's `factory/qa` status
+and the checks on the current head.
 One part of 5a is not deferred: before the Developer starts, `main` carries a
 minimal ruleset — a pull request required, force pushes and deletions
 blocked, no bypass for any factory App — because the Developer's App can
@@ -311,7 +344,8 @@ deferred.*
 | `merge_if_ready`: a merge bound to the reviewed head, signals validated by actor (*deferred in v1*) | layer 5 | Merger |
 | A minimal ruleset on `main`: a pull request required, force pushes and deletions blocked, no bypass for any factory App (*required in v1 before the Developer starts, #200*) | layer 5a | Developer |
 | The full ruleset on `main`: required checks pinned to their source, `factory/qa`, authorised reviewers, no bypass for the Merger (*deferred in v1, #207*) | layer 5a | Merger |
-| A trusted way for QA to set `factory/qa` under its own identity (*deferred in v1*) | the evidence `merge_if_ready` requires | QA, Merger |
+| A trusted way for QA to set `factory/qa` under its own identity (*done, #213: `record_qa_verdict`*) | the evidence `merge_if_ready` requires | QA, Merger |
+| Narrow board tools, `move_card` and `set_card_fields` (*done, #213*) | no role holds `projects_write` | every role |
 | Role references and the rulebook under `factory/` | the harness | every role |
 | Role specs published from the repository (*deferred in v1*) | the registry never drifts from what was reviewed | — |
 | A Level 1 developer: GitHub-API commits for small changes (*decided: the pilot starts here, #200*) | #154 Level 1 | Developer |

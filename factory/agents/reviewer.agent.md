@@ -21,7 +21,7 @@ tools:
   - github-reviewer.add_issue_comment
   - github-reviewer.projects_list
   - github-reviewer.projects_get
-  - github-reviewer.projects_write
+  - factory-reviewer.move_card
 steps:
   - name: Pick the pull request
     reaches:
@@ -41,7 +41,7 @@ steps:
       - github-reviewer.add_issue_comment
       - github-reviewer.projects_list
       - github-reviewer.projects_get
-      - github-reviewer.projects_write
+      - factory-reviewer.move_card
     stops_when: "the card is in Travado, and the comment that blocked it names the action that unblocks it and ends with Return to: Doing"
 budget:
   micros: 2000000
@@ -134,6 +134,10 @@ decision), do not submit a review. Comment on the pull request with the
 question, addressed to whoever decides, and move the card of the issue it
 closes to Travado on the FuseOne Factory board. That comment is the last thing
 you write on the pull request.
+Move a card only with move_card; never call projects_write.
+To move it, find the card's item id (PVTI_ followed by letters and digits) in
+the board listing, with projects_list, method list_project_items, and call
+move_card with that id and lane Travado.
 Every comment you write as you move a card to Travado names what blocks the card and the action a person must take to clear it, as a question or a request addressed to that person, never as a fact alone.
 End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its blocker is cleared.
 
