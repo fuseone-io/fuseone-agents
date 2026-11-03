@@ -78,10 +78,28 @@ func seedOtherMeasuredRuns(t *testing.T, pool *pgxpool.Pool, w domain.WorkItemWi
 			t.Fatalf("seed %s: %v", seed.prefix, err)
 		}
 	}
-	if _, err := pool.Exec(ctx, `analyze runs`); err != nil {
+	// Their claims and inheritances are history too: the links are reached
+	// from the window's runs, never read whole.
+	for _, stmt := range []string{
+		`insert into run_work_items (run_id, company_id, area_id, agent_id, ref, claimed_seq, claimed_at)
+		 select run_id, company_id, area_id, agent_id, 'github:o/r#' || substr(run_id, 9), 2, started_at
+		 from runs where run_id like 'run-old-%' or run_id like 'run-cx-%'`,
+		`insert into run_work_item_origins (run_id, company_id, area_id, agent_id, ref, source, started_at)
+		 select run_id, company_id, area_id, agent_id, 'github:o/r#1', 'github_delivery', started_at
+		 from runs where run_id like 'run-old-%' or run_id like 'run-cx-%'`,
+	} {
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			t.Fatalf("seed the history's links: %v", err)
+		}
+	}
+	if _, err := pool.Exec(ctx, `analyze runs; analyze run_work_items; analyze run_work_item_origins`); err != nil {
 		t.Fatalf("analyze: %v", err)
 	}
 }
+
+// historyTables are the tables that grow with the whole ledger: the
+// measures reach them from the window's runs, never by reading them whole.
+var historyTables = []string{"runs", "run_work_items", "run_work_item_origins"}
 
 func TestWorkItemMeasures_plan_runsByIndexAndStepsPrunedToTheWindowsMonths(t *testing.T) {
 	s, pool := feedPool(t)
@@ -102,10 +120,13 @@ func TestWorkItemMeasures_plan_runsByIndexAndStepsPrunedToTheWindowsMonths(t *te
 		if strings.HasPrefix(n.Relation, "run_steps_") && !slices.Contains(partitions, n.Relation) {
 			partitions = append(partitions, n.Relation)
 		}
-		if n.Relation == "runs" && n.NodeType == "Seq Scan" {
-			t.Errorf("the measures scan runs whole")
+		if slices.Contains(historyTables, n.Relation) && n.NodeType == "Seq Scan" {
+			t.Errorf("the measures scan %s whole", n.Relation)
 		}
 		byIndex = byIndex || strings.HasPrefix(n.Index, "runs_")
+		if n.Relation != "" || n.Index != "" {
+			t.Logf("planned: %s %s %s", n.NodeType, n.Relation, n.Index)
+		}
 	}
 	slices.Sort(partitions)
 	t.Logf("run_steps partitions planned: %v; runs by index: %v", partitions, byIndex)

@@ -94,20 +94,31 @@ func workItemMeasuresSQL(filter domain.RunFilter, window domain.WorkItemWindow) 
 
 // measuresRunsSQL is r: the runs, given the filter's WHERE and the
 // readable-alias predicate.
-const measuresRunsSQL = `r as (
-			select x.run_id, x.agent_id, x.company_id, x.area_id, x.started_at, x.cost_micros,
+//
+// Each link is a subquery per run, by the primary keys of run_work_items and
+// run_work_item_origins and the (company_id, ref) key of work_item_aliases,
+// rather than a join: joined, the planner could hash the whole of a link
+// table — every claim the ledger ever recorded — to match a window's runs.
+// x is materialized so each subquery runs once per run, not once for every
+// place r reads its result. The alias predicate's bare company_id and
+// area_id are the alias row's own.
+const measuresRunsSQL = `x as materialized (
+			select run_id, agent_id, company_id, area_id, started_at, cost_micros,
+			       phase not in ('finished', 'failed') as open, pending_at_seq is not null as pending,
+			       (select w.ref from run_work_items w where w.run_id = runs.run_id) as claimed,
+			       (select o.source from run_work_item_origins o where o.run_id = runs.run_id) is not null as inherited
+			from runs %s
+		),
+		r as (
+			select x.run_id, x.agent_id, x.company_id, x.area_id, x.started_at, x.cost_micros, x.open, x.pending,
 			       date_trunc('week', x.started_at, 'UTC') as week,
-			       x.phase not in ('finished', 'failed') as open,
-			       x.pending_at_seq is not null as pending,
-			       case when w.run_id is not null then 'claimed'
-			            when o.run_id is not null then 'inherited' else 'none' end as link,
-			       case when w.run_id is not null then coalesce(a.root_ref, w.ref) end as card
-			from (select run_id, agent_id, company_id, area_id, started_at, cost_micros, phase, pending_at_seq
-			      from runs %s) x
-			left join run_work_items w on w.run_id = x.run_id
-			left join (select company_id, ref, root_ref from work_item_aliases where %s) a
-			  on a.company_id = x.company_id and a.ref = w.ref
-			left join run_work_item_origins o on o.run_id = x.run_id
+			       case when x.claimed is not null then 'claimed'
+			            when x.inherited then 'inherited' else 'none' end as link,
+			       case when x.claimed is not null then coalesce(
+			           (select a.root_ref from work_item_aliases a
+			            where a.company_id = x.company_id and a.ref = x.claimed and %s),
+			           x.claimed) end as card
+			from x
 		)`
 
 // measuresAskedSQL is asked and per_run, given the parameters that hold the
