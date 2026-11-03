@@ -178,6 +178,12 @@ para depois
 ([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)); nada disso
 é necessário na v1.
 
+Antes de ativar o Merger, duas listas precisam estar aplicadas e ser idênticas:
+os checks obrigatórios do ruleset e o `FACTORY_CHECKS` do Merger. As duas trazem
+todos os jobs do workflow `check`, com os nomes que o GitHub mostra:
+`go`, `postgres`, `console`, `chart`, `factory-mcp-image`, `artifact`. A parte do
+ruleset é a #207; o `FACTORY_CHECKS` está descrito em `factory/mcp/README.md`.
+
 ## 3. Registre o servidor do GitHub uma vez por papel
 
 Na administração, registre o GitHub MCP hospedado

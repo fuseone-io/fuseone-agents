@@ -3,6 +3,7 @@ package guard
 import (
 	"errors"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -16,7 +17,7 @@ func mergerEnv() map[string]string {
 		"FACTORY_BASE_BRANCH":         "main",
 		"FACTORY_REVIEWERS":           "fuseone-reviewer[bot], Maintainer-One",
 		"FACTORY_QA_BOT_ID":           "9001",
-		"FACTORY_CHECKS":              "go,postgres,console,chart,artifact",
+		"FACTORY_CHECKS":              "go,postgres,console,chart,factory-mcp-image,artifact",
 		"FACTORY_CHECKS_APP_ID":       "15368",
 		"GITHUB_APP_ID":               "123",
 		"GITHUB_APP_INSTALLATION_ID":  "456",
@@ -60,7 +61,7 @@ func TestLoadConfig_completeMergerEnvironment_parsesEveryField(t *testing.T) {
 	if got := strings.Join(cfg.Reviewers, "|"); got != "fuseone-reviewer[bot]|Maintainer-One" {
 		t.Fatalf("reviewers = %q", got)
 	}
-	if cfg.QABotID != 9001 || cfg.ChecksAppID != 15368 || len(cfg.Checks) != 5 {
+	if cfg.QABotID != 9001 || cfg.ChecksAppID != 15368 || !slices.Equal(cfg.Checks, []string{"go", "postgres", "console", "chart", "factory-mcp-image", "artifact"}) {
 		t.Fatalf("qa bot %d, checks app %d, checks %v", cfg.QABotID, cfg.ChecksAppID, cfg.Checks)
 	}
 	if cfg.App.AppID != 123 || cfg.App.InstallationID != 456 || string(cfg.App.PrivateKeyPEM) != "PEM" {

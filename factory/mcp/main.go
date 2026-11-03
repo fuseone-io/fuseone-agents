@@ -21,6 +21,13 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
+		if err := healthcheck(ctx, os.Getenv, http.DefaultClient); err != nil {
+			fmt.Fprintln(os.Stderr, "factory-mcp:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(ctx, os.Getenv, os.ReadFile); err != nil {
 		fmt.Fprintln(os.Stderr, "factory-mcp:", err)
 		os.Exit(1)

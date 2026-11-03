@@ -171,6 +171,12 @@ is deferred
 ([#207](https://github.com/fuseone-io/fuseone-agents/issues/207)); none of it
 is needed in v1.
 
+Before the Merger is activated, two lists must be applied and kept identical:
+the ruleset's required checks and the Merger's `FACTORY_CHECKS`. Both are every
+job of the `check` workflow, by the names GitHub reports:
+`go`, `postgres`, `console`, `chart`, `factory-mcp-image`, `artifact`. The
+ruleset part is #207; `FACTORY_CHECKS` is described in `factory/mcp/README.md`.
+
 ## 3. Register the GitHub server once per role
 
 In the administration, register the hosted GitHub MCP server

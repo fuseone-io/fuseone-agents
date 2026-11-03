@@ -481,3 +481,69 @@ deleted. It does not declare `delete_file`, `update_pull_request`,
 The tool names in the references are the GitHub MCP server's own. The console
 refuses to publish a tool the registered server does not offer, so a wrong name
 is found when the role is created, not at run time.
+
+## Running the factory's own server beside the worker
+
+The board tools (`move_card`, `set_card_fields`) and QA's
+`record_qa_verdict` come from the factory's own MCP server,
+[`factory/mcp`](../mcp/README.md), not from GitHub's. It runs as a sidecar in
+every worker pod, in pass-through mode on the pod's loopback: it holds no
+credential, each role's registration sends that role's GitHub App token as
+the bearer, and the server serves only the surface of the bot behind it.
+Each role registers it at `http://127.0.0.1:8091/` with its own GitHub App;
+the platform accepts plain `http://` beside a GitHub App only to a loopback
+host. Moving the references off `projects_write` and onto these tools is
+the third pull request of #213; until then the references below still name
+`projects_write`.
+
+The chart carries it through its generic `worker.extraContainers` hook, so
+the platform knows nothing about the factory. The values, with the image
+pinned to the same release as agentd (full reasoning for the probes and
+sizes in [`factory/mcp/README.md`](../mcp/README.md#as-a-worker-sidecar)):
+
+```yaml
+worker:
+  extraContainers:
+    - name: factory-mcp
+      image: ghcr.io/fuseone-io/fuseone-agents-factory-mcp:0.90.0
+      imagePullPolicy: IfNotPresent
+      env:
+        - { name: FACTORY_MCP_ADDR, value: "127.0.0.1:8091" }
+        - { name: FACTORY_MCP_AUTH, value: github-app-token }
+      envFrom:
+        - configMapRef: { name: factory-mcp }
+      readinessProbe:
+        exec: { command: ["/factory-mcp", "healthcheck"] }
+        periodSeconds: 10
+        timeoutSeconds: 5
+      livenessProbe:
+        exec: { command: ["/factory-mcp", "healthcheck"] }
+        initialDelaySeconds: 10
+        periodSeconds: 20
+        timeoutSeconds: 5
+        failureThreshold: 3
+      securityContext:
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: { drop: ["ALL"] }
+      resources:
+        requests: { cpu: 10m, memory: 32Mi }
+        limits: { memory: 128Mi }
+```
+
+The probes are `exec`, not `httpGet`: the kubelet's httpGet goes to the pod
+IP, never to the pod's loopback. The `factory-mcp` ConfigMap holds the board
+ids, lanes, `FACTORY_ROLE_BOTS` and `FACTORY_REPOSITORY`; **none of it is a
+secret**, only identifiers that grant nothing. Its contents, with this
+repository's board as the example, are in
+[`factory/mcp/README.md`](../mcp/README.md#as-a-worker-sidecar).
+
+Its image is checked on every pull request by the `factory-mcp-image` job,
+which is one of the checks the Merger requires: `FACTORY_CHECKS` lists every
+job of `check.yml` (`go,postgres,console,chart,factory-mcp-image,artifact`),
+and the `main` ruleset's required checks must be that same list. Applying
+both is a prerequisite before the Merger is activated; the ruleset is
+configured on GitHub, and its required checks are part of
+[#207](https://github.com/fuseone-io/fuseone-agents/issues/207). See
+[the expected checks](../mcp/README.md#the-expected-checks-and-why-build-is-not-one).
