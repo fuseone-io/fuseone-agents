@@ -1,0 +1,76 @@
+# Factory board measures
+
+acme/widgets, project 2. Weeks 2026-10-05 to 2026-10-25 (Monday 00:00 UTC), read at 2026-10-22T12:00:00Z.
+
+Read from the board's status changes and the timelines of its issues and pull requests;
+factory/measure/README.md defines every measure. A signal names who caught what a role
+passed. It is not a defect count.
+
+## Lane time
+
+Closed stays, each counted in the week it ended, in hours. Median and p90 are nearest-rank.
+
+| Week | Lane | Stays | Median h | p90 h |
+|---|---|---:|---:|---:|
+| 2026-10-19 (partial) | Preparado | 1 | 163.0 | 163.0 |
+| 2026-10-12 | Triagem | 1 | 6.0 | 6.0 |
+| 2026-10-05 | Triagem | 2 | 4.0 | 25.0 |
+| 2026-10-05 | Preparado | 1 | 20.0 | 20.0 |
+| 2026-10-05 | Travado | 1 | 24.0 | 24.0 |
+
+## Per role, per week
+
+**Owned h**: the owner's share of the closed stays that ended that week. **Moves**: the
+board moves it made that week. **Caught later**: the signals that week against what it passed.
+
+| Week | Owner | Owned h | Moves | Caught later |
+|---|---|---:|---:|---:|
+| 2026-10-19 (partial) | triage | 0.0 | 0 | 1 |
+| 2026-10-19 (partial) | architect | 0.0 | 0 | 0 |
+| 2026-10-19 (partial) | developer | 0.0 | 0 | 0 |
+| 2026-10-19 (partial) | reviewer | 0.0 | 0 | 0 |
+| 2026-10-19 (partial) | qa | 0.0 | 0 | 1 |
+| 2026-10-19 (partial) | person | 163.0 | 1 | 0 |
+| 2026-10-12 | triage | 6.0 | 1 | 0 |
+| 2026-10-12 | architect | 0.0 | 0 | 0 |
+| 2026-10-12 | developer | 0.0 | 0 | 0 |
+| 2026-10-12 | reviewer | 0.0 | 0 | 2 |
+| 2026-10-12 | qa | 0.0 | 0 | 0 |
+| 2026-10-12 | person | 0.0 | 1 | 0 |
+| 2026-10-05 | triage | 3.0 | 0 | 0 |
+| 2026-10-05 | architect | 26.0 | 2 | 1 |
+| 2026-10-05 | developer | 0.0 | 0 | 1 |
+| 2026-10-05 | reviewer | 0.0 | 0 | 0 |
+| 2026-10-05 | qa | 0.0 | 0 | 0 |
+| 2026-10-05 | person | 44.0 | 3 | 0 |
+
+## Caught-later signals
+
+Each counted in the week of the act that caught it.
+
+| Week | Owner | Signal | Count |
+|---|---|---|---:|
+| 2026-10-19 (partial) | triage | returned to Triagem by a person from Preparado (by the last role write) | 1 |
+| 2026-10-19 (partial) | qa | caught by a person after QA passed: changes requested | 1 |
+| 2026-10-12 | reviewer | caught by QA on a head the Reviewer approved | 1 |
+| 2026-10-12 | reviewer | caught by a person after the Reviewer approved: a commit | 1 |
+| 2026-10-05 | architect | returned to Triagem by a person from Travado (by the last Return to: comment) | 1 |
+| 2026-10-05 | developer | caught by the Reviewer: changes requested | 1 |
+
+## Open stays
+
+Cards still in a lane, in no percentile above. Age to 2026-10-22T12:00:00Z, in hours.
+
+| Lane | Open | Oldest h |
+|---|---:|---:|
+| Triagem | 1 | 75.0 |
+| Doing | 1 | 339.0 |
+
+## Unmapped actors
+
+Actors in the window that are neither a person nor a bot in factory/measure/bots.yaml.
+Nothing they did is attributed to a role.
+
+| Login | Type | Seen as | Events |
+|---|---|---|---:|
+| stray-app[bot] | Bot | comment | 1 |
