@@ -43,6 +43,51 @@ type fakeGraphQL struct {
 	mutationStatus int                  // forces a status on updates
 	dropMutation   bool                 // applies the update, then loses the answer
 	readErrors     bool                 // answers every item read with a non-NOT_FOUND error
+	prs            []*fakeGQLPR         // pull requests, in creation order
+	morePRs        bool                 // the listing claims another page
+}
+
+// fakeGQLPR is a pull request as the ready listing sees it: its head, base,
+// labels, its own project items and those of the issues it closes.
+type fakeGQLPR struct {
+	Number  int
+	Head    string
+	Base    string
+	Open    bool
+	Labels  []string
+	Items   []string
+	Closing [][]string
+}
+
+func (f *fakeGraphQL) itemsJSON(ids []string) map[string]any {
+	nodes := []map[string]any{}
+	for _, id := range ids {
+		it := f.items[id]
+		nodes = append(nodes, map[string]any{"id": id, "isArchived": it.Archived, "type": canary,
+			"project": map[string]any{"id": it.ProjectID, "title": canary}})
+	}
+	return map[string]any{"pageInfo": map[string]any{"hasNextPage": false}, "nodes": nodes}
+}
+
+// listReady answers the open pull requests on the base that carry the label,
+// oldest first, as GitHub's filtered connection does.
+func (f *fakeGraphQL) listReady(w http.ResponseWriter, v map[string]string) {
+	nodes := []map[string]any{}
+	for _, pr := range f.prs {
+		if !pr.Open || pr.Base != v["base"] || !contains(pr.Labels, v["label"]) {
+			continue
+		}
+		closing := []map[string]any{}
+		for _, ids := range pr.Closing {
+			closing = append(closing, map[string]any{"title": canary, "projectItems": f.itemsJSON(ids)})
+		}
+		nodes = append(nodes, map[string]any{"number": pr.Number, "headRefOid": pr.Head, "title": canary,
+			"body": canary, "projectItems": f.itemsJSON(pr.Items),
+			"closingIssuesReferences": map[string]any{"pageInfo": map[string]any{"hasNextPage": false}, "nodes": closing}})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"repository": map[string]any{
+		"pullRequests": map[string]any{"pageInfo": map[string]any{"hasNextPage": f.morePRs}, "nodes": nodes},
+	}}})
 }
 
 func newFakeGraphQL(t *testing.T, board BoardConfig) (*fakeGraphQL, *httptest.Server) {
@@ -70,6 +115,8 @@ func (f *fakeGraphQL) serve(w http.ResponseWriter, r *http.Request) {
 	switch q := strings.TrimSpace(body.Query); {
 	case strings.HasPrefix(q, "mutation"):
 		f.update(w, token, body.Variables)
+	case strings.Contains(q, "pullRequests("):
+		f.listReady(w, body.Variables)
 	case strings.Contains(q, "viewer"):
 		f.viewerCalls++
 		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{

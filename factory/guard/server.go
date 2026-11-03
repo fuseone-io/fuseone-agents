@@ -20,6 +20,7 @@ func NewServer(cfg Config, role Role, gh *Client) (*mcp.Server, error) {
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "factory", Version: Version}, nil)
 	board := NewBoard(cfg.Board, role, gh)
+	merger, sendBack := NewMergerTools(cfg, gh, SystemClock{})
 	for _, tool := range tools {
 		switch tool {
 		case ToolMoveCard:
@@ -29,7 +30,11 @@ func NewServer(cfg Config, role Role, gh *Client) (*mcp.Server, error) {
 		case ToolRecordQAVerdict:
 			registerQA(server, NewQA(cfg, gh))
 		case ToolMergeIfReady:
-			registerMerger(server, NewMerger(cfg, gh))
+			registerMerger(server, merger)
+		case ToolSendBack:
+			registerSendBack(server, sendBack)
+		case ToolListReadyPRs:
+			registerListReady(server, NewReadyLister(cfg, gh))
 		}
 	}
 	return server, nil
@@ -61,5 +66,39 @@ func registerQA(server *mcp.Server, qa *QA) {
 			return nil, VerdictResult{}, err
 		}
 		return &mcp.CallToolResult{IsError: !res.Recorded}, res, nil
+	})
+}
+
+func registerSendBack(server *mcp.Server, s *SendBack) {
+	mcp.AddTool(server, &mcp.Tool{
+		Name: ToolSendBack,
+		Description: "Write back why the Merger did not merge a pull request still labelled " +
+			"factory:ready-to-merge: a closed-text comment, then the label of the role whose signal " +
+			"is missing. For a reason only a person can clear it keeps the label and answers " +
+			"travado, and the Merger moves the card to Travado. Returns structured state only.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in SendBackInput) (*mcp.CallToolResult, SendBackResult, error) {
+		res, err := s.SendBack(callContext(ctx, req), in)
+		if err != nil {
+			return nil, SendBackResult{}, err
+		}
+		return &mcp.CallToolResult{IsError: !res.SentBack}, res, nil
+	})
+}
+
+// readyInput is list_ready_prs' argument: none.
+type readyInput struct{}
+
+func registerListReady(server *mcp.Server, l *ReadyLister) {
+	mcp.AddTool(server, &mcp.Tool{
+		Name: ToolListReadyPRs,
+		Description: "List the open pull requests labelled factory:ready-to-merge whose one card is in " +
+			"Doing, oldest first, each with its head SHA, its card's item id and whether merge_if_ready " +
+			"would merge it now (and if not, why). Numbers, SHAs, ids and closed reasons only.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, _ readyInput) (*mcp.CallToolResult, ReadyList, error) {
+		res, err := l.List(callContext(ctx, req))
+		if err != nil {
+			return nil, ReadyList{}, err
+		}
+		return &mcp.CallToolResult{}, res, nil
 	})
 }

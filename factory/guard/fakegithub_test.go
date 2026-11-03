@@ -104,6 +104,18 @@ type fakeGitHub struct {
 	mergeFault  string              // loses the response of a merge that happened
 	readsDown   bool                // every read fails once a merge was attempted
 	compared    bool                // the base comparison, the guard's last read, was served
+	comments    []fakeComment       // every comment posted, in order
+	labelOps    []string            // "+name" or "-name", in order
+	writeError  int                 // forces a status on comment and label writes
+	commentLost int                 // records the comment, then answers this status
+}
+
+// fakeComment is one comment posted on an issue or pull request.
+type fakeComment struct {
+	ID     int64
+	Issue  int
+	Author ghUser
+	Body   string
 }
 
 func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
@@ -122,6 +134,9 @@ func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
 	mux.HandleFunc("GET /repos/{owner}/{repo}/compare/{spec}", f.handle(f.compare))
 	mux.HandleFunc("PUT /repos/{owner}/{repo}/pulls/{n}/merge", f.handle(f.merge))
 	mux.HandleFunc("POST /repos/{owner}/{repo}/statuses/{sha}", f.handle(f.createStatus))
+	mux.HandleFunc("POST /repos/{owner}/{repo}/issues/{n}/comments", f.handle(f.createComment))
+	mux.HandleFunc("POST /repos/{owner}/{repo}/issues/{n}/labels", f.handle(f.addLabels))
+	mux.HandleFunc("DELETE /repos/{owner}/{repo}/issues/{n}/labels/{name}", f.handle(f.removeLabel))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return f, srv
@@ -243,6 +258,80 @@ func (f *fakeGitHub) compare(w http.ResponseWriter, r *http.Request, _ ghUser) {
 	_, head, _ := strings.Cut(r.PathValue("spec"), "...")
 	f.compared = true
 	writeJSON(w, http.StatusOK, map[string]any{"status": canary, "behind_by": f.behind[head], "ahead_by": 1})
+}
+
+func (f *fakeGitHub) createComment(w http.ResponseWriter, r *http.Request, who ghUser) {
+	n, pr := f.pr(r)
+	var in struct{ Body string }
+	if pr == nil || json.NewDecoder(r.Body).Decode(&in) != nil || f.writeError != 0 {
+		writeJSON(w, cmpOr(f.writeError, http.StatusNotFound), map[string]string{"message": canary})
+		return
+	}
+	f.nextID++
+	f.comments = append(f.comments, fakeComment{ID: f.nextID, Issue: n, Author: who, Body: in.Body})
+	if f.commentLost != 0 {
+		writeJSON(w, f.commentLost, map[string]string{"message": canary})
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"id": f.nextID, "body": canary, "html_url": "https://example.test/" + canary,
+		"user": map[string]any{"login": who.Login, "bio": canary},
+	})
+}
+
+// addLabels answers the whole label set, as GitHub does, text included.
+func (f *fakeGitHub) addLabels(w http.ResponseWriter, r *http.Request, _ ghUser) {
+	_, pr := f.pr(r)
+	var in struct{ Labels []string }
+	if pr == nil || json.NewDecoder(r.Body).Decode(&in) != nil || f.writeError != 0 {
+		writeJSON(w, cmpOr(f.writeError, http.StatusNotFound), map[string]string{"message": canary})
+		return
+	}
+	for _, l := range in.Labels {
+		f.labelOps = append(f.labelOps, "+"+l)
+		if !contains(pr.Labels, l) {
+			pr.Labels = append(pr.Labels, l)
+		}
+	}
+	f.writeLabels(w, pr)
+}
+
+// removeLabel answers 404 for a label the PR does not carry, as GitHub does.
+func (f *fakeGitHub) removeLabel(w http.ResponseWriter, r *http.Request, _ ghUser) {
+	_, pr := f.pr(r)
+	name := r.PathValue("name")
+	if pr == nil || f.writeError != 0 {
+		writeJSON(w, cmpOr(f.writeError, http.StatusNotFound), map[string]string{"message": canary})
+		return
+	}
+	f.labelOps = append(f.labelOps, "-"+name)
+	kept := pr.Labels[:0:0]
+	for _, l := range pr.Labels {
+		if l != name {
+			kept = append(kept, l)
+		}
+	}
+	if len(kept) == len(pr.Labels) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": canary})
+		return
+	}
+	pr.Labels = kept
+	f.writeLabels(w, pr)
+}
+
+func (f *fakeGitHub) writeLabels(w http.ResponseWriter, pr *fakePR) {
+	out := []map[string]string{}
+	for _, l := range pr.Labels {
+		out = append(out, map[string]string{"name": l, "description": canary})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func cmpOr(a, b int) int {
+	if a != 0 {
+		return a
+	}
+	return b
 }
 
 func (f *fakeGitHub) createStatus(w http.ResponseWriter, r *http.Request, who ghUser) {

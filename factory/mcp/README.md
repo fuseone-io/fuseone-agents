@@ -10,6 +10,8 @@ general-purpose GitHub server:
 | `set_card_fields(item_id, work_type, size)` | Sets only a card's Work type and Size, and only while the card is in Triagem. Idempotent (#213). |
 | `record_qa_verdict(pr, head_sha, verdict, summary[, comment_id])` | Sets the commit status `factory/qa` (`success` or `failure`) on exactly `head_sha`, under the QA GitHub App's identity. Refuses if `head_sha` is no longer the PR's head (#208). |
 | `merge_if_ready(pr, head_sha)` | When it executes, re-reads GitHub and fails closed unless every signal is on `head_sha` and came from its authorised actor or app. Then it merges with `sha` set to `head_sha` (#193). |
+| `list_ready_prs()` | Lists the open pull requests on the base labelled `factory:ready-to-merge` whose one card is in Doing, oldest first, each with its head SHA, its card's item id and `merge_if_ready`'s verdict on it now. Numbers, SHAs, ids and closed reasons only: it is the Merger's one read, and no text GitHub holds reaches the run (#199). |
+| `send_back(pr, head_sha, reason)` | Writes a refused merge back to a pull request still labelled `factory:ready-to-merge`: a comment of closed text naming the reason, the head and the next action, then the label of the role whose signal is missing. A reason only a person can clear keeps the label, ends the comment with `Return to: Doing`, and answers `travado` (#199). |
 
 This is the factory's tooling, not part of the platform. It lives in this
 module so it is built and tested with the repository, but `agentd` does not
@@ -27,7 +29,7 @@ Each role sees exactly its surface, and nothing more:
 | `developer` | `move_card` | Doing → Travado |
 | `reviewer` | `move_card` | Doing → Travado |
 | `qa` | `move_card`, `record_qa_verdict` | Doing → Travado |
-| `merger` | `move_card`, `merge_if_ready` | Doing → Done |
+| `merger` | `move_card`, `list_ready_prs`, `merge_if_ready`, `send_back` | Doing → Done, Doing → Travado |
 
 For every role:
 
@@ -609,6 +611,46 @@ The Curator classifies:
 | `record_qa_verdict` | **write** | no (structured state only) | none |
 | `move_card` | **write** | no (structured state only) | none |
 | `set_card_fields` | **write** | no (structured state only) | none |
+| `send_back` | **write** | no (structured state only) | none |
+| `list_ready_prs` | **read** | **no** (structured state only) | none |
+
+`list_ready_prs` must be ruled **not** untrusted. Every imported tool starts
+untrusted, and an untrusted read anywhere before `merge_if_ready` blocks the
+merge outright: the Gate never lets an irreversible effect derive from
+untrusted data, and no approval releases that. Its answer holds numbers,
+SHAs, item ids and closed reasons and nothing anyone wrote, which is what
+makes that ruling true.
+
+`send_back` maps each refusal to its route:
+
+| Reason | Label change | Card |
+|---|---|---|
+| `head_moved`, `review_missing`, `review_stale` | `ready-to-merge` → `needs-review` | stays in Doing |
+| `changes_requested`, `qa_not_success`, `check_not_success` | `ready-to-merge` → `changes-requested` | stays in Doing |
+| `qa_missing`, `qa_untrusted_creator` | `ready-to-merge` → `needs-qa` | stays in Doing |
+| `base_behind`, `not_mergeable`, `merge_refused`, `outcome_unknown` | none | Travado, `Return to: Doing` |
+
+It refuses any other reason: `check_missing` and `mergeability_unknown` clear
+by themselves, so the Merger waits for its next run.
+
+The caller's reason and SHA are never proof. Before writing anything,
+`send_back` observes the cause itself, and answers `cause_not_observed`
+otherwise:
+
+- a cause a re-read can rebuild is judged again now, exactly as
+  `merge_if_ready` would, and must be that same cause on that same head: a
+  signal repaired or a head pushed since the listing writes nothing;
+- `merge_refused` and `outcome_unknown` cannot be rebuilt by reading, so they
+  must be what this process's own `merge_if_ready` returned for that head,
+  within the hour, and that refusal proves **one** `send_back`: it is spent
+  when used, so a second call, or one after a person cleared the cause and
+  returned the card, writes nothing. A comment known not to have been written
+  gives it back for a retry. The record is the process's memory only: a run
+  resumed on another instance finds none, `send_back` refuses, and the next
+  run proposes the merge again. The comment goes first
+and the labels after (the new one added before `ready-to-merge` comes off),
+so a failure between the writes leaves the pull request still ready to merge
+and the next `send_back` repairs it; its one cost is a repeated comment.
 
 Then, per NT-013 § Guardrails:
 

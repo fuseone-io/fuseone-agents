@@ -37,6 +37,7 @@ type Merger struct {
 	checks      []string
 	checksAppID int64
 	method      string
+	refusals    *refusals // what send_back may later prove; nil records nothing
 }
 
 // NewMerger builds the merge tool from the Merger instance's configuration.
@@ -81,7 +82,29 @@ func (m *Merger) MergeIfReady(ctx context.Context, in MergeInput) (MergeResult, 
 	if res.Reason, res.Check = m.judge(pr, sig, in.HeadSHA); res.Reason != "" {
 		return res, nil
 	}
-	return m.merge(ctx, res)
+	res, err = m.merge(ctx, res)
+	if err == nil && unrebuildable(res.Reason) {
+		m.refusals.record(res.PR, res.HeadSHA, res.Reason)
+	}
+	return res, err
+}
+
+// prejudge is merge_if_ready without the merge: the reason it would refuse
+// the head now, and the failing check, or "" when it would merge.
+func (m *Merger) prejudge(ctx context.Context, number int, head string) (Reason, string, error) {
+	pr, err := m.gh.pullRequest(ctx, number)
+	if err != nil {
+		return "", "", err
+	}
+	if r := checkPullRequest(m.target, pr, head); r != "" {
+		return r, "", nil
+	}
+	sig, err := m.gh.readSignals(ctx, number, m.target.base, head)
+	if err != nil {
+		return "", "", err
+	}
+	r, check := m.judge(pr, sig, head)
+	return r, check, nil
 }
 
 // judge applies the remaining conditions in order, returning the first that

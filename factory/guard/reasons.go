@@ -68,6 +68,19 @@ const (
 	ReasonAlreadySet    Reason = "already_set"
 	ReasonUpdateRefused Reason = "update_refused"
 	ReasonUpdateNotSent Reason = "update_not_sent"
+
+	// send_back's vocabulary. ReasonNotReadyToMerge: the pull request no
+	// longer carries factory:ready-to-merge, so it was sent back already or
+	// a person moved it.
+	ReasonSentBack        Reason = "sent_back"
+	ReasonNotReadyToMerge Reason = "not_ready_to_merge"
+	// ReasonCauseNotObserved: the server does not see the given cause on
+	// the given head now, so nothing is written.
+	ReasonCauseNotObserved Reason = "cause_not_observed"
+	ReasonCommentRefused   Reason = "comment_refused"
+	ReasonCommentNotSent   Reason = "comment_not_sent"
+	ReasonLabelRefused     Reason = "label_refused"
+	ReasonLabelNotSent     Reason = "label_not_sent"
 )
 
 // QAContext is the commit-status context the QA verdict lives under, and the
