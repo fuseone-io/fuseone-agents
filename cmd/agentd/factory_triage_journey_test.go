@@ -312,13 +312,20 @@ var githubWrites = []string{"add_issue_comment", "issue_write", "pull_request_re
 // projects_write is left without a ruling.
 func (j *factoryJourney) classify(t *testing.T) {
 	t.Helper()
+	j.classifyWith(t, j.ruling)
+}
+
+// classifyWith rules on every listed tool with ruling, which answers nil for
+// a tool it leaves unclassified.
+func (j *factoryJourney) classifyWith(t *testing.T, ruling func(openapi.Tool) *openapi.ClassifyToolJSONRequestBody) {
+	t.Helper()
 	resp, err := j.api.ListTools(installer(t), openapi.ListToolsRequestObject{})
 	listed, ok := resp.(openapi.ListTools200JSONResponse)
 	if err != nil || !ok {
 		t.Fatalf("ListTools = %#v, %v", resp, err)
 	}
 	for _, tool := range listed.Items {
-		body := j.ruling(tool)
+		body := ruling(tool)
 		if body == nil {
 			continue
 		}
@@ -458,6 +465,27 @@ func TestFactoryTriage_referenceRegisteredAsDocumented_publishesFromTheStudio(t 
 // role's servers reached as its App, the GitHub one with the role's toolsets.
 func assertPublishesAsTheReference(t *testing.T, j *factoryJourney, reference spec.Spec, toolsets string) {
 	t.Helper()
+	assertPublishedIsTheReference(t, j, reference)
+	// And the server it was judged against was reached as the App, with the
+	// role's toolsets.
+	j.hosted.mu.Lock()
+	defer j.hosted.mu.Unlock()
+	if j.hosted.refused != 0 || len(j.hosted.toolsets) == 0 || j.hosted.github.Minted() == 0 {
+		t.Fatalf("refused %d, served %d, minted %d; want discovery authorised by an installation token",
+			j.hosted.refused, len(j.hosted.toolsets), j.hosted.github.Minted())
+	}
+	for _, header := range j.hosted.toolsets {
+		if header != toolsets {
+			t.Fatalf("X-MCP-Toolsets = %q on a request, want the registration's", header)
+		}
+	}
+}
+
+// assertPublishedIsTheReference publishes reference through the Studio's
+// form, and requires what was published to be the reference, with the
+// role's factory server, when registered, reached as its App.
+func assertPublishedIsTheReference(t *testing.T, j *factoryJourney, reference spec.Spec) {
+	t.Helper()
 	resp := j.publish(t, reference)
 
 	published, ok := resp.(openapi.PublishAgent200JSONResponse)
@@ -488,19 +516,6 @@ func assertPublishesAsTheReference(t *testing.T, j *factoryJourney, reference sp
 	}
 	if j.board != nil {
 		j.board.assertReachedAsTheApp(t)
-	}
-	// And the server it was judged against was reached as the App, with the
-	// role's toolsets.
-	j.hosted.mu.Lock()
-	defer j.hosted.mu.Unlock()
-	if j.hosted.refused != 0 || len(j.hosted.toolsets) == 0 || j.hosted.github.Minted() == 0 {
-		t.Fatalf("refused %d, served %d, minted %d; want discovery authorised by an installation token",
-			j.hosted.refused, len(j.hosted.toolsets), j.hosted.github.Minted())
-	}
-	for _, header := range j.hosted.toolsets {
-		if header != toolsets {
-			t.Fatalf("X-MCP-Toolsets = %q on a request, want the registration's", header)
-		}
 	}
 }
 
