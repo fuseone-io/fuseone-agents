@@ -27,6 +27,40 @@ field" is a commit message.
 
 ---
 
+## [0.89.0] — 2026-11-02
+
+### Upgrade notes
+
+- **0.88.0 must be running on every worker first.** This version writes the
+  `work_item_linked` step that 0.88.0 taught every reader. A worker older than
+  0.88.0 fails a run that carries it.
+- **The built-in Gate policy is now `builtin/v6`.** It adds one coordination
+  exemption: `$fuseone.work_item.link` passes without approval only when the
+  run's own `create_pull_request`, answered by the hosted GitHub MCP server
+  under a GitHub App, opened the pull request it links. Any other link waits
+  for a person like any other write. Leave `create_pull_request`'s result
+  classified untrusted, as it is by default; the link does not need it ruled
+  trusted.
+- **Webhook deliveries attribute a card only from github.com.** A GitHub
+  Enterprise delivery still opens its run, with no card on it.
+
+### Added
+
+- **A card's trail joins its issue and its pull requests.** A Developer links
+  each pull request it opens to the issue it holds, and the trail of either
+  shows every role's runs on the card. Asking by the pull request answers with
+  the issue's trail, and says it resolved. A pull request links to one card
+  only; linking it to another is refused.
+- **Runs inherit a card for attribution.** A run opened by another run's event
+  carries the card that run held, and a signed GitHub delivery carries the issue
+  or pull request it is about. Inherited runs show on the card's trail with
+  their approvals, but never hold the card and never add to its cost.
+
+### Changed
+
+- **The trail says "joined the trail" and "first attribution"** instead of
+  "claimed", because an inherited run never claimed the card.
+
 ## [0.88.0] — 2026-11-02
 
 ### Upgrade notes
