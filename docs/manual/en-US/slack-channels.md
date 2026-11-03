@@ -183,6 +183,26 @@ Reading the root is one Slack call at opening time: the app needs the channel
 history scope, the same one thread context uses. Without it the thread waits
 and no ticket opens.
 
+### Requesters without a linked account
+
+By default only a linked account opens a ticket, and anybody else is told to
+link theirs. In a room where asking for help should not need a FuseOne login,
+tick **Accept requesters without a linked account**: an account nobody linked
+then opens the ticket as that Slack account, recorded as `slack:<user id>`. A
+linked account is still its person. The option works with either way of
+opening a ticket.
+
+That requester grants nothing. The run is still the `run as` principal,
+approving and closing still take a linked person with the right permission,
+and only the same Slack account's replies revise the ticket. The ticket opens
+with the name the Slack profile shows, so the agent can address the person; a
+profile the app cannot read leaves it unnamed.
+
+Reading the profile needs `users:read`. Gravitee tickets need
+`users:read.email` as well: for such a requester, the email compared with the
+application's primary owner is the one their Slack profile shows. Without the
+scope Slack leaves the email out and the check fails closed.
+
 ### The room where the answer is reviewed
 
 When this conversation's tickets should be worked away from the person who

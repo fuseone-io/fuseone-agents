@@ -32,7 +32,9 @@ the organization's protected path.
    expiration, inspect first, and call only the registered acceptance tool.
 4. Link the requester's and approver's Slack accounts to FuseOne people. Give
    the approver a role carrying `approval:act` in a scope that contains the
-   ticket.
+   ticket. A room that accepts requesters without a linked account needs no
+   link for the requester, but the Slack app then needs `users:read` and
+   `users:read.email`: their Slack profile's email is compared with the owner's.
 5. Give the Slack app `message.channels`, invite it to the support room,
    configure Interactivity for approval buttons, and grant `im:write` for
    direct messages.

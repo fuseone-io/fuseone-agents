@@ -184,6 +184,26 @@ Ler a raiz é uma chamada ao Slack na hora de abrir: o app precisa do escopo de
 histórico do canal, o mesmo que o contexto de thread usa. Sem ele a thread fica
 esperando e nenhum ticket abre.
 
+### Solicitantes sem conta vinculada
+
+Por padrão só uma conta vinculada abre ticket, e quem não tem vínculo é avisado
+para vincular. Numa sala onde pedir ajuda não deve exigir login no FuseOne,
+marque **Aceitar solicitante sem conta vinculada**: uma conta que ninguém
+vinculou passa a abrir o ticket como a própria conta do Slack, registrada como
+`slack:<id do usuário>`. Uma conta vinculada continua sendo a sua pessoa. A
+opção vale para os dois jeitos de abrir ticket.
+
+Esse solicitante não dá autoridade. O run continua sendo do principal de
+`run as`, aprovar e encerrar continuam exigindo uma pessoa vinculada com a
+permissão certa, e só as respostas da mesma conta do Slack corrigem o ticket. O
+ticket abre com o nome que o perfil do Slack mostra, para o agente chamar a
+pessoa pelo nome; um perfil que o app não consegue ler deixa o ticket sem nome.
+
+Ler o perfil exige `users:read`. Tickets do Gravitee exigem também
+`users:read.email`: para esse solicitante, o e-mail comparado com o dono
+principal da aplicação é o do perfil do Slack. Sem o escopo o Slack omite o
+e-mail e a checagem falha fechada.
+
 ### A sala onde a resposta é revisada
 
 Quando os tickets desta conversa devem ser trabalhados longe de quem pediu,

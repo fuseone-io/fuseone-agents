@@ -55,7 +55,7 @@ Four identities remain distinct throughout the ticket:
 
 | Identity | Meaning |
 |---|---|
-| `RequestedBy` | The linked person who wrote the root Slack message |
+| `RequestedBy` | The linked person who wrote the root Slack message, or — in a room that accepts Slack requesters — the unbound Slack account itself, as `slack:<user id>` |
 | `AddressedBy` | The configured bot or app that named approval recipients |
 | `RunAs` | The configured platform principal under which watched runs execute |
 | `DecidedBy` | The linked person who approved or refused the exact Gate request |
@@ -73,7 +73,8 @@ this release. Admission and addressing are separate configuration:
   list with structured mentions.
 
 The initial remote ownership rule is deliberately narrow. `RequestedBy` must
-match the expanded Gravitee application's primary-owner email. A group owner,
+match the expanded Gravitee application's primary-owner email; for a Slack
+requester that is the email its Slack profile shows. A group owner,
 a missing email or a different owner fails closed. Supporting application
 members requires an explicit identity mapping and is a later capability. The
 target-installation lab must prove that the expansion supplies this field.

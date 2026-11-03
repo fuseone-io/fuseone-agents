@@ -32,6 +32,9 @@ caminho protegido da organização.
    chamar somente a ferramenta registrada de aceitação.
 4. Vincule as contas Slack do solicitante e do aprovador a pessoas no FuseOne.
    Dê ao aprovador um papel com `approval:act` num escopo que contenha o chamado.
+   Numa sala que aceita solicitante sem conta vinculada o solicitante dispensa
+   vínculo, mas o app Slack passa a precisar de `users:read` e `users:read.email`:
+   o e-mail do perfil do Slack dele é comparado com o do dono.
 5. Dê ao app Slack `message.channels`, convide-o para a sala, configure
    Interactivity para os botões e conceda `im:write` para mensagens diretas.
 
