@@ -28,6 +28,8 @@ caller the card is worked on somewhere they cannot see.
 type WorkItems interface {
 	WorkItemTrail(ctx context.Context, filter domain.RunFilter, cost *domain.RunFilter,
 		ref domain.WorkItemRef, page domain.WorkItemPage) (domain.WorkItemTrail, error)
+	WorkItemMeasures(ctx context.Context, filter domain.RunFilter, cost *domain.RunFilter,
+		window domain.WorkItemWindow) ([]domain.WorkItemWeek, error)
 }
 
 // WithWorkItems wires the trail's store. Without it every trail is empty.
