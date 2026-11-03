@@ -1,18 +1,109 @@
 # factory-mcp
 
-The software factory's own MCP server (NT-013 § Guardrails, layers 5 and 5a).
-It hosts the two GitHub writes the factory does not trust to a general-purpose
-GitHub server:
+The software factory's own MCP server (NT-013 § Guardrails, layers 1, 3, 5
+and 5a). It hosts the GitHub writes the factory does not trust to a
+general-purpose GitHub server:
 
-| Tool | Role | What it does |
-|---|---|---|
-| `record_qa_verdict(pr, head_sha, verdict, summary[, comment_id])` | QA | Sets the commit status `factory/qa` (`success` or `failure`) on exactly `head_sha`, under the QA GitHub App's identity. Refuses if `head_sha` is no longer the PR's head (#208). |
-| `merge_if_ready(pr, head_sha)` | Merger | When it executes, re-reads GitHub and fails closed unless every signal is on `head_sha` and came from its authorised actor or app. Then it merges with `sha` set to `head_sha` (#193). |
+| Tool | What it does |
+|---|---|
+| `move_card(item_id, lane)` | Changes only the Status of a card in the factory's project, and only along the calling role's row of the transition table. Never out of Travado or Done (#213). |
+| `set_card_fields(item_id, work_type, size)` | Sets only a card's Work type and Size. Refused on a card in Travado or Done. Idempotent (#213). |
+| `record_qa_verdict(pr, head_sha, verdict, summary[, comment_id])` | Sets the commit status `factory/qa` (`success` or `failure`) on exactly `head_sha`, under the QA GitHub App's identity. Refuses if `head_sha` is no longer the PR's head (#208). |
+| `merge_if_ready(pr, head_sha)` | When it executes, re-reads GitHub and fails closed unless every signal is on `head_sha` and came from its authorised actor or app. Then it merges with `sha` set to `head_sha` (#193). |
 
 This is the factory's tooling, not part of the platform. It lives in this
 module so it is built and tested with the repository, but `agentd` does not
 import it and it ships as its own binary. The logic is in
 [`factory/guard`](../guard); this directory is the `main` package.
+
+## Roles and their surfaces
+
+Each role sees exactly its surface, and nothing more:
+
+| Role | Tools | Lane changes `move_card` accepts |
+|---|---|---|
+| `triage` | `move_card`, `set_card_fields` | Triagem → Preparado, Triagem → Travado |
+| `architect` | `move_card`, `set_card_fields` | Triagem → Preparado, Triagem → Travado |
+| `developer` | `move_card` | Doing → Travado |
+| `reviewer` | `move_card` | Doing → Travado |
+| `qa` | `move_card`, `record_qa_verdict` | Doing → Travado |
+| `merger` | `move_card`, `merge_if_ready` | Doing → Done |
+
+For every role:
+
+- **nothing leaves Travado** (`travado_is_human`): only a person moves a card
+  out of it;
+- **nothing leaves Done** (`done_is_final`);
+- nobody acts in Preparado, so no agent moves a card out of it;
+- moving a card to the lane it is already in is an idempotent success:
+  `moved: false`, reason `already_in_lane`, not an error;
+- every other change is `transition_refused`.
+
+## What `move_card` checks
+
+`item_id` must match `^PVTI_[A-Za-z0-9_-]{1,64}$` and `lane` must be one of
+`Triagem`, `Preparado`, `Doing`, `Travado`, `Done`, exactly (`travado` is not
+a lane). The arguments are decoded strictly: any property beyond `item_id`
+and `lane` (a `field_id`, a `project_id`, a `value`), a missing one, a
+non-string one or a key in another case is `invalid_input`, before any
+request. The SDK's inferred schemas already say `additionalProperties:
+false`, but the SDK rejects with prose, not a structured result, so the board
+tools take their arguments raw and enforce it themselves.
+
+Then one GraphQL `node(id)` query reads the item: whether it is archived, its
+project's id and the option id of each single-select field. Titles, content
+and text fields are never asked for. The refusals, in this order:
+
+| Condition | Reason when it fails |
+|---|---|
+| The id is a project item GitHub knows | `item_not_found` |
+| It belongs to `FACTORY_PROJECT_ID` | `wrong_project` |
+| It is not archived | `item_archived` |
+| Its Status is set, to an option `FACTORY_LANES` names | `lane_unknown` |
+| The change is on the calling role's row (above) | `already_in_lane` (success), `travado_is_human`, `done_is_final`, `transition_refused` |
+
+Then exactly one `updateProjectV2ItemFieldValue`, with `FACTORY_PROJECT_ID`,
+`FACTORY_STATUS_FIELD_ID` and the lane's option id from `FACTORY_LANES`. It
+counts as `moved` only when GitHub names the item back with no error. A
+GraphQL `errors[]`, a non-2xx status (reported in `http_status`) or no item
+in the answer is `move_refused`; an update that never left the process (no
+token) is `move_not_sent`; one that was sent and whose answer was lost is
+`outcome_unknown`. Setting a value is idempotent, so retrying is safe: a
+retry that finds the card in the lane answers `already_in_lane`.
+
+The result is `{moved, reason, item_id, from, to[, http_status]}`, where
+`from` and `to` are lane names from the closed set and `item_id` is the
+validated id.
+
+### The residual race
+
+GitHub's field updates have no compare-and-set. Between the read that
+judges a move and the one mutation that makes it, a person can move the
+card, and the mutation then overwrites their move. The window is one round
+trip, the same shape as `merge_if_ready`'s re-read before its merge (where
+GitHub's `sha` check at least closes the push case). A person who moved a
+card to Travado in that window sees it leave and moves it back; the factory
+does not try to detect it.
+
+## What `set_card_fields` checks
+
+`work_type` is one of `bug`, `feature`, `chore`, `docs`, and `size` one of
+`S`, `M`, `L`, exactly; `item_id` as for `move_card`. Strict decoding as for
+`move_card`. The same item read and the same first four refusals, then a card
+in Travado (`travado_is_human`) or Done (`done_is_final`) is refused.
+
+Each field is then compared with what the card holds: a field already
+holding the value is reported in `already_set` and not written; each other
+is one `updateProjectV2ItemFieldValue`, Work type first, then Size, with the
+configured project and field. The first write that does not apply stops the
+call (`update_refused`, `update_not_sent` or `outcome_unknown`), and
+`changed` lists what was written before it. So if Work type was set and Size
+failed, a retry writes only Size and answers `already_set: ["work_type"]`,
+`changed: ["size"]`. When nothing needed writing the answer is `updated:
+false`, reason `already_set`, not an error.
+
+The result is `{updated, reason, item_id, work_type, size, already_set,
+changed[, http_status]}`: closed names only.
 
 ## What `merge_if_ready` checks
 
@@ -62,8 +153,9 @@ check, the name from this server's own configuration. Nothing GitHub wrote
 comes back: no review bodies, comments, titles, descriptions, check output or
 error messages. The client does not even decode those fields, and error
 messages carry the method, the path this server built and the status code. The
-Merger's run reads these results, and free text would taint it (NT-013 §
-Guardrails, layer 4).
+runs read these results, and free text would taint them (NT-013 §
+Guardrails, layer 4). The board tools follow the same rule: closed reasons,
+lane and field names from the closed sets, and the validated item id.
 
 A refusal is returned as a failed tool call (`isError: true`) that still
 carries the structured result, so the run records a failure with a reason.
@@ -74,59 +166,149 @@ carries the structured result, so the run records a failure with a reason.
 go build -o bin/factory-mcp ./factory/mcp
 ```
 
-Each role runs **its own instance**, with its own GitHub App and its own
-`FACTORY_ROLE`. The QA instance exposes only `record_qa_verdict`; the Merger
-instance exposes only `merge_if_ready`.
+There are two ways to give the server its GitHub credential, chosen with
+`FACTORY_MCP_AUTH`.
 
-- **stdio** is the default and the preferred transport:
+### `FACTORY_MCP_AUTH=app` (the default): one role, its own App
+
+The instance holds one GitHub App's key, mints its own installation tokens,
+and serves the one role `FACTORY_ROLE` names: that role's whole surface from
+the table above. (Before #213 a `qa` or `merger` instance exposed only its
+one tool; `FACTORY_ROLE` now maps onto the role's surface, so those instances
+also hold `move_card` and need the board's configuration.) Run one instance
+per role.
+
+- **stdio** is the default transport and the preferred one here:
   `FACTORY_ROLE=qa ... bin/factory-mcp`. No port, no bearer, nothing on the
   network to intercept.
 - **Streamable HTTP**, when the instance must run apart from the worker: set
   `FACTORY_MCP_ADDR` and `FACTORY_MCP_TOKEN`. Every request must carry
-  `Authorization: Bearer $FACTORY_MCP_TOKEN`, so the bearer must never cross a
-  network in clear: whoever reads it can call `record_qa_verdict` (the QA App
-  signs the status) or `merge_if_ready` directly, skipping the platform's
-  approval. The server therefore refuses to start unless one of these holds:
-  - **HTTPS**: `FACTORY_MCP_TLS_CERT` and `FACTORY_MCP_TLS_KEY` name the paths
-    of the certificate and key PEM files; the
-    address may then be any, e.g. `FACTORY_MCP_ADDR=:8443`. Add
-    `FACTORY_MCP_CLIENT_CA` for **mTLS**: every client must then present a
-    certificate signed by that CA. mTLS is optional, not mandatory, because
-    FuseOne's MCP client authenticates with a bearer and does not present a
-    client certificate; require it where a proxy in front of the server can.
-  - **Loopback**: the address is a literal loopback IP (`127.0.0.1:8080`,
-    `[::1]:8080`), for a sidecar behind a TLS-terminating proxy in the same pod.
-    A hostname, even `localhost`, does not count.
+  `Authorization: Bearer $FACTORY_MCP_TOKEN`.
 
-  A non-loopback address without TLS, a certificate without its key, or no
-  token is a startup error naming the fix.
+### `FACTORY_MCP_AUTH=github-app-token`: every role, the caller's token
+
+The server holds **no credential**. The platform's GitHub App mode (#216)
+mints the calling role's installation token and sends it as the bearer to
+the MCP URL; the server uses that bearer as the GitHub token of the request.
+`FACTORY_ROLE`, `FACTORY_MCP_TOKEN` and `GITHUB_APP_*` are not read
+(`FACTORY_ROLE` set in this mode is a startup error, so nobody believes it
+narrows anything). HTTP only: over stdio there is no bearer to pass through.
+
+One process then serves every role `FACTORY_ROLE_BOTS` lists, so a valid
+token must not reach the union of their tools. The server authenticates the
+**identity** behind each request's bearer and serves only that identity's
+surface:
+
+1. It asks GitHub whose token it is, with GraphQL `viewer { databaseId }`.
+   An installation token's viewer is its App's bot account, and the bot's
+   `databaseId` is its numeric user id: the same id `FACTORY_QA_BOT_ID`
+   already pins, immutable, unlike a login.
+2. It looks that id up in `FACTORY_ROLE_BOTS`. A bearer GitHub rejects is
+   `401`; a valid token whose bot no role lists is `403`, with no tools.
+3. It serves the request on that role's own MCP handler. Each role has its
+   own handler, so a session opened by one identity is unknown to every
+   other's: a token cannot ride another role's session into its tools.
+
+The surface comes from the token alone. The server serves on any path and
+neither the path nor any header (a role header, `X-MCP-Tools`) chooses or
+widens it; per-path endpoints were dropped because a path could only ever
+narrow what the identity allows, and one rule is simpler to audit than two.
+
+Each tool call then acts on GitHub with the bearer of the HTTP request that
+carried that call, not the one that opened the session: the platform
+re-mints tokens hourly, and the token used is the one whose identity was
+just checked. An identity is cached for ten minutes, well under a token's
+hour, keyed by the token's SHA-256; the token itself is never stored as a
+key and never logged.
+
+Every role must have **its own GitHub App**: one bot, one role. A bot listed
+for two roles is a startup error.
+
+### Over HTTP, in either mode
+
+The bearer must never cross a network in clear: whoever reads it can call
+the tools directly, skipping the platform's approval, and in pass-through
+mode it is a GitHub token. The server therefore refuses to start unless one
+of these holds:
+
+- **HTTPS**: `FACTORY_MCP_TLS_CERT` and `FACTORY_MCP_TLS_KEY` name the paths
+  of the certificate and key PEM files; the address may then be any, e.g.
+  `FACTORY_MCP_ADDR=:8443`. Add `FACTORY_MCP_CLIENT_CA` for **mTLS**: every
+  client must then present a certificate signed by that CA. mTLS is
+  optional, not mandatory, because FuseOne's MCP client authenticates with a
+  bearer and does not present a client certificate; require it where a
+  proxy in front of the server can.
+- **Loopback**: the address is a literal loopback IP (`127.0.0.1:8080`,
+  `[::1]:8080`), for a sidecar behind a TLS-terminating proxy in the same
+  pod, or reached by the worker over the pod's loopback. A hostname, even
+  `localhost`, does not count.
+
+A non-loopback address without TLS, a certificate without its key, or (in
+`app` mode) no token is a startup error naming the fix.
+
+`GET /healthz` answers `ok` without a credential, for a readiness probe. It
+says the process is listening, nothing about GitHub, and carries no secret.
 
 ## Environment
 
 Nothing the guard decides with has a default. An unset or malformed variable
-stops the server at start and names the variable.
+stops the server at start and names the variable. A setting is required only
+when a served role uses it.
 
-| Variable | Roles | Required | Meaning |
+| Variable | Needed by | Required | Meaning |
 |---|---|---|---|
-| `FACTORY_ROLE` | both | yes | `qa` or `merger`: which single tool this instance exposes. |
-| `FACTORY_REPOSITORY` | both | yes | The only repository it acts on: `fuseone-io/fuseone-agents`. |
-| `FACTORY_BASE_BRANCH` | both | yes | The only base it accepts: `main`. |
-| `FACTORY_QA_BOT_ID` | both | yes | Numeric **user id of the QA App's bot account** (see below). The Merger accepts `factory/qa` only from it; the QA instance checks it created the status under it. |
+| `FACTORY_MCP_AUTH` | all | no | `app` (default) or `github-app-token`. |
+| `FACTORY_ROLE` | `app` mode | yes | `triage`, `architect`, `developer`, `reviewer`, `qa` or `merger`: the one role this instance serves. Refused in `github-app-token` mode. |
+| `FACTORY_ROLE_BOTS` | `github-app-token` mode | yes | `role=bot-user-id` pairs, e.g. `triage=<id>,architect=<id>,developer=<id>,reviewer=<id>,qa=<id>,merger=<id>`. Only the listed roles are served. Role names from the closed set; each role and each id at most once. |
+| `FACTORY_PROJECT_ID` | every role | yes | The factory project's node id (`PVT_...`). Cards of any other project are `wrong_project`. |
+| `FACTORY_STATUS_FIELD_ID` | every role | yes | The Status field's id (`PVTSSF_...`). |
+| `FACTORY_LANES` | every role | yes | `Triagem=<opt>,Preparado=<opt>,Doing=<opt>,Travado=<opt>,Done=<opt>`: all five, each name and each option id once. |
+| `FACTORY_WORKTYPE_FIELD_ID` | triage, architect | yes | The Work type field's id. |
+| `FACTORY_WORKTYPES` | triage, architect | yes | `bug=<opt>,feature=<opt>,chore=<opt>,docs=<opt>`: all four. |
+| `FACTORY_SIZE_FIELD_ID` | triage, architect | yes | The Size field's id. |
+| `FACTORY_SIZES` | triage, architect | yes | `S=<opt>,M=<opt>,L=<opt>`: all three. |
+| `FACTORY_REPOSITORY` | qa, merger; every role in `app` mode | yes | The only repository it acts on: `fuseone-io/fuseone-agents`. In `app` mode, also the one repository the minted tokens are restricted to. |
+| `FACTORY_BASE_BRANCH` | qa, merger | yes | The only base it accepts: `main`. |
+| `FACTORY_QA_BOT_ID` | qa, merger | yes | Numeric **user id of the QA App's bot account** (see below). The Merger accepts `factory/qa` only from it; the QA instance checks it created the status under it. |
 | `FACTORY_REVIEWERS` | merger | yes | Comma-separated GitHub logins whose approval counts. **The same list the ruleset requires (#207).** Compared case-insensitively. |
 | `FACTORY_CHECKS` | merger | yes | Comma-separated check-run names required on the head, `go,postgres,console,chart,artifact`. **Not `build`**: see below. |
 | `FACTORY_CHECKS_APP_ID` | merger | yes | The app that must have emitted them: GitHub Actions, `15368`. |
 | `FACTORY_MERGE_METHOD` | merger | no | `squash` (default), `merge` or `rebase`. |
-| `GITHUB_APP_ID` | both | yes | This instance's GitHub App id. |
-| `GITHUB_APP_INSTALLATION_ID` | both | yes | That App's installation id on the repository. |
-| `GITHUB_APP_PRIVATE_KEY_FILE` | both | one of | Path to the App's PEM private key (PKCS#1 or PKCS#8). Preferred: a mounted secret. |
-| `GITHUB_APP_PRIVATE_KEY` | both | one of | The PEM itself, when a file is not possible. |
-| `GITHUB_API_URL` | both | no | REST base URL. Default `https://api.github.com`. |
-| `GITHUB_WEB_URL` | both | no | Web base URL for the status's link. Default `https://github.com`. |
-| `FACTORY_MCP_ADDR` | both | no | Serve streamable HTTP at this address instead of stdio. Without TLS, only a literal loopback IP is accepted. |
-| `FACTORY_MCP_TOKEN` | both | with `FACTORY_MCP_ADDR` | Bearer token HTTP clients must present. |
-| `FACTORY_MCP_TLS_CERT` | both | for a non-loopback address | **Path to a PEM file** holding the certificate (chain) the server presents. Not the PEM content. |
-| `FACTORY_MCP_TLS_KEY` | both | with `FACTORY_MCP_TLS_CERT` | **Path to a PEM file** holding its private key. Not the PEM content. |
-| `FACTORY_MCP_CLIENT_CA` | both | no | **Path to a PEM file** holding the CA bundle; when set, clients must present a certificate it signed (mTLS). Not the PEM content. |
+| `GITHUB_APP_ID` | `app` mode | yes | This instance's GitHub App id. |
+| `GITHUB_APP_INSTALLATION_ID` | `app` mode | yes | That App's installation id. |
+| `GITHUB_APP_PRIVATE_KEY_FILE` | `app` mode | one of | Path to the App's PEM private key (PKCS#1 or PKCS#8). Preferred: a mounted secret. |
+| `GITHUB_APP_PRIVATE_KEY` | `app` mode | one of | The PEM itself, when a file is not possible. |
+| `GITHUB_API_URL` | all | no | REST base URL. Default `https://api.github.com`. |
+| `GITHUB_GRAPHQL_URL` | all | no | GraphQL URL. Default `https://api.github.com/graphql`. |
+| `GITHUB_WEB_URL` | all | no | Web base URL for the status's link. Default `https://github.com`. |
+| `FACTORY_MCP_ADDR` | all | in `github-app-token` mode | Serve streamable HTTP at this address instead of stdio. Without TLS, only a literal loopback IP is accepted. |
+| `FACTORY_MCP_TOKEN` | `app` mode | with `FACTORY_MCP_ADDR` | Bearer token HTTP clients must present. Not read in `github-app-token` mode. |
+| `FACTORY_MCP_TLS_CERT` | all | for a non-loopback address | **Path to a PEM file** holding the certificate (chain) the server presents. Not the PEM content. |
+| `FACTORY_MCP_TLS_KEY` | all | with `FACTORY_MCP_TLS_CERT` | **Path to a PEM file** holding its private key. Not the PEM content. |
+| `FACTORY_MCP_CLIENT_CA` | all | no | **Path to a PEM file** holding the CA bundle; when set, clients must present a certificate it signed (mTLS). Not the PEM content. |
+
+### The factory board's ids
+
+The ids of the live board (`fuseone-io` projects/2, "FuseOne Factory") as of
+2026-11-02. They belong here and in the deployment, never in code. Re-read
+them with `gh project field-list 2 --owner fuseone-io --format json` and
+`gh project view 2 --owner fuseone-io --format json --jq .id`.
+
+```
+FACTORY_PROJECT_ID=PVT_kwDOCda0tM4BpgXe
+FACTORY_STATUS_FIELD_ID=PVTSSF_lADOCda0tM4BpgXezhn7tpM
+FACTORY_LANES=Triagem=b6cc2db9,Preparado=81accba4,Doing=487fcd52,Travado=074ad6eb,Done=f46d8bb8
+FACTORY_WORKTYPE_FIELD_ID=PVTSSF_lADOCda0tM4BpgXezhn7uD4
+FACTORY_WORKTYPES=bug=c63ed0ce,feature=121ff620,chore=b5bce747,docs=bf073d82
+FACTORY_SIZE_FIELD_ID=PVTSSF_lADOCda0tM4BpgXezhn7uD8
+FACTORY_SIZES=S=4e5305ec,M=53fc9302,L=81761912
+```
+
+Each role's bot user id, for `FACTORY_ROLE_BOTS`:
+
+```
+gh api '/users/<app-slug>%5Bbot%5D' --jq .id
+```
 
 ### Why `build` is not an expected check
 
@@ -138,9 +320,9 @@ run on every PR, from `check.yml`: `go`, `postgres`, `console`, `chart`,
 `artifact`. #207 was corrected the same way. Keep `FACTORY_CHECKS` and the
 ruleset's required checks the same list.
 
-### Why App credentials, not a token
+### In `app` mode: why App credentials, not a token
 
-The server takes the App id and private key and mints its own installation
+In `app` mode the server takes the App id and private key and mints its own installation
 tokens, each restricted to the one repository and replaced five minutes before
 it expires. It does not take a pre-minted token for two reasons:
 
@@ -167,27 +349,83 @@ the one QA App.
 
 ## GitHub App permissions
 
-Two Apps, each installed **only on this repository**.
+One App per role, each installed on the organisation and **restricted to this
+repository**. Every role also moves cards, which needs the separate
+organisation permission for Projects: a repository-restricted installation
+token keeps its `organization_projects` permission (GitHub's documentation;
+verified once more by the setup canary below).
 
-| App | Repository permissions | Why |
-|---|---|---|
-| **QA** | Commit statuses: read and write. Pull requests: read. Metadata: read (mandatory). | Set `factory/qa`; read the PR's head and base. Nothing else. |
-| **Merger** | Contents: read and write. Pull requests: read and write. Checks: read. Commit statuses: read. Metadata: read (mandatory). | Merge (contents and PRs write); read reviews, check runs, statuses and the base comparison. |
+| App | Repository permissions | Organisation permissions | Why |
+|---|---|---|---|
+| **Triage**, **Architect** | What their issue work needs. Metadata: read (mandatory). | Projects: read and write. | Move cards out of Triagem and set their fields. |
+| **Developer**, **Reviewer** | What their own work needs. Metadata: read (mandatory). | Projects: read and write. | Move a card to Travado. |
+| **QA** | Commit statuses: read and write. Pull requests: read. Metadata: read (mandatory). | Projects: read and write. | Set `factory/qa`; read the PR's head and base; move a card to Travado. |
+| **Merger** | Contents: read and write. Pull requests: read and write. Checks: read. Commit statuses: read. Metadata: read (mandatory). | Projects: read and write. | Merge (contents and PRs write); read reviews, check runs, statuses and the base comparison; move a card to Done. |
 
 The Merger App must **never** be on the ruleset's bypass list (#207). The QA
-App has no write beyond statuses, so it can vouch for a commit but never merge
-one.
+App has no repository write beyond statuses, so it can vouch for a commit but
+never merge one.
+
+## Setup canary: one real query and one real mutation
+
+No test here can prove what real GitHub does with a repository-restricted
+installation token. Before the roles are activated, an operator runs these
+once, as each role's App, with a token minted exactly as the platform mints
+it (restricted to `fuseone-agents`), against a throwaway card in the factory
+project. `GH_TOKEN` is that installation token; never paste it anywhere
+else.
+
+1. The identity the server will read. Expect the App's bot, and a
+   `databaseId` equal to the id listed for that role in `FACTORY_ROLE_BOTS`:
+
+   ```
+   GH_TOKEN=<installation token> gh api graphql -f query='query { viewer { login databaseId } }'
+   ```
+
+2. The item read `move_card` makes. Expect `isArchived`, the project's id
+   (`FACTORY_PROJECT_ID`) and the Status option id:
+
+   ```
+   GH_TOKEN=<installation token> gh api graphql -F id=PVTI_<throwaway card> -f query='
+     query($id: ID!) { node(id: $id) { ... on ProjectV2Item { id isArchived project { id }
+       fieldValues(first: 50) { pageInfo { hasNextPage } nodes {
+         ... on ProjectV2ItemFieldSingleSelectValue { optionId field { ... on ProjectV2SingleSelectField { id } } } } } } } }'
+   ```
+
+3. The one mutation `move_card` makes, here to Travado. Expect the item's id
+   back and no `errors`; the card then shows in Travado, and a person moves
+   it back:
+
+   ```
+   GH_TOKEN=<installation token> gh api graphql \
+     -f project=PVT_kwDOCda0tM4BpgXe -f item=PVTI_<throwaway card> \
+     -f field=PVTSSF_lADOCda0tM4BpgXezhn7tpM -f option=074ad6eb -f query='
+     mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+       updateProjectV2ItemFieldValue(input: {projectId: $project, itemId: $item, fieldId: $field,
+         value: {singleSelectOptionId: $option}}) { projectV2Item { id } } }'
+   ```
+
+If any of the three fails for a role, that role is not activated: the board
+tools would answer `move_refused` or fail the read on every call.
 
 ## Registering in FuseOne
 
-Register two MCP servers in **Integrations**, one per role. A tool is addressed
-as `<server name>.<tool>`, so with these names the tool ids are
-`factory-qa.record_qa_verdict` and `factory-merger.merge_if_ready`.
+### Pass-through (`github-app-token`)
 
-| Server name | Instance | Surface |
-|---|---|---|
-| `factory-qa` | `FACTORY_ROLE=qa`, QA App | `record_qa_verdict` |
-| `factory-merger` | `FACTORY_ROLE=merger`, Merger App | `merge_if_ready` |
+Register **one** MCP server, e.g. `factory`, with the instance's URL (an
+`https://` address, or the sidecar's loopback `http://127.0.0.1:<port>`),
+and set the platform's GitHub App mode (#216) so each role's run sends its
+own App's installation token as the bearer. A tool is addressed as
+`<server name>.<tool>`: `factory.move_card`, `factory.set_card_fields`,
+`factory.record_qa_verdict`, `factory.merge_if_ready`. Which of them a run
+can actually call is decided by the token it sends, whatever its pack says.
+
+### Own App (`app`)
+
+Register one MCP server per role, each an instance with its own
+`FACTORY_ROLE` and App, e.g. `factory-qa` and `factory-merger`, giving
+`factory-qa.record_qa_verdict`, `factory-merger.merge_if_ready`, and each
+one's `move_card`.
 
 **stdio (preferred).** The command is `factory-mcp`, with the variables above
 set through the **Env** shape and the private key through the **Config file**
@@ -202,18 +440,24 @@ is the **Bearer** shape with that instance's `FACTORY_MCP_TOKEN`. Never an
 `http://` URL across a network: the server refuses to listen that way, and a
 proxy must not undo it.
 
+### Classification
+
 The Curator classifies:
 
 | Tool | Effect | Untrusted result | Compensator |
 |---|---|---|---|
-| `factory-merger.merge_if_ready` | **destructive** | no (structured state only) | none |
-| `factory-qa.record_qa_verdict` | **write** | no (structured state only) | none |
+| `merge_if_ready` | **destructive** | no (structured state only) | none |
+| `record_qa_verdict` | **write** | no (structured state only) | none |
+| `move_card` | **write** | no (structured state only) | none |
+| `set_card_fields` | **write** | no (structured state only) | none |
 
 Then, per NT-013 § Guardrails:
 
-- only the QA role's pack holds `factory-qa.record_qa_verdict`, and only the
-  Merger's pack holds `factory-merger.merge_if_ready`; the raw GitHub
-  `merge_pull_request` is in no pack;
+- only the QA role's pack holds `record_qa_verdict`, only the Merger's pack
+  holds `merge_if_ready`, and only Triage's and the Architect's hold
+  `set_card_fields`; the raw GitHub `merge_pull_request` is in no pack. In
+  pass-through mode the server enforces the same table from the token's
+  identity, so a pack that held more would still be refused;
 - an authored policy escalates `merge_if_ready` to approval (a destructive call
-  is blocked outright by default), and no standing approval may cover either
-  tool during the pilot (layer 6).
+  is blocked outright by default), and no standing approval may cover
+  `merge_if_ready` or `record_qa_verdict` during the pilot (layer 6).
