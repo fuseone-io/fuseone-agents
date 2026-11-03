@@ -27,6 +27,57 @@ field" is a commit message.
 
 ---
 
+## [0.90.0] — 2026-11-03
+
+### Upgrade notes
+
+- **An approval note may no longer start with `standing approval `.** The
+  approvals route answers 400 to such a note, in any letter case. That prefix
+  is now reserved for the engine. Whether an approval was standing is recorded
+  in its own field, so a person's note can no longer count as one.
+- **A second image ships with this release:**
+  `ghcr.io/fuseone-io/fuseone-agents-factory-mcp`, the software factory's own
+  tool server. Check that the new package's visibility matches the main
+  image's before pulling it, or the cluster needs a pull secret. Nothing runs
+  it unless you add it.
+- **The chart gains `worker.extraContainers`, empty by default.** With it
+  unset, the rendered worker is unchanged.
+- **The software factory's setup changed**, for installations running it:
+  - every role moves cards with the factory server's `move_card` instead of
+    the GitHub server's `projects_write`, which no role holds any more;
+  - QA records its verdict as a `factory/qa` commit status instead of a
+    review. Its App needs Commit statuses: write, and Pull requests only read;
+  - the factory server is a worker sidecar on loopback that acts under each
+    role's own App token. Run the setup canary in the factory server's README
+    with each role's token before starting the roles.
+
+### Added
+
+- **Per-role, per-week measures.** `GET /api/v1/work-items/measures` and a
+  "Per role, per week" panel on the work-items page count, for each agent and
+  ISO week (Monday 00:00 UTC):
+  - runs and cards;
+  - proposals: requested, approved, refused, pending and abandoned, plus
+    revised or repeated after a refusal;
+  - cost on cards, inherited and off any card, which add up to the week's
+    total.
+
+  The answer says that whether a person edited a proposal is not recorded,
+  rather than reporting it as zero. Only runs the caller can read appear, and
+  cost only with `cost:read`.
+- **Board measures for the software factory.** A read-only CLI,
+  `factory/measure`, reads the GitHub board's history. It reports time in
+  each lane and the signals a later stage caught, per role and per week. It
+  refuses to run until its canary has passed and every role's bot is named.
+- **The software factory's own tool server.** `move_card` and
+  `set_card_fields` change only the factory board's Status, Work type and
+  Size. Each role gets exactly the tools and lane moves its role allows,
+  judged from the calling App's identity, and nothing ever leaves Travado.
+
+### Changed
+
+- **Standing approvals carry their origin in the record**, instead of a note.
+
 ## [0.89.0] — 2026-11-02
 
 ### Upgrade notes
