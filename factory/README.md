@@ -23,7 +23,9 @@ The pilot's first version runs inside the platform (NT-013 § v1, amended
   GitHub write it proposes waits for a person, and that is the measurement.
   The one write that does not is the work-item claim, a coordination
   operation that only records which card a run holds (LANES.md § claim);
-- **a person merges.** No role merges, and nothing here automates the merge.
+- **the Merger proposes, a person approves.** The Merger reads nothing anyone
+  wrote and merges only through `merge_if_ready`, which re-checks the review,
+  QA and the checks on the head after a person approves the call (#199).
 
 This directory is the harness as **reference text** (NT-013 § The harness):
 what makes a role do its job well rather than merely within bounds. It changes
@@ -45,9 +47,9 @@ factory/
   agents/
     README.md            how a role is created in the console from a reference
     <role>.agent.md      the reference specification of one role
-  guard/, mcp/           the factory MCP server: move_card, set_card_fields
-                         and record_qa_verdict, used in v1 (#213);
-                         merge_if_ready, deferred with the Merger (#211)
+  guard/, mcp/           the factory MCP server: move_card, set_card_fields,
+                         record_qa_verdict, and the Merger's list_ready_prs,
+                         merge_if_ready and send_back (#213, #199)
   measure/               factory-measure: lane time and caught-later signals
                          read from the board, read-only (#201)
 ```
@@ -61,6 +63,7 @@ factory/
 | Reviewer | #197 | [agents/reviewer.agent.md](agents/reviewer.agent.md) |
 | QA | #198 | [agents/qa.agent.md](agents/qa.agent.md) |
 | Developer | #200 | [agents/developer.agent.md](agents/developer.agent.md), Level 1 |
+| Merger | #199 | [agents/merger.agent.md](agents/merger.agent.md) |
 
 The Architect takes the Triagem cards Triage labelled `factory:needs-design`.
 It verifies the change in the code with read tools only, writes the plan and
@@ -78,5 +81,7 @@ runtime is FuseOne Forja
 separate repository, phase 0 proposed), with `forja.implement` as a write tool
 under the Gate.
 
-There is no Merger in v1 (#199): a person merges a pull request once it is
-labelled `factory:ready-to-merge` (LANES.md).
+The Merger (#199) takes a pull request labelled `factory:ready-to-merge`
+whose card is in Doing and proposes its merge; a person approves each one.
+It starts only once `main` carries the checks ruleset as well as the minimal
+one (agents/README.md).
