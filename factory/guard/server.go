@@ -41,8 +41,8 @@ func registerMerger(server *mcp.Server, merger *Merger) {
 		Description: "Merge a pull request only if, re-read now, the given head SHA is still its head " +
 			"and carries an authorised approval, a passing factory/qa from the QA App and every " +
 			"expected check green, with the base up to date. Returns structured state only.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in MergeInput) (*mcp.CallToolResult, MergeResult, error) {
-		res, err := merger.MergeIfReady(ctx, in)
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in MergeInput) (*mcp.CallToolResult, MergeResult, error) {
+		res, err := merger.MergeIfReady(callContext(ctx, req), in)
 		if err != nil {
 			return nil, MergeResult{}, err
 		}
@@ -55,8 +55,8 @@ func registerQA(server *mcp.Server, qa *QA) {
 		Name: ToolRecordQAVerdict,
 		Description: "Record the QA verdict on a pull request as the factory/qa commit status " +
 			"on exactly the given head SHA. Refuses if that SHA is no longer the PR's head.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in VerdictInput) (*mcp.CallToolResult, VerdictResult, error) {
-		res, err := qa.Record(ctx, in)
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in VerdictInput) (*mcp.CallToolResult, VerdictResult, error) {
+		res, err := qa.Record(callContext(ctx, req), in)
 		if err != nil {
 			return nil, VerdictResult{}, err
 		}

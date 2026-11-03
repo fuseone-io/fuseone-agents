@@ -31,7 +31,7 @@ func registerMoveCard(server *mcp.Server, b *Board) {
 		if !ok {
 			return toolResult(MoveResult{Reason: ReasonInvalidInput}, true)
 		}
-		res, err := b.Move(ctx, MoveInput{ItemID: args["item_id"], Lane: args["lane"]})
+		res, err := b.Move(callContext(ctx, req), MoveInput{ItemID: args["item_id"], Lane: args["lane"]})
 		if err != nil {
 			return errorResult(err)
 		}
@@ -54,7 +54,7 @@ func registerSetCardFields(server *mcp.Server, b *Board) {
 		if !ok {
 			return toolResult(FieldsResult{Reason: ReasonInvalidInput}, true)
 		}
-		res, err := b.SetFields(ctx, FieldsInput{ItemID: args["item_id"], WorkType: args["work_type"], Size: args["size"]})
+		res, err := b.SetFields(callContext(ctx, req), FieldsInput{ItemID: args["item_id"], WorkType: args["work_type"], Size: args["size"]})
 		if err != nil {
 			return errorResult(err)
 		}
