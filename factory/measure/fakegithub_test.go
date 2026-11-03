@@ -307,6 +307,17 @@ func nReview(when, state, sha string, who Actor) map[string]any {
 		"author": ghActor(who), "commit": map[string]any{"oid": sha}}
 }
 
+func nReviewID(when, state, sha, id string, who Actor) map[string]any {
+	n := nReview(when, state, sha, who)
+	n["id"] = id
+	return n
+}
+
+func nDismissed(when, reviewID, previous string, who Actor) map[string]any {
+	return map[string]any{"__typename": "ReviewDismissedEvent", "createdAt": when, "actor": ghActor(who),
+		"previousReviewState": previous, "review": map[string]any{"id": reviewID}}
+}
+
 // nCommit is a commit by a person (a linked user) or by an App, whose
 // author GitHub gives no user but a noreply address.
 func nCommit(when, sha string, who Actor) map[string]any {

@@ -151,3 +151,20 @@ func TestClient_refusesAnythingButAQuery(t *testing.T) {
 		t.Fatalf("err = %v after %d requests, want a refusal before any request", err, len(f.requests))
 	}
 }
+
+// A dismissal is read with the review it dismissed, so an approval QA failed
+// before it was taken away still counts as an approval at that instant.
+func TestSnapshot_reviewDismissal_readWithTheReviewItDismissed(t *testing.T) {
+	t.Parallel()
+	f := newFakeGitHub(t)
+	f.add(20, &fakeThing{isPR: true, updatedAt: at(t, "2026-10-06T00:00:00Z"), author: ghActor(devBot).(map[string]any),
+		nodes: []map[string]any{
+			nReviewID("2026-10-05T10:00:00Z", "DISMISSED", shaA, "PRR_1", revBot),
+			nDismissed("2026-10-05T13:00:00Z", "PRR_1", "APPROVED", person),
+		}})
+	f.statuses[shaA] = []map[string]any{rStatus("2026-10-05T12:00:00Z", "failure", qaContext, qaBot)}
+	got := signalsOf(t, read(t, f))
+	if want := "reviewer: " + sigQAOnApproved; strings.Join(got, "|") != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}

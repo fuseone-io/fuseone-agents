@@ -36,8 +36,13 @@ type rawNode struct {
 	Label  *struct {
 		Name string `json:"name"`
 	} `json:"label"`
-	State  string     `json:"state"`
-	Commit *rawCommit `json:"commit"`
+	State          string     `json:"state"`
+	Commit         *rawCommit `json:"commit"`
+	ID             string     `json:"id"`
+	PreviousReview string     `json:"previousReviewState"`
+	Review         *struct {
+		ID string `json:"id"`
+	} `json:"review"`
 }
 
 type rawCommit struct {
@@ -68,14 +73,28 @@ func (n rawNode) event() (Event, bool) {
 		if n.Label != nil {
 			e.Label = n.Label.Name
 		}
-	case "PullRequestReview":
-		e = Event{Kind: KindReview, At: n.SubmittedAt, Actor: n.Author.actor(), State: n.State, SHA: n.Commit.oid()}
+	case "PullRequestReview", "ReviewDismissedEvent":
+		return n.reviewEvent(), true
 	case "PullRequestCommit":
 		return n.Commit.event()
 	default:
 		return Event{}, false
 	}
 	return e, true
+}
+
+// reviewEvent is a review, or the dismissal of one: when, the state the
+// review had before, and which review it was.
+func (n rawNode) reviewEvent() Event {
+	if n.Typename == "PullRequestReview" {
+		return Event{Kind: KindReview, At: n.SubmittedAt, Actor: n.Author.actor(), State: n.State,
+			SHA: n.Commit.oid(), ReviewID: n.ID}
+	}
+	e := Event{Kind: KindDismissed, At: n.CreatedAt, Actor: n.Actor.actor(), State: n.PreviousReview}
+	if n.Review != nil {
+		e.ReviewID = n.Review.ID
+	}
+	return e
 }
 
 func (c *rawCommit) oid() string {

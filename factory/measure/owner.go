@@ -57,6 +57,9 @@ const (
 	KindUnlabeled
 	KindReview
 	KindCommit
+	// KindDismissed is a review's dismissal: State holds the state the review
+	// had before, ReviewID the review it dismissed.
+	KindDismissed
 )
 
 // Event is one timeline item, reduced to what a measure reads. A comment's
@@ -71,6 +74,7 @@ type Event struct {
 	Label    string // KindLabeled, KindUnlabeled
 	State    string // KindReview: APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED
 	SHA      string // KindReview, KindCommit
+	ReviewID string // KindReview: its node id; KindDismissed: the review dismissed
 	ReturnTo string // KindComment
 }
 

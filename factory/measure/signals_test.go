@@ -56,6 +56,59 @@ func TestCaughtLater_qaFailure_goesToTheReviewerOnlyWhenItApprovedThatHead(t *te
 	}
 }
 
+func dismissal(t *testing.T, when, reviewID, previous string, who Actor) Event {
+	return Event{Kind: KindDismissed, At: at(t, when), Actor: who, ReviewID: reviewID, State: previous}
+}
+
+func reviewWithID(t *testing.T, when, state, sha, id string, who Actor) Event {
+	e := review(t, when, state, sha, who)
+	e.ReviewID = id
+	return e
+}
+
+// The Reviewer's standing on a head is judged at the instant QA failed it:
+// its latest decision on that head submitted before the status.
+func TestCaughtLater_qaFailure_judgedByTheReviewersLatestDecisionBeforeIt(t *testing.T) {
+	t.Parallel()
+	fail := qaStatus(t, "2026-10-05T12:00:00Z", shaA, "failure", qaBot)
+	for _, tc := range []struct {
+		name    string
+		reviews []Event
+		want    []string
+	}{
+		{"approved, then the failure", []Event{
+			review(t, "2026-10-05T10:00:00Z", "APPROVED", shaA, revBot),
+		}, []string{"reviewer: " + sigQAOnApproved}},
+		{"an approval after the failure", []Event{
+			review(t, "2026-10-05T13:00:00Z", "APPROVED", shaA, revBot),
+		}, []string{"developer: " + sigQAOnUnreviewed}},
+		{"approved, changes requested, then the failure", []Event{
+			review(t, "2026-10-05T10:00:00Z", "APPROVED", shaA, revBot),
+			review(t, "2026-10-05T11:00:00Z", "CHANGES_REQUESTED", shaA, revBot),
+		}, []string{"developer: " + sigReviewerChanges}}, // the change request's own signal; the failure gives none
+		{"approved, dismissed, then the failure", []Event{
+			reviewWithID(t, "2026-10-05T10:00:00Z", "DISMISSED", shaA, "R1", revBot),
+			dismissal(t, "2026-10-05T11:00:00Z", "R1", "APPROVED", person),
+		}, nil},
+		{"approved, the failure, dismissed after it", []Event{
+			reviewWithID(t, "2026-10-05T10:00:00Z", "DISMISSED", shaA, "R1", revBot),
+			dismissal(t, "2026-10-05T13:00:00Z", "R1", "APPROVED", person),
+		}, []string{"reviewer: " + sigQAOnApproved}},
+		{"a dismissal the timeline does not explain", []Event{
+			review(t, "2026-10-05T10:00:00Z", "DISMISSED", shaA, revBot),
+		}, nil},
+		{"changes requested, then approved, then the failure", []Event{
+			review(t, "2026-10-05T09:00:00Z", "CHANGES_REQUESTED", shaA, revBot),
+			review(t, "2026-10-05T10:00:00Z", "APPROVED", shaA, revBot),
+		}, []string{"developer: " + sigReviewerChanges, "reviewer: " + sigQAOnApproved}},
+	} {
+		got := signalsOf(t, snapshot(devPR(tc.reviews, fail)))
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestCaughtLater_qaFailureNotByTheQABot_isNoSignal(t *testing.T) {
 	t.Parallel()
 	pr := devPR(nil,

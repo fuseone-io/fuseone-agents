@@ -127,7 +127,8 @@ report will use.
   `closedByPullRequestsReferences` (closed ones included) on an issue;
 - their timelines through GraphQL, in batches of 20 aliases, each `first: 100`
   and followed by cursor to its last page: status changes, comments, labels,
-  reopen, close and merge events, and, on pull requests, reviews and commits;
+  reopen, close and merge events, and, on pull requests, reviews (with their
+  node id), review dismissals and commits;
 - through REST, every page of the commit statuses of each commit or reviewed
   head the timeline names, on pull requests a role wrote, acted on or labelled
   `factory:*`. Only `factory/qa` statuses are kept.
@@ -181,15 +182,37 @@ calls it a defect. Each signal counts in the week of the act that caught it.
 | Role | Signal | Counted |
 |---|---|---|
 | Developer | **caught by the Reviewer: changes requested**: the Reviewer bot's `CHANGES_REQUESTED` review on a pull request the Developer bot opened | once per reviewed commit |
-| Developer | **caught by QA on a head the Reviewer never reviewed**: `factory/qa` = `failure`, created by the QA bot, on a commit of a Developer pull request that the Reviewer bot left no review on | once per commit |
-| Reviewer | **caught by QA on a head the Reviewer approved**: `factory/qa` = `failure`, created by the QA bot, on a commit the Reviewer bot approved. The Developer gets no signal for it | once per commit |
+| Developer | **caught by QA on a head the Reviewer never reviewed**: `factory/qa` = `failure`, created by the QA bot, on a commit of a Developer pull request that the Reviewer bot had left no review on before the status | once per commit, judged at its first failure |
+| Reviewer | **caught by QA on a head the Reviewer approved**: `factory/qa` = `failure`, created by the QA bot, on a commit whose latest Reviewer-bot decision before the status was `APPROVED`. The Developer gets no signal for it | once per commit, judged at its first failure |
 | Reviewer | **caught by a person after the Reviewer approved**: after an approval and before the Reviewer's next decision (`APPROVED`, `CHANGES_REQUESTED` or `DISMISSED`), a person's `CHANGES_REQUESTED` review or a person's commit | once per approval, at the first such act |
 | QA | **caught by a person after QA passed**: after `factory/qa` = `success` by the QA bot and before QA's next status on the pull request, a person's `CHANGES_REQUESTED` review, a person's commit, the pull request closed without a merge, or a person reopening an issue it closes | once per success, at the first such act |
 | Triage, Architect | **returned to Triagem by a person**: a person moved the card into Triagem from another lane | once per move |
 
-A `factory/qa` failure on a head that the Reviewer had sent back gives nobody a
-signal. A status that any creator other than the QA bot set on `factory/qa`
-counts for nothing.
+A QA failure is judged **at the instant of the status**, by the Reviewer bot's
+reviews of that same commit submitted before the status's `created_at`. A
+review submitted after the failure never counts back.
+
+- If the latest decision (`APPROVED`, `CHANGES_REQUESTED` or `DISMISSED`) is
+  `APPROVED`, the signal is the Reviewer's.
+- If it is `CHANGES_REQUESTED` or `DISMISSED`, nobody gets a signal: the head
+  had been sent back, or its approval taken away.
+- If there is no review of the commit before the status, the signal is the
+  Developer's, when the Developer bot opened the pull request.
+- If there are only `COMMENTED` reviews, nobody gets a signal: they decide
+  nothing, but the head was looked at.
+
+**Dismissals.** GitHub rewrites a dismissed review's state to `DISMISSED` and
+keeps its original `submittedAt`. The timeline also carries a
+`ReviewDismissedEvent` with its `createdAt`, the `previousReviewState`, and
+the review it dismissed. The CLI reads both and matches them by the review's
+node id. A dismissed approval therefore counts as `APPROVED` from its
+submission until the dismissal, and as `DISMISSED` from then on. A dismissed
+review whose event is missing counts as `DISMISSED` from its submission. What
+it said before is unknown, so it vouches for nothing. The same rebuilt
+decisions bound the "after the Reviewer approved" window below.
+
+A status that any creator other than the QA bot set on `factory/qa` counts for
+nothing.
 
 ### Who a return to Triagem belongs to
 

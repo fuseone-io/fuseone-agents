@@ -31,6 +31,8 @@ func kindName(k Kind) string {
 		return "review"
 	case KindCommit:
 		return "commit"
+	case KindDismissed:
+		return "review dismissal"
 	}
 	return "event"
 }

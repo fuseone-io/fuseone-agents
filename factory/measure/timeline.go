@@ -12,7 +12,7 @@ const batchSize = 20
 
 const (
 	issueTypes = "PROJECT_V2_ITEM_STATUS_CHANGED_EVENT, ISSUE_COMMENT, REOPENED_EVENT, CLOSED_EVENT, LABELED_EVENT, UNLABELED_EVENT"
-	prTypes    = issueTypes + ", MERGED_EVENT, PULL_REQUEST_REVIEW, PULL_REQUEST_COMMIT"
+	prTypes    = issueTypes + ", MERGED_EVENT, PULL_REQUEST_REVIEW, REVIEW_DISMISSED_EVENT, PULL_REQUEST_COMMIT"
 
 	actorSel    = `{ __typename login }`
 	issueFields = `__typename
@@ -24,7 +24,8 @@ const (
 ... on UnlabeledEvent { createdAt actor ` + actorSel + ` label { name } }`
 	prFields = issueFields + `
 ... on MergedEvent { createdAt actor ` + actorSel + ` }
-... on PullRequestReview { submittedAt state author ` + actorSel + ` commit { oid } }
+... on PullRequestReview { id submittedAt state author ` + actorSel + ` commit { oid } }
+... on ReviewDismissedEvent { createdAt previousReviewState actor ` + actorSel + ` review { id } }
 ... on PullRequestCommit { commit { oid committedDate author { email user { login } } } }`
 
 	refSel    = `(first: 10) { nodes { number repository { nameWithOwner } } }`
