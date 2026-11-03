@@ -14,10 +14,10 @@ import (
 
 // The sidecar's whole contract with its pod, run against the built binary
 // from its real entry: the environment a chart gives it, a loopback bind,
-// no credential of its own, and a /healthz the kubelet can probe. Every
+// no credential of its own, a /healthz, and the exec probe that reads it. Every
 // other test drives serveHTTP or run directly, which cannot see a variable
 // the process never reads from os.Getenv, or a main that never serves.
-func TestBinary_passThroughOnLoopback_answersHealthzAndStopsOnSIGTERM(t *testing.T) {
+func TestBinary_passThroughOnLoopback_answersHealthzAndItsProbeAndStopsOnSIGTERM(t *testing.T) {
 	t.Parallel()
 
 	bin := filepath.Join(t.TempDir(), "factory-mcp")
@@ -44,6 +44,14 @@ func TestBinary_passThroughOnLoopback_answersHealthzAndStopsOnSIGTERM(t *testing
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK || string(body) != "ok\n" {
 		t.Fatalf("healthz: status %d, body %q", resp.StatusCode, body)
+	}
+
+	// The exec probe the chart gives the sidecar: the same binary, inside the
+	// pod, reading the same FACTORY_MCP_ADDR the server bound.
+	probe := exec.Command(bin, "healthcheck")
+	probe.Env = []string{"FACTORY_MCP_ADDR=" + addr}
+	if out, err := probe.CombinedOutput(); err != nil {
+		t.Fatalf("healthcheck: %v\n%s", err, out)
 	}
 
 	// The kubelet stops a container with SIGTERM: a clean exit, not a kill.

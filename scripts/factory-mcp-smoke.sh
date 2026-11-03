@@ -1,9 +1,9 @@
 #!/bin/sh
 # factory-mcp-smoke.sh IMAGE — the image starts as the sidecar does and answers
-# /healthz.
+# /healthz, and its exec probe passes inside it.
 #
 # Run against the built image, not the binary: a missing ENTRYPOINT, a binary
-# built for the wrong platform or a base without certificates passes every Go
+# built for the wrong platform or a probe the image cannot run passes every Go
 # test and fails here. The board values are placeholders, shaped like the real
 # ones and naming no board; pass-through mode holds no credential, so nothing
 # here is a secret either.
@@ -32,6 +32,10 @@ for _ in $(seq 1 30); do
   if body=$(curl -fsS "http://127.0.0.1:$port/healthz" 2>/dev/null); then
     if [ "$body" = "ok" ]; then
       echo "factory-mcp image answers /healthz"
+      # The exec probe the sidecar is given, run where the kubelet runs it:
+      # inside the container, which has no shell and no curl.
+      docker exec "$name" /factory-mcp healthcheck
+      echo "factory-mcp healthcheck passes inside the image"
       exit 0
     fi
   fi
