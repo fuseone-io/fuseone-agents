@@ -59,7 +59,7 @@ func TestAdvance_aStandingGrantCoversTheParkedWrite_decidesWithTheOwnersName(t *
 		t.Fatalf("decode: %v", err)
 	}
 	if !decided.Approved || decided.By != "usr_ana" ||
-		!strings.Contains(decided.Note, "SG-7") {
+		!strings.Contains(decided.Note, "SG-7") || decided.StandingGrant != "SG-7" {
 		t.Fatalf("decided = %+v, want the grant owner's name and the grant id", decided)
 	}
 

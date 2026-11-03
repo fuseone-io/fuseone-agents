@@ -351,6 +351,12 @@ type ApprovalDecidedPayload struct {
 	// decision arriving about a question the run has moved past can be told
 	// apart from the one it is waiting on.
 	AtSeq int64 `json:"at_seq,omitempty"`
+	// StandingGrant is the standing approval that gave this decision on a
+	// person's behalf (#192), set only by the engine. By is then the grant
+	// owner and the note is free text, so this field is the one structural
+	// mark of where the decision came from. Empty on a person's decision
+	// and on standing decisions written before it existed.
+	StandingGrant string `json:"standing_grant,omitempty"`
 }
 
 /*

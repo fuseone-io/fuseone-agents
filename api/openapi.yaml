@@ -1295,6 +1295,60 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /work-items/measures:
+    get:
+      tags: [runs]
+      operationId: getWorkItemMeasures
+      summary: The ledger's weekly measures of the work on cards
+      description: |
+        Per ISO week and agent, what the ledger knows about the factory's
+        work (#201): the runs that opened, how many were still open, the
+        distinct cards they claimed, what they asked people and how people
+        answered, and where their cost went.
+
+        A week starts on Monday at 00:00 UTC (`weekStart`, `timezone`). A
+        run belongs to the week it opened in, and every proposal and
+        decision it holds counts there, however late it was answered. The
+        window is the `weeks` whole weeks ending with the current one, which
+        is never `complete`. A week with no run has no row.
+
+        Cards are the distinct roots of the runs' claims: a pull request
+        linked to its issue through `$fuseone.work_item.link` is its issue,
+        resolved in the run's own company by a link the caller may read. A
+        run on a card only by how it was opened (an event or a GitHub
+        delivery) counts in `runs` and its proposals but adds no card.
+
+        Narrowed by the caller's own `run:read` and `agent:read` scopes, as
+        the trail is: a run the caller cannot read is absent and counts
+        nowhere. A caller with `run:read` but no `agent:read` gets the same
+        body as an empty window. Cost appears only with `cost:read` over
+        every scope a row folds, and then all three parts together.
+
+        Counts, agent ids and instants only: no tool arguments, no step
+        payloads, no approval reasons or notes, no references.
+
+        The measures the ledger cannot answer are listed in `unavailable`,
+        on every response, never reported as zero.
+      parameters:
+        - name: weeks
+          in: query
+          description: How many weeks, ending with the current one. 1 to 26; anything else is 400.
+          schema: { type: integer, minimum: 1, maximum: 26, default: 8 }
+        - $ref: '#/components/parameters/CompanyScope'
+        - $ref: '#/components/parameters/Area'
+        - name: agentId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: The window's weekly rows.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkItemMeasures' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /work-items/trail:
     get:
       tags: [runs]
@@ -1687,6 +1741,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Run' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -8206,6 +8261,142 @@ components:
           items: { $ref: '#/components/schemas/Run' }
         nextCursor: { type: string, nullable: true }
 
+    WorkItemMeasures:
+      type: object
+      required: [weekStart, timezone, from, to, asOf, rows, unavailable]
+      properties:
+        weekStart:
+          type: string
+          enum: [monday]
+          description: Weeks start on Monday at 00:00 (ISO weeks).
+        timezone:
+          type: string
+          enum: [UTC]
+          description: The zone weeks are cut in.
+        from:
+          type: string
+          format: date-time
+          description: The Monday 00:00 UTC that starts the window's first week.
+        to:
+          type: string
+          format: date-time
+          description: The Monday 00:00 UTC after the window's last week, exclusive.
+        asOf:
+          type: string
+          format: date-time
+          description: The instant the window was measured at.
+        rows:
+          type: array
+          description: One row per week and agent, oldest week first, agents in order.
+          items: { $ref: '#/components/schemas/WorkItemMeasureRow' }
+        unavailable:
+          type: array
+          description: |
+            The measures #201 asks for that this endpoint does not answer,
+            each listed once with why. `edited` is `not_recorded`: a
+            decision approves or refuses the proposal as asked, and the
+            engine refuses arguments whose digest differs from the approved
+            ones, so an approval with changes does not exist —
+            `revisedAfterRefusal` and `repeatedAfterRefusal` are what the
+            ledger records instead. `laneTime` and `caughtLater` are
+            `board_only`: read from the project board by the factory CLI.
+          items: { $ref: '#/components/schemas/UnavailableMeasure' }
+
+    WorkItemMeasureRow:
+      type: object
+      required: [week, complete, agentId, runs, openRuns, cards, proposals]
+      properties:
+        week:
+          type: string
+          format: date-time
+          description: The Monday 00:00 UTC that starts the week.
+        complete:
+          type: boolean
+          description: Whether the week had ended when measured; false for the current week.
+        agentId: { type: string }
+        runs:
+          type: integer
+          description: Runs of this agent that opened this week.
+        openRuns:
+          type: integer
+          description: Of those, the runs neither finished nor failed.
+        cards:
+          type: integer
+          description: |
+            Distinct cards the runs claimed, a linked pull request counted
+            as its issue. Inherited attributions add none.
+        proposals: { $ref: '#/components/schemas/WorkItemProposals' }
+        costOnCardsMicros:
+          type: integer
+          format: int64
+          description: |
+            Cost of the runs that claimed a card or a pull request. The
+            three costs add up to the cost of every run the row counts.
+            All three are absent — never zero — unless the caller holds
+            cost:read over every scope of the row.
+        costInheritedMicros:
+          type: integer
+          format: int64
+          description: |
+            Cost of the runs on a card only by how they were opened (an
+            event or a GitHub delivery): no card's cost, but not lost.
+        costOffCardMicros:
+          type: integer
+          format: int64
+          description: Cost of the runs on no card at all.
+
+    WorkItemProposals:
+      type: object
+      required: [requested, approved, refused, abandoned, pending, revisedAfterRefusal, repeatedAfterRefusal, standing]
+      properties:
+        requested:
+          type: integer
+          description: Approvals requested.
+        approved:
+          type: integer
+          description: Decisions that approved, standing approvals included.
+        refused: { type: integer }
+        abandoned:
+          type: integer
+          description: Runs a person abandoned.
+        pending:
+          type: integer
+          description: Runs waiting on an approval now.
+        revisedAfterRefusal:
+          type: integer
+          description: |
+            Refusals after which the same run proposed the same tool again
+            with other arguments (another args digest). Each refusal counts
+            at most once; a legacy refusal that names no request never does.
+        repeatedAfterRefusal:
+          type: integer
+          description: |
+            Refusals after which the same run proposed the same tool with
+            the same arguments again. Each refusal counts at most once.
+        standing:
+          type: integer
+          description: |
+            Approvals a standing approval gave on a person's behalf; also in
+            `approved`. Counted by the grant the engine records on the
+            decision, never by its note. A standing approval recorded before
+            the grant was recorded on it cannot be told from a
+            person's — its approver is the grant's owner and its note is the
+            only trace — so it counts in `approved` and not here.
+
+    UnavailableMeasure:
+      type: object
+      required: [measure, reason, detail]
+      properties:
+        measure:
+          type: string
+          enum: [edited, laneTime, caughtLater]
+        reason:
+          type: string
+          enum: [not_recorded, board_only]
+        detail:
+          type: string
+          description: Why, in English, and where the measure lives when it does.
+
     WorkItemTrail:
       type: object
       required: [ref, runs]
@@ -8661,7 +8852,13 @@ components:
             Sequence number of the approval_requested step being answered.
             Required so a stale browser tab cannot approve an action that a
             later step already superseded.
-        note: { type: string }
+        note:
+          type: string
+          description: |
+            Free text recorded with the decision. A note starting with
+            `standing approval ` (in any case, after leading space) is 400:
+            that prefix is reserved for the decisions the engine writes under
+            a standing approval.
 
     CostBucket:
       type: object

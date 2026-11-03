@@ -61,6 +61,8 @@ type Store interface {
 	WorkItemCost(ctx context.Context, filter domain.RunFilter, ref domain.WorkItemRef) (domain.WorkItemCost, error)
 	WorkItemTrail(ctx context.Context, filter domain.RunFilter, cost *domain.RunFilter,
 		ref domain.WorkItemRef, page domain.WorkItemPage) (domain.WorkItemTrail, error)
+	WorkItemMeasures(ctx context.Context, filter domain.RunFilter, cost *domain.RunFilter,
+		window domain.WorkItemWindow) ([]domain.WorkItemWeek, error)
 	StartsAndFinishes(ctx context.Context, runs []domain.RunSummary) (map[domain.RunID][]domain.Step, error)
 	FinishedSince(ctx context.Context, after domain.FinishCursor, limit int) ([]domain.FinishedRun, error)
 	EventCursor(ctx context.Context) (domain.FinishCursor, error)

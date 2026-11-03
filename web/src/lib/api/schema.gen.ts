@@ -871,6 +871,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/work-items/measures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The ledger's weekly measures of the work on cards
+         * @description Per ISO week and agent, what the ledger knows about the factory's
+         *     work (#201): the runs that opened, how many were still open, the
+         *     distinct cards they claimed, what they asked people and how people
+         *     answered, and where their cost went.
+         *
+         *     A week starts on Monday at 00:00 UTC (`weekStart`, `timezone`). A
+         *     run belongs to the week it opened in, and every proposal and
+         *     decision it holds counts there, however late it was answered. The
+         *     window is the `weeks` whole weeks ending with the current one, which
+         *     is never `complete`. A week with no run has no row.
+         *
+         *     Cards are the distinct roots of the runs' claims: a pull request
+         *     linked to its issue through `$fuseone.work_item.link` is its issue,
+         *     resolved in the run's own company by a link the caller may read. A
+         *     run on a card only by how it was opened (an event or a GitHub
+         *     delivery) counts in `runs` and its proposals but adds no card.
+         *
+         *     Narrowed by the caller's own `run:read` and `agent:read` scopes, as
+         *     the trail is: a run the caller cannot read is absent and counts
+         *     nowhere. A caller with `run:read` but no `agent:read` gets the same
+         *     body as an empty window. Cost appears only with `cost:read` over
+         *     every scope a row folds, and then all three parts together.
+         *
+         *     Counts, agent ids and instants only: no tool arguments, no step
+         *     payloads, no approval reasons or notes, no references.
+         *
+         *     The measures the ledger cannot answer are listed in `unavailable`,
+         *     on every response, never reported as zero.
+         */
+        get: operations["getWorkItemMeasures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/work-items/trail": {
         parameters: {
             query?: never;
@@ -5308,6 +5355,124 @@ export interface components {
             items: components["schemas"]["Run"][];
             nextCursor?: string | null;
         };
+        WorkItemMeasures: {
+            /**
+             * @description Weeks start on Monday at 00:00 (ISO weeks).
+             * @enum {string}
+             */
+            weekStart: "monday";
+            /**
+             * @description The zone weeks are cut in.
+             * @enum {string}
+             */
+            timezone: "UTC";
+            /**
+             * Format: date-time
+             * @description The Monday 00:00 UTC that starts the window's first week.
+             */
+            from: string;
+            /**
+             * Format: date-time
+             * @description The Monday 00:00 UTC after the window's last week, exclusive.
+             */
+            to: string;
+            /**
+             * Format: date-time
+             * @description The instant the window was measured at.
+             */
+            asOf: string;
+            /** @description One row per week and agent, oldest week first, agents in order. */
+            rows: components["schemas"]["WorkItemMeasureRow"][];
+            /**
+             * @description The measures #201 asks for that this endpoint does not answer,
+             *     each listed once with why. `edited` is `not_recorded`: a
+             *     decision approves or refuses the proposal as asked, and the
+             *     engine refuses arguments whose digest differs from the approved
+             *     ones, so an approval with changes does not exist —
+             *     `revisedAfterRefusal` and `repeatedAfterRefusal` are what the
+             *     ledger records instead. `laneTime` and `caughtLater` are
+             *     `board_only`: read from the project board by the factory CLI.
+             */
+            unavailable: components["schemas"]["UnavailableMeasure"][];
+        };
+        WorkItemMeasureRow: {
+            /**
+             * Format: date-time
+             * @description The Monday 00:00 UTC that starts the week.
+             */
+            week: string;
+            /** @description Whether the week had ended when measured; false for the current week. */
+            complete: boolean;
+            agentId: string;
+            /** @description Runs of this agent that opened this week. */
+            runs: number;
+            /** @description Of those, the runs neither finished nor failed. */
+            openRuns: number;
+            /**
+             * @description Distinct cards the runs claimed, a linked pull request counted
+             *     as its issue. Inherited attributions add none.
+             */
+            cards: number;
+            proposals: components["schemas"]["WorkItemProposals"];
+            /**
+             * Format: int64
+             * @description Cost of the runs that claimed a card or a pull request. The
+             *     three costs add up to the cost of every run the row counts.
+             *     All three are absent — never zero — unless the caller holds
+             *     cost:read over every scope of the row.
+             */
+            costOnCardsMicros?: number;
+            /**
+             * Format: int64
+             * @description Cost of the runs on a card only by how they were opened (an
+             *     event or a GitHub delivery): no card's cost, but not lost.
+             */
+            costInheritedMicros?: number;
+            /**
+             * Format: int64
+             * @description Cost of the runs on no card at all.
+             */
+            costOffCardMicros?: number;
+        };
+        WorkItemProposals: {
+            /** @description Approvals requested. */
+            requested: number;
+            /** @description Decisions that approved, standing approvals included. */
+            approved: number;
+            refused: number;
+            /** @description Runs a person abandoned. */
+            abandoned: number;
+            /** @description Runs waiting on an approval now. */
+            pending: number;
+            /**
+             * @description Refusals after which the same run proposed the same tool again
+             *     with other arguments (another args digest). Each refusal counts
+             *     at most once; a legacy refusal that names no request never does.
+             */
+            revisedAfterRefusal: number;
+            /**
+             * @description Refusals after which the same run proposed the same tool with
+             *     the same arguments again. Each refusal counts at most once.
+             */
+            repeatedAfterRefusal: number;
+            /**
+             * @description Approvals a standing approval gave on a person's behalf; also in
+             *     `approved`. Counted by the grant the engine records on the
+             *     decision, never by its note. A standing approval recorded before
+             *     the grant was recorded on it cannot be told from a
+             *     person's — its approver is the grant's owner and its note is the
+             *     only trace — so it counts in `approved` and not here.
+             */
+            standing: number;
+        };
+        UnavailableMeasure: {
+            /** @enum {string} */
+            measure: "edited" | "laneTime" | "caughtLater";
+            /** @enum {string} */
+            reason: "not_recorded" | "board_only";
+            /** @description Why, in English, and where the measure lives when it does. */
+            detail: string;
+        };
         WorkItemTrail: {
             /**
              * @description The card the trail is of, in canonical form: the reference asked
@@ -5650,6 +5815,12 @@ export interface components {
              *     later step already superseded.
              */
             atSeq: number;
+            /**
+             * @description Free text recorded with the decision. A note starting with
+             *     `standing approval ` (in any case, after leading space) is 400:
+             *     that prefix is reserved for the decisions the engine writes under
+             *     a standing approval.
+             */
             note?: string;
         };
         CostBucket: {
@@ -6979,6 +7150,36 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    getWorkItemMeasures: {
+        parameters: {
+            query?: {
+                /** @description How many weeks, ending with the current one. 1 to 26; anything else is 400. */
+                weeks?: number;
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["CompanyScope"];
+                area?: components["parameters"]["Area"];
+                agentId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The window's weekly rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemMeasures"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
     getWorkItemTrail: {
         parameters: {
             query: {
@@ -7376,6 +7577,7 @@ export interface operations {
                     "application/json": components["schemas"]["Run"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

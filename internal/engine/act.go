@@ -281,8 +281,10 @@ func (r *Runner) standingDecide(
 		Payload: mustJSON(domain.ApprovalDecidedPayload{
 			Approved: true,
 			By:       grant.By,
-			Note:     "standing approval " + grant.ID + ": " + grant.Reason,
+			Note:     domain.StandingApprovalNotePrefix + grant.ID + ": " + grant.Reason,
 			AtSeq:    atSeq,
+			// The provenance the measures count by; the note is for people.
+			StandingGrant: grant.ID,
 		}),
 	})
 	if err != nil {
