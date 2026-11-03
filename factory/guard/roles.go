@@ -87,7 +87,9 @@ func roleMoves(r Role, from, to Lane) bool {
 	case RoleDeveloper, RoleReviewer, RoleQA:
 		return from == LaneDoing && to == LaneTravado
 	case RoleMerger:
-		return from == LaneDoing && to == LaneDone
+		// Travado is the Merger's exit when only a person can unblock a merge:
+		// a base the head is behind, a conflict, a refusal GitHub gave.
+		return from == LaneDoing && (to == LaneDone || to == LaneTravado)
 	}
 	return false
 }
