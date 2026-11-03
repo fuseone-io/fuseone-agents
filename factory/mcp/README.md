@@ -269,7 +269,7 @@ when a served role uses it.
 | `FACTORY_SIZES` | triage, architect | yes | `S=<opt>,M=<opt>,L=<opt>`: all three. |
 | `FACTORY_REPOSITORY` | qa, merger; every role in `app` mode | yes | The only repository it acts on: `fuseone-io/fuseone-agents`. In `app` mode, also the one repository the minted tokens are restricted to. |
 | `FACTORY_BASE_BRANCH` | qa, merger | yes | The only base it accepts: `main`. |
-| `FACTORY_QA_BOT_ID` | qa, merger | yes | Numeric **user id of the QA App's bot account** (see below). The Merger accepts `factory/qa` only from it; the QA instance checks it created the status under it. |
+| `FACTORY_QA_BOT_ID` | qa, merger | in `app` mode; see the cell | Numeric **user id of the QA App's bot account** (see below). The Merger accepts `factory/qa` only from it; the QA instance checks it created the status under it. In `github-app-token` mode there is **one QA identity**: the id is derived from the `qa` entry of `FACTORY_ROLE_BOTS`, and a `FACTORY_QA_BOT_ID` that is also set must equal it, or the server refuses to start. If the Merger is served and `qa` is not listed (QA served elsewhere), `FACTORY_QA_BOT_ID` must name the QA bot explicitly; without either, the server refuses to start rather than run a Merger with no QA identity to trust. |
 | `FACTORY_REVIEWERS` | merger | yes | Comma-separated GitHub logins whose approval counts. **The same list the ruleset requires (#207).** Compared case-insensitively. |
 | `FACTORY_CHECKS` | merger | yes | Comma-separated check-run names required on the head, `go,postgres,console,chart,artifact`. **Not `build`**: see below. |
 | `FACTORY_CHECKS_APP_ID` | merger | yes | The app that must have emitted them: GitHub Actions, `15368`. |

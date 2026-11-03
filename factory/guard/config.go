@@ -154,8 +154,46 @@ func (e *envReader) repository(cfg *Config) {
 	}
 	if prs {
 		cfg.Base = e.required("FACTORY_BASE_BRANCH")
-		cfg.QABotID = e.id("FACTORY_QA_BOT_ID")
+		cfg.QABotID = e.qaIdentity(cfg)
 	}
+}
+
+// qaIdentity is the one QA bot: the identity QA's statuses must carry and
+// the only creator of factory/qa the Merger trusts. In pass-through mode
+// FACTORY_ROLE_BOTS already says who QA is, so the id is derived from it; a
+// FACTORY_QA_BOT_ID that is also set must agree, or the Merger could accept
+// evidence from a bot that is not the one serving QA. When the Merger is
+// served without qa in the allowlist, FACTORY_QA_BOT_ID must name the QA bot
+// explicitly: the Merger never runs without a QA identity to trust.
+func (e *envReader) qaIdentity(cfg *Config) int64 {
+	if cfg.Auth != AuthPassThrough {
+		return e.id("FACTORY_QA_BOT_ID")
+	}
+	listed := cfg.botOf(RoleQA)
+	raw := strings.TrimSpace(e.get("FACTORY_QA_BOT_ID"))
+	switch {
+	case raw == "" && listed == 0:
+		e.fail("FACTORY_ROLE_BOTS", "must list qa, or FACTORY_QA_BOT_ID must name the QA bot: "+
+			"the Merger has no QA identity to trust")
+		return 0
+	case raw == "":
+		return listed
+	}
+	explicit := e.positive("FACTORY_QA_BOT_ID", raw)
+	if listed != 0 && explicit != listed {
+		e.fail("FACTORY_QA_BOT_ID", "differs from the qa bot in FACTORY_ROLE_BOTS: there is one QA identity")
+	}
+	return explicit
+}
+
+// botOf is the bot listed for role, or 0.
+func (c Config) botOf(role Role) int64 {
+	for id, r := range c.RoleBots {
+		if r == role {
+			return id
+		}
+	}
+	return 0
 }
 
 // app reads the App credentials. The key comes from a file (a mounted secret)
