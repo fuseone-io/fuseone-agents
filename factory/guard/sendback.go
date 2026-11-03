@@ -77,15 +77,26 @@ func routeFor(cause Reason) (sendBackRoute, bool) {
 type SendBack struct {
 	gh     *Client
 	target target
+	merger *Merger // re-judges the head, and holds the refusals it observed
 }
 
-// NewSendBack builds the tool from the Merger instance's configuration.
-func NewSendBack(cfg Config, gh *Client) *SendBack {
-	return &SendBack{gh: gh, target: target{repo: cfg.Repo, base: cfg.Base}}
+// NewMergerTools builds merge_if_ready and send_back sharing one record of
+// the refusals the server observed, so send_back can prove the causes a
+// re-read cannot rebuild.
+func NewMergerTools(cfg Config, gh *Client, clock Clock) (*Merger, *SendBack) {
+	m := NewMerger(cfg, gh)
+	m.refusals = newRefusals(clock)
+	return m, &SendBack{gh: gh, target: target{repo: cfg.Repo, base: cfg.Base}, merger: m}
 }
 
-// SendBack posts the closed-text comment first, then moves the label: add
-// the new one, then remove ready-to-merge. A failure between the writes
+// SendBack writes nothing unless the server itself observes the cause on
+// the given head: a cause a re-read can rebuild is judged again now, exactly
+// as merge_if_ready would, and merge_refused or outcome_unknown must be one
+// this process's merge_if_ready returned for that head. The caller's reason
+// and SHA name what to check; they are never proof.
+//
+// It then posts the closed-text comment first and moves the label after:
+// add the new one, then remove ready-to-merge. A failure between the writes
 // leaves the PR still ready-to-merge, so the next send_back repairs it; the
 // one cost of a retry is a repeated comment.
 func (s *SendBack) SendBack(ctx context.Context, in SendBackInput) (SendBackResult, error) {
@@ -95,15 +106,18 @@ func (s *SendBack) SendBack(ctx context.Context, in SendBackInput) (SendBackResu
 		res.Reason = ReasonInvalidInput
 		return res, nil
 	}
-	res.Cause, res.Travado = Reason(in.Reason), route.to == ""
+	res.Cause = Reason(in.Reason)
 	pr, err := s.gh.pullRequest(ctx, in.PR)
 	if err != nil {
 		return res, fmt.Errorf("send_back: %w", err)
 	}
 	if res.Reason = s.judge(pr); res.Reason != "" {
-		res.Travado = false
 		return res, nil
 	}
+	if res.Reason, err = s.observe(ctx, pr, in.PR, in.HeadSHA, res.Cause); err != nil || res.Reason != "" {
+		return res, err
+	}
+	res.Travado = route.to == ""
 	if res.CommentID, res.Reason, res.HTTPStatus = s.comment(ctx, in.PR, commentBody(res.Cause, in.HeadSHA, route)); res.Reason != "" {
 		return res, nil
 	}
@@ -129,6 +143,26 @@ func (s *SendBack) judge(pr pullRequest) Reason {
 		return ReasonNotReadyToMerge
 	}
 	return ""
+}
+
+// observe answers "" when the server sees cause on head right now, and
+// cause_not_observed otherwise: a head that moved, a signal repaired in the
+// meantime, a cause the caller made up.
+func (s *SendBack) observe(ctx context.Context, pr pullRequest, number int, head string, cause Reason) (Reason, error) {
+	if unrebuildable(cause) {
+		if pr.Head.SHA != head || !s.merger.refusals.observed(number, head, cause) {
+			return ReasonCauseNotObserved, nil
+		}
+		return "", nil
+	}
+	now, _, err := s.merger.prejudge(ctx, number, head)
+	if err != nil {
+		return "", fmt.Errorf("send_back: %w", err)
+	}
+	if now != cause {
+		return ReasonCauseNotObserved, nil
+	}
+	return "", nil
 }
 
 // commentBody is closed text: the reason, the judged head and the action,

@@ -4,16 +4,53 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
-func (h *harness) sendBack(cause Reason) SendBackResult {
+// mergerTools builds merge_if_ready and send_back over one refusal record,
+// on a clock the test moves.
+func (h *harness) mergerTools(clock Clock) (*Merger, *SendBack) {
+	return NewMergerTools(h.cfg, h.client("merger-token"), clock)
+}
+
+func (h *harness) sendBackWith(s *SendBack, cause Reason) SendBackResult {
 	h.t.Helper()
-	res, err := NewSendBack(h.cfg, h.client("merger-token")).SendBack(h.t.Context(),
-		SendBackInput{PR: testPR, HeadSHA: headA, Reason: string(cause)})
+	res, err := s.SendBack(h.t.Context(), SendBackInput{PR: testPR, HeadSHA: headA, Reason: string(cause)})
 	if err != nil {
 		h.t.Fatalf("send_back: %v", err)
 	}
 	return res
+}
+
+// sendBack makes cause true on GitHub (or, for a merge's own refusal, has
+// merge_if_ready observe it), then sends it back.
+func (h *harness) sendBack(cause Reason) SendBackResult {
+	h.t.Helper()
+	merger, s := h.mergerTools(nil)
+	h.edit(causes[cause])
+	if unrebuildable(cause) {
+		if res, err := merger.MergeIfReady(h.t.Context(), MergeInput{PR: testPR, HeadSHA: headA}); err != nil || res.Reason != cause {
+			h.t.Fatalf("merge_if_ready = %+v, %v; want %s observed", res, err, cause)
+		}
+		h.edit(func(f *fakeGitHub) { f.mergeError, f.mergeFault = 0, "" })
+	}
+	return h.sendBackWith(s, cause)
+}
+
+// causes makes each cause true on the harness's otherwise ready PR.
+var causes = map[Reason]func(f *fakeGitHub){
+	ReasonHeadMoved:          func(f *fakeGitHub) { f.prs[testPR].Head = headB },
+	ReasonReviewMissing:      func(f *fakeGitHub) { f.reviews[testPR] = nil },
+	ReasonReviewStale:        func(f *fakeGitHub) { f.reviews[testPR][0].CommitID = headB },
+	ReasonChangesRequested:   func(f *fakeGitHub) { f.reviews[testPR][0].State = "CHANGES_REQUESTED" },
+	ReasonQANotSuccess:       func(f *fakeGitHub) { f.statuses[headA][0].State = "failure" },
+	ReasonCheckNotSuccess:    func(f *fakeGitHub) { f.checks[headA][0].Conclusion = "failure" },
+	ReasonQAMissing:          func(f *fakeGitHub) { f.statuses[headA] = nil },
+	ReasonQAUntrustedCreator: func(f *fakeGitHub) { f.statuses[headA][0].Creator = intruder },
+	ReasonBaseBehind:         func(f *fakeGitHub) { f.behind[headA] = 1 },
+	ReasonNotMergeable:       func(f *fakeGitHub) { no := false; f.prs[testPR].Mergeable = &no },
+	ReasonMergeRefused:       func(f *fakeGitHub) { f.mergeError = 405 },
+	ReasonOutcomeUnknown:     func(f *fakeGitHub) { f.mergeFault = faultDropUnmerged },
 }
 
 func (h *harness) prLabels() []string {
@@ -127,8 +164,10 @@ func TestSendBack_refusals_writeNothing(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			h := newHarness(t)
+			_, s := h.mergerTools(nil)
+			h.edit(causes[ReasonReviewStale])
 			h.edit(c.mutate)
-			res := h.sendBack(c.cause)
+			res := h.sendBackWith(s, c.cause)
 			if res.SentBack || res.Reason != c.want {
 				t.Fatalf("result %+v, want refused with %q", res, c.want)
 			}
@@ -150,5 +189,97 @@ func TestSendBack_commentRefused_changesNoLabel(t *testing.T) {
 	}
 	if len(h.fake.labelOps) != 0 {
 		t.Fatalf("labels changed after the comment was refused: %v", h.fake.labelOps)
+	}
+}
+
+type movableClock struct{ now time.Time }
+
+func (c *movableClock) Now() time.Time { return c.now }
+
+// The caller's reason is never proof: on a PR merge_if_ready would merge,
+// every cause is refused and nothing is written.
+func TestSendBack_readyPullRequest_everyCauseRefusedAndNothingWritten(t *testing.T) {
+	t.Parallel()
+
+	for cause := range sendBackTable {
+		t.Run(string(cause), func(t *testing.T) {
+			t.Parallel()
+			h := newHarness(t)
+			_, s := h.mergerTools(nil)
+			res := h.sendBackWith(s, cause)
+			if res.SentBack || res.Reason != ReasonCauseNotObserved || res.Travado {
+				t.Fatalf("result %+v, want cause_not_observed", res)
+			}
+			if len(h.fake.comments) != 0 || len(h.fake.labelOps) != 0 {
+				t.Fatalf("an unobserved cause wrote: comments %v, labels %v", h.fake.comments, h.fake.labelOps)
+			}
+		})
+	}
+}
+
+// The listing said review_stale; before send_back the Reviewer approved the
+// head. The stale diagnosis is not written.
+func TestSendBack_signalRepairedAfterTheListing_refused(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	_, s := h.mergerTools(nil)
+	h.edit(causes[ReasonReviewStale])
+	h.edit(func(f *fakeGitHub) { f.reviews[testPR][0].CommitID = headA })
+	if res := h.sendBackWith(s, ReasonReviewStale); res.Reason != ReasonCauseNotObserved {
+		t.Fatalf("result %+v, want cause_not_observed", res)
+	}
+}
+
+// A different cause than the one GitHub shows now is refused: QA missing is
+// not sent back as changes requested.
+func TestSendBack_anotherCauseThanTheObservedOne_refused(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	_, s := h.mergerTools(nil)
+	h.edit(causes[ReasonQAMissing])
+	if res := h.sendBackWith(s, ReasonChangesRequested); res.Reason != ReasonCauseNotObserved {
+		t.Fatalf("result %+v, want cause_not_observed", res)
+	}
+}
+
+// merge_refused and outcome_unknown are accepted only as this server's own
+// observation of that head, within the hour.
+func TestSendBack_unrebuildableCause_needsTheServersOwnObservation(t *testing.T) {
+	t.Parallel()
+
+	start := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	cases := map[string]func(h *harness, clock *movableClock, other *SendBack) *SendBack{
+		"another instance observed it": func(h *harness, _ *movableClock, other *SendBack) *SendBack {
+			_, fresh := h.mergerTools(nil)
+			return fresh
+		},
+		"observed more than an hour ago": func(_ *harness, clock *movableClock, other *SendBack) *SendBack {
+			clock.now = start.Add(refusalTTL)
+			return other
+		},
+		"the head moved since": func(h *harness, _ *movableClock, other *SendBack) *SendBack {
+			h.edit(func(f *fakeGitHub) { f.prs[testPR].Head = headB })
+			return other
+		},
+	}
+	for name, change := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			h := newHarness(t)
+			clock := &movableClock{now: start}
+			merger, s := h.mergerTools(clock)
+			h.edit(causes[ReasonMergeRefused])
+			if res, _ := merger.MergeIfReady(t.Context(), MergeInput{PR: testPR, HeadSHA: headA}); res.Reason != ReasonMergeRefused {
+				t.Fatalf("merge_if_ready = %+v", res)
+			}
+			if res := h.sendBackWith(change(h, clock, s), ReasonMergeRefused); res.Reason != ReasonCauseNotObserved {
+				t.Fatalf("result %+v, want cause_not_observed", res)
+			}
+			if len(h.fake.comments) != 0 {
+				t.Fatalf("comments %v", h.fake.comments)
+			}
+		})
 	}
 }

@@ -20,6 +20,7 @@ func NewServer(cfg Config, role Role, gh *Client) (*mcp.Server, error) {
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "factory", Version: Version}, nil)
 	board := NewBoard(cfg.Board, role, gh)
+	merger, sendBack := NewMergerTools(cfg, gh, SystemClock{})
 	for _, tool := range tools {
 		switch tool {
 		case ToolMoveCard:
@@ -29,9 +30,9 @@ func NewServer(cfg Config, role Role, gh *Client) (*mcp.Server, error) {
 		case ToolRecordQAVerdict:
 			registerQA(server, NewQA(cfg, gh))
 		case ToolMergeIfReady:
-			registerMerger(server, NewMerger(cfg, gh))
+			registerMerger(server, merger)
 		case ToolSendBack:
-			registerSendBack(server, NewSendBack(cfg, gh))
+			registerSendBack(server, sendBack)
 		case ToolListReadyPRs:
 			registerListReady(server, NewReadyLister(cfg, gh))
 		}
