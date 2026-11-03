@@ -113,3 +113,7 @@ func MigrateThrough(ctx context.Context, pool *pgxpool.Pool, version string) err
 	}
 	return migrateSet(ctx, pool, all[:n], migrationLogger(nil))
 }
+
+// WorkItemMeasuresSQL is the weekly measures' one statement, for the plan
+// test that holds it to the window's months and the runs' indexes.
+var WorkItemMeasuresSQL = workItemMeasuresSQL
