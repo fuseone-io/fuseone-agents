@@ -1,10 +1,24 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { api, unwrap, type WorkItemTrail } from "@/lib/api/client";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  api,
+  unwrap,
+  type WorkItemMeasures,
+  type WorkItemTrail,
+} from "@/lib/api/client";
+import { useScopeFilter } from "@/features/scope/use-scope-filter";
 
 export const workItemKeys = {
   all: ["work-items"] as const,
   trail: (ref: string) => [...workItemKeys.all, "trail", ref] as const,
+  measures: (scope: string, weeks: number, filters: MeasureFilters) =>
+    [...workItemKeys.all, "measures", scope, weeks, filters] as const,
 };
+
+/** Narrower than the active scope: one area of it, one agent. Empty is all. */
+export interface MeasureFilters {
+  area?: string;
+  agentId?: string;
+}
 
 /**
  * One card's trail, a page of runs at a time: the card's own runs and those
@@ -38,4 +52,32 @@ export function useWorkItemTrail(ref: string) {
     card: pages[0]?.ref,
     resolvedFrom: pages[0]?.resolvedFrom,
   };
+}
+
+/**
+ * The ledger's weekly measures per role (#201), for the `weeks` whole weeks
+ * ending with the current one.
+ *
+ * The active scope travels as it does everywhere; an area picked here narrows
+ * it further. The rows come back as the server sent them, oldest week first:
+ * the order they are shown in is the panel's business.
+ */
+export function useWorkItemMeasures(weeks: number, filters: MeasureFilters) {
+  const scope = useScopeFilter();
+  return useQuery({
+    queryKey: workItemKeys.measures(scope.key, weeks, filters),
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/work-items/measures", {
+          params: {
+            query: {
+              weeks,
+              company: scope.params.company,
+              area: filters.area || scope.params.area,
+              agentId: filters.agentId || undefined,
+            },
+          },
+        }),
+      ) as WorkItemMeasures,
+  });
 }
