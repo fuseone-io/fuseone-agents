@@ -75,6 +75,7 @@ export interface ConversationInput {
     rootFrom?: string;
     reviewIn?: string;
     closesOn?: string[];
+    slackRequesters?: boolean;
     addressFrom: string;
     patterns: string[];
   };

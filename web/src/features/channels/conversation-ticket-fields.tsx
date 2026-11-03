@@ -23,6 +23,7 @@ import {
 } from "@/features/channels/conversation-form-model";
 import { ConversationReviewField } from "@/features/channels/conversation-review-field";
 import { ConversationRunAsField } from "@/features/channels/conversation-run-as-field";
+import { ConversationTicketRequestersField } from "@/features/channels/conversation-ticket-requesters-field";
 
 export function ConversationTicketFields({
   form,
@@ -68,6 +69,7 @@ export function ConversationTicketFields({
         )}
       />
       {marksThreads(policy) ? <ConversationTicketRootField form={form} /> : null}
+      <ConversationTicketRequestersField form={form} />
       <FormField
         control={form.control}
         name="ticketAddressFrom"

@@ -975,6 +975,8 @@
     "ticketAddressFromExplains": "ID exato do bot ou app confiável, no formato bot:B… ou app:A…. Só essa fonte pode mudar os destinatários; texto comum nunca concede autoridade.",
     "ticketClosesOn": "Emoji que encerra o chamado",
     "ticketClosesOnExplains": "Nomes de emoji como o Slack os chama, separados por espaço, até quatro. Quem tem Aprovador no escopo reagir com um deles na mensagem do chamado encerra o ticket: correção para de valer e resposta pendente de aprovação não é publicada. Vazio, nada encerra por reaction.",
+    "ticketSlackRequesters": "Aceitar solicitante sem conta vinculada",
+    "ticketSlackRequestersExplains": "Quem não tem conta do Slack vinculada ao FuseOne abre o ticket identificado pela própria conta do Slack, em vez de ser recusado. Isso não dá autoridade: o run continua sendo do principal configurado e decidir continua exigindo vínculo. Nos pedidos de API key do Gravitee, o e-mail vem do perfil do Slack, o que exige os escopos users:read e users:read.email no app.",
     "needsTicketClosesOn": "No máximo quatro emojis",
     "ticketPatterns": "Padrões para abrir ticket",
     "ticketPatternsExplains": "Um padrão RE2 por linha, sem delimitadores. Eles são comparados sem diferenciar maiúsculas apenas com o texto limitado da mensagem raiz; respostas nunca são testadas novamente.",

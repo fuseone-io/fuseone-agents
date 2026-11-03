@@ -42,6 +42,7 @@ export function conversationDefaults(
     ticketRootFrom: conversation?.ticket?.rootFrom ?? "",
     ticketReviewIn: conversation?.ticket?.reviewIn ?? "",
     ticketClosesOn: (conversation?.ticket?.closesOn ?? []).join(" "),
+    ticketSlackRequesters: conversation?.ticket?.slackRequesters ?? false,
     ticketAddressFrom: conversation?.ticket?.addressFrom ?? "",
     ticketPatterns: (conversation?.ticket?.patterns ?? []).join("\n"),
     wants: (conversation?.wants as ConversationValues["wants"]) ?? [
@@ -99,6 +100,7 @@ export function conversationInput(
           ...(splitClosingEmoji(values.ticketClosesOn).length
             ? { closesOn: splitClosingEmoji(values.ticketClosesOn) }
             : {}),
+          ...(values.ticketSlackRequesters ? { slackRequesters: true } : {}),
           addressFrom: values.ticketAddressFrom.trim(),
           patterns: splitTicketPatterns(values.ticketPatterns),
         }

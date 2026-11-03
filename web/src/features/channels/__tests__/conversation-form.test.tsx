@@ -589,6 +589,50 @@ describe("conversation configuration", () => {
     ).toBeInTheDocument();
   });
 
+  const markedRoom = (slackRequesters?: boolean) => ({
+    id: "C-help",
+    scope: { company: "acme", area: "devops" },
+    mode: "ticket" as const,
+    agent: sre.agentId,
+    runAs: "usr_opsbot",
+    ticket: {
+      openFrom: "marked_threads" as const,
+      rootFrom: "bot:B-forms",
+      addressFrom: "bot:B-triage",
+      patterns: ["\\[team-sre\\]"],
+      ...(slackRequesters ? { slackRequesters } : {}),
+    },
+    enabled: true,
+  });
+  const slackRequesters = /Aceitar solicitante sem conta vinculada/;
+
+  it("accepts Slack requesters once the room says so", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests, agents: [sre] });
+    const user = userEvent.setup();
+    renderForm(markedRoom());
+
+    await user.click(await screen.findByRole("checkbox", { name: slackRequesters }));
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({ ticket: { slackRequesters: true } });
+  });
+
+  it("sends no Slack requesters flag once the room refuses the unbound", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests, agents: [sre] });
+    const user = userEvent.setup();
+    renderForm(markedRoom(true));
+
+    const accepted = await screen.findByRole("checkbox", { name: slackRequesters });
+    expect(accepted).toBeChecked();
+    await user.click(accepted);
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect((saved(requests) as { ticket: Record<string, unknown> }).ticket)
+      .not.toHaveProperty("slackRequesters");
+  });
+
   // Switching policies must not leave the other one's field behind: a stored
   // root source under `linked_users` is a rule the server refuses.
   it("drops the root source when the ticket opens from a human root", async () => {

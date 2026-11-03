@@ -141,6 +141,7 @@ export const conversationSchema = z
     ticketRootFrom: z.string(),
     ticketReviewIn: z.string(),
     ticketClosesOn: z.string(),
+    ticketSlackRequesters: z.boolean(),
     ticketAddressFrom: z.string(),
     ticketPatterns: z.string(),
     wants: z.array(z.enum(EVENTS)).min(1, "channels.needsEvent"),
