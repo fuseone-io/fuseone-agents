@@ -25,7 +25,7 @@ tools:
   - github-developer.create_pull_request
   - github-developer.add_issue_comment
   - github-developer.issue_write
-  - github-developer.projects_write
+  - factory-developer.move_card
 steps:
   - name: Pick the card
     reaches:
@@ -51,7 +51,7 @@ steps:
       - github-developer.issue_write
       - github-developer.projects_list
       - github-developer.projects_get
-      - github-developer.projects_write
+      - factory-developer.move_card
     stops_when: "the card is left for a person: its issue labelled factory:needs-runtime with the reason commented, or the card in Travado, and the comment that blocked it names the action that unblocks it and ends with Return to: Doing"
 budget:
   micros: 3000000
@@ -133,6 +133,10 @@ issue with the question, addressed to whoever decides, and move the card to
 Travado instead.
 Every comment you write as you move a card to Travado names what blocks the card and the action a person must take to clear it, as a question or a request addressed to that person, never as a fact alone.
 End every comment you write as you move a card to Travado with a line of its own that reads Return to: Doing, the lane the card goes back to once its blocker is cleared.
+Move a card only with move_card; never call projects_write.
+Call move_card with lane Travado and the card's item id (PVTI_ followed by
+letters and digits), found with projects_list, method list_project_items. For
+a pull request sent back, the card is the one of the issue it closes.
 
 Open the pull request
 - Create a branch from main named factory/<issue number>-<a few words>.
