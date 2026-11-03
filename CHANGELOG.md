@@ -27,6 +27,63 @@ field" is a commit message.
 
 ---
 
+## [0.91.0] — 2026-11-03
+
+### Upgrade notes
+
+- **Nothing changes in agentd itself.** This release changes the software
+  factory's tool server image, `ghcr.io/fuseone-io/fuseone-agents-factory-mcp`,
+  and the factory's texts. An installation that does not run the factory has
+  nothing to do.
+- **For installations running the factory, the Merger is ready to set up.**
+  Start it only once all of these hold, in this order:
+  - its own GitHub App exists;
+  - `main` carries the checks ruleset beside the minimal one;
+  - the `FACTORY-MERGE` policy is stored and enforced. Without it, the Gate
+    blocks every merge, and no approval releases a block;
+  - the factory server's environment lists `merger`, with
+    `FACTORY_REVIEWERS`, `FACTORY_CHECKS` and `FACTORY_CHECKS_APP_ID`;
+  - `factory-merger` is registered and classified.
+
+  The factory manual has each step. Until then, a person merges as before.
+- **The Merger's `move_card` no longer moves a card from Doing to Done.**
+  Only `close_merged` does, and only for a pull request GitHub reports
+  merged. No other role's transitions change.
+- **`factory-measure report` needs the Merger's bot in `bots.yaml`.** The
+  shipped map carries a placeholder for it, as for the Architect and the
+  Developer, and the report refuses to run until all three are filled in.
+
+### Added
+
+- **The Merger, the software factory's sixth role.** It reads only
+  `list_ready_prs`, which returns numbers, commit SHAs, item ids and reasons,
+  never text anyone wrote, so nothing it reads taints the merge.
+  - It proposes `merge_if_ready` on the listed head, and a person approves
+    each call. The tool re-checks, on that head, the Reviewer's approval, QA's
+    `factory/qa` and every expected check before it merges.
+  - A pull request it does not merge goes back through `send_back`. That
+    tool checks the cause itself and writes a comment of fixed text. It then
+    moves the label to the role whose signal is missing, or, when only a
+    person can clear the cause, sends the card to Travado.
+- **`close_merged`.** It finishes a merge whose card never reached Done: a
+  run that stopped between the merge and the move, or a person who merged by
+  hand.
+  - `list_ready_prs` lists those pull requests under `merged`.
+  - `close_merged` moves the card to Done and only then drops
+    `factory:ready-to-merge`, so any failure leaves the pull request listed
+    for the next run.
+
+### Changed
+
+- **`factory-measure` gives ready-to-merge time to the Merger, not to a
+  person.** This covers an open pull request carrying the label, and a
+  merged one still labelled, until `close_merged` finishes it. A pull request
+  closed without a merge stays a person's.
+- **The factory's rules distinguish a direct merge from `merge_if_ready`.**
+  No role merges directly or holds `merge_pull_request`. The Merger's one
+  merge is `merge_if_ready`, which a person approves on every call. A person
+  may still merge by hand.
+
 ## [0.90.0] — 2026-11-03
 
 ### Upgrade notes
