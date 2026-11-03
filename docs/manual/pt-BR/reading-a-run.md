@@ -100,4 +100,22 @@ request vinculado mostra o histórico da issue e avisa qual pull request você
 abriu. Um vínculo feito numa área que você não pode ler não junta nada para
 você.
 
+Uma execução também pode entrar num card sem assumi-lo, pela forma como foi
+aberta. Uma execução aberta por um evento herda o card que a execução de
+origem assumiu ou, quando a origem não assumiu nenhum, o card que a própria
+origem herdou: ela aparece marcada como **Evento**. Uma execução aberta por
+uma entrega assinada do GitHub herda a issue ou o pull request de que a
+entrega trata, lidos do repositório e do número que o GitHub escreve, nunca
+de um título ou de um comentário: ela aparece marcada como **Entrega do
+GitHub**. A primeira linha da trilha da própria execução diz o que ela herdou
+e de onde. É só atribuição: um card herdado nunca fica preso à execução,
+então nunca impede que outra o assuma. Uma execução herdada conta como
+execução do seu papel, com as aprovações que pediu, mas o custo dela é do card
+que ela assumiu: o custo de um card, no histórico e no FinOps, soma só as
+execuções que assumiram o card ou um pull request vinculado a ele, e assim os
+custos de cards diferentes se somam sem repetir. Uma execução que herdou um card e assumiu outro
+aparece nos dois históricos, e cada linha cita o outro card; se herdou e
+assumiu o mesmo card, aparece uma vez só nesse histórico, como quem o
+assumiu.
+
 O que decide cada parada está em [O que a plataforma para antes de acontecer](what-the-gate-stops.md) e em [Políticas](policies.md).

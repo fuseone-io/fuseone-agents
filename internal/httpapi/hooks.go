@@ -96,7 +96,18 @@ func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.open(w, r, path, hook, delivery, body)
+	h.open(w, r, hookOpen{path: path, hook: hook, delivery: delivery, input: body})
+}
+
+// hookOpen is one authenticated delivery, as the door opens its run.
+type hookOpen struct {
+	path     string
+	hook     trigger.Hook
+	delivery string
+	input    []byte
+	// workItem is the card the delivery is about, when a signed GitHub
+	// delivery names one (#204, slice 3). An ordinary hook never sets it.
+	workItem *domain.RunWorkItem
 }
 
 // logRefusal records a refusal worth an operator's attention: a failure to
@@ -119,14 +130,14 @@ func rejectHook(w http.ResponseWriter) {
 }
 
 // open starts the run a delivery names and answers the sender.
-func (h *Hooks) open(w http.ResponseWriter, r *http.Request, path string, hook trigger.Hook,
-	delivery string, input []byte,
-) {
+func (h *Hooks) open(w http.ResponseWriter, r *http.Request, o hookOpen) {
+	path := o.path
 	opened, err := h.opener.Open(r.Context(), trigger.Request{
-		Agent:   hook.Agent,
-		IdemKey: trigger.DeliveryKey(path, delivery),
-		Trigger: "webhook",
-		Input:   input,
+		Agent:    o.hook.Agent,
+		IdemKey:  trigger.DeliveryKey(path, o.delivery),
+		Trigger:  "webhook",
+		Input:    o.input,
+		WorkItem: o.workItem,
 		// A body somebody outside sent. On a good day it is an ERP's JSON and
 		// on a bad one it is whatever they posted, and the difference is not
 		// visible from here — the secret proves who sent it and says nothing

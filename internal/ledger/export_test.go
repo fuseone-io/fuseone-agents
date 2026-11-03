@@ -46,6 +46,10 @@ var (
 	WorkItemRolesSQL = workItemRolesSQL
 )
 
+// StartsAndFinishesSQL is the dispatcher's batch read, for the plan test that
+// holds it to the batch's months.
+const StartsAndFinishesSQL = startsAndFinishesSQL
+
 // PlantWorkItemClaim records that a run claimed ref under an agent and scope
 // that need not be the run's own, bypassing the append's judgement — the
 // state an older release or a hand-written row could leave behind, which the

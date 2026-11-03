@@ -97,4 +97,20 @@ pull request beside it, and opening a linked pull request's trail shows the
 issue's trail and says which pull request you opened. A link made in an area
 you cannot read joins nothing for you.
 
+A run can also be on a card without claiming it, by how it was opened. A run
+an event opened inherits the card its source run claimed, or, when the source
+claimed none, the card the source itself inherited: it is marked **Event**.
+A run a signed GitHub delivery opened inherits the issue or pull request the
+delivery is about, read from the repository and the number GitHub writes and
+never from a title or a comment: it is marked **GitHub delivery**. The run's
+first line in its own trail says what it inherited and from where. This is
+attribution only: an inherited card is never held, so it never stops a claim.
+An inherited run counts as a run of its role, with its approvals, but its
+cost belongs to the card it claimed: a card's cost, on its trail and in
+FinOps, counts only the runs that claimed it or a pull request linked to it,
+so the costs of different cards add up. A run that inherited
+one card and claimed another is on both trails, and each row names the other
+card; inherited and claimed on the same card, it is on that trail once, as
+its claim.
+
 What decides each stop is in [What the platform stops before it happens](what-the-gate-stops.md) and in [Policies](policies.md).

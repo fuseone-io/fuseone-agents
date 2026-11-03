@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkItemPage } from "@/features/work-items/work-item-page";
 import { workItemPath } from "@/features/work-items/work-item-path";
+import { i18next } from "@/i18n";
 import type { WorkItemTrail } from "@/lib/api/client";
 
 const REF = "github:fuseone-io/fuseone-agents#204";
@@ -47,6 +48,29 @@ const firstPage: WorkItemTrail = {
     },
   ],
   nextCursor: "next-1",
+};
+
+// A trail whose one run is there by a GitHub delivery: it claimed nothing.
+const inheritedOnly: WorkItemTrail = {
+  ref: REF,
+  runs: [
+    {
+      ...run("run-hook", "triage", "2026-10-01T10:00:00Z"),
+      link: "github_delivery",
+    },
+  ],
+  roles: [
+    {
+      agentId: "triage",
+      runs: 1,
+      approvalsRequested: 0,
+      approved: 0,
+      refused: 0,
+      abandoned: 0,
+      firstClaimedAt: "2026-10-01T10:00:00Z",
+      costMicros: 0,
+    },
+  ],
 };
 
 function serve(pages: Record<string, WorkItemTrail | number>) {
@@ -120,6 +144,64 @@ describe("a work item's trail", () => {
     expect(within(dev).getByText(/assumiu/i)).toBeInTheDocument();
     expect(within(dev).queryByText(PR)).toBeNull();
   });
+
+  it("marks runs that inherited the card, and names the card an inherited run claimed", async () => {
+    const OTHER = "github:fuseone-io/fuseone-agents#300";
+    serve({
+      "": {
+        ref: REF,
+        runs: [
+          {
+            ...run("run-qa", "qa", "2026-10-01T09:00:00Z"),
+            link: "event" as const,
+            claimedRef: OTHER,
+          },
+          {
+            ...run("run-hook", "triage", "2026-10-01T10:00:00Z"),
+            link: "github_delivery" as const,
+          },
+        ],
+        roles: [],
+      },
+    });
+    open();
+
+    const qa = await screen.findByRole("row", { name: /run-qa/ });
+    expect(within(qa).getByText("Evento")).toBeInTheDocument();
+    expect(
+      within(qa).getByRole("link", { name: `Também assumiu ${OTHER}` }),
+    ).toHaveAttribute("href", workItemPath(OTHER));
+    const hook = screen.getByRole("row", { name: /run-hook/ });
+    expect(within(hook).getByText("Entrega do GitHub")).toBeInTheDocument();
+    expect(within(hook).queryByText(REF)).toBeNull();
+  });
+
+  it.each([
+    ["pt-BR", "Entrou na trilha", "Primeira atribuição", /assum/i],
+    ["en-US", "Joined the trail", "First attribution", /claim/i],
+  ])(
+    "says an inherited run joined the trail, never that it claimed the card (%s)",
+    async (locale, joined, first, claimWord) => {
+      await i18next.changeLanguage(locale);
+      try {
+        serve({ "": inheritedOnly });
+        open();
+        const hook = await screen.findByRole("row", { name: /run-hook/ });
+        expect(
+          screen.getByRole("columnheader", { name: joined }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("columnheader", { name: first }),
+        ).toBeInTheDocument();
+        expect(within(hook).queryByText(claimWord)).toBeNull();
+        expect(
+          screen.queryByRole("columnheader", { name: claimWord }),
+        ).toBeNull();
+      } finally {
+        await i18next.changeLanguage("pt-BR");
+      }
+    },
+  );
 
   it("opened by a linked pull request, shows the card's trail and says where it came from", async () => {
     serve({ "": { ...firstPage, resolvedFrom: PR } });

@@ -111,7 +111,7 @@ func openPostgres(t *testing.T, dsn string) Store {
 		t.Fatalf("migrate: %v", err)
 	}
 	// Each test gets a clean ledger; these tables are the whole state.
-	if _, err := pool.Exec(ctx, `truncate run_steps, runs, run_work_items, work_item_aliases, event_dispatch_cursor`); err != nil {
+	if _, err := pool.Exec(ctx, `truncate run_steps, runs, run_work_items, work_item_aliases, run_work_item_origins, event_dispatch_cursor`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return ledger.NewPostgres(pool)

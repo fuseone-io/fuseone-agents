@@ -80,7 +80,7 @@ function Trail({ reference }: { reference: string }) {
             <WorkItemRoles roles={trail.roles} />
           </Panel>
           <Panel title={t("workItems.timeline")} flush>
-            <WorkItemRuns runs={trail.runs} />
+            <WorkItemRuns runs={trail.runs} card={trail.card ?? reference} />
             <div className="px-4 pb-3">
               <LoadMore
                 loaded={trail.runs.length}

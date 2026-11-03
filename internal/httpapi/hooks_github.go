@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/trigger"
 )
 
@@ -67,5 +68,19 @@ func (h *Hooks) serveGitHub(w http.ResponseWriter, r *http.Request, hook trigger
 		writeProblemJSON(w, http.StatusInternalServerError, CodeUnavailable, "Could not open the run", "")
 		return
 	}
-	h.open(w, r, hook.Path, hook, delivery, input)
+	h.open(w, r, hookOpen{path: hook.Path, hook: hook, delivery: delivery, input: input,
+		workItem: githubWorkItem(event, body)})
+}
+
+// githubWorkItem is the card a delivery whose signature already verified is
+// about, or nil (#204, slice 3). Read from GitHub's structural fields by
+// trigger.GitHubWorkItem; the body itself stays the run's untrusted input.
+// A pull request that is an alias of a card is recorded as itself: the trail
+// resolves it to the card, so nothing is resolved here.
+func githubWorkItem(event string, body []byte) *domain.RunWorkItem {
+	ref, ok := trigger.GitHubWorkItem(event, body)
+	if !ok {
+		return nil
+	}
+	return &domain.RunWorkItem{Ref: ref, Source: domain.WorkItemFromGitHubDelivery}
 }

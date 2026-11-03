@@ -882,8 +882,16 @@ export interface paths {
          * The trail of one work item reference
          * @description Every run that claimed the card through `$fuseone.work_item.claim`,
          *     or claimed a pull request linked to it through
-         *     `$fuseone.work_item.link`, oldest claim first, and per role what those
-         *     runs asked people and what they cost (#204).
+         *     `$fuseone.work_item.link`, in the order they joined the trail, and
+         *     per role what those runs asked people and what they cost (#204).
+         *
+         *     A run also joins the trail when it inherited the card, or a pull
+         *     request linked to it, by how it was opened: an event from a run that
+         *     claimed or itself inherited the card (`link: event`), or a signed
+         *     GitHub delivery about it (`link: github_delivery`). Attribution only:
+         *     an inheritance never holds the card. A run is on a trail once, by its
+         *     claim when that is on the same trail; each row names the run's other
+         *     attribution in `claimedRef` or `inheritedRef`.
          *
          *     Resolution is one level deep. Asked by a pull request linked to a
          *     card, the answer is that card's trail: `ref` is the card and
@@ -5311,11 +5319,15 @@ export interface components {
              *     `ref` and resolved to it. Absent otherwise.
              */
             resolvedFrom?: string;
-            /** @description This page of runs, oldest claim first. */
+            /**
+             * @description This page of runs, in the order they joined the trail (each
+             *     run's `claimedAt`).
+             */
             runs: components["schemas"]["WorkItemRun"][];
             /**
              * @description One row per agent over every readable run of the reference, in
-             *     the order each first claimed it. Present on the first page only.
+             *     the order each first joined the trail. Present on the first page
+             *     only.
              */
             roles?: components["schemas"]["WorkItemRole"][];
             /** @description Where the next page starts. Absent on the last page. */
@@ -5333,16 +5345,36 @@ export interface components {
              * @description Absent while the run is going.
              */
             endedAt?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the run joined the trail — not necessarily a claim. For
+             *     `claim` and `alias` it is the moment of the claim; for `event`
+             *     and `github_delivery`, which claimed nothing here, it is the
+             *     moment the run opened. `link` says which. The trail's order. The
+             *     name is kept for compatibility.
+             */
             claimedAt: string;
             /**
              * @description How the run came to be on the trail: `claim`, it claimed the card
-             *     itself; `alias`, it claimed a pull request linked to the card.
+             *     itself; `alias`, it claimed a pull request linked to the card;
+             *     `event`, an event opened it from a run on the card; and
+             *     `github_delivery`, a signed GitHub delivery about the card, or
+             *     about a pull request linked to it, opened it.
              * @enum {string}
              */
-            link: "claim" | "alias";
-            /** @description The reference the run claimed, in canonical form. */
+            link: "claim" | "alias" | "event" | "github_delivery";
+            /** @description The reference the run claimed, or inherited, in canonical form. */
             ref: string;
+            /**
+             * @description On an inherited run, the card the run claimed itself, when it
+             *     claimed one: it is on that card's trail as well. Absent otherwise.
+             */
+            claimedRef?: string;
+            /**
+             * @description On a run that is here by its claim, the card it inherited by how
+             *     it was opened, when it inherited one. Absent otherwise.
+             */
+            inheritedRef?: string;
         };
         WorkItemRole: {
             agentId: string;
@@ -5352,7 +5384,12 @@ export interface components {
             refused: number;
             /** @description Runs of this role a person abandoned. */
             abandoned: number;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The first attribution of any of the role's runs to the trail: the
+             *     earliest `claimedAt` among them, which for an inherited run is
+             *     when it opened, not a claim. The name is kept for compatibility.
+             */
             firstClaimedAt: string;
             /**
              * Format: date-time
@@ -5361,8 +5398,12 @@ export interface components {
             lastEndedAt?: string;
             /**
              * Format: int64
-             * @description What the role's runs cost. Absent — never zero — unless the
-             *     caller holds cost:read over every one of them.
+             * @description What the role's runs cost this card: the runs here by a `claim`
+             *     or an `alias` only. A run here by an inheritance (`event`,
+             *     `github_delivery`) counts in `runs` and the approvals but not in
+             *     the cost, which belongs to the card it claimed, so card totals
+             *     add up. Absent — never zero — unless the caller holds cost:read
+             *     over every one of the role's runs.
              */
             costMicros?: number;
         };

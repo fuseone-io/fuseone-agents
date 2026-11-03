@@ -109,3 +109,20 @@ not that the issue or pull request text inside it is safe to act on. On a
 public repository anybody can write that text, so the Gate treats what the
 agent does after reading it accordingly — see
 [Data labels and barriers](data-barriers.md).
+
+The run is also put on the trail of the issue or pull request the delivery is
+about, `github:<owner>/<repo>#<number>`, for `issues`, `issue_comment` (a
+comment on a pull request is on that pull request) and the `pull_request`
+events. Only the repository and the number GitHub writes are read, after the
+signature checks; a title, a comment or a branch name that spells a reference
+is never looked at. It is attribution only: the run holds nothing by it, and
+a delivery of any other event opens its run on no card — see
+[Which runs worked on this card](reading-a-run.md).
+
+This attribution is **github.com only** today, as the `github:` reference
+grammar is — claims included: a reference names no host, so it means
+github.com. A delivery names a card only when the repository's `html_url` in
+the signed body is exactly `https://github.com/<owner>/<repo>`. A delivery
+from GitHub Enterprise still opens its run, with no card: the same owner,
+repository and number on another host is a different issue, and putting it
+on the github.com card would mix two histories.

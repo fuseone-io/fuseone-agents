@@ -135,8 +135,10 @@ func TestWorkItemLink_aRunWithALink_readsAsItDidWithoutOne(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartsAndFinishes: %v", err)
 		}
-		if got := ends["run-a"]; len(got) != 2 || got[0].Kind != domain.StepRunStarted || got[1].Kind != domain.StepRunFinished {
-			t.Fatalf("StartsAndFinishes = %+v, want the opening and closing steps alone", got)
+		// The claim is read beside them since #204 slice 3; the link never.
+		if got := ends["run-a"]; len(got) != 3 || got[0].Kind != domain.StepRunStarted ||
+			got[1].Kind != domain.StepWorkItemClaimed || got[2].Kind != domain.StepRunFinished {
+			t.Fatalf("StartsAndFinishes = %+v, want the opening, claiming and closing steps alone", got)
 		}
 
 		stats, err := s.Stats(ctx, domain.RunFilter{})

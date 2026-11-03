@@ -1,0 +1,99 @@
+package trigger
+
+import (
+	"encoding/json"
+	"net/url"
+	"strconv"
+	"strings"
+
+	"github.com/fuseone/agents/internal/domain"
+)
+
+/*
+The card a GitHub delivery is about (#204, slice 3).
+
+A run a signed delivery opened is attributed to the issue or pull request the
+delivery names. Only the structure GitHub itself writes is read: the
+repository's full_name, and the number of the issue or the pull request the
+event is about. The body stays untrusted as a run's input; these fields are
+read here because GitHub signed them and no person types them — a title, a
+comment or a branch name that spells a reference is never looked at.
+
+Which object holds the number is the event's, from a closed table: a body that
+carries both an issue and a pull request is read by the one its event names,
+and an event outside the table attributes nothing. issue_comment reads the
+issue even when the comment is on a pull request, whose number is the same.
+*/
+
+// githubNumbered is, per event, which object of the body holds the number.
+var githubNumbered = map[string]string{
+	"issues":                      "issue",
+	"issue_comment":               "issue",
+	"pull_request":                "pull_request",
+	"pull_request_review":         "pull_request",
+	"pull_request_review_comment": "pull_request",
+	"pull_request_review_thread":  "pull_request",
+}
+
+// GitHubWorkItem is the reference a delivery of event names, through the
+// claim's own parser, or false when it names none: an event outside the
+// table, a missing or malformed number, or a repository that does not make a
+// canonical reference. False is never a refusal — the run opens without it.
+func GitHubWorkItem(event string, body []byte) (domain.WorkItemRef, bool) {
+	object, ok := githubNumbered[event]
+	if !ok {
+		return "", false
+	}
+	var envelope struct {
+		Repository  githubRepository `json:"repository"`
+		Issue       *githubNumber    `json:"issue"`
+		PullRequest *githubNumber    `json:"pull_request"`
+	}
+	if json.Unmarshal(body, &envelope) != nil || !envelope.Repository.onGitHubDotCom() {
+		return "", false
+	}
+	numbered := envelope.Issue
+	if object == "pull_request" {
+		numbered = envelope.PullRequest
+	}
+	if numbered == nil || numbered.Number == nil {
+		return "", false
+	}
+	ref := "github:" + envelope.Repository.FullName + "#" + strconv.FormatUint(*numbered.Number, 10)
+	return domain.ParseWorkItemRef(ref)
+}
+
+/*
+githubRepository is the repository a delivery is about, as GitHub writes it.
+
+The github: reference grammar — the one claims use too — names no host, so
+it means github.com, and automatic attribution is github.com-only today. A
+GitHub Enterprise delivery carries the same full_name shape for a repository
+on another host; attributed by name and number alone, acme/r#42 on an
+Enterprise server would land on the github.com card acme/r#42. So a delivery
+names a card only when its signed html_url is exactly
+https://github.com/<full_name>: https, the host github.com with no port and
+no user, and the path the repository's own. Anything else opens the run with
+no work item. A host-qualified reference is a separate change, and it would
+reach claims as well.
+*/
+type githubRepository struct {
+	FullName string `json:"full_name"`
+	HTMLURL  string `json:"html_url"`
+}
+
+func (r githubRepository) onGitHubDotCom() bool {
+	u, err := url.Parse(r.HTMLURL)
+	if err != nil || r.FullName == "" {
+		return false
+	}
+	return u.Scheme == "https" && u.Host == "github.com" && u.User == nil &&
+		u.RawQuery == "" && u.Fragment == "" && strings.EqualFold(u.Path, "/"+r.FullName)
+}
+
+// githubNumber is the number of an issue or a pull request. An unsigned
+// integer, so text, fractions and negatives fail to decode rather than being
+// coerced.
+type githubNumber struct {
+	Number *uint64 `json:"number"`
+}

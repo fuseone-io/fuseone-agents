@@ -22,7 +22,7 @@ const COLUMNS = [
   ["workItems.columnApproved", true],
   ["workItems.columnRefused", true],
   ["workItems.columnAbandoned", true],
-  ["workItems.columnFirstClaim", true],
+  ["workItems.columnFirstAttribution", true],
   ["workItems.columnLastEnd", true],
   ["workItems.columnCost", true],
 ] as const;

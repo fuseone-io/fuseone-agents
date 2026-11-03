@@ -2,6 +2,7 @@ package ledger_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -112,6 +113,47 @@ func TestStartsAndFinishes_idsAndMomentsSwappedBetweenRuns_findNothing(t *testin
 		got, err := s.StartsAndFinishes(context.Background(), swapped)
 		if err != nil || len(got) != 0 {
 			t.Fatalf("StartsAndFinishes = %d runs, %v; want nothing for swapped moments", len(got), err)
+		}
+	})
+}
+
+// The dispatcher passes a finished run's card on to the runs its events open
+// (#204, slice 3), so the batch read carries each run's claim too — in the
+// same statement, in sequence order, and nothing else of the run.
+func TestStartsAndFinishes_includesClaim(t *testing.T) {
+	run(t, "the claim beside the start and the finish", func(t *testing.T, s Store) {
+		for _, id := range []domain.RunID{"run-a", "run-b"} {
+			openRunOf(t, s, id, "developer")
+		}
+		if err := claim(t, s, "run-a", "developer", card); err != nil {
+			t.Fatalf("claim: %v", err)
+		}
+		for _, id := range []domain.RunID{"run-a", "run-b"} {
+			planned := step(id, domain.StepPlanned)
+			planned.AgentID = "developer"
+			mustAppend(t, s, planned)
+			finished := step(id, domain.StepRunFinished)
+			finished.AgentID = "developer"
+			mustAppend(t, s, finished)
+		}
+
+		got, err := s.StartsAndFinishes(context.Background(), asked(t, s, "run-a", "run-b"))
+		if err != nil {
+			t.Fatalf("StartsAndFinishes: %v", err)
+		}
+
+		want := map[domain.RunID][]domain.StepKind{
+			"run-a": {domain.StepRunStarted, domain.StepWorkItemClaimed, domain.StepRunFinished},
+			"run-b": {domain.StepRunStarted, domain.StepRunFinished},
+		}
+		for id, kinds := range want {
+			var seen []domain.StepKind
+			for _, st := range got[id] {
+				seen = append(seen, st.Kind)
+			}
+			if !slices.Equal(seen, kinds) {
+				t.Errorf("%s: %v, want %v", id, seen, kinds)
+			}
 		}
 	})
 }
