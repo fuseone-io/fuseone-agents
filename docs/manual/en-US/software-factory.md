@@ -37,8 +37,8 @@ and the role instructions live, reviewed like code, in
 - **Narrow board tools.** Cards move with the factory server's `move_card`,
   only along the role's own transitions (Triage and the Architect from
   Triagem to Preparado or Travado; the Developer, the Reviewer and QA from
-  Doing to Travado; the Merger from Doing to Done or Travado), and nothing
-  leaves Travado. Triage and the Architect set
+  Doing to Travado, as the Merger does; the Merger reaches Done only through
+  `close_merged`, for a merged pull request), and nothing leaves Travado. Triage and the Architect set
   Work type and Size with `set_card_fields`, only in Triagem. No role holds
   the GitHub server's `projects_write`.
 - **Every role at copilot**, with standing approvals forbidden. Every GitHub
@@ -300,7 +300,7 @@ toolsets. Each registration then offers its role's tools:
 | `factory-triage`, `factory-architect` | `move_card`, `set_card_fields` |
 | `factory-developer`, `factory-reviewer` | `move_card` |
 | `factory-qa` | `move_card`, `record_qa_verdict` |
-| `factory-merger` | `list_ready_prs`, `merge_if_ready`, `send_back`, `move_card` |
+| `factory-merger` | `list_ready_prs`, `merge_if_ready`, `send_back`, `move_card`, `close_merged` |
 
 One that offers nothing, or another row, was given the wrong App.
 
@@ -331,7 +331,7 @@ of the board's issues and pull requests even when asked for no fields (#220).
 |---|---|
 | read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `list_commits`, `get_commit` |
 | write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `create_branch`, `create_or_update_file`, `push_files`, `create_pull_request` |
-| write, result **not** untrusted | `move_card`, `set_card_fields`, `record_qa_verdict`, `send_back`, on the `factory-<role>` servers |
+| write, result **not** untrusted | `move_card`, `set_card_fields`, `record_qa_verdict`, `send_back`, `close_merged`, on the `factory-<role>` servers |
 | read, result **not** untrusted | `list_ready_prs`, on `factory-merger` |
 | **destructive** | `merge_if_ready`, on `factory-merger` |
 

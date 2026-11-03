@@ -39,8 +39,8 @@ e as instruções dos papéis ficam, revisadas como código, em
 - **Ferramentas de board estreitas.** Os cards andam com o `move_card` do
   servidor da fábrica, só pelas transições do próprio papel (a Triagem e o
   Arquiteto de Triagem para Preparado ou Travado; o Desenvolvedor, o Revisor e
-  o QA de Doing para Travado; o Merger de Doing para Done ou Travado), e nada
-  sai de Travado. A Triagem e o Arquiteto
+  o QA de Doing para Travado, assim como o Merger; o Merger só chega a Done
+  pelo `close_merged`, para uma PR mergeada), e nada sai de Travado. A Triagem e o Arquiteto
   preenchem Work type e Size com o `set_card_fields`, só em Triagem. Nenhum
   papel tem o `projects_write` do servidor do GitHub.
 - **Todos os papéis em copiloto**, com aprovações permanentes proibidas. Toda
@@ -314,7 +314,7 @@ toolsets. Cada registro então oferece as ferramentas do seu papel:
 | `factory-triage`, `factory-architect` | `move_card`, `set_card_fields` |
 | `factory-developer`, `factory-reviewer` | `move_card` |
 | `factory-qa` | `move_card`, `record_qa_verdict` |
-| `factory-merger` | `list_ready_prs`, `merge_if_ready`, `send_back`, `move_card` |
+| `factory-merger` | `list_ready_prs`, `merge_if_ready`, `send_back`, `move_card`, `close_merged` |
 
 Um registro que não oferece nada, ou que oferece outra linha, recebeu o App
 errado.
@@ -348,7 +348,7 @@ quando não se pede nenhum campo (#220).
 |---|---|
 | read, **untrusted** | `projects_list`, `projects_get`, `search_pull_requests`, `search_issues`, `list_issues`, `issue_read`, `pull_request_read`, `get_file_contents`, `search_code`, `list_commits`, `get_commit` |
 | write | `add_issue_comment`, `issue_write`, `pull_request_review_write`, `create_branch`, `create_or_update_file`, `push_files`, `create_pull_request` |
-| write, resultado **não** untrusted | `move_card`, `set_card_fields`, `record_qa_verdict`, `send_back`, nos servidores `factory-<papel>` |
+| write, resultado **não** untrusted | `move_card`, `set_card_fields`, `record_qa_verdict`, `send_back`, `close_merged`, nos servidores `factory-<papel>` |
 | read, resultado **não** untrusted | `list_ready_prs`, no `factory-merger` |
 | **destructive** | `merge_if_ready`, no `factory-merger` |
 

@@ -49,7 +49,8 @@ factory/
     <role>.agent.md      the reference specification of one role
   guard/, mcp/           the factory MCP server: move_card, set_card_fields,
                          record_qa_verdict, and the Merger's list_ready_prs,
-                         merge_if_ready and send_back (#213, #199)
+                         merge_if_ready, send_back and close_merged (#213,
+                         #199)
   measure/               factory-measure: lane time and caught-later signals
                          read from the board, read-only (#201)
 ```

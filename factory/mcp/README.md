@@ -10,8 +10,9 @@ general-purpose GitHub server:
 | `set_card_fields(item_id, work_type, size)` | Sets only a card's Work type and Size, and only while the card is in Triagem. Idempotent (#213). |
 | `record_qa_verdict(pr, head_sha, verdict, summary[, comment_id])` | Sets the commit status `factory/qa` (`success` or `failure`) on exactly `head_sha`, under the QA GitHub App's identity. Refuses if `head_sha` is no longer the PR's head (#208). |
 | `merge_if_ready(pr, head_sha)` | When it executes, re-reads GitHub and fails closed unless every signal is on `head_sha` and came from its authorised actor or app. Then it merges with `sha` set to `head_sha` (#193). |
-| `list_ready_prs()` | Lists the open pull requests on the base labelled `factory:ready-to-merge` whose one card is in Doing, oldest first, each with its head SHA, its card's item id and `merge_if_ready`'s verdict on it now. Numbers, SHAs, ids and closed reasons only: it is the Merger's one read, and no text GitHub holds reaches the run (#199). |
+| `list_ready_prs()` | Lists the open pull requests on the base labelled `factory:ready-to-merge` whose one card is in Doing, oldest first, each with its head SHA, its card's item id and `merge_if_ready`'s verdict on it now; and, under `merged`, the merged pull requests still labelled whose card is in Doing or Done, or that have none: the ones `close_merged` has not finished. Numbers, SHAs, ids and closed reasons only: it is the Merger's one read, and no text GitHub holds reaches the run (#199). |
 | `send_back(pr, head_sha, reason)` | Writes a refused merge back to a pull request still labelled `factory:ready-to-merge`: a comment of closed text naming the reason, the head and the next action, then the label of the role whose signal is missing. A reason only a person can clear keeps the label, ends the comment with `Return to: Doing`, and answers `travado` (#199). |
+| `close_merged(pr)` | Finishes a merged pull request still labelled `factory:ready-to-merge`, judged again from `list_ready_prs`'s own listing: moves its card from Doing to Done, then drops the label. The Merger's only way to Done, and the repair for a run that ended between its merge and that move (#199). |
 
 This is the factory's tooling, not part of the platform. It lives in this
 module so it is built and tested with the repository, but `agentd` does not
@@ -29,7 +30,7 @@ Each role sees exactly its surface, and nothing more:
 | `developer` | `move_card` | Doing → Travado |
 | `reviewer` | `move_card` | Doing → Travado |
 | `qa` | `move_card`, `record_qa_verdict` | Doing → Travado |
-| `merger` | `move_card`, `list_ready_prs`, `merge_if_ready`, `send_back` | Doing → Done, Doing → Travado |
+| `merger` | `move_card`, `list_ready_prs`, `merge_if_ready`, `send_back`, `close_merged` | Doing → Travado (Done only through `close_merged`) |
 
 For every role:
 
@@ -618,6 +619,7 @@ The Curator classifies:
 | `move_card` | **write** | no (structured state only) | none |
 | `set_card_fields` | **write** | no (structured state only) | none |
 | `send_back` | **write** | no (structured state only) | none |
+| `close_merged` | **write** | no (structured state only) | none |
 | `list_ready_prs` | **read** | **no** (structured state only) | none |
 
 `list_ready_prs` must be ruled **not** untrusted. Every imported tool starts
@@ -657,6 +659,29 @@ otherwise:
 and the labels after (the new one added before `ready-to-merge` comes off),
 so a failure between the writes leaves the pull request still ready to merge
 and the next `send_back` repairs it; its one cost is a repeated comment.
+
+### `close_merged`: the merge and the card are two calls
+
+A merge and its card's move to Done are two calls, each approved by a
+person, and a run can end between them: it stopped, the approval was refused
+or never given, the move's answer was lost. The pull request is then merged
+with its card in Doing, and a listing of open pull requests would never show
+it again. So `list_ready_prs` asks GitHub for the open **and the merged**
+pull requests carrying the label, and lists a merged one under `merged`.
+`close_merged` finishes it:
+
+- it reads that same listing again; a pull request not in it answers
+  `not_ready_to_merge`, an open one `pr_not_merged`, and one whose card is in
+  another lane, or that has two, `card_not_closable`: a person's;
+- a card in Doing moves to Done with one mutation; a card already in Done,
+  or no card, moves nothing;
+- only then is `factory:ready-to-merge` dropped. A failure at any point
+  leaves the label, so the pull request stays listed and the next run
+  finishes it; once the label is gone it is never listed again, which keeps
+  the merged part of the listing small.
+
+A pull request a person merged by hand, still labelled, is finished the same
+way.
 
 Then, per NT-013 § Guardrails:
 

@@ -43,8 +43,10 @@ destructive, and the Gate blocks an irreversible effect outright in a run that
 read untrusted data: no approval releases it. So it holds no GitHub server at
 all. Its one read is the factory server's `list_ready_prs`, which answers the
 ready pull requests' numbers, head SHAs, card item ids and `merge_if_ready`'s
-verdict on each, and nothing else; it refuses or blocks through `send_back`,
-which writes comments of fixed text. Its lines are sealed in
+verdict on each, and the merged ones whose card never reached Done, and
+nothing else; it refuses or blocks through `send_back`, which writes comments
+of fixed text, and finishes a merge with `close_merged`, its only way to
+Done. Its lines are sealed in
 `internal/spec/factory_merger_test.go`.
 
 ### The Developer's link line
@@ -676,7 +678,7 @@ Each registration then shows exactly its role's row of
 | `factory-developer` | `move_card` |
 | `factory-reviewer` | `move_card` |
 | `factory-qa` | `move_card`, `record_qa_verdict` |
-| `factory-merger` | `list_ready_prs`, `merge_if_ready`, `send_back`, `move_card` |
+| `factory-merger` | `list_ready_prs`, `merge_if_ready`, `send_back`, `move_card`, `close_merged` |
 
 A registration that shows no tools, or another row, has the wrong App, or an
 App whose bot id is missing from `FACTORY_ROLE_BOTS`.
@@ -694,7 +696,7 @@ The Merger's tools are ruled the same way, with two of their own:
 `merge_if_ready` is **destructive**, and `list_ready_prs` is a **read** whose
 result is **not untrusted**. Left at the untrusted default, that read would
 taint every Merger run before its merge, and the Gate would block every
-merge. `send_back` and `move_card` are writes.
+merge. `send_back`, `move_card` and `close_merged` are writes.
 
 A destructive call is blocked outright by default, and an approval never
 releases a block, so `merge_if_ready` needs one authored policy, stored in

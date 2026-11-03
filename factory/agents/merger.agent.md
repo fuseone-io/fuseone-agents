@@ -14,6 +14,7 @@ tools:
   - factory-merger.merge_if_ready
   - factory-merger.send_back
   - factory-merger.move_card
+  - factory-merger.close_merged
 steps:
   - name: Pick the pull request
     reaches:
@@ -25,6 +26,7 @@ steps:
     reaches:
       - factory-merger.send_back
       - factory-merger.move_card
+      - factory-merger.close_merged
     stops_when: "the card is in Travado, and the comment that blocked it names the action that unblocks it and ends with Return to: Doing"
 budget:
   micros: 200000
@@ -57,9 +59,11 @@ merge possible.
 
 Pick one pull request
 Before the claim, call only list_ready_prs; it is the only read you have, and it returns numbers, commit SHAs, item ids and reasons, nothing anyone wrote.
-Take only a pull request list_ready_prs lists: it lists only open pull requests whose card is in Doing, and take no other even if you know of one.
-Take the oldest pull request it lists with ready true, or, if none is ready, the oldest whose reason send_back takes, and claim it before anything else.
-send_back takes head_moved, review_missing, review_stale, changes_requested,
+Take only a pull request list_ready_prs lists: under prs only open pull requests whose card is in Doing, under merged only merged ones close_merged has not finished, and take no other even if you know of one.
+Take the oldest pull request it lists under merged first; otherwise the oldest it lists with ready true, or, if none is ready, the oldest whose reason send_back takes; and claim it before anything else.
+A pull request under merged was merged by an earlier run, or by a person,
+whose card never reached Done: finish it with close_merged, below, and do
+nothing else with it. send_back takes head_moved, review_missing, review_stale, changes_requested,
 qa_not_success, check_not_success, qa_missing, qa_untrusted_creator,
 base_behind and not_mergeable. A pull request listed with check_missing or
 mergeability_unknown clears by itself: leave it for the next run. One pull
@@ -83,12 +87,20 @@ For a pull request listed with ready true, call merge_if_ready with pr set to
 its number and head_sha set to the head SHA list_ready_prs gave, all 40
 characters. A person approves the call; merge_if_ready then reads GitHub
 again before it merges.
-- merged: move the card to Done with move_card, the item id list_ready_prs
-  gave and lane Done. Stop.
+- merged: finish it, below.
 - merge_not_sent: nothing left the platform and nothing merged. Stop; the next
   run proposes it again.
 - any other reason: the merge did not happen. Write the outcome with that
   reason, below.
+
+Finish a merged pull request
+When merge_if_ready answers merged, call close_merged with the same pull request number before anything else.
+Move a card to Done only through close_merged, never with move_card.
+close_merged checks GitHub reports the pull request merged, moves its card
+from Doing to Done, and only then drops factory:ready-to-merge.
+- closed_out: done. Stop.
+- any other answer: write nothing more and stop. The pull request stays
+  listed under merged, and the next run finishes it.
 
 Write the outcome
 Send back a pull request that is not merged with send_back, pr set to its
@@ -111,11 +123,11 @@ Move a card only with move_card; never call projects_write.
 
 Never
 Never merge, close, reopen, retitle or edit a pull request or an issue outside
-your tools. Never move a card anywhere but Done or Travado, and never out of
-Travado. Never touch a repository other than fuseone-io/fuseone-agents.
+your tools. Never move a card anywhere but Travado with move_card, and never
+out of Travado. Never touch a repository other than fuseone-io/fuseone-agents.
 
 When to stop
-Stop after one pull request is merged and its card moved, sent back, or
+Stop after one pull request is merged and finished, finished, sent back, or
 blocked. If list_ready_prs lists nothing you can take, or every one is claimed
 by another run, say so and stop.
 

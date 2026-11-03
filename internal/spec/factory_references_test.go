@@ -347,7 +347,7 @@ var skipClosedLines = map[string]string{
 	"developer": "Skip a card whose issue or pull request is closed: search pull requests with is:open, list the Doing lane with the query state:open is:issue, and take no closed card even if one is listed.",
 	"reviewer":  "Skip a pull request that is closed: search only with is:open, and take no closed pull request even if one is listed.",
 	"qa":        "Skip a pull request that is closed: search only with is:open, and take no closed pull request even if one is listed.",
-	"merger":    "Take only a pull request list_ready_prs lists: it lists only open pull requests whose card is in Doing, and take no other even if you know of one.",
+	"merger":    "Take only a pull request list_ready_prs lists: under prs only open pull requests whose card is in Doing, under merged only merged ones close_merged has not finished, and take no other even if you know of one.",
 }
 
 // clauseSeparator splits instructions into the clauses a query belongs to.

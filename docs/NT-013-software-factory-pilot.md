@@ -81,7 +81,9 @@ and reasons and is classified read with a result that is not untrusted, so a
 merge can still derive from it; `merge_if_ready`, classified destructive and
 brought to a person by an escalate policy on its registration; and
 `send_back`, which writes a comment of fixed text and moves the label back to
-the role whose signal is missing. A person still approves every merge. Before
+the role whose signal is missing; and `close_merged`, the Merger's only way
+to Done, which finishes a merged pull request whose card a run left in Doing.
+A person still approves every merge. Before
 the Merger starts, `main` carries a second ruleset beside the minimal one:
 the six checks of the check workflow required from GitHub Actions on an
 up-to-date head, with no bypass for anyone. The Reviewer's approval and

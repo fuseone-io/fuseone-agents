@@ -94,7 +94,7 @@ func TestFactorySetup_classification_leavesProjectsWriteUnclassifiedAndRulesTheB
 		if writes["projects_write"] {
 			t.Errorf("%s classifies projects_write as a write; it stays unclassified", path)
 		}
-		for _, tool := range []string{"move_card", "set_card_fields", "record_qa_verdict", "send_back", "issue_write"} {
+		for _, tool := range []string{"move_card", "set_card_fields", "record_qa_verdict", "send_back", "close_merged", "issue_write"} {
 			if !writes[tool] {
 				t.Errorf("%s does not classify %s as a write", path, tool)
 			}

@@ -18,7 +18,7 @@ for one.
 // mergerPreClaimRule fences what the Merger does before its claim.
 var mergerPreClaimRule = []string{
 	"Before the claim, call only list_ready_prs; it is the only read you have, and it returns numbers, commit SHAs, item ids and reasons, nothing anyone wrote.",
-	"Take the oldest pull request it lists with ready true, or, if none is ready, the oldest whose reason send_back takes, and claim it before anything else.",
+	"Take the oldest pull request it lists under merged first; otherwise the oldest it lists with ready true, or, if none is ready, the oldest whose reason send_back takes; and claim it before anything else.",
 }
 
 // mergerSealedLines are its fences and its one way into Travado, each
@@ -27,6 +27,8 @@ var mergerSealedLines = []string{
 	"Never read a pull request, an issue, a comment or a file: you act only on numbers, commit SHAs, item ids and reasons.",
 	"Never merge any other way than merge_if_ready, and never propose it for a pull request list_ready_prs did not list as ready.",
 	"Block a card only through send_back, which writes the comment that names the action a person must take and ends it with Return to: Doing, and then move the card to Travado with move_card.",
+	"When merge_if_ready answers merged, call close_merged with the same pull request number before anything else.",
+	"Move a card to Done only through close_merged, never with move_card.",
 }
 
 func TestFactoryReferences_merger_carriesThePreClaimRuleBeforeItsClaim(t *testing.T) {
