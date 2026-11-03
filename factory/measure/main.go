@@ -4,6 +4,7 @@
 // pilot). It only reads. See README.md.
 //
 //	go run ./factory/measure report --since 2026-10-05 [--weeks 4] --repo fuseone-io/fuseone-agents --project 2
+//	go run ./factory/measure canary --issue 213 [--pr 205] --repo fuseone-io/fuseone-agents --project 2
 package main
 
 import (
@@ -21,7 +22,7 @@ import (
 // Exit codes.
 const (
 	exitOK    = 0
-	exitFail  = 1 // GitHub could not be read
+	exitFail  = 1 // GitHub could not be read, or a canary check failed
 	exitUsage = 2 // bad arguments or a bot map the report cannot use
 )
 
@@ -41,18 +42,20 @@ func main() {
 
 func run(ctx context.Context, args []string, d deps) int {
 	if len(args) == 0 {
-		_, _ = fmt.Fprintln(d.stderr, "usage: factory-measure report [flags]")
+		_, _ = fmt.Fprintln(d.stderr, "usage: factory-measure report|canary [flags]")
 		return exitUsage
 	}
 	switch args[0] {
 	case "report":
 		return runReport(ctx, args[1:], d)
+	case "canary":
+		return runCanary(ctx, args[1:], d)
 	}
-	_, _ = fmt.Fprintf(d.stderr, "factory-measure: unknown command %q: report\n", args[0])
+	_, _ = fmt.Fprintf(d.stderr, "factory-measure: unknown command %q: report or canary\n", args[0])
 	return exitUsage
 }
 
-// common are the flags every command takes.
+// common are the flags both commands take.
 type common struct {
 	repo    string
 	project int
@@ -128,5 +131,29 @@ func runReport(ctx context.Context, args []string, d deps) int {
 		return fail(d, err)
 	}
 	render(d.stdout, measure(s, r.bots, sc))
+	return exitOK
+}
+
+func runCanary(ctx context.Context, args []string, d deps) int {
+	fs := flag.NewFlagSet("canary", flag.ContinueOnError)
+	fs.SetOutput(d.stderr)
+	var c common
+	c.register(fs)
+	issue := fs.Int("issue", 0, "an issue whose card a role's App moved (required)")
+	pr := fs.Int("pr", 0, "a pull request on the board, to check pull request cards too")
+	if err := fs.Parse(args); err != nil {
+		return exitUsage
+	}
+	if *issue <= 0 {
+		return fail(d, fmt.Errorf("%w: --issue N is required", errUsage))
+	}
+	r, err := c.reader(d)
+	if err != nil {
+		return fail(d, err)
+	}
+	_, _ = fmt.Fprintf(d.stdout, "factory-measure canary: %s, project %d, issue #%d\n", c.repo, c.project, *issue)
+	if !printCanary(d.stdout, canary(ctx, r, *issue, *pr), r.bots) {
+		return exitFail
+	}
 	return exitOK
 }
