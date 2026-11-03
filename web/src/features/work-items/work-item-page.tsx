@@ -13,12 +13,15 @@ import {
   LoadingRows,
 } from "@/components/shared/states";
 import { useWorkItemTrail } from "@/features/work-items/api";
+import { WorkItemMeasuresPanel } from "@/features/work-items/work-item-measures-panel";
 import { WorkItemRoles } from "@/features/work-items/work-item-roles";
 import { WorkItemRuns } from "@/features/work-items/work-item-runs";
 
 /**
  * A card's trail: every run that claimed the card or a pull request linked to
  * it, and per role what those runs asked people and cost (#204).
+ *
+ * With no card asked for, the page is the weekly measures per role instead.
  *
  * Opened by a linked pull request, it is the card's trail, headed by the card
  * and saying which pull request was asked for.
@@ -33,15 +36,14 @@ export function WorkItemPage() {
       <PageHeader
         icon={PAGE_ICONS["work-items"]}
         title={t("workItems.title")}
-        description={t("workItems.subtitle")}
+        description={t(
+          ref ? "workItems.subtitle" : "workItems.measures.subtitle",
+        )}
       />
       {ref ? (
         <Trail reference={ref} />
       ) : (
-        <EmptyState
-          title={t("workItems.noRef")}
-          hint={t("workItems.noRefHint")}
-        />
+        <WorkItemMeasuresPanel />
       )}
     </>
   );

@@ -7,8 +7,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Mono } from "@/components/shared/mono";
-import { formatInstant, formatMicros } from "@/lib/format";
+import { WorkItemCost } from "@/features/work-items/work-item-cost";
+import { formatInstant } from "@/lib/format";
 import type { WorkItemRole } from "@/lib/api/client";
 
 const HEAD =
@@ -66,22 +66,11 @@ export function WorkItemRoles({ roles }: { roles: WorkItemRole[] }) {
                 : t("workItems.notEnded")}
             </TableCell>
             <TableCell className={NUM}>
-              <RoleCost micros={role.costMicros} />
+              <WorkItemCost micros={role.costMicros} />
             </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
-  );
-}
-
-function RoleCost({ micros }: { micros?: number }) {
-  const { t } = useTranslation();
-  if (micros !== undefined) return <>{formatMicros(micros)}</>;
-  return (
-    <Mono dim>
-      <span aria-hidden>—</span>
-      <span className="sr-only">{t("workItems.costHidden")}</span>
-    </Mono>
   );
 }
