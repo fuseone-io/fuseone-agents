@@ -4461,6 +4461,13 @@ export interface components {
              */
             reviewIn?: string;
             /**
+             * @description Open the ticket of a requester whose Slack account nobody bound to
+             *     a FuseOne person under the account itself, instead of refusing it.
+             *     The account grants nothing: the run is still `runAs`, and deciding
+             *     still takes a bound person. Absent means the unbound are refused.
+             */
+            slackRequesters?: boolean;
+            /**
              * @description RE2 patterns matched against bounded message text: the root under
              *     `linked_users`, the reply that marks the thread under
              *     `marked_threads`. Replies to an open ticket are never matched again.

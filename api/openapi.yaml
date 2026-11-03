@@ -7115,6 +7115,13 @@ components:
             and corrected there and only the approved answer reaches the
             support thread. Absent means the support thread is the only room,
             and it may never be the ticket conversation itself.
+        slackRequesters:
+          type: boolean
+          description: |
+            Open the ticket of a requester whose Slack account nobody bound to
+            a FuseOne person under the account itself, instead of refusing it.
+            The account grants nothing: the run is still `runAs`, and deciding
+            still takes a bound person. Absent means the unbound are refused.
         patterns:
           type: array
           minItems: 1
