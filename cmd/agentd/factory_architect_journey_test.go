@@ -27,7 +27,7 @@ const architectReference = "../../factory/agents/architect.agent.md"
 const architectToolsets = "issues,projects,repos"
 
 func TestFactoryArchitect_referenceRegisteredAsDocumented_publishesFromTheStudio(t *testing.T) {
-	j := newRoleJourney(t, "github-architect", architectToolsets)
+	j := newDocumentedJourney(t, "architect")
 	j.discover(t)
 	j.classify(t)
 
