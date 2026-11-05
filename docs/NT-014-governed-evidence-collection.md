@@ -59,8 +59,8 @@ decides. An approval is bound to a digest of the query's declaration through
 An instance declares its base URL, the header that carries its sealed token, a
 positive control, and its named queries. A query declares:
 
-- method, path and a template;
-- parameters, each with a pattern;
+- a path and a template for its query string, requested with GET;
+- parameters, all required, each with a pattern;
 - the fields kept from each event, and which of them identify and timestamp it;
 - paging, either `offset` or `cursor`, with a page size and a ceiling on events;
 - its window, either a list of relative periods or an absolute range;
@@ -99,6 +99,15 @@ its counts and one of:
 
 `not_observed` never reads "did not happen". Events marked as unmeasured are
 counted and reported, because a sum that silently includes them understates.
+
+The positive control is not left to anyone's memory: a collection runs it over
+the same window before its first page and records the answer in the evidence. A
+parameter is never optional, because a query with a filter missing is a different
+query, and it gets its own name.
+
+The evidence state is sealed with a key derived from the instance's token. A
+reference alone would let content from another tool in the same run pose as a
+complete collection.
 
 ## Failures that must not become numbers
 
