@@ -6079,7 +6079,7 @@ components:
         gravitee: { $ref: '#/components/schemas/ConnectorGraviteeResponse' }
         cloudflare: { $ref: '#/components/schemas/ConnectorCloudflareConfig' }
         elasticsearch: { $ref: '#/components/schemas/ConnectorElasticsearchConfig' }
-        evidence: { $ref: '#/components/schemas/ConnectorEvidenceConfig' }
+        evidence: { $ref: '#/components/schemas/ConnectorEvidenceSummary' }
 
     ConnectorInstanceDetail:
       type: object
@@ -6436,6 +6436,19 @@ components:
         windowless:
           type: boolean
           description: A lookup, where a time filter would mean something else.
+
+    ConnectorEvidenceSummary:
+      type: object
+      required: [baseUrl, queries]
+      description: >
+        An evidence source as the listing reports it. Which paths, filters,
+        patterns and fields it reads belong to the detail, for connector
+        configurers.
+      properties:
+        baseUrl: { type: string }
+        queries:
+          type: integer
+          description: How many queries the source declares.
 
     ConnectorEvidenceConfig:
       type: object

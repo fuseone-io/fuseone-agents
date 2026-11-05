@@ -3764,7 +3764,7 @@ export interface components {
             gravitee?: components["schemas"]["ConnectorGraviteeResponse"];
             cloudflare?: components["schemas"]["ConnectorCloudflareConfig"];
             elasticsearch?: components["schemas"]["ConnectorElasticsearchConfig"];
-            evidence?: components["schemas"]["ConnectorEvidenceConfig"];
+            evidence?: components["schemas"]["ConnectorEvidenceSummary"];
         };
         /** @description The authored, non-secret configuration available only to connector configurers. SQL text is present because editing any other SQL field must not erase or replace a registered query. Gravitee's fixed Vault location is present for the same read-edit-write reason. Token presence is metadata; token bytes and generated credentials never leave storage. */
         ConnectorInstanceDetail: {
@@ -3960,6 +3960,12 @@ export interface components {
             timeField?: string;
             /** @description A lookup, where a time filter would mean something else. */
             windowless?: boolean;
+        };
+        /** @description An evidence source as the listing reports it. Which paths, filters, patterns and fields it reads belong to the detail, for connector configurers. */
+        ConnectorEvidenceSummary: {
+            baseUrl: string;
+            /** @description How many queries the source declares. */
+            queries: number;
         };
         /** @description One declared source of events. Paths, fields, paging and windows are configuration; a model chooses a query and supplies values that match its patterns, never query text. The sealed token travels in authHeader. */
         ConnectorEvidenceConfig: {

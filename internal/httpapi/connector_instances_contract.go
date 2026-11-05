@@ -94,7 +94,9 @@ func connectorInstanceResponse(instance connectortools.ConfiguredInstance) opena
 		item.Elasticsearch = ptr(elasticsearchConfigToAPI(instance.Elasticsearch))
 	}
 	if instance.Connector == "evidence" {
-		item.Evidence = evidenceConfigToAPI(instance.Evidence)
+		item.Evidence = ptr(openapi.ConnectorEvidenceSummary{
+			BaseUrl: instance.Evidence.BaseURL, Queries: len(instance.Evidence.Queries),
+		})
 	}
 	return item
 }
@@ -147,8 +149,8 @@ func evidenceConfigFromInput(in *openapi.ConnectorEvidenceConfig) connectortools
 	return out
 }
 
-// evidenceConfigToAPI serves listing and detail alike: the whole declaration is
-// non-secret, and the token lives sealed beside it, never in it.
+// evidenceConfigToAPI is for the detail, which only configurers read. The token
+// lives sealed beside the declaration, never in it.
 func evidenceConfigToAPI(cfg connectortools.EvidenceConfig) *openapi.ConnectorEvidenceConfig {
 	var out openapi.ConnectorEvidenceConfig
 	raw, err := json.Marshal(cfg)

@@ -23,11 +23,11 @@ func evidenceAPIConfig(t *testing.T) *openapi.ConnectorEvidenceConfig {
 		"paging": {"kind": "offset", "limitParam": "limit", "pageSize": 100, "offsetParam": "offset"},
 		"window": {"kind": "period", "periodParam": "timeperiod", "periods": [3600, 86400]},
 		"queries": [
-			{"id": "all", "description": "Everything.", "path": "/events", "fields": ["_id"], "idField": "_id"},
+			{"id": "all", "description": "Everything.", "path": "/events", "fields": ["_id", "bypass_traffic"], "idField": "_id"},
 			{"id": "by_user", "description": "One user.", "path": "/events",
 			 "filters": [{"name": "query", "value": "user eq '{user}'"}],
 			 "parameters": [{"name": "user", "pattern": "[a-z]+"}],
-			 "fields": ["_id", "timestamp"], "idField": "_id", "timeField": "timestamp", "windowless": true}
+			 "fields": ["_id", "timestamp", "bypass_traffic"], "idField": "_id", "timeField": "timestamp", "windowless": true}
 		]}`), &out); err != nil {
 		t.Fatal(err)
 	}
@@ -72,9 +72,8 @@ func TestPutConnectorInstance_carriesTheEvidenceDeclaration(t *testing.T) {
 	}
 }
 
-// Read, edit, write must not lose a field, and the token stays out of both.
-func TestConnectorInstanceResponses_evidenceRoundTripsWithoutTheToken(t *testing.T) {
-	t.Parallel()
+func configuredEvidence(t *testing.T) connectortools.ConfiguredInstance {
+	t.Helper()
 	spy := &connectorInstanceSpy{}
 	_, err := NewServer(ledger.NewMemory(), "test").WithConnectorInstances(spy).
 		PutConnectorInstance(as(domain.RoleCurator), openapi.PutConnectorInstanceRequestObject{
@@ -89,30 +88,60 @@ func TestConnectorInstanceResponses_evidenceRoundTripsWithoutTheToken(t *testing
 	}
 	instance := spy.put
 	instance.Token, instance.HasToken = "CANARY-token", true
-	configured := connectortools.ConfiguredInstance{
+	return connectortools.ConfiguredInstance{
 		Instance: instance, ScopeKind: settings.ScopeArea, HasToken: true,
 	}
+}
+
+// Read, edit, write must not lose a field, and the token stays out.
+func TestConnectorInstanceDetail_evidenceRoundTripsWithoutTheToken(t *testing.T) {
+	t.Parallel()
+	raw, err := json.Marshal(connectorInstanceDetailResponse(configuredEvidence(t)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "CANARY") {
+		t.Fatalf("the detail exposed the token: %s", raw)
+	}
+	var decoded struct {
+		Evidence json.RawMessage `json:"evidence"`
+	}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatal(err)
+	}
 	want, _ := json.Marshal(evidenceAPIConfig(t))
-	for name, body := range map[string]any{
-		"listing": connectorInstanceResponse(configured),
-		"detail":  connectorInstanceDetailResponse(configured),
+	if a, b := canonicalJSON(t, want), canonicalJSON(t, decoded.Evidence); a != b {
+		t.Fatalf("the detail changed the declaration:\n want %s\n got  %s", a, b)
+	}
+}
+
+// The listing answers anyone who may read tools, Authors and Auditors included.
+// Which paths, filters, patterns and fields a source reads is for whoever configures
+// it, as with SQL's query text, so the listing says what it is and how much.
+func TestConnectorInstanceListing_evidenceKeepsTheDeclarationToConfigurers(t *testing.T) {
+	t.Parallel()
+	raw, err := json.Marshal(connectorInstanceResponse(configuredEvidence(t)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, private := range []string{
+		"CANARY", "/events", "user eq", "[a-z]+", "bypass_traffic", "timestamp", "Authorization", "by_user",
 	} {
-		raw, err := json.Marshal(body)
-		if err != nil {
-			t.Fatalf("marshal %s: %v", name, err)
+		if strings.Contains(string(raw), private) {
+			t.Errorf("the listing exposed %q: %s", private, raw)
 		}
-		if strings.Contains(string(raw), "CANARY") {
-			t.Fatalf("the %s exposed the token: %s", name, raw)
-		}
-		var decoded struct {
-			Evidence json.RawMessage `json:"evidence"`
-		}
-		if err := json.Unmarshal(raw, &decoded); err != nil {
-			t.Fatal(err)
-		}
-		if a, b := canonicalJSON(t, want), canonicalJSON(t, decoded.Evidence); a != b {
-			t.Fatalf("the %s changed the declaration:\n want %s\n got  %s", name, a, b)
-		}
+	}
+	var decoded struct {
+		Evidence struct {
+			BaseURL string `json:"baseUrl"`
+			Queries int    `json:"queries"`
+		} `json:"evidence"`
+	}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("decode %s: %v", raw, err)
+	}
+	if decoded.Evidence.BaseURL != "https://source.example.com" || decoded.Evidence.Queries != 2 {
+		t.Fatalf("summary = %+v", decoded.Evidence)
 	}
 }
 

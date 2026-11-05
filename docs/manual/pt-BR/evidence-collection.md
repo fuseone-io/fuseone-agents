@@ -70,7 +70,7 @@ use um token sem escopo de escrita.
 
 O primeiro exemplo tem períodos relativos fixos, paginação por offset e recusa dentro
 de uma resposta 200. Ele marca como sem medição os eventos que o gateway não conseguiu
-decriptar.
+decriptar, e toda consulta precisa manter esse marcador.
 
 ```json
 {
@@ -88,7 +88,7 @@ decriptar.
       "id": "all_pages",
       "description": "Every page event, unfiltered. The positive control.",
       "path": "/api/v2/events/data/page",
-      "fields": ["_id"],
+      "fields": ["_id", "bypass_traffic"],
       "idField": "_id"
     },
     {

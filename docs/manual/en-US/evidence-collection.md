@@ -72,7 +72,8 @@ declaration in `evidence`. The console shows a summary. Read-only is the
 credential's guarantee, so give it a token with no write scope.
 
 The first example has fixed relative periods, offset paging and a refusal inside a
-200 response. It marks events the gateway could not decrypt as unmeasured.
+200 response. It marks events the gateway could not decrypt as unmeasured, and every
+query has to keep that marker.
 
 ```json
 {
@@ -90,7 +91,7 @@ The first example has fixed relative periods, offset paging and a refusal inside
       "id": "all_pages",
       "description": "Every page event, unfiltered. The positive control.",
       "path": "/api/v2/events/data/page",
-      "fields": ["_id"],
+      "fields": ["_id", "bypass_traffic"],
       "idField": "_id"
     },
     {

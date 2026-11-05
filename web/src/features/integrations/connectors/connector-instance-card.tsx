@@ -119,7 +119,7 @@ function EvidenceFacts({
       />
       <Fact
         label={t("connectors.evidenceQueries")}
-        value={String(instance.evidence?.queries.length ?? 0)}
+        value={String(instance.evidence?.queries ?? 0)}
       />
       <Fact label={t("connectors.token")} value={tokenState(instance, t)} />
       <Fact label={t("connectors.updatedAt")} value={updated(instance, t)} />

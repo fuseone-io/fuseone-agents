@@ -11,18 +11,7 @@ const evidence: ConnectorInstance = {
   company: "acme",
   area: "cyber",
   hasToken: true,
-  evidence: {
-    baseUrl: "https://source.example.com",
-    authHeader: "X-Api-Token",
-    control: "all",
-    rows: "result",
-    paging: { kind: "offset", limitParam: "limit", pageSize: 100 },
-    window: { kind: "period" },
-    queries: [
-      { id: "all", description: "All.", path: "/e", fields: ["_id"] },
-      { id: "by_user", description: "One.", path: "/e", fields: ["_id"] },
-    ],
-  },
+  evidence: { baseUrl: "https://source.example.com", queries: 2 },
 };
 
 describe("ConnectorInstanceCard", () => {
