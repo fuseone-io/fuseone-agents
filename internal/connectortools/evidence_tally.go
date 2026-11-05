@@ -2,6 +2,8 @@ package connectortools
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strconv"
 	"unicode/utf8"
@@ -15,13 +17,18 @@ type evidenceSumTally struct {
 }
 
 type evidenceBucket struct {
-	Value string             `json:"value"`
-	Count int64              `json:"count"`
-	Sums  map[string]float64 `json:"sums,omitempty"`
+	// Value is bounded for the reader; a long one carries the digest of the
+	// whole, which is what tells two shortened values apart.
+	Value  string             `json:"value"`
+	Digest string             `json:"valueDigest,omitempty"`
+	Count  int64              `json:"count"`
+	Sums   map[string]float64 `json:"sums,omitempty"`
 }
 
 type evidenceGroup struct {
-	buckets map[string]*evidenceBucket
+	// buckets is keyed by the digest of the whole value: only what is shown is
+	// bounded, and identity must not be.
+	buckets map[[sha256.Size]byte]*evidenceBucket
 	missing int64
 	capped  bool
 }
@@ -51,7 +58,7 @@ func newEvidenceTally(
 		groups: map[string]*evidenceGroup{}, sums: map[string]*evidenceSumTally{},
 	}
 	for _, field := range args.GroupBy {
-		tally.groups[field] = &evidenceGroup{buckets: map[string]*evidenceBucket{}}
+		tally.groups[field] = &evidenceGroup{buckets: map[[sha256.Size]byte]*evidenceBucket{}}
 	}
 	for _, field := range args.Sum {
 		tally.sums[field] = &evidenceSumTally{}
@@ -131,20 +138,28 @@ func (g *evidenceGroup) add(value string, amounts map[string]float64) {
 		g.missing++
 		return
 	}
-	value = boundEvidenceValue(value)
-	bucket, held := g.buckets[value]
+	key := sha256.Sum256([]byte(value))
+	bucket, held := g.buckets[key]
 	if !held {
 		if len(g.buckets) >= maxEvidenceDistinct {
 			g.capped = true
 			return
 		}
-		bucket = &evidenceBucket{Value: value, Sums: map[string]float64{}}
-		g.buckets[value] = bucket
+		bucket = newEvidenceBucket(value, key)
+		g.buckets[key] = bucket
 	}
 	bucket.Count++
 	for field, amount := range amounts {
 		bucket.Sums[field] += amount
 	}
+}
+
+func newEvidenceBucket(value string, key [sha256.Size]byte) *evidenceBucket {
+	bucket := &evidenceBucket{Value: boundEvidenceValue(value), Sums: map[string]float64{}}
+	if bucket.Value != value {
+		bucket.Digest = hex.EncodeToString(key[:])
+	}
+	return bucket
 }
 
 func boundEvidenceValue(value string) string {

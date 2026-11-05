@@ -67,6 +67,7 @@ func (t *evidenceTally) rankBuckets(group *evidenceGroup, top int) []*evidenceBu
 			cmp.Compare(b.Sums[first], a.Sums[first]),
 			cmp.Compare(b.Count, a.Count),
 			cmp.Compare(a.Value, b.Value),
+			cmp.Compare(a.Digest, b.Digest),
 		)
 	})
 	return buckets[:min(top, len(buckets))]

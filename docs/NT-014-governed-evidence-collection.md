@@ -112,7 +112,9 @@ the one the source could not see.
 A relative window moves between resumes, so a collection can hold an event twice.
 `analyze` counts each id once and reports the duplicates, which makes it the
 authority on counts; the number on a `collect` is what was stored. A window on
-`analyze` cannot reach outside what was collected, and a sum reports the events it
+`analyze` cannot reach outside what was collected or apply to a lookup with no
+window. A long value is shortened only for the reader, and carries a digest of the
+whole, so two values sharing their first bytes stay two. A sum reports the events it
 could not count, because a field some event types never carry is not a zero.
 
 The positive control is not left to anyone's memory: a collection runs it over

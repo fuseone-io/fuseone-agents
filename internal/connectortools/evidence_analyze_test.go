@@ -29,9 +29,10 @@ type analyzeAnswer struct {
 		Field    string `json:"field"`
 		Distinct int    `json:"distinct"`
 		Values   []struct {
-			Value string             `json:"value"`
-			Count int64              `json:"count"`
-			Sums  map[string]float64 `json:"sums"`
+			Value  string             `json:"value"`
+			Digest string             `json:"valueDigest"`
+			Count  int64              `json:"count"`
+			Sums   map[string]float64 `json:"sums"`
 		} `json:"values"`
 	} `json:"groups"`
 }
@@ -318,6 +319,35 @@ func TestAnalyze_boundsAGroupValue(t *testing.T) {
 	answer, _ := analyze(t, layer, fmt.Sprintf(`{"evidence":%q,"groupBy":["domain"]}`, ref))
 	if got := len(answer.Groups[0].Values[0].Value); got > maxEvidenceGroupValue {
 		t.Fatalf("value length = %d", got)
+	}
+}
+
+// Two URLs that share their first bytes are two values. Bounding what is shown must
+// not merge them, or a count reads as one destination when there were two.
+func TestAnalyze_longValuesStayDistinct(t *testing.T) {
+	t.Parallel()
+	shared := strings.Repeat("x", maxEvidenceGroupValue+10)
+	layer, ref := collected(t, trafficSource(
+		event("1", 100, shared+"a", 1),
+		event("2", 100, shared+"b", 1),
+		event("3", 100, shared+"b", 1),
+	))
+	answer, _ := analyze(t, layer, fmt.Sprintf(`{"evidence":%q,"groupBy":["domain"]}`, ref))
+	group := answer.Groups[0]
+	if group.Distinct != 2 || len(group.Values) != 2 || group.Values[0].Count != 2 || group.Values[1].Count != 1 {
+		t.Fatalf("group = %+v, want two values counted apart", group)
+	}
+	if group.Values[0].Digest == "" || group.Values[0].Digest == group.Values[1].Digest {
+		t.Fatalf("group = %+v, want digests that tell the shortened values apart", group)
+	}
+}
+
+func TestAnalyze_shortValueCarriesNoDigest(t *testing.T) {
+	t.Parallel()
+	layer, ref := collected(t, trafficSource(event("1", 100, "a.example.com", 1)))
+	answer, _ := analyze(t, layer, fmt.Sprintf(`{"evidence":%q,"groupBy":["domain"]}`, ref))
+	if answer.Groups[0].Values[0].Digest != "" {
+		t.Fatalf("group = %+v", answer.Groups[0])
 	}
 }
 
