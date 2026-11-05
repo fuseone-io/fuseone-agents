@@ -107,6 +107,47 @@ func TestCatalog_sqlIsReadOnlyAndTemplateBased(t *testing.T) {
 	}
 }
 
+func TestCatalog_evidenceOnlyReadsAndNeverAnswersFromACache(t *testing.T) {
+	t.Parallel()
+
+	connector := connectorByID(t, "evidence")
+	want := map[string]Approval{
+		"evidence.check":   ApprovalNone,
+		"evidence.collect": ApprovalPolicy,
+		"evidence.analyze": ApprovalPolicy,
+	}
+	if len(connector.Operations) != len(want) {
+		t.Fatalf("evidence operations = %+v, want %d", connector.Operations, len(want))
+	}
+	for _, op := range connector.Operations {
+		approval, known := want[op.ID]
+		if !known {
+			t.Fatalf("unexpected evidence operation %q", op.ID)
+		}
+		if op.Approval != approval {
+			t.Fatalf("%s approval = %q, want %q", op.ID, op.Approval, approval)
+		}
+		if len(op.Effects) != 1 || op.Effects[0] != EffectRead {
+			t.Fatalf("%s effects = %v, want read only", op.ID, op.Effects)
+		}
+		if op.CachePolicy != CacheNever {
+			t.Fatalf("%s cache policy = %q, want the refusal on the record", op.ID, op.CachePolicy)
+		}
+	}
+}
+
+func TestCatalog_evidenceDeclaresThatItsNumbersCarryCoverage(t *testing.T) {
+	t.Parallel()
+
+	connector := connectorByID(t, "evidence")
+	if !hasGuarantee(connector, "every count carries its window, scope and coverage; a number that hit a limit is reported as a floor") {
+		t.Fatal("evidence does not declare the coverage contract")
+	}
+	if !hasGuarantee(connector, "queries are named declarations; a model supplies values that match a declared pattern, never query text") {
+		t.Fatal("evidence does not declare named queries")
+	}
+}
+
 func TestCatalog_objectStorageMovesBytesByReference(t *testing.T) {
 	t.Parallel()
 
