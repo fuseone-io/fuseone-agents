@@ -131,19 +131,26 @@ sits beside this connector and is classified by the Curator like any other.</p>
 
 <table><thead><tr><th>Tool</th><th>Model supplies</th><th>Returns</th></tr></thead><tbody><tr><td><code dir="auto">evidence.&#x3C;instance>.check</code></td><td>nothing</td><td>Credential state and the positive control</td></tr><tr><td><code dir="auto">evidence.&#x3C;instance>.collect</code></td><td>query id, parameters, window, optional resume</td><td>A manifest and a reference to the events</td></tr><tr><td><code dir="auto">evidence.&#x3C;instance>.analyze</code></td><td>evidence reference, window, declared fields to group and sum</td><td>Aggregates with the coverage inherited</td></tr></tbody></table>
 <p><code dir="auto">check</code> needs no approval. <code dir="auto">collect</code> and <code dir="auto">analyze</code> touch personal data, so policy
-decides. An approval is bound to a digest of the query’s declaration through
-<code dir="auto">ApprovalBinding</code>, as SQL does: changing a query under the same id asks again.</p>
+decides. An approval is bound to a digest of the query’s and the control’s declarations
+through <code dir="auto">ApprovalBinding</code>, as SQL does: changing either under the same id asks
+again.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="the-declaration">The declaration</h2><a class="sl-anchor-link" href="#the-declaration"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “The declaration”</span></a></div>
-<p>An instance declares its base URL, the header that carries its sealed token, a
-positive control, and its named queries. A query declares:</p>
+<p>An instance declares its base URL over https, the header that carries its sealed
+token, a positive control, and what is common to the source:</p>
 <ul>
-<li>a path and a template for its query string, requested with GET;</li>
-<li>parameters, all required, each with a pattern;</li>
-<li>the fields kept from each event, and which of them identify and timestamp it;</li>
+<li>where the events are in a response;</li>
 <li>paging, either <code dir="auto">offset</code> or <code dir="auto">cursor</code>, with a page size and a ceiling on events;</li>
 <li>its window, either a list of relative periods or an absolute range;</li>
 <li>what a refusal looks like in a 200 response;</li>
 <li>which field and value mark an event the source could not measure.</li>
+</ul>
+<p>And its named queries. A query declares:</p>
+<ul>
+<li>a path and a template for its query string, requested with GET;</li>
+<li>parameters, all required, each with a pattern;</li>
+<li>the fields kept from each event, which must include the unmeasured marker, and
+which of them identify and timestamp it;</li>
+<li>whether it is a lookup with no window.</li>
 </ul>
 <p><strong>A value outside its pattern is refused, never escaped.</strong> Escaping needs the
 query language of each vendor, and a mistake there lets a model rewrite the
