@@ -158,6 +158,25 @@ func TestAnalyze_windowBeyondTheCollection_isRefused(t *testing.T) {
 	}
 }
 
+// A lookup was collected with no window, so nobody looked over any particular
+// time: a cut would conclude absence about a period the source was never asked.
+func TestAnalyze_windowOverAWindowlessCollection_isRefused(t *testing.T) {
+	t.Parallel()
+	source := trafficSource(event("1", 1790000000, "a.example.com", 1))
+	layer := evidenceLayer(t, source, func(i *Instance) {
+		i.Evidence.Queries[1].Windowless = true
+	})
+	first, _, _ := collect(t, layer, collectCall(`{"query":"by_user","params":{"user":"a@example.com"}}`))
+	if first.Evidence == "" {
+		t.Fatal("nothing collected")
+	}
+	_, result := analyze(t, layer, fmt.Sprintf(
+		`{"evidence":%q,"window":{"from":"2020-01-01T00:00:00Z","to":"2020-01-02T00:00:00Z"}}`, first.Evidence))
+	if !result.Failed || result.ErrorCode != CodeConnectorBadArguments {
+		t.Fatalf("result = %+v, want a refusal", result)
+	}
+}
+
 func TestAnalyze_windowOverAQueryWithNoTimeField_isRefused(t *testing.T) {
 	t.Parallel()
 	layer, ref := collected(t, trafficSource(event("1", 100, "a.example.com", 1)), func(i *Instance) {
@@ -299,6 +318,21 @@ func TestAnalyze_boundsAGroupValue(t *testing.T) {
 	answer, _ := analyze(t, layer, fmt.Sprintf(`{"evidence":%q,"groupBy":["domain"]}`, ref))
 	if got := len(answer.Groups[0].Values[0].Value); got > maxEvidenceGroupValue {
 		t.Fatalf("value length = %d", got)
+	}
+}
+
+// Collected with a marker kept, the gap reaches the analysis: this is the case the
+// review reproduced, from a query that had dropped it.
+func TestAnalyze_seesTheUnmeasuredEventsCollectCounted(t *testing.T) {
+	t.Parallel()
+	row := event("1", 100, "a.example.com", 0)
+	row["bypass_traffic"] = "yes"
+	layer := evidenceLayer(t, trafficSource(row))
+	first, _, _ := collect(t, layer, collectCall(byUserArgs))
+	answer, _ := analyze(t, layer, fmt.Sprintf(
+		`{"evidence":%q,"match":{"field":"user","equals":"nobody@example.com"}}`, first.Evidence))
+	if first.Unmeasured != 1 || answer.Unmeasured != 1 || answer.Outcome != EvidenceNotObservable {
+		t.Fatalf("collect = %+v, analyze = %+v", first, answer)
 	}
 }
 
