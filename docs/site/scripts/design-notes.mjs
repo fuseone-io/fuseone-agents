@@ -18,6 +18,7 @@ export const designDocs = [
   ["NT-011-durable-agent-execution-and-workflow-engines.md", "Durable agent execution and the workflow-engine boundary."],
   ["NT-012-governed-slack-tickets.md", "Governed Slack tickets and Gravitee subscription approval."],
   ["NT-013-software-factory-pilot.md", "A software factory of governed agent roles, piloted on this repository."],
+  ["NT-014-governed-evidence-collection.md", "Collecting events from a declared source, with the coverage of every number stated."],
 ];
 
 // Design notes left off the site on purpose. Leaving one out is a decision,
