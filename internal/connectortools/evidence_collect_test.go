@@ -207,6 +207,23 @@ func TestCollect_rowsMissingFromTheBody_failsInsteadOfCountingZero(t *testing.T)
 	}
 }
 
+// The control is executed under an approval too, and its answer decides whether
+// absence can be concluded, so changing it must ask again.
+func TestApprovalBinding_changesWithTheControlDeclaration(t *testing.T) {
+	t.Parallel()
+	layer := evidenceLayer(t, &fakeEvidenceSource{})
+	call := collectCall(byUserArgs)
+	before := layer.ApprovalBinding(call)
+	changed := validEvidenceInstance()
+	changed.Evidence.Queries[0].Path = "/events/elsewhere"
+	if err := layer.SetInstances([]Instance{changed}); err != nil {
+		t.Fatal(err)
+	}
+	if layer.ApprovalBinding(call) == before {
+		t.Fatal("the binding ignored a changed control")
+	}
+}
+
 // An offset the source ignores returns the first page forever. The collection
 // must stop, and it must not call that complete.
 func TestCollect_offsetStopsAdvancing_isAFloor(t *testing.T) {

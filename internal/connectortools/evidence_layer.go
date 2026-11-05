@@ -185,10 +185,14 @@ func evidenceFailure(err error) (engine.ToolResult, error) {
 }
 
 // evidenceContractDigest binds a decision to what would actually be read: the
-// source and this query's declaration, not the other queries beside it.
+// source, this query's declaration and the control that runs before it, whose
+// answer decides whether absence can be concluded. Not the other queries beside it.
 func evidenceContractDigest(cfg EvidenceConfig, query EvidenceQuery) string {
 	bound := cfg
 	bound.Queries = []EvidenceQuery{query}
+	if control, found := evidenceQueryByID(cfg, cfg.Control); found && control.ID != query.ID {
+		bound.Queries = append(bound.Queries, control)
+	}
 	raw, err := json.Marshal(bound)
 	if err != nil {
 		return ""
