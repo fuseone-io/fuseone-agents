@@ -9,6 +9,7 @@ var catalog = []Connector{
 	graviteeConnector,
 	cloudflareConnector,
 	elasticsearchConnector,
+	evidenceConnector,
 	objectStorageConnector,
 	identityConnector,
 	kubernetesConnector,
