@@ -71,6 +71,8 @@ export function ConnectorInstanceCard({
           <VaultFacts instance={instance} t={t} />
         ) : instance.connector === "cloudflare" ? (
           <CloudflareFacts instance={instance} t={t} />
+        ) : instance.connector === "evidence" ? (
+          <EvidenceFacts instance={instance} t={t} />
         ) : instance.connector === "elasticsearch" ? (
           <>
             <Fact
@@ -98,6 +100,30 @@ export function ConnectorInstanceCard({
         )}
       </div>
     </article>
+  );
+}
+
+function EvidenceFacts({
+  instance,
+  t,
+}: {
+  instance: ConnectorInstance;
+  t: TFunction;
+}) {
+  return (
+    <>
+      <Fact
+        label={t("connectors.evidenceSource")}
+        value={instance.evidence?.baseUrl ?? "-"}
+        mono
+      />
+      <Fact
+        label={t("connectors.evidenceQueries")}
+        value={String(instance.evidence?.queries.length ?? 0)}
+      />
+      <Fact label={t("connectors.token")} value={tokenState(instance, t)} />
+      <Fact label={t("connectors.updatedAt")} value={updated(instance, t)} />
+    </>
   );
 }
 

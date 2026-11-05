@@ -1516,6 +1516,8 @@
     "esBaseUrlInvalid": "An http(s) address.",
     "esUsername": "Username",
     "esUsernameRequired": "Name the user; the password is the sealed token.",
+    "evidenceSource": "Source",
+    "evidenceQueries": "Declared queries",
     "esIndex": "Index pattern",
     "esIndexHint": "Fixed for every query — arguments never choose an index. E.g. logs-*",
     "esIndexInvalid": "Lowercase, digits, * . _ -; cannot start with *.",

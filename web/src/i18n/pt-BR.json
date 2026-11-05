@@ -1516,6 +1516,8 @@
     "esBaseUrlInvalid": "Um endereço http(s).",
     "esUsername": "Usuário",
     "esUsernameRequired": "Informe o usuário; a senha é o token selado.",
+    "evidenceSource": "Fonte",
+    "evidenceQueries": "Consultas declaradas",
     "esIndex": "Padrão de índice",
     "esIndexHint": "Fixo para todas as consultas — os argumentos nunca escolhem índice. Ex.: logs-*",
     "esIndexInvalid": "Minúsculas, dígitos, * . _ -; não pode começar com *.",
