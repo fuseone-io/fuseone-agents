@@ -30,6 +30,7 @@ const (
 	CodeConnectorOutcomeUnknown   = "connector_outcome_unknown"
 	CodeConnectorNeedsAttention   = "connector_needs_attention"
 	CodeConnectorAbandoned        = "connector_reconciliation_abandoned"
+	CodeConnectorQueryRefused     = "connector_query_refused"
 )
 
 var instanceNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
@@ -48,6 +49,7 @@ type Instance struct {
 	Gravitee      GraviteeConfig
 	Cloudflare    CloudflareConfig
 	Elasticsearch ElasticsearchConfig
+	Evidence      EvidenceConfig
 	// Token is what the instance authenticates with, for the connectors that
 	// authenticate with one. RequiresToken says which; bound connectors are not
 	// among them.

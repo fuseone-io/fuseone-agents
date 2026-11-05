@@ -108,6 +108,7 @@ type StoredInstance struct {
 	Gravitee      *GraviteeConfig      `json:"gravitee,omitempty"`
 	Cloudflare    *CloudflareConfig    `json:"cloudflare,omitempty"`
 	Elasticsearch *ElasticsearchConfig `json:"elasticsearch,omitempty"`
+	Evidence      *EvidenceConfig      `json:"evidence,omitempty"`
 }
 
 func (s *Settings) instance(ctx context.Context, row settings.Setting) (Instance, error) {
@@ -141,6 +142,7 @@ func SettingInstance(row settings.Setting) (Instance, error) {
 		Gravitee:      storedGravitee(stored.Gravitee),
 		Cloudflare:    storedCloudflare(stored.Cloudflare),
 		Elasticsearch: storedElasticsearch(stored.Elasticsearch),
+		Evidence:      storedEvidence(stored.Evidence),
 		HasToken:      row.HasSecret,
 	}, nil
 }
@@ -153,6 +155,7 @@ func SettingValue(instance Instance) (json.RawMessage, error) {
 		Gravitee:      graviteeToStore(instance.Gravitee),
 		Cloudflare:    cloudflareToStore(instance.Cloudflare),
 		Elasticsearch: elasticsearchToStore(instance.Elasticsearch),
+		Evidence:      evidenceToStore(instance.Evidence),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("connector: encode %s: %w", instance.Name, err)
@@ -202,6 +205,8 @@ func ValidateInstanceConfig(instance Instance) error {
 		return validateCloudflareConfig(instance)
 	case "elasticsearch":
 		return validateElasticsearchConfig(instance)
+	case "evidence":
+		return validateEvidenceConfig(instance)
 	default:
 		return fmt.Errorf("connector: unsupported connector %q", instance.Connector)
 	}

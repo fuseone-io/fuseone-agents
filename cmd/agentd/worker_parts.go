@@ -138,7 +138,8 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 		WithCloudflare(connectortools.NewCloudflareBlocker(
 			connectortools.NewHTTPCloudflareClient(nil),
 		)).
-		WithElasticsearch(connectortools.NewHTTPElasticsearchClient(nil))
+		WithElasticsearch(connectortools.NewHTTPElasticsearchClient(nil)).
+		WithEvidence(connectortools.NewHTTPEvidenceClient(nil))
 	if parts.configPool != nil {
 		graviteeAccess := connectortools.NewGraviteeAccessResolver(connectorSettings, vaultClient)
 		graviteeRemote := connectortools.NewHTTPGraviteeClient(nil)

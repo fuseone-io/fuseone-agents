@@ -57,7 +57,7 @@ type SQLConfig struct {
 // from it and must not carry a second credential of their own.
 func RequiresToken(connector string) bool {
 	return connector == "vault" || connector == "cloudflare" ||
-		connector == "elasticsearch"
+		connector == "elasticsearch" || connector == "evidence"
 }
 
 func validateSQLConfig(instance Instance) error {

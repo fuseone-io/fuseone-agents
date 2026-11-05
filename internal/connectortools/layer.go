@@ -24,6 +24,7 @@ type Layer struct {
 	answers       *TicketAnswers
 	cloudflare    *CloudflareBlocker
 	elasticsearch ElasticsearchSearcher
+	evidence      EvidenceFetcher
 
 	mu        sync.RWMutex
 	instances map[instanceKey]Instance
@@ -175,6 +176,8 @@ func (l *Layer) ApprovalBinding(call engine.Call) string {
 		}
 		digest, _ := graviteeContractDigest(instance.Gravitee, vault, op.ID)
 		return digest
+	case "evidence":
+		return evidenceApprovalBinding(instance, op, call)
 	default:
 		return ""
 	}
@@ -239,7 +242,11 @@ func (l *Layer) Schema(id domain.ToolID) (string, string, map[string]any, bool) 
 	instance, op, ok := l.native(id)
 	if ok {
 		schema, ok := schemaFor(op.ID)
-		return string(id), op.Summary, schema, ok && instance.Enabled
+		description := op.Summary
+		if instance.Connector == "evidence" {
+			description = evidenceDescription(instance, op)
+		}
+		return string(id), description, schema, ok && instance.Enabled
 	}
 	if schemas, ok := l.catalog.(interface {
 		Schema(domain.ToolID) (string, string, map[string]any, bool)
@@ -310,6 +317,9 @@ func (l *Layer) Reserve(ctx context.Context, call engine.Call) error {
 			return ErrSQLContractChanged
 		}
 	}
+	if instance.Connector == "evidence" && l.ApprovalBinding(call) != call.ContractDigest {
+		return ErrEvidenceContractChanged
+	}
 	if instance.Connector == "gravitee" && op.ID == "gravitee.accept_subscription" {
 		current := l.ApprovalBinding(call)
 		if current == "" || current != call.ContractDigest {
@@ -348,6 +358,8 @@ func (l *Layer) Invoke(ctx context.Context, call engine.Call) (engine.ToolResult
 		return l.invokeCloudflareNative(ctx, instance, op, call)
 	case "elasticsearch":
 		return l.invokeElasticsearchNative(ctx, instance, op, call)
+	case "evidence":
+		return l.invokeEvidenceNative(ctx, instance, op, call)
 	default:
 		return failed(CodeConnectorUnavailable), nil
 	}
@@ -376,5 +388,6 @@ func cloneInstance(in Instance) Instance {
 	for i := range out.SQL.Templates {
 		out.SQL.Templates[i].Parameters = slices.Clone(in.SQL.Templates[i].Parameters)
 	}
+	out.Evidence = cloneEvidence(in.Evidence)
 	return out
 }
