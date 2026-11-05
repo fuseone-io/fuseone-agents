@@ -376,5 +376,6 @@ func cloneInstance(in Instance) Instance {
 	for i := range out.SQL.Templates {
 		out.SQL.Templates[i].Parameters = slices.Clone(in.SQL.Templates[i].Parameters)
 	}
+	out.Evidence = cloneEvidence(in.Evidence)
 	return out
 }
