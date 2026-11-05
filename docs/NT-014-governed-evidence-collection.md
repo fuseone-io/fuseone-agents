@@ -99,11 +99,19 @@ its counts and one of:
 | Outcome | When |
 |---|---|
 | `observed` | Matching events exist. It proves what the source recorded, not intent |
-| `not_observed` | No match, coverage `complete`, and the positive control passed |
-| `not_observable` | No match, and the control failed, was not run, or coverage is not `complete` |
+| `not_observed` | No match, coverage `complete`, the positive control passed, and no event in the set is unmeasured |
+| `not_observable` | No match, and any of those is missing |
 
 `not_observed` never reads "did not happen". Events marked as unmeasured are
-counted and reported, because a sum that silently includes them understates.
+counted and reported, because a sum that silently includes them understates, and
+they rule out `not_observed`: the event that would have matched may be exactly
+the one the source could not see.
+
+A relative window moves between resumes, so a collection can hold an event twice.
+`analyze` counts each id once and reports the duplicates, which makes it the
+authority on counts; the number on a `collect` is what was stored. A window on
+`analyze` cannot reach outside what was collected, and a sum reports the events it
+could not count, because a field some event types never carry is not a zero.
 
 The positive control is not left to anyone's memory: a collection runs it over
 the same window before its first page and records the answer in the evidence. A
