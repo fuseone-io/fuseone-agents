@@ -51,8 +51,9 @@ All three read, return untrusted content and never answer from a cache.
 | `evidence.<instance>.analyze` | evidence reference, window, declared fields to group and sum | Aggregates with the coverage inherited |
 
 `check` needs no approval. `collect` and `analyze` touch personal data, so policy
-decides. An approval is bound to a digest of the query's declaration through
-`ApprovalBinding`, as SQL does: changing a query under the same id asks again.
+decides. An approval is bound to a digest of the query's and the control's declarations
+through `ApprovalBinding`, as SQL does: changing either under the same id asks
+again.
 
 ## The declaration
 
@@ -69,7 +70,8 @@ And its named queries. A query declares:
 
 - a path and a template for its query string, requested with GET;
 - parameters, all required, each with a pattern;
-- the fields kept from each event, and which of them identify and timestamp it;
+- the fields kept from each event, which must include the unmeasured marker, and
+  which of them identify and timestamp it;
 - whether it is a lookup with no window.
 
 **A value outside its pattern is refused, never escaped.** Escaping needs the
