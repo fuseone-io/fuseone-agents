@@ -6079,6 +6079,7 @@ components:
         gravitee: { $ref: '#/components/schemas/ConnectorGraviteeResponse' }
         cloudflare: { $ref: '#/components/schemas/ConnectorCloudflareConfig' }
         elasticsearch: { $ref: '#/components/schemas/ConnectorElasticsearchConfig' }
+        evidence: { $ref: '#/components/schemas/ConnectorEvidenceConfig' }
 
     ConnectorInstanceDetail:
       type: object
@@ -6104,6 +6105,7 @@ components:
         gravitee: { $ref: '#/components/schemas/ConnectorGraviteeInput' }
         cloudflare: { $ref: '#/components/schemas/ConnectorCloudflareConfig' }
         elasticsearch: { $ref: '#/components/schemas/ConnectorElasticsearchConfig' }
+        evidence: { $ref: '#/components/schemas/ConnectorEvidenceConfig' }
 
     ConnectorGraviteeReference:
       type: object
@@ -6360,13 +6362,118 @@ components:
           maximum: 30
           description: Window ceiling in days; zero means the default (7).
 
+    ConnectorEvidenceMatch:
+      type: object
+      description: One field holding one value.
+      properties:
+        field: { type: string, maxLength: 255 }
+        value: { type: string, maxLength: 255 }
+
+    ConnectorEvidencePaging:
+      type: object
+      required: [kind, limitParam, pageSize]
+      properties:
+        kind: { type: string, enum: [offset, cursor] }
+        limitParam: { type: string, maxLength: 64 }
+        pageSize: { type: integer, minimum: 1, maximum: 10000 }
+        offsetParam: { type: string, maxLength: 64 }
+        cursorParam: { type: string, maxLength: 64 }
+        nextCursor:
+          type: string
+          maxLength: 255
+          description: Dotted path to the next cursor in a response body.
+
+    ConnectorEvidenceWindow:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [period, range] }
+        periodParam: { type: string, maxLength: 64 }
+        periods:
+          type: array
+          description: Accepted relative periods in seconds, ascending.
+          items: { type: integer, minimum: 1 }
+        startParam: { type: string, maxLength: 64 }
+        endParam: { type: string, maxLength: 64 }
+        format: { type: string, enum: [iso, epoch] }
+
+    ConnectorEvidenceFilter:
+      type: object
+      required: [name, value]
+      properties:
+        name: { type: string, maxLength: 64 }
+        value:
+          type: string
+          description: May hold {parameter} placeholders.
+
+    ConnectorEvidenceParameter:
+      type: object
+      required: [name, pattern]
+      description: Always required. A value must match the pattern whole.
+      properties:
+        name: { type: string, maxLength: 63 }
+        pattern: { type: string }
+
+    ConnectorEvidenceQuery:
+      type: object
+      required: [id, description, path, fields]
+      properties:
+        id: { type: string, maxLength: 63 }
+        description: { type: string }
+        path: { type: string }
+        filters:
+          type: array
+          items: { $ref: '#/components/schemas/ConnectorEvidenceFilter' }
+        parameters:
+          type: array
+          items: { $ref: '#/components/schemas/ConnectorEvidenceParameter' }
+        fields:
+          type: array
+          description: The allowlist kept from each event.
+          items: { type: string, maxLength: 255 }
+        idField: { type: string, maxLength: 255 }
+        timeField: { type: string, maxLength: 255 }
+        windowless:
+          type: boolean
+          description: A lookup, where a time filter would mean something else.
+
+    ConnectorEvidenceConfig:
+      type: object
+      required: [baseUrl, authHeader, control, rows, paging, window, queries]
+      description: >
+        One declared source of events. Paths, fields, paging and windows are
+        configuration; a model chooses a query and supplies values that match
+        its patterns, never query text. The sealed token travels in authHeader.
+      properties:
+        baseUrl: { type: string, description: The source's API root; https only. }
+        authHeader: { type: string, maxLength: 64 }
+        authPrefix: { type: string, maxLength: 64 }
+        control:
+          type: string
+          description: The unfiltered query that proves the source answers.
+        rows:
+          type: string
+          description: Dotted path to the array of events in a response body.
+        refusal: { $ref: '#/components/schemas/ConnectorEvidenceMatch' }
+        gap: { $ref: '#/components/schemas/ConnectorEvidenceMatch' }
+        paging: { $ref: '#/components/schemas/ConnectorEvidencePaging' }
+        window: { $ref: '#/components/schemas/ConnectorEvidenceWindow' }
+        maxEvents:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+          description: Event ceiling per collection; zero means the default (200000).
+        queries:
+          type: array
+          items: { $ref: '#/components/schemas/ConnectorEvidenceQuery' }
+
     ConnectorInstanceInput:
       type: object
       required: [connector, scopeKind]
       properties:
         connector:
           type: string
-          description: Connector shape, such as vault, sql, gravitee, cloudflare or elasticsearch.
+          description: Connector shape, such as vault, sql, gravitee, cloudflare, elasticsearch or evidence.
         enabled:
           type: boolean
           default: true
@@ -6378,6 +6485,7 @@ components:
         gravitee: { $ref: '#/components/schemas/ConnectorGraviteeInput' }
         cloudflare: { $ref: '#/components/schemas/ConnectorCloudflareConfig' }
         elasticsearch: { $ref: '#/components/schemas/ConnectorElasticsearchConfig' }
+        evidence: { $ref: '#/components/schemas/ConnectorEvidenceConfig' }
         token:
           type: string
           description: >

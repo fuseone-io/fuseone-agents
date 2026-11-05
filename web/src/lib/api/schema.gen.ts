@@ -3764,6 +3764,7 @@ export interface components {
             gravitee?: components["schemas"]["ConnectorGraviteeResponse"];
             cloudflare?: components["schemas"]["ConnectorCloudflareConfig"];
             elasticsearch?: components["schemas"]["ConnectorElasticsearchConfig"];
+            evidence?: components["schemas"]["ConnectorEvidenceConfig"];
         };
         /** @description The authored, non-secret configuration available only to connector configurers. SQL text is present because editing any other SQL field must not erase or replace a registered query. Gravitee's fixed Vault location is present for the same read-edit-write reason. Token presence is metadata; token bytes and generated credentials never leave storage. */
         ConnectorInstanceDetail: {
@@ -3782,6 +3783,7 @@ export interface components {
             gravitee?: components["schemas"]["ConnectorGraviteeInput"];
             cloudflare?: components["schemas"]["ConnectorCloudflareConfig"];
             elasticsearch?: components["schemas"]["ConnectorElasticsearchConfig"];
+            evidence?: components["schemas"]["ConnectorEvidenceConfig"];
         };
         ConnectorGraviteeReference: {
             /**
@@ -3910,8 +3912,75 @@ export interface components {
             /** @description Window ceiling in days; zero means the default (7). */
             maxWindowDays?: number;
         };
+        /** @description One field holding one value. */
+        ConnectorEvidenceMatch: {
+            field?: string;
+            value?: string;
+        };
+        ConnectorEvidencePaging: {
+            /** @enum {string} */
+            kind: "offset" | "cursor";
+            limitParam: string;
+            pageSize: number;
+            offsetParam?: string;
+            cursorParam?: string;
+            /** @description Dotted path to the next cursor in a response body. */
+            nextCursor?: string;
+        };
+        ConnectorEvidenceWindow: {
+            /** @enum {string} */
+            kind: "period" | "range";
+            periodParam?: string;
+            /** @description Accepted relative periods in seconds, ascending. */
+            periods?: number[];
+            startParam?: string;
+            endParam?: string;
+            /** @enum {string} */
+            format?: "iso" | "epoch";
+        };
+        ConnectorEvidenceFilter: {
+            name: string;
+            /** @description May hold {parameter} placeholders. */
+            value: string;
+        };
+        /** @description Always required. A value must match the pattern whole. */
+        ConnectorEvidenceParameter: {
+            name: string;
+            pattern: string;
+        };
+        ConnectorEvidenceQuery: {
+            id: string;
+            description: string;
+            path: string;
+            filters?: components["schemas"]["ConnectorEvidenceFilter"][];
+            parameters?: components["schemas"]["ConnectorEvidenceParameter"][];
+            /** @description The allowlist kept from each event. */
+            fields: string[];
+            idField?: string;
+            timeField?: string;
+            /** @description A lookup, where a time filter would mean something else. */
+            windowless?: boolean;
+        };
+        /** @description One declared source of events. Paths, fields, paging and windows are configuration; a model chooses a query and supplies values that match its patterns, never query text. The sealed token travels in authHeader. */
+        ConnectorEvidenceConfig: {
+            /** @description The source's API root; https only. */
+            baseUrl: string;
+            authHeader: string;
+            authPrefix?: string;
+            /** @description The unfiltered query that proves the source answers. */
+            control: string;
+            /** @description Dotted path to the array of events in a response body. */
+            rows: string;
+            refusal?: components["schemas"]["ConnectorEvidenceMatch"];
+            gap?: components["schemas"]["ConnectorEvidenceMatch"];
+            paging: components["schemas"]["ConnectorEvidencePaging"];
+            window: components["schemas"]["ConnectorEvidenceWindow"];
+            /** @description Event ceiling per collection; zero means the default (200000). */
+            maxEvents?: number;
+            queries: components["schemas"]["ConnectorEvidenceQuery"][];
+        };
         ConnectorInstanceInput: {
-            /** @description Connector shape, such as vault, sql, gravitee, cloudflare or elasticsearch. */
+            /** @description Connector shape, such as vault, sql, gravitee, cloudflare, elasticsearch or evidence. */
             connector: string;
             /** @default true */
             enabled: boolean;
@@ -3923,6 +3992,7 @@ export interface components {
             gravitee?: components["schemas"]["ConnectorGraviteeInput"];
             cloudflare?: components["schemas"]["ConnectorCloudflareConfig"];
             elasticsearch?: components["schemas"]["ConnectorElasticsearchConfig"];
+            evidence?: components["schemas"]["ConnectorEvidenceConfig"];
             /** @description Connector token to seal. Only connectors that authenticate with a token of their own accept it; bound connectors such as SQL and Gravitee reject it. */
             token?: string;
             /** @description Remove the stored token. An enabled connector that authenticates directly is refused unless the same request also supplies a replacement. Bound connectors never keep a token of their own. */
