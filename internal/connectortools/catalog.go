@@ -70,6 +70,10 @@ func schemaFor(operationID string) (map[string]any, bool) {
 		return elasticsearchTopIPsSchema(), true
 	case "elasticsearch.resource_history":
 		return elasticsearchHistorySchema(), true
+	case "evidence.check":
+		return evidenceCheckSchema(), true
+	case "evidence.collect":
+		return evidenceCollectSchema(), true
 	default:
 		return nil, false
 	}
