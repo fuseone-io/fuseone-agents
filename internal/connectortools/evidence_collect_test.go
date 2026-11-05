@@ -42,7 +42,13 @@ func (f *fakeEvidenceSource) Fetch(
 
 func (f *fakeEvidenceSource) page(request EvidenceRequest) ([]byte, error) {
 	if request.Path == "/events/all" {
-		return json.Marshal(map[string]any{"ok": 1, "result": make([]map[string]any, f.controls)})
+		rows := []map[string]any{}
+		for i := range f.controls {
+			rows = append(rows, map[string]any{"_id": fmt.Sprintf("c-%d", i)})
+		}
+		return json.Marshal(map[string]any{
+			"ok": 1, "result": rows, "pagination": map[string]any{"nextCursor": nil},
+		})
 	}
 	offset, _ := strconv.Atoi(request.Query.Get("offset"))
 	limit, _ := strconv.Atoi(request.Query.Get("limit"))
@@ -204,6 +210,99 @@ func TestCollect_rowsMissingFromTheBody_failsInsteadOfCountingZero(t *testing.T)
 	_, result, _ := collect(t, evidenceLayer(t, source), collectCall(byUserArgs))
 	if !result.Failed || result.ErrorCode != CodeConnectorUpstreamFailed {
 		t.Fatalf("result = %+v, want an upstream failure", result)
+	}
+}
+
+// Each of these parses, and each would read as an empty set: a complete
+// collection of nothing, which is the road to a false not_observed.
+func TestCollect_rowsAreNotAnArrayOfObjects_failsInsteadOfCountingZero(t *testing.T) {
+	t.Parallel()
+	for name, body := range map[string]string{
+		"null":         `{"ok":1,"result":null}`,
+		"an object":    `{"ok":1,"result":{}}`,
+		"a string":     `{"ok":1,"result":"none"}`,
+		"a null event": `{"ok":1,"result":[null]}`,
+		"a text event": `{"ok":1,"result":["a"]}`,
+		"a number row": `{"ok":1,"result":[1]}`,
+		"mixed":        `{"ok":1,"result":[{"_id":"a"},null]}`,
+	} {
+		source := &fakeEvidenceSource{controls: 1}
+		source.hook = func(r EvidenceRequest) ([]byte, error, bool) {
+			if r.Path == "/events/page" {
+				return []byte(body), nil, true
+			}
+			return nil, nil, false
+		}
+		_, result, _ := collect(t, evidenceLayer(t, source), collectCall(byUserArgs))
+		if !result.Failed || result.ErrorCode != CodeConnectorUpstreamFailed {
+			t.Errorf("%s: result = %+v, want an upstream failure", name, result)
+		}
+	}
+}
+
+func cursorLayer(t *testing.T, body string) *Layer {
+	t.Helper()
+	source := &fakeEvidenceSource{controls: 1}
+	source.hook = func(r EvidenceRequest) ([]byte, error, bool) {
+		if r.Path == "/events/page" {
+			return []byte(body), nil, true
+		}
+		return nil, nil, false
+	}
+	return evidenceLayer(t, source, func(i *Instance) {
+		i.Evidence.Paging = EvidencePaging{
+			Kind: EvidencePagingCursor, LimitParam: "limit", PageSize: 2,
+			CursorParam: "cursor", NextCursor: "pagination.nextCursor",
+		}
+	})
+}
+
+// Only an explicit end ends a collection. A cursor that is missing or unreadable
+// may have more behind it, so reading it as the end would call a prefix complete.
+func TestCollect_cursorMissingOrUnreadable_failsInsteadOfEnding(t *testing.T) {
+	t.Parallel()
+	for name, body := range map[string]string{
+		"no pagination":   `{"ok":1,"result":[{"_id":"a"}]}`,
+		"no next":         `{"ok":1,"result":[{"_id":"a"}],"pagination":{}}`,
+		"an object":       `{"ok":1,"result":[{"_id":"a"}],"pagination":{"nextCursor":{}}}`,
+		"an array":        `{"ok":1,"result":[{"_id":"a"}],"pagination":{"nextCursor":[]}}`,
+		"a boolean":       `{"ok":1,"result":[{"_id":"a"}],"pagination":{"nextCursor":true}}`,
+		"pagination null": `{"ok":1,"result":[{"_id":"a"}],"pagination":null}`,
+	} {
+		_, result, _ := collect(t, cursorLayer(t, body), collectCall(byUserArgs))
+		if !result.Failed || result.ErrorCode != CodeConnectorUpstreamFailed {
+			t.Errorf("%s: result = %+v, want an upstream failure", name, result)
+		}
+	}
+}
+
+func TestCollect_cursorExplicitlyEnds_isComplete(t *testing.T) {
+	t.Parallel()
+	for name, body := range map[string]string{
+		"null":         `{"ok":1,"result":[{"_id":"a"}],"pagination":{"nextCursor":null}}`,
+		"empty string": `{"ok":1,"result":[{"_id":"a"}],"pagination":{"nextCursor":""}}`,
+	} {
+		answer, _, _ := collect(t, cursorLayer(t, body), collectCall(byUserArgs))
+		if answer.Coverage != EvidenceComplete || answer.Events != 1 {
+			t.Errorf("%s: answer = %+v, want one event complete", name, answer)
+		}
+	}
+}
+
+// The control is executed under an approval too, and its answer decides whether
+// absence can be concluded, so changing it must ask again.
+func TestApprovalBinding_changesWithTheControlDeclaration(t *testing.T) {
+	t.Parallel()
+	layer := evidenceLayer(t, &fakeEvidenceSource{})
+	call := collectCall(byUserArgs)
+	before := layer.ApprovalBinding(call)
+	changed := validEvidenceInstance()
+	changed.Evidence.Queries[0].Path = "/events/elsewhere"
+	if err := layer.SetInstances([]Instance{changed}); err != nil {
+		t.Fatal(err)
+	}
+	if layer.ApprovalBinding(call) == before {
+		t.Fatal("the binding ignored a changed control")
 	}
 }
 
@@ -558,7 +657,7 @@ func TestCollect_resumeAfterTheQueryChanged_isRefused(t *testing.T) {
 		t.Fatal("no evidence")
 	}
 	changed := validEvidenceInstance()
-	changed.Evidence.Queries[1].Fields = []string{"_id"}
+	changed.Evidence.Queries[1].Fields = []string{"_id", "bypass_traffic"}
 	if err := layer.SetInstances([]Instance{changed}); err != nil {
 		t.Fatal(err)
 	}

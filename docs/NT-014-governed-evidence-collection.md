@@ -51,8 +51,9 @@ All three read, return untrusted content and never answer from a cache.
 | `evidence.<instance>.analyze` | evidence reference, window, declared fields to group and sum | Aggregates with the coverage inherited |
 
 `check` needs no approval. `collect` and `analyze` touch personal data, so policy
-decides. An approval is bound to a digest of the query's declaration through
-`ApprovalBinding`, as SQL does: changing a query under the same id asks again.
+decides. An approval is bound to a digest of the query's and the control's declarations
+through `ApprovalBinding`, as SQL does: changing either under the same id asks
+again.
 
 ## The declaration
 
@@ -69,7 +70,8 @@ And its named queries. A query declares:
 
 - a path and a template for its query string, requested with GET;
 - parameters, all required, each with a pattern;
-- the fields kept from each event, and which of them identify and timestamp it;
+- the fields kept from each event, which must include the unmeasured marker, and
+  which of them identify and timestamp it;
 - whether it is a lookup with no window.
 
 **A value outside its pattern is refused, never escaped.** Escaping needs the
@@ -110,7 +112,9 @@ the one the source could not see.
 A relative window moves between resumes, so a collection can hold an event twice.
 `analyze` counts each id once and reports the duplicates, which makes it the
 authority on counts; the number on a `collect` is what was stored. A window on
-`analyze` cannot reach outside what was collected, and a sum reports the events it
+`analyze` cannot reach outside what was collected or apply to a lookup with no
+window. A long value is shortened only for the reader, and carries a digest of the
+whole, so two values sharing their first bytes stay two. A sum reports the events it
 could not count, because a field some event types never carry is not a zero.
 
 The positive control is not left to anyone's memory: a collection runs it over

@@ -38,6 +38,10 @@ func validateEvidenceSource(cfg EvidenceConfig) error {
 		return errors.New("token prefix must be one line")
 	case strings.TrimSpace(cfg.Rows) == "":
 		return errors.New("needs the path to the events in a response")
+	case (cfg.Refusal.Field == "") != (cfg.Refusal.Value == ""):
+		return errors.New("refusal needs both a field and a value")
+	case (cfg.Gap.Field == "") != (cfg.Gap.Value == ""):
+		return errors.New("gap needs both a field and a value")
 	case cfg.MaxEvents < 0 || cfg.MaxEvents > maxEvidenceEvents:
 		return fmt.Errorf("event ceiling must be between 0 and %d", maxEvidenceEvents)
 	}
@@ -132,6 +136,11 @@ func validateEvidenceFields(cfg EvidenceConfig, query EvidenceQuery) error {
 	}
 	if query.TimeField != "" && !slices.Contains(query.Fields, query.TimeField) {
 		return errors.New("must keep its time field")
+	}
+	// Analysis reads what was kept. A marker dropped here turns an unmeasured
+	// event into a measured one, and absence becomes concludable by accident.
+	if cfg.Gap.Field != "" && !slices.Contains(query.Fields, cfg.Gap.Field) {
+		return errors.New("must keep the gap field")
 	}
 	// Without an id an offset that stopped advancing looks like more events.
 	if cfg.Paging.Kind == EvidencePagingOffset && query.IDField == "" {

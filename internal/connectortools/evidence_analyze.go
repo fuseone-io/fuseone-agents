@@ -131,8 +131,9 @@ func resolveEvidenceCut(asked *evidenceArgument, collected evidenceSpan) (eviden
 	if !ok {
 		return evidenceCut{}, false
 	}
-	// Nobody looked outside what was collected, so nothing can be said about it.
-	if collected.From != "" && (span.From < collected.From || span.To > collected.To) {
+	// Nobody looked outside what was collected, and a windowless lookup looked over
+	// no time in particular, so nothing can be said about either.
+	if collected.Kind == EvidenceWindowNone || span.From < collected.From || span.To > collected.To {
 		return evidenceCut{}, false
 	}
 	from, _ := time.Parse(time.RFC3339, span.From)

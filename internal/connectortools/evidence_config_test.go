@@ -26,7 +26,7 @@ func validEvidenceInstance() Instance {
 			},
 			Queries: []EvidenceQuery{
 				{ID: "all", Description: "Everything, unfiltered.", Path: "/events/all",
-					Fields: []string{"_id"}, IDField: "_id"},
+					Fields: []string{"_id", "bypass_traffic"}, IDField: "_id"},
 				{ID: "by_user", Description: "One user's events.", Path: "/events/page",
 					Filters:    []EvidenceFilter{{Name: "query", Value: "user eq '{user}'"}},
 					Parameters: []EvidenceParameter{{Name: "user", Pattern: `[a-z.]+@[a-z.]+`}},
@@ -35,7 +35,7 @@ func validEvidenceInstance() Instance {
 				{ID: "sloppy", Description: "A careless pattern.", Path: "/events/page",
 					Filters:    []EvidenceFilter{{Name: "query", Value: "user eq '{user}'"}},
 					Parameters: []EvidenceParameter{{Name: "user", Pattern: `.*`}},
-					Fields:     []string{"_id"}, IDField: "_id"},
+					Fields:     []string{"_id", "bypass_traffic"}, IDField: "_id"},
 			},
 		},
 	}
@@ -82,11 +82,16 @@ func TestValidateEvidence_refusesWhatCouldNotRunHonestly(t *testing.T) {
 		"cursor no path": func(c *EvidenceConfig) {
 			c.Paging = EvidencePaging{Kind: EvidencePagingCursor, LimitParam: "limit", PageSize: 2, CursorParam: "cursor"}
 		},
-		"no page size":     func(c *EvidenceConfig) { c.Paging.PageSize = 0 },
-		"huge ceiling":     func(c *EvidenceConfig) { c.MaxEvents = maxEvidenceEvents + 1 },
-		"unknown window":   func(c *EvidenceConfig) { c.Window.Kind = "sliding" },
-		"no periods":       func(c *EvidenceConfig) { c.Window.Periods = nil },
-		"unordered period": func(c *EvidenceConfig) { c.Window.Periods = []int{86400, 3600} },
+		"no page size":         func(c *EvidenceConfig) { c.Paging.PageSize = 0 },
+		"gap not kept":         func(c *EvidenceConfig) { c.Queries[1].Fields = []string{"_id", "timestamp"} },
+		"gap has no value":     func(c *EvidenceConfig) { c.Gap.Value = "" },
+		"gap has no field":     func(c *EvidenceConfig) { c.Gap.Field = "" },
+		"refusal has no value": func(c *EvidenceConfig) { c.Refusal.Value = "" },
+		"refusal has no field": func(c *EvidenceConfig) { c.Refusal.Field = "" },
+		"huge ceiling":         func(c *EvidenceConfig) { c.MaxEvents = maxEvidenceEvents + 1 },
+		"unknown window":       func(c *EvidenceConfig) { c.Window.Kind = "sliding" },
+		"no periods":           func(c *EvidenceConfig) { c.Window.Periods = nil },
+		"unordered period":     func(c *EvidenceConfig) { c.Window.Periods = []int{86400, 3600} },
 		"range no format": func(c *EvidenceConfig) {
 			c.Window = EvidenceWindow{Kind: EvidenceWindowRange, StartParam: "from", EndParam: "to"}
 		},

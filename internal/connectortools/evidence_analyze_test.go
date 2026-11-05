@@ -29,9 +29,10 @@ type analyzeAnswer struct {
 		Field    string `json:"field"`
 		Distinct int    `json:"distinct"`
 		Values   []struct {
-			Value string             `json:"value"`
-			Count int64              `json:"count"`
-			Sums  map[string]float64 `json:"sums"`
+			Value  string             `json:"value"`
+			Digest string             `json:"valueDigest"`
+			Count  int64              `json:"count"`
+			Sums   map[string]float64 `json:"sums"`
 		} `json:"values"`
 	} `json:"groups"`
 }
@@ -153,6 +154,25 @@ func TestAnalyze_windowBeyondTheCollection_isRefused(t *testing.T) {
 	layer, ref := collected(t, trafficSource(event("1", 100, "a.example.com", 1)))
 	_, result := analyze(t, layer, fmt.Sprintf(
 		`{"evidence":%q,"window":{"from":"2020-01-01T00:00:00Z","to":"2020-01-02T00:00:00Z"}}`, ref))
+	if !result.Failed || result.ErrorCode != CodeConnectorBadArguments {
+		t.Fatalf("result = %+v, want a refusal", result)
+	}
+}
+
+// A lookup was collected with no window, so nobody looked over any particular
+// time: a cut would conclude absence about a period the source was never asked.
+func TestAnalyze_windowOverAWindowlessCollection_isRefused(t *testing.T) {
+	t.Parallel()
+	source := trafficSource(event("1", 1790000000, "a.example.com", 1))
+	layer := evidenceLayer(t, source, func(i *Instance) {
+		i.Evidence.Queries[1].Windowless = true
+	})
+	first, _, _ := collect(t, layer, collectCall(`{"query":"by_user","params":{"user":"a@example.com"}}`))
+	if first.Evidence == "" {
+		t.Fatal("nothing collected")
+	}
+	_, result := analyze(t, layer, fmt.Sprintf(
+		`{"evidence":%q,"window":{"from":"2020-01-01T00:00:00Z","to":"2020-01-02T00:00:00Z"}}`, first.Evidence))
 	if !result.Failed || result.ErrorCode != CodeConnectorBadArguments {
 		t.Fatalf("result = %+v, want a refusal", result)
 	}
@@ -299,6 +319,50 @@ func TestAnalyze_boundsAGroupValue(t *testing.T) {
 	answer, _ := analyze(t, layer, fmt.Sprintf(`{"evidence":%q,"groupBy":["domain"]}`, ref))
 	if got := len(answer.Groups[0].Values[0].Value); got > maxEvidenceGroupValue {
 		t.Fatalf("value length = %d", got)
+	}
+}
+
+// Two URLs that share their first bytes are two values. Bounding what is shown must
+// not merge them, or a count reads as one destination when there were two.
+func TestAnalyze_longValuesStayDistinct(t *testing.T) {
+	t.Parallel()
+	shared := strings.Repeat("x", maxEvidenceGroupValue+10)
+	layer, ref := collected(t, trafficSource(
+		event("1", 100, shared+"a", 1),
+		event("2", 100, shared+"b", 1),
+		event("3", 100, shared+"b", 1),
+	))
+	answer, _ := analyze(t, layer, fmt.Sprintf(`{"evidence":%q,"groupBy":["domain"]}`, ref))
+	group := answer.Groups[0]
+	if group.Distinct != 2 || len(group.Values) != 2 || group.Values[0].Count != 2 || group.Values[1].Count != 1 {
+		t.Fatalf("group = %+v, want two values counted apart", group)
+	}
+	if group.Values[0].Digest == "" || group.Values[0].Digest == group.Values[1].Digest {
+		t.Fatalf("group = %+v, want digests that tell the shortened values apart", group)
+	}
+}
+
+func TestAnalyze_shortValueCarriesNoDigest(t *testing.T) {
+	t.Parallel()
+	layer, ref := collected(t, trafficSource(event("1", 100, "a.example.com", 1)))
+	answer, _ := analyze(t, layer, fmt.Sprintf(`{"evidence":%q,"groupBy":["domain"]}`, ref))
+	if answer.Groups[0].Values[0].Digest != "" {
+		t.Fatalf("group = %+v", answer.Groups[0])
+	}
+}
+
+// Collected with a marker kept, the gap reaches the analysis: this is the case the
+// review reproduced, from a query that had dropped it.
+func TestAnalyze_seesTheUnmeasuredEventsCollectCounted(t *testing.T) {
+	t.Parallel()
+	row := event("1", 100, "a.example.com", 0)
+	row["bypass_traffic"] = "yes"
+	layer := evidenceLayer(t, trafficSource(row))
+	first, _, _ := collect(t, layer, collectCall(byUserArgs))
+	answer, _ := analyze(t, layer, fmt.Sprintf(
+		`{"evidence":%q,"match":{"field":"user","equals":"nobody@example.com"}}`, first.Evidence))
+	if first.Unmeasured != 1 || answer.Unmeasured != 1 || answer.Outcome != EvidenceNotObservable {
+		t.Fatalf("collect = %+v, analyze = %+v", first, answer)
 	}
 }
 
