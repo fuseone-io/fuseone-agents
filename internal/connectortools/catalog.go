@@ -74,6 +74,8 @@ func schemaFor(operationID string) (map[string]any, bool) {
 		return evidenceCheckSchema(), true
 	case "evidence.collect":
 		return evidenceCollectSchema(), true
+	case "evidence.analyze":
+		return evidenceAnalyzeSchema(), true
 	default:
 		return nil, false
 	}
