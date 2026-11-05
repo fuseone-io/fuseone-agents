@@ -657,7 +657,7 @@ func TestCollect_resumeAfterTheQueryChanged_isRefused(t *testing.T) {
 		t.Fatal("no evidence")
 	}
 	changed := validEvidenceInstance()
-	changed.Evidence.Queries[1].Fields = []string{"_id"}
+	changed.Evidence.Queries[1].Fields = []string{"_id", "bypass_traffic"}
 	if err := layer.SetInstances([]Instance{changed}); err != nil {
 		t.Fatal(err)
 	}
