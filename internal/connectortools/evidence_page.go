@@ -33,17 +33,61 @@ func parseEvidencePage(cfg EvidenceConfig, body []byte) (evidencePage, error) {
 	if !found {
 		return evidencePage{}, errEvidenceShape
 	}
-	var page evidencePage
-	if err := json.Unmarshal(raw, &page.rows); err != nil || page.rows == nil && !isJSONNull(raw) {
+	rows, ok := evidenceRows(raw)
+	if !ok {
 		return evidencePage{}, errEvidenceShape
 	}
 	sum := sha256.Sum256(raw)
-	page.digest = hex.EncodeToString(sum[:])
+	page := evidencePage{rows: rows, digest: hex.EncodeToString(sum[:])}
 	if cfg.Paging.Kind == EvidencePagingCursor {
-		next, _ := evidencePath(body, cfg.Paging.NextCursor)
-		page.next = evidenceScalar(next)
+		next, ok := evidenceNextCursor(body, cfg.Paging.NextCursor)
+		if !ok {
+			return evidencePage{}, errEvidenceShape
+		}
+		page.next = next
 	}
 	return page, nil
+}
+
+// evidenceRows accepts an array of objects and nothing else. Null decodes without
+// an error, and it would read as a complete collection of nothing.
+func evidenceRows(raw json.RawMessage) ([]map[string]json.RawMessage, bool) {
+	var rows []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &rows); err != nil || rows == nil {
+		return nil, false
+	}
+	for _, row := range rows {
+		if row == nil {
+			return nil, false
+		}
+	}
+	return rows, true
+}
+
+// evidenceNextCursor tells the source saying it is finished, with a null or an
+// empty cursor, from not saying anything readable. Only the first ends a
+// collection: behind the second there may be more events.
+func evidenceNextCursor(body []byte, path string) (string, bool) {
+	raw, found := evidencePath(body, path)
+	if !found {
+		return "", false
+	}
+	var value any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if decoder.Decode(&value) != nil {
+		return "", false
+	}
+	switch next := value.(type) {
+	case nil:
+		return "", true
+	case string:
+		return next, true
+	case json.Number:
+		return next.String(), true
+	default:
+		return "", false
+	}
 }
 
 func evidenceRefused(refusal EvidenceMatch, body []byte) bool {
