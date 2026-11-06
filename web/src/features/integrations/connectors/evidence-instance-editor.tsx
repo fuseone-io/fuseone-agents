@@ -25,7 +25,10 @@ export function EvidenceInstanceEditor({
       <EvidenceInstanceForm instance={null} onClose={onClose} onSave={onSave} />
     );
   }
-  if (!detail.isLoading && !detail.isFetching && detail.data) {
+  const settled = !detail.isLoading && !detail.isFetching;
+  // The error first. A failed refetch keeps the last answer in `data`, and
+  // opening the form on it would let a save overwrite a newer declaration.
+  if (settled && !detail.error && detail.data) {
     return (
       <EvidenceInstanceForm
         instance={detail.data}
@@ -42,9 +45,11 @@ export function EvidenceInstanceEditor({
       description={t("connectors.evidenceSheetHint")}
     >
       <PropertiesSheetBody>
-        {detail.error ? (
+        {settled ? (
           <ErrorState
-            error={detail.error}
+            error={
+              detail.error ?? new Error("evidence instance detail is missing")
+            }
             onRetry={() => void detail.refetch()}
           />
         ) : (

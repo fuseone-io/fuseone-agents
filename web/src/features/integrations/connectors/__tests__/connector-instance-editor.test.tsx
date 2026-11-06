@@ -107,6 +107,52 @@ describe("connector instance editor", () => {
     expect(await screen.findByText("pages_by_user")).toBeInTheDocument();
   });
 
+  it("refuses to edit from a cached declaration when reading the current one fails", async () => {
+    const declaration = evidenceExamples[0]!.declaration;
+    const summary: ConnectorInstance = {
+      name: "gateway",
+      connector: "evidence",
+      enabled: true,
+      scopeKind: "area",
+      company: "acme",
+      area: "cyber",
+      hasToken: true,
+      evidence: { baseUrl: declaration.baseUrl, queries: 3 },
+    };
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(JSON.stringify({ detail: "down" }), {
+          status: 500,
+          headers: { "Content-Type": "application/problem+json" },
+        }),
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    client.setQueryData(integrationKeys.connectorInstance(summary), {
+      ...summary,
+      evidence: declaration,
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <ConnectorEditor
+          connector="evidence"
+          instance={summary}
+          instances={[summary]}
+          onClose={vi.fn()}
+          onSave={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Nome da instância"),
+    ).not.toBeInTheDocument();
+  });
+
   it("opens a new evidence source without asking the server for anything", () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
