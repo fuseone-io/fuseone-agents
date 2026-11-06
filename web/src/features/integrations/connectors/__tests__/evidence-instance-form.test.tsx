@@ -18,6 +18,11 @@ const stored: ConnectorInstanceDetail = {
   evidence: evidenceExamples[0]!.declaration,
 };
 
+// This form validates on every keystroke over dozens of fields, so typing is slow on a
+// busy machine. A test that timed out kept typing in the background, into the next
+// test's fields, and the failure looked like the form doubling letters.
+vi.setConfig({ testTimeout: 60_000 });
+
 beforeAll(() => {
   Element.prototype.hasPointerCapture ??= () => false;
   Element.prototype.setPointerCapture ??= () => {};
