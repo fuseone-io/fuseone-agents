@@ -108,11 +108,30 @@ func (s *Store) List(ctx context.Context, agent domain.AgentID) ([]domain.Regres
 	return out, rows.Err()
 }
 
-// Delete removes one case from the corpus.
+/*
+Delete removes one case from the corpus, and the copy it kept.
+
+Left behind, the copy has nothing pointing at it, so no erasure could ever find
+it again. Identical input shares one reference, so a copy another case still
+names stays. One statement, because a delete between the two would leave exactly
+what this exists to prevent.
+*/
 func (s *Store) Delete(ctx context.Context, agent domain.AgentID, id string) error {
-	if _, err := s.pool.Exec(ctx,
-		`delete from regression_cases where agent_id = $1 and case_id = $2`,
-		string(agent), id); err != nil {
+	if _, err := s.pool.Exec(ctx, `
+		with gone as (
+			delete from regression_cases
+			where agent_id = $1 and case_id = $2
+			returning input_ref
+		)
+		update run_content rc
+		set bytes = null, erased_at = now(), erased_reason = 'case_deleted'
+		from gone
+		where rc.ref = gone.input_ref and rc.erased_at is null
+		  and not exists (
+		    select 1 from regression_cases other
+		    where other.input_ref = rc.ref
+		      and not (other.agent_id = $1 and other.case_id = $2)
+		  )`, string(agent), id); err != nil {
 		return fmt.Errorf("regression: delete %s: %w", id, err)
 	}
 	return nil

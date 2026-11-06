@@ -146,6 +146,64 @@ func TestContentContract(t *testing.T) {
 			}
 		})
 
+		t.Run(name+"/storing erased bytes again does not bring them back", func(t *testing.T) {
+			store := open(t)
+			ctx := context.Background()
+			eraser, ok := store.(interface {
+				Erase(ctx context.Context, kind, owner, reason string) (int, error)
+			})
+			if !ok {
+				t.Fatalf("%T cannot erase", store)
+			}
+
+			ref, err := store.Put(ctx, "run-1", 4, []byte(`{"email":"ana@example.com"}`))
+			if err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+			if _, err := eraser.Erase(ctx, "run", "run-1", "subject"); err != nil {
+				t.Fatalf("Erase: %v", err)
+			}
+			// A retried step writes the same reference, and a retry must not
+			// undo an erasure that happened in between.
+			if _, err := store.Put(ctx, "run-1", 4, []byte(`{"email":"ana@example.com"}`)); err != nil {
+				t.Fatalf("Put again: %v", err)
+			}
+
+			if _, err := store.Get(ctx, ref); !errors.Is(err, ledger.ErrErased) {
+				t.Fatalf("Get after a second Put: err = %v, want erased", err)
+			}
+		})
+
+		t.Run(name+"/restoring erased bytes is a new life for them", func(t *testing.T) {
+			store := open(t)
+			ctx := context.Background()
+			restorer, ok := store.(interface {
+				Erase(ctx context.Context, kind, owner, reason string) (int, error)
+				RestoreFor(ctx context.Context, kind, owner string, seq int64, data []byte) (string, error)
+			})
+			if !ok {
+				t.Fatalf("%T cannot restore", store)
+			}
+
+			ref, err := store.PutFor(ctx, "regression", "suporte", 1, []byte("case"))
+			if err != nil {
+				t.Fatalf("PutFor: %v", err)
+			}
+			if _, err := restorer.Erase(ctx, "regression", "suporte", "retention"); err != nil {
+				t.Fatalf("Erase: %v", err)
+			}
+
+			restored, err := restorer.RestoreFor(ctx, "regression", "suporte", 1, []byte("case"))
+			if err != nil {
+				t.Fatalf("RestoreFor: %v", err)
+			}
+
+			got, err := store.Get(ctx, restored)
+			if err != nil || string(got) != "case" || restored != ref {
+				t.Fatalf("Get(%q) = %q, %v; want the bytes under %q", restored, got, err, ref)
+			}
+		})
+
 		t.Run(name+"/storing the same bytes twice is idempotent", func(t *testing.T) {
 			store := open(t)
 			ctx := context.Background()

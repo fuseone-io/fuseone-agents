@@ -101,6 +101,33 @@ func TestRecordRegression_keepsItsOwnCopyOfTheOccurrence(t *testing.T) {
 	}
 }
 
+// A case that aged out has to be recorded again, and the reference is the
+// digest, so the new copy lands on the tombstone of the old one.
+func TestRecordRegression_afterItsCopyWasErased_keepsAReadableCopy(t *testing.T) {
+	t.Parallel()
+
+	corpus := &fakeCorpus{}
+	server, content := correctable(t, corpus)
+	ctx := inArea("cx", domain.RoleAuthor)
+
+	if _, err := server.RecordRegression(ctx, correction(openapi.Expectation{Kind: "asks"})); err != nil {
+		t.Fatalf("RecordRegression: %v", err)
+	}
+	owner := string(corpus.recorded[0].Agent)
+	if erased, err := content.Erase(gocontext.Background(), "regression", owner, "retention"); err != nil || erased != 1 {
+		t.Fatalf("Erase = %d, %v", erased, err)
+	}
+
+	if _, err := server.RecordRegression(ctx, correction(openapi.Expectation{Kind: "asks"})); err != nil {
+		t.Fatalf("RecordRegression again: %v", err)
+	}
+
+	again := corpus.recorded[len(corpus.recorded)-1].InputRef
+	if _, err := content.Get(gocontext.Background(), again); err != nil {
+		t.Fatalf("the new copy: %v", err)
+	}
+}
+
 func TestRecordRegression_fromARunOpenedWithNothing_isRefused(t *testing.T) {
 	t.Parallel()
 

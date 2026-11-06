@@ -86,6 +86,37 @@ func (c *Content) PutFor(
 }
 
 /*
+RestoreFor stores content again over its own tombstone.
+
+PutFor leaves an erased payload erased, because a retried step writes the same
+reference and must not undo an erasure that happened in between. A person
+recording a correction again is a new act: the reference is the digest, so what
+they read from a live run lands on the tombstone of the copy that aged out. It
+gets a new retention window, because it was stored again today.
+*/
+func (c *Content) RestoreFor(
+	ctx context.Context, kind, owner string, seq int64, data []byte,
+) (string, error) {
+	sum := sha256.Sum256(data)
+	digest := hex.EncodeToString(sum[:])
+	ref := fmt.Sprintf("%s://%s/%d/%s", kind, owner, seq, digest[:16])
+	stored, truncated := domain.Truncate(data, c.limit)
+
+	if _, err := c.pool.Exec(ctx, `
+		insert into run_content
+			(ref, owner_kind, run_id, seq, digest, bytes, full_bytes, truncated)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
+		on conflict (ref) do update
+		set bytes = excluded.bytes, truncated = excluded.truncated,
+		    erased_at = null, erased_reason = '', created_at = now()
+		where run_content.erased_at is not null`,
+		ref, kind, owner, seq, digest, stored, len(data), truncated); err != nil {
+		return "", fmt.Errorf("ledger: restore content for %s: %w", owner, err)
+	}
+	return ref, nil
+}
+
+/*
 WithLimit raises or lowers what one payload may occupy.
 
 The day object storage arrives, this is where the number goes up. Zero is

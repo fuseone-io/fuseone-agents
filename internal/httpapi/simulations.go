@@ -18,6 +18,7 @@ import (
 // same retention as every other bulky payload (AU-04).
 type Cases interface {
 	PutFor(ctx context.Context, kind, owner string, seq int64, data []byte) (string, error)
+	RestoreFor(ctx context.Context, kind, owner string, seq int64, data []byte) (string, error)
 }
 
 // WithCases wires where simulation sets are filed. Optional, like the rest of

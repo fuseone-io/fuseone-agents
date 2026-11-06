@@ -85,10 +85,11 @@ func (s *Server) RecordRegression(
 			invalid(err.Error())), nil
 	}
 
-	// Copied into the corpus rather than pointed at inside the run: runs are
-	// purged on the installation's retention, and a corpus that lost its cases
-	// would stop checking while still reporting green.
-	ref, err := s.cases.PutFor(ctx, "regression", string(published.ID), 1, input)
+	// Copied into the corpus rather than pointed at inside the run, so a case
+	// outlives the purge of the run it came from. The copy is under retention
+	// itself, and recording a case again after it aged out has to work: the
+	// reference is the digest, so this lands on the old copy's tombstone.
+	ref, err := s.cases.RestoreFor(ctx, "regression", string(published.ID), 1, input)
 	if err != nil {
 		return nil, fmt.Errorf("keep the occurrence: %w", err)
 	}
