@@ -102,7 +102,7 @@ func (s *Server) recordCorrection(
 	ctx context.Context, published domain.AgentSummary, body *openapi.RecordRegressionJSONRequestBody,
 ) (recorded domain.RegressionCase, refused, err error) {
 	err = s.regressions.Hold(ctx, published.ID, func(ctx context.Context) error {
-		input, readErr := s.occurrenceOf(ctx, domain.RunID(body.RunId))
+		input, readErr := s.occurrenceOf(ctx, published.ID, domain.RunID(body.RunId))
 		if readErr != nil {
 			refused = readErr
 			return nil
@@ -155,10 +155,16 @@ func (s *Server) DeleteRegression(
 	return openapi.DeleteRegression204Response{}, nil
 }
 
-// occurrenceOf reads back what a run was about.
-func (s *Server) occurrenceOf(ctx context.Context, runID domain.RunID) ([]byte, error) {
+// occurrenceOf reads back what one of this agent's runs was about.
+//
+// Only this agent's. Authority was checked on the agent being corrected, and the
+// copy goes under its scope, so a run of another agent would carry content across
+// that boundary. It reads as absent, which says nothing about whether it exists.
+func (s *Server) occurrenceOf(
+	ctx context.Context, agent domain.AgentID, runID domain.RunID,
+) ([]byte, error) {
 	steps, err := s.store.Read(ctx, runID, domain.FirstSeq)
-	if err != nil || len(steps) == 0 {
+	if err != nil || len(steps) == 0 || steps[0].AgentID != agent {
 		return nil, fmt.Errorf("no such run: %s", runID)
 	}
 

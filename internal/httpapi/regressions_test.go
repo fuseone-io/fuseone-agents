@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -352,5 +353,47 @@ func TestStartSimulation_corpusIsReadAndOpenedInsideTheFence(t *testing.T) {
 	}
 	if corpus.held != 1 || len(fenced.outside) != 0 {
 		t.Fatalf("held = %d, outside the fence = %v", corpus.held, fenced.outside)
+	}
+}
+
+// A correction copies a run's input into this agent's corpus, under this agent's
+// scope. Authority was checked on the agent being corrected, so a run of another
+// agent would carry content across that boundary.
+func TestRecordRegression_fromARunOfAnotherAgent_isRefused(t *testing.T) {
+	t.Parallel()
+
+	corpus := &fakeCorpus{}
+	server, content := correctable(t, corpus)
+	ctx := inArea("cx", domain.RoleAuthor)
+	if _, err := server.RecordRegression(ctx, correction(openapi.Expectation{Kind: "asks"})); err != nil {
+		t.Fatalf("RecordRegression: %v", err)
+	}
+	copies := len(corpus.recorded)
+
+	foreign := server.store.(*ledger.Memory)
+	input, err := content.Put(gocontext.Background(), "run-foreign", 1, []byte(`{"from":"elsewhere"}`))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, err := foreign.Append(gocontext.Background(), domain.Step{
+		RunID: "run-foreign", Seq: 1, Kind: domain.StepRunStarted, AgentID: "someone-else",
+		Scope: domain.Scope{Company: "acme", Area: "finance"}, IdemKey: "run-foreign", VersionID: "v1",
+		At:      time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC),
+		Payload: []byte(`{"trigger":"manual","input_ref":"` + input + `"}`),
+	}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	request := correction(openapi.Expectation{Kind: "asks"})
+	request.Body.RunId = "run-foreign"
+	resp, err := server.RecordRegression(ctx, request)
+	if err != nil {
+		t.Fatalf("RecordRegression: %v", err)
+	}
+	if _, ok := resp.(openapi.RecordRegression400ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want a refusal", resp)
+	}
+	if len(corpus.recorded) != copies {
+		t.Fatalf("a run of another agent was copied into this corpus")
 	}
 }
