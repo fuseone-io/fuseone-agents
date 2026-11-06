@@ -27,6 +27,53 @@ field" is a commit message.
 
 ---
 
+## [0.93.0] — 2026-11-06
+
+### Upgrade notes
+
+- **Nothing to do to upgrade.** No migration, no chart change and no new setting.
+- **The `evidence` connector has still not run against a real source.** The editor
+  was tested with a fake token and no `check` or `collect` reached a source. The
+  examples are starting points, so confirm their field names against your own
+  console, and run `check` first.
+- **The console can now change a source declared through the API.** Whoever can
+  configure connectors now sees an edit button on the card. Saving with nothing
+  changed sends the stored declaration back as it was.
+- **A known gap in erasure, not new in this release and not fixed by it.** Erasing a
+  run on a person's request does not reach the copy kept when that run became a
+  correction, or that correction's note. Retention does reach the copy, and after it
+  does, the agent's battery refuses to run until that case is deleted. NT-015 records
+  both, and a later release fixes them. Until then, when you handle an erasure request,
+  also delete any correction made from those runs. Deleting removes the case and leaves
+  the copy in the content store, where it stays until retention takes it.
+
+### Added
+
+- **An editor for evidence sources.** Under **Integrations → Connectors**, choose
+  **New instance → New evidence source**, or **Configure** on the catalogue card. It
+  covers the source, paging, window, queries and a token that is sealed and never comes
+  back to the screen.
+  - Start from one of the manual's two examples, or paste a declaration as JSON. A
+    pasted declaration with an unknown key at any level is refused whole, so a misspelled
+    filter cannot silently widen a query.
+  - Editing opens only on the current declaration. If it cannot be read, the form does
+    not open.
+  - The manual, in pt-BR and en-US, now starts from the console.
+
+### Design decisions
+
+These are decisions recorded in a note. Nothing below is implemented in this release.
+
+- **NT-015: versioned evaluation datasets and experiments.** It extends NT-006 and
+  stays within its rule that this is not a general evaluation platform: a dataset
+  belongs to one agent.
+  - A dataset version is immutable and holds no free text. Tags are left out.
+  - An experiment is never a battery, so it cannot satisfy the start gate, the drift
+    sweep or FU-10, even with an empty configuration.
+  - Retention wins over the corpus. An erased case stays visible as a gap.
+  - A case added after the last battery reads as `not_checked` and does not refuse a
+    start by itself.
+
 ## [0.92.0] — 2026-11-06
 
 ### Upgrade notes
