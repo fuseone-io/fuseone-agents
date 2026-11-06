@@ -254,6 +254,17 @@ was configured with.</li>
 account gives every tool on that server that reach. This platform cannot
 narrow it and does not pretend to.</li>
 </ul>
+<p><strong>Service accounts</strong> let a pipeline, a script or Terraform call the API. An
+administrator creates one with <code dir="auto">POST /admin/service-accounts</code>, gives it roles with
+<code dir="auto">PUT /admin/people/{principalId}/grants</code>, and issues a token with
+<code dir="auto">POST /admin/service-accounts/{accountId}/tokens</code>, which needs an expiry. The secret is
+in that response and nowhere else; only its hash is stored. To rotate, issue a second
+token, move the machine over, then revoke the first. Revoking or disabling takes effect
+on the next request, and each of these acts is on the admin trail.</p>
+<p>Whatever its roles say, a service account can never approve an action, grant a standing
+approval or change who holds what. So a token cannot manage accounts or tokens: that
+stays with a person. Every role that can publish can also start runs, so a token that
+publishes can start runs too.</p>
 <p>Removing a credential is its own gesture, on the server’s page. An empty field
 means “leave what is stored”, so there has to be a way to say the other thing.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="5-upgrading">5. Upgrading</h2><a class="sl-anchor-link" href="#5-upgrading"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “5. Upgrading”</span></a></div>
