@@ -6,15 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/regression"
+	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/testdb"
 )
 
@@ -716,5 +719,185 @@ func TestSweep_leavesTheReplaysOfACopyStillInsideTheWindow(t *testing.T) {
 
 	if _, err := content.Get(ctx, replayed); err != nil {
 		t.Fatalf("replay of a copy inside the window: %v", err)
+	}
+}
+
+// commandCounter counts what reaches the database, including through the fence's
+// own connection, which copies this pool's configuration.
+type commandCounter struct{ commands atomic.Int64 }
+
+func (c *commandCounter) TraceQueryStart(
+	ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData,
+) context.Context {
+	c.commands.Add(1)
+	return ctx
+}
+
+func (c *commandCounter) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
+
+func countingPool(t *testing.T) (*pgxpool.Pool, *commandCounter) {
+	t.Helper()
+	config, err := pgxpool.ParseConfig(testdb.DSN(t))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	counter := &commandCounter{}
+	config.ConnConfig.Tracer = counter
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
+		t.Fatalf("pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	return pool, counter
+}
+
+// Five years of nightly batteries is thousands of replays per case. All of it runs
+// holding the fence, so a command per replay is corrections and batteries waiting on
+// something proportional to history.
+func TestSweep_commandsDoNotGrowWithTheReplaysItTakes(t *testing.T) {
+	erasuresFor(t, time.Now)
+	seeded := openPool(t)
+	pool, counter := countingPool(t)
+	erasures := admin.NewErasures(pool, ledger.NewContent(pool),
+		admin.NewRetention(pool, settings.NewStore(pool, testVault(t))), regression.NewStore(pool))
+	ctx := context.Background()
+
+	measure := func(replays int) int64 {
+		t.Helper()
+		cleanCorpus(t, seeded)
+		content := ledger.NewContent(seeded)
+		input := []byte(`{"email":"ana@example.com"}`)
+		copied, err := content.PutFor(ctx, "regression", "suporte", 1, input)
+		if err != nil {
+			t.Fatalf("PutFor: %v", err)
+		}
+		if _, err := seeded.Exec(ctx, `update run_content set created_at = now() - interval '6 years'
+			where ref = $1`, copied); err != nil {
+			t.Fatalf("age the copy: %v", err)
+		}
+		for range replays {
+			run := fresh("run-replay-")
+			replay(t, seeded, "suporte", run, "reg-1")
+			if _, err := content.Put(ctx, run, 1, input); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+		}
+		counter.commands.Store(0)
+		if _, err := erasures.Sweep(ctx); err != nil {
+			t.Fatalf("Sweep: %v", err)
+		}
+		return counter.commands.Load()
+	}
+
+	// The first pass also pays for a new connection learning the database's types.
+	measure(1)
+	one, many := measure(1), measure(100)
+	if one != many {
+		t.Fatalf("commands = %d for one replay, %d for a hundred", one, many)
+	}
+}
+
+func TestForSubject_commandsDoNotGrowWithTheReplaysItTakes(t *testing.T) {
+	erasuresFor(t, time.Now)
+	seeded := openPool(t)
+	pool, counter := countingPool(t)
+	erasures := admin.NewErasures(pool, ledger.NewContent(pool),
+		admin.NewRetention(pool, settings.NewStore(pool, testVault(t))), regression.NewStore(pool))
+	ctx := context.Background()
+
+	measure := func(replays int) int64 {
+		t.Helper()
+		cleanCorpus(t, seeded)
+		content := ledger.NewContent(seeded)
+		input := []byte(`{"email":"ana@example.com"}`)
+		copied, err := content.PutFor(ctx, "regression", "suporte", 1, input)
+		if err != nil {
+			t.Fatalf("PutFor: %v", err)
+		}
+		recordCorrection(t, seeded, correction{"suporte", "reg-1", "run-asked", copied, ""})
+		for range replays {
+			run := fresh("run-replay-")
+			replay(t, seeded, "suporte", run, "reg-1")
+			if _, err := content.Put(ctx, run, 1, input); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+		}
+		counter.commands.Store(0)
+		if _, err := erasures.ForSubject(ctx, "dpo", domain.Scope{}, []domain.RunID{"run-asked"}, "request"); err != nil {
+			t.Fatalf("ForSubject: %v", err)
+		}
+		return counter.commands.Load()
+	}
+
+	// The first pass also pays for a new connection learning the database's types.
+	measure(1)
+	one, many := measure(1), measure(100)
+	if one != many {
+		t.Fatalf("commands = %d for one replay, %d for a hundred", one, many)
+	}
+}
+
+// A replay holds more than its input: what it did is content too, and it goes whole.
+func TestForSubject_takesAllTheContentOfAReplay(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+	input := []byte(`{"email":"ana@example.com"}`)
+
+	copied, err := content.PutFor(ctx, "regression", "suporte", 1, input)
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	recordCorrection(t, pool, correction{"suporte", "reg-1", "run-asked", copied, ""})
+	run := fresh("run-replay-")
+	replay(t, pool, "suporte", run, "reg-1")
+	if _, err := content.Put(ctx, run, 1, input); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	answer, err := content.Put(ctx, run, 5, []byte("the answer quoting ana@example.com"))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	if _, err := erasures.ForSubject(ctx, "dpo", domain.Scope{}, []domain.RunID{"run-asked"}, "request"); err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	if _, err := content.Get(ctx, answer); !errors.Is(err, ledger.ErrErased) {
+		t.Fatalf("what the replay said: err = %v, want erased", err)
+	}
+}
+
+// The owner column holds an id of any kind, so a replay's id can be another kind's
+// owner too, and that content is not the replay's.
+func TestForSubject_leavesAnotherKindOfContentUnderTheSameOwnerId(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+	input := []byte(`{"email":"ana@example.com"}`)
+
+	copied, err := content.PutFor(ctx, "regression", "suporte", 1, input)
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	recordCorrection(t, pool, correction{"suporte", "reg-1", "run-asked", copied, ""})
+	run := fresh("run-replay-")
+	replay(t, pool, "suporte", run, "reg-1")
+	if _, err := content.Put(ctx, run, 1, input); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	unrelated, err := content.PutFor(ctx, "case", string(run), 1, []byte("an uploaded set"))
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+
+	if _, err := erasures.ForSubject(ctx, "dpo", domain.Scope{}, []domain.RunID{"run-asked"}, "request"); err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	if _, err := content.Get(ctx, unrelated); err != nil {
+		t.Fatalf("content of another kind: %v", err)
 	}
 }

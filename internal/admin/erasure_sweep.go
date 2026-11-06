@@ -95,7 +95,7 @@ func (e *Erasures) eraseExpired(
 	ctx context.Context, tx pgx.Tx, before time.Time,
 ) (sweepCounts, error) {
 	var counts sweepCounts
-	replays, replayed, err := e.eraseExpiredReplays(ctx, tx, before)
+	replays, replayed, err := eraseExpiredReplays(ctx, tx, before)
 	if err != nil {
 		return sweepCounts{}, err
 	}

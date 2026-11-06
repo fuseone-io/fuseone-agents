@@ -49,22 +49,34 @@ const expiredReplaysSQL = `
 	where copied.owner_kind = 'regression' and copied.created_at < $1
 	  and held.owner_kind = 'run' and held.erased_at is null and r.simulated`
 
-// eraseExpiredReplays runs before the copies go, in the transaction that takes them.
-func (e *Erasures) eraseExpiredReplays(
-	ctx context.Context, tx pgx.Tx, before time.Time,
+// eraseReplays takes the content of the runs a search found, in one statement, and
+// says how many runs and objects that was.
+//
+// One statement because all of this runs holding the fence. Five years of nightly
+// batteries is thousands of replays per case, and a command for each would keep
+// corrections and batteries waiting on something proportional to history. Reading the
+// ids out first would only move the same weight into memory.
+func eraseReplays(
+	ctx context.Context, tx pgx.Tx, search string, reason int, args ...any,
 ) (runs, objects int, err error) {
-	replays, err := scanStrings(ctx, tx, expiredReplaysSQL, before.UTC())
-	if err != nil {
-		return 0, 0, fmt.Errorf("admin: find replays of expired copies: %w", err)
+	statement := fmt.Sprintf(`
+		with replays as (%s), erased as (
+			update run_content c
+			set bytes = null, erased_at = now(), erased_reason = $%d
+			from replays r
+			where c.owner_kind = 'run' and c.run_id = r.run_id and c.erased_at is null
+			returning c.run_id
+		)
+		select count(distinct run_id), count(*) from erased`, search, reason)
+	if err := tx.QueryRow(ctx, statement, args...).Scan(&runs, &objects); err != nil {
+		return 0, 0, fmt.Errorf("admin: erase replays: %w", err)
 	}
-	for _, run := range replays {
-		count, err := e.content.EraseTx(ctx, tx, "run", run, "retention")
-		if err != nil {
-			return 0, 0, fmt.Errorf("admin: erase replay %s: %w", run, err)
-		}
-		objects += count
-	}
-	return len(replays), objects, nil
+	return runs, objects, nil
+}
+
+// eraseExpiredReplays runs before the copies go, in the transaction that takes them.
+func eraseExpiredReplays(ctx context.Context, tx pgx.Tx, before time.Time) (runs, objects int, err error) {
+	return eraseReplays(ctx, tx, expiredReplaysSQL, 2, before.UTC(), "retention")
 }
 
 // agentsLosingCopies is whose corrections retention is about to reach.
@@ -142,11 +154,7 @@ func (e *Erasures) eraseCorpusOf(
 	if err != nil {
 		return corpusErasure{}, fmt.Errorf("admin: clear corpus notes: %w", err)
 	}
-	replays, err := scanStrings(ctx, tx, replaySearchSQL, digests, owners)
-	if err != nil {
-		return corpusErasure{}, fmt.Errorf("admin: find replays: %w", err)
-	}
-	replayed, err := e.eraseRuns(ctx, tx, toRunIDs(replays))
+	_, replayed, err := eraseReplays(ctx, tx, replaySearchSQL, 3, digests, owners, "subject")
 	if err != nil {
 		return corpusErasure{}, err
 	}
@@ -176,14 +184,6 @@ func scanStrings(ctx context.Context, conn db, query string, args ...any) ([]str
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowTo[string])
-}
-
-func toRunIDs(ids []string) []domain.RunID {
-	out := make([]domain.RunID, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, domain.RunID(id))
-	}
-	return out
 }
 
 // clearNotesOfErasedCases is retention's half: the copy aged out, and a note is
