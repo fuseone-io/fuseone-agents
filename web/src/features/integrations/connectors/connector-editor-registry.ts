@@ -4,6 +4,7 @@ import {
   KeyRound,
   ScrollText,
   ShieldCheck,
+  Telescope,
   type LucideIcon,
 } from "lucide-react";
 import type { ComponentType } from "react";
@@ -12,6 +13,7 @@ import { ConnectorInstanceForm } from "@/features/integrations/connectors/connec
 import { CloudflareInstanceForm } from "@/features/integrations/connectors/cloudflare-instance-form";
 import { ElasticsearchInstanceForm } from "@/features/integrations/connectors/elasticsearch-instance-form";
 import type { ConnectorInstanceSaver } from "@/features/integrations/connectors/connector-instance-model";
+import { EvidenceInstanceEditor } from "@/features/integrations/connectors/evidence-instance-editor";
 import { GraviteeInstanceEditor } from "@/features/integrations/connectors/gravitee-instance-editor";
 import { SQLInstanceEditor } from "@/features/integrations/connectors/sql-instance-editor";
 
@@ -59,6 +61,12 @@ const editors = [
     label: "connectors.newElasticsearch",
     icon: ScrollText,
     Editor: ElasticsearchInstanceForm,
+  },
+  {
+    connector: "evidence",
+    label: "connectors.newEvidence",
+    icon: Telescope,
+    Editor: EvidenceInstanceEditor,
   },
 ] as const satisfies readonly EditorDefinition[];
 

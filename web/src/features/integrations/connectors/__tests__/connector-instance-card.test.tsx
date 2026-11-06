@@ -15,7 +15,7 @@ const evidence: ConnectorInstance = {
 };
 
 describe("ConnectorInstanceCard", () => {
-  it("summarises an evidence source without offering an editor it does not have", () => {
+  it("summarises an evidence source with its address and query count", () => {
     render(<ConnectorInstanceCard instance={evidence} />);
 
     expect(screen.getByText("https://source.example.com")).toBeInTheDocument();
