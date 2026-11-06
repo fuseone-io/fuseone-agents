@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/domain"
@@ -205,13 +207,7 @@ func TestOrphanedBindingsMigration_takesOnlyBindingsWithNoConnection(t *testing.
 	}, "usr_admin"); err != nil {
 		t.Fatalf("BindIdentity: %v", err)
 	}
-	if err := store.Put(ctx, settings.Setting{
-		ScopeKind: settings.ScopeInstallation, Kind: admin.KindChannelIdentity,
-		Name: "gone-slack/U2", Value: []byte(`{"channel":"gone-slack","account":"U2","principal":"usr_bia"}`),
-		Enabled: true, UpdatedBy: "test",
-	}); err != nil {
-		t.Fatalf("orphan: %v", err)
-	}
+	seedOrphan(t, pool, "gone-slack/U2", "usr_bia")
 
 	migration, err := os.ReadFile("../ledger/sql/0100_orphaned_channel_identities.sql")
 	if err != nil {
@@ -228,11 +224,159 @@ func TestOrphanedBindingsMigration_takesOnlyBindingsWithNoConnection(t *testing.
 	if len(stored) != 1 || stored[0].Name != "kept-slack/U1" {
 		t.Fatalf("bindings left = %+v", stored)
 	}
+	// Run again it changes nothing, so an installation that re-applies it is safe.
+	if _, err := pool.Exec(ctx, string(migration)); err != nil {
+		t.Fatalf("apply again: %v", err)
+	}
 	var events int
 	if err := pool.QueryRow(ctx, `
 		select count(*) from admin_events
 		where action = 'channel.identity.unbound' and target = 'gone-slack/U2'
 		  and detail->>'principal' = 'usr_bia'`).Scan(&events); err != nil || events != 1 {
 		t.Fatalf("events = %d, %v", events, err)
+	}
+}
+
+// seedOrphan writes what an earlier version could leave behind and the schema now
+// refuses, so the rule has to be off for the write.
+func seedOrphan(t *testing.T, pool *pgxpool.Pool, key, principal string) {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	for _, statement := range []string{
+		`alter table settings disable trigger settings_binding_needs_connection`,
+		`insert into settings (scope_kind, kind, name, value) values ('installation', 'channel_identity', '` +
+			key + `', '{"principal":"` + principal + `"}')`,
+		`alter table settings enable trigger settings_binding_needs_connection`,
+	} {
+		if _, err := tx.Exec(ctx, statement); err != nil {
+			t.Fatalf("%s: %v", statement, err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+}
+
+// What the previous version sends, word for word. During a rolling upgrade a replica
+// still running it writes against this schema, and it knows nothing of the new locks.
+const (
+	oldBind = `insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by)
+		values ('installation', '', '', 'channel_identity', $1, '{"principal":"usr_ana"}', true, 'old')
+		on conflict (scope_kind, company_id, area_id, kind, name) do update set value = excluded.value`
+	oldDelete = `delete from settings
+		where scope_kind = 'installation' and company_id = '' and area_id = '' and kind = 'channel' and name = $1`
+)
+
+func TestOldReplica_bindingWithNoConnection_isRefusedByTheSchema(t *testing.T) {
+	_, store := boundChannels(t)
+	pool := freshPool(t)
+	ctx := context.Background()
+	aConnection(t, store, "acme-slack")
+
+	if _, err := pool.Exec(ctx, oldBind, "nobody-slack/U1"); err == nil {
+		t.Fatal("a binding with no connection was stored")
+	}
+	if _, err := pool.Exec(ctx, oldBind, "acme-slack/U1"); err != nil {
+		t.Fatalf("a binding on a real connection: %v", err)
+	}
+}
+
+func TestOldReplica_deletingAConnectionWithBindings_isRefusedByTheSchema(t *testing.T) {
+	_, store := boundChannels(t)
+	pool := freshPool(t)
+	ctx := context.Background()
+	aConnection(t, store, "kept-slack")
+	if _, err := pool.Exec(ctx, oldBind, "kept-slack/U1"); err != nil {
+		t.Fatalf("bind: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx, oldDelete, "kept-slack"); err == nil {
+		t.Fatal("the connection was deleted with a binding on it")
+	}
+	if _, err := store.Get(ctx, settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, "kept-slack"); err != nil {
+		t.Fatalf("the connection is gone: %v", err)
+	}
+
+	aConnection(t, store, "empty-slack")
+	if _, err := pool.Exec(ctx, oldDelete, "empty-slack"); err != nil {
+		t.Fatalf("a connection with nothing bound: %v", err)
+	}
+}
+
+// Editing a connection is not removing it. A rule that treated it so would stop anybody
+// rotating a credential on a connection people are bound to.
+func TestEditingAConnectionWithBindings_isAllowed(t *testing.T) {
+	channels, store := boundChannels(t)
+	ctx := context.Background()
+	if err := channels.BindIdentity(ctx, admin.ChannelIdentity{
+		Channel: "acme-slack", Account: "U1", Principal: "usr_ana",
+	}, "usr_admin"); err != nil {
+		t.Fatalf("BindIdentity: %v", err)
+	}
+
+	aConnection(t, store, "acme-slack")
+
+	if _, bound, err := channels.PrincipalFor(ctx, "acme-slack", "U1"); err != nil || !bound {
+		t.Fatalf("the binding after editing: bound=%v, %v", bound, err)
+	}
+}
+
+// Neither order of the race leaves a binding without its connection, though neither
+// writer takes the new lock: the row itself is what they serialise on.
+func TestOldReplica_bindRacingDelete_oneOfThemIsRefused(t *testing.T) {
+	_, store := boundChannels(t)
+	pool := freshPool(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	blocked := func(t *testing.T, first, second string, name string) error {
+		t.Helper()
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatalf("Begin: %v", err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		firstArg, secondArg := name+"/U1", name
+		if first == oldDelete {
+			firstArg, secondArg = name, name+"/U1"
+		}
+		if _, err := tx.Exec(ctx, first, firstArg); err != nil {
+			t.Fatalf("first: %v", err)
+		}
+		done := make(chan error, 1)
+		go func() {
+			_, err := pool.Exec(ctx, second, secondArg)
+			done <- err
+		}()
+		select {
+		case err := <-done:
+			t.Fatalf("the second writer did not wait: %v", err)
+		case <-time.After(300 * time.Millisecond):
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatalf("Commit: %v", err)
+		}
+		return <-done
+	}
+
+	aConnection(t, store, "bind-first")
+	if err := blocked(t, oldBind, oldDelete, "bind-first"); err == nil {
+		t.Error("bind first: the delete went through with a binding committed")
+	}
+	aConnection(t, store, "delete-first")
+	if err := blocked(t, oldDelete, oldBind, "delete-first"); err == nil {
+		t.Error("delete first: the bind went through with the connection gone")
+	}
+	var orphaned int
+	if err := pool.QueryRow(ctx, `
+		select count(*) from settings s where s.kind = 'channel_identity' and not exists (
+			select 1 from settings c where c.kind = 'channel' and c.scope_kind = 'installation'
+			  and c.name = channel_identity_connection(s.name))`).Scan(&orphaned); err != nil || orphaned != 0 {
+		t.Fatalf("orphaned = %d, %v", orphaned, err)
 	}
 }

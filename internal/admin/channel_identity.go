@@ -171,13 +171,13 @@ func (c *Channels) BindIdentity(
 
 // withdrawBindings removes every binding of a connection, wherever each is stored, and
 // records each one with who it spoke for. One statement however many there are, because
-// the connection's lock is held for all of it. The name is compared whole, so a
-// connection whose name starts with this one's keeps its own.
+// the connection's lock is held for all of it. channel_identity_connection is the one
+// reading of a key, shared with the rule the schema enforces (migration 0100).
 func withdrawBindings(ctx context.Context, conn settings.DB, name string, by domain.UserID) error {
 	if _, err := conn.Exec(ctx, `
 		with gone as (
 			delete from settings
-			where kind = $1 and split_part(name, '/', 1) = $2
+			where kind = $1 and channel_identity_connection(name) = $2
 			returning name, value
 		)
 		insert into admin_events (principal_id, action, target, detail)
