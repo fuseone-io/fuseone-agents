@@ -107,6 +107,7 @@ func boundChannels(t *testing.T) (*admin.Channels, *settings.Store) {
 	t.Helper()
 	pool := freshPool(t)
 	store := settings.NewStore(pool, nil)
+	aConnection(t, store, "acme-slack")
 	return admin.NewChannels(pool, store, onlySlack{}), store
 }
 
