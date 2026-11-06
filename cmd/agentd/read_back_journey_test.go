@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -93,7 +94,11 @@ func (w *readBackWorld) send(t *testing.T, method, path string, body any) (int, 
 			t.Fatalf("encode: %v", err)
 		}
 	}
-	req := httptest.NewRequestWithContext(t.Context(), method, "/api/v1"+path, bytes.NewReader(raw))
+	// Not cancelled with the test: cleanups run after t.Context() ends, and a
+	// removal that fails on a cancelled context leaves a rule in force for
+	// every other journey sharing this database.
+	ctx := context.WithoutCancel(t.Context())
+	req := httptest.NewRequestWithContext(ctx, method, "/api/v1"+path, bytes.NewReader(raw))
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(auth.WithPrincipal(req.Context(), domain.Principal{
 		ID: "usr_ana", Kind: domain.PrincipalUser,
@@ -137,9 +142,20 @@ func (w *readBackWorld) sealedHalf(t *testing.T, c readBack) string {
 	return row.Secret
 }
 
+// removeAtTheEnd keeps the resource off the journeys sharing this database, even
+// when the walk fails halfway. A policy left behind would decide their calls.
+func (w *readBackWorld) removeAtTheEnd(t *testing.T, path string) {
+	t.Helper()
+	t.Cleanup(func() {
+		if code, answer := w.send(t, http.MethodDelete, path, nil); code >= 300 {
+			t.Errorf("clean up %s = %d: %s", path, code, answer)
+		}
+	})
+}
+
 func (w *readBackWorld) walk(t *testing.T, c readBack) {
 	t.Helper()
-	t.Cleanup(func() { w.send(t, http.MethodDelete, c.path, nil) })
+	w.removeAtTheEnd(t, c.path)
 
 	w.put(t, c.path, c.body)
 	first, raw := w.get(t, c.path)
@@ -308,7 +324,7 @@ func TestReadBack_policy_putWhatGetAnsweredChangesNothing(t *testing.T) {
 func TestReadBack_policy_puttingTheAnswerBack_keepsTheHashAndWhatThePutAnswered(t *testing.T) {
 	world := newReadBackWorld(t)
 	const path = "/policies/READBACK-HASH"
-	t.Cleanup(func() { world.send(t, http.MethodDelete, path, nil) })
+	world.removeAtTheEnd(t, path)
 
 	written := func(body any) (map[string]any, string) {
 		t.Helper()
@@ -375,7 +391,9 @@ func TestReadBack_channel_putWhatGetAnsweredChangesNothing(t *testing.T) {
 func TestReadBack_channel_whatIsAttachedSurvivesPuttingTheAnswerBack(t *testing.T) {
 	world := newReadBackWorld(t)
 	const path = "/admin/channels/readback-attached"
-	t.Cleanup(func() { world.send(t, http.MethodDelete, path, nil) })
+	world.removeAtTheEnd(t, path)
+	// Its own removal: taking the connection away leaves the binding in place.
+	world.removeAtTheEnd(t, path+"/identities/U-READBACK")
 
 	world.put(t, path, map[string]any{"kind": "slack", "token": "readback-bot-secret"})
 	world.put(t, path+"/conversations/C-READBACK", map[string]any{
@@ -413,6 +431,17 @@ func TestReadBack_modelProvider_putWhatGetAnsweredChangesNothing(t *testing.T) {
 		},
 		writeOnly: map[string]string{"apiKey": "hasKey"},
 		secrets:   []string{"readback-provider-secret"},
+	}, {
+		// Switched on too: a switched-off row's key is never opened, so a read
+		// that leaked what it opened would pass on that case alone.
+		name: "an endpoint in use, whose key is open in this process",
+		path: base + "readback-in-use", sealed: settings.KindModelProvider, key: "readback-in-use",
+		body: map[string]any{
+			"kind": "openai_compatible", "baseUrl": "https://models.example.test/v1",
+			"apiKey": "readback-in-use-secret", "enabled": true,
+		},
+		writeOnly: map[string]string{"apiKey": "hasKey"},
+		secrets:   []string{"readback-in-use-secret"},
 	}, {
 		name: "a pasted list is stored clean",
 		path: base + "readback-pasted",
