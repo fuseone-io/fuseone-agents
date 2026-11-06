@@ -65,7 +65,9 @@ func (s *Server) GetModelProvider(ctx context.Context, req openapi.GetModelProvi
 	if err != nil {
 		return nil, fmt.Errorf("get model provider: %w", err)
 	}
-	return openapi.GetModelProvider200JSONResponse(modelProviderConfig(provider)), nil
+	out := modelProviderConfig(provider)
+	out.SecretFingerprint = someString(provider.SecretFingerprint)
+	return openapi.GetModelProvider200JSONResponse(out), nil
 }
 
 func (s *Server) GetChannel(ctx context.Context, req openapi.GetChannelRequestObject) (openapi.GetChannelResponseObject, error) {
@@ -87,6 +89,7 @@ func (s *Server) GetChannel(ctx context.Context, req openapi.GetChannelRequestOb
 		return nil, fmt.Errorf("get channel: %w", err)
 	}
 	out := channelFrom(found, bound, nil)
+	out.SecretFingerprint = someString(found.SecretFingerprint)
 	// Left out, not empty. Who interacted changes with nobody having
 	// written anything, and an empty list would say nobody did.
 	out.SeenAccounts = nil

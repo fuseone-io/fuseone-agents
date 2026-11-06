@@ -51,14 +51,20 @@ func (i *Integrations) MCPServerNamed(ctx context.Context, name string) (domain.
 	return server, nil
 }
 
-// ProviderNamed reads one provider.
+// ProviderNamed reads one provider, naming its key without saying what it is.
+// The key is opened here and goes no further.
 func (i *Integrations) ProviderNamed(ctx context.Context, name string) (domain.ModelProvider, error) {
-	row, err := i.settings.Get(ctx, settings.ScopeInstallation, domain.Scope{}, settings.KindModelProvider, name)
+	row, err := i.settings.Reveal(ctx, settings.ScopeInstallation, domain.Scope{}, settings.KindModelProvider, name)
 	if errors.Is(err, settings.ErrNotFound) {
 		return domain.ModelProvider{}, fmt.Errorf("%w: %s", ErrProviderUnknown, name)
 	}
 	if err != nil {
+		return domain.ModelProvider{}, fmt.Errorf("admin: read provider %s: %w", name, err)
+	}
+	provider, err := providerFromRow(row)
+	if err != nil {
 		return domain.ModelProvider{}, err
 	}
-	return providerFromRow(row)
+	provider.SecretFingerprint = i.settings.Fingerprint(row, []byte(row.Secret))
+	return provider, nil
 }

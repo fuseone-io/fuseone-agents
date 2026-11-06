@@ -2303,7 +2303,7 @@ export interface paths {
         /**
          * Read one channel connection as it is configured
          * @description What PUT stored, for a client deciding whether the connection drifted, with the conversations and identities attached to it. Those have PUTs of their own: this one ignores them when the answer is sent back, and leaves them as they are.
-         *     The credentials are never returned; hasCredential, hasSigning and hasAppToken report which are stored, and sending the answer back unchanged keeps them. Accounts seen interacting stay on the listing: they change with nobody having written anything.
+         *     The credentials are never returned; hasCredential, hasSigning and hasAppToken report which are stored, secretFingerprint moves when one changes, and sending the answer back unchanged keeps them. Accounts seen interacting stay on the listing: they change with nobody having written anything.
          */
         get: operations["getChannel"];
         /** Configure a channel connection */
@@ -2434,7 +2434,7 @@ export interface paths {
         };
         /**
          * Read one model provider as it is configured
-         * @description What PUT stored, for a client deciding whether the provider drifted. The credential is never returned; hasKey reports that one is stored, and sending the answer back unchanged keeps it.
+         * @description What PUT stored, for a client deciding whether the provider drifted. The credential is never returned; hasKey reports that one is stored, secretFingerprint moves when it changes, and sending the answer back unchanged keeps it.
          */
         get: operations["getModelProvider"];
         /** Configure a model provider */
@@ -4463,6 +4463,8 @@ export interface components {
             lastOkAt?: string;
         };
         ModelProvider: {
+            /** @description Only on the read by name, and only when a secret is stored. Opaque: compare it for equality with an earlier answer. It moves when a stored secret changes, is keyed by this installation's master key and tied to this resource, and replacing the master key moves it. */
+            secretFingerprint?: string;
             name: string;
             /** @enum {string} */
             kind: "anthropic" | "openai_compatible";
@@ -4637,6 +4639,8 @@ export interface components {
             createdBy?: string;
         };
         Channel: {
+            /** @description Only on the read by name, and only when a secret is stored. Opaque: compare it for equality with an earlier answer. It moves when a stored secret changes, is keyed by this installation's master key and tied to this resource, and replacing the master key moves it. */
+            secretFingerprint?: string;
             name: string;
             kind: string;
             workspace?: string;

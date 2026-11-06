@@ -104,8 +104,11 @@ type Channel struct {
 	HasSigning bool
 	// HasAppToken reports whether Slack Socket Mode can be opened without
 	// revealing the app-level token that opens it.
-	HasAppToken   bool
-	Conversations []Conversation
+	HasAppToken bool
+	// SecretFingerprint is filled by a read of this one connection, which opens
+	// its secrets. A listing leaves it empty.
+	SecretFingerprint string
+	Conversations     []Conversation
 }
 
 // Conversation is one place, and the scope it speaks for.

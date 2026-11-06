@@ -54,7 +54,10 @@ func (c *Channels) Named(ctx context.Context, name string) (Channel, []ChannelId
 		DeliveryMode: channel.StoredDeliveryMode(conn.DeliveryMode),
 		Enabled:      row.Enabled, HasCredential: creds.Token != "",
 		HasSigning: creds.Signing != "", HasAppToken: creds.AppToken != "",
-		Conversations: conversationsOf(name, conversations),
+		// Over the document this row would be re-sealed as, so a row still holding
+		// a bare token does not appear to change the next time it is saved.
+		SecretFingerprint: c.settings.Fingerprint(row, []byte(creds.Sealed())),
+		Conversations:     conversationsOf(name, conversations),
 	}, bound, nil
 }
 

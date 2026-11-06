@@ -104,6 +104,11 @@ func TestNamed_connectionWithAwkwardRows_answersWhatTheListingAnswers(t *testing
 	if err != nil {
 		t.Fatalf("Named: %v", err)
 	}
+	// The one field the listing leaves empty, because it opens no secret to name.
+	if got.SecretFingerprint == "" {
+		t.Error("Named names no secret, though the connection holds two")
+	}
+	got.SecretFingerprint = ""
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Named answers\n %+v\nthe listing answers\n %+v", got, want)
 	}

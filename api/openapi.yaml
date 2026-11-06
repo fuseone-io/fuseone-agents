@@ -3527,8 +3527,9 @@ paths:
         leaves them as they are.
 
         The credentials are never returned; hasCredential, hasSigning and
-        hasAppToken report which are stored, and sending the answer back
-        unchanged keeps them. Accounts seen interacting stay on the listing:
+        hasAppToken report which are stored, secretFingerprint moves when one
+        changes, and sending the answer back unchanged keeps them. Accounts
+        seen interacting stay on the listing:
         they change with nobody having written anything.
       parameters:
         - name: name
@@ -3911,7 +3912,8 @@ paths:
       description: >
         What PUT stored, for a client deciding whether the provider drifted.
         The credential is never returned; hasKey reports that one is stored,
-        and sending the answer back unchanged keeps it.
+        secretFingerprint moves when it changes, and sending the answer back
+        unchanged keeps it.
       parameters:
         - name: name
           in: path
@@ -7247,6 +7249,13 @@ components:
       type: object
       required: [name, kind, baseUrl, enabled, hasKey]
       properties:
+        secretFingerprint:
+          type: string
+          description: >
+            Only on the read by name, and only when a secret is stored. Opaque:
+            compare it for equality with an earlier answer. It moves when a
+            stored secret changes, is keyed by this installation's master key
+            and tied to this resource, and replacing the master key moves it.
         name: { type: string }
         kind:
           type: string
@@ -7486,6 +7495,13 @@ components:
       type: object
       required: [name, kind, enabled, hasCredential, conversations]
       properties:
+        secretFingerprint:
+          type: string
+          description: >
+            Only on the read by name, and only when a secret is stored. Opaque:
+            compare it for equality with an earlier answer. It moves when a
+            stored secret changes, is keyed by this installation's master key
+            and tied to this resource, and replacing the master key moves it.
         name: { type: string }
         kind: { type: string }
         workspace: { type: string }
