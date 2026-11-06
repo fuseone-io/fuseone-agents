@@ -59,6 +59,9 @@ type Watch struct {
 	said map[string]bool
 	// lost is where corrections that lost their input are found. Optional.
 	lost ErasedCases
+	// saidLost is which of them have been announced. Forgotten when a case stops
+	// being lost, because recorded again and lost again is a second thing to say.
+	saidLost map[string]bool
 }
 
 // ErasedCases is which corrections can no longer run, declared by the consumer.
@@ -83,7 +86,7 @@ func New(
 	}
 	return &Watch{
 		corpora: corpora, batteries: batteries, folds: folds,
-		announcer: announcer, log: log, said: map[string]bool{},
+		announcer: announcer, log: log, said: map[string]bool{}, saidLost: map[string]bool{},
 	}
 }
 
@@ -123,13 +126,26 @@ func (w *Watch) announceErased(ctx context.Context) {
 		w.log.Error("could not read erased corrections", "err", err)
 		return
 	}
-	for _, group := range newlyErased(lost, w.said) {
+	w.forgetRecovered(lost)
+	for _, group := range newlyErased(lost, w.saidLost) {
 		w.announceLost(ctx, group)
 	}
 }
 
+func (w *Watch) forgetRecovered(lost []domain.ErasedCase) {
+	current := make(map[string]bool, len(lost))
+	for _, c := range lost {
+		current[erasedKey(c)] = true
+	}
+	for key := range w.saidLost {
+		if !current[key] {
+			delete(w.saidLost, key)
+		}
+	}
+}
+
 func erasedKey(c domain.ErasedCase) string {
-	return "erased/" + string(c.Agent) + "/" + c.Case
+	return string(c.Agent) + "/" + c.Case
 }
 
 // newlyErased groups what has not been said yet, one group per agent, in the
@@ -173,7 +189,7 @@ func (w *Watch) announceLost(ctx context.Context, group []domain.ErasedCase) {
 		}
 	}
 	for _, c := range group {
-		w.said[erasedKey(c)] = true
+		w.saidLost[erasedKey(c)] = true
 	}
 }
 

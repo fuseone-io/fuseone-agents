@@ -258,3 +258,23 @@ type growing struct{ current lost }
 func (g *growing) ErasedCases(ctx context.Context) ([]domain.ErasedCase, error) {
 	return g.current.ErasedCases(ctx)
 }
+
+// Recorded again and then lost again is a second thing worth saying.
+func TestSweep_aCaseLostAgainAfterBeingRecorded_isAnnouncedAgain(t *testing.T) {
+	t.Parallel()
+
+	said := &spy{}
+	cases := &growing{current: lost{{Agent: "triage", Case: "reg-1"}}}
+	sweep := drift.New(corpusOf("triage"), batteries{}, reports{}, said, nil).WithErased(cases)
+
+	for _, state := range []lost{{{Agent: "triage", Case: "reg-1"}}, nil, {{Agent: "triage", Case: "reg-1"}}} {
+		cases.current = state
+		if _, err := sweep.Sweep(context.Background(), at()); err != nil {
+			t.Fatalf("Sweep: %v", err)
+		}
+	}
+
+	if len(said.posted) != 2 {
+		t.Fatalf("messages = %d, want one for each time it was lost", len(said.posted))
+	}
+}
