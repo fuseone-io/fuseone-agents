@@ -184,21 +184,30 @@ expectations re-judge old runs in the same way.</p>
 <p>These change no evaluation behaviour, so they ship ahead of phase 1 in their own
 pull request, with DP-001 updated in the same change.</p>
 <ul>
-<li><strong>Erasure follows provenance.</strong> <code dir="auto">ForSubject</code> also tombstones the corpus copies
-of cases whose <code dir="auto">from_run</code> is one of the named runs, and the simulated runs that
-replayed those cases. It finds them from <code dir="auto">regression_cases</code> and from the <code dir="auto">case</code>
-in <code dir="auto">run_started</code>, so no new index by person is added. The admin event counts them.</li>
+<li><strong>Erasure follows the input.</strong> <code dir="auto">ForSubject</code> also tombstones, within the same agent,
+the corpus copies and the simulated runs holding the digest of a named run’s input.
+The run recorded that input and a tombstone keeps its digest, so the link survives the
+correction being deleted and reaches corrections sharing the copy. It reads an index of
+what is still readable rather than the ledger. No new index by person is added. The
+admin event counts them.</li>
+<li><strong>Erasure and copying exclude each other.</strong> Recording a correction and opening a
+battery read an occurrence and write it elsewhere, under a per-agent lock held shared.
+An erasure holds it exclusively, so neither can undo the other.</li>
 <li><strong>Erasure clears the case’s note.</strong> <code dir="auto">regression_cases.note</code> is free text about the
 run, so it goes with the copy.</li>
-<li><strong>Deleting a case erases its copy.</strong> Copies already orphaned are erased once, by a
+<li><strong>Deleting a case erases its copy and its replays.</strong> Copies already orphaned are erased once, by a
 sweep for <code dir="auto">regression://</code> content that no case references. Phase 1 changes this
 rule, because a version keeps naming a deleted case. From then on, the version rows
 hold <code dir="auto">from_run</code> and erasure follows them too.</li>
 <li><strong>Erased is a state of a case, not a failure of the corpus.</strong> A battery runs what
 can be read and reports the rest as <code dir="auto">erased</code>: neither held nor broken, and stated
 as a gap. A corpus with every case erased is refused, as an empty one is now.</li>
-<li><strong>The author is told.</strong> A <code dir="auto">corpus_case_erased</code> notice goes to the channel that
-already carries drift.</li>
+<li><strong>The author is told.</strong> A notice goes out on the <code dir="auto">drifted</code> subscription, which is
+on by default and reaches whoever already cares that a corpus stopped covering what
+it used to. Like drift, it is said once per process, so a restart can repeat it.</li>
+<li><strong>A case can be recorded again.</strong> The reference is the digest, so a new copy of the
+same bytes lands on the old tombstone. Recording overwrites that tombstone, and a
+retried step still cannot.</li>
 <li><strong>Retention wins.</strong> The corpus stays under the installation’s window. That window
 is a promise an operator configured, and a safety net is not a reason to break it.
 The comments that say otherwise are corrected, and the manual says that a case
