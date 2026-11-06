@@ -127,6 +127,8 @@ pull request, with DP-001 updated in the same change.
   of cases whose `from_run` is one of the named runs, and the simulated runs that
   replayed those cases. It finds them from `regression_cases` and from the `case`
   in `run_started`, so no new index by person is added. The admin event counts them.
+- **Erasure clears the case's note.** `regression_cases.note` is free text about the
+  run, so it goes with the copy.
 - **Deleting a case erases its copy.** Copies already orphaned are erased once, by a
   sweep for `regression://` content that no case references. Phase 1 changes this
   rule, because a version keeps naming a deleted case. From then on, the version rows
@@ -151,23 +153,36 @@ Today's `regression_cases` becomes the **working set** of the agent's default
 dataset, so corrections, FU-12, the start gate and the drift sweep keep working.
 Further named datasets are allowed per agent.
 
-A case gains `tags`. An expected output is not added: nothing checks one until a
-judge exists, and a field nothing reads is how a dataset starts to look more
-verified than it is.
+Two things from #261 are not added:
+
+- **An expected output.** Nothing checks one until a judge exists, and a field
+  nothing reads is how a dataset starts to look more verified than it is.
+- **Tags.** Nothing in phases 1 and 2 reads them, and a tag is free text. In an
+  immutable row, `customer:ana@example.com` would outlive every erasure. If tags
+  are ever needed, they go in erasable content and into the digest.
 
 A **version** is immutable:
 
 ```
-dataset_versions       agent, dataset, version, digest, created_by, created_at
-dataset_version_cases  version → case id, input ref, input digest, expectations, tags, from_run
+datasets               id, agent, name, scope                      ordinary row; a name can be changed
+dataset_versions       dataset id, version, digest, created_by, created_at
+dataset_version_cases  version → case id, input ref, input digest,
+                                 expectations ref, expectations digest, from_run
 ```
 
 - Any added, changed or deleted case writes a new version in the same transaction.
   Renaming does not. The migration writes version 1 from the corpus as it stands.
-- The digest covers the ordered case ids, input digests and expectations. It covers
-  digests and not bytes, so erasing an input does not change a version's identity.
+- **Immutable rows hold no free text.** They hold generated ids, references and
+  digests. A case id is already derived (`regressionID`), and a dataset's name stays
+  on the ordinary row. Expectations are stored as content, because
+  `Expectation.Value` is an unvalidated string, and anything in it would otherwise
+  outlive an erasure the way tags would.
+- The digest covers the ordered case ids, input digests and expectation digests.
+  Changing only the expectations changes the digest. It covers digests and not
+  bytes, so erasing content does not change a version's identity.
 - Versions hold references. They never copy bytes, because a copy is what caused the
-  first defect above. An erased input stays erased in every version that names it.
+  first defect above. Content erased stays erased in every version that names it, and
+  a case whose input or expectations are gone reads as `erased`.
 - Deleting a case removes it from the next version. Earlier versions still name it,
   since they record what was checked.
 
@@ -206,19 +221,27 @@ repetitions: 1..5                      default 1
 
 It reuses everything simulation has: `simulate.Open`, `simulate.Deps` with no tool
 layer, the Gate, the ledger, budget reservation and the worker pool. There is no
-second queue and no second record. The `run_started` step records the configuration,
-so the fold can state it.
+second queue and no second record. The `run_started` step records an `experiment` id
+and the configuration, so the fold can state both.
 
 Three rules protect what already exists:
 
-1. **An experiment is never a battery.** `Batteries` counts any simulated run with a
-   `case`, and an experiment has one. Unless it is excluded, a run on another model
-   would become the evidence the start gate and the drift sweep read about this
-   version. `Batteries` excludes any run recording a configuration.
-2. **A configuration reaches simulated runs only.** The override is honoured only for
-   a run opened with a `Simulation`, and it is refused for any other, as `simulate.Deps`
+1. **An experiment is never a battery, whatever its configuration.** The identity is
+   structural: every experiment run records an `experiment` id generated at the edge,
+   and an empty configuration is still an experiment. It does not depend on an override
+   being present, because a run with none would otherwise read as a battery. A battery
+   is a simulated run with a `case` and no `experiment`. Every place that decides this
+   changes together: `Batteries` and `LastBatteryAt`, on both Postgres and the in-memory
+   fake.
+   Otherwise an experiment becomes the evidence that the start gate and the drift sweep
+   read about this version, and it resets the clock that decides when a real battery
+   runs.
+   `HasSimulation`, which is FU-10's gate on leaving Draft, excludes experiments too: an
+   agent has to be simulated as it is, not on a model it would not use.
+2. **A configuration reaches experiment runs only.** The override is honoured only for
+   a simulated run with an `experiment`, and it is refused for any other, as `simulate.Deps`
    leaves no path from a simulated run to a real tool. The test uses the adversary's
-   move: a non-simulated request carrying a configuration.
+   moves: a non-simulated request carrying a configuration, and a battery carrying one.
 3. **The model must be available.** A configuration resolves through the same model
    registry as a published agent (`spec.Resolver`), so an experiment cannot reach a model
    the installation has not allowed.
@@ -256,18 +279,23 @@ Nothing in the tables above has to change for this. Results attach to a run and 
 
 ## Tests that must exist
 
-- **Erasure:** a subject erasure of a run reaches its corpus copy and the simulated runs
-  that replayed it, and leaves other cases intact. After phase 1 it also reaches the copy
-  of a case that was deleted and that an old version still names.
+- **Erasure:** a subject erasure of a run reaches its corpus copy, the case's note and the
+  simulated runs that replayed it, and leaves other cases intact. After phase 1 it also
+  reaches the input and expectations of a case that was deleted and that an old version
+  still names.
 - **Erased case:** the battery runs the others, reports it as `erased`, and sends the
   notice once rather than on every pass.
 - **Pinning:** adding a case after a battery leaves that battery's numbers unchanged,
   and the comparison does not report the case as fixed.
 - **Immutability:** an `UPDATE` and a `DELETE` on a version are refused by the database.
-- **Gate:** an experiment that holds on another model does not let a version start, and
-  does not stop it either. Sabotage: remove the exclusion from `Batteries` and the test
-  must fail.
-- **Fence:** a configuration on a non-simulated request is refused.
+- **Digest:** changing only one case's expectations changes the version's digest.
+- **No free text:** a test reads the columns of the immutable tables and fails on a new
+  text column that is not on an explicit list of ids, references and digests.
+- **Gate:** an experiment with an **empty configuration**, and one on another model,
+  neither lets a version start nor stops it, does not count as its last battery, and does
+  not let an agent leave Draft. Sabotage: remove the exclusion from each door in turn,
+  on Postgres and on the fake, and a test must fail each time.
+- **Fence:** a configuration on a non-simulated request or on a battery is refused.
 - **Journey:** from the API through a real run to the fold, on real Postgres, with the
   configuration visible in the report.
 
