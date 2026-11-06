@@ -35,9 +35,10 @@ const KindChannelIdentity settings.Kind = "channel_identity"
 // ErrNoAccount and ErrNoPrincipal are the two halves nothing can be inferred
 // from.
 var (
-	ErrNoConnection = errors.New("admin: a binding needs a connection that exists")
-	ErrNoAccount    = errors.New("admin: a binding needs a channel account")
-	ErrNoPrincipal  = errors.New("admin: a binding needs somebody to bind it to")
+	ErrNoConnection     = errors.New("admin: a binding needs a connection that exists")
+	ErrAccountSeparator = errors.New("admin: a channel account cannot hold a slash")
+	ErrNoAccount        = errors.New("admin: a binding needs a channel account")
+	ErrNoPrincipal      = errors.New("admin: a binding needs somebody to bind it to")
 )
 
 // ChannelIdentity is one account, and who it speaks for.
@@ -120,6 +121,8 @@ func (c *Channels) BindIdentity(
 		return ErrNoAccount
 	case strings.TrimSpace(string(id.Principal)) == "":
 		return ErrNoPrincipal
+	case strings.Contains(id.Account, "/"):
+		return ErrAccountSeparator
 	}
 
 	value, err := json.Marshal(map[string]string{
@@ -319,17 +322,22 @@ diverge only by restore or by hand; on an unreadable one the value is the
 broken part outright. Either way the key is the thing that survived, because it
 is not inside what broke.
 
-One separator and the first one: a Slack account id has no slash, and the
-channel is the half an operator typed.
+One separator and the last one: an account never holds a slash, and BindIdentity
+refuses one, while the channel is the half an operator typed and may. The schema
+reads a key the same way (channel_identity_connection, migration 0100).
 */
 func keyChannel(key string) string {
-	channelName, _, _ := strings.Cut(key, "/")
-	return channelName
+	if at := strings.LastIndex(key, "/"); at >= 0 {
+		return key[:at]
+	}
+	return key
 }
 
 func keyAccount(key string) string {
-	_, account, _ := strings.Cut(key, "/")
-	return account
+	if at := strings.LastIndex(key, "/"); at >= 0 {
+		return key[at+1:]
+	}
+	return ""
 }
 
 /*

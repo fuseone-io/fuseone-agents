@@ -208,6 +208,7 @@ func TestOrphanedBindingsMigration_takesOnlyBindingsWithNoConnection(t *testing.
 		t.Fatalf("BindIdentity: %v", err)
 	}
 	seedOrphan(t, pool, "gone-slack/U2", "usr_bia")
+	seedOrphan(t, pool, "gone-slack/with/slash/U3", "usr_cid")
 
 	migration, err := os.ReadFile("../ledger/sql/0100_orphaned_channel_identities.sql")
 	if err != nil {
@@ -378,5 +379,59 @@ func TestOldReplica_bindRacingDelete_oneOfThemIsRefused(t *testing.T) {
 			select 1 from settings c where c.kind = 'channel' and c.scope_kind = 'installation'
 			  and c.name = channel_identity_connection(s.name))`).Scan(&orphaned); err != nil || orphaned != 0 {
 		t.Fatalf("orphaned = %d, %v", orphaned, err)
+	}
+}
+
+// A connection's name may hold a slash. An account never does, so the last one is the
+// separator, and reading the first would make these three each other's.
+func TestConnectionNames_holdingASlash_keepTheirOwnBindings(t *testing.T) {
+	channels, store := boundChannels(t)
+	ctx := context.Background()
+	for _, name := range []string{"acme", "acme/slack"} {
+		aConnection(t, store, name)
+		if err := channels.BindIdentity(ctx, admin.ChannelIdentity{
+			Channel: name, Account: "U1", Principal: "usr_ana",
+		}, "usr_admin"); err != nil {
+			t.Fatalf("BindIdentity %s: %v", name, err)
+		}
+	}
+
+	listed, err := channels.Identities(ctx)
+	if err != nil {
+		t.Fatalf("Identities: %v", err)
+	}
+	shown := map[string]string{}
+	for _, one := range listed {
+		shown[one.Channel] = one.Account
+	}
+	if shown["acme/slack"] != "U1" || shown["acme"] != "U1" {
+		t.Fatalf("listed = %+v", shown)
+	}
+
+	if err := channels.DeleteChannel(ctx, "acme", "usr_admin", true); err != nil {
+		t.Fatalf("DeleteChannel acme: %v", err)
+	}
+	if _, bound, err := channels.PrincipalFor(ctx, "acme/slack", "U1"); err != nil || !bound {
+		t.Fatalf("deleting acme took acme/slack's binding: bound=%v, %v", bound, err)
+	}
+	if err := channels.DeleteChannel(ctx, "acme/slack", "usr_admin", true); err != nil {
+		t.Fatalf("DeleteChannel acme/slack: %v", err)
+	}
+	stored, err := store.List(ctx, admin.KindChannelIdentity)
+	if err != nil || len(stored) != 0 {
+		t.Fatalf("bindings left = %+v, %v", stored, err)
+	}
+}
+
+// The separator is only unambiguous while no account holds one.
+func TestBindIdentity_anAccountHoldingASlash_isRefused(t *testing.T) {
+	channels, _ := boundChannels(t)
+
+	err := channels.BindIdentity(context.Background(), admin.ChannelIdentity{
+		Channel: "acme-slack", Account: "U1/x", Principal: "usr_ana",
+	}, "usr_admin")
+
+	if !errors.Is(err, admin.ErrAccountSeparator) {
+		t.Fatalf("err = %v, want refused", err)
 	}
 }
