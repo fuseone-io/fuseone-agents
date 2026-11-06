@@ -3,6 +3,7 @@ package admin_test
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -189,5 +190,49 @@ func TestBindAndDelete_racing_neverLeaveABindingWithoutAConnection(t *testing.T)
 		if err != nil || len(stored) != 0 {
 			t.Fatalf("a binding outlived its connection: %+v, %v", stored, err)
 		}
+	}
+}
+
+// Bindings a delete already left behind are waiting for somebody to reuse the name, and
+// a fix to the delete does not reach them.
+func TestOrphanedBindingsMigration_takesOnlyBindingsWithNoConnection(t *testing.T) {
+	channels, store := boundChannels(t)
+	pool := freshPool(t)
+	ctx := context.Background()
+	aConnection(t, store, "kept-slack")
+	if err := channels.BindIdentity(ctx, admin.ChannelIdentity{
+		Channel: "kept-slack", Account: "U1", Principal: "usr_ana",
+	}, "usr_admin"); err != nil {
+		t.Fatalf("BindIdentity: %v", err)
+	}
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeInstallation, Kind: admin.KindChannelIdentity,
+		Name: "gone-slack/U2", Value: []byte(`{"channel":"gone-slack","account":"U2","principal":"usr_bia"}`),
+		Enabled: true, UpdatedBy: "test",
+	}); err != nil {
+		t.Fatalf("orphan: %v", err)
+	}
+
+	migration, err := os.ReadFile("../ledger/sql/0100_orphaned_channel_identities.sql")
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	if _, err := pool.Exec(ctx, string(migration)); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	stored, err := store.List(ctx, admin.KindChannelIdentity)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(stored) != 1 || stored[0].Name != "kept-slack/U1" {
+		t.Fatalf("bindings left = %+v", stored)
+	}
+	var events int
+	if err := pool.QueryRow(ctx, `
+		select count(*) from admin_events
+		where action = 'channel.identity.unbound' and target = 'gone-slack/U2'
+		  and detail->>'principal' = 'usr_bia'`).Scan(&events); err != nil || events != 1 {
+		t.Fatalf("events = %d, %v", events, err)
 	}
 }
