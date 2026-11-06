@@ -15,6 +15,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/regression"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 /*
@@ -443,5 +444,104 @@ func TestReplaySearch_usesTheDigestIndex(t *testing.T) {
 		if strings.Contains(plan, "run_steps") {
 			t.Errorf("%s: plan reads the ledger:\n%s", name, plan)
 		}
+	}
+}
+
+// Retention is the other way a copy goes. A battery that has read a case and has
+// yet to open its runs would otherwise put expired bytes back into a new run.
+func TestSweep_waitsForACopyInProgress(t *testing.T) {
+	future := time.Now().Add(6 * 365 * 24 * time.Hour)
+	erasures, content := erasuresFor(t, func() time.Time { return future })
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+	store := regression.NewStore(pool)
+
+	copied, err := content.PutFor(ctx, "regression", "suporte", 1, []byte(`{"email":"ana@example.com"}`))
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+
+	entered, release, swept := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	held := make(chan error, 1)
+	go func() {
+		held <- store.Hold(ctx, "suporte", func(context.Context) error {
+			close(entered)
+			<-release
+			return nil
+		})
+	}()
+	<-entered
+	go func() {
+		_, err := erasures.Sweep(ctx)
+		swept <- err
+	}()
+
+	select {
+	case err := <-swept:
+		t.Fatalf("the sweep did not wait for the battery: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	close(release)
+	if err := <-held; err != nil {
+		t.Fatalf("Hold: %v", err)
+	}
+	if err := <-swept; err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if _, err := content.Get(ctx, copied); !errors.Is(err, ledger.ErrErased) {
+		t.Fatalf("copy after the sweep: err = %v, want erased", err)
+	}
+}
+
+// Waiting at the fence must not hold what the work inside it needs.
+func TestForSubject_waitingAtTheFence_leavesThePoolFree(t *testing.T) {
+	config, err := pgxpool.ParseConfig(testdb.DSN(t))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	config.MaxConns = 1
+	small, err := pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
+		t.Fatalf("pool: %v", err)
+	}
+	defer small.Close()
+	erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	store := regression.NewStore(small)
+	erasures := admin.NewErasures(small, ledger.NewContent(small), admin.NewRetention(small, nil), store)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	copied, err := ledger.NewContent(pool).PutFor(ctx, "regression", "suporte", 1, []byte("x"))
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	recordCorrection(t, pool, correction{"suporte", "reg-1", "run-asked", copied, ""})
+
+	entered, release, erased := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	held := make(chan error, 1)
+	go func() {
+		held <- store.Hold(ctx, "suporte", func(ctx context.Context) error {
+			close(entered)
+			<-release
+			_, err := store.List(ctx, "suporte")
+			return err
+		})
+	}()
+	<-entered
+	go func() {
+		_, err := erasures.ForSubject(ctx, "dpo", domain.Scope{}, []domain.RunID{"run-asked"}, "request")
+		erased <- err
+	}()
+	time.Sleep(200 * time.Millisecond)
+	close(release)
+
+	if err := <-held; err != nil {
+		t.Fatalf("Hold, with the erasure waiting: %v", err)
+	}
+	if err := <-erased; err != nil {
+		t.Fatalf("ForSubject: %v", err)
 	}
 }

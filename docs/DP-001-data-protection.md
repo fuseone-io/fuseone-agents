@@ -177,8 +177,13 @@ corrections as `corpusCases`. The case itself stays, with no input, and is repor
 gap. Deleting a correction takes its copy and the runs that replayed it, unless another
 correction still holds the same input.
 
-Recording a correction and opening a battery wait for an erasure in progress, and an
-erasure waits for them, so neither can put back what was just erased.
+Recording a correction and opening a battery wait while content is being erased, and
+erasing waits for them, so neither can put back what was just erased. This covers a
+person's request, retention and deleting a correction.
+
+**Identical bytes are treated as the same data.** Following the digest means input that
+is trivially common within an agent, such as `{}`, takes every copy, note and rehearsal
+holding it. Erasing too much of a rehearsal was chosen over leaving a person's data.
 
 **Real runs are the operator's to name.** Only rehearsals are followed. A real run holding
 the same bytes, including one started from another with "run from this input", is a record

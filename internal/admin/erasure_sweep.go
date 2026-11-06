@@ -38,6 +38,23 @@ func (e *Erasures) Sweep(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	agents, err := e.agentsLosingCopies(ctx, before)
+	if err != nil {
+		return 0, err
+	}
+	var total int
+	err = e.fence.Exclusive(ctx, agents, func(ctx context.Context) error {
+		var err error
+		total, err = e.sweepPast(ctx, window, before)
+		return err
+	})
+	if err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (e *Erasures) sweepPast(ctx context.Context, window time.Duration, before time.Time) (int, error) {
 	tx, err := e.pool.Begin(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("admin: begin retention sweep: %w", err)

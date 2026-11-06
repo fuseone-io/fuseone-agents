@@ -12,6 +12,7 @@ import (
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/finops"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/regression"
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/trigger"
 	"github.com/fuseone/agents/internal/worker"
@@ -74,7 +75,7 @@ func (p *workerParts) startLoops(
 	// it takes effect on the next sweep rather than at the next deploy —
 	// which is the whole reason it is a setting.
 	if p.durable != nil && p.retention != nil {
-		go sweepContent(ctx, admin.NewErasures(p.configPool, p.durable, p.retention))
+		go sweepContent(ctx, admin.NewErasures(p.configPool, p.durable, p.retention, regression.NewStore(p.configPool)))
 	}
 
 	// What each planning call cost, for the aggregate. A projection rather

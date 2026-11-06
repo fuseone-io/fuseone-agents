@@ -21,9 +21,14 @@ import (
 // ErrNothingToCheck means a correction arrived with no expectation on it.
 var ErrNothingToCheck = errors.New("regression: a case with no expectation cannot be checked")
 
-type Store struct{ pool *pgxpool.Pool }
+type Store struct {
+	pool  *pgxpool.Pool
+	fence *fence
+}
 
-func NewStore(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
+func NewStore(pool *pgxpool.Pool) *Store {
+	return &Store{pool: pool, fence: newFence(pool.Config().ConnConfig)}
+}
 
 // Record stores one correction, replacing a case of the same id.
 //
@@ -111,35 +116,6 @@ func (s *Store) List(ctx context.Context, agent domain.AgentID) ([]domain.Regres
 }
 
 /*
-Hold runs inside, with the agent's corpus fenced against an erasure.
-
-Reading an occurrence and writing it somewhere else are two steps, and an erasure
-between them would be undone by the second while reporting success. Shared, so
-copies do not wait for each other: an erasure takes it exclusively and waits for
-these to finish, and anything starting after it reads the tombstone.
-*/
-func (s *Store) Hold(
-	ctx context.Context, agent domain.AgentID, inside func(context.Context) error,
-) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("regression: begin the corpus fence: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock_shared(hashtextextended($1, 0))`,
-		domain.CorpusFence(agent)); err != nil {
-		return fmt.Errorf("regression: wait at the corpus fence: %w", err)
-	}
-	if err := inside(ctx); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("regression: leave the corpus fence: %w", err)
-	}
-	return nil
-}
-
-/*
 Delete removes one case from the corpus, with the copy it kept and the runs that
 replayed it.
 
@@ -150,6 +126,12 @@ names the copy, it stays and so do the replays. One statement, because a delete
 between the steps would leave exactly what this exists to prevent.
 */
 func (s *Store) Delete(ctx context.Context, agent domain.AgentID, id string) error {
+	return s.Exclusive(ctx, []domain.AgentID{agent}, func(ctx context.Context) error {
+		return s.deleteCase(ctx, agent, id)
+	})
+}
+
+func (s *Store) deleteCase(ctx context.Context, agent domain.AgentID, id string) error {
 	if _, err := s.pool.Exec(ctx, `
 		with gone as (
 			delete from regression_cases

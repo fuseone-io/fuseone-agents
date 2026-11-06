@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -14,33 +15,46 @@ type corpusErasure struct {
 	objects int
 }
 
-/*
-lockCorporaOf waits for anything copying these agents' corpora to finish.
+// CorpusFence excludes anything copying these corpora, declared by the consumer.
+//
+// Recording a correction and opening a battery each read an occurrence and write it
+// somewhere else. If the occurrence goes between the two, the second puts it back
+// while this reports success, so everything here that makes one go runs inside this.
+type CorpusFence interface {
+	Exclusive(ctx context.Context, agents []domain.AgentID, inside func(context.Context) error) error
+}
 
-Recording a correction and opening a battery each read an occurrence and write
-it somewhere else. An erasure between the two would be undone by the second, and
-it would report success. They hold this lock shared, so they do not wait for each
-other, and an erasure holds it exclusively until it commits. Whatever starts after
-it reads the tombstone.
-
-In a stable order, so two erasures cannot deadlock.
-*/
-func lockCorporaOf(ctx context.Context, tx pgx.Tx, runs []string) ([]string, error) {
-	agents, err := scanStrings(ctx, tx, `
+// agentsOf is whose corpora a set of runs reaches. Read before the fence and not in
+// a transaction, because waiting at it must not hold what its work needs: a run's
+// agent does not change, and a correction naming the run is for that same agent.
+func (e *Erasures) agentsOf(ctx context.Context, runs []string) ([]domain.AgentID, error) {
+	agents, err := scanStrings(ctx, e.pool, `
 		select agent_id from runs where run_id = any($1::text[])
 		union
-		select agent_id from regression_cases where from_run = any($1::text[])
-		order by 1`, runs)
+		select agent_id from regression_cases where from_run = any($1::text[])`, runs)
 	if err != nil {
 		return nil, fmt.Errorf("admin: find the agents of erased runs: %w", err)
 	}
-	for _, agent := range agents {
-		if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`,
-			domain.CorpusFence(domain.AgentID(agent))); err != nil {
-			return nil, fmt.Errorf("admin: wait for the corpus of %s: %w", agent, err)
-		}
+	return toAgents(agents), nil
+}
+
+// agentsLosingCopies is whose corrections retention is about to reach.
+func (e *Erasures) agentsLosingCopies(ctx context.Context, before time.Time) ([]domain.AgentID, error) {
+	agents, err := scanStrings(ctx, e.pool, `
+		select distinct run_id from run_content
+		where owner_kind = 'regression' and created_at < $1 and erased_at is null`, before.UTC())
+	if err != nil {
+		return nil, fmt.Errorf("admin: find the corpora retention reaches: %w", err)
 	}
-	return agents, nil
+	return toAgents(agents), nil
+}
+
+func toAgents(ids []string) []domain.AgentID {
+	out := make([]domain.AgentID, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, domain.AgentID(id))
+	}
+	return out
 }
 
 // Both start from a digest, on an index of what is still readable, so a request
@@ -75,13 +89,17 @@ holding the same bytes is a record of something that happened, and naming it is
 the operator's act.
 */
 func (e *Erasures) eraseCorpusOf(
-	ctx context.Context, tx pgx.Tx, runs []string, agents []string,
+	ctx context.Context, tx pgx.Tx, runs []string, agents []domain.AgentID,
 ) (corpusErasure, error) {
 	digests, err := inputDigestsOf(ctx, tx, runs)
 	if err != nil {
 		return corpusErasure{}, err
 	}
-	refs, err := scanStrings(ctx, tx, copySearchSQL, digests, agents)
+	owners := make([]string, 0, len(agents))
+	for _, agent := range agents {
+		owners = append(owners, string(agent))
+	}
+	refs, err := scanStrings(ctx, tx, copySearchSQL, digests, owners)
 	if err != nil {
 		return corpusErasure{}, fmt.Errorf("admin: find corpus copies: %w", err)
 	}
@@ -95,7 +113,7 @@ func (e *Erasures) eraseCorpusOf(
 	if err != nil {
 		return corpusErasure{}, fmt.Errorf("admin: clear corpus notes: %w", err)
 	}
-	replays, err := scanStrings(ctx, tx, replaySearchSQL, digests, agents)
+	replays, err := scanStrings(ctx, tx, replaySearchSQL, digests, owners)
 	if err != nil {
 		return corpusErasure{}, fmt.Errorf("admin: find replays: %w", err)
 	}
@@ -123,8 +141,8 @@ func inputDigestsOf(ctx context.Context, tx pgx.Tx, runs []string) ([]string, er
 	return digests, nil
 }
 
-func scanStrings(ctx context.Context, tx pgx.Tx, query string, args ...any) ([]string, error) {
-	rows, err := tx.Query(ctx, query, args...)
+func scanStrings(ctx context.Context, conn db, query string, args ...any) ([]string, error) {
+	rows, err := conn.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

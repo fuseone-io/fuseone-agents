@@ -1,10 +1,13 @@
 package regression_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -220,7 +223,7 @@ func TestOrphanedCopiesMigration_takesOnlyCopiesNoCaseNames(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	migration, err := os.ReadFile("../ledger/sql/0097_erase_orphaned_corpus_copies.sql")
+	migration, err := os.ReadFile("../ledger/sql/0098_erase_orphaned_corpus_copies.sql")
 	if err != nil {
 		t.Fatalf("read migration: %v", err)
 	}
@@ -306,6 +309,207 @@ func TestList_saysWhichCasesLostTheirInput(t *testing.T) {
 
 // With the case gone nothing else leads to the runs that replayed it, and for an
 // input too large to keep whole their bytes do not match the run it came from.
+func replayHolding(t *testing.T, pool *pgxpool.Pool, content *ledger.Content, input []byte) string {
+	t.Helper()
+	return runHolding(t, pool, content, "suporte",
+		`{"trigger":"simulation","simulated":true,"simulation":"b","case":"reg-1"}`, input)
+}
+
+func runHolding(
+	t *testing.T, pool *pgxpool.Pool, content *ledger.Content,
+	agent domain.AgentID, started string, input []byte,
+) string {
+	t.Helper()
+	ctx := context.Background()
+	run := domain.RunID("run-holding-" + fmt.Sprint(time.Now().UnixNano()))
+	if _, err := ledger.NewPostgres(pool).Append(ctx, domain.Step{
+		RunID: run, Seq: 1, Kind: domain.StepRunStarted, AgentID: agent,
+		Scope: domain.Scope{Company: "acme", Area: "suporte"}, IdemKey: string(run), VersionID: "v1",
+		At:      time.Now(),
+		Payload: []byte(started),
+	}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	ref, err := content.Put(ctx, run, 1, input)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	return ref
+}
+
+// The same input through Delete, which the comment on it promises.
+func TestDelete_takesTheReplaysOfATruncatedInput(t *testing.T) {
+	store := storeFor(t)
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	limited := ledger.NewContent(pool).WithLimit(64)
+	whole := []byte(strings.Repeat("abcdefgh", 32))
+
+	source, err := limited.Put(ctx, "run-source", 1, whole)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	kept, err := limited.Get(ctx, source)
+	if err != nil || bytes.Equal(kept, whole) {
+		t.Fatalf("kept = %q, %v; the fixture needs a truncated input", kept, err)
+	}
+	ref, err := limited.PutFor(ctx, "regression", "suporte", 1, kept)
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	withRef := aCase("reg-1", domain.Expectation{Kind: domain.ExpectAsks})
+	withRef.InputRef = ref
+	if err := store.Record(ctx, withRef); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	replayed := replayHolding(t, pool, limited, kept)
+
+	if err := store.Delete(ctx, "suporte", "reg-1"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	if _, err := limited.Get(ctx, replayed); !errors.Is(err, ledger.ErrErased) {
+		t.Fatalf("replay after delete: err = %v, want erased", err)
+	}
+}
+
+// A battery has read this case and has yet to open its runs.
+func TestDelete_waitsForACopyInProgress(t *testing.T) {
+	store := storeFor(t)
+	ctx := context.Background()
+
+	entered, release, deleted := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	held := make(chan error, 1)
+	go func() {
+		held <- store.Hold(ctx, "suporte", func(context.Context) error {
+			close(entered)
+			<-release
+			return nil
+		})
+	}()
+	<-entered
+	go func() { deleted <- store.Delete(ctx, "suporte", "reg-1") }()
+
+	select {
+	case err := <-deleted:
+		t.Fatalf("Delete did not wait for the battery: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	close(release)
+	if err := <-held; err != nil {
+		t.Fatalf("Hold: %v", err)
+	}
+	if err := <-deleted; err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+}
+
+func smallPool(t *testing.T, conns int32) *pgxpool.Pool {
+	t.Helper()
+	config, err := pgxpool.ParseConfig(testdb.DSN(t))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	config.MaxConns = conns
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
+		t.Fatalf("pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
+}
+
+// Each Hold needs the pool for its own work. If the fence also sat on a pool
+// connection, as many Holds as connections would each wait for one forever.
+func TestHold_asManyAsThePoolHasConnections_allFinish(t *testing.T) {
+	storeFor(t)
+	pool := smallPool(t, 2)
+	store := regression.NewStore(pool)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var inside sync.WaitGroup
+	inside.Add(2)
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			results <- store.Hold(ctx, "suporte", func(ctx context.Context) error {
+				inside.Done()
+				inside.Wait()
+				_, err := store.List(ctx, "suporte")
+				return err
+			})
+		}()
+	}
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatalf("Hold: %v", err)
+		}
+	}
+}
+
+// The fence takes nothing from a saturated pool, so what is inside it can finish
+// as soon as anybody gives a connection back.
+func TestHold_withThePoolSaturated_stillEntersTheFence(t *testing.T) {
+	storeFor(t)
+	pool := smallPool(t, 1)
+	store := regression.NewStore(pool)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	taken, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	defer taken.Release()
+
+	if err := store.Hold(ctx, "suporte", func(context.Context) error { return nil }); err != nil {
+		t.Fatalf("Hold: %v", err)
+	}
+}
+
+func TestHold_finishing_givesItsSlotBack(t *testing.T) {
+	store := storeFor(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	for range regression.FenceSlots + 1 {
+		if err := store.Hold(ctx, "suporte", func(context.Context) error { return nil }); err != nil {
+			t.Fatalf("Hold: %v", err)
+		}
+	}
+}
+
+func TestHold_withNoSlotLeft_givesUpWithItsContext(t *testing.T) {
+	store := storeFor(t)
+	ctx := context.Background()
+
+	release := make(chan struct{})
+	defer close(release)
+	var entered sync.WaitGroup
+	entered.Add(regression.FenceSlots)
+	for range regression.FenceSlots {
+		go func() {
+			_ = store.Hold(ctx, "suporte", func(context.Context) error {
+				entered.Done()
+				<-release
+				return nil
+			})
+		}()
+	}
+	entered.Wait()
+
+	short, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	err := store.Hold(short, "suporte", func(context.Context) error {
+		t.Error("entered a fence with no slot left")
+		return nil
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Hold = %v, want the context's error", err)
+	}
+}
+
 func TestDelete_takesTheRunsThatReplayedTheCase(t *testing.T) {
 	store := storeFor(t)
 	pool := testdb.Pool(t)

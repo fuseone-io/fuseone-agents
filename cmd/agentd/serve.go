@@ -185,7 +185,7 @@ func serve(args []string) error {
 			WithRetention(
 				admin.NewRetention(identity.pool, store),
 				admin.NewErasures(identity.pool, ledger.NewContent(identity.pool),
-					admin.NewRetention(identity.pool, store)),
+					admin.NewRetention(identity.pool, store), regression.NewStore(identity.pool)),
 			).
 			WithWebhooks(webhooksWith(identity.pool, masterVault)).
 			// Where a published cron trigger becomes a moment the worker
