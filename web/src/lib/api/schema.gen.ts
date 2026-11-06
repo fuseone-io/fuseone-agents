@@ -2417,7 +2417,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one model provider as it is configured
+         * @description What PUT stored, for a client deciding whether the provider drifted. The credential is never returned; hasKey reports that one is stored, and sending the answer back unchanged keeps it.
+         */
+        get: operations["getModelProvider"];
         /** Configure a model provider */
         put: operations["putModelProvider"];
         post?: never;
@@ -9809,6 +9813,31 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getModelProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The provider's stored configuration. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelProvider"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     putModelProvider: {

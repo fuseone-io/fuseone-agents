@@ -268,6 +268,43 @@ func roundTrip(t *testing.T, in map[string]any) map[string]any {
 	return out
 }
 
+func TestReadBack_modelProvider_putWhatGetAnsweredChangesNothing(t *testing.T) {
+	world := newReadBackWorld(t)
+	const base = "/admin/integrations/providers/"
+	cases := []readBack{{
+		name: "an endpoint only this installation knows, switched off",
+		path: base + "readback-gateway", sealed: settings.KindModelProvider, key: "readback-gateway",
+		body: map[string]any{
+			"kind": "openai_compatible", "baseUrl": "https://models.example.test/v1",
+			"models":               []string{"model-a", "model-b"},
+			"autoToolChoiceModels": []string{"model-b"},
+			"apiKey":               "readback-provider-secret",
+			"enabled":              false,
+		},
+		writeOnly: map[string]string{"apiKey": "hasKey"},
+		secrets:   []string{"readback-provider-secret"},
+	}, {
+		name: "a pasted list is stored clean",
+		path: base + "readback-pasted",
+		body: map[string]any{
+			"kind": "openai_compatible", "baseUrl": "https://models.example.test/v1",
+			"models":               []string{" model-a ", "", "model-a", "model-b"},
+			"autoToolChoiceModels": []string{"model-b", "model-b"},
+		},
+		normalised: map[string]any{
+			"models": []string{"model-a", "model-b"}, "autoToolChoiceModels": []string{"model-b"},
+		},
+	}, {
+		name: "a vendor whose client knows its own address",
+		path: base + "readback-vendor",
+		body: map[string]any{"kind": "anthropic"},
+	}}
+	assertEveryAcceptedFieldIsWalked(t, base+"{name}", cases)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) { world.walk(t, c) })
+	}
+}
+
 func TestReadBack_mcpServer_putWhatGetAnsweredChangesNothing(t *testing.T) {
 	world := newReadBackWorld(t)
 	const base = "/admin/integrations/mcp-servers/"

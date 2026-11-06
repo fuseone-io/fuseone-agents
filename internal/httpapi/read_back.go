@@ -42,6 +42,29 @@ func (s *Server) GetMCPServer(ctx context.Context, req openapi.GetMCPServerReque
 	}, nil
 }
 
+func (s *Server) GetModelProvider(ctx context.Context, req openapi.GetModelProviderRequestObject) (openapi.GetModelProviderResponseObject, error) {
+	if _, forbidden := s.configurer(ctx); forbidden != nil {
+		return openapi.GetModelProvider403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
+		}, nil
+	}
+	if s.integrations == nil {
+		return nil, errNoAdministration
+	}
+	providers, err := s.integrations.Providers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get model provider: %w", err)
+	}
+	for _, provider := range providers {
+		if provider.Name == req.Name {
+			return openapi.GetModelProvider200JSONResponse(modelProviderConfig(provider)), nil
+		}
+	}
+	return openapi.GetModelProvider404ApplicationProblemPlusJSONResponse{
+		NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
+	}, nil
+}
+
 // mcpServerConfig is a server as it was configured, before anything observed
 // about it is added.
 func mcpServerConfig(srv domain.MCPServer) openapi.MCPServer {

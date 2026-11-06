@@ -140,6 +140,68 @@ func TestGetMCPServer_storeHoldsACredential_noResponseFieldCarriesIt(t *testing.
 	}
 }
 
+func TestGetModelProvider_withoutTheAuthorityToConfigure_refusesTheSameWhetherItExistsOrNot(t *testing.T) {
+	t.Parallel()
+	s := serverWith(t, &fakeAdmin{providers: []domain.ModelProvider{{Name: "gateway", Enabled: true}}})
+	for name, caller := range refusedCallers() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			there, err := s.GetModelProvider(caller, openapi.GetModelProviderRequestObject{Name: "gateway"})
+			if err != nil {
+				t.Fatalf("GetModelProvider: %v", err)
+			}
+			absent, err := s.GetModelProvider(caller, openapi.GetModelProviderRequestObject{Name: "nothing"})
+			if err != nil {
+				t.Fatalf("GetModelProvider: %v", err)
+			}
+			if _, refused := there.(openapi.GetModelProvider403ApplicationProblemPlusJSONResponse); !refused {
+				t.Fatalf("existing = %T, want 403", there)
+			}
+			if !reflect.DeepEqual(there, absent) {
+				t.Errorf("the refusal says whether it exists\n there: %#v\nabsent: %#v", there, absent)
+			}
+		})
+	}
+}
+
+func TestGetModelProvider_asAConfigurer_answersWhatIsStoredOrNotFound(t *testing.T) {
+	t.Parallel()
+	s := serverWith(t, &fakeAdmin{providers: []domain.ModelProvider{{
+		Name: "gateway", Kind: "openai_compatible", BaseURL: "https://models.example.test",
+		Models: []string{"m1"}, Enabled: true, HasKey: true,
+	}}})
+
+	resp, err := s.GetModelProvider(as(domain.RoleCurator), openapi.GetModelProviderRequestObject{Name: "gateway"})
+	if err != nil {
+		t.Fatalf("GetModelProvider: %v", err)
+	}
+	got, ok := resp.(openapi.GetModelProvider200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want 200", resp)
+	}
+	if got.Name != "gateway" || got.BaseUrl != "https://models.example.test" || !got.HasKey ||
+		got.Models == nil || len(*got.Models) != 1 {
+		t.Errorf("provider = %+v", got)
+	}
+
+	resp, err = s.GetModelProvider(as(domain.RoleCurator), openapi.GetModelProviderRequestObject{Name: "gate"})
+	if err != nil {
+		t.Fatalf("GetModelProvider: %v", err)
+	}
+	if _, absent := resp.(openapi.GetModelProvider404ApplicationProblemPlusJSONResponse); !absent {
+		t.Fatalf("response = %T, want 404", resp)
+	}
+}
+
+func TestGetModelProvider_noAdministrationStore_failsLikeItsNeighbour(t *testing.T) {
+	t.Parallel()
+	s := NewServer(ledger.NewMemory(), "test")
+	_, err := s.GetModelProvider(as(domain.RoleCurator), openapi.GetModelProviderRequestObject{Name: "gateway"})
+	if !errors.Is(err, errNoAdministration) {
+		t.Fatalf("err = %v, want errNoAdministration", err)
+	}
+}
+
 func TestGetMCPServer_noAdministrationStore_failsLikeItsNeighbour(t *testing.T) {
 	t.Parallel()
 	s := NewServer(ledger.NewMemory(), "test")
