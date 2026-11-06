@@ -27,6 +27,46 @@ field" is a commit message.
 
 ---
 
+## [0.92.0] — 2026-11-06
+
+### Upgrade notes
+
+- **Nothing to do to upgrade.** No migration, no chart change and no new
+  setting. The `evidence` connector stays out of every agent's tools until an
+  administrator creates an instance through the API.
+- **The console shows an evidence source and does not edit it.** Declaring one
+  is an API call, as with SQL.
+- **Try a new source before relying on it.** This connector has not yet run
+  against a real source. The manual's declarations are starting points, so
+  confirm their field names against your own console, and run `check` first.
+- **Read-only is the token's guarantee.** Give each instance a read-only token.
+
+### Added
+
+- **Governed evidence collection, the `evidence` connector.** It collects events
+  from a source you declare and answers in aggregate. The model never sees an
+  event and never writes a query. Each instance gives an agent three reads:
+  - `check` validates the credential and runs the source's positive control.
+  - `collect` runs a named query over a window and returns a manifest and a
+    reference to the events, which stay in the content store under the run's
+    retention. A collection too long for one call answers `partial` and resumes.
+  - `analyze` counts, sums and groups what this run collected. It cannot read
+    another run's evidence.
+- **Every number states its coverage.** A result carries its window, scope, count
+  and coverage: `complete`, `partial`, or `floor` when a limit was hit or paging
+  stopped advancing, so the number is a minimum.
+- **Absence is claimed only when it can be shown.** `analyze` answers `observed`,
+  `not_observed` or `not_observable`. `not_observed` needs a complete collection,
+  a passing positive control and no unmeasured event in the set, so a source with
+  much unmeasured traffic will usually answer `not_observable`.
+- **A source's failure is never zero events.** A refusal inside a 200 response, a
+  denied credential or a body of the wrong shape is a failure. A value a model
+  supplies that does not match its declared pattern is refused, never escaped.
+- **A manual page and a reference agent.** The manual, in pt-BR and en-US, covers
+  how to read coverage and outcomes, with two example declarations.
+  `agents/evidence-investigator.agent.md` reports window, scope, counts and
+  coverage before any interpretation.
+
 ## [0.91.0] — 2026-11-03
 
 ### Upgrade notes
