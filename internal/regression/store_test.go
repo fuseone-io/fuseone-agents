@@ -337,6 +337,76 @@ func runHolding(
 	return ref
 }
 
+// An input too large to keep whole: the run's digest covers all of it, while the
+// copy and its replays hold and digest only what was kept. Nothing leads from the
+// run to them once the case is gone, so the migration is the last chance.
+func TestOrphanedCopiesMigration_takesTheReplaysOfATruncatedInput(t *testing.T) {
+	storeFor(t)
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	limited := ledger.NewContent(pool).WithLimit(64)
+	whole := []byte(strings.Repeat("abcdefgh", 32))
+
+	source, err := limited.Put(ctx, "run-source", 1, whole)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	kept, err := limited.Get(ctx, source)
+	if err != nil || bytes.Equal(kept, whole) {
+		t.Fatalf("kept = %q, %v; the fixture needs a truncated input", kept, err)
+	}
+	if _, err := limited.PutFor(ctx, "regression", "suporte", 1, kept); err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	replayed := replayHolding(t, pool, limited, kept)
+
+	migration, err := os.ReadFile("../ledger/sql/0098_erase_orphaned_corpus_copies.sql")
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	if _, err := pool.Exec(ctx, string(migration)); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	if _, err := limited.Get(ctx, replayed); !errors.Is(err, ledger.ErrErased) {
+		t.Fatalf("replay of an orphaned copy: err = %v, want erased", err)
+	}
+}
+
+// Identical bytes elsewhere are somebody else's record, and a real run is the
+// operator's to name.
+func TestOrphanedCopiesMigration_staysInsideTheAgentsRehearsals(t *testing.T) {
+	storeFor(t)
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	content := ledger.NewContent(pool)
+	input := []byte(`{"email":"ana@example.com"}`)
+
+	if _, err := content.PutFor(ctx, "regression", "suporte", 1, input); err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	real := runHolding(t, pool, content, "suporte", `{"trigger":"manual"}`, input)
+	other := runHolding(t, pool, content, "vendas",
+		`{"trigger":"simulation","simulated":true,"simulation":"b","case":"reg-v"}`, input)
+	if replayed := replayHolding(t, pool, content, input); replayed == "" {
+		t.Fatal("no replay")
+	}
+
+	migration, err := os.ReadFile("../ledger/sql/0098_erase_orphaned_corpus_copies.sql")
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	if _, err := pool.Exec(ctx, string(migration)); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	for name, ref := range map[string]string{"a real run": real, "another agent's rehearsal": other} {
+		if _, err := content.Get(ctx, ref); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
 // The same input through Delete, which the comment on it promises.
 func TestDelete_takesTheReplaysOfATruncatedInput(t *testing.T) {
 	store := storeFor(t)
