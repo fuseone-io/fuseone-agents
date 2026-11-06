@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -43,45 +44,71 @@ func Asserted(grantedBy string) bool {
 func (p *Postgres) ReplaceAssertedGrants(
 	ctx context.Context, principalID, provider string, grants []domain.Grant,
 ) error {
-	return p.replaceGrants(ctx, principalID, assertedBy(provider), grants,
-		`delete from role_grants where principal_id = $1 and granted_by = $2`,
-		assertedBy(provider))
+	return p.onTrail(ctx, func(tx pgx.Tx) error {
+		return replaceGrants(ctx, tx, grantWrite{principalID, assertedBy(provider), grants},
+			`delete from role_grants where principal_id = $1 and granted_by = $2`,
+			assertedBy(provider))
+	})
 }
 
 // SetGrants replaces what an operator granted by hand, leaving every asserted
 // grant in place. An operator cannot revoke what a group decides.
+//
+// Recorded, because who may do what is the first thing an auditor asks about, and for
+// a service account a grant is the whole of what it can do.
 func (p *Postgres) SetGrants(
 	ctx context.Context, principalID string, grants []domain.Grant, by string,
 ) error {
-	return p.replaceGrants(ctx, principalID, by, grants,
-		`delete from role_grants where principal_id = $1 and granted_by not like $2`,
-		assertedPrefix+"%")
+	return p.onTrail(ctx, func(tx pgx.Tx) error {
+		if err := replaceGrants(ctx, tx, grantWrite{principalID, by, grants},
+			`delete from role_grants where principal_id = $1 and granted_by not like $2`,
+			assertedPrefix+"%"); err != nil {
+			return err
+		}
+		return recordGrants(ctx, tx, by, principalID, grants)
+	})
 }
 
-func (p *Postgres) replaceGrants(
-	ctx context.Context, principalID, by string, grants []domain.Grant,
-	clear string, clearArg any,
-) error {
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("auth: begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
+type grantWrite struct {
+	principalID string
+	by          string
+	grants      []domain.Grant
+}
 
-	if _, err := tx.Exec(ctx, clear, principalID, clearArg); err != nil {
+func replaceGrants(ctx context.Context, tx pgx.Tx, write grantWrite, clear string, clearArg any) error {
+	if _, err := tx.Exec(ctx, clear, write.principalID, clearArg); err != nil {
 		return fmt.Errorf("auth: clear grants: %w", err)
 	}
-	for _, g := range grants {
+	for _, g := range write.grants {
 		if _, err := tx.Exec(ctx, `
 			insert into role_grants (principal_id, company_id, area_id, role, granted_by)
 			values ($1, $2, $3, $4, $5)
 			on conflict do nothing`,
-			principalID, string(g.Scope.Company), string(g.Scope.Area),
-			string(g.Role), by); err != nil {
+			write.principalID, string(g.Scope.Company), string(g.Scope.Area),
+			string(g.Role), write.by); err != nil {
 			return fmt.Errorf("auth: write grant: %w", err)
 		}
 	}
-	return tx.Commit(ctx)
+	return nil
+}
+
+func recordGrants(ctx context.Context, tx pgx.Tx, by, principalID string, grants []domain.Grant) error {
+	listed := make([]map[string]string, 0, len(grants))
+	for _, g := range grants {
+		listed = append(listed, map[string]string{
+			"company": string(g.Scope.Company), "area": string(g.Scope.Area), "role": string(g.Role),
+		})
+	}
+	detail, err := json.Marshal(map[string]any{"grants": listed})
+	if err != nil {
+		return fmt.Errorf("auth: encode grants: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into admin_events (principal_id, action, target, detail)
+		values ($1, 'grants.set', $2, $3)`, by, principalID, detail); err != nil {
+		return fmt.Errorf("auth: record grants: %w", err)
+	}
+	return nil
 }
 
 // People lists everybody the installation knows about, with what they hold.

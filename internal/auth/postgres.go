@@ -247,23 +247,6 @@ func (p *Postgres) RevokeAllSessions(ctx context.Context, principalID string, no
 	return nil
 }
 
-// IssueToken mints a long-lived credential. The secret is returned once and
-// never recoverable — the database holds only its hash.
-func (p *Postgres) IssueToken(ctx context.Context, principalID, name, createdBy string, expires *time.Time) (Token, error) {
-	token, err := NewToken()
-	if err != nil {
-		return Token{}, err
-	}
-
-	if _, err := p.pool.Exec(ctx, `
-		insert into api_tokens (token_id, principal_id, name, token_hash, created_by, expires_at)
-		values ($1, $2, $3, $4, $5, $6)`,
-		"tok_"+shortHash(principalID+name), principalID, name, token.Hash, createdBy, expires); err != nil {
-		return Token{}, fmt.Errorf("auth: issue token: %w", err)
-	}
-	return token, nil
-}
-
 // PurgeExpired removes lapsed sessions. Housekeeping, not security — an
 // expired session is already refused on read.
 func (p *Postgres) PurgeExpired(ctx context.Context, before time.Time) (int64, error) {
