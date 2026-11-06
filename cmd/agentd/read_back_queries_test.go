@@ -101,6 +101,28 @@ func readsByName() []readByName {
 			w.removeAtTheEnd(t, path)
 			w.put(t, path, map[string]any{"name": n, "effect": "deny", "mode": "monitor", "enabled": false})
 		},
+	}, {
+		name: "mcp",
+		path: func(n string) string { return "/admin/integrations/mcp-servers/" + n },
+		seed: func(t *testing.T, w *readBackWorld, n string) {
+			t.Helper()
+			path := "/admin/integrations/mcp-servers/" + n
+			w.removeAtTheEnd(t, path)
+			w.put(t, path, map[string]any{
+				"transport": "http", "url": "https://mcp.example.test/mcp", "token": "secret-of-" + n,
+			})
+		},
+	}, {
+		name: "provider",
+		path: func(n string) string { return "/admin/integrations/providers/" + n },
+		seed: func(t *testing.T, w *readBackWorld, n string) {
+			t.Helper()
+			path := "/admin/integrations/providers/" + n
+			w.removeAtTheEnd(t, path)
+			w.put(t, path, map[string]any{
+				"kind": "openai_compatible", "baseUrl": "https://models.example.test", "apiKey": "secret-of-" + n,
+			})
+		},
 	}}
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -31,18 +32,16 @@ func (s *Server) GetMCPServer(ctx context.Context, req openapi.GetMCPServerReque
 	if s.integrations == nil {
 		return nil, errNoAdministration
 	}
-	servers, err := s.integrations.MCPServers(ctx)
+	server, err := s.integrations.MCPServerNamed(ctx, req.Name)
+	if errors.Is(err, admin.ErrMCPServerUnknown) {
+		return openapi.GetMCPServer404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
+		}, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get MCP server: %w", err)
 	}
-	for _, server := range servers {
-		if server.Name == req.Name {
-			return openapi.GetMCPServer200JSONResponse(mcpServerConfig(server)), nil
-		}
-	}
-	return openapi.GetMCPServer404ApplicationProblemPlusJSONResponse{
-		NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
-	}, nil
+	return openapi.GetMCPServer200JSONResponse(mcpServerConfig(server)), nil
 }
 
 func (s *Server) GetModelProvider(ctx context.Context, req openapi.GetModelProviderRequestObject) (openapi.GetModelProviderResponseObject, error) {
@@ -54,18 +53,16 @@ func (s *Server) GetModelProvider(ctx context.Context, req openapi.GetModelProvi
 	if s.integrations == nil {
 		return nil, errNoAdministration
 	}
-	providers, err := s.integrations.Providers(ctx)
+	provider, err := s.integrations.ProviderNamed(ctx, req.Name)
+	if errors.Is(err, admin.ErrProviderUnknown) {
+		return openapi.GetModelProvider404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
+		}, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get model provider: %w", err)
 	}
-	for _, provider := range providers {
-		if provider.Name == req.Name {
-			return openapi.GetModelProvider200JSONResponse(modelProviderConfig(provider)), nil
-		}
-	}
-	return openapi.GetModelProvider404ApplicationProblemPlusJSONResponse{
-		NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
-	}, nil
+	return openapi.GetModelProvider200JSONResponse(modelProviderConfig(provider)), nil
 }
 
 func (s *Server) GetChannel(ctx context.Context, req openapi.GetChannelRequestObject) (openapi.GetChannelResponseObject, error) {

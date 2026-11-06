@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -44,6 +45,22 @@ type fakeAdmin struct {
 
 func (f *fakeAdmin) MCPServers(context.Context) ([]domain.MCPServer, error) {
 	return f.servers, f.err
+}
+func (f *fakeAdmin) MCPServerNamed(_ context.Context, name string) (domain.MCPServer, error) {
+	for _, server := range f.servers {
+		if server.Name == name {
+			return server, nil
+		}
+	}
+	return domain.MCPServer{}, admin.ErrMCPServerUnknown
+}
+func (f *fakeAdmin) ProviderNamed(_ context.Context, name string) (domain.ModelProvider, error) {
+	for _, provider := range f.providers {
+		if provider.Name == name {
+			return provider, nil
+		}
+	}
+	return domain.ModelProvider{}, admin.ErrProviderUnknown
 }
 func (f *fakeAdmin) Providers(context.Context) ([]domain.ModelProvider, error) {
 	return f.providers, f.err

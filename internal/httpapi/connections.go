@@ -23,11 +23,13 @@ needs the absence answered as plainly as the presence.
 // the consumer.
 type Integrations interface {
 	MCPServers(ctx context.Context) ([]domain.MCPServer, error)
+	MCPServerNamed(ctx context.Context, name string) (domain.MCPServer, error)
 	MCPPersonalCredentials(ctx context.Context, principal domain.UserID) ([]domain.MCPPersonalCredential, error)
 	MCPPersonalCredentialPresence(ctx context.Context, principal domain.UserID, servers []string) (map[string]bool, error)
 	PutMCPPersonalCredential(ctx context.Context, by domain.UserID, scope domain.Scope, name string, creds domain.MCPCredentialPatch) error
 	DeleteMCPPersonalCredential(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
 	Providers(ctx context.Context) ([]domain.ModelProvider, error)
+	ProviderNamed(ctx context.Context, name string) (domain.ModelProvider, error)
 	PutMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, server domain.MCPServer, creds domain.MCPCredentialPatch) error
 	MCPCredentials(ctx context.Context, name string) (domain.MCPCredentials, error)
 	RequestMCPProbe(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
