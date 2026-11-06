@@ -93,10 +93,10 @@ func TestNamed_connectionWithAwkwardRows_answersWhatTheListingAnswers(t *testing
 		}
 	}
 	// Anchors: a comparison of two empty answers would pass with the read broken.
-	// Four bindings, not three: a key is split at its first slash, so the listing
-	// files acme_slack/nested's binding under acme_slack, and this read has to agree.
-	if len(want.Conversations) != 3 || len(wantBound) != 4 {
-		t.Fatalf("seeded %d conversations and %d identities, want 3 and 4",
+	// Three bindings: a key is split at its last slash, so acme_slack/nested's binding
+	// is its own and not this connection's, though the range catches it.
+	if len(want.Conversations) != 3 || len(wantBound) != 3 {
+		t.Fatalf("seeded %d conversations and %d identities, want 3 and 3",
 			len(want.Conversations), len(wantBound))
 	}
 
@@ -116,14 +116,13 @@ func TestNamed_connectionWithAwkwardRows_answersWhatTheListingAnswers(t *testing
 		t.Errorf("identities\n %+v\nthe listing answers\n %+v", bound, wantBound)
 	}
 
-	// The other side of the same rule: the range for acme_slack/nested catches the
-	// binding the listing files under acme_slack, and it must not claim it.
+	// The other side of the same rule: the binding is the nested connection's own.
 	_, nested, err := channels.Named(ctx, "acme_slack/nested")
 	if err != nil {
 		t.Fatalf("Named nested: %v", err)
 	}
-	if len(nested) != 0 {
-		t.Errorf("nested connection claims %+v, which the listing files under acme_slack", nested)
+	if len(nested) != 1 || nested[0].Channel != "acme_slack/nested" || nested[0].Account != "U1" {
+		t.Errorf("nested connection reads %+v, want its own binding", nested)
 	}
 }
 
@@ -192,5 +191,31 @@ func TestNamed_ownSecretWillNotOpen_failsRatherThanSayingItIsAbsent(t *testing.T
 	}
 	if _, _, err := channels.Named(ctx, "sealed"); err == nil || errors.Is(err, admin.ErrChannelUnknown) {
 		t.Fatalf("err = %v, want the failure to open", err)
+	}
+}
+
+// A connection named under another's: the range for one catches the other's keys, and
+// neither read may claim them. Read back, a binding on the wrong connection is authority
+// shown in the wrong place.
+func TestNamed_aConnectionNamedUnderAnother_readsOnlyItsOwnBindings(t *testing.T) {
+	channels, store := boundChannels(t)
+	ctx := context.Background()
+	for name, account := range map[string]string{"acme": "U-TOP", "acme/slack": "U-NESTED"} {
+		aConnection(t, store, name)
+		if err := channels.BindIdentity(ctx, admin.ChannelIdentity{
+			Channel: name, Account: account, Principal: "usr_ana",
+		}, "usr_admin"); err != nil {
+			t.Fatalf("bind %s: %v", name, err)
+		}
+	}
+
+	for name, account := range map[string]string{"acme": "U-TOP", "acme/slack": "U-NESTED"} {
+		_, bound, err := channels.Named(ctx, name)
+		if err != nil {
+			t.Fatalf("Named %s: %v", name, err)
+		}
+		if len(bound) != 1 || bound[0].Channel != name || bound[0].Account != account {
+			t.Errorf("Named(%s) bound = %+v", name, bound)
+		}
 	}
 }

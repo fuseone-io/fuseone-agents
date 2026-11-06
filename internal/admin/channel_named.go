@@ -69,8 +69,9 @@ func (c *Channels) identitiesOn(ctx context.Context, name string) ([]ChannelIden
 	}
 	out := make([]ChannelIdentity, 0, len(stored))
 	for _, row := range stored {
-		// The first slash ends the channel's half of a key, so a connection
-		// named with one in it does not own what the range also caught.
+		// The last slash ends the channel's half of a key, so the range also
+		// catches the bindings of a connection named under this one's, which are
+		// not this one's.
 		if keyChannel(row.Name) == name {
 			out = append(out, identityOfRow(row))
 		}
