@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -377,7 +378,7 @@ func TestRecordRegression_fromARunOfAnotherAgent_isRefused(t *testing.T) {
 	}
 	if _, err := foreign.Append(gocontext.Background(), domain.Step{
 		RunID: "run-foreign", Seq: 1, Kind: domain.StepRunStarted, AgentID: "someone-else",
-		Scope: domain.Scope{Company: "acme", Area: "finance"}, IdemKey: "run-foreign", VersionID: "v1",
+		Scope: domain.Scope{Company: "acme", Area: "cx"}, IdemKey: "run-foreign", VersionID: "v1",
 		At:      time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC),
 		Payload: []byte(`{"trigger":"manual","input_ref":"` + input + `"}`),
 	}); err != nil {
@@ -396,4 +397,102 @@ func TestRecordRegression_fromARunOfAnotherAgent_isRefused(t *testing.T) {
 	if len(corpus.recorded) != copies {
 		t.Fatalf("a run of another agent was copied into this corpus")
 	}
+}
+
+// The same agent can have an old run under another scope. Authority was checked on
+// the scope it is published in now, and the copy goes there, so that run's input
+// would cross the boundary as surely as another agent's.
+func TestRecordRegression_fromARunOfThisAgentInAnotherScope_isRefused(t *testing.T) {
+	t.Parallel()
+
+	corpus := &fakeCorpus{}
+	server, content := correctable(t, corpus)
+	bg := gocontext.Background()
+	input, err := content.Put(bg, "run-finance", 1, []byte(`{"secret":"finance"}`))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, err := server.store.(*ledger.Memory).Append(bg, domain.Step{
+		RunID: "run-finance", Seq: 1, Kind: domain.StepRunStarted, AgentID: "triage",
+		Scope: domain.Scope{Company: "acme", Area: "finance"}, IdemKey: "run-finance", VersionID: "v1",
+		At:      time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC),
+		Payload: []byte(`{"trigger":"manual","input_ref":"` + input + `"}`),
+	}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	foreign := correction(openapi.Expectation{Kind: "asks"})
+	foreign.Body.RunId = "run-finance"
+	resp, err := server.RecordRegression(inArea("cx", domain.RoleAuthor), foreign)
+	if err != nil {
+		t.Fatalf("RecordRegression: %v", err)
+	}
+	refused, ok := resp.(openapi.RecordRegression400ApplicationProblemPlusJSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want a refusal", resp)
+	}
+	if len(corpus.recorded) != 0 {
+		t.Fatal("a run of another scope was copied into this corpus")
+	}
+
+	absent := correction(openapi.Expectation{Kind: "asks"})
+	absent.Body.RunId = "run-that-never-was"
+	resp, err = server.RecordRegression(inArea("cx", domain.RoleAuthor), absent)
+	if err != nil {
+		t.Fatalf("RecordRegression: %v", err)
+	}
+	nothing, ok := resp.(openapi.RecordRegression400ApplicationProblemPlusJSONResponse)
+	if !ok {
+		t.Fatalf("response = %T", resp)
+	}
+	// Told apart, this answers whether a run exists in a scope you cannot read.
+	if strings.ReplaceAll(*refused.Detail, "run-finance", "X") !=
+		strings.ReplaceAll(*nothing.Detail, "run-that-never-was", "X") {
+		t.Fatalf("refused %q, absent %q: they must read the same", *refused.Detail, *nothing.Detail)
+	}
+}
+
+// Reading a run is not authority to copy it elsewhere. A person who can read finance
+// and publish in cx would otherwise carry finance's input into cx's corpus.
+func TestRecordRegression_byAuthorWhoCanReadTheOtherScope_isStillRefused(t *testing.T) {
+	t.Parallel()
+
+	corpus := &fakeCorpus{}
+	server, content := correctable(t, corpus)
+	bg := gocontext.Background()
+	input, err := content.Put(bg, "run-finance", 1, []byte(`{"secret":"finance"}`))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, err := server.store.(*ledger.Memory).Append(bg, domain.Step{
+		RunID: "run-finance", Seq: 1, Kind: domain.StepRunStarted, AgentID: "triage",
+		Scope: domain.Scope{Company: "acme", Area: "finance"}, IdemKey: "run-finance", VersionID: "v1",
+		At:      time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC),
+		Payload: []byte(`{"trigger":"manual","input_ref":"` + input + `"}`),
+	}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	request := correction(openapi.Expectation{Kind: "asks"})
+	request.Body.RunId = "run-finance"
+	resp, err := server.RecordRegression(inAreas(
+		map[string]domain.Role{"cx": domain.RoleAuthor, "finance": domain.RoleAuditor}), request)
+	if err != nil {
+		t.Fatalf("RecordRegression: %v", err)
+	}
+	if _, ok := resp.(openapi.RecordRegression400ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want a refusal", resp)
+	}
+}
+
+func inAreas(roles map[string]domain.Role) gocontext.Context {
+	grants := make([]domain.Grant, 0, len(roles))
+	for area, role := range roles {
+		grants = append(grants, domain.Grant{
+			Scope: domain.Scope{Company: "acme", Area: domain.AreaID(area)}, Role: role,
+		})
+	}
+	return auth.WithPrincipal(gocontext.Background(), domain.Principal{
+		ID: "usr_ana", Kind: domain.PrincipalUser, Grants: grants,
+	})
 }

@@ -102,7 +102,7 @@ func (s *Server) recordCorrection(
 	ctx context.Context, published domain.AgentSummary, body *openapi.RecordRegressionJSONRequestBody,
 ) (recorded domain.RegressionCase, refused, err error) {
 	err = s.regressions.Hold(ctx, published.ID, func(ctx context.Context) error {
-		input, readErr := s.occurrenceOf(ctx, published.ID, domain.RunID(body.RunId))
+		input, readErr := s.occurrenceOf(ctx, published, domain.RunID(body.RunId))
 		if readErr != nil {
 			refused = readErr
 			return nil
@@ -155,17 +155,26 @@ func (s *Server) DeleteRegression(
 	return openapi.DeleteRegression204Response{}, nil
 }
 
-// occurrenceOf reads back what one of this agent's runs was about.
+// occurrenceOf reads back what one of this agent's runs was about, in the scope it
+// is published in.
 //
-// Only this agent's. Authority was checked on the agent being corrected, and the
-// copy goes under its scope, so a run of another agent would carry content across
-// that boundary. It reads as absent, which says nothing about whether it exists.
+// Authority was checked on that scope and the copy goes there, so a run of another
+// agent, or an old run of this one under another scope, would carry content across
+// the boundary. Both read as absent, which says nothing about whether they exist.
+// The read is checked as well, because this hands a person a run's input.
 func (s *Server) occurrenceOf(
-	ctx context.Context, agent domain.AgentID, runID domain.RunID,
+	ctx context.Context, published domain.AgentSummary, runID domain.RunID,
 ) ([]byte, error) {
+	absent := fmt.Errorf("no such run: %s", runID)
 	steps, err := s.store.Read(ctx, runID, domain.FirstSeq)
-	if err != nil || len(steps) == 0 || steps[0].AgentID != agent {
-		return nil, fmt.Errorf("no such run: %s", runID)
+	if err != nil || len(steps) == 0 {
+		return nil, absent
+	}
+	if steps[0].AgentID != published.ID || steps[0].Scope != published.Scope {
+		return nil, absent
+	}
+	if err := auth.Require(ctx, domain.PermRunRead, steps[0].Scope); err != nil {
+		return nil, absent
 	}
 
 	var started domain.RunStartedPayload
