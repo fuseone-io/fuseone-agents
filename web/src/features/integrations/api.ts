@@ -10,6 +10,8 @@ export type ModelProvider = components["schemas"]["ModelProvider"];
 export type IntegrationHealth = components["schemas"]["IntegrationHealth"];
 export type GovernedConnector = components["schemas"]["GovernedConnector"];
 export type ConnectorInstance = components["schemas"]["ConnectorInstance"];
+export type ConnectorEvidenceConfig =
+  components["schemas"]["ConnectorEvidenceConfig"];
 export type ConnectorInstanceDetail =
   components["schemas"]["ConnectorInstanceDetail"];
 export type ConnectorInstanceInput =

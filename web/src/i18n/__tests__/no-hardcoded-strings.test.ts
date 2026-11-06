@@ -58,6 +58,8 @@ const PROPS =
  * makes on purpose. Translating `openai` would be worse than leaving it.
  */
 const SAMPLES = new Set([
+  "https://tenant.example.com",
+  "https://console.example.com",
   "FuseOne Agents",
   "Fuse",
   "One",
