@@ -132,6 +132,7 @@ func aConversation(t *testing.T) *conversing {
 	if _, err := pool.Exec(ctx, `truncate governed_external_attempts,
 		governed_ticket_events, governed_ticket_revisions, governed_tickets;
 		delete from channel_inbox;
+		delete from settings where kind = 'channel_identity';
 		delete from settings where kind like 'channel%';
 		truncate agent_specs; truncate agent_state;
 		truncate run_steps, runs, run_content`); err != nil {

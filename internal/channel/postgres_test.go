@@ -421,6 +421,7 @@ func channelStore(t *testing.T) (*channel.Postgres, *pgxpool.Pool) {
 	// test passed because a leftover conversation resolved for it, which is a
 	// test agreeing with something nobody wrote.
 	if _, err := pool.Exec(t.Context(), `
+		delete from settings where kind = 'channel_identity';
 		delete from settings where kind in ('channel', 'channel_conversation', 'channel_identity');
 		delete from admin_events`); err != nil {
 		t.Fatalf("clean the configuration: %v", err)
