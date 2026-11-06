@@ -1984,6 +1984,32 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /policies/{code}:
+    get:
+      tags: [policies]
+      operationId: getPolicy
+      summary: Read one policy as it is authored
+      description: |
+        What PUT stored, for a client deciding whether the rule drifted, and
+        readable by whoever can read the list: an author who cannot see the rule
+        that stopped their agent cannot act on it.
+
+        The rule alone. `hits` is a count over a period and moves with nobody
+        having written anything, so it stays on the list, and so does the hash
+        naming the whole set.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The policy as stored.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Policy' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
     put:
       tags: [policies]
       operationId: putPolicy

@@ -1401,7 +1401,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one policy as it is authored
+         * @description What PUT stored, for a client deciding whether the rule drifted, and
+         *     readable by whoever can read the list: an author who cannot see the rule
+         *     that stopped their agent cannot act on it.
+         *
+         *     The rule alone. `hits` is a count over a period and moves with nobody
+         *     having written anything, so it stays on the list, and so does the hash
+         *     naming the whole set.
+         */
+        get: operations["getPolicy"];
         /**
          * Write a policy
          * @description Creating and editing are the same call: the code is the identity, set
@@ -8035,6 +8045,31 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Policy"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     putPolicy: {

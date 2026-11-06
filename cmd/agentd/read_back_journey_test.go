@@ -269,6 +269,73 @@ func roundTrip(t *testing.T, in map[string]any) map[string]any {
 	return out
 }
 
+func TestReadBack_policy_putWhatGetAnsweredChangesNothing(t *testing.T) {
+	world := newReadBackWorld(t)
+	const base = "/policies/"
+	cases := []readBack{{
+		name: "every field, reaching named scopes and agents, switched off",
+		path: base + "READBACK-FULL",
+		body: map[string]any{
+			"name": "No bulk export", "owner": "Security", "reason": "Ask the data owner first.",
+			"resource": "crm.*", "effects": []string{"write", "destructive"},
+			"reach":  "scopes",
+			"scopes": []map[string]any{{"company": "acme", "area": "finance"}, {"company": "acme", "area": ""}},
+			"agents": []string{"triage", "developer"},
+			"conditions": []map[string]any{
+				{"field": "tool.id", "op": "eq", "value": "crm.export"},
+				{"field": "args.limit", "op": "gt", "value": "100"},
+			},
+			"effect": "escalate", "mode": "enforce", "enabled": false,
+		},
+	}, {
+		name: "an empty resource covers every tool, and says so",
+		path: base + "READBACK-ANY",
+		body: map[string]any{
+			"name": "Watch everything", "resource": "", "effect": "deny", "mode": "monitor",
+			"effects": []string{}, "scopes": []map[string]any{}, "agents": []string{}, "conditions": []map[string]any{},
+		},
+		normalised: map[string]any{"resource": "*"},
+	}}
+	assertEveryAcceptedFieldIsWalked(t, base+"{code}", cases)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) { world.walk(t, c) })
+	}
+}
+
+// Every decision records the set's hash. Putting a rule back unchanged has to
+// name the same rules, or a client reconciling on a schedule would make every
+// decision after it look like it ran under a different policy.
+func TestReadBack_policy_puttingTheAnswerBack_keepsTheHashAndWhatThePutAnswered(t *testing.T) {
+	world := newReadBackWorld(t)
+	const path = "/policies/READBACK-HASH"
+	t.Cleanup(func() { world.send(t, http.MethodDelete, path, nil) })
+
+	written := func(body any) (map[string]any, string) {
+		t.Helper()
+		code, raw := world.send(t, http.MethodPut, path, body)
+		if code != http.StatusOK {
+			t.Fatalf("PUT = %d: %s", code, raw)
+		}
+		var out struct {
+			Policy     map[string]any `json:"policy"`
+			PolicyHash string         `json:"policyHash"`
+		}
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatalf("decode %s: %v", raw, err)
+		}
+		return out.Policy, out.PolicyHash
+	}
+
+	answered, hash := written(map[string]any{"name": "Rule", "effect": "deny", "mode": "enforce"})
+	read, _ := world.get(t, path)
+	if !reflect.DeepEqual(answered, read) {
+		t.Errorf("PUT and GET answer different things\n  put: %v\n  get: %v", answered, read)
+	}
+	if _, again := written(read); again != hash {
+		t.Errorf("hash = %s after an unchanged PUT, want %s", again, hash)
+	}
+}
+
 func TestReadBack_channel_putWhatGetAnsweredChangesNothing(t *testing.T) {
 	world := newReadBackWorld(t)
 	const base = "/admin/channels/"

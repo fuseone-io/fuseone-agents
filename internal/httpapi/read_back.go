@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 )
@@ -94,6 +95,32 @@ func (s *Server) GetChannel(ctx context.Context, req openapi.GetChannelRequestOb
 	}
 	return openapi.GetChannel404ApplicationProblemPlusJSONResponse{
 		NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
+	}, nil
+}
+
+// GetPolicy takes what the list takes, not what the write takes. A policy
+// constrains people who hold nothing in the administrative scope, and being
+// stopped by a rule you cannot read is unactionable.
+func (s *Server) GetPolicy(ctx context.Context, req openapi.GetPolicyRequestObject) (openapi.GetPolicyResponseObject, error) {
+	if len(auth.VisibleScopes(ctx, domain.PermPolicyRead)) == 0 {
+		return openapi.GetPolicy403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermPolicyRead, domain.Scope{}),
+		}, nil
+	}
+	if s.policies == nil {
+		return nil, errNoAdministration
+	}
+	set, err := s.policies.Active(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get policy: %w", err)
+	}
+	for _, p := range set.Policies {
+		if p.Code == req.Code {
+			return openapi.GetPolicy200JSONResponse(policyFrom(p)), nil
+		}
+	}
+	return openapi.GetPolicy404ApplicationProblemPlusJSONResponse{
+		NotFoundApplicationProblemPlusJSONResponse: notFound(req.Code),
 	}, nil
 }
 

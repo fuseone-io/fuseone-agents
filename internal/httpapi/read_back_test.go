@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/policy"
 )
 
 /*
@@ -283,6 +285,116 @@ func TestGetChannel_noAdministrationStore_failsLikeItsNeighbour(t *testing.T) {
 	t.Parallel()
 	s := NewServer(ledger.NewMemory(), "test")
 	_, err := s.GetChannel(as(domain.RoleCurator), openapi.GetChannelRequestObject{Name: "acme-slack"})
+	if !errors.Is(err, errNoAdministration) {
+		t.Fatalf("err = %v, want errNoAdministration", err)
+	}
+}
+
+func policyServer(store *ledger.Memory) *Server {
+	return NewServer(store, "test").WithPolicies(&policyStore{set: policy.Set{
+		Hash: "pol_now",
+		Policies: []domain.Policy{{
+			Code: "POL-114", Name: "No bulk export", Effect: domain.PolicyDeny, Mode: domain.PolicyEnforce,
+			Reach: domain.ReachScopes, Enabled: true,
+			Scopes: []domain.Scope{{Company: "acme", Area: "finance"}},
+		}},
+	}})
+}
+
+func TestGetPolicy_holdingNoPolicyReadAnywhere_refusesTheSameWhetherItExistsOrNot(t *testing.T) {
+	t.Parallel()
+	s := policyServer(ledger.NewMemory())
+	for name, caller := range map[string]context.Context{
+		"nobody signed in": context.Background(),
+		"somebody with no grants": auth.WithPrincipal(context.Background(), domain.Principal{
+			ID: "usr_ana", Kind: domain.PrincipalUser,
+		}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			there, err := s.GetPolicy(caller, openapi.GetPolicyRequestObject{Code: "POL-114"})
+			if err != nil {
+				t.Fatalf("GetPolicy: %v", err)
+			}
+			absent, err := s.GetPolicy(caller, openapi.GetPolicyRequestObject{Code: "POL-404"})
+			if err != nil {
+				t.Fatalf("GetPolicy: %v", err)
+			}
+			if _, refused := there.(openapi.GetPolicy403ApplicationProblemPlusJSONResponse); !refused {
+				t.Fatalf("existing = %T, want 403", there)
+			}
+			if !reflect.DeepEqual(there, absent) {
+				t.Errorf("the refusal says whether it exists\n there: %#v\nabsent: %#v", there, absent)
+			}
+		})
+	}
+}
+
+// The list answers every rule to anybody holding policy:read anywhere, so the
+// rule that stopped an author's agent is readable from the author's own area,
+// even one written for another. A read by name that narrowed this would make
+// the two answers disagree.
+func TestGetPolicy_anAuthorInAnotherArea_readsTheRuleAsTheListDoes(t *testing.T) {
+	t.Parallel()
+	resp, err := policyServer(ledger.NewMemory()).
+		GetPolicy(inArea("cx", domain.RoleAuthor), openapi.GetPolicyRequestObject{Code: "POL-114"})
+	if err != nil {
+		t.Fatalf("GetPolicy: %v", err)
+	}
+	got, ok := resp.(openapi.GetPolicy200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want 200", resp)
+	}
+	if got.Code != "POL-114" || got.Name != "No bulk export" || got.Scopes == nil || len(*got.Scopes) != 1 {
+		t.Errorf("policy = %+v", got)
+	}
+}
+
+func TestGetPolicy_codeNobodyWrote_isNotFound(t *testing.T) {
+	t.Parallel()
+	resp, err := policyServer(ledger.NewMemory()).
+		GetPolicy(inArea("cx", domain.RoleAuthor), openapi.GetPolicyRequestObject{Code: "POL-11"})
+	if err != nil {
+		t.Fatalf("GetPolicy: %v", err)
+	}
+	if _, absent := resp.(openapi.GetPolicy404ApplicationProblemPlusJSONResponse); !absent {
+		t.Fatalf("response = %T, want 404", resp)
+	}
+}
+
+// A count over a period moves with nobody having written anything, and a client
+// diffing this body would read every decision as drift.
+func TestGetPolicy_ruleThatDecidedSomething_answersNoCount(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	seedPolicyDecision(t, store, "run-1", "POL-114")
+	s := policyServer(store)
+
+	listed, err := s.ListPolicies(as(domain.RoleCurator), openapi.ListPoliciesRequestObject{})
+	if err != nil {
+		t.Fatalf("ListPolicies: %v", err)
+	}
+	if page := listed.(openapi.ListPolicies200JSONResponse); page.Items[0].Hits == nil {
+		t.Fatal("the list counts nothing, so nothing here proves the read leaves it out")
+	}
+
+	resp, err := s.GetPolicy(as(domain.RoleCurator), openapi.GetPolicyRequestObject{Code: "POL-114"})
+	if err != nil {
+		t.Fatalf("GetPolicy: %v", err)
+	}
+	got, ok := resp.(openapi.GetPolicy200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want 200", resp)
+	}
+	if got.Hits != nil {
+		t.Errorf("hits = %d, want it left out", *got.Hits)
+	}
+}
+
+func TestGetPolicy_noAdministrationStore_failsLikeItsNeighbour(t *testing.T) {
+	t.Parallel()
+	s := NewServer(ledger.NewMemory(), "test")
+	_, err := s.GetPolicy(as(domain.RoleCurator), openapi.GetPolicyRequestObject{Code: "POL-114"})
 	if !errors.Is(err, errNoAdministration) {
 		t.Fatalf("err = %v, want errNoAdministration", err)
 	}
