@@ -2159,7 +2159,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one tool server as it is configured
+         * @description What PUT stored, for a client deciding whether the server drifted. Credentials, variables and configuration files are never returned; the has* fields report that one is stored, and sending the answer back unchanged keeps them.
+         *     Configuration only. Health, call authentication and the egress statement vary with what a worker saw and who is asking, with nobody having written anything, so they stay on the listing. A server a worker reports and nobody configured here is on the listing too and is 404 here: PUT wrote nothing a client could compare it to.
+         */
+        get: operations["getMCPServer"];
         /**
          * Configure a tool server
          * @description Adding a server changes what agents can do, so it is recorded like any other administrative change. The tools it offers arrive unclassified and do nothing until somebody says what they do; that stays a separate act.
@@ -9202,6 +9207,31 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getMCPServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The server's stored configuration. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPServer"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     putMCPServer: {

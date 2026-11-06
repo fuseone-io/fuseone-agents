@@ -1,9 +1,46 @@
 package httpapi
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 )
+
+/*
+Reading one resource by name, for a client that manages it declaratively.
+
+Each read answers what a PUT stored, so a client can tell whether a resource
+drifted without reading a whole listing. The authority is checked before the
+lookup, so a refusal says nothing about whether the name exists, and a secret
+reports only that one is stored.
+*/
+
+// GetMCPServer answers a server configured here. One a worker reports from a
+// flag is on the listing, and has no stored form to compare with.
+func (s *Server) GetMCPServer(ctx context.Context, req openapi.GetMCPServerRequestObject) (openapi.GetMCPServerResponseObject, error) {
+	if _, forbidden := s.configurer(ctx); forbidden != nil {
+		return openapi.GetMCPServer403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
+		}, nil
+	}
+	if s.integrations == nil {
+		return nil, errNoAdministration
+	}
+	servers, err := s.integrations.MCPServers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get MCP server: %w", err)
+	}
+	for _, server := range servers {
+		if server.Name == req.Name {
+			return openapi.GetMCPServer200JSONResponse(mcpServerConfig(server)), nil
+		}
+	}
+	return openapi.GetMCPServer404ApplicationProblemPlusJSONResponse{
+		NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
+	}, nil
+}
 
 // mcpServerConfig is a server as it was configured, before anything observed
 // about it is added.

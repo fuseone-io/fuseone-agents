@@ -3131,6 +3131,35 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /admin/integrations/mcp-servers/{name}:
+    get:
+      tags: [admin]
+      operationId: getMCPServer
+      summary: Read one tool server as it is configured
+      description: >
+        What PUT stored, for a client deciding whether the server drifted.
+        Credentials, variables and configuration files are never returned; the
+        has* fields report that one is stored, and sending the answer back
+        unchanged keeps them.
+
+        Configuration only. Health, call authentication and the egress
+        statement vary with what a worker saw and who is asking, with nobody
+        having written anything, so they stay on the listing. A server a worker
+        reports and nobody configured here is on the listing too and is 404
+        here: PUT wrote nothing a client could compare it to.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The server's stored configuration.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MCPServer' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
     put:
       tags: [admin]
       operationId: putMCPServer
