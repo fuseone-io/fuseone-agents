@@ -167,6 +167,18 @@ given. It does not offer "everything about this person" as a query, because it
 does not index by data subject — a run is identified by agent, scope and time,
 not by whose data it touched.
 
+**It follows a run into the regression corpus.** A correction keeps its own copy of
+what a run was about, under the agent rather than the run, and every battery opens a
+new simulated run holding that input again. Erasing a run also erases the copy of any
+correction made from it, that correction's note, and the content of the simulated runs
+that replayed it. The admin event counts those corrections as `corpusCases`. Two
+corrections made from identical input share one copy, so erasing it affects both. The
+case itself stays, with no input, and is reported as a gap.
+
+**Uploaded simulation sets are not reached.** A set an author uploads is filed under
+its simulation and has no run to follow. An operator has to name those simulations'
+runs, and the file itself ages out through retention.
+
 **What survives an erasure.** The chain: that a run happened, which agent, which
 tool, what the Gate decided, and the digest of content that no longer exists.
 That much is the deliberate trade — a record of processing is what the platform
@@ -198,6 +210,11 @@ it erased anything.
 
 The window is read on every sweep rather than cached, so shortening retention
 takes effect on the next run.
+
+Retention applies to the regression corpus too. A correction's copy ages out like any
+other content, and its note is cleared with it. The window is a promise the operator
+configured, and a safety net is not a reason to break it. The case stays as a visible
+gap, and a person has to record it again to have it checked.
 
 The same sweep deletes operational channel rows older than the window:
 `channel_inbox` by arrival time, `channel_deliveries` by post time, and

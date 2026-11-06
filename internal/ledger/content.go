@@ -172,6 +172,28 @@ func eraseOwner(
 	return int(tag.RowsAffected()), nil
 }
 
+/*
+EraseRefsTx removes named payloads, leaving the same tombstone.
+
+Per owner is too wide for a corpus: its copies are filed under the agent, and a
+request about one person must not take every correction that agent has.
+*/
+func (c *Content) EraseRefsTx(
+	ctx context.Context, tx pgx.Tx, refs []string, reason string,
+) (int, error) {
+	if len(refs) == 0 {
+		return 0, nil
+	}
+	tag, err := tx.Exec(ctx, `
+		update run_content
+		set bytes = null, erased_at = now(), erased_reason = $2
+		where ref = any($1::text[]) and erased_at is null`, refs, reason)
+	if err != nil {
+		return 0, fmt.Errorf("ledger: erase content by reference: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
+}
+
 // ErasePastTx is retention: everything stored before a moment goes.
 //
 // The moment is computed by the caller from what the installation configured,

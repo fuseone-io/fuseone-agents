@@ -18,6 +18,7 @@ import (
 // it is the payload going while the record of it happening stays.
 type Content interface {
 	EraseTx(ctx context.Context, tx pgx.Tx, kind, owner, reason string) (int, error)
+	EraseRefsTx(ctx context.Context, tx pgx.Tx, refs []string, reason string) (int, error)
 	ErasePastTx(ctx context.Context, tx pgx.Tx, before time.Time, reason string) (int, error)
 }
 
@@ -63,6 +64,11 @@ func (e *Erasures) ForSubject(
 	if err != nil {
 		return 0, err
 	}
+	corpus, err := e.eraseCorpusOf(ctx, tx, runs)
+	if err != nil {
+		return 0, err
+	}
+	erased += corpus.objects
 	memoryRecords, err := e.markMemorySourcesErased(ctx, tx, runs, by, e.clock())
 	if err != nil {
 		return 0, err
@@ -74,7 +80,7 @@ func (e *Erasures) ForSubject(
 		Principal: by, Scope: scope, Action: "content.erased", Target: "content",
 		Detail: map[string]any{
 			"runs": len(runs), "objects": erased, "reason": reason,
-			"memoryRecords": memoryRecords,
+			"memoryRecords": memoryRecords, "corpusCases": corpus.cases,
 		},
 	}); err != nil {
 		return 0, err
