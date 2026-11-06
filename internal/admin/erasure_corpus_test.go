@@ -901,3 +901,112 @@ func TestForSubject_leavesAnotherKindOfContentUnderTheSameOwnerId(t *testing.T) 
 		t.Fatalf("content of another kind: %v", err)
 	}
 }
+
+// A request about one person can name thousands of runs, and the fence is held for
+// all of it. Each run here also has a correction and a replay, so nothing about the
+// request is smaller for being asked about more runs.
+func TestForSubject_commandsDoNotGrowWithTheRunsItNames(t *testing.T) {
+	erasuresFor(t, time.Now)
+	seeded := openPool(t)
+	pool, counter := countingPool(t)
+	erasures := admin.NewErasures(pool, ledger.NewContent(pool),
+		admin.NewRetention(pool, settings.NewStore(pool, testVault(t))), regression.NewStore(pool))
+	ctx := context.Background()
+
+	measure := func(named int) int64 {
+		t.Helper()
+		cleanCorpus(t, seeded)
+		content := ledger.NewContent(seeded)
+		runs := make([]domain.RunID, 0, named)
+		for at := range named {
+			// Different on every pass: identical bytes would land on the last pass's
+			// tombstone, and there would be no copy left to count.
+			run := fresh("run-named-")
+			input := []byte(fmt.Sprintf(`{"email":"person-%d@example.com","run":%q}`, at, run))
+			runs = append(runs, run)
+			inputRef, err := content.Put(ctx, run, 1, input)
+			if err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+			open(t, seeded, "suporte", run, domain.RunStartedPayload{Trigger: "manual", InputRef: inputRef})
+			copied, err := content.PutFor(ctx, "regression", "suporte", 1, input)
+			if err != nil {
+				t.Fatalf("PutFor: %v", err)
+			}
+			recordCorrection(t, seeded, correction{"suporte", fmt.Sprintf("reg-%d", at), string(run), copied, "note"})
+			replayRun := fresh("run-replay-")
+			replay(t, seeded, "suporte", replayRun, fmt.Sprintf("reg-%d", at))
+			if _, err := content.Put(ctx, replayRun, 1, input); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+		}
+		counter.commands.Store(0)
+		erased, err := erasures.ForSubject(ctx, "dpo", domain.Scope{}, runs, "request")
+		if err != nil {
+			t.Fatalf("ForSubject: %v", err)
+		}
+		// Own input, the copy and the replay's input, for each run named.
+		if erased != 3*named {
+			t.Fatalf("erased = %d objects for %d runs, want %d", erased, named, 3*named)
+		}
+		return counter.commands.Load()
+	}
+
+	// The first pass also pays for a new connection learning the database's types.
+	measure(1)
+	one, many := measure(1), measure(100)
+	if one != many {
+		t.Fatalf("commands = %d for one named run, %d for a hundred", one, many)
+	}
+}
+
+// One statement over many runs must still stop at those runs, and at this kind.
+func TestForSubject_namingManyRuns_leavesOtherRunsAndKindsAlone(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+
+	first, second, other := fresh("run-a-"), fresh("run-b-"), fresh("run-c-")
+	refs := make([]string, 0, 2)
+	for _, run := range []domain.RunID{first, second} {
+		ref, err := content.Put(ctx, run, 1, []byte("named "+string(run)))
+		if err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+		refs = append(refs, ref)
+	}
+	kept, err := content.Put(ctx, other, 1, []byte("not named"))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	sameOwner, err := content.PutFor(ctx, "case", string(first), 1, []byte("an uploaded set"))
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+
+	erased, err := erasures.ForSubject(ctx, "dpo", domain.Scope{}, []domain.RunID{first, second}, "request")
+	if err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+	if erased != 2 {
+		t.Fatalf("erased = %d, want 2", erased)
+	}
+
+	for _, ref := range refs {
+		if _, err := content.Get(ctx, ref); !errors.Is(err, ledger.ErrErased) {
+			t.Errorf("a named run's content: err = %v, want erased", err)
+		}
+	}
+	// The tombstone says why, and an erasure nobody can account for looks like loss.
+	var reason string
+	if err := pool.QueryRow(ctx, `select erased_reason from run_content where ref = $1`,
+		refs[0]).Scan(&reason); err != nil || reason != "subject" {
+		t.Errorf("reason = %q, %v; want subject", reason, err)
+	}
+	for name, ref := range map[string]string{"a run nobody named": kept, "another kind under that id": sameOwner} {
+		if _, err := content.Get(ctx, ref); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}

@@ -89,7 +89,7 @@ func (s postgresContentStore) Erase(
 		return 0, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	erased, err := s.EraseTx(ctx, tx, kind, owner, reason)
+	erased, err := s.EraseOwnersTx(ctx, tx, kind, []string{owner}, reason)
 	if err != nil {
 		return 0, err
 	}

@@ -174,31 +174,29 @@ func (c *Content) Metadata(ctx context.Context, ref string) (domain.ContentMetad
 }
 
 /*
-EraseTx removes everything one owner's content holds, leaving a tombstone.
+EraseOwnersTx removes everything these owners' content holds, leaving tombstones.
 
 This is per-subject erasure (NF-09), and it reaches the referenced content
 rather than the ledger: the step keeps its reference and its digest, neither
 changes, and the hash chain is untouched. That is the whole reason bulky
 content was segregated in the first place (AU-04).
 
+One statement however many owners: a request about one person can name thousands of
+runs, and everything else that wants their corpus is waiting while this runs.
+
 Erasing what is already erased is not an error. The caller is asking for a
 state, not for an event, and a retry after a failure must not refuse.
 */
-func (c *Content) EraseTx(
-	ctx context.Context, tx pgx.Tx, kind, owner, reason string,
+func (c *Content) EraseOwnersTx(
+	ctx context.Context, tx pgx.Tx, kind string, owners []string, reason string,
 ) (int, error) {
-	return eraseOwner(ctx, tx, kind, owner, reason)
-}
-
-func eraseOwner(
-	ctx context.Context, conn contentExecutor, kind, owner, reason string,
-) (int, error) {
-	tag, err := conn.Exec(ctx, `
+	tag, err := tx.Exec(ctx, `
 		update run_content
 		set bytes = null, erased_at = now(), erased_reason = $3
-		where owner_kind = $1 and run_id = $2 and erased_at is null`, kind, owner, reason)
+		where owner_kind = $1 and run_id = any($2::text[]) and erased_at is null`,
+		kind, owners, reason)
 	if err != nil {
-		return 0, fmt.Errorf("ledger: erase content of %s: %w", owner, err)
+		return 0, fmt.Errorf("ledger: erase content of %d owners: %w", len(owners), err)
 	}
 	return int(tag.RowsAffected()), nil
 }
