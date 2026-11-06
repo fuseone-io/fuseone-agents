@@ -35,8 +35,10 @@ const KindChannelIdentity settings.Kind = "channel_identity"
 // ErrNoAccount and ErrNoPrincipal are the two halves nothing can be inferred
 // from.
 var (
-	ErrNoAccount   = errors.New("admin: a binding needs a channel account")
-	ErrNoPrincipal = errors.New("admin: a binding needs somebody to bind it to")
+	ErrNoConnection     = errors.New("admin: a binding needs a connection that exists")
+	ErrAccountSeparator = errors.New("admin: a channel account cannot hold a slash")
+	ErrNoAccount        = errors.New("admin: a binding needs a channel account")
+	ErrNoPrincipal      = errors.New("admin: a binding needs somebody to bind it to")
 )
 
 // ChannelIdentity is one account, and who it speaks for.
@@ -119,6 +121,8 @@ func (c *Channels) BindIdentity(
 		return ErrNoAccount
 	case strings.TrimSpace(string(id.Principal)) == "":
 		return ErrNoPrincipal
+	case strings.Contains(id.Account, "/"):
+		return ErrAccountSeparator
 	}
 
 	value, err := json.Marshal(map[string]string{
@@ -131,6 +135,23 @@ func (c *Channels) BindIdentity(
 
 	key := identityKey(id.Channel, id.Account)
 	guard := func(ctx context.Context, conn settings.DB) error {
+		// The connection's lock first, the one DeleteChannel holds, and its existence
+		// judged under it. A bind that checked and then wrote could land after the
+		// delete, and the binding would wait there for the next connection to take the
+		// name, carrying somebody's authority onto it.
+		if err := lockChannel(ctx, conn, id.Channel); err != nil {
+			return err
+		}
+		var exists bool
+		if err := conn.QueryRow(ctx, `
+			select exists (select 1 from settings
+				where scope_kind = $1 and kind = $2 and name = $3)`,
+			string(settings.ScopeInstallation), string(channel.KindChannel), id.Channel).Scan(&exists); err != nil {
+			return fmt.Errorf("admin: read the connection %s: %w", id.Channel, err)
+		}
+		if !exists {
+			return fmt.Errorf("%w: %s", ErrNoConnection, id.Channel)
+		}
 		return lockIdentity(ctx, conn, key)
 	}
 	return writeGuarded(ctx, c.pool, c.settings, guard, folded{
@@ -149,6 +170,26 @@ func (c *Channels) BindIdentity(
 			"principal": string(id.Principal),
 		},
 	})
+}
+
+// withdrawBindings removes every binding of a connection, wherever each is stored, and
+// records each one with who it spoke for. One statement however many there are, because
+// the connection's lock is held for all of it. channel_identity_connection is the one
+// reading of a key, shared with the rule the schema enforces (migration 0100).
+func withdrawBindings(ctx context.Context, conn settings.DB, name string, by domain.UserID) error {
+	if _, err := conn.Exec(ctx, `
+		with gone as (
+			delete from settings
+			where kind = $1 and channel_identity_connection(name) = $2
+			returning name, value
+		)
+		insert into admin_events (principal_id, action, target, detail)
+		select $3, 'channel.identity.unbound', gone.name,
+		       jsonb_build_object('reason', 'connection removed', 'principal', gone.value->>'principal')
+		from gone`, string(KindChannelIdentity), name, string(by)); err != nil {
+		return fmt.Errorf("admin: withdraw the bindings of %s: %w", name, err)
+	}
+	return nil
 }
 
 /*
@@ -281,17 +322,22 @@ diverge only by restore or by hand; on an unreadable one the value is the
 broken part outright. Either way the key is the thing that survived, because it
 is not inside what broke.
 
-One separator and the first one: a Slack account id has no slash, and the
-channel is the half an operator typed.
+One separator and the last one: an account never holds a slash, and BindIdentity
+refuses one, while the channel is the half an operator typed and may. The schema
+reads a key the same way (channel_identity_connection, migration 0100).
 */
 func keyChannel(key string) string {
-	channelName, _, _ := strings.Cut(key, "/")
-	return channelName
+	if at := strings.LastIndex(key, "/"); at >= 0 {
+		return key[:at]
+	}
+	return key
 }
 
 func keyAccount(key string) string {
-	_, account, _ := strings.Cut(key, "/")
-	return account
+	if at := strings.LastIndex(key, "/"); at >= 0 {
+		return key[at+1:]
+	}
+	return ""
 }
 
 /*

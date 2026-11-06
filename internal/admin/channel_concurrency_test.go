@@ -238,7 +238,9 @@ thing and the platform doing the other.
 */
 func TestBindAndUnbind_atOnce_leaveTheTrailAgreeingWithTheState(t *testing.T) {
 	pool := freshPool(t)
-	channels := admin.NewChannels(pool, settings.NewStore(pool, testVault(t)), onlySlack{})
+	store := settings.NewStore(pool, testVault(t))
+	aConnection(t, store, "acme-slack")
+	channels := admin.NewChannels(pool, store, onlySlack{})
 	ctx := context.Background()
 
 	barrier := hold(t, pool, "identity:acme-slack/U-RACED")

@@ -27,7 +27,8 @@ receive anything, and the two answers are allowed to differ.
 */
 
 func TestAccountsOn_namesWhereEachPersonIsReachable(t *testing.T) {
-	channels, _ := boundChannels(t)
+	channels, store := boundChannels(t)
+	aConnection(t, store, "acme-teams")
 	ctx := context.Background()
 
 	bind(t, channels, "acme-slack", "U-ana", "usr_ana")
@@ -68,6 +69,7 @@ func TestAccountsOn_somebodyNobodyAskedAbout_isNotReturned(t *testing.T) {
 
 func TestTicketAddresses_resolvesOnlyTheAccountsNamedOnThisConnection(t *testing.T) {
 	channels, store := boundChannels(t)
+	aConnection(t, store, "acme-teams")
 	bind(t, channels, "acme-slack", "U-ana", "usr_ana")
 	bind(t, channels, "acme-slack", "U-bruno", "usr_bruno")
 	bind(t, channels, "acme-teams", "U-ana", "usr_wrong_workspace")

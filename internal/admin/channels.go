@@ -608,6 +608,10 @@ The conversations go too. Leaving them would keep rows pointing at a connection
 that no longer exists, which reads as configured, delivers nothing, and is
 adopted by the next connection to take the name.
 
+So do the bindings, where adoption is worse: a binding is somebody's authority,
+and whoever holds that account on the next connection would hold it too, with
+nobody having decided that.
+
 One transaction, holding the connection's lock. As a loop of separate
 transactions it could stop halfway — conversations gone, connection still there
 — and a room attached while it ran was neither seen by the authority check nor
@@ -643,6 +647,9 @@ func (c *Channels) DeleteChannel(
 		}
 	}
 
+	if err := withdrawBindings(ctx, tx, name, by); err != nil {
+		return err
+	}
 	if err := c.settings.DeleteTx(ctx, tx, settings.ScopeInstallation,
 		domain.Scope{}, channel.KindChannel, name); err != nil {
 		return err

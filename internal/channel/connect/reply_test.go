@@ -62,7 +62,7 @@ func stored(t *testing.T) (*settings.Store, *pgxpool.Pool) {
 	t.Helper()
 	pool := testdb.Pool(t)
 	if _, err := pool.Exec(context.Background(),
-		`delete from settings where kind = 'channel'`); err != nil {
+		`delete from settings where kind = 'channel_identity'; delete from settings where kind = 'channel'`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 	v, err := vault.New(make([]byte, 32), "test")

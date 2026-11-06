@@ -32,8 +32,10 @@ func freshPool(t *testing.T) *pgxpool.Pool {
 	// behind, and the list grows with the package: a kind left off leaks
 	// between tests and fails whichever one happens to run second.
 	if _, err := pool.Exec(context.Background(),
-		`delete from settings where kind in ('tool_classification', 'stop',
-		           'channel', 'channel_conversation', 'channel_identity', 'branding');
+		// Bindings first: the schema refuses to remove a connection that has them.
+		`delete from settings where kind = 'channel_identity';
+		 delete from settings where kind in ('tool_classification', 'stop',
+		           'channel', 'channel_conversation', 'branding');
 		 delete from branding_assets;
 		 delete from admin_events`); err != nil {
 		t.Fatalf("clean: %v", err)
