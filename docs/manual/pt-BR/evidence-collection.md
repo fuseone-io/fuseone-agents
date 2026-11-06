@@ -63,10 +63,19 @@ Fonte que recusa a consulta ou nega a credencial é falha, nunca zero eventos.
 
 ## Como declarar uma fonte
 
-A configuração é feita pela API de administração: faça `PUT /admin/integrations/connectors/instances/{name}` com
-`"connector": "evidence"`, o escopo, um token de leitura em `token` e a declaração em
-`evidence`. O console mostra um resumo. Quem garante a leitura é a credencial, então
-use um token sem escopo de escrita.
+No console, abra **Integrações → Connectors** e escolha **Nova instância → Nova fonte
+de evidências**. Dê um nome e um escopo à instância. Comece por um dos dois exemplos
+abaixo, ou cole uma declaração em **Colar JSON**, e confira os campos no console da sua
+fonte. Quem garante a leitura é a credencial, então use um token sem escopo de escrita.
+Ele fica selado e nunca volta para a tela.
+
+O nome da instância entra no id da ferramenta: uma instância chamada `gateway` dá ao
+agente `evidence.gateway.check`, `evidence.gateway.collect` e
+`evidence.gateway.analyze`.
+
+A mesma declaração também pode ir pela API de administração:
+`PUT /admin/integrations/connectors/instances/{name}` com `"connector": "evidence"`, o
+escopo, o token em `token` e a declaração em `evidence`.
 
 O primeiro exemplo tem períodos relativos fixos, paginação por offset e recusa dentro
 de uma resposta 200. Ele marca como sem medição os eventos que o gateway não conseguiu

@@ -66,10 +66,19 @@ A source refusing a query or denying the credential is a failure, never zero eve
 
 ## Declaring a source
 
-Authoring goes through the administration API: `PUT /admin/integrations/connectors/instances/{name}` with
-`"connector": "evidence"`, its scope, a read-only token in `token`, and the
-declaration in `evidence`. The console shows a summary. Read-only is the
-credential's guarantee, so give it a token with no write scope.
+In the console, go to **Integrations → Connectors** and choose **New instance →
+New evidence source**. Give the instance a name and a scope. Start from one of the
+two examples below, or paste a declaration with **Paste JSON**, then check its fields
+against your source's console. Read-only is the credential's guarantee, so give it a
+token with no write scope. It is sealed and never comes back to the screen.
+
+The instance name becomes part of the tool's id, so an instance called `gateway` gives
+an agent `evidence.gateway.check`, `evidence.gateway.collect` and
+`evidence.gateway.analyze`.
+
+The same declaration can go through the administration API:
+`PUT /admin/integrations/connectors/instances/{name}` with `"connector": "evidence"`,
+its scope, the token in `token`, and the declaration in `evidence`.
 
 The first example has fixed relative periods, offset paging and a refusal inside a
 200 response. It marks events the gateway could not decrypt as unmeasured, and every
