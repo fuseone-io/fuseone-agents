@@ -236,6 +236,7 @@ func serve(args []string) error {
 		identity.routes.WithIdentityProviders(identityStore)
 		api = api.WithIdentity(identityStore, identity.oidc).
 			WithPeople(auth.NewPostgres(identity.pool)).
+			WithServiceAccounts(auth.NewPostgres(identity.pool)).
 			// The narrow list an agent's author picks recipients from. The
 			// same store, a different question: who may decide here, by name,
 			// with no authority over the directory needed to ask it.

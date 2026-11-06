@@ -53,8 +53,9 @@ type Store interface {
 
 // Server implements openapi.StrictServerInterface.
 type Server struct {
-	store   Store
-	version string
+	store           Store
+	serviceAccounts ServiceAccounts
+	version         string
 
 	// curator and tools back the administration area. Both are optional: an
 	// installation running on the in-memory ledger has no administration
