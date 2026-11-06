@@ -10,7 +10,6 @@ import (
 func mcpServerConfig(srv domain.MCPServer) openapi.MCPServer {
 	server := openapi.MCPServer{
 		Name: srv.Name, Enabled: srv.Enabled,
-		Args:               &srv.Args,
 		Transport:          ptr(openapi.Transport(srv.TransportOf())),
 		ProtocolMode:       ptr(openapi.MCPProtocolMode(srv.MCPProtocolModeOf())),
 		RateLimit:          rateLimitToResponse(srv.RateLimit),
@@ -33,6 +32,11 @@ func mcpServerConfig(srv domain.MCPServer) openapi.MCPServer {
 		Surface:               srv.Surface,
 		AcceptsLocalExecution: ptr(srv.AcceptsLocalExecution),
 		StdioEgress:           stdioEgressToResponse(srv.StdioEgress),
+	}
+	// Absent rather than null: the schema says array, and a pointer to a nil
+	// slice encodes as neither.
+	if len(srv.Args) > 0 {
+		server.Args = &srv.Args
 	}
 	server.Command = someString(srv.Command)
 	server.Url = someString(srv.URL)

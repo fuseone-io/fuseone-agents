@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -417,6 +419,31 @@ func TestListMCPUserCredentials_returnsPresenceOnly(t *testing.T) {
 		!body.Items[0].HasHeaders ||
 		body.Items[0].HasOAuth {
 		t.Fatalf("items = %+v, want only credential presence", body.Items)
+	}
+}
+
+// The schema says array or absent. A null is a third answer no client was told
+// about, and every server taking no arguments was giving it.
+func TestListIntegrations_serverWithNoArguments_leavesThemOutRatherThanAnsweringNull(t *testing.T) {
+	t.Parallel()
+	admin := &fakeAdmin{servers: []domain.MCPServer{{
+		Name: "crm", Transport: domain.TransportHTTP, URL: "https://crm.example.test", Enabled: true,
+	}, {
+		Name: "local", Command: "serve", Args: []string{"--stdio"}, Enabled: true,
+	}}}
+	resp, err := serverWith(t, admin).ListIntegrations(as(domain.RoleCurator), openapi.ListIntegrationsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListIntegrations: %v", err)
+	}
+	raw, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	if strings.Contains(string(raw), `"args":null`) {
+		t.Errorf("a server with no arguments answers null: %s", raw)
+	}
+	if !strings.Contains(string(raw), `"args":["--stdio"]`) {
+		t.Errorf("a server with arguments lost them: %s", raw)
 	}
 }
 
