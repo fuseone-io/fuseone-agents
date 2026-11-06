@@ -5,7 +5,7 @@ var evidenceConnector = Connector{
 	Name:     "Governed evidence collection",
 	Category: CategorySecurity,
 	Summary:  "Collect events from a declared source and analyze them in aggregate, with the coverage of every number stated.",
-	Maturity: MaturityPlanned,
+	Maturity: MaturityRuntime,
 	Guarantees: []string{
 		"queries are named declarations; a model supplies values that match a declared pattern, never query text",
 		"every count carries its window, scope and coverage; a number that hit a limit is reported as a floor",

@@ -37,6 +37,8 @@ func (l *Layer) invokeEvidenceNative(
 		return l.evidenceCheck(ctx, instance, call)
 	case "evidence.collect":
 		return l.evidenceCollect(ctx, instance, call)
+	case "evidence.analyze":
+		return l.evidenceAnalyze(ctx, instance, call)
 	default:
 		return failed(CodeConnectorUnavailable), nil
 	}
@@ -220,6 +222,9 @@ func evidenceApprovalBinding(instance Instance, op connectors.Operation, call en
 // evidenceDescription tells a model what this instance can answer: the schema
 // is per operation, and the queries are per instance.
 func evidenceDescription(instance Instance, op connectors.Operation) string {
+	if op.ID == "evidence.analyze" {
+		return evidenceAnalyzeDescription(instance, op)
+	}
 	if op.ID != "evidence.collect" {
 		return op.Summary
 	}
@@ -238,30 +243,4 @@ func evidenceDescription(instance Instance, op connectors.Operation) string {
 		fmt.Fprintf(&text, ": %s", query.Description)
 	}
 	return text.String()
-}
-
-// Native schemas return the provider's property map; the wire adds the envelope.
-func evidenceCheckSchema() map[string]any {
-	return map[string]any{}
-}
-
-func evidenceCollectSchema() map[string]any {
-	return map[string]any{
-		"query": map[string]any{"type": "string",
-			"description": "A query this instance declares. Omit when resuming."},
-		"params": map[string]any{"type": "object",
-			"additionalProperties": map[string]any{"type": "string"},
-			"description":          "A value for every parameter of the query."},
-		"window": map[string]any{"type": "object",
-			"properties": map[string]any{
-				"periodSeconds": map[string]any{"type": "integer", "minimum": 1,
-					"description": "How far back, for a source with fixed periods; the next accepted one is used."},
-				"from": map[string]any{"type": "string", "description": "RFC 3339 start, for a source with absolute ranges."},
-				"to":   map[string]any{"type": "string", "description": "RFC 3339 end, for a source with absolute ranges."},
-			},
-			"additionalProperties": false,
-			"description":          "The window. Omit for a lookup with no window, and when resuming."},
-		"resume": map[string]any{"type": "string",
-			"description": "The evidence reference of a partial collection, to continue it. Nothing else goes with it."},
-	}
 }
