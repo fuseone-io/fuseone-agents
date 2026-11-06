@@ -144,31 +144,13 @@ func (s *Store) Named(ctx context.Context, kind Kind, name string) ([]Setting, e
 // and then write must read under the same lock it writes under, or it decides
 // from a state that no longer holds by the time it acts.
 func (s *Store) ListTx(ctx context.Context, conn DB, kind Kind) ([]Setting, error) {
-	rows, err := conn.Query(ctx, `
-		select scope_kind, company_id, area_id, name, value, secret is not null, enabled, updated_by, updated_at
+	rows, err := conn.Query(ctx, `select `+settingColumns+`
 		from settings where kind = $1
 		order by scope_kind, company_id, area_id, name`, string(kind))
 	if err != nil {
 		return nil, fmt.Errorf("settings: list %s: %w", kind, err)
 	}
-	defer rows.Close()
-
-	var out []Setting
-	for rows.Next() {
-		var (
-			set           = Setting{Kind: kind}
-			scopeKind     string
-			company, area string
-		)
-		if err := rows.Scan(&scopeKind, &company, &area, &set.Name, &set.Value,
-			&set.HasSecret, &set.Enabled, &set.UpdatedBy, &set.UpdatedAt); err != nil {
-			return nil, err
-		}
-		set.ScopeKind = ScopeKind(scopeKind)
-		set.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
-		out = append(out, set)
-	}
-	return out, rows.Err()
+	return scanSettings(rows, kind)
 }
 
 /*

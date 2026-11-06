@@ -25,6 +25,7 @@ to an agent: the Gate decides effects after the run starts.
 // ChannelAdmin is channel configuration, declared here by the consumer.
 type ChannelAdmin interface {
 	List(ctx context.Context) ([]admin.Channel, error)
+	Named(ctx context.Context, name string) (admin.Channel, []admin.ChannelIdentity, error)
 	PutChannel(ctx context.Context, w admin.ChannelWrite) error
 	DeleteChannel(ctx context.Context, name string, by domain.UserID, governs bool) error
 	PutConversation(ctx context.Context, channelName string, conv admin.Conversation, by domain.UserID) error

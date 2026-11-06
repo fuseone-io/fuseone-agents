@@ -74,27 +74,20 @@ func (s *Server) GetChannel(ctx context.Context, req openapi.GetChannelRequestOb
 	if s.channels == nil {
 		return nil, errNoAdministration
 	}
-	configured, err := s.channels.List(ctx)
+	found, bound, err := s.channels.Named(ctx, req.Name)
+	if errors.Is(err, admin.ErrChannelUnknown) {
+		return openapi.GetChannel404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
+		}, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get channel: %w", err)
 	}
-	for _, c := range configured {
-		if c.Name != req.Name {
-			continue
-		}
-		bound, err := s.channels.Identities(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("get channel identities: %w", err)
-		}
-		out := channelFrom(c, bound, nil)
-		// Left out, not empty. Who interacted changes with nobody having
-		// written anything, and an empty list would say nobody did.
-		out.SeenAccounts = nil
-		return openapi.GetChannel200JSONResponse(out), nil
-	}
-	return openapi.GetChannel404ApplicationProblemPlusJSONResponse{
-		NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
-	}, nil
+	out := channelFrom(found, bound, nil)
+	// Left out, not empty. Who interacted changes with nobody having
+	// written anything, and an empty list would say nobody did.
+	out.SeenAccounts = nil
+	return openapi.GetChannel200JSONResponse(out), nil
 }
 
 // GetPolicy takes what the list takes, not what the write takes. A policy

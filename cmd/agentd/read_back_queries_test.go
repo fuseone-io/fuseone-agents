@@ -123,6 +123,19 @@ func readsByName() []readByName {
 				"kind": "openai_compatible", "baseUrl": "https://models.example.test", "apiKey": "secret-of-" + n,
 			})
 		},
+	}, {
+		name: "channel",
+		path: func(n string) string { return "/admin/channels/" + n },
+		seed: func(t *testing.T, w *readBackWorld, n string) {
+			t.Helper()
+			path := "/admin/channels/" + n
+			w.removeAtTheEnd(t, path)
+			w.removeAtTheEnd(t, path+"/identities/U-1")
+			w.put(t, path, map[string]any{"kind": "slack", "token": "secret-of-" + n})
+			w.put(t, path+"/conversations/C-1-"+n, map[string]any{"company": "default", "area": "platform"})
+			w.put(t, path+"/conversations/C-2-"+n, map[string]any{"company": "default", "area": "platform"})
+			w.put(t, path+"/identities/U-1", map[string]any{"principal": "usr_ana"})
+		},
 	}}
 }
 
