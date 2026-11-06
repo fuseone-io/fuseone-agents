@@ -40,6 +40,12 @@ export function SimulationSummary({ report }: { report: SimulationReport }) {
             />
           </>
         )}
+        {(report.erased ?? 0) > 0 && (
+          <Figure
+            label={t("correction.tallyErased")}
+            value={report.erased ?? 0}
+          />
+        )}
         <Figure label={t("simulation.tallyCases")} value={counted.cases} />
         <Figure
           label={t("simulation.tallyFinished")}

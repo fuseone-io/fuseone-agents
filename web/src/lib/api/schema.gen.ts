@@ -3207,6 +3207,8 @@ export interface components {
             outcome?: string;
             outcomeState?: components["schemas"]["SimulationOutcomeState"];
             reason?: string;
+            /** @description The case could not run because its input was erased. */
+            erased?: boolean;
             /** @description Why this case did not run, when it did not. */
             error?: string;
         };
@@ -3220,6 +3222,11 @@ export interface components {
             held?: number;
             /** @description Corrections that stopped standing. */
             broken?: number;
+            /**
+             * @description Corrections that could not run because their input was erased.
+             *     Neither held nor broken: coverage this battery does not have.
+             */
+            erased?: number;
             /**
              * @description Cases whose model is no longer the one they last held against.
              *

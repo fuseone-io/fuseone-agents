@@ -36,7 +36,7 @@ func watchDrift(ctx context.Context, p *workerParts, store *settings.Store) {
 	notice := channel.NewNotice(
 		channel.NewConfigured(store), channel.NewRouter(connect.New(store)))
 
-	watch := drift.New(corpora, p.store, folded{p.store}, notice, slog.Default())
+	watch := drift.New(corpora, p.store, folded{p.store}, notice, slog.Default()).WithErased(corpora)
 	rerun := drift.NewRerun(corpora,
 		p.store, regression.NewCorpus(corpora, ledger.NewContent(p.configPool)),
 		p.opener(), slog.Default()).Every(drift.Default)

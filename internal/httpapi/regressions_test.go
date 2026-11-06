@@ -3,6 +3,7 @@ package httpapi
 import (
 	gocontext "context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -201,5 +202,76 @@ func TestRecordRegression_twiceFromTheSameRun_replacesRatherThanDuplicates(t *te
 	// twice is one complaint refined, not two cases to satisfy.
 	if corpus.recorded[0].ID != corpus.recorded[1].ID {
 		t.Errorf("ids %q and %q", corpus.recorded[0].ID, corpus.recorded[1].ID)
+	}
+}
+
+func corpusSimulation() openapi.StartSimulationRequestObject {
+	return openapi.StartSimulationRequestObject{
+		AgentId: "triage",
+		Params:  openapi.StartSimulationParams{IdempotencyKey: "corpus-after-erasure"},
+		Body:    &openapi.StartSimulationJSONRequestBody{Corpus: ptr(true)},
+	}
+}
+
+func TestStartSimulation_corpusWithAnErasedCase_runsTheOthers(t *testing.T) {
+	t.Parallel()
+
+	corpus := &fakeCorpus{}
+	server, content := correctable(t, corpus)
+	ctx := inArea("cx", domain.RoleAuthor)
+	bg := gocontext.Background()
+	kept, err := content.PutFor(bg, "regression", "triage", 1, []byte(`{"assunto":"kept"}`))
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	gone, err := content.PutFor(bg, "regression", "other", 1, []byte(`{"assunto":"gone"}`))
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	if _, err := content.Erase(bg, "regression", "other", "retention"); err != nil {
+		t.Fatalf("Erase: %v", err)
+	}
+	corpus.listed = []domain.RegressionCase{
+		{ID: "reg-kept", InputRef: kept}, {ID: "reg-gone", InputRef: gone, Erased: true},
+	}
+
+	resp, err := server.StartSimulation(ctx, corpusSimulation())
+	if err != nil {
+		t.Fatalf("StartSimulation: %v", err)
+	}
+	accepted, ok := resp.(openapi.StartSimulation202JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the rest of the corpus to run", resp)
+	}
+	if accepted.Cases != 1 {
+		t.Fatalf("cases = %d, want one", accepted.Cases)
+	}
+}
+
+func TestStartSimulation_corpusWithEveryCaseErased_isRefused(t *testing.T) {
+	t.Parallel()
+
+	corpus := &fakeCorpus{}
+	server, content := correctable(t, corpus)
+	bg := gocontext.Background()
+	gone, err := content.PutFor(bg, "regression", "other", 1, []byte(`{"assunto":"gone"}`))
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	if _, err := content.Erase(bg, "regression", "other", "retention"); err != nil {
+		t.Fatalf("Erase: %v", err)
+	}
+	corpus.listed = []domain.RegressionCase{{ID: "reg-gone", InputRef: gone, Erased: true}}
+
+	resp, err := server.StartSimulation(inArea("cx", domain.RoleAuthor), corpusSimulation())
+	if err != nil {
+		t.Fatalf("StartSimulation: %v", err)
+	}
+	refused, ok := resp.(openapi.StartSimulation400ApplicationProblemPlusJSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want a refusal", resp)
+	}
+	if !strings.Contains(*refused.Detail, "lost its input") {
+		t.Fatalf("detail = %q, want it to say why", *refused.Detail)
 	}
 }

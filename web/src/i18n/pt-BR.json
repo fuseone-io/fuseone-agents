@@ -1145,6 +1145,7 @@
     "shouldCall": "deveria conseguir chamar",
     "shouldFinish": "deveria concluir sozinho",
     "tallyBroken": "Quebraram",
+    "tallyErased": "Sem entrada, apagada",
     "tallyHeld": "Seguraram",
     "title": "Corrigir este caso"
   },

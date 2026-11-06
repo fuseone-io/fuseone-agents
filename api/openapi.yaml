@@ -5233,6 +5233,9 @@ components:
         outcomeState:
           $ref: '#/components/schemas/SimulationOutcomeState'
         reason: { type: string }
+        erased:
+          type: boolean
+          description: The case could not run because its input was erased.
         error:
           type: string
           description: Why this case did not run, when it did not.
@@ -5257,6 +5260,11 @@ components:
         broken:
           type: integer
           description: Corrections that stopped standing.
+        erased:
+          type: integer
+          description: |
+            Corrections that could not run because their input was erased.
+            Neither held nor broken: coverage this battery does not have.
         drifted:
           type: integer
           description: |

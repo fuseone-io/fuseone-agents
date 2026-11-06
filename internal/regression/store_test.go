@@ -21,7 +21,7 @@ import (
 func storeFor(t *testing.T) *regression.Store {
 	t.Helper()
 	pool := poolFor(t)
-	if _, err := pool.Exec(t.Context(), `delete from regression_cases`); err != nil {
+	if _, err := pool.Exec(t.Context(), `delete from regression_cases; delete from run_content`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 	return regression.NewStore(pool)
@@ -243,5 +243,61 @@ func TestOrphanedCopiesMigration_takesOnlyCopiesNoCaseNames(t *testing.T) {
 	}
 	if accounted == 0 {
 		t.Fatal("the erasure left no record")
+	}
+}
+
+func TestList_saysWhichCasesLostTheirInput(t *testing.T) {
+	store := storeFor(t)
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	content := ledger.NewContent(pool)
+
+	gone, err := content.PutFor(ctx, "regression", "suporte", 1, []byte(`{"aged":"out"}`))
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	kept, err := content.PutFor(ctx, "regression", "suporte", 1, []byte(`{"still":"here"}`))
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	for id, ref := range map[string]string{"reg-gone": gone, "reg-kept": kept} {
+		c := aCase(id, domain.Expectation{Kind: domain.ExpectAsks})
+		c.InputRef = ref
+		if err := store.Record(ctx, c); err != nil {
+			t.Fatalf("Record: %v", err)
+		}
+	}
+	if _, err := pool.Exec(ctx, `
+		update run_content set bytes = null, erased_at = now(), erased_reason = 'retention'
+		where ref = $1`, gone); err != nil {
+		t.Fatalf("erase: %v", err)
+	}
+
+	listed, err := store.List(ctx, "suporte")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	erased := map[string]bool{}
+	for _, c := range listed {
+		erased[c.ID] = c.Erased
+	}
+	if !erased["reg-gone"] || erased["reg-kept"] {
+		t.Fatalf("erased = %v", erased)
+	}
+
+	found, err := store.ErasedCases(ctx)
+	if err != nil {
+		t.Fatalf("ErasedCases: %v", err)
+	}
+	if len(found) != 1 || found[0].Case != "reg-gone" || found[0].Agent != "suporte" {
+		t.Fatalf("erased cases = %+v", found)
+	}
+
+	occurrences, err := regression.NewCorpus(store, content).Occurrences(ctx, "suporte")
+	if err != nil {
+		t.Fatalf("Occurrences: %v", err)
+	}
+	if len(occurrences) != 1 || occurrences[0].ID != "reg-kept" {
+		t.Fatalf("occurrences = %+v, want the one that can still run", occurrences)
 	}
 }

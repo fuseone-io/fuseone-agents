@@ -85,6 +85,9 @@ type Case struct {
 	// failure and not a pass: it is the reason a reader should read the rest
 	// of the row differently.
 	Drifted bool `json:"drifted,omitempty"`
+	// Erased says the case could not run because its input is gone. Neither a
+	// correction that held nor one that broke, so it is counted apart from both.
+	Erased bool `json:"erased,omitempty"`
 }
 
 // Fold turns one simulated run's steps into its row in the report.
@@ -228,6 +231,9 @@ type Report struct {
 	// name that did not change? The second is the one nobody notices, because
 	// nothing in this installation moved.
 	Drifted int `json:"drifted"`
+	// Erased counts the corrections that lost their input, which is coverage this
+	// battery does not have.
+	Erased int `json:"erased"`
 
 	// Running is whether any case has yet to settle. Derived rather than
 	// tracked: the runs are the queue, so a simulation is still going exactly

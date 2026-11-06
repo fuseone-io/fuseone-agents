@@ -2,6 +2,7 @@ package drift_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -202,4 +203,58 @@ type spy struct{ posted []channel.Message }
 func (s *spy) Announce(_ context.Context, _ domain.Scope, m channel.Message) error {
 	s.posted = append(s.posted, m)
 	return nil
+}
+
+type lost []domain.ErasedCase
+
+func (l lost) ErasedCases(context.Context) ([]domain.ErasedCase, error) { return l, nil }
+
+// Nobody is told otherwise: a case that aged out just stops being checked, and
+// it looks exactly like a corpus that still covers what it used to.
+func TestSweep_aCaseThatLostItsInput_isAnnouncedOnce(t *testing.T) {
+	t.Parallel()
+
+	said := &spy{}
+	sweep := drift.New(corpusOf("triage"), batteries{}, reports{}, said, nil).
+		WithErased(lost{{Agent: "triage", Case: "reg-1"}})
+
+	for range 2 {
+		if _, err := sweep.Sweep(context.Background(), at()); err != nil {
+			t.Fatalf("Sweep: %v", err)
+		}
+	}
+
+	if len(said.posted) != 1 {
+		t.Fatalf("messages = %d, want one across two sweeps", len(said.posted))
+	}
+	if said.posted[0].Agent != "triage" || !strings.Contains(said.posted[0].Reason, "reg-1") {
+		t.Fatalf("message = %+v, want it to name the case", said.posted[0])
+	}
+}
+
+func TestSweep_anotherCaseLosingItsInputLater_isAnnouncedToo(t *testing.T) {
+	t.Parallel()
+
+	said := &spy{}
+	cases := &growing{current: lost{{Agent: "triage", Case: "reg-1"}}}
+	sweep := drift.New(corpusOf("triage"), batteries{}, reports{}, said, nil).WithErased(cases)
+
+	if _, err := sweep.Sweep(context.Background(), at()); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	cases.current = lost{{Agent: "triage", Case: "reg-1"}, {Agent: "triage", Case: "reg-2"}}
+	if _, err := sweep.Sweep(context.Background(), at()); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	if len(said.posted) != 2 || !strings.Contains(said.posted[1].Reason, "reg-2") ||
+		strings.Contains(said.posted[1].Reason, "reg-1") {
+		t.Fatalf("messages = %+v", said.posted)
+	}
+}
+
+type growing struct{ current lost }
+
+func (g *growing) ErasedCases(ctx context.Context) ([]domain.ErasedCase, error) {
+	return g.current.ErasedCases(ctx)
 }

@@ -136,8 +136,12 @@ pull request, with DP-001 updated in the same change.
 - **Erased is a state of a case, not a failure of the corpus.** A battery runs what
   can be read and reports the rest as `erased`: neither held nor broken, and stated
   as a gap. A corpus with every case erased is refused, as an empty one is now.
-- **The author is told.** A `corpus_case_erased` notice goes to the channel that
-  already carries drift.
+- **The author is told.** A notice goes out on the `drifted` subscription, which is
+  on by default and reaches whoever already cares that a corpus stopped covering what
+  it used to. Like drift, it is said once per process, so a restart can repeat it.
+- **A case can be recorded again.** The reference is the digest, so a new copy of the
+  same bytes lands on the old tombstone. Recording overwrites that tombstone, and a
+  retried step still cannot.
 - **Retention wins.** The corpus stays under the installation's window. That window
   is a promise an operator configured, and a safety net is not a reason to break it.
   The comments that say otherwise are corrected, and the manual says that a case

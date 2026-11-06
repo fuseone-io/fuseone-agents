@@ -57,6 +57,21 @@ type Watch struct {
 	// found it. A sweep that repeated itself every pass is a sweep somebody
 	// silences, and then the next notice is not heard either.
 	said map[string]bool
+	// lost is where corrections that lost their input are found. Optional.
+	lost ErasedCases
+}
+
+// ErasedCases is which corrections can no longer run, declared by the consumer.
+type ErasedCases interface {
+	ErasedCases(ctx context.Context) ([]domain.ErasedCase, error)
+}
+
+// WithErased also says when a correction stops being checked because its input
+// is gone. Without it, a case that aged out looks exactly like a corpus that
+// still covers what it used to.
+func (w *Watch) WithErased(lost ErasedCases) *Watch {
+	w.lost = lost
+	return w
 }
 
 func New(
@@ -94,7 +109,72 @@ func (w *Watch) Sweep(ctx context.Context, now time.Time) (int, error) {
 		drifted++
 		w.announce(ctx, one, *found, now)
 	}
+	w.announceErased(ctx)
 	return drifted, nil
+}
+
+// announceErased names, once per agent per sweep, the corrections newly lost.
+func (w *Watch) announceErased(ctx context.Context) {
+	if w.lost == nil {
+		return
+	}
+	lost, err := w.lost.ErasedCases(ctx)
+	if err != nil {
+		w.log.Error("could not read erased corrections", "err", err)
+		return
+	}
+	for _, group := range newlyErased(lost, w.said) {
+		w.announceLost(ctx, group)
+	}
+}
+
+func erasedKey(c domain.ErasedCase) string {
+	return "erased/" + string(c.Agent) + "/" + c.Case
+}
+
+// newlyErased groups what has not been said yet, one group per agent, in the
+// order the store listed them.
+func newlyErased(lost []domain.ErasedCase, said map[string]bool) [][]domain.ErasedCase {
+	var groups [][]domain.ErasedCase
+	at := map[domain.AgentID]int{}
+	for _, c := range lost {
+		if said[erasedKey(c)] {
+			continue
+		}
+		if i, found := at[c.Agent]; found {
+			groups[i] = append(groups[i], c)
+			continue
+		}
+		at[c.Agent] = len(groups)
+		groups = append(groups, []domain.ErasedCase{c})
+	}
+	return groups
+}
+
+func (w *Watch) announceLost(ctx context.Context, group []domain.ErasedCase) {
+	first := group[0]
+	w.log.Warn("corrections lost their input", "agent", first.Agent, "cases", len(group))
+	reason := fmt.Sprintf("%s lost its input to erasure and is no longer checked; "+
+		"record it again from a new run if it still matters", first.Case)
+	if len(group) > 1 {
+		reason = fmt.Sprintf("%d corrections lost their input to erasure and are no "+
+			"longer checked, starting with %s; record them again from new runs if "+
+			"they still matter", len(group), first.Case)
+	}
+	if w.announcer != nil {
+		err := w.announcer.Announce(ctx, first.Scope, channel.Message{
+			Event: channel.EventDrifted, Agent: first.Agent, Scope: first.Scope, Reason: reason,
+		})
+		if err != nil {
+			// Left unmarked, so the next sweep tries again.
+			w.log.Error("erased corrections could not be announced",
+				"agent", first.Agent, "err", err)
+			return
+		}
+	}
+	for _, c := range group {
+		w.said[erasedKey(c)] = true
+	}
 }
 
 // finding is drift, and the battery that found it — which is what "said

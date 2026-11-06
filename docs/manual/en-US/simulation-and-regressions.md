@@ -79,6 +79,17 @@ Use one corpus for one promise:
 Small corpora are easier to trust. Ten cases that each teach something are
 better than a hundred cases nobody reads.
 
+## When a case loses its input
+
+A correction keeps its own copy of what the run was about. That copy ages out with
+your installation's retention, and it goes at once if the run it came from is erased
+on a person's request. The case stays, shown as **Input erased**: neither held nor
+broken, because nothing was checked.
+
+The rest of the corpus keeps running, and the conversation that receives drift notices
+is told which case stopped being checked. To check it again, record the correction
+from a newer run of the same situation. Deleting a case also erases its copy.
+
 ## When to run regressions
 
 Run the corpus when:

@@ -1145,6 +1145,7 @@
     "shouldCall": "should be able to call",
     "shouldFinish": "should finish on its own",
     "tallyBroken": "Broke",
+    "tallyErased": "Input erased",
     "tallyHeld": "Held",
     "title": "Correct this case"
   },

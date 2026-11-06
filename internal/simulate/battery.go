@@ -29,10 +29,21 @@ func Battery(report Report, corpus []domain.RegressionCase) Report {
 
 	out := report
 	out.Cases = append([]Case(nil), report.Cases...)
-	out.Held, out.Broken, out.Drifted = 0, 0, 0
+	out.Held, out.Broken, out.Drifted, out.Erased = 0, 0, 0, 0
 
 	for _, corrected := range corpus {
 		at, ran := rows[corrected.ID]
+		// A gap, not a failure. The case cannot run again, and calling it broken
+		// would accuse the agent of something nobody checked. Only when it did
+		// not run: a past battery that did run it keeps saying what happened.
+		if !ran && corrected.Erased {
+			out.Cases = append(out.Cases, Case{
+				ID: corrected.ID, Settled: SettledUnsettled, Expected: corrected.Expectations,
+				Erased: true, Error: "the input of this case was erased",
+			})
+			out.Erased++
+			continue
+		}
 		if !ran {
 			out.Cases = append(out.Cases, Case{
 				ID: corrected.ID, Settled: SettledUnsettled,
