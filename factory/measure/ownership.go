@@ -69,7 +69,9 @@ func ownerAt(s Snapshot, card *Item, lane string, t time.Time) Owner {
 //     a person too.
 //
 // A pull request card exists from the start of its stay; while it is open its
-// own label decides, and once it is closed or merged the time is a person's.
+// own label decides, and once it is closed or merged the time is a person's,
+// except while it is merged and still carries factory:ready-to-merge: then
+// the Merger's, until close_merged drops the label.
 func doingOwner(s Snapshot, card *Item, t time.Time) Owner {
 	prs := []*Item{card}
 	if !card.IsPR {
