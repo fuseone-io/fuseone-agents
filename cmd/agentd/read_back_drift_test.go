@@ -306,15 +306,28 @@ func TestReadBack_mcpServer_namesAreNotCopiedOutOfTheSeal(t *testing.T) {
 	world := newReadBackWorld(t)
 	path := "/admin/integrations/mcp-servers/readback-seal"
 	world.removeAtTheEnd(t, path)
-	world.put(t, path, mcpHTTP(merged(oauthGrant(nil), headers(map[string]string{"X-Drift-Name": "v"}))))
-	row, err := world.store.Get(t.Context(), settings.ScopeInstallation, domain.Scope{},
-		settings.KindMCPServer, "readback-seal")
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	for _, sealed := range []string{"X-Drift-Name", "drift-client", "idp.example.test"} {
-		if strings.Contains(string(row.Value), sealed) {
-			t.Errorf("%q left the seal: %s", sealed, row.Value)
+	// One at a time: a grant written with headers replaces them, and a test holding
+	// both would look for a name that was never stored.
+	for _, c := range []struct {
+		body   map[string]any
+		sealed []string
+	}{
+		{mcpHTTP(headers(map[string]string{"X-Drift-Name": "v"})), []string{"X-Drift-Name"}},
+		{mcpHTTP(oauthGrant(nil)), []string{"drift-client", "idp.example.test"}},
+	} {
+		world.put(t, path, c.body)
+		if read, raw := world.get(t, path); read["secretFingerprint"] == nil {
+			t.Fatalf("nothing was sealed, so nothing here proves it stayed: %s", raw)
+		}
+		row, err := world.store.Get(t.Context(), settings.ScopeInstallation, domain.Scope{},
+			settings.KindMCPServer, "readback-seal")
+		if err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		for _, name := range c.sealed {
+			if strings.Contains(string(row.Value), name) {
+				t.Errorf("%q left the seal: %s", name, row.Value)
+			}
 		}
 	}
 }

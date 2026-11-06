@@ -44,7 +44,9 @@ func TestFingerprint_withoutTheMasterKey_cannotBeComputed(t *testing.T) {
 func TestFingerprint_sameMaterialElsewhere_differs(t *testing.T) {
 	t.Parallel()
 	v := testKeyed(t, 1)
-	if v.Fingerprint([]byte("s3cret"), "here") == v.Fingerprint([]byte("s3cret"), "there") {
+	// Of one length: the context's length is hashed too, so contexts of two
+	// lengths would differ with the context itself left out.
+	if v.Fingerprint([]byte("s3cret"), "here") == v.Fingerprint([]byte("s3cret"), "hers") {
 		t.Error("one secret on two resources gave one fingerprint, which lets a guess sealed on one test the other")
 	}
 }
