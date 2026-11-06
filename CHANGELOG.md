@@ -27,6 +27,70 @@ field" is a commit message.
 
 ---
 
+## [0.94.0] — 2026-11-06
+
+### Upgrade notes
+
+- **This upgrade erases data.** Migration `0098` erases corpus copies that no correction
+  names any more, left behind by deleting a correction before this release, along with
+  the content of the same agent's simulated runs holding those bytes. Their steps and
+  digests stay, and it records a `content.erased` admin event when it took anything.
+  It has only been run on disposable databases, so look at what it would take first:
+
+  ```sql
+  with orphans as (
+    select rc.ref, rc.digest, rc.run_id as agent_id, rc.erased_at from run_content rc
+    where rc.owner_kind = 'regression'
+      and not exists (select 1 from regression_cases c where c.input_ref = rc.ref)
+  )
+  select
+    (select count(*) from orphans where erased_at is null) as copies,
+    (select count(distinct held.run_id) from run_content held
+     join orphans o on o.digest = held.digest
+     join runs r on r.run_id = held.run_id and r.agent_id = o.agent_id
+     where held.owner_kind = 'run' and held.erased_at is null and r.simulated) as replay_runs;
+  ```
+- **Migration `0097` builds an index on `run_content`** without blocking writes. It can
+  take a while on a large installation.
+- **Count four more PostgreSQL connections** per `serve` and `worker` replica when you
+  size `max_connections`. They are outside each process's pool, and only open while
+  content is being erased or a corpus is being copied.
+- **Recording a correction from a run in another scope, or of another agent, now fails**
+  as an absent run. Those used to succeed, which copied the run's input across the
+  boundary.
+- **A battery can now report fewer cases than the corpus holds.** A case whose input was
+  erased no longer stops the battery. It is reported as a gap, neither held nor broken.
+- **The `evidence` connector has still not run against a real source.**
+
+### Fixed
+
+- **Erasing a run on a person's request now reaches the regression corpus.** This closes
+  the gap the 0.93.0 notes described. Within the same agent, it erases every correction's
+  copy holding that run's input, those corrections' notes, and the content of the simulated
+  runs holding it. It follows the digest the run recorded, so it still works after a
+  correction was deleted. The event counts them as `corpusCases`. Input that is trivially
+  common within an agent, such as `{}`, takes every copy, note and rehearsal holding it.
+  A real run holding the same bytes is not reached unless it is named.
+- **Retention counts from when bytes were collected.** When a correction's copy expires, its
+  note and the content of the same agent's simulated runs holding those bytes go with it,
+  however recent they are. `content.expired` counts them as `corpusReplays`.
+- **Deleting a correction takes its copy and the runs that replayed it,** unless another
+  correction still holds the same input.
+- **Nothing can put back what was just erased.** Recording a correction and opening a battery
+  now exclude erasing, retention and deleting a correction, per agent.
+- **One erased case no longer stops every battery of an agent.** The rest of the corpus runs,
+  the report and console show **Input erased**, and the conversation subscribed to drift
+  notices hears which case stopped being checked. If every case is erased, the battery is
+  refused and says why. Recording a case again after it aged out now works.
+- **A past comparison no longer depends on erased cases.** A case erased on one side is neither
+  fixed nor regressed.
+
+### Security
+
+- **A correction can only be made from a run of the same agent, in the scope it is published
+  in, by someone who can read that run.** Before, an author could copy the input of a run from
+  another scope or another agent into their own corpus. Every refusal reads as an absent run.
+
 ## [0.93.0] — 2026-11-06
 
 ### Upgrade notes
