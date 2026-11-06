@@ -230,6 +230,13 @@ other content, and its note is cleared with it. The window is a promise the oper
 configured, and a safety net is not a reason to break it. The case stays as a visible
 gap, and a person has to record it again to have it checked.
 
+The window counts from when the bytes were collected, not from when the platform last
+copied them. A nightly battery is the platform duplicating an occurrence, so when a
+correction's copy expires, the content of the same agent's simulated runs holding those
+bytes goes with it, however recent they are. Their steps and digests stay, and
+`content.expired` counts them as `corpusReplays`. Recording a correction again from a
+live run is a new collection and starts a new window.
+
 The same sweep deletes operational channel rows older than the window:
 `channel_inbox` by arrival time, `channel_deliveries` by post time, and
 `channel_delivery_failures` by the last time that failure was seen. Open channel

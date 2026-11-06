@@ -38,6 +38,35 @@ func (e *Erasures) agentsOf(ctx context.Context, runs []string) ([]domain.AgentI
 	return toAgents(agents), nil
 }
 
+// expiredReplaysSQL is the rehearsals holding the bytes of a copy past the window. A
+// battery is the platform duplicating those bytes, not anybody collecting them again,
+// so a replay does not get a window of its own. A tombstoned copy still counts: the
+// run that replayed it may be younger than whatever took it.
+const expiredReplaysSQL = `
+	select distinct held.run_id from run_content copied
+	join run_content held on held.digest = copied.digest
+	join runs r on r.run_id = held.run_id and r.agent_id = copied.run_id
+	where copied.owner_kind = 'regression' and copied.created_at < $1
+	  and held.owner_kind = 'run' and held.erased_at is null and r.simulated`
+
+// eraseExpiredReplays runs before the copies go, in the transaction that takes them.
+func (e *Erasures) eraseExpiredReplays(
+	ctx context.Context, tx pgx.Tx, before time.Time,
+) (runs, objects int, err error) {
+	replays, err := scanStrings(ctx, tx, expiredReplaysSQL, before.UTC())
+	if err != nil {
+		return 0, 0, fmt.Errorf("admin: find replays of expired copies: %w", err)
+	}
+	for _, run := range replays {
+		count, err := e.content.EraseTx(ctx, tx, "run", run, "retention")
+		if err != nil {
+			return 0, 0, fmt.Errorf("admin: erase replay %s: %w", run, err)
+		}
+		objects += count
+	}
+	return len(replays), objects, nil
+}
+
 // agentsLosingCopies is whose corrections retention is about to reach.
 func (e *Erasures) agentsLosingCopies(ctx context.Context, before time.Time) ([]domain.AgentID, error) {
 	agents, err := scanStrings(ctx, e.pool, `

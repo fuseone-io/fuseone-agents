@@ -20,6 +20,7 @@ type sweepCounts struct {
 	egressRecords  int
 	memoryRecords  int
 	corpusNotes    int
+	corpusReplays  int
 }
 
 func (c sweepCounts) total() int {
@@ -94,11 +95,16 @@ func (e *Erasures) eraseExpired(
 	ctx context.Context, tx pgx.Tx, before time.Time,
 ) (sweepCounts, error) {
 	var counts sweepCounts
-	var err error
+	replays, replayed, err := e.eraseExpiredReplays(ctx, tx, before)
+	if err != nil {
+		return sweepCounts{}, err
+	}
+	counts.corpusReplays = replays
 	counts.objects, err = e.content.ErasePastTx(ctx, tx, before, "retention")
 	if err != nil {
 		return sweepCounts{}, err
 	}
+	counts.objects += replayed
 	counts.channelRecords, err = e.eraseChannelOperationalRows(ctx, tx, before)
 	if err != nil {
 		return sweepCounts{}, err
@@ -126,6 +132,7 @@ func recordSweep(ctx context.Context, tx pgx.Tx, counts sweepCounts, window time
 			"egressRecords":  counts.egressRecords,
 			"memoryRecords":  counts.memoryRecords,
 			"corpusNotes":    counts.corpusNotes,
+			"corpusReplays":  counts.corpusReplays,
 			"olderThanHours": int64(window / time.Hour),
 		},
 	})

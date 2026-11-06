@@ -545,3 +545,176 @@ func TestForSubject_waitingAtTheFence_leavesThePoolFree(t *testing.T) {
 		t.Fatalf("ForSubject: %v", err)
 	}
 }
+
+// A nightly battery is the platform duplicating bytes, not somebody collecting them
+// again. Given a window of its own, each replay would keep them for nearly two.
+func TestSweep_takesTheRecentReplaysOfACopyItTook(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+	input := []byte(`{"email":"ana@example.com"}`)
+
+	copied, err := content.PutFor(ctx, "regression", "suporte", 1, input)
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `update run_content set created_at = now() - interval '6 years'
+		where ref = $1`, copied); err != nil {
+		t.Fatalf("age the copy: %v", err)
+	}
+
+	replayRun := fresh("run-replay-")
+	replay(t, pool, "suporte", replayRun, "reg-1")
+	replayed, err := content.Put(ctx, replayRun, 1, input)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	realRun := fresh("run-real-")
+	open(t, pool, "suporte", realRun, domain.RunStartedPayload{Trigger: "manual"})
+	realContent, _ := content.Put(ctx, realRun, 1, input)
+	otherAgent := fresh("run-other-agent-")
+	replay(t, pool, "vendas", otherAgent, "reg-vendas")
+	otherContent, _ := content.Put(ctx, otherAgent, 1, input)
+	otherBytes := fresh("run-other-bytes-")
+	replay(t, pool, "suporte", otherBytes, "reg-2")
+	otherBytesContent, _ := content.Put(ctx, otherBytes, 1, []byte(`{"email":"bia@example.com"}`))
+
+	var digest string
+	if err := pool.QueryRow(ctx, `select digest from run_content where ref = $1`, replayed).Scan(&digest); err != nil {
+		t.Fatalf("read digest: %v", err)
+	}
+	var stepsBefore int
+	if err := pool.QueryRow(ctx, `select count(*) from run_steps where run_id = $1`,
+		string(replayRun)).Scan(&stepsBefore); err != nil || stepsBefore == 0 {
+		t.Fatalf("steps = %d, %v", stepsBefore, err)
+	}
+
+	if _, err := erasures.Sweep(ctx); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	for name, ref := range map[string]string{"the copy": copied, "its recent replay": replayed} {
+		if _, err := content.Get(ctx, ref); !errors.Is(err, ledger.ErrErased) {
+			t.Errorf("%s: err = %v, want erased", name, err)
+		}
+	}
+	for name, ref := range map[string]string{
+		"a real run": realContent, "another agent's replay": otherContent,
+		"a replay of other bytes": otherBytesContent,
+	} {
+		if _, err := content.Get(ctx, ref); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+
+	// Only content: what happened stays on the record.
+	var stepsAfter int
+	if err := pool.QueryRow(ctx, `select count(*) from run_steps where run_id = $1`,
+		string(replayRun)).Scan(&stepsAfter); err != nil || stepsAfter != stepsBefore {
+		t.Errorf("steps after the sweep = %d, %v; want %d", stepsAfter, err, stepsBefore)
+	}
+	var kept string
+	if err := pool.QueryRow(ctx, `select digest from run_content where ref = $1`, replayed).Scan(&kept); err != nil || kept != digest {
+		t.Errorf("digest after the sweep = %q, %v; want %q", kept, err, digest)
+	}
+	var reason string
+	if err := pool.QueryRow(ctx, `select erased_reason from run_content where ref = $1`, replayed).Scan(&reason); err != nil || reason != "retention" {
+		t.Errorf("reason = %q, %v", reason, err)
+	}
+}
+
+func TestSweep_recordsTheReplaysItTook(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+	input := []byte(`{"email":"ana@example.com"}`)
+
+	copied, err := content.PutFor(ctx, "regression", "suporte", 1, input)
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `update run_content set created_at = now() - interval '6 years'
+		where ref = $1`, copied); err != nil {
+		t.Fatalf("age the copy: %v", err)
+	}
+	replayRun := fresh("run-replay-")
+	replay(t, pool, "suporte", replayRun, "reg-1")
+	if _, err := content.Put(ctx, replayRun, 1, input); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	if _, err := erasures.Sweep(ctx); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	var replays int
+	if err := pool.QueryRow(ctx, `
+		select (detail->>'corpusReplays')::int from admin_events
+		where action = 'content.expired' order by event_id desc limit 1`).Scan(&replays); err != nil {
+		t.Fatalf("read event: %v", err)
+	}
+	if replays != 1 {
+		t.Fatalf("corpusReplays = %d, want 1", replays)
+	}
+}
+
+// Retention runs every day, so what it follows must not read the whole content store.
+func TestExpiredReplaySearch_startsFromTheCopies(t *testing.T) {
+	erasuresFor(t, time.Now)
+	pool := openPool(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `
+		insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes, truncated)
+		select 'run://plan/' || g, 'run', 'plan-' || g, 1, md5(g::text), 'x', 1, false
+		from generate_series(1, 5000) g;
+		analyze run_content;`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	rows, err := pool.Query(ctx, "explain "+admin.ExpiredReplaysQuery, time.Now())
+	if err != nil {
+		t.Fatalf("explain: %v", err)
+	}
+	defer rows.Close()
+	plan := ""
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		plan += line + "\n"
+	}
+	if strings.Contains(plan, "Seq Scan on run_content") {
+		t.Errorf("plan reads all the content:\n%s", plan)
+	}
+}
+
+// A copy inside the window keeps its replays, however old they are themselves: they
+// age out as content, and following the copy is only about taking more, never less.
+func TestSweep_leavesTheReplaysOfACopyStillInsideTheWindow(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+	input := []byte(`{"email":"ana@example.com"}`)
+
+	if _, err := content.PutFor(ctx, "regression", "suporte", 1, input); err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	replayRun := fresh("run-replay-")
+	replay(t, pool, "suporte", replayRun, "reg-1")
+	replayed, err := content.Put(ctx, replayRun, 1, input)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	if _, err := erasures.Sweep(ctx); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	if _, err := content.Get(ctx, replayed); err != nil {
+		t.Fatalf("replay of a copy inside the window: %v", err)
+	}
+}
