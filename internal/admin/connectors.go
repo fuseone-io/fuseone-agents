@@ -191,6 +191,12 @@ func connectorInstanceDetail(
 			"maxWindowDays": instance.Elasticsearch.MaxWindowDays,
 		}
 	}
+	if instance.Connector == "evidence" {
+		detail["evidence"] = map[string]any{
+			"baseUrl": instance.Evidence.BaseURL,
+			"queries": len(instance.Evidence.Queries),
+		}
+	}
 	if instance.Connector == "cloudflare" {
 		detail["cloudflare"] = map[string]any{
 			"accountId":       instance.Cloudflare.AccountID,

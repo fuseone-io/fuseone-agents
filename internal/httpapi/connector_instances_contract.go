@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -27,6 +28,7 @@ func connectorInstanceInput(
 		SQL: sqlConfigFromInput(body.Sql), Gravitee: graviteeConfigFromInput(body.Gravitee),
 		Cloudflare:    cloudflareConfigFromInput(body.Cloudflare),
 		Elasticsearch: elasticsearchConfigFromInput(body.Elasticsearch),
+		Evidence:      evidenceConfigFromInput(body.Evidence),
 	}
 	clear := body.ClearToken != nil && *body.ClearToken
 	return settings.ScopeKind(body.ScopeKind), scope, instance, body.Token, clear, nil
@@ -91,6 +93,11 @@ func connectorInstanceResponse(instance connectortools.ConfiguredInstance) opena
 	if instance.Connector == "elasticsearch" {
 		item.Elasticsearch = ptr(elasticsearchConfigToAPI(instance.Elasticsearch))
 	}
+	if instance.Connector == "evidence" {
+		item.Evidence = ptr(openapi.ConnectorEvidenceSummary{
+			BaseUrl: instance.Evidence.BaseURL, Queries: len(instance.Evidence.Queries),
+		})
+	}
 	return item
 }
 
@@ -116,7 +123,41 @@ func connectorInstanceDetailResponse(instance connectortools.ConfiguredInstance)
 	if instance.Connector == "elasticsearch" {
 		item.Elasticsearch = ptr(elasticsearchConfigToAPI(instance.Elasticsearch))
 	}
+	if instance.Connector == "evidence" {
+		item.Evidence = evidenceConfigToAPI(instance.Evidence)
+	}
 	return item
+}
+
+/*
+evidenceConfigFromInput and evidenceConfigToAPI cross the wire by the JSON both
+shapes already share.
+
+The declaration is deep and every field matters: a field a hand-written copy
+forgot would be dropped without a word, and that is how a query loses its filter.
+A value that cannot convert stays empty, which validation refuses.
+*/
+func evidenceConfigFromInput(in *openapi.ConnectorEvidenceConfig) connectortools.EvidenceConfig {
+	var out connectortools.EvidenceConfig
+	if in == nil {
+		return out
+	}
+	raw, err := json.Marshal(in)
+	if err != nil || json.Unmarshal(raw, &out) != nil {
+		return connectortools.EvidenceConfig{}
+	}
+	return out
+}
+
+// evidenceConfigToAPI is for the detail, which only configurers read. The token
+// lives sealed beside the declaration, never in it.
+func evidenceConfigToAPI(cfg connectortools.EvidenceConfig) *openapi.ConnectorEvidenceConfig {
+	var out openapi.ConnectorEvidenceConfig
+	raw, err := json.Marshal(cfg)
+	if err != nil || json.Unmarshal(raw, &out) != nil {
+		return nil
+	}
+	return &out
 }
 
 // elasticsearchConfigToAPI serves listing and detail alike: the whole shape
