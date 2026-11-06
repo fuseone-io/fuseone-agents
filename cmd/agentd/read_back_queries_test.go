@@ -89,6 +89,9 @@ type readByName struct {
 	// seed creates the resource called n, with whatever a read of it has to
 	// fetch, and cleans it up afterwards.
 	seed func(t *testing.T, w *readBackWorld, n string)
+	// indexes must answer the read. An index on the kind alone also avoids a
+	// sequential scan, and then reads every row of the kind to filter them.
+	indexes []string
 }
 
 func readsByName() []readByName {
@@ -124,8 +127,9 @@ func readsByName() []readByName {
 			})
 		},
 	}, {
-		name: "channel",
-		path: func(n string) string { return "/admin/channels/" + n },
+		name:    "channel",
+		indexes: []string{"settings_kind_channel_idx", "settings_kind_name_pattern_idx"},
+		path:    func(n string) string { return "/admin/channels/" + n },
 		seed: func(t *testing.T, w *readBackWorld, n string) {
 			t.Helper()
 			path := "/admin/channels/" + n
@@ -224,6 +228,14 @@ func TestReadByName_everyCommand_isAnsweredFromAnIndex(t *testing.T) {
 			world, trace, pool := newTracedWorld(t)
 			target := "qcount-target-" + r.name
 			r.seed(t, world, target)
+			// Enough rows, and known to the planner: on a handful it picks between
+			// indexes of near-equal cost, and the plan proves nothing.
+			for i := range others {
+				r.seed(t, world, fmt.Sprintf("qcount-other-%s-%d", r.name, i))
+			}
+			if _, err := pool.Exec(t.Context(), `analyze settings`); err != nil {
+				t.Fatalf("analyze: %v", err)
+			}
 			trace.take()
 			world.get(t, r.path(target))
 			commands := trace.take()
@@ -238,10 +250,17 @@ func TestReadByName_everyCommand_isAnsweredFromAnIndex(t *testing.T) {
 			}
 			defer func() { _, _ = conn.Exec(context.Background(), `reset enable_seqscan`) }()
 
+			var plans strings.Builder
 			for _, one := range commands {
 				plan := explain(t, conn, one)
+				plans.WriteString(plan)
 				if strings.Contains(plan, "Seq Scan") {
 					t.Errorf("no index answers: %s\n%s", one.sql, plan)
+				}
+			}
+			for _, index := range r.indexes {
+				if !strings.Contains(plans.String(), index) {
+					t.Errorf("%s answers nothing:\n%s", index, plans.String())
 				}
 			}
 		})

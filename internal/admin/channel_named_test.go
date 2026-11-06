@@ -115,6 +115,52 @@ func TestNamed_connectionWithAwkwardRows_answersWhatTheListingAnswers(t *testing
 	if !reflect.DeepEqual(bound, wantBound) {
 		t.Errorf("identities\n %+v\nthe listing answers\n %+v", bound, wantBound)
 	}
+
+	// The other side of the same rule: the range for acme_slack/nested catches the
+	// binding the listing files under acme_slack, and it must not claim it.
+	_, nested, err := channels.Named(ctx, "acme_slack/nested")
+	if err != nil {
+		t.Fatalf("Named nested: %v", err)
+	}
+	if len(nested) != 0 {
+		t.Errorf("nested connection claims %+v, which the listing files under acme_slack", nested)
+	}
+}
+
+// The same rule on the two reads beside it: told a credential is gone, a client
+// writes it back.
+func TestNamed_serverOrProviderWhoseSecretWillNotOpen_fails(t *testing.T) {
+	pool := freshPool(t)
+	store := settings.NewStore(pool, testVault(t))
+	integrations := admin.NewIntegrations(pool, store)
+	ctx := context.Background()
+	t.Cleanup(func() {
+		_ = integrations.DeleteMCPServer(context.Background(), "usr_ana", domain.Scope{}, "sealed-server")
+		_ = integrations.DeleteProvider(context.Background(), "usr_ana", domain.Scope{}, "sealed-provider")
+	})
+	token := "bearer"
+	if err := integrations.PutMCPServer(ctx, "usr_ana", domain.Scope{}, domain.MCPServer{
+		Name: "sealed-server", Transport: domain.TransportHTTP, URL: "https://mcp.example.test", Enabled: true,
+	}, domain.MCPCredentialPatch{Token: &token}); err != nil {
+		t.Fatalf("put server: %v", err)
+	}
+	if err := integrations.PutProvider(ctx, "usr_ana", domain.Scope{}, domain.ModelProvider{
+		Name: "sealed-provider", Kind: "anthropic", Enabled: true,
+	}, "key"); err != nil {
+		t.Fatalf("put provider: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `update settings set secret = '\x00'::bytea
+		where name in ('sealed-server', 'sealed-provider')`); err != nil {
+		t.Fatalf("break the ciphertext: %v", err)
+	}
+	if _, err := integrations.MCPServerNamed(ctx, "sealed-server"); err == nil ||
+		errors.Is(err, admin.ErrMCPServerUnknown) {
+		t.Errorf("server err = %v, want the failure to open", err)
+	}
+	if _, err := integrations.ProviderNamed(ctx, "sealed-provider"); err == nil ||
+		errors.Is(err, admin.ErrProviderUnknown) {
+		t.Errorf("provider err = %v, want the failure to open", err)
+	}
 }
 
 func TestNamed_nameNobodyConfigured_isUnknown(t *testing.T) {
