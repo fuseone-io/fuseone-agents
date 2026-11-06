@@ -167,5 +167,3 @@ is not made here.
 - **Directory and configuration sources.** Per-entity fan-out and delegated
   tokens fit the shape; the domain rules that classify what they return do not,
   and those need their own decision.
-- **A console editor.** Authoring goes through the administration API, as SQL's
-  does, until a form can round-trip the whole declaration.
