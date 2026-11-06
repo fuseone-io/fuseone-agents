@@ -223,6 +223,14 @@ describe("evidence instance schema", () => {
   });
 });
 
+function withQuery(change: Record<string, unknown>) {
+  const [first, ...rest] = declarations[0].queries;
+  return JSON.stringify({
+    ...declarations[0],
+    queries: [{ ...first, ...change }, ...rest],
+  });
+}
+
 describe("parseEvidenceDeclaration", () => {
   it("reads a declaration from the manual", () => {
     const parsed = parseEvidenceDeclaration(JSON.stringify(declarations[0]));
@@ -237,6 +245,55 @@ describe("parseEvidenceDeclaration", () => {
     [
       "a query with no fields",
       JSON.stringify({ ...declarations[0], queries: [{ id: "a" }] }),
+    ],
+    [
+      "a misspelled filter list, which would widen the query",
+      withQuery({ filterz: [{ name: "query", value: "x" }] }),
+    ],
+    [
+      "an unknown key in a filter",
+      withQuery({ filters: [{ name: "q", value: "x", extra: 1 }] }),
+    ],
+    [
+      "an unknown key in a parameter",
+      withQuery({ parameters: [{ name: "q", pattern: "x", extra: 1 }] }),
+    ],
+    ["filters that are not a list", withQuery({ filters: {} })],
+    ["parameters that are not a list", withQuery({ parameters: "x" })],
+    ["a filter that is null", withQuery({ filters: [null] })],
+    ["fields that are not text", withQuery({ fields: [1] })],
+    ["a windowless that is not a boolean", withQuery({ windowless: "yes" })],
+    [
+      "a query that is null",
+      JSON.stringify({ ...declarations[0], queries: [null] }),
+    ],
+    [
+      "an unknown key in paging",
+      JSON.stringify({
+        ...declarations[0],
+        paging: { ...declarations[0].paging, pagesize: 1 },
+      }),
+    ],
+    [
+      "an unknown key in the window",
+      JSON.stringify({
+        ...declarations[0],
+        window: { ...declarations[0].window, period: 1 },
+      }),
+    ],
+    [
+      "an unknown key in a refusal",
+      JSON.stringify({
+        ...declarations[0],
+        refusal: { ...declarations[0].refusal, values: "0" },
+      }),
+    ],
+    [
+      "periods that are not numbers",
+      JSON.stringify({
+        ...declarations[0],
+        window: { ...declarations[0].window, periods: ["3600"] },
+      }),
     ],
     [
       "a paging kind that does not exist",

@@ -14,6 +14,7 @@ import {
   type EvidenceQueryValues,
 } from "@/features/integrations/connectors/evidence-instance-schema";
 
+export { parseEvidenceDeclaration } from "@/features/integrations/connectors/evidence-declaration-schema";
 export {
   evidenceControlEligible,
   evidenceInstanceSchema,
@@ -228,61 +229,4 @@ export function evidenceInstancePayload(
   if (newToken) body.token = values.token;
   if (values.clearToken && !newToken) body.clearToken = true;
   return { name: values.name.trim(), body };
-}
-
-function shapedQuery(query: Partial<EvidenceQuery>) {
-  return (
-    typeof query.id === "string" &&
-    typeof query.description === "string" &&
-    typeof query.path === "string" &&
-    Array.isArray(query.fields)
-  );
-}
-
-const declarationKeys = new Set([
-  "baseUrl",
-  "authHeader",
-  "authPrefix",
-  "control",
-  "rows",
-  "refusal",
-  "gap",
-  "paging",
-  "window",
-  "maxEvents",
-  "queries",
-]);
-
-/**
- * Reads a declaration someone pasted, or null. Only its shape is checked here:
- * the form's own rules judge the rest once it is in the fields. An unknown key
- * is refused rather than dropped, so a token pasted alongside never sits in a
- * form field looking as though it was accepted, and a typo is not lost quietly.
- */
-export function parseEvidenceDeclaration(
-  text: string,
-): ConnectorEvidenceConfig | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return null;
-  }
-  const candidate = parsed as Partial<ConnectorEvidenceConfig>;
-  const known = Object.keys(parsed).every((key) => declarationKeys.has(key));
-  const shaped =
-    typeof candidate.baseUrl === "string" &&
-    typeof candidate.authHeader === "string" &&
-    typeof candidate.control === "string" &&
-    typeof candidate.rows === "string" &&
-    (candidate.paging?.kind === "offset" ||
-      candidate.paging?.kind === "cursor") &&
-    (candidate.window?.kind === "period" ||
-      candidate.window?.kind === "range") &&
-    Array.isArray(candidate.queries) &&
-    candidate.queries.every(shapedQuery);
-  return known && shaped ? (parsed as ConnectorEvidenceConfig) : null;
 }
