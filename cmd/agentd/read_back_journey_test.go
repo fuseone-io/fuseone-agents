@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/channel"
@@ -66,7 +68,11 @@ type readBackWorld struct {
 
 func newReadBackWorld(t *testing.T) *readBackWorld {
 	t.Helper()
-	pool := testdb.Pool(t)
+	return readBackWorldOn(t, testdb.Pool(t))
+}
+
+func readBackWorldOn(t *testing.T, pool *pgxpool.Pool) *readBackWorld {
+	t.Helper()
 	v, err := vault.New(make([]byte, 32), "test")
 	if err != nil {
 		t.Fatalf("vault: %v", err)

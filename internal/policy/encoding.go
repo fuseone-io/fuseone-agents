@@ -24,10 +24,7 @@ type rows interface {
 // order would make every restart look like a policy change, and every step
 // would seal a decision to a name nobody could reproduce.
 func readAll(ctx context.Context, db rows) ([]domain.Policy, error) {
-	result, err := db.Query(ctx, `
-		select code, name, owner, reason, resource, effects, reach,
-		       scopes, agents, conditions, effect, mode, enabled
-		from policies order by code`)
+	result, err := db.Query(ctx, `select `+policyColumns+` from policies order by code`)
 	if err != nil {
 		return nil, fmt.Errorf("policy: read: %w", err)
 	}
@@ -38,34 +35,9 @@ func readAll(ctx context.Context, db rows) ([]domain.Policy, error) {
 	// two different hashes for the same absence of rules.
 	out := []domain.Policy{}
 	for result.Next() {
-		var (
-			p                  domain.Policy
-			effects, agents    []string
-			reach, effect      string
-			mode               string
-			scopes, conditions []byte
-		)
-		if err := result.Scan(&p.Code, &p.Name, &p.Owner, &p.Reason, &p.Resource,
-			&effects, &reach, &scopes, &agents, &conditions,
-			&effect, &mode, &p.Enabled); err != nil {
+		p, err := scanPolicy(result)
+		if err != nil {
 			return nil, err
-		}
-
-		p.Reach, p.Effect, p.Mode = domain.PolicyReach(reach), domain.PolicyEffect(effect), domain.PolicyMode(mode)
-		for _, e := range effects {
-			// An effect nobody can parse becomes Unknown, which never
-			// executes — a stored value that drifted must not read as a read.
-			effect, _ := domain.ParseEffect(e)
-			p.Effects = append(p.Effects, effect)
-		}
-		for _, a := range agents {
-			p.Agents = append(p.Agents, domain.AgentID(a))
-		}
-		if err := json.Unmarshal(scopes, &p.Scopes); err != nil {
-			return nil, fmt.Errorf("policy: decode scopes of %s: %w", p.Code, err)
-		}
-		if err := json.Unmarshal(conditions, &p.Conditions); err != nil {
-			return nil, fmt.Errorf("policy: decode conditions of %s: %w", p.Code, err)
 		}
 		out = append(out, p)
 	}
@@ -75,6 +47,43 @@ func readAll(ctx context.Context, db rows) ([]domain.Policy, error) {
 
 	slices.SortFunc(out, func(a, b domain.Policy) int { return strings.Compare(a.Code, b.Code) })
 	return out, nil
+}
+
+const policyColumns = `code, name, owner, reason, resource, effects, reach,
+	scopes, agents, conditions, effect, mode, enabled`
+
+// scanPolicy reads one row of policyColumns.
+func scanPolicy(row pgx.Row) (domain.Policy, error) {
+	var (
+		p                  domain.Policy
+		effects, agents    []string
+		reach, effect      string
+		mode               string
+		scopes, conditions []byte
+	)
+	if err := row.Scan(&p.Code, &p.Name, &p.Owner, &p.Reason, &p.Resource,
+		&effects, &reach, &scopes, &agents, &conditions,
+		&effect, &mode, &p.Enabled); err != nil {
+		return domain.Policy{}, err
+	}
+
+	p.Reach, p.Effect, p.Mode = domain.PolicyReach(reach), domain.PolicyEffect(effect), domain.PolicyMode(mode)
+	for _, e := range effects {
+		// An effect nobody can parse becomes Unknown, which never
+		// executes — a stored value that drifted must not read as a read.
+		effect, _ := domain.ParseEffect(e)
+		p.Effects = append(p.Effects, effect)
+	}
+	for _, a := range agents {
+		p.Agents = append(p.Agents, domain.AgentID(a))
+	}
+	if err := json.Unmarshal(scopes, &p.Scopes); err != nil {
+		return domain.Policy{}, fmt.Errorf("policy: decode scopes of %s: %w", p.Code, err)
+	}
+	if err := json.Unmarshal(conditions, &p.Conditions); err != nil {
+		return domain.Policy{}, fmt.Errorf("policy: decode conditions of %s: %w", p.Code, err)
+	}
+	return p, nil
 }
 
 // encode prepares the JSON and array columns.

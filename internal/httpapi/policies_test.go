@@ -22,6 +22,15 @@ type policyStore struct {
 
 func (s *policyStore) Active(context.Context) (policy.Set, error) { return s.set, nil }
 
+func (s *policyStore) Named(_ context.Context, code string) (domain.Policy, error) {
+	for _, p := range s.set.Policies {
+		if p.Code == code {
+			return p, nil
+		}
+	}
+	return domain.Policy{}, policy.ErrNoPolicy
+}
+
 func (s *policyStore) Put(_ context.Context, p domain.Policy, _ domain.UserID) (policy.Set, error) {
 	s.written = p
 	return policy.Set{Hash: "pol_after"}, nil

@@ -2,11 +2,13 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/policy"
 )
 
 /*
@@ -110,18 +112,16 @@ func (s *Server) GetPolicy(ctx context.Context, req openapi.GetPolicyRequestObje
 	if s.policies == nil {
 		return nil, errNoAdministration
 	}
-	set, err := s.policies.Active(ctx)
+	found, err := s.policies.Named(ctx, req.Code)
+	if errors.Is(err, policy.ErrNoPolicy) {
+		return openapi.GetPolicy404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(req.Code),
+		}, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get policy: %w", err)
 	}
-	for _, p := range set.Policies {
-		if p.Code == req.Code {
-			return openapi.GetPolicy200JSONResponse(policyFrom(p)), nil
-		}
-	}
-	return openapi.GetPolicy404ApplicationProblemPlusJSONResponse{
-		NotFoundApplicationProblemPlusJSONResponse: notFound(req.Code),
-	}, nil
+	return openapi.GetPolicy200JSONResponse(policyFrom(found)), nil
 }
 
 // mcpServerConfig is a server as it was configured, before anything observed
