@@ -243,3 +243,28 @@ func TestServiceTokenRoutes_returnTheSecretOnlyWhenIssuing(t *testing.T) {
 		t.Fatalf("listing = %s", raw)
 	}
 }
+
+func TestSetGrants_onNobody_isNotFound(t *testing.T) {
+	dir := auth.NewPostgres(testdb.Pool(t))
+	server := NewServer(ledger.NewMemory(), "test").WithPeople(dir)
+	admin := auth.WithPrincipal(context.Background(), domain.Principal{
+		ID: "usr_admin", Kind: domain.PrincipalUser, Grants: []domain.Grant{{
+			Scope: domain.Scope{Company: domain.Installation}, Role: domain.RoleAdmin,
+		}},
+	})
+
+	for name, grants := range map[string][]openapi.GrantInput{
+		"an empty list": {},
+		"a grant":       {{Company: "acme", Area: "cx", Role: openapi.GrantInputRoleAuthor}},
+	} {
+		resp, err := server.SetGrants(admin, openapi.SetGrantsRequestObject{
+			PrincipalId: "svc_nobody", Body: &openapi.SetGrantsJSONRequestBody{Grants: grants},
+		})
+		if err != nil {
+			t.Fatalf("%s: SetGrants: %v", name, err)
+		}
+		if _, ok := resp.(openapi.SetGrants404ApplicationProblemPlusJSONResponse); !ok {
+			t.Errorf("%s: response = %T, want 404", name, resp)
+		}
+	}
+}

@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -60,6 +61,17 @@ func (p *Postgres) SetGrants(
 	ctx context.Context, principalID string, grants []domain.Grant, by string,
 ) error {
 	return p.onTrail(ctx, func(tx pgx.Tx) error {
+		// Locked, so a principal removed meanwhile is not granted anything either, and
+		// first, so nobody gets a line on the trail for a change that never happened.
+		var exists bool
+		err := tx.QueryRow(ctx, `select true from principals where principal_id = $1 for update`,
+			principalID).Scan(&exists)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNoPrincipal
+		}
+		if err != nil {
+			return fmt.Errorf("auth: read principal: %w", err)
+		}
 		if err := replaceGrants(ctx, tx, grantWrite{principalID, by, grants},
 			`delete from role_grants where principal_id = $1 and granted_by not like $2`,
 			assertedPrefix+"%"); err != nil {

@@ -17,12 +17,13 @@ var (
 	ErrServiceAccountName     = errors.New("auth: a service account name is lowercase letters, digits and hyphens, starting with a letter")
 	ErrServiceAccountTaken    = errors.New("auth: that service account name is taken")
 	ErrNoServiceAccount       = errors.New("auth: no such service account")
+	ErrNoPrincipal            = errors.New("auth: no such principal")
 	ErrServiceAccountDisabled = errors.New("auth: this service account is disabled")
 	ErrNoServiceToken         = errors.New("auth: no such token")
 	ErrTokenExpiry            = errors.New("auth: a token needs an expiry in the future")
 )
 
-var serviceAccountName = regexp.MustCompile(`^[a-z][a-z0-9-]{1,62}$`)
+var serviceAccountName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 
 // IssuedToken is the one moment a secret exists outside the caller's hands.
 type IssuedToken struct {

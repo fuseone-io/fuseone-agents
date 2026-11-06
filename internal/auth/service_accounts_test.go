@@ -297,3 +297,59 @@ func TestSetGrants_isOnTheTrail(t *testing.T) {
 		t.Fatalf("grant events = %d, %v", count, err)
 	}
 }
+
+// Nothing is recorded as granted to somebody who does not exist: the trail would say
+// access changed when nothing did, and an empty list used to do exactly that.
+func TestSetGrants_onNobody_isAbsent_andLeavesNoEvent(t *testing.T) {
+	store, pool := serviceStore(t)
+	ctx := context.Background()
+
+	cases := map[string][]domain.Grant{
+		"an empty list": nil,
+		"a grant":       {{Scope: domain.Scope{Company: "acme", Area: "cx"}, Role: domain.RoleAuthor}},
+	}
+	for name, grants := range cases {
+		err := store.SetGrants(ctx, "svc_nobody", grants, "usr_admin")
+		if !errors.Is(err, auth.ErrNoPrincipal) {
+			t.Errorf("%s: err = %v, want absent", name, err)
+		}
+	}
+
+	var events int
+	if err := pool.QueryRow(ctx, `
+		select count(*) from admin_events where action = 'grants.set' and target = 'svc_nobody'`).Scan(&events); err != nil || events != 0 {
+		t.Fatalf("events about nobody = %d, %v", events, err)
+	}
+}
+
+// Anchored: revoking everything is a real act on somebody real.
+func TestSetGrants_anEmptyListOnSomebody_isStoredAndRecorded(t *testing.T) {
+	store, pool := serviceStore(t)
+	ctx := context.Background()
+	a := aServiceAccount(t, store, "emptied")
+	if err := store.SetGrants(ctx, a.ID, []domain.Grant{{
+		Scope: domain.Scope{Company: "acme", Area: "cx"}, Role: domain.RoleAuthor,
+	}}, "usr_admin"); err != nil {
+		t.Fatalf("SetGrants: %v", err)
+	}
+
+	if err := store.SetGrants(ctx, a.ID, nil, "usr_admin"); err != nil {
+		t.Fatalf("SetGrants: %v", err)
+	}
+
+	var held, events int
+	if err := pool.QueryRow(ctx, `select count(*) from role_grants where principal_id = $1`, a.ID).Scan(&held); err != nil || held != 0 {
+		t.Fatalf("grants held = %d, %v", held, err)
+	}
+	if err := pool.QueryRow(ctx, `select count(*) from admin_events where action = 'grants.set' and target = $1`, a.ID).Scan(&events); err != nil || events != 2 {
+		t.Fatalf("events = %d, %v; want 2", events, err)
+	}
+}
+
+func TestCreateServiceAccount_acceptsTheShortestNameTheContractAllows(t *testing.T) {
+	store, _ := serviceStore(t)
+
+	if _, err := store.CreateServiceAccount(context.Background(), "a", "", "usr_admin"); err != nil {
+		t.Fatalf("a one-letter name: %v", err)
+	}
+}
