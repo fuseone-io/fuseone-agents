@@ -40,6 +40,9 @@ func (p *workerParts) startLoops(
 	if p.configPool == nil {
 		return
 	}
+	// One per process: its fence holds connections outside the pool, and that budget
+	// only means something while there is one of it.
+	corpus := regression.NewStore(p.configPool)
 	if p.native != nil && p.settings != nil {
 		go p.watchConnectors(ctx)
 	}
@@ -75,7 +78,7 @@ func (p *workerParts) startLoops(
 	// it takes effect on the next sweep rather than at the next deploy —
 	// which is the whole reason it is a setting.
 	if p.durable != nil && p.retention != nil {
-		go sweepContent(ctx, admin.NewErasures(p.configPool, p.durable, p.retention, regression.NewStore(p.configPool)))
+		go sweepContent(ctx, admin.NewErasures(p.configPool, p.durable, p.retention, corpus))
 	}
 
 	// What each planning call cost, for the aggregate. A projection rather
@@ -108,7 +111,7 @@ func (p *workerParts) startLoops(
 	// only where there is somewhere to say it: an installation that keeps no
 	// corrections starts no loop and pays for no batteries.
 	if p.settings != nil && p.registry != nil {
-		go watchDrift(ctx, p, p.settings)
+		go watchDrift(ctx, p, p.settings, corpus)
 	}
 
 	if p.registry != nil {

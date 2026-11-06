@@ -210,6 +210,11 @@ means "leave what is stored", so there has to be a way to say the other thing.
 Read `CHANGELOG.md` first, and its **Upgrade notes** section before anything
 else — it is where a release says what it stops.
 
+Count four more PostgreSQL connections per `serve` and `worker` replica, beyond
+each process's pool, when you size `max_connections`. They are opened only while a
+correction is being recorded, a battery is opening its runs, or content is being
+erased, so that erasing and copying cannot overtake each other.
+
 ```
 helm upgrade fuseone-agents deploy/helm/fuseone-agents \
   -n <namespace> --reuse-values --timeout 25m --set image.tag=<version>

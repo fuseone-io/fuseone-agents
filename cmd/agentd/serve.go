@@ -97,6 +97,9 @@ func serve(args []string) error {
 		// The administration area needs a database: it is where rulings and
 		// their trail live. An installation on the in-memory ledger serves
 		// runs and answers the admin endpoints empty.
+		// One per process: its fence holds connections outside the pool, and that
+		// budget only means something while there is one of it.
+		corpus := regression.NewStore(identity.pool)
 		curator := admin.NewCurator(identity.pool)
 
 		// The vault is optional here and required in the worker. This process
@@ -169,7 +172,7 @@ func serve(args []string) error {
 			// The corrections a future version is checked against (FU-12),
 			// and the last battery run against a version — which is what
 			// stands between a broken corpus and somebody starting the agent.
-			WithRegressions(regression.NewStore(identity.pool)).
+			WithRegressions(corpus).
 			WithBatteries(runs).
 			// How long content is kept, and erasing it on request. Its own
 			// permission: the one act here nobody can undo.
@@ -185,7 +188,7 @@ func serve(args []string) error {
 			WithRetention(
 				admin.NewRetention(identity.pool, store),
 				admin.NewErasures(identity.pool, ledger.NewContent(identity.pool),
-					admin.NewRetention(identity.pool, store), regression.NewStore(identity.pool)),
+					admin.NewRetention(identity.pool, store), corpus),
 			).
 			WithWebhooks(webhooksWith(identity.pool, masterVault)).
 			// Where a published cron trigger becomes a moment the worker
