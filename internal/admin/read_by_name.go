@@ -20,16 +20,35 @@ cost the same however many others exist.
 // ErrProviderUnknown means nobody configured a provider under that name.
 var ErrProviderUnknown = errors.New("admin: no such provider")
 
-// MCPServerNamed reads one server configured here.
+/*
+MCPServerNamed reads one server configured here, with what may be said about its
+sealed document.
+
+That document is opened here and goes no further: only the summary and the
+fingerprint leave this function. Worked out on every read rather than copied out
+on write, so nothing leaves the seal, and rows stored before this existed need no
+migration.
+
+A document that will not open is an error. Reported as absent, a client would
+read the credential as gone and write it back.
+*/
 func (i *Integrations) MCPServerNamed(ctx context.Context, name string) (domain.MCPServer, error) {
-	row, err := i.settings.Get(ctx, settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, name)
+	row, err := i.settings.Reveal(ctx, settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, name)
 	if errors.Is(err, settings.ErrNotFound) {
 		return domain.MCPServer{}, fmt.Errorf("%w: %s", ErrMCPServerUnknown, name)
 	}
 	if err != nil {
+		return domain.MCPServer{}, fmt.Errorf("admin: read MCP server %s: %w", name, err)
+	}
+	server, err := serverFromRow(row)
+	if err != nil {
 		return domain.MCPServer{}, err
 	}
-	return serverFromRow(row)
+	creds := domain.ReadMCPCredentials(row.Secret)
+	summary := creds.Summary()
+	server.Credential = &summary
+	server.SecretFingerprint = i.settings.Fingerprint(row, creds.FingerprintMaterial())
+	return server, nil
 }
 
 // ProviderNamed reads one provider.

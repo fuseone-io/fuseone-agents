@@ -41,7 +41,10 @@ func (s *Server) GetMCPServer(ctx context.Context, req openapi.GetMCPServerReque
 	if err != nil {
 		return nil, fmt.Errorf("get MCP server: %w", err)
 	}
-	return openapi.GetMCPServer200JSONResponse(mcpServerConfig(server)), nil
+	out := mcpServerConfig(server)
+	out.SecretFingerprint = someString(server.SecretFingerprint)
+	applyCredentialSummary(&out, server.Credential)
+	return openapi.GetMCPServer200JSONResponse(out), nil
 }
 
 func (s *Server) GetModelProvider(ctx context.Context, req openapi.GetModelProviderRequestObject) (openapi.GetModelProviderResponseObject, error) {
@@ -112,6 +115,27 @@ func (s *Server) GetPolicy(ctx context.Context, req openapi.GetPolicyRequestObje
 		return nil, fmt.Errorf("get policy: %w", err)
 	}
 	return openapi.GetPolicy200JSONResponse(policyFrom(found)), nil
+}
+
+func applyCredentialSummary(out *openapi.MCPServer, summary *domain.MCPCredentialSummary) {
+	if summary == nil {
+		return
+	}
+	if len(summary.HeaderNames) > 0 {
+		out.HeaderNames = &summary.HeaderNames
+	}
+	if len(summary.EnvNames) > 0 {
+		out.EnvNames = &summary.EnvNames
+	}
+	if client := summary.OAuth; client != nil {
+		out.OauthClient = &openapi.MCPOAuthClient{
+			TokenURL: someString(client.TokenURL), ClientID: someString(client.ClientID),
+			TokenType: someString(client.TokenType),
+		}
+		if len(client.Scopes) > 0 {
+			out.OauthClient.Scopes = &client.Scopes
+		}
+	}
 }
 
 // mcpServerConfig is a server as it was configured, before anything observed

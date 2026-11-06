@@ -2171,7 +2171,7 @@ export interface paths {
         };
         /**
          * Read one tool server as it is configured
-         * @description What PUT stored, for a client deciding whether the server drifted. Credentials, variables and configuration files are never returned; the has* fields report that one is stored, and sending the answer back unchanged keeps them.
+         * @description What PUT stored, for a client deciding whether the server drifted. Secret values are never returned. What is not secret comes back as itself (headerNames, envNames, oauthClient), and secretFingerprint moves when a value that may be a secret changes. Sending the answer back unchanged keeps all of it.
          *     Configuration only. Health, call authentication and the egress statement vary with what a worker saw and who is asking, with nobody having written anything, so they stay on the listing. A server a worker reports and nobody configured here is on the listing too and is 404 here: PUT wrote nothing a client could compare it to.
          */
         get: operations["getMCPServer"];
@@ -4210,7 +4210,23 @@ export interface components {
              */
             policy: "unknown" | "metadata_refused" | "proxy_requested" | "proxy_with_network_policy" | "unconstrained_local_process";
         };
+        /** @description Whose client an OAuth grant is. The tokens and the client secret never come back; the access token, refresh token and expiry are also left out of secretFingerprint, because a worker rotates them on its own. */
+        MCPOAuthClient: {
+            /** @description The token endpoint, with any credential put in the address (user information, query, fragment) taken out. A change to those parts moves secretFingerprint. */
+            tokenURL?: string;
+            clientID?: string;
+            tokenType?: string;
+            scopes?: string[];
+        };
         MCPServer: {
+            /** @description Only on the read by name. The names of the stored HTTP headers; the values never come back, because a value cannot be told apart from a credential by reading it. */
+            headerNames?: string[];
+            /** @description Only on the read by name. The names of the stored variables, never their values. */
+            envNames?: string[];
+            /** @description Only on the read by name. */
+            oauthClient?: components["schemas"]["MCPOAuthClient"];
+            /** @description Only on the read by name, and only when something sealed can be named. Opaque: compare it for equality with an earlier answer. It moves when the token, a header or variable value, the configuration file, the client secret, the token address or the App's key changes. It is keyed by this installation's master key and tied to this server, so it cannot be computed elsewhere or compared across servers, and replacing the master key moves it. */
+            secretFingerprint?: string;
             /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */
             name: string;
             transport?: components["schemas"]["Transport"];

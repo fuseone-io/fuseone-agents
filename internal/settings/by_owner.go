@@ -69,3 +69,12 @@ func scanSettings(rows pgx.Rows, kind Kind) ([]Setting, error) {
 	}
 	return out, rows.Err()
 }
+
+// Fingerprint names what a row seals, without saying what it is, or nothing when
+// there is nothing to name. Bound to the row, as sealing it was.
+func (s *Store) Fingerprint(set Setting, material []byte) string {
+	if s.vault == nil || len(material) == 0 {
+		return ""
+	}
+	return s.vault.Fingerprint(material, contextFor(set))
+}
