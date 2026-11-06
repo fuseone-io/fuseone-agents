@@ -94,7 +94,25 @@ type RegressionCase struct {
 	// drift, and the difference decides who gets woken up.
 	Model  string
 	Effort string
+	// Erased says the occurrence is gone, to retention or to a person's request.
+	// The case stays, because a correction nobody can check any more is a gap
+	// somebody should see rather than a line that quietly disappears.
+	Erased bool
 
 	CreatedBy UserID
 	CreatedAt time.Time
+}
+
+// CorpusFence names the lock an erasure and anything copying a corpus share, per
+// agent. Reading an occurrence and writing it somewhere else are two steps, and an
+// erasure between them would be undone by the second.
+func CorpusFence(agent AgentID) string {
+	return "corpus-fence:" + string(agent)
+}
+
+// ErasedCase is a correction that lost its occurrence, named for the notice.
+type ErasedCase struct {
+	Agent AgentID
+	Case  string
+	Scope Scope
 }

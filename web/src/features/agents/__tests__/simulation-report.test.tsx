@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { SimulationReportView } from "@/features/agents/simulation-report";
+import { SimulationSummary } from "@/features/agents/simulation-summary";
 import { setLocale } from "@/i18n";
 import type {
   SimulationCase,
@@ -56,6 +57,37 @@ describe("simulation report", () => {
     vi.restoreAllMocks();
   });
   afterEach(() => vi.unstubAllGlobals());
+
+  it("shows a case that lost its input as a gap, apart from held and broken", () => {
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <SimulationSummary
+            report={{
+              id: "sim-1",
+              cases: [],
+              running: false,
+              held: 2,
+              broken: 0,
+              erased: 1,
+            }}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText("Input erased")).toBeInTheDocument();
+  });
+
+  it("does not show a case that lost its input as still going", () => {
+    renderReport([
+      answeredCase({ id: "gone", settled: "erased", runId: undefined }),
+    ]);
+
+    expect(screen.getAllByText("Input erased").length).toBeGreaterThan(0);
+    expect(screen.queryByText("In progress")).not.toBeInTheDocument();
+  });
 
   it("saves a clean rehearsal as a regression baseline", async () => {
     const posted: unknown[] = [];

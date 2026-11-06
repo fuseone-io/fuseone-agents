@@ -2,6 +2,7 @@ package regression
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -29,11 +30,22 @@ func NewCorpus(cases *Store, content Content) *Corpus {
 	return &Corpus{cases: cases, content: content}
 }
 
-// Occurrences reads every case of one agent's corpus.
-//
-// Refused whole rather than run short. A battery missing a case is a battery
-// that reports green on a correction nobody checked, which is the one failure
-// a safety net must not have.
+// Hold fences the corpus against an erasure while it is being copied.
+func (c *Corpus) Hold(
+	ctx context.Context, agent domain.AgentID, inside func(context.Context) error,
+) error {
+	return c.cases.Hold(ctx, agent, inside)
+}
+
+/*
+Occurrences reads the cases of one agent's corpus that can still run.
+
+A case whose occurrence was erased is left out, and the battery reports it as a
+gap, because one aged-out case must not stop every other correction being
+checked. Anything else that cannot be read refuses the whole corpus: a battery
+missing a case for no stated reason reports green on a correction nobody
+checked, which is the one failure a safety net must not have.
+*/
 func (c *Corpus) Occurrences(
 	ctx context.Context, agent domain.AgentID,
 ) ([]simulate.Occurrence, error) {
@@ -45,6 +57,9 @@ func (c *Corpus) Occurrences(
 	out := make([]simulate.Occurrence, 0, len(cases))
 	for _, one := range cases {
 		input, err := c.content.Get(ctx, one.InputRef)
+		if errors.Is(err, domain.ErrContentErased) {
+			continue
+		}
 		if err != nil {
 			return nil, fmt.Errorf("the occurrence of %s could not be read: %w", one.ID, err)
 		}

@@ -121,7 +121,9 @@ type standing struct {
 func standings(r Report) map[string]standing {
 	out := make(map[string]standing, len(r.Cases))
 	for _, c := range r.Cases {
-		if c.ID == "" {
+		// An erased case did not run. Reading it as having held would report the
+		// other side as a regression or a fix nobody measured.
+		if c.ID == "" || c.Settled == SettledErased {
 			continue
 		}
 		stood := Held

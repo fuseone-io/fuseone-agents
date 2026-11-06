@@ -167,6 +167,32 @@ given. It does not offer "everything about this person" as a query, because it
 does not index by data subject — a run is identified by agent, scope and time,
 not by whose data it touched.
 
+**It follows a run into the regression corpus.** A correction keeps its own copy of
+what a run was about, under the agent rather than the run, and every battery opens a
+new simulated run holding that input again. Erasing a run also erases, within the same
+agent, every correction's copy holding that run's input, those corrections' notes, and
+the content of every simulated run holding it. It finds them by the digest the run
+recorded, which outlives the correction being deleted. The admin event counts those
+corrections as `corpusCases`. The case itself stays, with no input, and is reported as a
+gap. Deleting a correction takes its copy and the runs that replayed it, unless another
+correction still holds the same input.
+
+Recording a correction and opening a battery wait while content is being erased, and
+erasing waits for them, so neither can put back what was just erased. This covers a
+person's request, retention and deleting a correction.
+
+**Identical bytes are treated as the same data.** Following the digest means input that
+is trivially common within an agent, such as `{}`, takes every copy, note and rehearsal
+holding it. Erasing too much of a rehearsal was chosen over leaving a person's data.
+
+**Real runs are the operator's to name.** Only rehearsals are followed. A real run holding
+the same bytes, including one started from another with "run from this input", is a record
+of something that happened, and erasure does not reach it unless it is named.
+
+**Uploaded simulation sets are not reached.** A set an author uploads is filed under
+its simulation and has no run to follow. An operator has to name those simulations'
+runs, and the file itself ages out through retention.
+
 **What survives an erasure.** The chain: that a run happened, which agent, which
 tool, what the Gate decided, and the digest of content that no longer exists.
 That much is the deliberate trade — a record of processing is what the platform
@@ -198,6 +224,18 @@ it erased anything.
 
 The window is read on every sweep rather than cached, so shortening retention
 takes effect on the next run.
+
+Retention applies to the regression corpus too. A correction's copy ages out like any
+other content, and its note is cleared with it. The window is a promise the operator
+configured, and a safety net is not a reason to break it. The case stays as a visible
+gap, and a person has to record it again to have it checked.
+
+The window counts from when the bytes were collected, not from when the platform last
+copied them. A nightly battery is the platform duplicating an occurrence, so when a
+correction's copy expires, the content of the same agent's simulated runs holding those
+bytes goes with it, however recent they are. Their steps and digests stay, and
+`content.expired` counts them as `corpusReplays`. Recording a correction again from a
+live run is a new collection and starts a new window.
 
 The same sweep deletes operational channel rows older than the window:
 `channel_inbox` by arrival time, `channel_deliveries` by post time, and

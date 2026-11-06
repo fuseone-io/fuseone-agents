@@ -86,6 +86,37 @@ func (c *Content) PutFor(
 }
 
 /*
+RestoreFor stores content again over its own tombstone.
+
+PutFor leaves an erased payload erased, because a retried step writes the same
+reference and must not undo an erasure that happened in between. A person
+recording a correction again is a new act: the reference is the digest, so what
+they read from a live run lands on the tombstone of the copy that aged out. It
+gets a new retention window, because it was stored again today.
+*/
+func (c *Content) RestoreFor(
+	ctx context.Context, kind, owner string, seq int64, data []byte,
+) (string, error) {
+	sum := sha256.Sum256(data)
+	digest := hex.EncodeToString(sum[:])
+	ref := fmt.Sprintf("%s://%s/%d/%s", kind, owner, seq, digest[:16])
+	stored, truncated := domain.Truncate(data, c.limit)
+
+	if _, err := c.pool.Exec(ctx, `
+		insert into run_content
+			(ref, owner_kind, run_id, seq, digest, bytes, full_bytes, truncated)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
+		on conflict (ref) do update
+		set bytes = excluded.bytes, truncated = excluded.truncated,
+		    erased_at = null, erased_reason = '', created_at = now()
+		where run_content.erased_at is not null`,
+		ref, kind, owner, seq, digest, stored, len(data), truncated); err != nil {
+		return "", fmt.Errorf("ledger: restore content for %s: %w", owner, err)
+	}
+	return ref, nil
+}
+
+/*
 WithLimit raises or lowers what one payload may occupy.
 
 The day object storage arrives, this is where the number goes up. Zero is
@@ -143,31 +174,51 @@ func (c *Content) Metadata(ctx context.Context, ref string) (domain.ContentMetad
 }
 
 /*
-EraseTx removes everything one owner's content holds, leaving a tombstone.
+EraseOwnersTx removes everything these owners' content holds, leaving tombstones.
 
 This is per-subject erasure (NF-09), and it reaches the referenced content
 rather than the ledger: the step keeps its reference and its digest, neither
 changes, and the hash chain is untouched. That is the whole reason bulky
 content was segregated in the first place (AU-04).
 
+One statement however many owners: a request about one person can name thousands of
+runs, and everything else that wants their corpus is waiting while this runs.
+
 Erasing what is already erased is not an error. The caller is asking for a
 state, not for an event, and a retry after a failure must not refuse.
 */
-func (c *Content) EraseTx(
-	ctx context.Context, tx pgx.Tx, kind, owner, reason string,
+func (c *Content) EraseOwnersTx(
+	ctx context.Context, tx pgx.Tx, kind string, owners []string, reason string,
 ) (int, error) {
-	return eraseOwner(ctx, tx, kind, owner, reason)
-}
-
-func eraseOwner(
-	ctx context.Context, conn contentExecutor, kind, owner, reason string,
-) (int, error) {
-	tag, err := conn.Exec(ctx, `
+	tag, err := tx.Exec(ctx, `
 		update run_content
 		set bytes = null, erased_at = now(), erased_reason = $3
-		where owner_kind = $1 and run_id = $2 and erased_at is null`, kind, owner, reason)
+		where owner_kind = $1 and run_id = any($2::text[]) and erased_at is null`,
+		kind, owners, reason)
 	if err != nil {
-		return 0, fmt.Errorf("ledger: erase content of %s: %w", owner, err)
+		return 0, fmt.Errorf("ledger: erase content of %d owners: %w", len(owners), err)
+	}
+	return int(tag.RowsAffected()), nil
+}
+
+/*
+EraseRefsTx removes named payloads, leaving the same tombstone.
+
+Per owner is too wide for a corpus: its copies are filed under the agent, and a
+request about one person must not take every correction that agent has.
+*/
+func (c *Content) EraseRefsTx(
+	ctx context.Context, tx pgx.Tx, refs []string, reason string,
+) (int, error) {
+	if len(refs) == 0 {
+		return 0, nil
+	}
+	tag, err := tx.Exec(ctx, `
+		update run_content
+		set bytes = null, erased_at = now(), erased_reason = $2
+		where ref = any($1::text[]) and erased_at is null`, refs, reason)
+	if err != nil {
+		return 0, fmt.Errorf("ledger: erase content by reference: %w", err)
 	}
 	return int(tag.RowsAffected()), nil
 }

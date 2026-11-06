@@ -79,6 +79,18 @@ Use um corpus para uma promessa:
 Corpora pequenos são mais fáceis de confiar. Dez casos que ensinam algo são
 melhores que cem casos que ninguém lê.
 
+## Quando um caso perde a entrada
+
+Uma correção guarda a própria cópia do assunto da execução. Essa cópia expira com a
+retenção da sua instalação, e é apagada na hora se a execução de origem for apagada a
+pedido de uma pessoa. O caso continua, marcado como **Sem entrada, apagada**: nem
+segurou nem quebrou, porque nada foi verificado.
+
+O resto do corpus continua rodando, e a conversa que recebe avisos de drift é informada
+de qual caso deixou de ser verificado. Para voltar a verificá-lo, grave a correção a
+partir de uma execução mais recente da mesma situação. Excluir um caso também apaga a
+cópia dele.
+
 ## Quando rodar regressões
 
 Rode o corpus quando:

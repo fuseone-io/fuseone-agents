@@ -19,10 +19,12 @@ type sweepCounts struct {
 	channelRecords int
 	egressRecords  int
 	memoryRecords  int
+	corpusNotes    int
+	corpusReplays  int
 }
 
 func (c sweepCounts) total() int {
-	return c.objects + c.channelRecords + c.egressRecords + c.memoryRecords
+	return c.objects + c.channelRecords + c.egressRecords + c.memoryRecords + c.corpusNotes
 }
 
 /*
@@ -37,6 +39,23 @@ func (e *Erasures) Sweep(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	agents, err := e.agentsLosingCopies(ctx, before)
+	if err != nil {
+		return 0, err
+	}
+	var total int
+	err = e.fence.Exclusive(ctx, agents, func(ctx context.Context) error {
+		var err error
+		total, err = e.sweepPast(ctx, window, before)
+		return err
+	})
+	if err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (e *Erasures) sweepPast(ctx context.Context, window time.Duration, before time.Time) (int, error) {
 	tx, err := e.pool.Begin(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("admin: begin retention sweep: %w", err)
@@ -76,11 +95,16 @@ func (e *Erasures) eraseExpired(
 	ctx context.Context, tx pgx.Tx, before time.Time,
 ) (sweepCounts, error) {
 	var counts sweepCounts
-	var err error
+	replays, replayed, err := eraseExpiredReplays(ctx, tx, before)
+	if err != nil {
+		return sweepCounts{}, err
+	}
+	counts.corpusReplays = replays
 	counts.objects, err = e.content.ErasePastTx(ctx, tx, before, "retention")
 	if err != nil {
 		return sweepCounts{}, err
 	}
+	counts.objects += replayed
 	counts.channelRecords, err = e.eraseChannelOperationalRows(ctx, tx, before)
 	if err != nil {
 		return sweepCounts{}, err
@@ -90,6 +114,10 @@ func (e *Erasures) eraseExpired(
 		return sweepCounts{}, err
 	}
 	counts.memoryRecords, err = e.eraseMemoryRows(ctx, tx, before)
+	if err != nil {
+		return sweepCounts{}, err
+	}
+	counts.corpusNotes, err = e.clearNotesOfErasedCases(ctx, tx)
 	if err != nil {
 		return sweepCounts{}, err
 	}
@@ -103,6 +131,8 @@ func recordSweep(ctx context.Context, tx pgx.Tx, counts sweepCounts, window time
 			"objects": counts.objects, "channelRecords": counts.channelRecords,
 			"egressRecords":  counts.egressRecords,
 			"memoryRecords":  counts.memoryRecords,
+			"corpusNotes":    counts.corpusNotes,
+			"corpusReplays":  counts.corpusReplays,
 			"olderThanHours": int64(window / time.Hour),
 		},
 	})

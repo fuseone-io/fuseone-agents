@@ -118,6 +118,12 @@ func occurrencesOf(ids ...string) occurrences {
 	return out
 }
 
+func (o occurrences) Hold(
+	ctx context.Context, _ domain.AgentID, inside func(context.Context) error,
+) error {
+	return inside(ctx)
+}
+
 func (o occurrences) Occurrences(
 	context.Context, domain.AgentID,
 ) ([]simulate.Occurrence, error) {
@@ -129,4 +135,57 @@ type openerSpy struct{ opened []trigger.Request }
 func (o *openerSpy) Open(_ context.Context, req trigger.Request) (trigger.Result, error) {
 	o.opened = append(o.opened, req)
 	return trigger.Result{RunID: domain.RunID("run-" + req.IdemKey)}, nil
+}
+
+// A battery reads the corpus and then opens runs holding it. An erasure between
+// the two would leave those runs behind, so both happen inside the fence.
+func TestSweepRerun_opensTheBatteryInsideTheCorpusFence(t *testing.T) {
+	t.Parallel()
+
+	fence := &fencedOccurrences{cases: []simulate.Occurrence{{ID: "reg-1", Input: []byte("x")}}}
+	opener := &fenceCheckingOpener{fence: fence}
+	rerun := drift.NewRerun(corpusOf("triage"), neverRan{}, fence, opener, nil)
+
+	if _, err := rerun.Sweep(context.Background(), at()); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	if !fence.readInside || !opener.openedInside {
+		t.Fatalf("read inside = %v, opened inside = %v", fence.readInside, opener.openedInside)
+	}
+}
+
+type fencedOccurrences struct {
+	cases      []simulate.Occurrence
+	inside     bool
+	readInside bool
+}
+
+func (f *fencedOccurrences) Occurrences(context.Context, domain.AgentID) ([]simulate.Occurrence, error) {
+	f.readInside = f.inside
+	return f.cases, nil
+}
+
+func (f *fencedOccurrences) Hold(
+	ctx context.Context, _ domain.AgentID, inside func(context.Context) error,
+) error {
+	f.inside = true
+	defer func() { f.inside = false }()
+	return inside(ctx)
+}
+
+type fenceCheckingOpener struct {
+	fence        *fencedOccurrences
+	openedInside bool
+}
+
+func (o *fenceCheckingOpener) Open(context.Context, trigger.Request) (trigger.Result, error) {
+	o.openedInside = o.fence.inside
+	return trigger.Result{RunID: "run-1"}, nil
+}
+
+type neverRan struct{}
+
+func (neverRan) LastBatteryAt(context.Context, domain.AgentID, domain.VersionID) (time.Time, bool, error) {
+	return time.Time{}, false, nil
 }

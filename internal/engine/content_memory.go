@@ -88,6 +88,35 @@ func (m *MemoryContent) PutFor(
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// A retried step writes the same reference. The durable store does nothing
+	// on that conflict, so an erasure in between stands, and here it must too.
+	if held, found := m.data[ref]; found && held.erased {
+		return ref, nil
+	}
+	m.data[ref] = object{
+		bytes:  append([]byte(nil), stored...),
+		digest: hex.EncodeToString(sum[:]),
+		kind:   kind,
+		owner:  owner,
+		at:     time.Now(),
+	}
+	return ref, nil
+}
+
+// RestoreFor stores content again over its own tombstone, as the durable store
+// does for a person recording a correction anew.
+func (m *MemoryContent) RestoreFor(
+	ctx context.Context, kind, owner string, seq int64, data []byte,
+) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	ref := fmt.Sprintf("%s://%s/%d/%s", kind, owner, seq, hex.EncodeToString(sum[:])[:16])
+	stored, _ := domain.Truncate(data, m.limit)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.data[ref] = object{
 		bytes:  append([]byte(nil), stored...),
 		digest: hex.EncodeToString(sum[:]),

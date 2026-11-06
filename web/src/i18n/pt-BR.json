@@ -1145,6 +1145,7 @@
     "shouldCall": "deveria conseguir chamar",
     "shouldFinish": "deveria concluir sozinho",
     "tallyBroken": "Quebraram",
+    "tallyErased": "Sem entrada, apagada",
     "tallyHeld": "Seguraram",
     "title": "Corrigir este caso"
   },
@@ -2913,6 +2914,7 @@
     "factToolsDry": "As ferramentas são chamadas, mas respondem vazio. Nenhuma query roda",
     "fileLabel": "Arquivo de casos",
     "fixInstructions": "Corrigir as instruções",
+    "erasedNotChecked": "Não verificado: a entrada foi apagada",
     "gaveUpBeforeAnswering": "Parou antes de responder",
     "gateStoppedProposal": "O Gate teria parado pelo menos uma chamada de ferramenta proposta.",
     "handWritten": "Escrita aqui, ainda não salva para reuso",
@@ -2964,6 +2966,7 @@
     "setTitle": "Ocorrências para repetir",
     "settledFinished": "Concluiu",
     "settledParked": "Parou",
+    "settledErased": "Entrada apagada",
     "settledRunning": "Em andamento",
     "settledWaiting": "Esperaria alguém",
     "situationNumber": "Situação {{n}}",

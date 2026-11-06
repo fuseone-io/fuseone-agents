@@ -21,9 +21,14 @@ import (
 // ErrNothingToCheck means a correction arrived with no expectation on it.
 var ErrNothingToCheck = errors.New("regression: a case with no expectation cannot be checked")
 
-type Store struct{ pool *pgxpool.Pool }
+type Store struct {
+	pool  *pgxpool.Pool
+	fence *fence
+}
 
-func NewStore(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
+func NewStore(pool *pgxpool.Pool) *Store {
+	return &Store{pool: pool, fence: newFence(pool.Config().ConnConfig)}
+}
 
 // Record stores one correction, replacing a case of the same id.
 //
@@ -79,11 +84,13 @@ func (s *Store) Record(ctx context.Context, c domain.RegressionCase) error {
 // one on the second read.
 func (s *Store) List(ctx context.Context, agent domain.AgentID) ([]domain.RegressionCase, error) {
 	rows, err := s.pool.Query(ctx, `
-		select case_id, company_id, area_id, input_ref, expectations,
-		       from_run, note, created_by, created_at, model, effort
-		from regression_cases
-		where agent_id = $1
-		order by created_at, case_id`, string(agent))
+		select c.case_id, c.company_id, c.area_id, c.input_ref, c.expectations,
+		       c.from_run, c.note, c.created_by, c.created_at, c.model, c.effort,
+		       coalesce(rc.erased_at is not null, false)
+		from regression_cases c
+		left join run_content rc on rc.ref = c.input_ref
+		where c.agent_id = $1
+		order by c.created_at, c.case_id`, string(agent))
 	if err != nil {
 		return nil, fmt.Errorf("regression: list %s: %w", agent, err)
 	}
@@ -95,7 +102,7 @@ func (s *Store) List(ctx context.Context, agent domain.AgentID) ([]domain.Regres
 		var expectations []byte
 		var company, area, fromRun, by string
 		if err := rows.Scan(&c.ID, &company, &area, &c.InputRef, &expectations,
-			&fromRun, &c.Note, &by, &c.CreatedAt, &c.Model, &c.Effort); err != nil {
+			&fromRun, &c.Note, &by, &c.CreatedAt, &c.Model, &c.Effort, &c.Erased); err != nil {
 			return nil, fmt.Errorf("regression: scan case: %w", err)
 		}
 		if err := json.Unmarshal(expectations, &c.Expectations); err != nil {
@@ -108,14 +115,80 @@ func (s *Store) List(ctx context.Context, agent domain.AgentID) ([]domain.Regres
 	return out, rows.Err()
 }
 
-// Delete removes one case from the corpus.
+/*
+Delete removes one case from the corpus, with the copy it kept and the runs that
+replayed it.
+
+Left behind, none of those have anything pointing at them. An input too large to
+keep whole does not even match the run it came from, so this is the last moment
+they can be found. Identical input shares one reference, so while another case
+names the copy, it stays and so do the replays. One statement, because a delete
+between the steps would leave exactly what this exists to prevent.
+*/
 func (s *Store) Delete(ctx context.Context, agent domain.AgentID, id string) error {
-	if _, err := s.pool.Exec(ctx,
-		`delete from regression_cases where agent_id = $1 and case_id = $2`,
+	return s.Exclusive(ctx, []domain.AgentID{agent}, func(ctx context.Context) error {
+		return s.deleteCase(ctx, agent, id)
+	})
+}
+
+func (s *Store) deleteCase(ctx context.Context, agent domain.AgentID, id string) error {
+	if _, err := s.pool.Exec(ctx, `
+		with gone as (
+			delete from regression_cases
+			where agent_id = $1 and case_id = $2
+			returning input_ref
+		), orphaned as (
+			select rc.ref, rc.digest from run_content rc
+			join gone on rc.ref = gone.input_ref
+			where not exists (
+				select 1 from regression_cases other
+				where other.input_ref = rc.ref
+				  and not (other.agent_id = $1 and other.case_id = $2)
+			)
+		), replays as (
+			select distinct held.run_id from run_content held
+			join orphaned on held.digest = orphaned.digest
+			join runs r on r.run_id = held.run_id
+			where held.owner_kind = 'run' and held.erased_at is null
+			  and r.simulated and r.agent_id = $1
+		)
+		update run_content rc
+		set bytes = null, erased_at = now(), erased_reason = 'case_deleted'
+		where rc.erased_at is null
+		  and (rc.ref in (select ref from orphaned)
+		       or (rc.owner_kind = 'run' and rc.run_id in (select run_id from replays)))`,
 		string(agent), id); err != nil {
 		return fmt.Errorf("regression: delete %s: %w", id, err)
 	}
 	return nil
+}
+
+// ErasedCases lists every correction whose occurrence is gone, for the notice
+// that tells an author a case has stopped being checked.
+func (s *Store) ErasedCases(ctx context.Context) ([]domain.ErasedCase, error) {
+	rows, err := s.pool.Query(ctx, `
+		select c.agent_id, c.case_id, c.company_id, c.area_id
+		from regression_cases c
+		join run_content rc on rc.ref = c.input_ref
+		where rc.erased_at is not null
+		order by c.agent_id, c.case_id`)
+	if err != nil {
+		return nil, fmt.Errorf("regression: list erased cases: %w", err)
+	}
+	defer rows.Close()
+
+	var out []domain.ErasedCase
+	for rows.Next() {
+		var agent, kase, company, area string
+		if err := rows.Scan(&agent, &kase, &company, &area); err != nil {
+			return nil, fmt.Errorf("regression: scan erased case: %w", err)
+		}
+		out = append(out, domain.ErasedCase{
+			Agent: domain.AgentID(agent), Case: kase,
+			Scope: domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)},
+		})
+	}
+	return out, rows.Err()
 }
 
 /*

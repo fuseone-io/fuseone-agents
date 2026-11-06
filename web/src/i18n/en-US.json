@@ -1145,6 +1145,7 @@
     "shouldCall": "should be able to call",
     "shouldFinish": "should finish on its own",
     "tallyBroken": "Broke",
+    "tallyErased": "Input erased",
     "tallyHeld": "Held",
     "title": "Correct this case"
   },
@@ -2913,6 +2914,7 @@
     "factToolsDry": "Tools are asked, but they answer with nothing. No query runs",
     "fileLabel": "Case file",
     "fixInstructions": "Fix the instructions",
+    "erasedNotChecked": "Not checked: its input was erased",
     "gaveUpBeforeAnswering": "Gave up before answering",
     "gateStoppedProposal": "The Gate would have stopped at least one proposed tool call.",
     "handWritten": "Written here, not saved for reuse yet",
@@ -2964,6 +2966,7 @@
     "setTitle": "Occurrences to replay",
     "settledFinished": "Finished",
     "settledParked": "Stopped",
+    "settledErased": "Input erased",
     "settledRunning": "In progress",
     "settledWaiting": "Would ask someone",
     "situationNumber": "Situation {{n}}",

@@ -31,12 +31,11 @@ const driftPass = time.Hour
 
 // watchDrift runs the corpus on a clock and says so when the world moves
 // underneath an agent nobody changed (NT-006 §3).
-func watchDrift(ctx context.Context, p *workerParts, store *settings.Store) {
-	corpora := regression.NewStore(p.configPool)
+func watchDrift(ctx context.Context, p *workerParts, store *settings.Store, corpora *regression.Store) {
 	notice := channel.NewNotice(
 		channel.NewConfigured(store), channel.NewRouter(connect.New(store)))
 
-	watch := drift.New(corpora, p.store, folded{p.store}, notice, slog.Default())
+	watch := drift.New(corpora, p.store, folded{p.store}, notice, slog.Default()).WithErased(corpora)
 	rerun := drift.NewRerun(corpora,
 		p.store, regression.NewCorpus(corpora, ledger.NewContent(p.configPool)),
 		p.opener(), slog.Default()).Every(drift.Default)

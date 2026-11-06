@@ -12,6 +12,7 @@ import (
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/regression"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/vault"
 )
@@ -36,7 +37,8 @@ func erasuresFor(t *testing.T, now func() time.Time) (*admin.Erasures, *ledger.C
 	v, _ := vault.New(key, "test")
 	store := settings.NewStore(pool, v)
 	content := ledger.NewContent(pool)
-	return admin.NewErasures(pool, content, admin.NewRetention(pool, store)).WithClock(now), content
+	return admin.NewErasures(pool, content, admin.NewRetention(pool, store),
+		regression.NewStore(pool)).WithClock(now), content
 }
 
 func TestSweep_onTheDefaultWindow_takesNothingRecent(t *testing.T) {

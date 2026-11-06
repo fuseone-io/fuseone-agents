@@ -18,6 +18,8 @@ type Regressions interface {
 	Record(ctx context.Context, c domain.RegressionCase) error
 	List(ctx context.Context, agent domain.AgentID) ([]domain.RegressionCase, error)
 	Delete(ctx context.Context, agent domain.AgentID, id string) error
+	// Hold fences the corpus against an erasure while it is being copied.
+	Hold(ctx context.Context, agent domain.AgentID, inside func(context.Context) error) error
 }
 
 // WithRegressions wires the corrections a future version is checked against.
@@ -79,38 +81,56 @@ func (s *Server) RecordRegression(
 		return absent, nil
 	}
 
-	input, err := s.occurrenceOf(ctx, domain.RunID(req.Body.RunId))
+	recorded, refused, err := s.recordCorrection(ctx, published, req.Body)
 	if err != nil {
+		return nil, err
+	}
+	if refused != nil {
 		return openapi.RecordRegression400ApplicationProblemPlusJSONResponse(
-			invalid(err.Error())), nil
-	}
-
-	// Copied into the corpus rather than pointed at inside the run: runs are
-	// purged on the installation's retention, and a corpus that lost its cases
-	// would stop checking while still reporting green.
-	ref, err := s.cases.PutFor(ctx, "regression", string(published.ID), 1, input)
-	if err != nil {
-		return nil, fmt.Errorf("keep the occurrence: %w", err)
-	}
-
-	recorded := domain.RegressionCase{
-		ID:           regressionID(published.ID, req.Body.RunId),
-		Agent:        published.ID,
-		Scope:        published.Scope,
-		InputRef:     ref,
-		Expectations: fromExpectations(req.Body.Expectations),
-		FromRun:      domain.RunID(req.Body.RunId),
-		CreatedBy:    callerOf(ctx),
-	}
-	if req.Body.Note != nil {
-		recorded.Note = *req.Body.Note
-	}
-
-	if err := s.regressions.Record(ctx, recorded); err != nil {
-		return openapi.RecordRegression400ApplicationProblemPlusJSONResponse(
-			invalid(err.Error())), nil
+			invalid(refused.Error())), nil
 	}
 	return openapi.RecordRegression201JSONResponse(toRegressionCase(recorded)), nil
+}
+
+/*
+recordCorrection copies what a run was about into the corpus.
+
+Reading the run and writing the copy happen inside the fence an erasure takes. An
+erasure between them would be undone by the write, and would report success.
+*/
+func (s *Server) recordCorrection(
+	ctx context.Context, published domain.AgentSummary, body *openapi.RecordRegressionJSONRequestBody,
+) (recorded domain.RegressionCase, refused, err error) {
+	err = s.regressions.Hold(ctx, published.ID, func(ctx context.Context) error {
+		input, readErr := s.occurrenceOf(ctx, published, domain.RunID(body.RunId))
+		if readErr != nil {
+			refused = readErr
+			return nil
+		}
+		// Copied into the corpus rather than pointed at inside the run, so a case
+		// outlives the purge of the run it came from. The copy is under retention
+		// itself, and recording a case again after it aged out has to work: the
+		// reference is the digest, so this lands on the old copy's tombstone.
+		ref, putErr := s.cases.RestoreFor(ctx, "regression", string(published.ID), 1, input)
+		if putErr != nil {
+			return fmt.Errorf("keep the occurrence: %w", putErr)
+		}
+		recorded = domain.RegressionCase{
+			ID:           regressionID(published.ID, body.RunId),
+			Agent:        published.ID,
+			Scope:        published.Scope,
+			InputRef:     ref,
+			Expectations: fromExpectations(body.Expectations),
+			FromRun:      domain.RunID(body.RunId),
+			CreatedBy:    callerOf(ctx),
+		}
+		if body.Note != nil {
+			recorded.Note = *body.Note
+		}
+		refused = s.regressions.Record(ctx, recorded)
+		return nil
+	})
+	return recorded, refused, err
 }
 
 func (s *Server) DeleteRegression(
@@ -135,11 +155,26 @@ func (s *Server) DeleteRegression(
 	return openapi.DeleteRegression204Response{}, nil
 }
 
-// occurrenceOf reads back what a run was about.
-func (s *Server) occurrenceOf(ctx context.Context, runID domain.RunID) ([]byte, error) {
+// occurrenceOf reads back what one of this agent's runs was about, in the scope it
+// is published in.
+//
+// Authority was checked on that scope and the copy goes there, so a run of another
+// agent, or an old run of this one under another scope, would carry content across
+// the boundary. Both read as absent, which says nothing about whether they exist.
+// The read is checked as well, because this hands a person a run's input.
+func (s *Server) occurrenceOf(
+	ctx context.Context, published domain.AgentSummary, runID domain.RunID,
+) ([]byte, error) {
+	absent := fmt.Errorf("no such run: %s", runID)
 	steps, err := s.store.Read(ctx, runID, domain.FirstSeq)
 	if err != nil || len(steps) == 0 {
-		return nil, fmt.Errorf("no such run: %s", runID)
+		return nil, absent
+	}
+	if steps[0].AgentID != published.ID || steps[0].Scope != published.Scope {
+		return nil, absent
+	}
+	if err := auth.Require(ctx, domain.PermRunRead, steps[0].Scope); err != nil {
+		return nil, absent
 	}
 
 	var started domain.RunStartedPayload

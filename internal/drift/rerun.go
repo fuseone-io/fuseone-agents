@@ -30,8 +30,12 @@ type LastBatteries interface {
 }
 
 // Occurrences reads the cases of a corpus, bytes and all.
+//
+// Hold fences it against an erasure: a battery reads the corpus and then opens runs
+// holding it, and an erasure between the two would leave those runs behind.
 type Occurrences interface {
 	Occurrences(ctx context.Context, agent domain.AgentID) ([]simulate.Occurrence, error)
+	Hold(ctx context.Context, agent domain.AgentID, inside func(context.Context) error) error
 }
 
 // Default is how often a corpus runs when nobody has said otherwise.
@@ -116,6 +120,12 @@ func (r *Rerun) due(ctx context.Context, one domain.WatchedCorpus, now time.Time
 
 // run opens one simulated run per case.
 func (r *Rerun) run(ctx context.Context, one domain.WatchedCorpus, now time.Time) error {
+	return r.occurrences.Hold(ctx, one.Agent, func(ctx context.Context) error {
+		return r.open(ctx, one, now)
+	})
+}
+
+func (r *Rerun) open(ctx context.Context, one domain.WatchedCorpus, now time.Time) error {
 	cases, err := r.occurrences.Occurrences(ctx, one.Agent)
 	if err != nil {
 		return fmt.Errorf("read the corpus of %s: %w", one.Agent, err)

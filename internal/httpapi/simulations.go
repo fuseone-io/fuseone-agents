@@ -18,6 +18,7 @@ import (
 // same retention as every other bulky payload (AU-04).
 type Cases interface {
 	PutFor(ctx context.Context, kind, owner string, seq int64, data []byte) (string, error)
+	RestoreFor(ctx context.Context, kind, owner string, seq int64, data []byte) (string, error)
 }
 
 // WithCases wires where simulation sets are filed. Optional, like the rest of
@@ -59,19 +60,15 @@ func (s *Server) StartSimulation(
 	}
 
 	id := simulationID(published.ID, clockOr(s.clock).Now().UnixMilli(), req.Params.IdempotencyKey)
-	occurrences, err := s.occurrences(ctx, published.ID, id, req.Body)
+	opened, refused, err := s.openSimulation(ctx, published.ID, id, req.Body)
 	if err != nil {
+		return nil, fmt.Errorf("open simulation %s: %w", id, err)
+	}
+	if refused != nil {
 		// The whole file, named line and all. Running forty-nine of fifty and
 		// mentioning nothing gives an author coverage that is a lie.
 		return openapi.StartSimulation400ApplicationProblemPlusJSONResponse(
-			invalid(err.Error())), nil
-	}
-
-	opened, err := simulate.Open(ctx, s.opener(), simulate.Batch{
-		ID: id, Agent: published.ID, By: callerOf(ctx), Cases: occurrences,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("open simulation %s: %w", id, err)
+			invalid(refused.Error())), nil
 	}
 	for _, why := range opened.Failed {
 		slog.Warn("simulated case did not open", "simulation", id, "agent", published.ID, "err", why)
@@ -85,63 +82,6 @@ func (s *Server) StartSimulation(
 	}
 
 	return openapi.StartSimulation202JSONResponse{Id: id, Cases: len(opened.Runs)}, nil
-}
-
-/*
-occurrences is what the simulation will replay: an uploaded set, or the corpus.
-
-Replaying the corpus is the battery, and it reads each case back from the
-claim check rather than from the run it was corrected from — that copy is the
-whole reason the corpus survives retention.
-*/
-func (s *Server) occurrences(
-	ctx context.Context, agent domain.AgentID, simulation string,
-	body *openapi.SimulationRequest,
-) ([]simulate.Occurrence, error) {
-	if body.Corpus != nil && *body.Corpus {
-		return s.corpusOccurrences(ctx, agent)
-	}
-
-	file := ""
-	if body.Cases != nil {
-		file = *body.Cases
-	}
-	cases, err := simulate.Load(ctx, s.cases, simulation, []byte(file))
-	if err != nil {
-		return nil, err
-	}
-	out := make([]simulate.Occurrence, 0, len(cases))
-	for _, input := range cases {
-		out = append(out, simulate.Occurrence{Input: input})
-	}
-	return out, nil
-}
-
-func (s *Server) corpusOccurrences(
-	ctx context.Context, agent domain.AgentID,
-) ([]simulate.Occurrence, error) {
-	if s.regressions == nil {
-		return nil, fmt.Errorf("this installation keeps no corrections")
-	}
-	corpus, err := s.regressions.List(ctx, agent)
-	if err != nil {
-		return nil, err
-	}
-	if len(corpus) == 0 {
-		return nil, fmt.Errorf("%s has no corrections to re-check", agent)
-	}
-
-	out := make([]simulate.Occurrence, 0, len(corpus))
-	for _, c := range corpus {
-		input, err := s.content.Get(ctx, c.InputRef)
-		if err != nil {
-			// Refused whole rather than run short: a battery missing a case is
-			// a battery that reports green on a correction nobody checked.
-			return nil, fmt.Errorf("the occurrence of %s could not be read: %w", c.ID, err)
-		}
-		out = append(out, simulate.Occurrence{ID: c.ID, Input: input})
-	}
-	return out, nil
 }
 
 // GetSimulation folds the runs the simulation opened back into rows.
@@ -226,7 +166,7 @@ func firstOr(reasons []string, fallback string) string {
 func (s *Server) simulationReport(ctx context.Context, r simulate.Report) openapi.SimulationReport {
 	out := openapi.SimulationReport{
 		Id: r.ID, Running: r.Running,
-		Held: ptr(r.Held), Broken: ptr(r.Broken), Drifted: ptr(r.Drifted),
+		Held: ptr(r.Held), Broken: ptr(r.Broken), Drifted: ptr(r.Drifted), Erased: ptr(r.Erased),
 		Cases: make([]openapi.SimulationCase, 0, len(r.Cases)),
 	}
 	if r.Agent != "" {

@@ -94,3 +94,70 @@ func TestBattery_withoutACorpus_changesNothing(t *testing.T) {
 		t.Errorf("report = %+v", got)
 	}
 }
+
+// A case whose input was erased cannot run again. It is neither a correction
+// that holds nor one that broke, and calling it either would be a false claim
+// about an agent: it is a gap, and the report says so.
+func TestBattery_aCaseWhoseInputWasErased_isAGapNotABreak(t *testing.T) {
+	t.Parallel()
+
+	erased := corpusCase("gone", domain.Expectation{Kind: domain.ExpectAsks})
+	erased.Erased = true
+	report := simulate.Battery(simulate.Report{}, []domain.RegressionCase{erased})
+
+	if report.Erased != 1 || report.Broken != 0 || report.Held != 0 {
+		t.Fatalf("erased=%d broken=%d held=%d, want a single gap",
+			report.Erased, report.Broken, report.Held)
+	}
+	if len(report.Cases) != 1 || report.Cases[0].Settled != simulate.SettledErased || len(report.Cases[0].Unmet) != 0 {
+		t.Fatalf("row = %+v", report.Cases)
+	}
+}
+
+// Erased after it ran. The run happened and is still a fact, so a past battery
+// keeps saying what that run did.
+func TestBattery_aCaseErasedAfterItRan_isStillJudgedOnThatRun(t *testing.T) {
+	t.Parallel()
+
+	erased := corpusCase("gone", domain.Expectation{Kind: domain.ExpectSettles, Value: "finished"})
+	erased.Erased = true
+	report := simulate.Battery(simulate.Report{Cases: []simulate.Case{
+		{ID: "gone", RunID: "run-1", Settled: simulate.SettledFinished},
+	}}, []domain.RegressionCase{erased})
+
+	if report.Held != 1 || report.Erased != 0 {
+		t.Fatalf("held=%d erased=%d, want it judged on the run", report.Held, report.Erased)
+	}
+}
+
+func TestCompare_aCaseErasedOnOneSide_isNeitherFixedNorRegressed(t *testing.T) {
+	t.Parallel()
+
+	erased := corpusCase("gone", domain.Expectation{Kind: domain.ExpectSettles, Value: "finished"})
+	erased.Erased = true
+	ran := simulate.Battery(simulate.Report{Cases: []simulate.Case{
+		{ID: "gone", RunID: "run-1", Settled: simulate.SettledParked},
+	}}, []domain.RegressionCase{erased})
+	gap := simulate.Battery(simulate.Report{}, []domain.RegressionCase{erased})
+
+	for name, compared := range map[string]simulate.Comparison{
+		"erased since":  simulate.Compare(ran, gap),
+		"erased before": simulate.Compare(gap, ran),
+	} {
+		if compared.Regressed != 0 || compared.Fixed != 0 {
+			t.Errorf("%s: regressed=%d fixed=%d", name, compared.Regressed, compared.Fixed)
+		}
+	}
+}
+
+func TestTally_aCaseThatLostItsInput_isNotStillGoing(t *testing.T) {
+	t.Parallel()
+
+	erased := corpusCase("gone", domain.Expectation{Kind: domain.ExpectAsks})
+	erased.Erased = true
+	tally := simulate.Battery(simulate.Report{}, []domain.RegressionCase{erased}).Tally()
+
+	if tally.Unsettled != 0 {
+		t.Fatalf("unsettled = %d, want none: nothing is running", tally.Unsettled)
+	}
+}
