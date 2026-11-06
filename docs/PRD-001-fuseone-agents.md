@@ -680,7 +680,8 @@ The agent and the model never receive them in context.
 ### 9.3 Agent lifecycle
 
 **DE-07.** Publishing an agent is an interface action, not a deploy. No pipeline,
-no ticket, no change window.
+no ticket, no change window. An installation may choose to drive the same API from a
+pipeline with a service account; that is an additional way in, never a requirement.
 
 **DE-08.** Every publication creates an immutable version, with author, date and a
 legible difference against the previous one. Rolling back is selecting an earlier
