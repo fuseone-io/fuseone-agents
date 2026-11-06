@@ -5160,7 +5160,8 @@ components:
         Where a case ended. `unsettled` is a run still going when the turn
         bound ran out — a result, not a missing row: a planner that will not
         finish is one of the things a simulation exists to reveal.
-      enum: [finished, parked, awaiting_approval, unsettled]
+        `erased` is a correction that could not run because its input is gone.
+      enum: [finished, parked, awaiting_approval, unsettled, erased]
 
     SimulationAct:
       type: object
@@ -5233,9 +5234,6 @@ components:
         outcomeState:
           $ref: '#/components/schemas/SimulationOutcomeState'
         reason: { type: string }
-        erased:
-          type: boolean
-          description: The case could not run because its input was erased.
         error:
           type: string
           description: Why this case did not run, when it did not.

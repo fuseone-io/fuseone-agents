@@ -47,6 +47,9 @@ export function tally(report: SimulationReport): Tally {
       case "awaiting_approval":
         counted.waiting++;
         break;
+      // Nothing is going: it could not run, and the report counts it as a gap.
+      case "erased":
+        break;
       default:
         counted.running++;
     }

@@ -109,7 +109,7 @@ func TestBattery_aCaseWhoseInputWasErased_isAGapNotABreak(t *testing.T) {
 		t.Fatalf("erased=%d broken=%d held=%d, want a single gap",
 			report.Erased, report.Broken, report.Held)
 	}
-	if len(report.Cases) != 1 || !report.Cases[0].Erased || len(report.Cases[0].Unmet) != 0 {
+	if len(report.Cases) != 1 || report.Cases[0].Settled != simulate.SettledErased || len(report.Cases[0].Unmet) != 0 {
 		t.Fatalf("row = %+v", report.Cases)
 	}
 }
@@ -147,5 +147,17 @@ func TestCompare_aCaseErasedOnOneSide_isNeitherFixedNorRegressed(t *testing.T) {
 		if compared.Regressed != 0 || compared.Fixed != 0 {
 			t.Errorf("%s: regressed=%d fixed=%d", name, compared.Regressed, compared.Fixed)
 		}
+	}
+}
+
+func TestTally_aCaseThatLostItsInput_isNotStillGoing(t *testing.T) {
+	t.Parallel()
+
+	erased := corpusCase("gone", domain.Expectation{Kind: domain.ExpectAsks})
+	erased.Erased = true
+	tally := simulate.Battery(simulate.Report{}, []domain.RegressionCase{erased}).Tally()
+
+	if tally.Unsettled != 0 {
+		t.Fatalf("unsettled = %d, want none: nothing is running", tally.Unsettled)
 	}
 }

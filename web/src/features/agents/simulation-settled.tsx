@@ -13,6 +13,7 @@ const SETTLED: Record<
   parked: { label: "simulation.settledParked", variant: "destructive" },
   awaiting_approval: { label: "simulation.settledWaiting", variant: "outline" },
   unsettled: { label: "simulation.settledRunning", variant: "outline" },
+  erased: { label: "simulation.settledErased", variant: "outline" },
 };
 
 export function SettledBadge({

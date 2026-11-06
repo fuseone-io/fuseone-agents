@@ -265,6 +265,14 @@ function statusOf(entry: SimulationCase, t: TFunction) {
         state: t("simulation.needsALook"),
         subtitle: t("simulation.gaveUpBeforeAnswering"),
       };
+    case "erased":
+      return {
+        icon: CircleAlert,
+        className: "bg-muted text-muted-foreground",
+        textClassName: "text-muted-foreground",
+        state: t("simulation.settledErased"),
+        subtitle: t("simulation.erasedNotChecked"),
+      };
     default:
       return {
         icon: Clock,

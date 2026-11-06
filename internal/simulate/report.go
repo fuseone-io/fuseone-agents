@@ -29,6 +29,9 @@ const (
 	// out. It is a result, not a missing row: a planner that will not finish
 	// is one of the things a simulation exists to reveal.
 	SettledUnsettled Settled = "unsettled"
+	// SettledErased is a case that could not run because its input is gone.
+	// Nothing is still going, and it neither held nor broke.
+	SettledErased Settled = "erased"
 )
 
 // Act is one thing the agent proposed, and what the Gate did about it.
@@ -85,9 +88,6 @@ type Case struct {
 	// failure and not a pass: it is the reason a reader should read the rest
 	// of the row differently.
 	Drifted bool `json:"drifted,omitempty"`
-	// Erased says the case could not run because its input is gone. Neither a
-	// correction that held nor one that broke, so it is counted apart from both.
-	Erased bool `json:"erased,omitempty"`
 }
 
 // Fold turns one simulated run's steps into its row in the report.

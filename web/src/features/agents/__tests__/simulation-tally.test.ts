@@ -92,3 +92,15 @@ describe("caseNeedsLook", () => {
     ).toBe(true);
   });
 });
+
+describe("a case that lost its input", () => {
+  it("is not counted as still going", () => {
+    const counted = tally({
+      id: "sim-1",
+      running: false,
+      cases: [{ id: "gone", settled: "erased", steps: 0, cost: { micros: 0 } }],
+    });
+
+    expect(counted.running).toBe(0);
+  });
+});

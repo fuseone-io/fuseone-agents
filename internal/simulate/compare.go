@@ -123,7 +123,7 @@ func standings(r Report) map[string]standing {
 	for _, c := range r.Cases {
 		// An erased case did not run. Reading it as having held would report the
 		// other side as a regression or a fix nobody measured.
-		if c.ID == "" || c.Erased {
+		if c.ID == "" || c.Settled == SettledErased {
 			continue
 		}
 		stood := Held

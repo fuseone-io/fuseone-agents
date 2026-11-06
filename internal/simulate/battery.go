@@ -38,8 +38,8 @@ func Battery(report Report, corpus []domain.RegressionCase) Report {
 		// not run: a past battery that did run it keeps saying what happened.
 		if !ran && corrected.Erased {
 			out.Cases = append(out.Cases, Case{
-				ID: corrected.ID, Settled: SettledUnsettled, Expected: corrected.Expectations,
-				Erased: true, Error: "the input of this case was erased",
+				ID: corrected.ID, Settled: SettledErased, Expected: corrected.Expectations,
+				Error: "the input of this case was erased",
 			})
 			out.Erased++
 			continue

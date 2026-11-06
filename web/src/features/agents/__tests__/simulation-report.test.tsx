@@ -80,6 +80,15 @@ describe("simulation report", () => {
     expect(screen.getByText("Input erased")).toBeInTheDocument();
   });
 
+  it("does not show a case that lost its input as still going", () => {
+    renderReport([
+      answeredCase({ id: "gone", settled: "erased", runId: undefined }),
+    ]);
+
+    expect(screen.getAllByText("Input erased").length).toBeGreaterThan(0);
+    expect(screen.queryByText("In progress")).not.toBeInTheDocument();
+  });
+
   it("saves a clean rehearsal as a regression baseline", async () => {
     const posted: unknown[] = [];
     vi.stubGlobal(
