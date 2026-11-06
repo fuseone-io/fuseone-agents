@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/fuseone/agents/internal/auth"
@@ -70,7 +71,13 @@ func (s *Server) SetGrants(
 
 	// Recorded as granted by whoever is signing in to do it, which is what
 	// keeps the asserted grants separable from the hand-made ones.
-	if err := s.people.SetGrants(ctx, req.PrincipalId, grants, string(callerOf(ctx))); err != nil {
+	err := s.people.SetGrants(ctx, req.PrincipalId, grants, string(callerOf(ctx)))
+	if errors.Is(err, auth.ErrNoPrincipal) {
+		return openapi.SetGrants404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(req.PrincipalId),
+		}, nil
+	}
+	if err != nil {
 		return nil, fmt.Errorf("set grants for %s: %w", req.PrincipalId, err)
 	}
 	return openapi.SetGrants204Response{}, nil

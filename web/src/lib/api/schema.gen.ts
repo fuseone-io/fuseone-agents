@@ -1676,6 +1676,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/service-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The machines that act on this installation */
+        get: operations["listServiceAccounts"];
+        put?: never;
+        /**
+         * Create a service account, holding nothing
+         * @description For a pipeline, a script or a Terraform run. Grant it access with
+         *     `PUT /admin/people/{principalId}/grants`, the same as a person: a separate
+         *     act and a separate line on the trail. Whatever its grants say, a service
+         *     account can never approve an action or change who holds what, so a token
+         *     cannot manage accounts or tokens either.
+         */
+        post: operations["createServiceAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/service-accounts/{accountId}/disabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Turn every token of an account off, or back on
+         * @description Takes effect on the next request.
+         */
+        put: operations["setServiceAccountDisabled"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/service-accounts/{accountId}/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An account's tokens, never their secrets */
+        get: operations["listServiceTokens"];
+        put?: never;
+        /**
+         * Issue a token. The secret is in this response and nowhere else
+         * @description Only its hash is stored. To rotate, issue another under any name, move the
+         *     machine over, then revoke the old one.
+         */
+        post: operations["issueServiceToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/service-accounts/{accountId}/tokens/{tokenId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a token
+         * @description Takes effect on the next request. Revoking twice is not an error.
+         */
+        delete: operations["revokeServiceToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/people/local": {
         parameters: {
             query?: never;
@@ -3280,6 +3367,46 @@ export interface components {
             area: string;
             /** @enum {string} */
             role: "admin" | "author" | "approver" | "curator" | "auditor";
+        };
+        ServiceAccountInput: {
+            /** @description Lowercase letters, digits and hyphens, starting with a letter. */
+            name: string;
+            /** @description What this machine does, so somebody can decide to revoke it. */
+            description?: string;
+        };
+        ServiceAccount: {
+            id: string;
+            name: string;
+            description?: string;
+            disabled: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            grants: components["schemas"]["GrantInput"][];
+        };
+        ServiceTokenInput: {
+            name: string;
+            /**
+             * Format: date-time
+             * @description Required, and in the future. A token outlives whoever made it otherwise.
+             */
+            expiresAt: string;
+        };
+        ServiceToken: {
+            id: string;
+            name: string;
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            lastUsedAt?: string;
+            /** Format: date-time */
+            revokedAt?: string;
+        };
+        IssuedServiceToken: components["schemas"]["ServiceToken"] & {
+            /** @description Shown once. Only its hash is stored. */
+            secret: string;
         };
         HeldGrant: {
             company: string;
@@ -8312,6 +8439,184 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listServiceAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Each account, with what it holds. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ServiceAccount"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createServiceAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServiceAccountInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceAccount"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description That name is taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setServiceAccountDisabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    disabled: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listServiceTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first, including revoked and expired ones. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ServiceToken"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    issueServiceToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServiceTokenInput"];
+            };
+        };
+        responses: {
+            /** @description Issued. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuedServiceToken"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The account is disabled. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeServiceToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+                tokenId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     createLocalPerson: {

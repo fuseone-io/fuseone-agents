@@ -2400,6 +2400,144 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/service-accounts:
+    get:
+      tags: [admin]
+      operationId: listServiceAccounts
+      summary: The machines that act on this installation
+      responses:
+        '200':
+          description: Each account, with what it holds.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ServiceAccount' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [admin]
+      operationId: createServiceAccount
+      summary: Create a service account, holding nothing
+      description: |
+        For a pipeline, a script or a Terraform run. Grant it access with
+        `PUT /admin/people/{principalId}/grants`, the same as a person: a separate
+        act and a separate line on the trail. Whatever its grants say, a service
+        account can never approve an action or change who holds what, so a token
+        cannot manage accounts or tokens either.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServiceAccountInput' }
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServiceAccount' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: That name is taken.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /admin/service-accounts/{accountId}/disabled:
+    put:
+      tags: [admin]
+      operationId: setServiceAccountDisabled
+      summary: Turn every token of an account off, or back on
+      description: Takes effect on the next request.
+      parameters:
+        - { name: accountId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [disabled]
+              properties:
+                disabled: { type: boolean }
+      responses:
+        '204': { description: Stored. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/service-accounts/{accountId}/tokens:
+    get:
+      tags: [admin]
+      operationId: listServiceTokens
+      summary: An account's tokens, never their secrets
+      parameters:
+        - { name: accountId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Newest first, including revoked and expired ones.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ServiceToken' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [admin]
+      operationId: issueServiceToken
+      summary: Issue a token. The secret is in this response and nowhere else
+      description: |
+        Only its hash is stored. To rotate, issue another under any name, move the
+        machine over, then revoke the old one.
+      parameters:
+        - { name: accountId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServiceTokenInput' }
+      responses:
+        '201':
+          description: Issued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IssuedServiceToken' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The account is disabled.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /admin/service-accounts/{accountId}/tokens/{tokenId}:
+    delete:
+      tags: [admin]
+      operationId: revokeServiceToken
+      summary: Revoke a token
+      description: Takes effect on the next request. Revoking twice is not an error.
+      parameters:
+        - { name: accountId, in: path, required: true, schema: { type: string } }
+        - { name: tokenId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Revoked. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /admin/people/local:
     post:
       tags: [admin]
@@ -5348,6 +5486,62 @@ components:
         role:
           type: string
           enum: [admin, author, approver, curator, auditor]
+
+    ServiceAccountInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Lowercase letters, digits and hyphens, starting with a letter.
+        description:
+          type: string
+          description: What this machine does, so somebody can decide to revoke it.
+
+    ServiceAccount:
+      type: object
+      required: [id, name, disabled, createdAt, grants]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        disabled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        grants:
+          type: array
+          items: { $ref: '#/components/schemas/GrantInput' }
+
+    ServiceTokenInput:
+      type: object
+      required: [name, expiresAt]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        expiresAt:
+          type: string
+          format: date-time
+          description: Required, and in the future. A token outlives whoever made it otherwise.
+
+    ServiceToken:
+      type: object
+      required: [id, name, createdBy, createdAt, expiresAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        lastUsedAt: { type: string, format: date-time }
+        revokedAt: { type: string, format: date-time }
+
+    IssuedServiceToken:
+      allOf:
+        - $ref: '#/components/schemas/ServiceToken'
+        - type: object
+          required: [secret]
+          properties:
+            secret:
+              type: string
+              description: Shown once. Only its hash is stored.
 
     HeldGrant:
       type: object
