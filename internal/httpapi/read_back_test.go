@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
@@ -197,6 +198,91 @@ func TestGetModelProvider_noAdministrationStore_failsLikeItsNeighbour(t *testing
 	t.Parallel()
 	s := NewServer(ledger.NewMemory(), "test")
 	_, err := s.GetModelProvider(as(domain.RoleCurator), openapi.GetModelProviderRequestObject{Name: "gateway"})
+	if !errors.Is(err, errNoAdministration) {
+		t.Fatalf("err = %v, want errNoAdministration", err)
+	}
+}
+
+func TestGetChannel_withoutTheAuthorityToConfigure_refusesTheSameWhetherItExistsOrNot(t *testing.T) {
+	t.Parallel()
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(&channelSpy{
+		listed: []admin.Channel{{Name: "acme-slack", Kind: "slack", Enabled: true}},
+	}, nil)
+	for name, caller := range refusedCallers() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			there, err := s.GetChannel(caller, openapi.GetChannelRequestObject{Name: "acme-slack"})
+			if err != nil {
+				t.Fatalf("GetChannel: %v", err)
+			}
+			absent, err := s.GetChannel(caller, openapi.GetChannelRequestObject{Name: "nothing"})
+			if err != nil {
+				t.Fatalf("GetChannel: %v", err)
+			}
+			if _, refused := there.(openapi.GetChannel403ApplicationProblemPlusJSONResponse); !refused {
+				t.Fatalf("existing = %T, want 403", there)
+			}
+			if !reflect.DeepEqual(there, absent) {
+				t.Errorf("the refusal says whether it exists\n there: %#v\nabsent: %#v", there, absent)
+			}
+		})
+	}
+}
+
+func TestGetChannel_asAConfigurer_answersConfigurationAndNoAccountsSeen(t *testing.T) {
+	t.Parallel()
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(&channelSpy{
+		listed: []admin.Channel{{
+			Name: "acme-slack", Kind: "slack", Workspace: "Acme", Enabled: true, HasCredential: true,
+			Conversations: []admin.Conversation{{ID: "C1", Enabled: true}},
+		}, {Name: "other", Kind: "slack", Enabled: true}},
+		bound: []admin.ChannelIdentity{
+			{Channel: "acme-slack", Account: "U1", Principal: "usr_ana"},
+			{Channel: "other", Account: "U2", Principal: "usr_bia"},
+		},
+		seen: []admin.ChannelAccountSeen{{Channel: "acme-slack", Account: "U3"}},
+	}, nil)
+
+	resp, err := s.GetChannel(as(domain.RoleCurator), openapi.GetChannelRequestObject{Name: "acme-slack"})
+	if err != nil {
+		t.Fatalf("GetChannel: %v", err)
+	}
+	got, ok := resp.(openapi.GetChannel200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want 200", resp)
+	}
+	if got.Name != "acme-slack" || valueOr(got.Workspace) != "Acme" || !got.HasCredential ||
+		len(got.Conversations) != 1 {
+		t.Errorf("channel = %+v", got)
+	}
+	if got.Identities == nil || len(*got.Identities) != 1 || (*got.Identities)[0].Account != "U1" {
+		t.Errorf("identities = %+v, want this connection's own", got.Identities)
+	}
+	// Who interacted changes with nobody having written anything, and an empty
+	// list here would say nobody did.
+	if got.SeenAccounts != nil {
+		t.Errorf("seenAccounts = %+v, want it left out", *got.SeenAccounts)
+	}
+}
+
+func TestGetChannel_nameNobodyConfigured_isNotFound(t *testing.T) {
+	t.Parallel()
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(&channelSpy{
+		listed: []admin.Channel{{Name: "acme-slack", Kind: "slack", Enabled: true}},
+	}, nil)
+	resp, err := s.GetChannel(as(domain.RoleCurator), openapi.GetChannelRequestObject{Name: "acme"})
+	if err != nil {
+		t.Fatalf("GetChannel: %v", err)
+	}
+	if _, absent := resp.(openapi.GetChannel404ApplicationProblemPlusJSONResponse); !absent {
+		t.Fatalf("response = %T, want 404", resp)
+	}
+}
+
+func TestGetChannel_noAdministrationStore_failsLikeItsNeighbour(t *testing.T) {
+	t.Parallel()
+	s := NewServer(ledger.NewMemory(), "test")
+	_, err := s.GetChannel(as(domain.RoleCurator), openapi.GetChannelRequestObject{Name: "acme-slack"})
 	if !errors.Is(err, errNoAdministration) {
 		t.Fatalf("err = %v, want errNoAdministration", err)
 	}

@@ -65,6 +65,38 @@ func (s *Server) GetModelProvider(ctx context.Context, req openapi.GetModelProvi
 	}, nil
 }
 
+func (s *Server) GetChannel(ctx context.Context, req openapi.GetChannelRequestObject) (openapi.GetChannelResponseObject, error) {
+	if _, forbidden := s.configurer(ctx); forbidden != nil {
+		return openapi.GetChannel403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
+		}, nil
+	}
+	if s.channels == nil {
+		return nil, errNoAdministration
+	}
+	configured, err := s.channels.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get channel: %w", err)
+	}
+	for _, c := range configured {
+		if c.Name != req.Name {
+			continue
+		}
+		bound, err := s.channels.Identities(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("get channel identities: %w", err)
+		}
+		out := channelFrom(c, bound, nil)
+		// Left out, not empty. Who interacted changes with nobody having
+		// written anything, and an empty list would say nobody did.
+		out.SeenAccounts = nil
+		return openapi.GetChannel200JSONResponse(out), nil
+	}
+	return openapi.GetChannel404ApplicationProblemPlusJSONResponse{
+		NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
+	}, nil
+}
+
 // mcpServerConfig is a server as it was configured, before anything observed
 // about it is added.
 func mcpServerConfig(srv domain.MCPServer) openapi.MCPServer {

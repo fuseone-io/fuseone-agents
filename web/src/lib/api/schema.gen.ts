@@ -2290,7 +2290,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one channel connection as it is configured
+         * @description What PUT stored, for a client deciding whether the connection drifted, with the conversations and identities attached to it. Those have PUTs of their own: this one ignores them when the answer is sent back, and leaves them as they are.
+         *     The credentials are never returned; hasCredential, hasSigning and hasAppToken report which are stored, and sending the answer back unchanged keeps them. Accounts seen interacting stay on the listing: they change with nobody having written anything.
+         */
+        get: operations["getChannel"];
         /** Configure a channel connection */
         put: operations["putChannel"];
         post?: never;
@@ -9478,6 +9483,31 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The connection's stored configuration. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Channel"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     putChannel: {

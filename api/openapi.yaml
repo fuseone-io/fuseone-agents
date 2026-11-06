@@ -3489,6 +3489,34 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /admin/channels/{name}:
+    get:
+      tags: [admin]
+      operationId: getChannel
+      summary: Read one channel connection as it is configured
+      description: >
+        What PUT stored, for a client deciding whether the connection drifted,
+        with the conversations and identities attached to it. Those have PUTs
+        of their own: this one ignores them when the answer is sent back, and
+        leaves them as they are.
+
+        The credentials are never returned; hasCredential, hasSigning and
+        hasAppToken report which are stored, and sending the answer back
+        unchanged keeps them. Accounts seen interacting stay on the listing:
+        they change with nobody having written anything.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The connection's stored configuration.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Channel' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
     put:
       tags: [admin]
       operationId: putChannel

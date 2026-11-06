@@ -11,6 +11,7 @@ import (
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/auth"
+	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/githubapp/githubapptest"
 	"github.com/fuseone/agents/internal/httpapi"
@@ -266,6 +267,68 @@ func roundTrip(t *testing.T, in map[string]any) map[string]any {
 		t.Fatalf("decode: %v", err)
 	}
 	return out
+}
+
+func TestReadBack_channel_putWhatGetAnsweredChangesNothing(t *testing.T) {
+	world := newReadBackWorld(t)
+	const base = "/admin/channels/"
+	cases := []readBack{{
+		name: "inbound over HTTP, switched off",
+		path: base + "readback-http", sealed: channel.KindChannel, key: "readback-http",
+		body: map[string]any{
+			"kind": "slack", "workspace": "Readback", "deliveryMode": "http",
+			"token": "readback-bot-secret", "signingSecret": "readback-signing-secret",
+			"enabled": false,
+		},
+		writeOnly: map[string]string{"token": "hasCredential", "signingSecret": "hasSigning"},
+		secrets:   []string{"readback-bot-secret", "readback-signing-secret"},
+	}, {
+		name: "inbound over Socket Mode",
+		path: base + "readback-socket", sealed: channel.KindChannel, key: "readback-socket",
+		body: map[string]any{
+			"kind": "slack", "deliveryMode": "socket",
+			"token": "readback-bot-secret", "appToken": "readback-app-secret",
+		},
+		writeOnly: map[string]string{"token": "hasCredential", "appToken": "hasAppToken"},
+		secrets:   []string{"readback-bot-secret", "readback-app-secret"},
+	}, {
+		name: "posting only, the fewest fields it can take",
+		path: base + "readback-bare",
+		body: map[string]any{"kind": "slack"},
+	}}
+	assertEveryAcceptedFieldIsWalked(t, base+"{name}", cases)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) { world.walk(t, c) })
+	}
+}
+
+// A conversation and an identity have PUTs of their own and travel in the
+// answer. Sent back, the connection's PUT has to ignore them, neither losing
+// them nor treating them as an edit.
+func TestReadBack_channel_whatIsAttachedSurvivesPuttingTheAnswerBack(t *testing.T) {
+	world := newReadBackWorld(t)
+	const path = "/admin/channels/readback-attached"
+	t.Cleanup(func() { world.send(t, http.MethodDelete, path, nil) })
+
+	world.put(t, path, map[string]any{"kind": "slack", "token": "readback-bot-secret"})
+	world.put(t, path+"/conversations/C-READBACK", map[string]any{
+		"company": "default", "area": "platform", "label": "Readback",
+	})
+	world.put(t, path+"/identities/U-READBACK", map[string]any{"principal": "usr_ana"})
+
+	first, _ := world.get(t, path)
+	if rooms, _ := first["conversations"].([]any); len(rooms) != 1 {
+		t.Fatalf("conversations = %v, want the one attached", first["conversations"])
+	}
+	if bound, _ := first["identities"].([]any); len(bound) != 1 {
+		t.Fatalf("identities = %v, want the one attached", first["identities"])
+	}
+
+	world.put(t, path, first)
+	second, _ := world.get(t, path)
+	if a, b := withoutMeta(first), withoutMeta(second); !reflect.DeepEqual(a, b) {
+		t.Errorf("putting back what GET answered changed it\n before: %v\n  after: %v", a, b)
+	}
 }
 
 func TestReadBack_modelProvider_putWhatGetAnsweredChangesNothing(t *testing.T) {
