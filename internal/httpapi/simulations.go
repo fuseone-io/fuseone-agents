@@ -60,19 +60,15 @@ func (s *Server) StartSimulation(
 	}
 
 	id := simulationID(published.ID, clockOr(s.clock).Now().UnixMilli(), req.Params.IdempotencyKey)
-	occurrences, err := s.occurrences(ctx, published.ID, id, req.Body)
+	opened, refused, err := s.openSimulation(ctx, published.ID, id, req.Body)
 	if err != nil {
+		return nil, fmt.Errorf("open simulation %s: %w", id, err)
+	}
+	if refused != nil {
 		// The whole file, named line and all. Running forty-nine of fifty and
 		// mentioning nothing gives an author coverage that is a lie.
 		return openapi.StartSimulation400ApplicationProblemPlusJSONResponse(
-			invalid(err.Error())), nil
-	}
-
-	opened, err := simulate.Open(ctx, s.opener(), simulate.Batch{
-		ID: id, Agent: published.ID, By: callerOf(ctx), Cases: occurrences,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("open simulation %s: %w", id, err)
+			invalid(refused.Error())), nil
 	}
 	for _, why := range opened.Failed {
 		slog.Warn("simulated case did not open", "simulation", id, "agent", published.ID, "err", why)
@@ -224,9 +220,6 @@ func (s *Server) caseOut(
 		OutcomeState: outcomeState,
 		Reason:       someString(c.Reason),
 		Model:        someString(c.Model),
-	}
-	if c.Erased {
-		out.Erased = ptr(true)
 	}
 	if c.Drifted {
 		out.Drifted = ptr(true)

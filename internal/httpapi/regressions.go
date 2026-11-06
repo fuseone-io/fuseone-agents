@@ -18,6 +18,8 @@ type Regressions interface {
 	Record(ctx context.Context, c domain.RegressionCase) error
 	List(ctx context.Context, agent domain.AgentID) ([]domain.RegressionCase, error)
 	Delete(ctx context.Context, agent domain.AgentID, id string) error
+	// Hold fences the corpus against an erasure while it is being copied.
+	Hold(ctx context.Context, agent domain.AgentID, inside func(context.Context) error) error
 }
 
 // WithRegressions wires the corrections a future version is checked against.
@@ -79,39 +81,56 @@ func (s *Server) RecordRegression(
 		return absent, nil
 	}
 
-	input, err := s.occurrenceOf(ctx, domain.RunID(req.Body.RunId))
+	recorded, refused, err := s.recordCorrection(ctx, published, req.Body)
 	if err != nil {
+		return nil, err
+	}
+	if refused != nil {
 		return openapi.RecordRegression400ApplicationProblemPlusJSONResponse(
-			invalid(err.Error())), nil
-	}
-
-	// Copied into the corpus rather than pointed at inside the run, so a case
-	// outlives the purge of the run it came from. The copy is under retention
-	// itself, and recording a case again after it aged out has to work: the
-	// reference is the digest, so this lands on the old copy's tombstone.
-	ref, err := s.cases.RestoreFor(ctx, "regression", string(published.ID), 1, input)
-	if err != nil {
-		return nil, fmt.Errorf("keep the occurrence: %w", err)
-	}
-
-	recorded := domain.RegressionCase{
-		ID:           regressionID(published.ID, req.Body.RunId),
-		Agent:        published.ID,
-		Scope:        published.Scope,
-		InputRef:     ref,
-		Expectations: fromExpectations(req.Body.Expectations),
-		FromRun:      domain.RunID(req.Body.RunId),
-		CreatedBy:    callerOf(ctx),
-	}
-	if req.Body.Note != nil {
-		recorded.Note = *req.Body.Note
-	}
-
-	if err := s.regressions.Record(ctx, recorded); err != nil {
-		return openapi.RecordRegression400ApplicationProblemPlusJSONResponse(
-			invalid(err.Error())), nil
+			invalid(refused.Error())), nil
 	}
 	return openapi.RecordRegression201JSONResponse(toRegressionCase(recorded)), nil
+}
+
+/*
+recordCorrection copies what a run was about into the corpus.
+
+Reading the run and writing the copy happen inside the fence an erasure takes. An
+erasure between them would be undone by the write, and would report success.
+*/
+func (s *Server) recordCorrection(
+	ctx context.Context, published domain.AgentSummary, body *openapi.RecordRegressionJSONRequestBody,
+) (recorded domain.RegressionCase, refused, err error) {
+	err = s.regressions.Hold(ctx, published.ID, func(ctx context.Context) error {
+		input, readErr := s.occurrenceOf(ctx, domain.RunID(body.RunId))
+		if readErr != nil {
+			refused = readErr
+			return nil
+		}
+		// Copied into the corpus rather than pointed at inside the run, so a case
+		// outlives the purge of the run it came from. The copy is under retention
+		// itself, and recording a case again after it aged out has to work: the
+		// reference is the digest, so this lands on the old copy's tombstone.
+		ref, putErr := s.cases.RestoreFor(ctx, "regression", string(published.ID), 1, input)
+		if putErr != nil {
+			return fmt.Errorf("keep the occurrence: %w", putErr)
+		}
+		recorded = domain.RegressionCase{
+			ID:           regressionID(published.ID, body.RunId),
+			Agent:        published.ID,
+			Scope:        published.Scope,
+			InputRef:     ref,
+			Expectations: fromExpectations(body.Expectations),
+			FromRun:      domain.RunID(body.RunId),
+			CreatedBy:    callerOf(ctx),
+		}
+		if body.Note != nil {
+			recorded.Note = *body.Note
+		}
+		refused = s.regressions.Record(ctx, recorded)
+		return nil
+	})
+	return recorded, refused, err
 }
 
 func (s *Server) DeleteRegression(

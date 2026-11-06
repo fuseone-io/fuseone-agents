@@ -111,12 +111,43 @@ func (s *Store) List(ctx context.Context, agent domain.AgentID) ([]domain.Regres
 }
 
 /*
-Delete removes one case from the corpus, and the copy it kept.
+Hold runs inside, with the agent's corpus fenced against an erasure.
 
-Left behind, the copy has nothing pointing at it, so no erasure could ever find
-it again. Identical input shares one reference, so a copy another case still
-names stays. One statement, because a delete between the two would leave exactly
-what this exists to prevent.
+Reading an occurrence and writing it somewhere else are two steps, and an erasure
+between them would be undone by the second while reporting success. Shared, so
+copies do not wait for each other: an erasure takes it exclusively and waits for
+these to finish, and anything starting after it reads the tombstone.
+*/
+func (s *Store) Hold(
+	ctx context.Context, agent domain.AgentID, inside func(context.Context) error,
+) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("regression: begin the corpus fence: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock_shared(hashtextextended($1, 0))`,
+		domain.CorpusFence(agent)); err != nil {
+		return fmt.Errorf("regression: wait at the corpus fence: %w", err)
+	}
+	if err := inside(ctx); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("regression: leave the corpus fence: %w", err)
+	}
+	return nil
+}
+
+/*
+Delete removes one case from the corpus, with the copy it kept and the runs that
+replayed it.
+
+Left behind, none of those have anything pointing at them. An input too large to
+keep whole does not even match the run it came from, so this is the last moment
+they can be found. Identical input shares one reference, so while another case
+names the copy, it stays and so do the replays. One statement, because a delete
+between the steps would leave exactly what this exists to prevent.
 */
 func (s *Store) Delete(ctx context.Context, agent domain.AgentID, id string) error {
 	if _, err := s.pool.Exec(ctx, `
@@ -124,16 +155,27 @@ func (s *Store) Delete(ctx context.Context, agent domain.AgentID, id string) err
 			delete from regression_cases
 			where agent_id = $1 and case_id = $2
 			returning input_ref
+		), orphaned as (
+			select rc.ref, rc.digest from run_content rc
+			join gone on rc.ref = gone.input_ref
+			where not exists (
+				select 1 from regression_cases other
+				where other.input_ref = rc.ref
+				  and not (other.agent_id = $1 and other.case_id = $2)
+			)
+		), replays as (
+			select distinct held.run_id from run_content held
+			join orphaned on held.digest = orphaned.digest
+			join runs r on r.run_id = held.run_id
+			where held.owner_kind = 'run' and held.erased_at is null
+			  and r.simulated and r.agent_id = $1
 		)
 		update run_content rc
 		set bytes = null, erased_at = now(), erased_reason = 'case_deleted'
-		from gone
-		where rc.ref = gone.input_ref and rc.erased_at is null
-		  and not exists (
-		    select 1 from regression_cases other
-		    where other.input_ref = rc.ref
-		      and not (other.agent_id = $1 and other.case_id = $2)
-		  )`, string(agent), id); err != nil {
+		where rc.erased_at is null
+		  and (rc.ref in (select ref from orphaned)
+		       or (rc.owner_kind = 'run' and rc.run_id in (select run_id from replays)))`,
+		string(agent), id); err != nil {
 		return fmt.Errorf("regression: delete %s: %w", id, err)
 	}
 	return nil

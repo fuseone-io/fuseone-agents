@@ -60,11 +60,16 @@ func (e *Erasures) ForSubject(
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	named := memoryRunIDs(runs)
+	agents, err := lockCorporaOf(ctx, tx, named)
+	if err != nil {
+		return 0, err
+	}
 	erased, err := e.eraseRuns(ctx, tx, runs)
 	if err != nil {
 		return 0, err
 	}
-	corpus, err := e.eraseCorpusOf(ctx, tx, runs)
+	corpus, err := e.eraseCorpusOf(ctx, tx, named, agents)
 	if err != nil {
 		return 0, err
 	}

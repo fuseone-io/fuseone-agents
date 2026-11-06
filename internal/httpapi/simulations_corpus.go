@@ -11,6 +11,36 @@ import (
 )
 
 /*
+openSimulation reads the occurrences and opens their runs.
+
+A corpus does both inside the fence an erasure takes: read before an erasure and
+opened after it, these runs would hold what was just erased. An uploaded set has
+no run to be erased from, so it needs no fence.
+*/
+func (s *Server) openSimulation(
+	ctx context.Context, agent domain.AgentID, id string, body *openapi.SimulationRequest,
+) (opened simulate.Opened, refused error, err error) {
+	open := func(ctx context.Context) error {
+		occurrences, readErr := s.occurrences(ctx, agent, id, body)
+		if readErr != nil {
+			refused = readErr
+			return nil
+		}
+		var openErr error
+		opened, openErr = simulate.Open(ctx, s.opener(), simulate.Batch{
+			ID: id, Agent: agent, By: callerOf(ctx), Cases: occurrences,
+		})
+		return openErr
+	}
+	if body.Corpus != nil && *body.Corpus && s.regressions != nil {
+		err = s.regressions.Hold(ctx, agent, open)
+	} else {
+		err = open(ctx)
+	}
+	return opened, refused, err
+}
+
+/*
 occurrences is what the simulation will replay: an uploaded set, or the corpus.
 
 Replaying the corpus is the battery, and it reads each case back from the

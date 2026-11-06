@@ -3,8 +3,10 @@ package regression_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -299,5 +301,46 @@ func TestList_saysWhichCasesLostTheirInput(t *testing.T) {
 	}
 	if len(occurrences) != 1 || occurrences[0].ID != "reg-kept" {
 		t.Fatalf("occurrences = %+v, want the one that can still run", occurrences)
+	}
+}
+
+// With the case gone nothing else leads to the runs that replayed it, and for an
+// input too large to keep whole their bytes do not match the run it came from.
+func TestDelete_takesTheRunsThatReplayedTheCase(t *testing.T) {
+	store := storeFor(t)
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	content := ledger.NewContent(pool)
+	input := []byte(`{"email":"ana@example.com"}`)
+
+	ref, err := content.PutFor(ctx, "regression", "suporte", 1, input)
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	withRef := aCase("reg-1", domain.Expectation{Kind: domain.ExpectAsks})
+	withRef.InputRef = ref
+	if err := store.Record(ctx, withRef); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	run := domain.RunID("run-replay-" + fmt.Sprint(time.Now().UnixNano()))
+	if _, err := ledger.NewPostgres(pool).Append(ctx, domain.Step{
+		RunID: run, Seq: 1, Kind: domain.StepRunStarted, AgentID: "suporte",
+		Scope: domain.Scope{Company: "acme", Area: "suporte"}, IdemKey: string(run), VersionID: "v1",
+		At:      time.Now(),
+		Payload: []byte(`{"trigger":"simulation","simulated":true,"simulation":"b","case":"reg-1"}`),
+	}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	replayed, err := content.Put(ctx, run, 1, input)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	if err := store.Delete(ctx, "suporte", "reg-1"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	if _, err := content.Get(ctx, replayed); !errors.Is(err, ledger.ErrErased) {
+		t.Fatalf("replay after delete: err = %v, want erased", err)
 	}
 }

@@ -30,6 +30,13 @@ func NewCorpus(cases *Store, content Content) *Corpus {
 	return &Corpus{cases: cases, content: content}
 }
 
+// Hold fences the corpus against an erasure while it is being copied.
+func (c *Corpus) Hold(
+	ctx context.Context, agent domain.AgentID, inside func(context.Context) error,
+) error {
+	return c.cases.Hold(ctx, agent, inside)
+}
+
 /*
 Occurrences reads the cases of one agent's corpus that can still run.
 

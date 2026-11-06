@@ -123,13 +123,18 @@ expectations re-judge old runs in the same way.
 These change no evaluation behaviour, so they ship ahead of phase 1 in their own
 pull request, with DP-001 updated in the same change.
 
-- **Erasure follows provenance.** `ForSubject` also tombstones the corpus copies
-  of cases whose `from_run` is one of the named runs, and the simulated runs that
-  replayed those cases. It finds them from `regression_cases` and from the `case`
-  in `run_started`, so no new index by person is added. The admin event counts them.
+- **Erasure follows the input.** `ForSubject` also tombstones, within the same agent,
+  the corpus copies and the simulated runs holding the digest of a named run's input.
+  The run recorded that input and a tombstone keeps its digest, so the link survives the
+  correction being deleted and reaches corrections sharing the copy. It reads an index of
+  what is still readable rather than the ledger. No new index by person is added. The
+  admin event counts them.
+- **Erasure and copying exclude each other.** Recording a correction and opening a
+  battery read an occurrence and write it elsewhere, under a per-agent lock held shared.
+  An erasure holds it exclusively, so neither can undo the other.
 - **Erasure clears the case's note.** `regression_cases.note` is free text about the
   run, so it goes with the copy.
-- **Deleting a case erases its copy.** Copies already orphaned are erased once, by a
+- **Deleting a case erases its copy and its replays.** Copies already orphaned are erased once, by a
   sweep for `regression://` content that no case references. Phase 1 changes this
   rule, because a version keeps naming a deleted case. From then on, the version rows
   hold `from_run` and erasure follows them too.

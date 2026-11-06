@@ -5,13 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/regression"
 )
 
 /*
@@ -37,9 +40,16 @@ func recordCorrection(t *testing.T, pool *pgxpool.Pool, c correction) {
 // replay opens the simulated run a battery opens for a case.
 func replay(t *testing.T, pool *pgxpool.Pool, agent string, run domain.RunID, kase string) {
 	t.Helper()
-	payload, err := json.Marshal(domain.RunStartedPayload{
+	open(t, pool, agent, run, domain.RunStartedPayload{
 		Trigger: "simulation", Simulated: true, Simulation: "battery-" + kase, Case: kase,
 	})
+}
+
+func open(
+	t *testing.T, pool *pgxpool.Pool, agent string, run domain.RunID, started domain.RunStartedPayload,
+) {
+	t.Helper()
+	payload, err := json.Marshal(started)
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
@@ -217,5 +227,221 @@ func TestSweep_clearsTheNoteOfACorrectionWhoseCopyAgedOut(t *testing.T) {
 
 	if got := noteOf(t, pool, "reg-1"); got != "" {
 		t.Fatalf("note after retention = %q, want it gone", got)
+	}
+}
+
+// fresh is a run id no earlier pass of this test used: the ledger has no delete.
+func fresh(prefix string) domain.RunID {
+	return domain.RunID(prefix + fmt.Sprint(time.Now().UnixNano()))
+}
+
+// Identical input shares a reference. The replay of the other correction holds
+// the same bytes, and leaving it readable would keep what was asked to go.
+func TestForSubject_reachesTheReplayOfACorrectionSharingTheCopy(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+	input := []byte(`{"email":"ana@example.com"}`)
+
+	copied, err := content.PutFor(ctx, "regression", "suporte", 1, input)
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	recordCorrection(t, pool, correction{"suporte", "reg-a", "run-asked", copied, "first"})
+	recordCorrection(t, pool, correction{"suporte", "reg-b", "run-other", copied, "second"})
+	other := fresh("run-replay-b-")
+	replay(t, pool, "suporte", other, "reg-b")
+	replayed, err := content.Put(ctx, other, 1, input)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	if _, err := erasures.ForSubject(ctx, "dpo", domain.Scope{}, []domain.RunID{"run-asked"}, "request"); err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	if _, err := content.Get(ctx, replayed); !errors.Is(err, ledger.ErrErased) {
+		t.Fatalf("replay of the correction sharing the copy: err = %v, want erased", err)
+	}
+	if got := noteOf(t, pool, "reg-b"); got != "" {
+		t.Fatalf("note of the correction sharing the copy = %q", got)
+	}
+}
+
+// The case is gone, so nothing links the run to its replays except what the run
+// itself recorded: which input it was opened with.
+func TestForSubject_reachesReplaysAfterTheCorrectionWasDeleted(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+	input := []byte(`{"email":"ana@example.com"}`)
+
+	asked := fresh("run-asked-")
+	inputRef, err := content.Put(ctx, asked, 1, input)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	open(t, pool, "suporte", asked, domain.RunStartedPayload{Trigger: "manual", InputRef: inputRef})
+	replayRun := fresh("run-replay-")
+	replay(t, pool, "suporte", replayRun, "reg-deleted")
+	replayed, err := content.Put(ctx, replayRun, 1, input)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	if _, err := erasures.ForSubject(ctx, "dpo", domain.Scope{}, []domain.RunID{asked}, "request"); err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	if _, err := content.Get(ctx, replayed); !errors.Is(err, ledger.ErrErased) {
+		t.Fatalf("replay of a deleted correction: err = %v, want erased", err)
+	}
+}
+
+// Erasure follows identical bytes only inside the agent, and only into its
+// rehearsals. A real run is the operator's to name.
+func TestForSubject_leavesWhatIsNotAReplayOfThisAgent(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+	input := []byte(`{"email":"ana@example.com"}`)
+
+	asked := fresh("run-asked-")
+	inputRef, err := content.Put(ctx, asked, 1, input)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	open(t, pool, "suporte", asked, domain.RunStartedPayload{Trigger: "manual", InputRef: inputRef})
+
+	realRun := fresh("run-real-")
+	open(t, pool, "suporte", realRun, domain.RunStartedPayload{Trigger: "manual"})
+	realContent, _ := content.Put(ctx, realRun, 1, input)
+	otherAgent := fresh("run-other-agent-")
+	replay(t, pool, "vendas", otherAgent, "reg-vendas")
+	otherContent, _ := content.Put(ctx, otherAgent, 1, input)
+	otherCopy, _ := content.PutFor(ctx, "regression", "vendas", 1, input)
+	different := fresh("run-different-")
+	replay(t, pool, "suporte", different, "reg-other")
+	differentContent, _ := content.Put(ctx, different, 1, []byte(`{"email":"bia@example.com"}`))
+
+	if _, err := erasures.ForSubject(ctx, "dpo", domain.Scope{}, []domain.RunID{asked}, "request"); err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+	if _, err := content.Get(ctx, inputRef); !errors.Is(err, ledger.ErrErased) {
+		t.Fatalf("the named run itself: err = %v, want erased", err)
+	}
+
+	for name, ref := range map[string]string{
+		"a real run with the same bytes": realContent, "another agent's replay": otherContent,
+		"another agent's copy": otherCopy, "a replay of other bytes": differentContent,
+	} {
+		if _, err := content.Get(ctx, ref); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+// A correction being recorded read the run before the erasure and writes after
+// it. Held, the erasure waits; once it runs, it finds what was written.
+func TestForSubject_waitsForACorrectionBeingRecorded(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+	store := regression.NewStore(pool)
+	input := []byte(`{"email":"ana@example.com"}`)
+
+	asked := fresh("run-asked-")
+	inputRef, err := content.Put(ctx, asked, 1, input)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	open(t, pool, "suporte", asked, domain.RunStartedPayload{Trigger: "manual", InputRef: inputRef})
+
+	entered, release, erased := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	var copied string
+	held := make(chan error, 1)
+	go func() {
+		held <- store.Hold(ctx, "suporte", func(ctx context.Context) error {
+			close(entered)
+			<-release
+			var err error
+			copied, err = content.RestoreFor(ctx, "regression", "suporte", 1, input)
+			if err != nil {
+				return err
+			}
+			_, err = pool.Exec(ctx, `insert into regression_cases
+				(agent_id, case_id, input_ref, from_run) values ('suporte', 'reg-race', $1, $2)`,
+				copied, string(asked))
+			return err
+		})
+	}()
+	<-entered
+	go func() {
+		_, err := erasures.ForSubject(ctx, "dpo", domain.Scope{}, []domain.RunID{asked}, "request")
+		erased <- err
+	}()
+
+	select {
+	case err := <-erased:
+		t.Fatalf("the erasure did not wait for the correction: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	close(release)
+	if err := <-held; err != nil {
+		t.Fatalf("Hold: %v", err)
+	}
+	if err := <-erased; err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	if _, err := content.Get(ctx, copied); !errors.Is(err, ledger.ErrErased) {
+		t.Fatalf("copy written during the erasure: err = %v, want erased", err)
+	}
+}
+
+// A request has to finish in time on an installation with years of history, so
+// the search must not read in proportion to it.
+func TestReplaySearch_usesTheDigestIndex(t *testing.T) {
+	erasuresFor(t, time.Now)
+	pool := openPool(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `
+		insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes, truncated)
+		select 'run://plan/' || g, 'run', 'plan-' || g, 1, md5(g::text), 'x', 1, false
+		from generate_series(1, 5000) g;
+		analyze run_content;`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	for name, query := range admin.CorpusSearchQueries() {
+		rows, err := pool.Query(ctx, "explain "+query,
+			[]string{"abc"}, []string{"suporte"})
+		if err != nil {
+			t.Fatalf("%s: explain: %v", name, err)
+		}
+		plan := ""
+		for rows.Next() {
+			var line string
+			if err := rows.Scan(&line); err != nil {
+				t.Fatalf("%s: scan: %v", name, err)
+			}
+			plan += line + "\n"
+		}
+		rows.Close()
+		if strings.Contains(plan, "Seq Scan on run_content") {
+			t.Errorf("%s: plan reads all the content:\n%s", name, plan)
+		}
+		// Copies may use the owner index instead, which is bounded by the agent's
+		// corpus. Replays have no such bound: an agent's content is its whole history.
+		if name == "replays" && !strings.Contains(plan, "run_content_digest_idx") {
+			t.Errorf("%s: plan does not use the digest index:\n%s", name, plan)
+		}
+		if strings.Contains(plan, "run_steps") {
+			t.Errorf("%s: plan reads the ledger:\n%s", name, plan)
+		}
 	}
 }

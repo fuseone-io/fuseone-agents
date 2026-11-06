@@ -103,6 +103,13 @@ type RegressionCase struct {
 	CreatedAt time.Time
 }
 
+// CorpusFence names the lock an erasure and anything copying a corpus share, per
+// agent. Reading an occurrence and writing it somewhere else are two steps, and an
+// erasure between them would be undone by the second.
+func CorpusFence(agent AgentID) string {
+	return "corpus-fence:" + string(agent)
+}
+
 // ErasedCase is a correction that lost its occurrence, named for the notice.
 type ErasedCase struct {
 	Agent AgentID

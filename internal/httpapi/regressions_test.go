@@ -20,6 +20,8 @@ type fakeCorpus struct {
 	recorded []domain.RegressionCase
 	listed   []domain.RegressionCase
 	err      error
+	held     int
+	inside   bool
 }
 
 func (f *fakeCorpus) Record(_ gocontext.Context, c domain.RegressionCase) error {
@@ -35,6 +37,38 @@ func (f *fakeCorpus) List(gocontext.Context, domain.AgentID) ([]domain.Regressio
 }
 
 func (f *fakeCorpus) Delete(gocontext.Context, domain.AgentID, string) error { return nil }
+
+func (f *fakeCorpus) Hold(
+	ctx gocontext.Context, _ domain.AgentID, inside func(gocontext.Context) error,
+) error {
+	f.held, f.inside = f.held+1, true
+	defer func() { f.inside = false }()
+	return inside(ctx)
+}
+
+// fencedContent records whether the corpus is being read and written from
+// inside the fence an erasure takes.
+type fencedContent struct {
+	*engine.MemoryContent
+	corpus  *fakeCorpus
+	outside []string
+}
+
+func (c *fencedContent) RestoreFor(
+	ctx gocontext.Context, kind, owner string, seq int64, data []byte,
+) (string, error) {
+	if !c.corpus.inside {
+		c.outside = append(c.outside, "RestoreFor")
+	}
+	return c.MemoryContent.RestoreFor(ctx, kind, owner, seq, data)
+}
+
+func (c *fencedContent) Get(ctx gocontext.Context, ref string) ([]byte, error) {
+	if !c.corpus.inside {
+		c.outside = append(c.outside, "Get")
+	}
+	return c.MemoryContent.Get(ctx, ref)
+}
 
 // correctable returns a server holding one run with an occurrence behind it.
 func correctable(t *testing.T, corpus *fakeCorpus) (*Server, *engine.MemoryContent) {
@@ -273,5 +307,50 @@ func TestStartSimulation_corpusWithEveryCaseErased_isRefused(t *testing.T) {
 	}
 	if !strings.Contains(*refused.Detail, "lost its input") {
 		t.Fatalf("detail = %q, want it to say why", *refused.Detail)
+	}
+}
+
+// An erasure between reading the run and writing the copy would be undone by the
+// write, so both happen inside the fence the erasure takes.
+func TestRecordRegression_readsAndWritesInsideTheCorpusFence(t *testing.T) {
+	t.Parallel()
+
+	corpus := &fakeCorpus{}
+	server, content := correctable(t, corpus)
+	fenced := &fencedContent{MemoryContent: content, corpus: corpus}
+	server.WithContent(fenced).WithCases(fenced)
+
+	if _, err := server.RecordRegression(inArea("cx", domain.RoleAuthor),
+		correction(openapi.Expectation{Kind: "asks"})); err != nil {
+		t.Fatalf("RecordRegression: %v", err)
+	}
+
+	if corpus.held != 1 || len(fenced.outside) != 0 {
+		t.Fatalf("held = %d, outside the fence = %v", corpus.held, fenced.outside)
+	}
+}
+
+func TestStartSimulation_corpusIsReadAndOpenedInsideTheFence(t *testing.T) {
+	t.Parallel()
+
+	corpus := &fakeCorpus{}
+	server, content := correctable(t, corpus)
+	kept, err := content.PutFor(gocontext.Background(), "regression", "triage", 1, []byte(`{"a":1}`))
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	corpus.listed = []domain.RegressionCase{{ID: "reg-kept", InputRef: kept}}
+	fenced := &fencedContent{MemoryContent: content, corpus: corpus}
+	server.WithContent(fenced).WithCases(fenced)
+
+	resp, err := server.StartSimulation(inArea("cx", domain.RoleAuthor), corpusSimulation())
+	if err != nil {
+		t.Fatalf("StartSimulation: %v", err)
+	}
+	if _, ok := resp.(openapi.StartSimulation202JSONResponse); !ok {
+		t.Fatalf("response = %T", resp)
+	}
+	if corpus.held != 1 || len(fenced.outside) != 0 {
+		t.Fatalf("held = %d, outside the fence = %v", corpus.held, fenced.outside)
 	}
 }

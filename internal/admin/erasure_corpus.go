@@ -15,87 +15,128 @@ type corpusErasure struct {
 }
 
 /*
-eraseCorpusOf follows a named run into the corpus.
+lockCorporaOf waits for anything copying these agents' corpora to finish.
+
+Recording a correction and opening a battery each read an occurrence and write
+it somewhere else. An erasure between the two would be undone by the second, and
+it would report success. They hold this lock shared, so they do not wait for each
+other, and an erasure holds it exclusively until it commits. Whatever starts after
+it reads the tombstone.
+
+In a stable order, so two erasures cannot deadlock.
+*/
+func lockCorporaOf(ctx context.Context, tx pgx.Tx, runs []string) ([]string, error) {
+	agents, err := scanStrings(ctx, tx, `
+		select agent_id from runs where run_id = any($1::text[])
+		union
+		select agent_id from regression_cases where from_run = any($1::text[])
+		order by 1`, runs)
+	if err != nil {
+		return nil, fmt.Errorf("admin: find the agents of erased runs: %w", err)
+	}
+	for _, agent := range agents {
+		if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`,
+			domain.CorpusFence(domain.AgentID(agent))); err != nil {
+			return nil, fmt.Errorf("admin: wait for the corpus of %s: %w", agent, err)
+		}
+	}
+	return agents, nil
+}
+
+// Both start from a digest, on an index of what is still readable, so a request
+// costs what it finds rather than what the installation has ever done.
+const (
+	copySearchSQL = `
+		select ref from run_content
+		where digest = any($1::text[]) and owner_kind = 'regression'
+		  and run_id = any($2::text[]) and erased_at is null`
+	replaySearchSQL = `
+		select distinct rc.run_id from run_content rc
+		join runs r on r.run_id = rc.run_id
+		where rc.digest = any($1::text[]) and rc.owner_kind = 'run'
+		  and rc.erased_at is null and r.simulated and r.agent_id = any($2::text[])`
+)
+
+/*
+eraseCorpusOf follows a named run to everything that holds its input.
 
 A correction keeps its own copy of the occurrence, filed under the agent so it
 outlives the run, and a battery opens a new run holding the same input every
 time it runs. Erasing only the run leaves all of those behind, with nothing to
 tell the operator they exist.
 
-Everything here is found by provenance, from what the run already recorded, so
-no index by person comes into existence.
+It follows the digest rather than the case. A run recorded which input it was
+opened with, and a tombstone keeps its digest, so the link survives the
+correction being deleted and reaches every correction sharing that input. No
+index by person comes into existence: this starts from runs somebody named.
 
-Two corrections made from identical input share one reference, because the
-reference is the digest. Erasing it takes both: they hold the same bytes, and
-keeping one of them would keep the bytes.
+Only inside the agents involved, and only into copies and rehearsals. A real run
+holding the same bytes is a record of something that happened, and naming it is
+the operator's act.
 */
 func (e *Erasures) eraseCorpusOf(
-	ctx context.Context, tx pgx.Tx, runs []domain.RunID,
+	ctx context.Context, tx pgx.Tx, runs []string, agents []string,
 ) (corpusErasure, error) {
-	cases, refs, err := corpusCasesFrom(ctx, tx, memoryRunIDs(runs))
+	digests, err := inputDigestsOf(ctx, tx, runs)
 	if err != nil {
 		return corpusErasure{}, err
 	}
-	if len(cases) == 0 {
-		return corpusErasure{}, nil
+	refs, err := scanStrings(ctx, tx, copySearchSQL, digests, agents)
+	if err != nil {
+		return corpusErasure{}, fmt.Errorf("admin: find corpus copies: %w", err)
 	}
 	objects, err := e.content.EraseRefsTx(ctx, tx, refs, "subject")
 	if err != nil {
 		return corpusErasure{}, fmt.Errorf("admin: erase corpus copies: %w", err)
 	}
-	if _, err := tx.Exec(ctx,
-		`update regression_cases set note = '' where case_id = any($1::text[])`, cases); err != nil {
+	tag, err := tx.Exec(ctx, `
+		update regression_cases set note = ''
+		where input_ref = any($1::text[]) or from_run = any($2::text[])`, refs, runs)
+	if err != nil {
 		return corpusErasure{}, fmt.Errorf("admin: clear corpus notes: %w", err)
 	}
-	replays, err := runsReplaying(ctx, tx, cases)
+	replays, err := scanStrings(ctx, tx, replaySearchSQL, digests, agents)
+	if err != nil {
+		return corpusErasure{}, fmt.Errorf("admin: find replays: %w", err)
+	}
+	replayed, err := e.eraseRuns(ctx, tx, toRunIDs(replays))
 	if err != nil {
 		return corpusErasure{}, err
 	}
-	replayed, err := e.eraseRuns(ctx, tx, replays)
-	if err != nil {
-		return corpusErasure{}, err
-	}
-	return corpusErasure{cases: len(cases), objects: objects + replayed}, nil
+	return corpusErasure{cases: int(tag.RowsAffected()), objects: objects + replayed}, nil
 }
 
-func corpusCasesFrom(
-	ctx context.Context, tx pgx.Tx, runs []string,
-) (cases, refs []string, err error) {
-	rows, err := tx.Query(ctx, `
-		select case_id, input_ref from regression_cases
-		where from_run = any($1::text[])`, runs)
+// inputDigestsOf is the input each run recorded, and the copy any correction made
+// from it. They differ when an input was too large to keep whole.
+func inputDigestsOf(ctx context.Context, tx pgx.Tx, runs []string) ([]string, error) {
+	digests, err := scanStrings(ctx, tx, `
+		select rc.digest from run_steps s
+		join run_content rc on rc.ref = s.payload->>'input_ref'
+		where s.run_id = any($1::text[]) and s.seq = 1 and s.kind = 'run_started'
+		union
+		select rc.digest from regression_cases c
+		join run_content rc on rc.ref = c.input_ref
+		where c.from_run = any($1::text[])`, runs)
 	if err != nil {
-		return nil, nil, fmt.Errorf("admin: find corrections of erased runs: %w", err)
+		return nil, fmt.Errorf("admin: read the input of erased runs: %w", err)
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var kase, ref string
-		if err := rows.Scan(&kase, &ref); err != nil {
-			return nil, nil, fmt.Errorf("admin: scan correction: %w", err)
-		}
-		cases, refs = append(cases, kase), append(refs, ref)
-	}
-	return cases, refs, rows.Err()
+	return digests, nil
 }
 
-func runsReplaying(ctx context.Context, tx pgx.Tx, cases []string) ([]domain.RunID, error) {
-	rows, err := tx.Query(ctx, `
-		select r.run_id from runs r
-		join run_steps s on s.run_id = r.run_id and s.seq = 1 and s.kind = 'run_started'
-		where r.simulated and s.payload->>'case' = any($1::text[])`, cases)
+func scanStrings(ctx context.Context, tx pgx.Tx, query string, args ...any) ([]string, error) {
+	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("admin: find replays of erased corrections: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
-	var out []domain.RunID
-	for rows.Next() {
-		var run string
-		if err := rows.Scan(&run); err != nil {
-			return nil, fmt.Errorf("admin: scan replay: %w", err)
-		}
-		out = append(out, domain.RunID(run))
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+func toRunIDs(ids []string) []domain.RunID {
+	out := make([]domain.RunID, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, domain.RunID(id))
 	}
-	return out, rows.Err()
+	return out
 }
 
 // clearNotesOfErasedCases is retention's half: the copy aged out, and a note is

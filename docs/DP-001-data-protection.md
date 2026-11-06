@@ -169,11 +169,20 @@ not by whose data it touched.
 
 **It follows a run into the regression corpus.** A correction keeps its own copy of
 what a run was about, under the agent rather than the run, and every battery opens a
-new simulated run holding that input again. Erasing a run also erases the copy of any
-correction made from it, that correction's note, and the content of the simulated runs
-that replayed it. The admin event counts those corrections as `corpusCases`. Two
-corrections made from identical input share one copy, so erasing it affects both. The
-case itself stays, with no input, and is reported as a gap.
+new simulated run holding that input again. Erasing a run also erases, within the same
+agent, every correction's copy holding that run's input, those corrections' notes, and
+the content of every simulated run holding it. It finds them by the digest the run
+recorded, which outlives the correction being deleted. The admin event counts those
+corrections as `corpusCases`. The case itself stays, with no input, and is reported as a
+gap. Deleting a correction takes its copy and the runs that replayed it, unless another
+correction still holds the same input.
+
+Recording a correction and opening a battery wait for an erasure in progress, and an
+erasure waits for them, so neither can put back what was just erased.
+
+**Real runs are the operator's to name.** Only rehearsals are followed. A real run holding
+the same bytes, including one started from another with "run from this input", is a record
+of something that happened, and erasure does not reach it unless it is named.
 
 **Uploaded simulation sets are not reached.** A set an author uploads is filed under
 its simulation and has no run to follow. An operator has to name those simulations'
