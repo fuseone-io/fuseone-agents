@@ -66,7 +66,8 @@ func openPrincipal() domain.Principal {
 		ID:      "open-installation",
 		Subject: "open-installation",
 		Display: "Open installation (no database)",
-		Kind:    domain.PrincipalService,
+		// A person at the keyboard: with no database there is nobody else to approve.
+		Kind: domain.PrincipalUser,
 		Grants: []domain.Grant{{
 			Scope: domain.Scope{Company: domain.Installation},
 			Role:  domain.RoleAdmin,

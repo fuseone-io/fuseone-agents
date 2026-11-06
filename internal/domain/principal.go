@@ -76,12 +76,32 @@ const (
 	PrincipalAgent   PrincipalKind = "agent"
 )
 
+// barredFrom is what no role can give a principal that is not a person.
+//
+// Releasing an effect the Gate held is the human check itself, and a token that could
+// do it would turn one leaked secret into an approval. Deciding who may act is how
+// access spreads, so a token that could do it could issue itself more. Here rather
+// than at each door, because a door that forgets is the failure this exists to stop.
+func (p Principal) barredFrom(perm Permission) bool {
+	if p.Kind != PrincipalService && p.Kind != PrincipalAgent {
+		return false
+	}
+	switch perm {
+	case PermApprovalAct, PermApprovalGrant, PermIdentityWrite:
+		return true
+	}
+	return false
+}
+
 // Can reports whether the principal may perform an action in a scope.
 //
 // Both the permission and the scope must match the same grant. Holding curator
 // on one area does not grant it on another, which is what makes the company
 // boundary hold once a group runs several of them (PRD §3.1).
 func (p Principal) Can(perm Permission, scope Scope) bool {
+	if p.barredFrom(perm) {
+		return false
+	}
 	for _, g := range p.Grants {
 		if g.Scope.Contains(scope) && g.Role.Allows(perm) {
 			return true
@@ -94,6 +114,9 @@ func (p Principal) Can(perm Permission, scope Scope) bool {
 // Use it to decide whether a listing is worth attempting; use Can for the
 // resource itself.
 func (p Principal) CanAnywhere(perm Permission) bool {
+	if p.barredFrom(perm) {
+		return false
+	}
 	for _, g := range p.Grants {
 		if g.Role.Allows(perm) {
 			return true
@@ -106,6 +129,9 @@ func (p Principal) CanAnywhere(perm Permission) bool {
 // listing endpoint filters by this rather than reading everything and
 // discarding — the difference matters once a company has real volume.
 func (p Principal) ScopesFor(perm Permission) []Scope {
+	if p.barredFrom(perm) {
+		return nil
+	}
 	var out []Scope
 	for _, g := range p.Grants {
 		if g.Role.Allows(perm) && !slices.Contains(out, g.Scope) {
