@@ -15,14 +15,16 @@ const querySchema = z.object({
   id: z.string().regex(queryId, "connectors.evidenceQueryIdInvalid"),
   description: z
     .string()
-    .trim()
-    .min(1, "connectors.evidenceDescriptionRequired"),
+    .refine(
+      (value) => value.trim() !== "",
+      "connectors.evidenceDescriptionRequired",
+    ),
   path: z
     .string()
     .regex(path, "connectors.evidencePathInvalid")
     .refine((value) => !value.includes(".."), "connectors.evidencePathInvalid"),
-  filters: z.string(),
-  parameters: z.string(),
+  filters: z.array(z.object({ name: z.string(), value: z.string() })),
+  parameters: z.array(z.object({ name: z.string(), pattern: z.string() })),
   fields: z.string(),
   idField: z.string(),
   timeField: z.string(),
@@ -40,13 +42,20 @@ export const evidenceInstanceSchema = z
     area: z.string(),
     baseUrl: z
       .string()
-      .regex(/^https:\/\/[^\s/]+/, "connectors.evidenceBaseUrlInvalid"),
+      .regex(/^https:\/\/\S+$/, "connectors.evidenceBaseUrlInvalid"),
     authHeader: z.string().regex(header, "connectors.evidenceHeaderInvalid"),
     // Never trimmed: "ApiToken " carries the space that separates it from the
     // token, and a tidied prefix is a source that refuses every request.
     authPrefix: z.string(),
     control: z.string(),
-    rows: z.string().trim().min(1, "connectors.evidenceRowsRequired"),
+    // Sent as written, like every value here: a save with nothing changed must
+    // send back the bytes it was given. The server compares this path exactly.
+    rows: z
+      .string()
+      .refine(
+        (value) => value.trim() !== "",
+        "connectors.evidenceRowsRequired",
+      ),
     refusalField: z.string(),
     refusalValue: z.string(),
     gapField: z.string(),
@@ -98,20 +107,8 @@ export function evidenceList(text: string): string[] {
     .filter(Boolean);
 }
 
-/** A line of `name = value`, split on the first `=`. Null when one has none. */
-export function evidencePairs(text: string): [string, string][] | null {
-  const pairs: [string, string][] = [];
-  for (const line of text.split("\n")) {
-    if (line.trim() === "") continue;
-    const at = line.indexOf("=");
-    if (at < 1) return null;
-    pairs.push([line.slice(0, at).trim(), line.slice(at + 1).trim()]);
-  }
-  return pairs;
-}
-
 export function evidenceControlEligible(query: EvidenceQueryValues) {
-  return query.id !== "" && !query.windowless && query.parameters.trim() === "";
+  return query.id !== "" && !query.windowless && query.parameters.length === 0;
 }
 
 function issue(ctx: Ctx, at: (string | number)[], message: string) {
@@ -148,7 +145,7 @@ function requirePaging(values: EvidenceInstanceValues, ctx: Ctx) {
   if (!param.test(values.cursorParam)) {
     issue(ctx, ["cursorParam"], "connectors.evidenceParamInvalid");
   }
-  if (values.nextCursor.trim() === "") {
+  if (values.nextCursor === "") {
     issue(ctx, ["nextCursor"], "connectors.evidenceNextCursorRequired");
   }
 }
@@ -232,34 +229,34 @@ function requireFilters(
   at: number,
   ctx: Ctx,
 ) {
-  const filtersAt = ["queries", at, "filters"];
-  const parametersAt = ["queries", at, "parameters"];
-  const filters = evidencePairs(query.filters);
-  const parameters = evidencePairs(query.parameters);
-  if (!filters) issue(ctx, filtersAt, "connectors.evidenceLineInvalid");
-  if (!parameters) issue(ctx, parametersAt, "connectors.evidenceLineInvalid");
-  if (!filters || !parameters) return;
-
   const reserved = reservedParams(values);
+  const declared = new Set(query.parameters.map(({ name }) => name));
   const used = new Set<string>();
-  for (const [name, value] of filters) {
+  query.filters.forEach(({ name, value }, row) => {
+    const where = ["queries", at, "filters", row];
     if (!param.test(name) || reserved.has(name)) {
-      issue(ctx, filtersAt, "connectors.evidenceFilterReserved");
+      issue(ctx, [...where, "name"], "connectors.evidenceFilterReserved");
     }
-    for (const match of value.matchAll(/\{([^{}]*)\}/g)) used.add(match[1]!);
-  }
-  const declared = new Set(parameters.map(([name]) => name));
-  if ([...used].some((name) => !declared.has(name))) {
-    issue(ctx, filtersAt, "connectors.evidencePlaceholderUndeclared");
-  }
-  for (const [name, pattern] of parameters) {
+    for (const match of value.matchAll(/\{([^{}]*)\}/g)) {
+      used.add(match[1]!);
+      if (!declared.has(match[1]!)) {
+        issue(
+          ctx,
+          [...where, "value"],
+          "connectors.evidencePlaceholderUndeclared",
+        );
+      }
+    }
+  });
+  query.parameters.forEach(({ name, pattern }, row) => {
+    const where = ["queries", at, "parameters", row];
     if (!queryId.test(name) || !used.has(name)) {
-      issue(ctx, parametersAt, "connectors.evidenceParameterUnused");
+      issue(ctx, [...where, "name"], "connectors.evidenceParameterUnused");
     }
     if (pattern === "") {
-      issue(ctx, parametersAt, "connectors.evidencePatternRequired");
+      issue(ctx, [...where, "pattern"], "connectors.evidencePatternRequired");
     }
-  }
+  });
 }
 
 function requireControl(values: EvidenceInstanceValues, ctx: Ctx) {

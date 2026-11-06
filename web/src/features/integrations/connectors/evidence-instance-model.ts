@@ -9,7 +9,6 @@ import {
 } from "@/features/integrations/connectors/connector-instance-model";
 import {
   evidenceList,
-  evidencePairs,
   type EvidenceInstanceValues,
   type EvidenceQueryValues,
 } from "@/features/integrations/connectors/evidence-instance-schema";
@@ -33,8 +32,8 @@ export function emptyEvidenceQuery(): EvidenceQueryValues {
     id: "",
     description: "",
     path: "",
-    filters: "",
-    parameters: "",
+    filters: [],
+    parameters: [],
     fields: "",
     idField: "",
     timeField: "",
@@ -104,12 +103,8 @@ function queryValues(query: EvidenceQuery): EvidenceQueryValues {
     id: query.id,
     description: query.description,
     path: query.path,
-    filters: (query.filters ?? [])
-      .map((filter) => `${filter.name} = ${filter.value}`)
-      .join("\n"),
-    parameters: (query.parameters ?? [])
-      .map((parameter) => `${parameter.name} = ${parameter.pattern}`)
-      .join("\n"),
+    filters: (query.filters ?? []).map((filter) => ({ ...filter })),
+    parameters: (query.parameters ?? []).map((parameter) => ({ ...parameter })),
     fields: query.fields.join(", "),
     idField: query.idField ?? "",
     timeField: query.timeField ?? "",
@@ -137,19 +132,13 @@ export function evidenceInstanceDefaults(
 }
 
 function queryDeclaration(query: EvidenceQueryValues): EvidenceQuery {
-  const filters = evidencePairs(query.filters) ?? [];
-  const parameters = evidencePairs(query.parameters) ?? [];
   return {
-    id: query.id.trim(),
-    description: query.description.trim(),
-    path: query.path.trim(),
+    id: query.id,
+    description: query.description,
+    path: query.path,
     fields: evidenceList(query.fields),
-    ...(filters.length > 0 && {
-      filters: filters.map(([name, value]) => ({ name, value })),
-    }),
-    ...(parameters.length > 0 && {
-      parameters: parameters.map(([name, pattern]) => ({ name, pattern })),
-    }),
+    ...(query.filters.length > 0 && { filters: query.filters }),
+    ...(query.parameters.length > 0 && { parameters: query.parameters }),
     ...(query.idField && { idField: query.idField }),
     ...(query.timeField && { timeField: query.timeField }),
     ...(query.windowless && { windowless: true }),
@@ -169,7 +158,7 @@ function pagingDeclaration(
     : {
         ...shared,
         cursorParam: values.cursorParam,
-        nextCursor: values.nextCursor.trim(),
+        nextCursor: values.nextCursor,
       };
 }
 
@@ -192,11 +181,11 @@ function windowDeclaration(
 
 function declaration(values: EvidenceInstanceValues): ConnectorEvidenceConfig {
   return {
-    baseUrl: values.baseUrl.trim(),
+    baseUrl: values.baseUrl,
     authHeader: values.authHeader,
     ...(values.authPrefix && { authPrefix: values.authPrefix }),
     control: values.control,
-    rows: values.rows.trim(),
+    rows: values.rows,
     ...(values.refusalField && {
       refusal: { field: values.refusalField, value: values.refusalValue },
     }),

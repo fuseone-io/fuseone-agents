@@ -72,6 +72,42 @@ describe("evidence instance payload", () => {
     expect(saved?.body.evidence).toEqual(declarations[at]);
   });
 
+  it("sends back unchanged every byte a valid declaration holds", () => {
+    const declaration = {
+      ...declarations[0],
+      rows: " result ",
+      refusal: { field: " ok", value: " 0 " },
+      queries: [
+        {
+          ...declarations[0].queries[0],
+          description: "  spaced  description  ",
+          filters: [{ name: "constant", value: "  a = b  " }],
+        },
+        {
+          ...declarations[0].queries[1],
+          filters: [
+            { name: "query", value: " user eq '{user}'\nand more " },
+            { name: "blank", value: "" },
+          ],
+          parameters: [{ name: "user", pattern: " [a-z]+ = x " }],
+        },
+        declarations[0].queries[2],
+      ],
+    };
+
+    const values = {
+      ...evidenceInstanceDefaults(null, "acme", "cyber"),
+      ...evidenceDeclarationValues(declaration),
+      name: "source",
+      token: "read-only",
+    };
+
+    expect(issuesOf(values)).toEqual([]);
+    expect(evidenceInstancePayload(values, false)?.body.evidence).toEqual(
+      declaration,
+    );
+  });
+
   it("keeps the space that separates a token prefix from the token", () => {
     const saved = evidenceInstancePayload(cursorValues(), false);
 
@@ -191,22 +227,22 @@ describe("evidence instance schema", () => {
     [
       "a filter that collides with paging",
       "connectors.evidenceFilterReserved",
-      (v) => void (v.queries[1]!.filters = "limit = {user}"),
-    ],
-    [
-      "a filter line with no separator",
-      "connectors.evidenceLineInvalid",
-      (v) => void (v.queries[1]!.filters = "query"),
+      (v) =>
+        void (v.queries[1]!.filters = [{ name: "limit", value: "{user}" }]),
     ],
     [
       "a placeholder no parameter declares",
       "connectors.evidencePlaceholderUndeclared",
-      (v) => void (v.queries[1]!.filters = "query = user eq '{person}'"),
+      (v) =>
+        void (v.queries[1]!.filters = [
+          { name: "query", value: "user eq '{person}'" },
+        ]),
     ],
     [
       "a parameter no filter uses",
       "connectors.evidenceParameterUnused",
-      (v) => void (v.queries[1]!.filters = "query = everything"),
+      (v) =>
+        void (v.queries[1]!.filters = [{ name: "query", value: "everything" }]),
     ],
     [
       "a path with a query string",

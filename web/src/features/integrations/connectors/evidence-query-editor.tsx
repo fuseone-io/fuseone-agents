@@ -13,6 +13,7 @@ import {
   emptyEvidenceQuery,
   type EvidenceInstanceValues,
 } from "@/features/integrations/connectors/evidence-instance-model";
+import { EvidencePairsEditor } from "@/features/integrations/connectors/evidence-pairs-editor";
 import { EvidenceTextField } from "@/features/integrations/connectors/evidence-text-field";
 
 export function EvidenceQueryEditor() {
@@ -128,25 +129,9 @@ function EvidenceQueryFields({
             label: t("connectors.evidenceQueryTimeField"),
           }}
         />
-        <EvidenceTextField
-          field={{
-            control,
-            name: `${at}.filters`,
-            label: t("connectors.evidenceQueryFilters"),
-            description: t("connectors.evidenceQueryFiltersHint"),
-            type: "lines",
-          }}
-        />
-        <EvidenceTextField
-          field={{
-            control,
-            name: `${at}.parameters`,
-            label: t("connectors.evidenceQueryParameters"),
-            description: t("connectors.evidenceQueryParametersHint"),
-            type: "lines",
-          }}
-        />
       </div>
+      <EvidencePairsEditor query={index} kind="filters" />
+      <EvidencePairsEditor query={index} kind="parameters" />
       <FormField
         control={control}
         name={`${at}.windowless`}

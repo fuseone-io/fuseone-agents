@@ -114,6 +114,38 @@ describe("evidence connector instance form", () => {
     expect(saved.body.evidence).toEqual(stored.evidence);
   });
 
+  it("saves a filter and a parameter added to a query, byte for byte", async () => {
+    const { onSave, user } = renderForm(stored);
+    const query = within(
+      screen.getByRole("heading", { name: "pages_by_user" }).parentElement!
+        .parentElement!,
+    );
+
+    await user.click(query.getByRole("button", { name: "Adicionar filtro" }));
+    await user.click(
+      query.getByRole("button", { name: "Adicionar parâmetro" }),
+    );
+    const names = query.getAllByLabelText("Nome do filtro");
+    const values = query.getAllByLabelText("Valor do filtro");
+    const parameters = query.getAllByLabelText("Nome do parâmetro");
+    const patterns = query.getAllByLabelText("Padrão");
+    await user.type(names.at(-1)!, "extra");
+    await user.click(values.at(-1)!);
+    await user.paste("  a {who} ");
+    await user.type(parameters.at(-1)!, "who");
+    await user.click(patterns.at(-1)!);
+    await user.paste(" x ");
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    const saved = onSave.mock.calls[0]![0].body.evidence.queries[1];
+    expect(saved.filters.at(-1)).toEqual({
+      name: "extra",
+      value: "  a {who} ",
+    });
+    expect(saved.parameters.at(-1)).toEqual({ name: "who", pattern: " x " });
+  });
+
   it("offers as the control only a query that can be one", async () => {
     const { user } = renderForm(stored);
 
