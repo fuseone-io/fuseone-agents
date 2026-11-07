@@ -2,10 +2,12 @@ package ledger_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/ledger"
@@ -421,5 +423,228 @@ func TestMigrate_conversationsUnderTheIdAlone_waitForTheConnectionsLock(t *testi
 	}
 	if name != "10:held-slack/C-LOCKED" {
 		t.Errorf("name = %q, want it renamed once the lock was free", name)
+	}
+}
+
+// Corrections erased before erasure took expectations still hold them. The next
+// step turns expectations into content, and these must not arrive there readable.
+func TestMigrate_correctionsAlreadyErased_loseTheirExpectations(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := t.Context()
+
+	if _, err := pool.Exec(ctx, `
+		delete from regression_cases where agent_id = 'migrate-erased';
+		delete from run_content where run_id = 'migrate-erased';
+		delete from schema_migrations where version = '0102_erased_corrections_expectations';
+		insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes, erased_at, erased_reason)
+		values ('regression://migrate-erased/1/gone', 'regression', 'migrate-erased', 1, 'gone', null, 0, now(), 'subject'),
+		       ('regression://migrate-erased/1/kept', 'regression', 'migrate-erased', 1, 'kept', '{}', 2, null, '');
+		insert into regression_cases (agent_id, case_id, input_ref, expectations) values
+		  ('migrate-erased', 'erased', 'regression://migrate-erased/1/gone', '[{"kind":"says","value":"ana@example.com"}]'),
+		  ('migrate-erased', 'readable', 'regression://migrate-erased/1/kept', '[{"kind":"says","value":"keep"}]');
+	`); err != nil {
+		t.Fatalf("restore the state before the migration: %v", err)
+	}
+	if err := ledger.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	read := func(id string) string {
+		var text string
+		if err := pool.QueryRow(ctx, `select expectations::text from regression_cases
+			where agent_id = 'migrate-erased' and case_id = $1`, id).Scan(&text); err != nil {
+			t.Fatalf("read %s: %v", id, err)
+		}
+		return text
+	}
+	if got := read("erased"); got != "[]" {
+		t.Errorf("erased case = %s, want its expectations gone", got)
+	}
+	if got := read("readable"); !strings.Contains(got, "keep") {
+		t.Errorf("readable case = %s, want it untouched", got)
+	}
+}
+
+/*
+The binary before 0102 runs alongside it during a rolling update, and that binary
+clears only a note. Each statement here is its SQL, narrowed only so that retention
+stays inside this test's rows: it reports the erasure as done, so what it does not
+clear has to be cleared by the database.
+*/
+func TestMigrate_theErasureSQLOfThePreviousVersion_leavesNoExpectations(t *testing.T) {
+	cases := []struct {
+		name  string
+		erase func(ctx context.Context, tx pgx.Tx, ref string) error
+	}{{
+		name: "a subject erasure",
+		erase: func(ctx context.Context, tx pgx.Tx, ref string) error {
+			if _, err := tx.Exec(ctx, `
+				update run_content
+				set bytes = null, erased_at = now(), erased_reason = $2
+				where ref = any($1::text[]) and erased_at is null`, []string{ref}, "subject"); err != nil {
+				return err
+			}
+			_, err := tx.Exec(ctx, `
+				update regression_cases set note = ''
+				where input_ref = any($1::text[]) or from_run = any($2::text[])`,
+				[]string{ref}, []string{"run-old-binary"})
+			return err
+		},
+	}, {
+		name: "retention",
+		erase: func(ctx context.Context, tx pgx.Tx, _ string) error {
+			if _, err := tx.Exec(ctx, `
+				update run_content
+				set bytes = null, erased_at = now(), erased_reason = $2
+				where created_at < $1 and erased_at is null and run_id = 'old-binary'`,
+				time.Now().Add(time.Hour).UTC(), "retention"); err != nil {
+				return err
+			}
+			_, err := tx.Exec(ctx, `
+				update regression_cases c set note = ''
+				from run_content rc
+				where rc.ref = c.input_ref and rc.erased_at is not null and c.note <> ''`)
+			return err
+		},
+	}}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := testdb.Pool(t)
+			ctx := t.Context()
+			const ref = "regression://old-binary/1/copy"
+			if _, err := pool.Exec(ctx, `
+				delete from regression_cases where agent_id = 'old-binary';
+				delete from run_content where run_id = 'old-binary';
+				insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes)
+				values ('regression://old-binary/1/copy', 'regression', 'old-binary', 1, 'copy', '{}', 2),
+				       ('regression://old-binary/1/other', 'regression', 'old-binary-other', 1, 'other', '{}', 2);
+				insert into regression_cases (agent_id, case_id, input_ref, from_run, expectations) values
+				  ('old-binary', 'named', 'regression://old-binary/1/copy', 'run-old-binary',
+				   '[{"kind":"says","value":"ana@example.com"}]'),
+				  ('old-binary', 'other', 'regression://old-binary/1/other', 'run-other',
+				   '[{"kind":"says","value":"keep"}]');
+			`); err != nil {
+				t.Fatalf("seed: %v", err)
+			}
+			t.Cleanup(func() {
+				_, _ = pool.Exec(context.Background(), `
+					delete from regression_cases where agent_id = 'old-binary';
+					delete from run_content where run_id in ('old-binary', 'old-binary-other')`)
+			})
+
+			tx, err := pool.Begin(ctx)
+			if err != nil {
+				t.Fatalf("begin: %v", err)
+			}
+			defer func() { _ = tx.Rollback(context.Background()) }()
+			if err := tc.erase(ctx, tx, ref); err != nil {
+				t.Fatalf("erase: %v", err)
+			}
+			if err := tx.Commit(ctx); err != nil {
+				t.Fatalf("commit: %v", err)
+			}
+
+			if got := expectationsIn(t, pool, "old-binary", "named"); got != "[]" {
+				t.Errorf("after the old binary's erasure = %s, want nothing left", got)
+			}
+			if got := expectationsIn(t, pool, "old-binary", "other"); !strings.Contains(got, "keep") {
+				t.Errorf("a correction nothing erased = %s, want it untouched", got)
+			}
+		})
+	}
+}
+
+func expectationsIn(t *testing.T, pool *pgxpool.Pool, agent, id string) string {
+	t.Helper()
+	var text string
+	if err := pool.QueryRow(context.Background(), `select expectations::text from regression_cases
+		where agent_id = $1 and case_id = $2`, agent, id).Scan(&text); err != nil {
+		t.Fatalf("read %s: %v", id, err)
+	}
+	return text
+}
+
+// An erasure holding its tombstone uncommitted while the migration runs. A backfill
+// reading before that commit, with the trigger arriving after it, would miss the row
+// for good: the old binary has already finished and nothing comes back for it.
+func TestMigrate_anErasureInFlight_isSeenByTheBackfill(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := t.Context()
+	const ref = "regression://in-flight/1/copy"
+	if _, err := pool.Exec(ctx, `
+		delete from regression_cases where agent_id = 'in-flight';
+		delete from run_content where run_id = 'in-flight';
+		delete from schema_migrations where version = '0102_erased_corrections_expectations';
+		drop trigger if exists corpus_copy_erased on run_content;
+		insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes)
+		values ('regression://in-flight/1/copy', 'regression', 'in-flight', 1, 'copy', '{}', 2);
+		insert into regression_cases (agent_id, case_id, input_ref, expectations)
+		values ('in-flight', 'named', 'regression://in-flight/1/copy', '[{"kind":"says","value":"ana@example.com"}]');
+	`); err != nil {
+		t.Fatalf("restore the state before the migration: %v", err)
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := tx.Exec(ctx, `update run_content set bytes = null, erased_at = now(), erased_reason = 'subject'
+		where ref = $1`, ref); err != nil {
+		t.Fatalf("tombstone: %v", err)
+	}
+
+	migrated := make(chan error, 1)
+	go func() { migrated <- ledger.Migrate(context.Background(), pool) }()
+
+	// The migration has reached the table and is queued behind this transaction.
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		var waiting bool
+		if err := pool.QueryRow(ctx, `select exists (
+			select 1 from pg_locks where relation = 'run_content'::regclass and not granted)`).Scan(&waiting); err != nil {
+			t.Fatalf("read locks: %v", err)
+		}
+		if waiting {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the migration never queued behind the erasure in flight")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit the erasure: %v", err)
+	}
+	if err := <-migrated; err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	if got := expectationsIn(t, pool, "in-flight", "named"); got != "[]" {
+		t.Fatalf("expectations = %s, want them gone", got)
+	}
+}
+
+// Recording a correction again restores the copy before writing what it expects,
+// and clearing is for a copy going away, never for one coming back.
+func TestMigrate_aCopyRestored_doesNotLoseTheExpectationsWrittenAfter(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := t.Context()
+	if _, err := pool.Exec(ctx, `
+		delete from regression_cases where agent_id = 'restored';
+		delete from run_content where run_id = 'restored';
+		insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes, erased_at, erased_reason)
+		values ('regression://restored/1/copy', 'regression', 'restored', 1, 'copy', null, 2, now(), 'subject');
+		insert into regression_cases (agent_id, case_id, input_ref)
+		values ('restored', 'named', 'regression://restored/1/copy');
+		update run_content set bytes = '{}', erased_at = null, erased_reason = '' where run_id = 'restored';
+		update regression_cases set expectations = '[{"kind":"says","value":"recorded again"}]'
+		where agent_id = 'restored';
+		update run_content set full_bytes = 2 where run_id = 'restored';
+	`); err != nil {
+		t.Fatalf("record again: %v", err)
+	}
+	if got := expectationsIn(t, pool, "restored", "named"); !strings.Contains(got, "recorded again") {
+		t.Fatalf("expectations = %s, want what was recorded", got)
 	}
 }

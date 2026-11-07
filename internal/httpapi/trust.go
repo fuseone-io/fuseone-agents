@@ -330,7 +330,9 @@ func simulationTrust(
 	case report.Broken > 0 || tally.Stopped > 0:
 		return trustEvidence(openapi.AgentTrustEvidenceIdSimulation,
 			openapi.AgentTrustEvidenceStatusBad, openapi.SimulationBroken, vals)
-	case tally.Parked > 0 || tally.Unsettled > 0 || tally.NotRun > 0:
+	// An erased case is coverage this battery no longer has, whether or not it ran
+	// before it went. Reading as ready would be green over something nobody checked.
+	case tally.Parked > 0 || tally.Unsettled > 0 || tally.NotRun > 0 || report.Erased > 0:
 		return trustEvidence(openapi.AgentTrustEvidenceIdSimulation,
 			openapi.AgentTrustEvidenceStatusBad, openapi.SimulationIncomplete, vals)
 	case tally.Waiting > 0:
@@ -485,7 +487,7 @@ func simulationValues(
 		"broken", report.Broken, "finished", tally.Finished,
 		"parked", tally.Parked, "waiting", tally.Waiting,
 		"unsettled", tally.Unsettled, "stopped", tally.Stopped,
-		"notRun", tally.NotRun, "steps", reportSteps(report),
+		"notRun", tally.NotRun, "erased", report.Erased, "steps", reportSteps(report),
 		"costMicros", tally.Cost.Micros)
 	if compared {
 		vals["regressed"] = cmp.Regressed

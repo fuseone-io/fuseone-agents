@@ -160,7 +160,10 @@ will state this limit instead of hiding it.
 
 Today's `regression_cases` becomes the **working set** of the agent's default
 dataset, so corrections, FU-12, the start gate and the drift sweep keep working.
-Further named datasets are allowed per agent.
+
+**Named datasets are deferred; phase 1 delivers the default dataset only.** Further
+datasets need a dataset id in the key of `regression_cases`, and nothing consumes
+them until experiments exist. They need their own decision.
 
 Two things from #261 are not added:
 
@@ -193,7 +196,14 @@ dataset_version_cases  version → case id, input ref, input digest,
   first defect above. Content erased stays erased in every version that names it, and
   a case whose input or expectations are gone reads as `erased`.
 - Deleting a case removes it from the next version. Earlier versions still name it,
-  since they record what was checked.
+  since they record what was checked. **So once versions are active, deleting a case
+  no longer erases its data:** the copy and the replays stay until retention or a
+  subject erasure takes them. The API and the manual have to say so.
+- Expectations are stored as content, one object per case. The bytes name the case,
+  so that identical expectations on two cases are two objects, and erasing one does
+  not leave the other as a gap. Erasure takes them directly through the version rows
+  and clears the working row. Their digest never joins the search for a run's input,
+  because it is not an input and must not lead to replays.
 
 No `UPDATE` or `DELETE` reaches these two tables. A database trigger enforces it, as
 on `run_steps`. Retention and erasure act on the content they reference and never on
@@ -217,6 +227,41 @@ as `not_comparable`, never as fixed.
 **The gate changes in one way.** It refuses on a case that ran against this version
 and broke. A case added after the last battery is reported as `not_checked`, and
 the author is told to run the battery. It no longer refuses a start by itself.
+
+## Rollout
+
+A version is only trustworthy if every write produced one, and during a rolling
+update an older pod still writes `regression_cases` without knowing versions exist.
+Keeping the old column protects old readers and does nothing about old writers. So
+activation is separate from the release that can honour it:
+
+1. **Release A adds the tables and a switch, off.** Writers read the switch inside
+   their transaction. While it is off they behave as they do today, and the working
+   row stays authoritative.
+2. **A later migration activates, in one transaction.** It holds the switch's row
+   and locks the table, so a writer in flight finishes first and the next one sees it
+   on. It converts every case's expectations to content, writes version 1 and turns
+   the switch on.
+3. **That migration also adds a trigger refusing writes that do not declare
+   themselves.** Inserting, deleting or changing anything a version covers raises an
+   error unless the transaction set the marker only version-aware writers set. A note
+   is outside a version, so an older erasure still works. An older pod, or an
+   installation that skipped release A, fails without changing the working set rather
+   than writing a state no version records.
+
+Release A does not protect erasure the same way, because erasure cannot wait for a
+switch. From `0102`, a database trigger clears a correction's expectations whenever
+its copy is tombstoned, whichever binary did it. The activation trigger has to let
+that write through.
+
+A case whose input is already erased is converted to a tombstone. Its expectations
+never become readable content. A converted object takes the age of the case's input,
+so conversion does not extend how long it lives.
+
+Reads prefer the content and fall back to the column only where no reference exists.
+A tombstone is an answer, never a reason to fall back. **The column is dropped only
+once the version that reads it has left the rollback window**, not simply in the next
+release.
 
 ## Experiments
 

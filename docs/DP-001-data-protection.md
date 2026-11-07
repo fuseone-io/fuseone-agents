@@ -170,7 +170,7 @@ not by whose data it touched.
 **It follows a run into the regression corpus.** A correction keeps its own copy of
 what a run was about, under the agent rather than the run, and every battery opens a
 new simulated run holding that input again. Erasing a run also erases, within the same
-agent, every correction's copy holding that run's input, those corrections' notes, and
+agent, every correction's copy holding that run's input, those corrections' notes and expectations, and
 the content of every simulated run holding it. It finds them by the digest the run
 recorded, which outlives the correction being deleted. The admin event counts those
 corrections as `corpusCases`. The case itself stays, with no input, and is reported as a
@@ -182,8 +182,8 @@ erasing waits for them, so neither can put back what was just erased. This cover
 person's request, retention and deleting a correction.
 
 **Identical bytes are treated as the same data.** Following the digest means input that
-is trivially common within an agent, such as `{}`, takes every copy, note and rehearsal
-holding it. Erasing too much of a rehearsal was chosen over leaving a person's data.
+is trivially common within an agent, such as `{}`, takes every copy, note, expectation and
+rehearsal holding it. Erasing too much of a rehearsal was chosen over leaving a person's data.
 
 **Real runs are the operator's to name.** Only rehearsals are followed. A real run holding
 the same bytes, including one started from another with "run from this input", is a record
@@ -225,8 +225,11 @@ it erased anything.
 The window is read on every sweep rather than cached, so shortening retention
 takes effect on the next run.
 
+Expectations are cleared by the database when a copy is erased, so this holds during
+a rolling update, when an older process is still the one erasing.
+
 Retention applies to the regression corpus too. A correction's copy ages out like any
-other content, and its note is cleared with it. The window is a promise the operator
+other content, and its note and expectations are cleared with it. The window is a promise the operator
 configured, and a safety net is not a reason to break it. The case stays as a visible
 gap, and a person has to record it again to have it checked.
 

@@ -264,7 +264,11 @@ func (r Report) Tally() Tally {
 	for _, c := range r.Cases {
 		t.Cost = t.Cost.Add(c.Cost)
 		if c.RunID == "" {
-			t.NotRun++
+			// A case that could not run because its input is gone is the report's
+			// Erased, and counting it here too would read as two missing cases.
+			if c.Settled != SettledErased {
+				t.NotRun++
+			}
 			continue
 		}
 		if stopped(c) {
@@ -277,6 +281,9 @@ func (r Report) Tally() Tally {
 			t.Parked++
 		case SettledWaiting:
 			t.Waiting++
+		// It ran and ended, and what judged it has since been erased. The report
+		// counts it as a gap, and nothing about it is still going.
+		case SettledErased:
 		default:
 			t.Unsettled++
 		}

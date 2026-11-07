@@ -409,7 +409,7 @@
     "trustCodeRunsUnfinished": "{{unfinished}} de {{runs}} run(s) não concluíram.",
     "trustCodeRunsWaiting": "{{waiting}} de {{runs}} run(s) aguardam uma pessoa.",
     "trustCodeSimulationBroken": "{{broken}} de {{cases}} caso(s) salvo(s) quebraram.",
-    "trustCodeSimulationIncomplete": "A simulação mais recente tem casos incompletos: {{parked}} parked, {{waiting}} aguardando, {{unsettled}} sem conclusão, {{notRun}} não rodaram.",
+    "trustCodeSimulationIncomplete": "A simulação mais recente tem casos incompletos: {{parked}} parked, {{waiting}} aguardando, {{unsettled}} sem conclusão, {{notRun}} sem rodar, {{erased}} apagado(s).",
     "trustCodeSimulationMissingCorpus": "Nenhum caso de regressão salvo ainda. Salve runs corrigidas antes de confiar no próximo estágio.",
     "trustCodeSimulationNotRun": "{{cases}} caso(s) salvo(s) existem, mas esta versão ainda não rodou eles.",
     "trustCodeSimulationReady": "{{held}} de {{cases}} caso(s) salvo(s) continuam passando.",

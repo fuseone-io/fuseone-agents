@@ -161,3 +161,29 @@ func TestTally_aCaseThatLostItsInput_isNotStillGoing(t *testing.T) {
 		t.Fatalf("unsettled = %d, want none: nothing is running", tally.Unsettled)
 	}
 }
+
+// Erasure takes what a case expected along with its input. With nothing left to
+// check, the run that happened can no longer be judged, and an empty list of unmet
+// expectations must not read as a case that held.
+func TestBattery_aCaseErasedWithItsExpectationsAfterItRan_isAGapNotAHold(t *testing.T) {
+	t.Parallel()
+
+	erased := corpusCase("gone")
+	erased.Erased = true
+	report := simulate.Battery(simulate.Report{
+		Cases: []simulate.Case{{ID: "gone", RunID: "run-1", Settled: simulate.SettledFinished}},
+	}, []domain.RegressionCase{erased})
+
+	if report.Erased != 1 || report.Held != 0 || report.Broken != 0 {
+		t.Fatalf("erased=%d held=%d broken=%d, want a single gap",
+			report.Erased, report.Held, report.Broken)
+	}
+	if report.Cases[0].Settled != simulate.SettledErased {
+		t.Fatalf("settled = %q, want %q", report.Cases[0].Settled, simulate.SettledErased)
+	}
+	// It ran and ended. Nothing about it is still going, so the evidence read from
+	// this tally must not call it an incomplete run.
+	if tally := report.Tally(); tally.Unsettled != 0 || tally.Finished != 0 {
+		t.Fatalf("unsettled=%d finished=%d, want neither for a gap", tally.Unsettled, tally.Finished)
+	}
+}

@@ -54,6 +54,15 @@ func Battery(report Report, corpus []domain.RegressionCase) Report {
 			continue
 		}
 
+		// Erasure took what it expected too. There is nothing left to judge the run
+		// against, and no unmet expectations would otherwise read as a case that held.
+		if corrected.Erased && len(corrected.Expectations) == 0 {
+			out.Cases[at].Settled = SettledErased
+			out.Cases[at].Error = "the input and the expectations of this case were erased"
+			out.Erased++
+			continue
+		}
+
 		out.Cases[at].Expected = corrected.Expectations
 		// Said whether or not the case broke. A case that still holds against
 		// a model that moved is worth knowing about too: it is the one that
