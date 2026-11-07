@@ -8,12 +8,24 @@
 select active from dataset_versioning where only_row for update;
 lock table regression_cases in share row exclusive mode;
 
+-- A case whose input is nowhere has nothing to run, and nothing ages its words out: no
+-- copy means no retention and no tombstone for an erasure to follow. It is treated as
+-- erased, as 0102 treated those already gone. No row of run_content is ever deleted and
+-- a correction stores its copy first, so this cannot arise again.
+update regression_cases c
+set note = '', expectations = '[]'::jsonb
+where not exists (select 1 from run_content i where i.ref = c.input_ref)
+  and (c.note <> '' or c.expectations <> '[]'::jsonb);
+
 -- One object per case, naming the case, so that erasing one does not leave another
--- case with identical expectations as a gap. It takes the age of the input, so this
--- does not extend how long it lives, and a case whose input is gone becomes a
--- tombstone: 0102 emptied its expectations, and they never become readable here.
+-- case with identical expectations as a gap. It takes the age of the input, or of the
+-- case where there is no input, so this does not extend how long it lives. A case with
+-- no readable input becomes a tombstone, and its expectations never become readable.
 with bodies as (
-    select c.agent_id, c.case_id, i.created_at, i.erased_at, i.erased_reason,
+    select c.agent_id, c.case_id,
+           coalesce(i.created_at, c.created_at) as created_at,
+           case when i.ref is null then now() else i.erased_at end as erased_at,
+           coalesce(i.erased_reason, 'input_absent') as erased_reason,
            convert_to(jsonb_build_object('case', c.case_id, 'expectations', c.expectations)::text,
                       'UTF8') as body
     from regression_cases c
@@ -27,7 +39,7 @@ with bodies as (
     select 'expectations://' || agent_id || '/1/' || left(digest, 16),
            'expectations', agent_id, 1, digest,
            case when erased_at is null then body end, octet_length(body), false,
-           coalesce(created_at, now()), erased_at, coalesce(erased_reason, '')
+           created_at, erased_at, erased_reason
     from objects
     on conflict (ref) do nothing
 )
@@ -98,3 +110,26 @@ $$;
 create trigger regression_cases_versioned_writes
     before insert or update or delete on regression_cases
     for each row execute function refuse_undeclared_corpus_writes();
+
+-- Whatever empties a case's expectations takes the object too, in every binary. An
+-- erasure naming a run reaches a case whose input it cannot find, and it reports success
+-- whether or not that binary knows objects exist. It keeps the input's reason where
+-- there is one, because the input is usually what is going.
+create function take_object_of_emptied_expectations() returns trigger
+language plpgsql as $$
+begin
+    update run_content held
+    set bytes = null, erased_at = now(), erased_reason = coalesce(
+        (select i.erased_reason from run_content i
+         where i.ref = new.input_ref and i.erased_at is not null), 'expectations_cleared')
+    where held.ref = new.expectations_ref and held.erased_at is null;
+    return null;
+end;
+$$;
+
+create trigger regression_cases_expectations_emptied
+    after update of expectations on regression_cases
+    for each row
+    when (new.expectations = '[]'::jsonb and old.expectations <> '[]'::jsonb
+          and new.expectations_ref is not null)
+    execute function take_object_of_emptied_expectations();

@@ -398,3 +398,22 @@ func TestRecord_aWriteThatFails_leavesNoObjectBehind(t *testing.T) {
 		t.Errorf("%d objects outlived the write that made them", orphans)
 	}
 }
+
+// A case that arrived erased is a gap in the corpus, and the others still run. Before,
+// a reference to nothing refused the whole corpus.
+func TestOccurrences_aCaseWithNoCopyFromBefore_isAGapAndTheRestRun(t *testing.T) {
+	pool := beforeActivation(t)
+	seedCaseWithNoCopy(t, pool)
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	store := regression.NewStore(pool)
+
+	got, err := regression.NewCorpus(store, ledger.NewContent(pool)).Occurrences(t.Context(), "suporte")
+	if err != nil {
+		t.Fatalf("Occurrences: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "reg-1" {
+		t.Errorf("occurrences = %+v, want only the case that can run", got)
+	}
+}
