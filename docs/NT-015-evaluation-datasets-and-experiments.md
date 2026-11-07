@@ -223,7 +223,10 @@ as `unpinned`, because naming either would be a guess.
 
 During the rollout of those keys, a pod of the previous release and a pod of this one key
 the same window differently, so a case can get two runs that disagree. A battery reduces
-them to one row, the worst, keeping what both cost. A case holds only if every run of it did.
+them to one row, the worst real run, whichever order the ledger holds them in. A case
+holds only if every run of it did. An expectation is judged on one run, so two cheap runs
+do not break a per-run ceiling. The total still counts what every run cost and whether a
+Gate stopped any of them, and any run on another model counts as drift.
 
 A battery recorded before this has no pin. It is read as today and labelled
 `unpinned`, because inventing which version it ran would be worse than admitting
