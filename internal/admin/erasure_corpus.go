@@ -26,12 +26,17 @@ type CorpusFence interface {
 
 // agentsOf is whose corpora a set of runs reaches. Read before the fence and not in
 // a transaction, because waiting at it must not hold what its work needs: a run's
-// agent does not change, and a correction naming the run is for that same agent.
+// agent does not change, and a correction naming the run is for that same agent. A
+// version still names a case that was deleted, and the run may be long purged.
 func (e *Erasures) agentsOf(ctx context.Context, runs []string) ([]domain.AgentID, error) {
 	agents, err := scanStrings(ctx, e.pool, `
 		select agent_id from runs where run_id = any($1::text[])
 		union
-		select agent_id from regression_cases where from_run = any($1::text[])`, runs)
+		select agent_id from regression_cases where from_run = any($1::text[])
+		union
+		select d.agent_id from dataset_version_cases v
+		join datasets d on d.dataset_id = v.dataset_id
+		where v.from_run = any($1::text[])`, runs)
 	if err != nil {
 		return nil, fmt.Errorf("admin: find the agents of erased runs: %w", err)
 	}
@@ -83,7 +88,8 @@ func eraseExpiredReplays(ctx context.Context, tx pgx.Tx, before time.Time) (runs
 func (e *Erasures) agentsLosingCopies(ctx context.Context, before time.Time) ([]domain.AgentID, error) {
 	agents, err := scanStrings(ctx, e.pool, `
 		select distinct run_id from run_content
-		where owner_kind = 'regression' and created_at < $1 and erased_at is null`, before.UTC())
+		where owner_kind in ('regression', 'expectations')
+		  and created_at < $1 and erased_at is null`, before.UTC())
 	if err != nil {
 		return nil, fmt.Errorf("admin: find the corpora retention reaches: %w", err)
 	}
@@ -162,7 +168,11 @@ func (e *Erasures) eraseCorpusOf(
 }
 
 // inputDigestsOf is the input each run recorded, and the copy any correction made
-// from it. They differ when an input was too large to keep whole.
+// from it, including one deleted since and named only by a version. They differ when
+// an input was too large to keep whole.
+//
+// Only inputs. An expectation's digest must not lead to replays: its object goes when
+// the input does, by the trigger every binary's erasure passes through.
 func inputDigestsOf(ctx context.Context, tx pgx.Tx, runs []string) ([]string, error) {
 	digests, err := scanStrings(ctx, tx, `
 		select rc.digest from run_steps s
@@ -171,7 +181,10 @@ func inputDigestsOf(ctx context.Context, tx pgx.Tx, runs []string) ([]string, er
 		union
 		select rc.digest from regression_cases c
 		join run_content rc on rc.ref = c.input_ref
-		where c.from_run = any($1::text[])`, runs)
+		where c.from_run = any($1::text[])
+		union
+		select v.input_digest from dataset_version_cases v
+		where v.from_run = any($1::text[])`, runs)
 	if err != nil {
 		return nil, fmt.Errorf("admin: read the input of erased runs: %w", err)
 	}
