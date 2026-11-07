@@ -2329,6 +2329,7 @@ export interface paths {
         /**
          * Read one channel connection as it is configured
          * @description What PUT stored, for a client deciding whether the connection drifted, with the conversations and identities attached to it. Those have PUTs of their own: this one ignores them when the answer is sent back, and leaves them as they are.
+         *     The ETag names all of it. Attaching a conversation or binding an identity moves it, so a PUT or DELETE answering an older one is refused: removing the connection removes its conversations too.
          *     The credentials are never returned; hasCredential, hasSigning and hasAppToken report which are stored, secretFingerprint moves when one changes, and sending the answer back unchanged keeps them. Accounts seen interacting stay on the listing: they change with nobody having written anything.
          */
         get: operations["getChannel"];

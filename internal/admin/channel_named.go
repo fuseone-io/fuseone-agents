@@ -60,11 +60,7 @@ func (c *Channels) namedOn(ctx context.Context, db settings.DB, name string) (Ch
 	_ = json.Unmarshal(row.Value, &conn)
 	creds := channel.ReadCredentials(row.Secret)
 
-	conversations, err := c.settings.ListByChannelTx(ctx, db, channel.KindConversation, name)
-	if err != nil {
-		return Channel{}, nil, fmt.Errorf("admin: read conversations of %s: %w", name, err)
-	}
-	bound, err := c.identitiesOn(ctx, db, name)
+	held, err := c.attachedOn(ctx, db, name)
 	if err != nil {
 		return Channel{}, nil, err
 	}
@@ -76,9 +72,59 @@ func (c *Channels) namedOn(ctx context.Context, db settings.DB, name string) (Ch
 		// Over the document this row would be re-sealed as, so a row still holding
 		// a bare token does not appear to change the next time it is saved.
 		SecretFingerprint: c.settings.Fingerprint(row, []byte(creds.Sealed())),
-		Revision:          c.revisionOf(row),
-		Conversations:     conversationsOf(name, conversations),
-	}, bound, nil
+		Revision:          c.revisionOf(row, held),
+		Conversations:     held.Conversations,
+	}, held.Identities, nil
+}
+
+// attached is what a channel's answer carries besides the connection, as its revision counts
+// it. Its writers take the connection's lock, so read under that lock it is exact. None and
+// an empty list are the same answer, and name the same revision.
+type attached struct {
+	Conversations []Conversation    `json:"conversations,omitempty"`
+	Identities    []ChannelIdentity `json:"identities,omitempty"`
+}
+
+func (c *Channels) attachedOn(ctx context.Context, db settings.DB, name string) (attached, error) {
+	conversations, err := c.settings.ListByChannelTx(ctx, db, channel.KindConversation, name)
+	if err != nil {
+		return attached{}, fmt.Errorf("admin: read conversations of %s: %w", name, err)
+	}
+	bound, err := c.identitiesOn(ctx, db, name)
+	if err != nil {
+		return attached{}, err
+	}
+	return attached{Conversations: conversationsOf(name, conversations), Identities: bound}, nil
+}
+
+/*
+revisionOf names a connection by its configuration, the document its secrets would be sealed
+as, and what is attached to it. The secrets as they would be sealed, so a row still holding a
+bare token does not read as changed once it is saved. What is attached, because the answer
+carries it: a validator that held still while a conversation arrived would let a client
+holding the older answer remove the connection, and the conversation with it.
+*/
+func (c *Channels) revisionOf(set settings.Setting, held attached) domain.Revision {
+	return c.settings.Revision(set, []byte(channel.ReadCredentials(set.Secret).Sealed()), held)
+}
+
+// channelRevised is a write's precondition on one connection. Read must run under the
+// connection's lock and before anything is judged.
+type channelRevised struct {
+	c    *Channels
+	held attached
+}
+
+func (r *channelRevised) read(ctx context.Context, db settings.DB, name string) error {
+	var err error
+	r.held, err = r.c.attachedOn(ctx, db, name)
+	return err
+}
+
+func (r *channelRevised) of(expect domain.IfMatch) *revised {
+	return &revised{expect: expect, lockedByGuard: true, of: func(set settings.Setting) domain.Revision {
+		return r.c.revisionOf(set, r.held)
+	}}
 }
 
 // identitiesOn reads the bindings keyed under one connection, wherever stored.

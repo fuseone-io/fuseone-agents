@@ -304,12 +304,6 @@ func (c *Channels) PutChannel(ctx context.Context, w ChannelWrite) error {
 	return err
 }
 
-// revisionOf names a connection by its configuration and the document its secrets would be
-// sealed as, so a row still holding a bare token does not read as changed once it is saved.
-func (c *Channels) revisionOf(set settings.Setting) domain.Revision {
-	return c.settings.Revision(set, []byte(channel.ReadCredentials(set.Secret).Sealed()), nil)
-}
-
 // WriteChannel stores a connection and answers its resulting revision.
 func (c *Channels) WriteChannel(ctx context.Context, w ChannelWrite) (domain.Revision, error) {
 	ch, by := w.Channel, w.By
@@ -334,18 +328,22 @@ func (c *Channels) WriteChannel(ctx context.Context, w ChannelWrite) (domain.Rev
 		Kind:      channel.KindChannel, Name: ch.Name,
 		Value: value, Enabled: ch.Enabled, UpdatedBy: string(by),
 	}
+	precondition := &channelRevised{c: c}
 	guard := func(ctx context.Context, conn settings.DB) error {
 		if err := c.guardInstallationRoom(ctx, conn, ch.Name, w.Governs); err != nil {
 			return err
 		}
-		return c.refuseStartingConversations(ctx, conn, ch.Name, ch.Kind)
+		if err := c.refuseStartingConversations(ctx, conn, ch.Name, ch.Kind); err != nil {
+			return err
+		}
+		return precondition.read(ctx, conn, ch.Name)
 	}
 	return writeRevised(ctx, c.pool, c.settings, folded{
 		guard: guard,
 		by:    by, scope: domain.Scope{},
 		action: "channel.configured", target: ch.Name,
 		set:     base,
-		revised: &revised{expect: w.Expect, of: c.revisionOf, lockedByGuard: true},
+		revised: precondition.of(w.Expect),
 		// The credentials are folded inside the transaction, onto the row this
 		// write has already locked. Read before it, a request carrying one
 		// half and meaning "leave the other" is a lost update waiting for two
@@ -665,9 +663,13 @@ func (c *Channels) RemoveChannel(ctx context.Context, r ChannelRemoval) error {
 	if err := c.guardInstallationRoom(ctx, tx, name, r.Governs); err != nil {
 		return err
 	}
+	precondition := &channelRevised{c: c}
+	if err := precondition.read(ctx, tx, name); err != nil {
+		return err
+	}
 	if err := removalGuard(ctx, tx, c.settings, settings.Setting{
 		ScopeKind: settings.ScopeInstallation, Kind: channel.KindChannel, Name: name,
-	}, &revised{expect: r.Expect, of: c.revisionOf, lockedByGuard: true}); err != nil {
+	}, precondition.of(r.Expect)); err != nil {
 		return err
 	}
 	stored, err := c.settings.ListTx(ctx, tx, channel.KindConversation)
