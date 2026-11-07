@@ -72,8 +72,9 @@ func (s *Server) SetPassword(
 	ctx context.Context, req openapi.SetPasswordRequestObject,
 ) (openapi.SetPasswordResponseObject, error) {
 	// Somebody may always set their own, which is what stops "change your
-	// password" needing the authority to administer everybody else's.
-	if string(callerOf(ctx)) != req.PrincipalId {
+	// password" needing the authority to administer everybody else's. A machine
+	// is nobody here: Require refuses it, and a password would outlive its token.
+	if !settingOwnPassword(ctx, req.PrincipalId) {
 		if err := auth.Require(ctx, domain.PermIdentityWrite, identityScope); err != nil {
 			return openapi.SetPassword403ApplicationProblemPlusJSONResponse{
 				ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, identityScope),
@@ -95,6 +96,11 @@ func (s *Server) SetPassword(
 		return passwordRefused(err)
 	}
 	return openapi.SetPassword204Response{}, nil
+}
+
+func settingOwnPassword(ctx context.Context, principalID string) bool {
+	caller, ok := auth.PrincipalFrom(ctx)
+	return ok && caller.Kind == domain.PrincipalUser && string(caller.ID) == principalID
 }
 
 func passwordRefused(err error) (openapi.SetPasswordResponseObject, error) {

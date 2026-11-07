@@ -66,6 +66,10 @@ func (p *Postgres) PrincipalBySession(ctx context.Context, tokenHash []byte, now
 		// A disabled account must lose access immediately, not when its
 		// session happens to lapse.
 		return domain.Principal{}, Session{}, ErrBadCredential
+	case kind != string(domain.PrincipalUser):
+		// A machine has no sign-in, so a session of one is left over from when it
+		// could. Revoking its tokens has to be the end of it.
+		return domain.Principal{}, Session{}, ErrBadCredential
 	case !now.Before(s.ExpiresAt):
 		return domain.Principal{}, Session{}, ErrExpired
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -266,5 +267,27 @@ func TestSetGrants_onNobody_isNotFound(t *testing.T) {
 		if _, ok := resp.(openapi.SetGrants404ApplicationProblemPlusJSONResponse); !ok {
 			t.Errorf("%s: response = %T, want 404", name, resp)
 		}
+	}
+}
+
+// The adversary's move: a token asking for what would outlive it. "Somebody may always
+// set their own" is about people. A machine that could would still sign in after its
+// token was revoked, so revoking would not stop it.
+func TestServiceToken_cannotGiveItselfAPassword(t *testing.T) {
+	pool := testdb.Pool(t)
+	dir := auth.NewPostgres(pool)
+	local := auth.NewLocal(pool, dir)
+	account, issued := issuedFor(t, dir, "journey-password", domain.RoleAuthor, domain.Scope{Company: "acme", Area: "cx"})
+	token := machine{routed(dir, NewServer(ledger.NewMemory(), "test").WithAccounts(local)), issued.Secret}
+
+	set := token.do(t, http.MethodPut, "/admin/people/"+account.ID+"/password", map[string]string{
+		"username": "journey-password", "password": "a-password-long-enough",
+	})
+
+	if set.Code != http.StatusForbidden {
+		t.Fatalf("set own password = %d, want 403: %s", set.Code, set.Body)
+	}
+	if _, err := local.Verify(context.Background(), "journey-password", "a-password-long-enough"); !errors.Is(err, auth.ErrBadCredential) {
+		t.Fatalf("Verify = %v, want it refused", err)
 	}
 }
