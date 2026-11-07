@@ -150,13 +150,13 @@ func (e *Erasures) eraseCorpusOf(
 	if err != nil {
 		return corpusErasure{}, fmt.Errorf("admin: find corpus copies: %w", err)
 	}
+	expectations, err := e.eraseExpectationsOf(ctx, tx, refs, runs)
+	if err != nil {
+		return corpusErasure{}, err
+	}
 	objects, err := e.content.EraseRefsTx(ctx, tx, refs, "subject")
 	if err != nil {
 		return corpusErasure{}, fmt.Errorf("admin: erase corpus copies: %w", err)
-	}
-	expectations, err := e.eraseExpectationsNamedBy(ctx, tx, runs)
-	if err != nil {
-		return corpusErasure{}, err
 	}
 	tag, err := tx.Exec(ctx, `
 		update regression_cases set note = '', expectations = '[]'::jsonb
@@ -169,22 +169,6 @@ func (e *Erasures) eraseCorpusOf(
 		return corpusErasure{}, err
 	}
 	return corpusErasure{cases: int(tag.RowsAffected()), objects: objects + expectations + replayed}, nil
-}
-
-// eraseExpectationsNamedBy takes what the corrections made from these runs expected,
-// through the versions naming them. Taking a copy brings its objects with it, by
-// trigger, but a case whose copy was never stored has no tombstone to follow.
-func (e *Erasures) eraseExpectationsNamedBy(ctx context.Context, tx pgx.Tx, runs []string) (int, error) {
-	refs, err := scanStrings(ctx, tx, `
-		select distinct expectations_ref from dataset_version_cases where from_run = any($1::text[])`, runs)
-	if err != nil {
-		return 0, fmt.Errorf("admin: find what corrections expected: %w", err)
-	}
-	objects, err := e.content.EraseRefsTx(ctx, tx, refs, "subject")
-	if err != nil {
-		return 0, fmt.Errorf("admin: erase what corrections expected: %w", err)
-	}
-	return objects, nil
 }
 
 // inputDigestsOf is the input each run recorded, and the copy any correction made

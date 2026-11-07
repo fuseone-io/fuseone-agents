@@ -100,11 +100,15 @@ func (e *Erasures) eraseExpired(
 		return sweepCounts{}, err
 	}
 	counts.corpusReplays = replays
+	expectations, err := eraseExpectationsOfExpired(ctx, tx, before)
+	if err != nil {
+		return sweepCounts{}, err
+	}
 	counts.objects, err = e.content.ErasePastTx(ctx, tx, before, "retention")
 	if err != nil {
 		return sweepCounts{}, err
 	}
-	counts.objects += replayed
+	counts.objects += replayed + expectations
 	counts.channelRecords, err = e.eraseChannelOperationalRows(ctx, tx, before)
 	if err != nil {
 		return sweepCounts{}, err

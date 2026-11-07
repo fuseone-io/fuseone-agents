@@ -195,3 +195,83 @@ func TestForSubject_afterActivation_takesTheObjectOfACaseWithNoCopy(t *testing.T
 		t.Errorf("column = %s, want it empty", column)
 	}
 }
+
+func (c activatedCorpus) detailOf(t *testing.T, action string) int {
+	t.Helper()
+	var objects int
+	if err := c.pool.QueryRow(t.Context(), `
+		select (detail->>'objects')::int from admin_events
+		where action = $1 order by at desc limit 1`, action).Scan(&objects); err != nil {
+		t.Fatalf("read the event: %v", err)
+	}
+	return objects
+}
+
+// The event is how a DPO proves what went, so an object the trigger took on the way
+// has to be in it. A copy and its object are two.
+func TestForSubject_afterActivation_countsTheObjectItTook(t *testing.T) {
+	c := activatedCase(t)
+
+	erased, err := c.erasures.ForSubject(t.Context(), "dpo", domain.Scope{},
+		[]domain.RunID{"run-named"}, "request")
+	if err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	if erased != 2 {
+		t.Errorf("erased = %d, want the copy and the object", erased)
+	}
+	if got := c.detailOf(t, "content.erased"); got != 2 {
+		t.Errorf("detail.objects = %d, want 2", got)
+	}
+}
+
+// Retention reaches the copy and not the object, which is younger: re-recorded
+// expectations are. The object goes with its input, and it counts.
+func TestSweep_afterActivation_countsAYoungerObjectItTook(t *testing.T) {
+	c := activatedCase(t)
+	ctx := t.Context()
+	object := c.expectationsObject(t)
+	if _, err := c.pool.Exec(ctx, `
+		update run_content set created_at = '2000-01-01 00:00:00+00' where ref = $1;`, c.copied); err != nil {
+		t.Fatalf("age the copy: %v", err)
+	}
+	if _, err := c.pool.Exec(ctx, `update run_content set created_at = now() where ref = $1`, object); err != nil {
+		t.Fatalf("freshen the object: %v", err)
+	}
+
+	erased, err := c.erasures.Sweep(ctx)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	c.expectGone(t, c.copied, object)
+	if erased != 2 {
+		t.Errorf("erased = %d, want the copy and the object", erased)
+	}
+	if got := c.detailOf(t, "content.expired"); got != 2 {
+		t.Errorf("detail.objects = %d, want 2", got)
+	}
+}
+
+// A correction made from another run shares the copy. Only the copy leads to its object.
+func TestForSubject_afterActivation_countsTheObjectOfACorrectionSharingTheCopy(t *testing.T) {
+	c := activatedCase(t)
+	ctx := t.Context()
+	if err := c.store.Record(ctx, domain.RegressionCase{
+		ID: "reg-later", Agent: "suporte", InputRef: c.copied, FromRun: "run-later",
+		Expectations: []domain.Expectation{{Kind: domain.ExpectNeverCalls, Value: "x"}},
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	erased, err := c.erasures.ForSubject(ctx, "dpo", domain.Scope{},
+		[]domain.RunID{"run-named"}, "request")
+	if err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	if erased != 3 {
+		t.Errorf("erased = %d, want the copy and both objects", erased)
+	}
+}
