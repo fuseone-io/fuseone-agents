@@ -108,7 +108,9 @@ Run the corpus when:
 A battery is read against the version of the corpus it ran, so adding a correction later
 does not change a past result. A new correction is not checked until the corpus runs again,
 and it stops an agent from starting only once it has run and broken. Until then, the report
-lists it under **Not checked yet**, and the trust center does not read as ready. A battery
+lists it under **Not checked yet**, and the trust center does not read as ready. So does a
+correction that keeps its name and expects something else. One that has already lost its input
+is listed under **Lost since**, because running the battery will not bring it back. A battery
 with **No corpus version** is from before corpus versions, or was opened on either side of
 a correction, and it is read against the corpus as it is now.
 
