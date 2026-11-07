@@ -158,8 +158,12 @@ replayed it stay until retention or an erasure request takes them.</p>
 </ul>
 <p>A battery is read against the version of the corpus it ran, so adding a correction later
 does not change a past result. A new correction is not checked until the corpus runs again,
-and it stops an agent from starting only once it has run and broken. Batteries from before
-corpus versions are read against the corpus as it is now.</p>
+and it stops an agent from starting only once it has run and broken. Until then, the report
+lists it under <strong>Not checked yet</strong>, and the trust center does not read as ready. So does a
+correction that keeps its name and expects something else. One that has already lost its input
+is listed under <strong>Lost since</strong>, because running the battery will not bring it back. A battery
+with <strong>No corpus version</strong> is from before corpus versions, or was opened on either side of
+a correction, and it is read against the corpus as it is now.</p>
 <p>If a regression starts failing after a policy changed, read the Gate step
 first. The policy may be doing exactly what it was written to do.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="common-mistakes">Common mistakes</h2><a class="sl-anchor-link" href="#common-mistakes"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Common mistakes”</span></a></div>

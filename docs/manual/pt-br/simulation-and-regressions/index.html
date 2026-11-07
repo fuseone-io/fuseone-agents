@@ -159,8 +159,11 @@ apagamento levá-las.</p>
 </ul>
 <p>Uma bateria é lida contra a versão do corpus que ela rodou, então adicionar uma correção
 depois não muda um resultado passado. Uma correção nova só é verificada quando o corpus roda
-de novo, e só impede um agente de iniciar depois de rodar e quebrar. Baterias anteriores às
-versões do corpus são lidas contra o corpus como ele está agora.</p>
+de novo, e só impede um agente de iniciar depois de rodar e quebrar. Até lá, o relatório a
+lista em <strong>Ainda não verificados</strong>, e o centro de confiança não aparece como pronto. O mesmo
+vale para uma correção que mantém o nome e espera outra coisa. Uma que já perdeu a entrada
+aparece em <strong>Perdidos depois</strong>, porque rodar a bateria não a traz de volta. Uma bateria <strong>Sem versão do corpus</strong> é anterior às versões, ou foi aberta dos dois lados de uma
+correção, e é lida contra o corpus como ele está agora.</p>
 <p>Se uma regressão começa a falhar depois de uma política mudar, leia primeiro o
 passo do Gate. A política pode estar fazendo exatamente o que foi escrita para
 fazer.</p>
