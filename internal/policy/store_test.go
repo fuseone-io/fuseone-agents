@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/policy"
@@ -420,53 +419,7 @@ func TestDelete_ifMatch_decidesOnWhatIsThere(t *testing.T) {
 	}
 }
 
-/*
-overlapped runs the writers so that every one of them has read before any can write.
-
-Started together they do not overlap: opening a connection takes far longer than a write,
-so they finish one after another and a missing lock goes unseen. So this holds the row.
-A plain read passes that hold and a write does not, so without the guard each writer reads
-the old revision, passes, and waits at its write; with it the first does that and the rest
-wait at the guard. Either way, every writer is waiting on a lock before the row is let go.
-*/
-func overlapped(t *testing.T, code string, writers []func() error) []error {
-	t.Helper()
-	ctx := context.Background()
-	pool := testdb.Pool(t)
-	hold, err := pool.Begin(ctx)
-	if err != nil {
-		t.Fatalf("begin: %v", err)
-	}
-	defer func() { _ = hold.Rollback(ctx) }()
-	if _, err := hold.Exec(ctx, `select 1 from policies where code = $1 for update`, code); err != nil {
-		t.Fatalf("hold: %v", err)
-	}
-
-	results := make(chan error, len(writers))
-	for _, write := range writers {
-		go func() { results <- write() }()
-	}
-	deadline := time.Now().Add(20 * time.Second)
-	for waiting := 0; waiting < len(writers); {
-		if time.Now().After(deadline) {
-			t.Fatalf("%d of %d writers reached a lock", waiting, len(writers))
-		}
-		if err := pool.QueryRow(ctx, `
-			select count(*) from pg_stat_activity
-			where datname = current_database() and wait_event_type = 'Lock'`).Scan(&waiting); err != nil {
-			t.Fatalf("watch: %v", err)
-		}
-	}
-	if err := hold.Rollback(ctx); err != nil {
-		t.Fatalf("release: %v", err)
-	}
-
-	out := make([]error, 0, len(writers))
-	for range writers {
-		out = append(out, <-results)
-	}
-	return out
-}
+const holdPolicy = `select 1 from policies where code = $1 for update`
 
 func tally(t *testing.T, results []error) (won, refused int) {
 	t.Helper()
@@ -496,17 +449,19 @@ func TestPut_twoWritersWithOneRevision_exactlyOneWins(t *testing.T) {
 	expect := mustIfMatch(t, string(first.Revision))
 
 	const count = 6
+	contention := testdb.NewContention(t, count)
+	racing := policy.NewStore(contention.Pool)
 	writers := make([]func() error, count)
 	for i := range writers {
 		writers[i] = func() error {
-			_, err := store.Put(ctx, rule("POL-1", func(p *domain.Policy) {
+			_, err := racing.Put(ctx, rule("POL-1", func(p *domain.Policy) {
 				p.Name = fmt.Sprintf("writer %d", i)
 			}), "usr_a", expect)
 			return err
 		}
 	}
 
-	won, refused := tally(t, overlapped(t, "POL-1", writers))
+	won, refused := tally(t, contention.Overlap(t, holdPolicy, []any{"POL-1"}, writers))
 	if won != 1 || refused != count-1 {
 		t.Fatalf("won %d and refused %d of %d", won, refused, count)
 	}
@@ -523,13 +478,15 @@ func TestPut_racingADelete_exactlyOneWins(t *testing.T) {
 	}
 	expect := mustIfMatch(t, string(first.Revision))
 
-	won, refused := tally(t, overlapped(t, "POL-1", []func() error{
+	contention := testdb.NewContention(t, 2)
+	racing := policy.NewStore(contention.Pool)
+	won, refused := tally(t, contention.Overlap(t, holdPolicy, []any{"POL-1"}, []func() error{
 		func() error {
-			_, err := store.Delete(ctx, "POL-1", expect)
+			_, err := racing.Delete(ctx, "POL-1", expect)
 			return err
 		},
 		func() error {
-			_, err := store.Put(ctx, rule("POL-1", func(p *domain.Policy) { p.Name = "changed" }), "usr_a", expect)
+			_, err := racing.Put(ctx, rule("POL-1", func(p *domain.Policy) { p.Name = "changed" }), "usr_a", expect)
 			return err
 		},
 	}))

@@ -8,9 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
@@ -194,47 +192,26 @@ func TestPolicyETag_noHeader_lastWriteWins(t *testing.T) {
 	}
 }
 
-// Writers started together do not overlap, because opening a connection takes longer than a
-// write. So the row is held until every one of them has read and is waiting on a lock.
 func TestPolicyETag_twoWritersWithOneETag_exactlyOneChangesIt(t *testing.T) {
-	ctx := context.Background()
-	pool := testdb.Pool(t)
-	w := readBackWorldOn(t, pool)
-	path, first := aStoredPolicy(t, w, "ETAG-RACE")
-	hold, err := pool.Begin(ctx)
-	if err != nil {
-		t.Fatalf("begin: %v", err)
-	}
-	defer func() { _ = hold.Rollback(ctx) }()
-	if _, err := hold.Exec(ctx, `select 1 from policies where code = 'ETAG-RACE' for update`); err != nil {
-		t.Fatalf("hold: %v", err)
-	}
-
 	const writers = 4
+	contention := testdb.NewContention(t, writers)
+	// Migrated first: the contention's pool does not do that, and this one does.
+	seeding := newReadBackWorld(t)
+	path, first := aStoredPolicy(t, seeding, "ETAG-RACE")
+	w := readBackWorldOn(t, contention.Pool)
+
 	codes := make([]int, writers)
-	var wg sync.WaitGroup
-	for i := range writers {
-		wg.Go(func() {
+	writes := make([]func() error, writers)
+	for i := range writes {
+		writes[i] = func() error {
 			codes[i] = w.call(t, etagCall{
 				method: http.MethodPut, path: path, ifMatch: []string{first},
 				body: aPolicyBody(fmt.Sprintf("writer %d", i)),
 			}).Code
-		})
-	}
-	deadline := time.Now().Add(20 * time.Second)
-	for waiting := 0; waiting < writers; {
-		if time.Now().After(deadline) {
-			t.Fatalf("%d of %d writers reached a lock", waiting, writers)
-		}
-		if err := pool.QueryRow(ctx, `select count(*) from pg_stat_activity
-			where datname = current_database() and wait_event_type = 'Lock'`).Scan(&waiting); err != nil {
-			t.Fatalf("watch: %v", err)
+			return nil
 		}
 	}
-	if err := hold.Rollback(ctx); err != nil {
-		t.Fatalf("release: %v", err)
-	}
-	wg.Wait()
+	contention.Overlap(t, `select 1 from policies where code = $1 for update`, []any{"ETAG-RACE"}, writes)
 
 	won, refused := 0, 0
 	for _, code := range codes {
