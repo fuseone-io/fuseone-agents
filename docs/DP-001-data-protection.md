@@ -229,6 +229,9 @@ takes effect on the next run.
 Expectations are cleared by the database when a copy is erased, so this holds during
 a rolling update, when an older process is still the one erasing.
 
+A correction whose copy is nowhere has nothing to run and nothing that would age its words
+out, so migration `0104` clears its note and expectations and keeps it as a gap.
+
 Retention applies to the regression corpus too. A correction's copy ages out like any
 other content, and its note and expectations are cleared with it. The window is a promise the operator
 configured, and a safety net is not a reason to break it. The case stays as a visible
