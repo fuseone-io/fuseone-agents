@@ -30,19 +30,28 @@ func (i *Integrations) Providers(ctx context.Context) ([]domain.ModelProvider, e
 
 	out := make([]domain.ModelProvider, 0, len(rows))
 	for _, row := range rows {
-		var stored storedProvider
-		if err := json.Unmarshal(row.Value, &stored); err != nil {
-			return nil, fmt.Errorf("admin: decode provider %s: %w", row.Name, err)
+		provider, err := providerFromRow(row)
+		if err != nil {
+			return nil, err
 		}
-		out = append(out, domain.ModelProvider{
-			Name: row.Name, Kind: stored.Kind, BaseURL: stored.BaseURL,
-			Models:               stored.Models,
-			AutoToolChoiceModels: stored.AutoToolChoiceModels,
-			Enabled:              row.Enabled, HasKey: row.HasSecret,
-			UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
-		})
+		out = append(out, provider)
 	}
 	return out, nil
+}
+
+// providerFromRow reads one stored provider, without its credential.
+func providerFromRow(row settings.Setting) (domain.ModelProvider, error) {
+	var stored storedProvider
+	if err := json.Unmarshal(row.Value, &stored); err != nil {
+		return domain.ModelProvider{}, fmt.Errorf("admin: decode provider %s: %w", row.Name, err)
+	}
+	return domain.ModelProvider{
+		Name: row.Name, Kind: stored.Kind, BaseURL: stored.BaseURL,
+		Models:               stored.Models,
+		AutoToolChoiceModels: stored.AutoToolChoiceModels,
+		Enabled:              row.Enabled, HasKey: row.HasSecret,
+		UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
+	}, nil
 }
 
 /*

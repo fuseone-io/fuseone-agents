@@ -294,6 +294,22 @@ type channelSpy struct {
 
 func (c *channelSpy) List(context.Context) ([]admin.Channel, error) { return c.listed, nil }
 
+func (c *channelSpy) Named(_ context.Context, name string) (admin.Channel, []admin.ChannelIdentity, error) {
+	for _, one := range c.listed {
+		if one.Name != name {
+			continue
+		}
+		var bound []admin.ChannelIdentity
+		for _, id := range c.bound {
+			if id.Channel == name {
+				bound = append(bound, id)
+			}
+		}
+		return one, bound, nil
+	}
+	return admin.Channel{}, nil, admin.ErrChannelUnknown
+}
+
 func (c *channelSpy) PutChannel(_ context.Context, w admin.ChannelWrite) error {
 	c.putChannel, c.governs = w.Channel.Name, w.Governs
 	if c.refuse != nil {

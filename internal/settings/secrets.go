@@ -18,38 +18,35 @@ different consequences: a listing tells a screen that a credential exists, and
 these hand one to something about to speak to a third party.
 */
 
+// revealSelect reads a row with its sealed credential in one statement.
+//
+// One because a configuration and its credential are a pair. Read apart, a write
+// landing between them yields an address that was never paired with that key, or
+// a row that disappeared halfway, and every caller of Reveal inherits the mix.
+const revealSelect = `
+	select value, secret, secret_nonce, enabled, updated_by, updated_at
+	from settings
+	where scope_kind = $1 and company_id = $2 and area_id = $3 and kind = $4 and name = $5`
+
 // Reveal returns a setting with its credential decrypted.
 //
 // Separate from Get on purpose. Reading configuration is routine; reading a
 // credential is not, and a caller has to ask for it explicitly so the audit
 // trail can record that they did.
 func (s *Store) Reveal(ctx context.Context, scopeKind ScopeKind, scope domain.Scope, kind Kind, name string) (Setting, error) {
-	set, err := s.Get(ctx, scopeKind, scope, kind, name)
-	if err != nil {
-		return Setting{}, err
-	}
-	if !set.HasSecret {
-		return set, nil
-	}
-	if s.vault == nil {
-		return Setting{}, ErrNoVault
-	}
+	return s.RevealOn(ctx, s.pool, scopeKind, scope, kind, name)
+}
 
-	var ciphertext, nonce []byte
-	if err := s.pool.QueryRow(ctx, `
-		select secret, secret_nonce from settings
-		where scope_kind = $1 and company_id = $2 and area_id = $3 and kind = $4 and name = $5`,
+// RevealOn is Reveal on a caller's connection, taking no lock: for a read that
+// has to agree with other reads in the same ReadSnapshot. A write folding onto
+// what it reads wants RevealTx.
+func (s *Store) RevealOn(
+	ctx context.Context, conn DB,
+	scopeKind ScopeKind, scope domain.Scope, kind Kind, name string,
+) (Setting, error) {
+	return s.openRow(conn.QueryRow(ctx, revealSelect,
 		string(scopeKind), string(scope.Company), string(scope.Area), string(kind), name,
-	).Scan(&ciphertext, &nonce); err != nil {
-		return Setting{}, fmt.Errorf("settings: read secret: %w", err)
-	}
-
-	plain, err := s.vault.Open(ciphertext, nonce, contextFor(set))
-	if err != nil {
-		return Setting{}, err
-	}
-	set.Secret = string(plain)
-	return set, nil
+	), Setting{ScopeKind: scopeKind, Scope: scope, Kind: kind, Name: name})
 }
 
 /*
@@ -70,21 +67,20 @@ func (s *Store) RevealTx(
 	ctx context.Context, conn DB,
 	scopeKind ScopeKind, scope domain.Scope, kind Kind, name string,
 ) (Setting, error) {
-	out := Setting{ScopeKind: scopeKind, Scope: scope, Kind: kind, Name: name}
-	var ciphertext, nonce []byte
-	err := conn.QueryRow(ctx, `
-		select value, secret, secret_nonce, enabled, updated_by, updated_at
-		from settings
-		where scope_kind = $1 and company_id = $2 and area_id = $3 and kind = $4 and name = $5
-		for update`,
+	return s.openRow(conn.QueryRow(ctx, revealSelect+` for update`,
 		string(scopeKind), string(scope.Company), string(scope.Area), string(kind), name,
-	).Scan(&out.Value, &ciphertext, &nonce, &out.Enabled, &out.UpdatedBy, &out.UpdatedAt)
+	), Setting{ScopeKind: scopeKind, Scope: scope, Kind: kind, Name: name})
+}
 
+// openRow scans what revealSelect returns onto a setting already naming the row.
+func (s *Store) openRow(row pgx.Row, out Setting) (Setting, error) {
+	var ciphertext, nonce []byte
+	err := row.Scan(&out.Value, &ciphertext, &nonce, &out.Enabled, &out.UpdatedBy, &out.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Setting{}, fmt.Errorf("%w: %s/%s", ErrNotFound, kind, name)
+		return Setting{}, fmt.Errorf("%w: %s/%s", ErrNotFound, out.Kind, out.Name)
 	}
 	if err != nil {
-		return Setting{}, fmt.Errorf("settings: read %s/%s: %w", kind, name, err)
+		return Setting{}, fmt.Errorf("settings: read %s/%s: %w", out.Kind, out.Name, err)
 	}
 	out.HasSecret = len(ciphertext) > 0
 	if !out.HasSecret {
@@ -144,31 +140,13 @@ func (s *Store) Named(ctx context.Context, kind Kind, name string) ([]Setting, e
 // and then write must read under the same lock it writes under, or it decides
 // from a state that no longer holds by the time it acts.
 func (s *Store) ListTx(ctx context.Context, conn DB, kind Kind) ([]Setting, error) {
-	rows, err := conn.Query(ctx, `
-		select scope_kind, company_id, area_id, name, value, secret is not null, enabled, updated_by, updated_at
+	rows, err := conn.Query(ctx, `select `+settingColumns+`
 		from settings where kind = $1
 		order by scope_kind, company_id, area_id, name`, string(kind))
 	if err != nil {
 		return nil, fmt.Errorf("settings: list %s: %w", kind, err)
 	}
-	defer rows.Close()
-
-	var out []Setting
-	for rows.Next() {
-		var (
-			set           = Setting{Kind: kind}
-			scopeKind     string
-			company, area string
-		)
-		if err := rows.Scan(&scopeKind, &company, &area, &set.Name, &set.Value,
-			&set.HasSecret, &set.Enabled, &set.UpdatedBy, &set.UpdatedAt); err != nil {
-			return nil, err
-		}
-		set.ScopeKind = ScopeKind(scopeKind)
-		set.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
-		out = append(out, set)
-	}
-	return out, rows.Err()
+	return scanSettings(rows, kind)
 }
 
 /*

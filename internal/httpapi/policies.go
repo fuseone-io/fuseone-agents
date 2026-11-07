@@ -19,6 +19,7 @@ const hitWindow = 7 * 24 * time.Hour
 // Policies is the authored set, declared here by the consumer.
 type Policies interface {
 	Active(ctx context.Context) (policy.Set, error)
+	Named(ctx context.Context, code string) (domain.Policy, error)
 	Put(ctx context.Context, p domain.Policy, by domain.UserID) (policy.Set, error)
 	Delete(ctx context.Context, code string) (policy.Set, error)
 }

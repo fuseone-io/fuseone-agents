@@ -1984,6 +1984,32 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /policies/{code}:
+    get:
+      tags: [policies]
+      operationId: getPolicy
+      summary: Read one policy as it is authored
+      description: |
+        What PUT stored, for a client deciding whether the rule drifted, and
+        readable by whoever can read the list: an author who cannot see the rule
+        that stopped their agent cannot act on it.
+
+        The rule alone. `hits` is a count over a period and moves with nobody
+        having written anything, so it stays on the list, and so does the hash
+        naming the whole set.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The policy as stored.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Policy' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
     put:
       tags: [policies]
       operationId: putPolicy
@@ -3131,6 +3157,36 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /admin/integrations/mcp-servers/{name}:
+    get:
+      tags: [admin]
+      operationId: getMCPServer
+      summary: Read one tool server as it is configured
+      description: >
+        What PUT stored, for a client deciding whether the server drifted.
+        Secret values are never returned. What is not secret comes back as
+        itself (headerNames, envNames, oauthClient), and secretFingerprint
+        moves when a value that may be a secret changes. Sending the answer
+        back unchanged keeps all of it.
+
+        Configuration only. Health, call authentication and the egress
+        statement vary with what a worker saw and who is asking, with nobody
+        having written anything, so they stay on the listing. A server a worker
+        reports and nobody configured here is on the listing too and is 404
+        here: PUT wrote nothing a client could compare it to.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The server's stored configuration.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MCPServer' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
     put:
       tags: [admin]
       operationId: putMCPServer
@@ -3460,6 +3516,35 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /admin/channels/{name}:
+    get:
+      tags: [admin]
+      operationId: getChannel
+      summary: Read one channel connection as it is configured
+      description: >
+        What PUT stored, for a client deciding whether the connection drifted,
+        with the conversations and identities attached to it. Those have PUTs
+        of their own: this one ignores them when the answer is sent back, and
+        leaves them as they are.
+
+        The credentials are never returned; hasCredential, hasSigning and
+        hasAppToken report which are stored, secretFingerprint moves when one
+        changes, and sending the answer back unchanged keeps them. Accounts
+        seen interacting stay on the listing:
+        they change with nobody having written anything.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The connection's stored configuration.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Channel' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
     put:
       tags: [admin]
       operationId: putChannel
@@ -3820,6 +3905,29 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /admin/integrations/providers/{name}:
+    get:
+      tags: [admin]
+      operationId: getModelProvider
+      summary: Read one model provider as it is configured
+      description: >
+        What PUT stored, for a client deciding whether the provider drifted.
+        The credential is never returned; hasKey reports that one is stored,
+        secretFingerprint moves when it changes, and sending the answer back
+        unchanged keeps it.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The provider's stored configuration.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelProvider' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
     put:
       tags: [admin]
       operationId: putModelProvider
@@ -6766,10 +6874,53 @@ components:
             starts a process on the worker and the platform does not constrain
             its outbound destinations.
 
+    MCPOAuthClient:
+      type: object
+      description: >
+        Whose client an OAuth grant is. The tokens and the client secret never
+        come back; the access token, refresh token and expiry are also left out
+        of secretFingerprint, because a worker rotates them on its own.
+      properties:
+        tokenURL:
+          type: string
+          description: >
+            The token endpoint, with any credential put in the address (user
+            information, query, fragment) taken out. A change to those parts
+            moves secretFingerprint.
+        clientID: { type: string }
+        tokenType: { type: string }
+        scopes:
+          type: array
+          items: { type: string }
+
     MCPServer:
       type: object
       required: [name, enabled]
       properties:
+        headerNames:
+          type: array
+          items: { type: string }
+          description: >
+            Only on the read by name. The names of the stored HTTP headers; the
+            values never come back, because a value cannot be told apart from a
+            credential by reading it.
+        envNames:
+          type: array
+          items: { type: string }
+          description: Only on the read by name. The names of the stored variables, never their values.
+        oauthClient:
+          allOf: [{ $ref: '#/components/schemas/MCPOAuthClient' }]
+          description: Only on the read by name.
+        secretFingerprint:
+          type: string
+          description: >
+            Only on the read by name, and only when something sealed can be
+            named. Opaque: compare it for equality with an earlier answer. It
+            moves when the token, a header or variable value, the configuration
+            file, the client secret, the token address or the App's key changes.
+            It is keyed by this installation's master key and tied to this
+            server, so it cannot be computed elsewhere or compared across
+            servers, and replacing the master key moves it.
         name:
           type: string
           description: Namespaces the tools it offers, so two servers naming a tool "search" do not collide.
@@ -7098,6 +7249,13 @@ components:
       type: object
       required: [name, kind, baseUrl, enabled, hasKey]
       properties:
+        secretFingerprint:
+          type: string
+          description: >
+            Only on the read by name, and only when a secret is stored. Opaque:
+            compare it for equality with an earlier answer. It moves when a
+            stored secret changes, is keyed by this installation's master key
+            and tied to this resource, and replacing the master key moves it.
         name: { type: string }
         kind:
           type: string
@@ -7337,6 +7495,13 @@ components:
       type: object
       required: [name, kind, enabled, hasCredential, conversations]
       properties:
+        secretFingerprint:
+          type: string
+          description: >
+            Only on the read by name, and only when a secret is stored. Opaque:
+            compare it for equality with an earlier answer. It moves when a
+            stored secret changes, is keyed by this installation's master key
+            and tied to this resource, and replacing the master key moves it.
         name: { type: string }
         kind: { type: string }
         workspace: { type: string }

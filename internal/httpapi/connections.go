@@ -23,11 +23,13 @@ needs the absence answered as plainly as the presence.
 // the consumer.
 type Integrations interface {
 	MCPServers(ctx context.Context) ([]domain.MCPServer, error)
+	MCPServerNamed(ctx context.Context, name string) (domain.MCPServer, error)
 	MCPPersonalCredentials(ctx context.Context, principal domain.UserID) ([]domain.MCPPersonalCredential, error)
 	MCPPersonalCredentialPresence(ctx context.Context, principal domain.UserID, servers []string) (map[string]bool, error)
 	PutMCPPersonalCredential(ctx context.Context, by domain.UserID, scope domain.Scope, name string, creds domain.MCPCredentialPatch) error
 	DeleteMCPPersonalCredential(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
 	Providers(ctx context.Context) ([]domain.ModelProvider, error)
+	ProviderNamed(ctx context.Context, name string) (domain.ModelProvider, error)
 	PutMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, server domain.MCPServer, creds domain.MCPCredentialPatch) error
 	MCPCredentials(ctx context.Context, name string) (domain.MCPCredentials, error)
 	RequestMCPProbe(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
@@ -100,38 +102,9 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 	configured := map[string]bool{}
 	for _, srv := range servers {
 		configured[srv.Name] = true
-		server := openapi.MCPServer{
-			Name: srv.Name, Args: &srv.Args, Enabled: srv.Enabled,
-			Transport:          ptr(openapi.Transport(srv.TransportOf())),
-			ProtocolMode:       ptr(openapi.MCPProtocolMode(srv.MCPProtocolModeOf())),
-			RateLimit:          rateLimitToResponse(srv.RateLimit),
-			CallTimeoutSeconds: srv.CallTimeout,
-			Cache:              resultCacheToResponse(srv.Cache),
-			HasSecret:          ptr(srv.HasSecret),
-			HasOAuth:           ptr(srv.HasOAuth),
-			GithubApp:          githubAppToResponse(srv.GitHubApp),
-			HasVariables:       ptr(srv.HasVariables),
-			HasConfigFile:      ptr(srv.HasConfigFile),
-			Managed:            ptr(true),
-			UpdatedBy:          ptr(srv.UpdatedBy), UpdatedAt: ptr(srv.UpdatedAt),
-			// What was brought in, and who accepted running it. Both are
-			// stored and neither reached the screen, so a server somebody had
-			// narrowed read back as all-in — and saving anything from that
-			// screen would have widened it back.
-			//
-			// The pointer is the whole point: nil is "nobody has chosen", and
-			// an empty list is "chosen, and none of it".
-			Surface:               srv.Surface,
-			AcceptsLocalExecution: ptr(srv.AcceptsLocalExecution),
-			CallAuth:              ptr(callAuth.forServer(srv.Name, srv.TransportOf())),
-			Egress:                ptr(s.mcpEgress(srv)),
-			StdioEgress:           stdioEgressToResponse(srv.StdioEgress),
-		}
-		server.Command = someString(srv.Command)
-		server.Url = someString(srv.URL)
-		if srv.ConfigFileEnv != nil {
-			server.ConfigFileEnv = someString(*srv.ConfigFileEnv)
-		}
+		server := mcpServerConfig(srv)
+		server.CallAuth = ptr(callAuth.forServer(srv.Name, srv.TransportOf()))
+		server.Egress = ptr(s.mcpEgress(srv))
 		// Absent when no worker has tried yet, which is a different thing from
 		// a server that failed — and the screen has to be able to say so.
 		if seen, tried := observed[srv.Name]; tried {
@@ -171,17 +144,7 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 		return nil, fmt.Errorf("list providers: %w", err)
 	}
 	for _, p := range providers {
-		body.Providers = append(body.Providers, openapi.ModelProvider{
-			Name: p.Name, Kind: openapi.ModelProviderKind(p.Kind), BaseUrl: p.BaseURL,
-			// An empty array and never null: a provider with no list is a
-			// provider that offers none, and the schema says array or absent.
-			Models:               ptr(append([]string{}, p.Models...)),
-			AutoToolChoiceModels: ptr(append([]string{}, p.AutoToolChoiceModels...)),
-			// Only whether a credential exists. The credential itself never
-			// leaves the vault through this API.
-			Enabled: p.Enabled, HasKey: p.HasKey,
-			UpdatedBy: ptr(p.UpdatedBy), UpdatedAt: ptr(p.UpdatedAt),
-		})
+		body.Providers = append(body.Providers, modelProviderConfig(p))
 	}
 	return body, nil
 }

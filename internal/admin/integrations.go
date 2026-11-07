@@ -144,45 +144,54 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 
 	out := make([]domain.MCPServer, 0, len(rows))
 	for _, row := range rows {
-		var stored storedServer
-		if err := json.Unmarshal(row.Value, &stored); err != nil {
-			return nil, fmt.Errorf("admin: decode MCP server %s: %w", row.Name, err)
+		server, err := serverFromRow(row)
+		if err != nil {
+			return nil, err
 		}
-		transport := stored.Transport
-		if transport == "" {
-			transport = domain.TransportStdio
-		}
-		hasVariables := stored.HasVariables
-		if !hasVariables && row.HasSecret && transport == domain.TransportStdio && !stored.HasConfigFile {
-			// Rows written after per-server env existed but before this
-			// read-model bit have a sealed document and no way to say which
-			// half. Config files did not exist then, so keep the old revoke
-			// affordance for local variables instead of hiding it on upgrade.
-			hasVariables = true
-		}
-		server := domain.MCPServer{
-			Name: row.Name, Transport: stored.Transport,
-			Command: stored.Command, Args: stored.Args, URL: stored.URL,
-			ProtocolMode:          stored.ProtocolMode,
-			Surface:               stored.Surface,
-			RateLimit:             stored.RateLimit,
-			CallTimeout:           stored.CallTimeoutSeconds,
-			Cache:                 stored.Cache,
-			StdioEgress:           stored.StdioEgress,
-			AcceptsLocalExecution: stored.AcceptsLocalExecution,
-			HasSecret:             row.HasSecret,
-			HasOAuth:              stored.HasOAuth,
-			GitHubApp:             stored.GitHubApp.summary(),
-			HasVariables:          hasVariables,
-			HasConfigFile:         stored.HasConfigFile,
-			ConfigFileEnv:         configFileEnv(stored.ConfigFileEnv),
-			Enabled:               row.Enabled,
-			UpdatedBy:             row.UpdatedBy, UpdatedAt: row.UpdatedAt,
-		}
-		server.Transport = server.TransportOf()
 		out = append(out, server)
 	}
 	return out, nil
+}
+
+// serverFromRow reads one stored server, without its sealed half.
+func serverFromRow(row settings.Setting) (domain.MCPServer, error) {
+	var stored storedServer
+	if err := json.Unmarshal(row.Value, &stored); err != nil {
+		return domain.MCPServer{}, fmt.Errorf("admin: decode MCP server %s: %w", row.Name, err)
+	}
+	transport := stored.Transport
+	if transport == "" {
+		transport = domain.TransportStdio
+	}
+	hasVariables := stored.HasVariables
+	if !hasVariables && row.HasSecret && transport == domain.TransportStdio && !stored.HasConfigFile {
+		// Rows written after per-server env existed but before this
+		// read-model bit have a sealed document and no way to say which
+		// half. Config files did not exist then, so keep the old revoke
+		// affordance for local variables instead of hiding it on upgrade.
+		hasVariables = true
+	}
+	server := domain.MCPServer{
+		Name: row.Name, Transport: stored.Transport,
+		Command: stored.Command, Args: stored.Args, URL: stored.URL,
+		ProtocolMode:          stored.ProtocolMode,
+		Surface:               stored.Surface,
+		RateLimit:             stored.RateLimit,
+		CallTimeout:           stored.CallTimeoutSeconds,
+		Cache:                 stored.Cache,
+		StdioEgress:           stored.StdioEgress,
+		AcceptsLocalExecution: stored.AcceptsLocalExecution,
+		HasSecret:             row.HasSecret,
+		HasOAuth:              stored.HasOAuth,
+		GitHubApp:             stored.GitHubApp.summary(),
+		HasVariables:          hasVariables,
+		HasConfigFile:         stored.HasConfigFile,
+		ConfigFileEnv:         configFileEnv(stored.ConfigFileEnv),
+		Enabled:               row.Enabled,
+		UpdatedBy:             row.UpdatedBy, UpdatedAt: row.UpdatedAt,
+	}
+	server.Transport = server.TransportOf()
+	return server, nil
 }
 
 /*

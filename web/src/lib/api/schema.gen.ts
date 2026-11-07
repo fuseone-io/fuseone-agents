@@ -1401,7 +1401,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one policy as it is authored
+         * @description What PUT stored, for a client deciding whether the rule drifted, and
+         *     readable by whoever can read the list: an author who cannot see the rule
+         *     that stopped their agent cannot act on it.
+         *
+         *     The rule alone. `hits` is a count over a period and moves with nobody
+         *     having written anything, so it stays on the list, and so does the hash
+         *     naming the whole set.
+         */
+        get: operations["getPolicy"];
         /**
          * Write a policy
          * @description Creating and editing are the same call: the code is the identity, set
@@ -2159,7 +2169,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one tool server as it is configured
+         * @description What PUT stored, for a client deciding whether the server drifted. Secret values are never returned. What is not secret comes back as itself (headerNames, envNames, oauthClient), and secretFingerprint moves when a value that may be a secret changes. Sending the answer back unchanged keeps all of it.
+         *     Configuration only. Health, call authentication and the egress statement vary with what a worker saw and who is asking, with nobody having written anything, so they stay on the listing. A server a worker reports and nobody configured here is on the listing too and is 404 here: PUT wrote nothing a client could compare it to.
+         */
+        get: operations["getMCPServer"];
         /**
          * Configure a tool server
          * @description Adding a server changes what agents can do, so it is recorded like any other administrative change. The tools it offers arrive unclassified and do nothing until somebody says what they do; that stays a separate act.
@@ -2285,7 +2300,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one channel connection as it is configured
+         * @description What PUT stored, for a client deciding whether the connection drifted, with the conversations and identities attached to it. Those have PUTs of their own: this one ignores them when the answer is sent back, and leaves them as they are.
+         *     The credentials are never returned; hasCredential, hasSigning and hasAppToken report which are stored, secretFingerprint moves when one changes, and sending the answer back unchanged keeps them. Accounts seen interacting stay on the listing: they change with nobody having written anything.
+         */
+        get: operations["getChannel"];
         /** Configure a channel connection */
         put: operations["putChannel"];
         post?: never;
@@ -2412,7 +2432,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one model provider as it is configured
+         * @description What PUT stored, for a client deciding whether the provider drifted. The credential is never returned; hasKey reports that one is stored, secretFingerprint moves when it changes, and sending the answer back unchanged keeps it.
+         */
+        get: operations["getModelProvider"];
         /** Configure a model provider */
         put: operations["putModelProvider"];
         post?: never;
@@ -4186,7 +4210,23 @@ export interface components {
              */
             policy: "unknown" | "metadata_refused" | "proxy_requested" | "proxy_with_network_policy" | "unconstrained_local_process";
         };
+        /** @description Whose client an OAuth grant is. The tokens and the client secret never come back; the access token, refresh token and expiry are also left out of secretFingerprint, because a worker rotates them on its own. */
+        MCPOAuthClient: {
+            /** @description The token endpoint, with any credential put in the address (user information, query, fragment) taken out. A change to those parts moves secretFingerprint. */
+            tokenURL?: string;
+            clientID?: string;
+            tokenType?: string;
+            scopes?: string[];
+        };
         MCPServer: {
+            /** @description Only on the read by name. The names of the stored HTTP headers; the values never come back, because a value cannot be told apart from a credential by reading it. */
+            headerNames?: string[];
+            /** @description Only on the read by name. The names of the stored variables, never their values. */
+            envNames?: string[];
+            /** @description Only on the read by name. */
+            oauthClient?: components["schemas"]["MCPOAuthClient"];
+            /** @description Only on the read by name, and only when something sealed can be named. Opaque: compare it for equality with an earlier answer. It moves when the token, a header or variable value, the configuration file, the client secret, the token address or the App's key changes. It is keyed by this installation's master key and tied to this server, so it cannot be computed elsewhere or compared across servers, and replacing the master key moves it. */
+            secretFingerprint?: string;
             /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */
             name: string;
             transport?: components["schemas"]["Transport"];
@@ -4423,6 +4463,8 @@ export interface components {
             lastOkAt?: string;
         };
         ModelProvider: {
+            /** @description Only on the read by name, and only when a secret is stored. Opaque: compare it for equality with an earlier answer. It moves when a stored secret changes, is keyed by this installation's master key and tied to this resource, and replacing the master key moves it. */
+            secretFingerprint?: string;
             name: string;
             /** @enum {string} */
             kind: "anthropic" | "openai_compatible";
@@ -4597,6 +4639,8 @@ export interface components {
             createdBy?: string;
         };
         Channel: {
+            /** @description Only on the read by name, and only when a secret is stored. Opaque: compare it for equality with an earlier answer. It moves when a stored secret changes, is keyed by this installation's master key and tied to this resource, and replacing the master key moves it. */
+            secretFingerprint?: string;
             name: string;
             kind: string;
             workspace?: string;
@@ -8023,6 +8067,31 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    getPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Policy"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     putPolicy: {
         parameters: {
             query?: never;
@@ -9204,6 +9273,31 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    getMCPServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The server's stored configuration. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPServer"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     putMCPServer: {
         parameters: {
             query?: never;
@@ -9444,6 +9538,31 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The connection's stored configuration. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Channel"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     putChannel: {
@@ -9779,6 +9898,31 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getModelProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The provider's stored configuration. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelProvider"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     putModelProvider: {

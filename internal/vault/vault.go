@@ -9,8 +9,12 @@ package vault
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -39,6 +43,9 @@ type Vault struct {
 	// the key that sealed it, so old records stay readable while new ones use
 	// the new key — rotation without a stop-the-world re-encryption.
 	keyID string
+	// fingerprintKey is derived from the master key and is not the master key:
+	// the key that seals a secret never touches anything that gets published.
+	fingerprintKey []byte
 }
 
 // New builds a vault from a 32-byte key.
@@ -61,7 +68,7 @@ func New(key []byte, keyID string) (*Vault, error) {
 	if keyID == "" {
 		keyID = "default"
 	}
-	return &Vault{aead: aead, keyID: keyID}, nil
+	return &Vault{aead: aead, keyID: keyID, fingerprintKey: deriveFingerprintKey(key)}, nil
 }
 
 // FromBase64 builds a vault from the encoded form the environment carries.
@@ -122,6 +129,35 @@ func (v *Vault) Open(ciphertext, nonce []byte, context string) ([]byte, error) {
 		return nil, ErrCiphertext
 	}
 	return plain, nil
+}
+
+func deriveFingerprintKey(master []byte) []byte {
+	mac := hmac.New(sha256.New, master)
+	mac.Write([]byte("fuseone/vault/fingerprint/v1"))
+	return mac.Sum(nil)
+}
+
+/*
+Fingerprint names sealed material without saying what it is, so a client can
+tell that it changed.
+
+Keyed, because a plain hash of a secret lets anybody holding the answer test
+guesses against it offline. Tied to context, the same string Seal binds to, so
+the same secret on two resources gives two fingerprints: otherwise somebody able
+to configure one thing could seal a guess there and compare it with another.
+What is left is replacing the secret with the guess and looking, which destroys
+what they were guessing at and is recorded.
+
+Stable only under this master key. Replacing the key moves every fingerprint.
+*/
+func (v *Vault) Fingerprint(material []byte, context string) string {
+	mac := hmac.New(sha256.New, v.fingerprintKey)
+	var length [8]byte
+	binary.BigEndian.PutUint64(length[:], uint64(len(context)))
+	mac.Write(length[:])
+	mac.Write([]byte(context))
+	mac.Write(material)
+	return "fp_" + hex.EncodeToString(mac.Sum(nil)[:16])
 }
 
 // KeyID identifies the key in use, for recording alongside sealed records.

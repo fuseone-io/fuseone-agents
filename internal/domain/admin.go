@@ -143,6 +143,11 @@ type MCPStdioEgress struct {
 }
 
 type MCPServer struct {
+	// Credential and SecretFingerprint are filled by a read of this one server,
+	// which opens its sealed document. A listing opens none and leaves them empty.
+	Credential        *MCPCredentialSummary
+	SecretFingerprint string
+
 	Name string
 	// Transport is stdio or http. Empty reads as stdio: rows written before
 	// the field existed are the commands they always were, and defaulting them
@@ -316,9 +321,12 @@ type ModelProvider struct {
 	AutoToolChoiceModels []string
 	Enabled              bool
 	// HasKey reports that a credential is stored, never what it is.
-	HasKey    bool
-	UpdatedBy string
-	UpdatedAt time.Time
+	HasKey bool
+	// SecretFingerprint is filled by a read of this one provider, which opens
+	// its key. A listing opens none and leaves it empty.
+	SecretFingerprint string
+	UpdatedBy         string
+	UpdatedAt         time.Time
 }
 
 // IntegrationHealth is what the platform observed about a connected system the

@@ -254,62 +254,66 @@ func (c *ChannelFacts) Identities(ctx context.Context) ([]ChannelIdentity, error
 
 	out := make([]ChannelIdentity, 0, len(stored))
 	for _, s := range stored {
-		// Where the row is, kept whatever else it turns out to be: a delete
-		// recomputing the position would name the place a binding belongs
-		// rather than the place this one is, and remove nothing.
-		here := s.ScopeKind != settings.ScopeInstallation || s.Scope != (domain.Scope{})
-		id, ok := identityFrom(s)
-		if ok && id.Principal != "" {
-			/*
-				Named by the key, like every row here.
-
-				PrincipalFor looks a binding up by `channel/account`, so the
-				key is what grants the authority — and the same two fields
-				inside the value are a copy that can only ever disagree with
-				it. Published from the value, a row keyed `acme-slack/U505`
-				whose contents say `old-slack/U777` grants under the first and
-				is shown and deleted under the second: the console offers to
-				remove a binding that is not the one doing anything.
-
-				They are written from the same inputs, so they diverge only by
-				restore or by a hand-edited row — which is exactly when the
-				screen has to agree with the runtime.
-			*/
-			id.Channel, id.Account = keyChannel(s.Name), keyAccount(s.Name)
-			id.Misplaced, id.scope, id.scopeAt = here, s.Scope, s.ScopeKind
-			out = append(out, id)
-			continue
-		}
-		// Shown as what it is. The runtime refuses an ask on this row and says
-		// it is unreadable; a listing that showed it as an ordinary binding
-		// with a blank name would leave an operator comparing that error
-		// against a row that looks fine.
-		/*
-			The key names it, and the value does not get a vote.
-
-			Falling back to the key only where the value said nothing was
-			still trusting the value: a row keyed `acme-slack/U505` whose
-			corrupted contents claim `old-slack` would be listed under a
-			channel it does not belong to — filed on the wrong card, and
-			deleted by a request naming a channel the row was never under. The
-			value is the part that is broken, so on this path it is not
-			evidence of anything.
-
-			Display survives as a hint. It changes nothing and names nothing,
-			and an operator deciding whether to remove a row wants every hint
-			there is.
-		*/
-		out = append(out, ChannelIdentity{
-			Channel:    keyChannel(s.Name),
-			Account:    keyAccount(s.Name),
-			Display:    id.Display,
-			Unreadable: true,
-			Misplaced:  here,
-			scope:      s.Scope,
-			scopeAt:    s.ScopeKind,
-		})
+		out = append(out, identityOfRow(s))
 	}
 	return out, nil
+}
+
+// identityOfRow reads one stored binding, readable or not, as a screen shows it.
+func identityOfRow(s settings.Setting) ChannelIdentity {
+	// Where the row is, kept whatever else it turns out to be: a delete
+	// recomputing the position would name the place a binding belongs
+	// rather than the place this one is, and remove nothing.
+	here := s.ScopeKind != settings.ScopeInstallation || s.Scope != (domain.Scope{})
+	id, ok := identityFrom(s)
+	if ok && id.Principal != "" {
+		/*
+			Named by the key, like every row here.
+
+			PrincipalFor looks a binding up by `channel/account`, so the
+			key is what grants the authority — and the same two fields
+			inside the value are a copy that can only ever disagree with
+			it. Published from the value, a row keyed `acme-slack/U505`
+			whose contents say `old-slack/U777` grants under the first and
+			is shown and deleted under the second: the console offers to
+			remove a binding that is not the one doing anything.
+
+			They are written from the same inputs, so they diverge only by
+			restore or by a hand-edited row — which is exactly when the
+			screen has to agree with the runtime.
+		*/
+		id.Channel, id.Account = keyChannel(s.Name), keyAccount(s.Name)
+		id.Misplaced, id.scope, id.scopeAt = here, s.Scope, s.ScopeKind
+		return id
+	}
+	// Shown as what it is. The runtime refuses an ask on this row and says
+	// it is unreadable; a listing that showed it as an ordinary binding
+	// with a blank name would leave an operator comparing that error
+	// against a row that looks fine.
+	/*
+		The key names it, and the value does not get a vote.
+
+		Falling back to the key only where the value said nothing was
+		still trusting the value: a row keyed `acme-slack/U505` whose
+		corrupted contents claim `old-slack` would be listed under a
+		channel it does not belong to — filed on the wrong card, and
+		deleted by a request naming a channel the row was never under. The
+		value is the part that is broken, so on this path it is not
+		evidence of anything.
+
+		Display survives as a hint. It changes nothing and names nothing,
+		and an operator deciding whether to remove a row wants every hint
+		there is.
+	*/
+	return ChannelIdentity{
+		Channel:    keyChannel(s.Name),
+		Account:    keyAccount(s.Name),
+		Display:    id.Display,
+		Unreadable: true,
+		Misplaced:  here,
+		scope:      s.Scope,
+		scopeAt:    s.ScopeKind,
+	}
 }
 
 /*

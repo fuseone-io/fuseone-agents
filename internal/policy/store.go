@@ -25,6 +25,9 @@ import (
 // ErrNoSnapshot means nothing was ever taken under that hash.
 var ErrNoSnapshot = errors.New("policy: no snapshot with that hash")
 
+// ErrNoPolicy means nobody wrote a rule under that code.
+var ErrNoPolicy = errors.New("policy: no policy with that code")
+
 // Store is the authored set and its history.
 type Store struct{ pool *pgxpool.Pool }
 
@@ -127,6 +130,23 @@ func (s *Store) Active(ctx context.Context) (Set, error) {
 		}
 	}
 	return Set{Hash: hash, Policies: policies}, nil
+}
+
+// Named reads one rule, for a client asking about that rule.
+//
+// Not Active with a filter. That reads the whole set and may write a snapshot,
+// which is right for what names the set and wrong for a read that a refresh
+// repeats once per policy.
+func (s *Store) Named(ctx context.Context, code string) (domain.Policy, error) {
+	p, err := scanPolicy(s.pool.QueryRow(ctx,
+		`select `+policyColumns+` from policies where code = $1`, code))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Policy{}, fmt.Errorf("%w: %s", ErrNoPolicy, code)
+	}
+	if err != nil {
+		return domain.Policy{}, fmt.Errorf("policy: read %s: %w", code, err)
+	}
+	return p, nil
 }
 
 // Exec runs a statement against the policy tables. It exists for tests that
