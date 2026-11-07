@@ -97,12 +97,31 @@ gets a new retention window, because it was stored again today.
 func (c *Content) RestoreFor(
 	ctx context.Context, kind, owner string, seq int64, data []byte,
 ) (string, error) {
+	return c.restore(ctx, c.pool, contentOwner{kind, owner, seq}, data)
+}
+
+// RestoreForTx is RestoreFor inside a transaction, for content that must not exist
+// unless what names it does.
+func (c *Content) RestoreForTx(
+	ctx context.Context, tx pgx.Tx, kind, owner string, seq int64, data []byte,
+) (string, error) {
+	return c.restore(ctx, tx, contentOwner{kind, owner, seq}, data)
+}
+
+type contentOwner struct {
+	kind, owner string
+	seq         int64
+}
+
+func (c *Content) restore(
+	ctx context.Context, conn contentExecutor, to contentOwner, data []byte,
+) (string, error) {
 	sum := sha256.Sum256(data)
 	digest := hex.EncodeToString(sum[:])
-	ref := fmt.Sprintf("%s://%s/%d/%s", kind, owner, seq, digest[:16])
+	ref := fmt.Sprintf("%s://%s/%d/%s", to.kind, to.owner, to.seq, digest[:16])
 	stored, truncated := domain.Truncate(data, c.limit)
 
-	if _, err := c.pool.Exec(ctx, `
+	if _, err := conn.Exec(ctx, `
 		insert into run_content
 			(ref, owner_kind, run_id, seq, digest, bytes, full_bytes, truncated)
 		values ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -110,8 +129,8 @@ func (c *Content) RestoreFor(
 		set bytes = excluded.bytes, truncated = excluded.truncated,
 		    erased_at = null, erased_reason = '', created_at = now()
 		where run_content.erased_at is not null`,
-		ref, kind, owner, seq, digest, stored, len(data), truncated); err != nil {
-		return "", fmt.Errorf("ledger: restore content for %s: %w", owner, err)
+		ref, to.kind, to.owner, to.seq, digest, stored, len(data), truncated); err != nil {
+		return "", fmt.Errorf("ledger: restore content for %s: %w", to.owner, err)
 	}
 	return ref, nil
 }

@@ -17,7 +17,7 @@ import (
 type Regressions interface {
 	Record(ctx context.Context, c domain.RegressionCase) error
 	List(ctx context.Context, agent domain.AgentID) ([]domain.RegressionCase, error)
-	Delete(ctx context.Context, agent domain.AgentID, id string) error
+	Delete(ctx context.Context, agent domain.AgentID, id string, by domain.UserID) error
 	// Hold fences the corpus against an erasure while it is being copied.
 	Hold(ctx context.Context, agent domain.AgentID, inside func(context.Context) error) error
 }
@@ -149,7 +149,7 @@ func (s *Server) DeleteRegression(
 		return openapi.DeleteRegression204Response{}, nil
 	}
 
-	if err := s.regressions.Delete(ctx, published.ID, req.CaseId); err != nil {
+	if err := s.regressions.Delete(ctx, published.ID, req.CaseId, callerOf(ctx)); err != nil {
 		return nil, fmt.Errorf("delete regression %s: %w", req.CaseId, err)
 	}
 	return openapi.DeleteRegression204Response{}, nil

@@ -13,21 +13,26 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/ledger"
 )
 
 // ErrNothingToCheck means a correction arrived with no expectation on it.
 var ErrNothingToCheck = errors.New("regression: a case with no expectation cannot be checked")
 
 type Store struct {
-	pool  *pgxpool.Pool
-	fence *fence
+	pool    *pgxpool.Pool
+	fence   *fence
+	content *ledger.Content
 }
 
 func NewStore(pool *pgxpool.Pool) *Store {
-	return &Store{pool: pool, fence: newFence(pool.Config().ConnConfig)}
+	return &Store{
+		pool: pool, fence: newFence(pool.Config().ConnConfig), content: ledger.NewContent(pool),
+	}
 }
 
 // Record stores one correction, replacing a case of the same id.
@@ -53,14 +58,31 @@ func (s *Store) Record(ctx context.Context, c domain.RegressionCase) error {
 		return fmt.Errorf("regression: encode expectations: %w", err)
 	}
 
-	_, err = s.pool.Exec(ctx, `
+	return s.write(ctx, func(tx pgx.Tx, versioned bool) error {
+		if !versioned {
+			return upsertCase(ctx, tx, caseRow{c, expectations, nil})
+		}
+		return s.recordVersioned(ctx, tx, c, expectations)
+	})
+}
+
+// caseRow is what one recorded case writes. Ref is empty until versions are on.
+type caseRow struct {
+	domain.RegressionCase
+	expectations []byte
+	ref          *string
+}
+
+func upsertCase(ctx context.Context, tx pgx.Tx, c caseRow) error {
+	_, err := tx.Exec(ctx, `
 		insert into regression_cases (
 			agent_id, case_id, company_id, area_id,
-			input_ref, expectations, from_run, note, created_by, model, effort
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+			input_ref, expectations, from_run, note, created_by, model, effort, expectations_ref
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 		on conflict (agent_id, case_id) do update set
 			input_ref = excluded.input_ref,
 			expectations = excluded.expectations,
+			expectations_ref = excluded.expectations_ref,
 			from_run = excluded.from_run,
 			note = excluded.note,
 			-- Re-recorded, because a correction made today held against
@@ -69,8 +91,8 @@ func (s *Store) Record(ctx context.Context, c domain.RegressionCase) error {
 			model = excluded.model,
 			effort = excluded.effort`,
 		string(c.Agent), c.ID, string(c.Scope.Company), string(c.Scope.Area),
-		c.InputRef, expectations, string(c.FromRun), c.Note, string(c.CreatedBy),
-		c.Model, c.Effort)
+		c.InputRef, c.expectations, string(c.FromRun), c.Note, string(c.CreatedBy),
+		c.Model, c.Effort, c.ref)
 	if err != nil {
 		return fmt.Errorf("regression: record %s: %w", c.ID, err)
 	}
@@ -86,9 +108,12 @@ func (s *Store) List(ctx context.Context, agent domain.AgentID) ([]domain.Regres
 	rows, err := s.pool.Query(ctx, `
 		select c.case_id, c.company_id, c.area_id, c.input_ref, c.expectations,
 		       c.from_run, c.note, c.created_by, c.created_at, c.model, c.effort,
-		       coalesce(rc.erased_at is not null, false)
+		       coalesce(rc.erased_at is not null, false),
+		       c.expectations_ref, ex.ref is not null, ex.bytes,
+		       coalesce(ex.erased_at is not null, false)
 		from regression_cases c
 		left join run_content rc on rc.ref = c.input_ref
+		left join run_content ex on ex.ref = c.expectations_ref
 		where c.agent_id = $1
 		order by c.created_at, c.case_id`, string(agent))
 	if err != nil {
@@ -99,15 +124,19 @@ func (s *Store) List(ctx context.Context, agent domain.AgentID) ([]domain.Regres
 	var out []domain.RegressionCase
 	for rows.Next() {
 		c := domain.RegressionCase{Agent: agent}
-		var expectations []byte
+		var held heldExpectations
 		var company, area, fromRun, by string
-		if err := rows.Scan(&c.ID, &company, &area, &c.InputRef, &expectations,
-			&fromRun, &c.Note, &by, &c.CreatedAt, &c.Model, &c.Effort, &c.Erased); err != nil {
+		var inputErased bool
+		if err := rows.Scan(&c.ID, &company, &area, &c.InputRef, &held.column,
+			&fromRun, &c.Note, &by, &c.CreatedAt, &c.Model, &c.Effort, &inputErased,
+			&held.ref, &held.found, &held.object, &held.erased); err != nil {
 			return nil, fmt.Errorf("regression: scan case: %w", err)
 		}
-		if err := json.Unmarshal(expectations, &c.Expectations); err != nil {
+		var err error
+		if c.Expectations, err = held.read(); err != nil {
 			return nil, fmt.Errorf("regression: decode expectations of %s: %w", c.ID, err)
 		}
+		c.Erased = inputErased || held.erased
 		c.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
 		c.FromRun, c.CreatedBy = domain.RunID(fromRun), domain.UserID(by)
 		out = append(out, c)
@@ -124,15 +153,24 @@ keep whole does not even match the run it came from, so this is the last moment
 they can be found. Identical input shares one reference, so while another case
 names the copy, it stays and so do the replays. One statement, because a delete
 between the steps would leave exactly what this exists to prevent.
+
+Once versions are on, this no longer erases: an earlier version still names the case,
+because it records what was checked, so the copy and the replays stay until retention
+or a subject erasure takes them.
 */
-func (s *Store) Delete(ctx context.Context, agent domain.AgentID, id string) error {
+func (s *Store) Delete(ctx context.Context, agent domain.AgentID, id string, by domain.UserID) error {
 	return s.Exclusive(ctx, []domain.AgentID{agent}, func(ctx context.Context) error {
-		return s.deleteCase(ctx, agent, id)
+		return s.write(ctx, func(tx pgx.Tx, versioned bool) error {
+			if versioned {
+				return deleteVersioned(ctx, tx, agent, id, by)
+			}
+			return deleteCase(ctx, tx, agent, id)
+		})
 	})
 }
 
-func (s *Store) deleteCase(ctx context.Context, agent domain.AgentID, id string) error {
-	if _, err := s.pool.Exec(ctx, `
+func deleteCase(ctx context.Context, tx pgx.Tx, agent domain.AgentID, id string) error {
+	if _, err := tx.Exec(ctx, `
 		with gone as (
 			delete from regression_cases
 			where agent_id = $1 and case_id = $2
@@ -161,78 +199,4 @@ func (s *Store) deleteCase(ctx context.Context, agent domain.AgentID, id string)
 		return fmt.Errorf("regression: delete %s: %w", id, err)
 	}
 	return nil
-}
-
-// ErasedCases lists every correction whose occurrence is gone, for the notice
-// that tells an author a case has stopped being checked.
-func (s *Store) ErasedCases(ctx context.Context) ([]domain.ErasedCase, error) {
-	rows, err := s.pool.Query(ctx, `
-		select c.agent_id, c.case_id, c.company_id, c.area_id
-		from regression_cases c
-		join run_content rc on rc.ref = c.input_ref
-		where rc.erased_at is not null
-		order by c.agent_id, c.case_id`)
-	if err != nil {
-		return nil, fmt.Errorf("regression: list erased cases: %w", err)
-	}
-	defer rows.Close()
-
-	var out []domain.ErasedCase
-	for rows.Next() {
-		var agent, kase, company, area string
-		if err := rows.Scan(&agent, &kase, &company, &area); err != nil {
-			return nil, fmt.Errorf("regression: scan erased case: %w", err)
-		}
-		out = append(out, domain.ErasedCase{
-			Agent: domain.AgentID(agent), Case: kase,
-			Scope: domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)},
-		})
-	}
-	return out, rows.Err()
-}
-
-/*
-Watching lists the agents that have a corpus at all.
-
-The clock only spends money where there is something to check. An agent with
-no corrections would produce a battery whose report says nothing, at the price
-of a real set of model calls per pass.
-
-The scope comes from the cases, which is where it already is: a correction is
-made in an area and the notice about it has to reach that area's conversation,
-not the installation's.
-*/
-func (s *Store) Watching(ctx context.Context) ([]domain.WatchedCorpus, error) {
-	rows, err := s.pool.Query(ctx, `
-		select c.agent_id, coalesce(st.current_version, ''),
-		       min(c.company_id), min(c.area_id)
-		from regression_cases c
-		left join agent_state st on st.agent_id = c.agent_id
-		group by c.agent_id, st.current_version
-		order by c.agent_id`)
-	if err != nil {
-		return nil, fmt.Errorf("regression: list watched corpora: %w", err)
-	}
-	defer rows.Close()
-
-	var out []domain.WatchedCorpus
-	for rows.Next() {
-		var agent, version, company, area string
-		if err := rows.Scan(&agent, &version, &company, &area); err != nil {
-			return nil, fmt.Errorf("regression: scan watched corpus: %w", err)
-		}
-		// An agent with no current version has never been published, so
-		// there is nothing to have drifted.
-		if version == "" {
-			continue
-		}
-		out = append(out, domain.WatchedCorpus{
-			Agent:   domain.AgentID(agent),
-			Version: domain.VersionID(version),
-			Scope: domain.Scope{
-				Company: domain.CompanyID(company), Area: domain.AreaID(area),
-			},
-		})
-	}
-	return out, rows.Err()
 }

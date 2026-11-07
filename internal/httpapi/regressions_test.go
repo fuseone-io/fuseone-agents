@@ -38,7 +38,9 @@ func (f *fakeCorpus) List(gocontext.Context, domain.AgentID) ([]domain.Regressio
 	return f.listed, nil
 }
 
-func (f *fakeCorpus) Delete(gocontext.Context, domain.AgentID, string) error { return nil }
+func (f *fakeCorpus) Delete(gocontext.Context, domain.AgentID, string, domain.UserID) error {
+	return nil
+}
 
 func (f *fakeCorpus) Hold(
 	ctx gocontext.Context, _ domain.AgentID, inside func(gocontext.Context) error,
