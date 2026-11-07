@@ -31,14 +31,37 @@ func (s *policyStore) Named(_ context.Context, code string) (domain.Policy, erro
 	return domain.Policy{}, policy.ErrNoPolicy
 }
 
-func (s *policyStore) Put(_ context.Context, p domain.Policy, _ domain.UserID) (policy.Set, error) {
+// Judges If-Match as the real one does, so a handler test cannot pass on a fake more
+// permissive than Postgres. The race itself is the real store's test.
+func (s *policyStore) Put(_ context.Context, p domain.Policy, _ domain.UserID, expect domain.IfMatch) (policy.Written, error) {
+	current, exists := s.revision(p.Code)
+	if !expect.Allows(exists, current) {
+		return policy.Written{}, &domain.StaleError{Current: current}
+	}
+	revision := policy.RevisionOf(p)
+	if current == revision {
+		return policy.Written{Set: policy.Set{Hash: "pol_same"}, Revision: revision}, nil
+	}
 	s.written = p
+	return policy.Written{Set: policy.Set{Hash: "pol_after"}, Revision: revision, Changed: true}, nil
+}
+
+func (s *policyStore) Delete(_ context.Context, code string, expect domain.IfMatch) (policy.Set, error) {
+	current, exists := s.revision(code)
+	if !expect.Allows(exists, current) {
+		return policy.Set{}, &domain.StaleError{Current: current}
+	}
+	s.deleted = code
 	return policy.Set{Hash: "pol_after"}, nil
 }
 
-func (s *policyStore) Delete(_ context.Context, code string) (policy.Set, error) {
-	s.deleted = code
-	return policy.Set{Hash: "pol_after"}, nil
+func (s *policyStore) revision(code string) (domain.Revision, bool) {
+	for _, p := range s.set.Policies {
+		if p.Code == code {
+			return policy.RevisionOf(p), true
+		}
+	}
+	return "", false
 }
 
 func written(over func(*openapi.PolicyInput)) *openapi.PutPolicyJSONRequestBody {
@@ -103,8 +126,8 @@ func TestPutPolicy_asACurator_storesTheRuleAndReturnsTheNewHash(t *testing.T) {
 	}
 
 	got := resp.(openapi.PutPolicy200JSONResponse)
-	if got.PolicyHash != "pol_after" {
-		t.Errorf("hash = %q, want the set's new name", got.PolicyHash)
+	if got.Body.PolicyHash != "pol_after" {
+		t.Errorf("hash = %q, want the set's new name", got.Body.PolicyHash)
 	}
 	if store.written.Code != "POL-114" || len(store.written.Conditions) != 1 {
 		t.Errorf("stored = %+v, want the rule as written", store.written)
@@ -113,8 +136,8 @@ func TestPutPolicy_asACurator_storesTheRuleAndReturnsTheNewHash(t *testing.T) {
 	// line from them. The server used to compose that sentence too, which was
 	// two renderings of one structure and, being prose in a binary, arrived in
 	// one language for every reader.
-	if got.Policy.Resource == nil || *got.Policy.Resource == "" || got.Policy.Effect == "" {
-		t.Errorf("policy = %+v, want the fields a sentence is rendered from", got.Policy)
+	if got.Body.Policy.Resource == nil || *got.Body.Policy.Resource == "" || got.Body.Policy.Effect == "" {
+		t.Errorf("policy = %+v, want the fields a sentence is rendered from", got.Body.Policy)
 	}
 }
 
@@ -201,5 +224,36 @@ func TestSimulatePolicy_beforeTheRuleIsNamed_stillAnswers(t *testing.T) {
 	}
 	if got.Considered == 0 {
 		t.Error("nothing was considered, so nothing was replayed")
+	}
+}
+
+// What is judged first says what a refusal can reveal: somebody holding no authority learns
+// nothing about the resource from If-Match, and a request that could never be stored is told
+// that rather than sent off to read again.
+func TestPutPolicy_ifMatch_isJudgedAfterAuthorityAndValidation(t *testing.T) {
+	t.Parallel()
+	store := &policyStore{set: policy.Set{Policies: []domain.Policy{{Code: "POL-1", Name: "x"}}}}
+	server := NewServer(ledger.NewMemory(), "test").WithPolicies(store)
+	stale := `"v1-old"`
+
+	refused, err := server.PutPolicy(inArea("cx", domain.RoleAuditor), openapi.PutPolicyRequestObject{
+		Code: "POL-1", Params: openapi.PutPolicyParams{IfMatch: &stale}, Body: written(nil),
+	})
+	if err != nil {
+		t.Fatalf("PutPolicy: %v", err)
+	}
+	if _, ok := refused.(openapi.PutPolicy403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("no authority = %T, want 403", refused)
+	}
+
+	invalid, err := server.PutPolicy(as(domain.RoleCurator), openapi.PutPolicyRequestObject{
+		Code: "POL-1", Params: openapi.PutPolicyParams{IfMatch: &stale},
+		Body: written(func(in *openapi.PolicyInput) { in.Name = "" }),
+	})
+	if err != nil {
+		t.Fatalf("PutPolicy: %v", err)
+	}
+	if _, ok := invalid.(openapi.PutPolicy400ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("an unstorable rule = %T, want 400", invalid)
 	}
 }

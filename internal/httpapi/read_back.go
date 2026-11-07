@@ -117,7 +117,10 @@ func (s *Server) GetPolicy(ctx context.Context, req openapi.GetPolicyRequestObje
 	if err != nil {
 		return nil, fmt.Errorf("get policy: %w", err)
 	}
-	return openapi.GetPolicy200JSONResponse(policyFrom(found)), nil
+	return openapi.GetPolicy200JSONResponse{
+		Body:    policyFrom(found),
+		Headers: openapi.GetPolicy200ResponseHeaders{ETag: string(policy.RevisionOf(found))},
+	}, nil
 }
 
 func applyCredentialSummary(out *openapi.MCPServer, summary *domain.MCPCredentialSummary) {

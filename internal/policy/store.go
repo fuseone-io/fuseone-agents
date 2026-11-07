@@ -40,62 +40,6 @@ type Set struct {
 	TakenAt  time.Time
 }
 
-// Put writes one policy and takes a new snapshot in the same transaction.
-//
-// Together, always. A policy that reached the table without a snapshot would
-// be enforced under a hash describing a set it is not in, and the trail would
-// point at the wrong rules for every decision until the next write.
-func (s *Store) Put(ctx context.Context, p domain.Policy, by domain.UserID) (Set, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return Set{}, fmt.Errorf("policy: begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	scopes, conditions, effects, err := encode(p)
-	if err != nil {
-		return Set{}, err
-	}
-
-	// The company and area columns are left at their defaults: in phase 1 every
-	// policy is filed at the installation and reach is what narrows it. They
-	// exist so multi-company does not need a migration on this table.
-	if _, err := tx.Exec(ctx, `
-		insert into policies (code, name, owner, reason,
-		                      resource, effects, reach, scopes, agents,
-		                      conditions, effect, mode, enabled, updated_by)
-		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-		on conflict (code) do update set
-			name = excluded.name, owner = excluded.owner, reason = excluded.reason,
-			resource = excluded.resource, effects = excluded.effects,
-			reach = excluded.reach, scopes = excluded.scopes, agents = excluded.agents,
-			conditions = excluded.conditions, effect = excluded.effect,
-			mode = excluded.mode, enabled = excluded.enabled,
-			updated_at = now(), updated_by = excluded.updated_by`,
-		p.Code, p.Name, p.Owner, p.Reason,
-		p.Resource, effects, string(p.Reach), scopes, agentIDs(p.Agents),
-		conditions, string(p.Effect), string(p.Mode), p.Enabled, string(by),
-	); err != nil {
-		return Set{}, fmt.Errorf("policy: write %s: %w", p.Code, err)
-	}
-
-	return s.snapshot(ctx, tx)
-}
-
-// Delete removes a policy and snapshots what is left.
-func (s *Store) Delete(ctx context.Context, code string) (Set, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return Set{}, fmt.Errorf("policy: begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if _, err := tx.Exec(ctx, `delete from policies where code = $1`, code); err != nil {
-		return Set{}, fmt.Errorf("policy: delete %s: %w", code, err)
-	}
-	return s.snapshot(ctx, tx)
-}
-
 // Active reads what is in force now, with the hash that names it — and takes
 // a snapshot if that hash has none.
 //
@@ -183,34 +127,6 @@ func (s *Store) Snapshot(ctx context.Context, hash string) (Set, error) {
 		return Set{}, fmt.Errorf("policy: decode snapshot %s: %w", hash, err)
 	}
 	return Set{Hash: hash, Policies: policies, TakenAt: takenAt.UTC()}, nil
-}
-
-// snapshot records the current set inside the caller's transaction.
-func (s *Store) snapshot(ctx context.Context, tx pgx.Tx) (Set, error) {
-	policies, err := readAll(ctx, tx)
-	if err != nil {
-		return Set{}, err
-	}
-
-	hash := HashOf(policies)
-	encoded, err := json.Marshal(policies)
-	if err != nil {
-		return Set{}, fmt.Errorf("policy: encode snapshot: %w", err)
-	}
-
-	// The same set twice is the same snapshot. Editing a policy back to what
-	// it was returns to the hash it had, which is correct: the rules in force
-	// are identical and a decision under either is the same decision.
-	if _, err := tx.Exec(ctx, `
-		insert into policy_snapshots (policy_hash, policies)
-		values ($1, $2)
-		on conflict (policy_hash) do nothing`, hash, encoded); err != nil {
-		return Set{}, fmt.Errorf("policy: take snapshot: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return Set{}, fmt.Errorf("policy: commit: %w", err)
-	}
-	return Set{Hash: hash, Policies: policies}, nil
 }
 
 // HashOf names a set of policies.

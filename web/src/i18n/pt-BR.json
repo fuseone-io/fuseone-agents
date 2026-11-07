@@ -2388,6 +2388,7 @@
     "invalid-input": "O pedido não pôde ser aceito: {{detail}}",
     "not-found": "Não encontrado: {{detail}}",
     "not-signed-in": "Sua sessão terminou. Entre de novo.",
+    "precondition-failed": "Alguém alterou isto depois da leitura, então nada foi salvo. Leia de novo e decida com o que está lá agora.",
     "not-simulated": "Um agente sai de Rascunho sendo executado contra ocorrências que já aconteceram. Simule antes.",
     "not-stored": "Não foi possível gravar: {{detail}}",
     "saved-not-reachable": "Gravado, mas ninguém consegue entrar por ele ainda: {{detail}}",

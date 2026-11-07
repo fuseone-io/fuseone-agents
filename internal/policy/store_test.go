@@ -1,7 +1,9 @@
 package policy_test
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -42,7 +44,7 @@ func rule(code string, over func(*domain.Policy)) domain.Policy {
 func TestPut_takesASnapshotThatCanBeFetchedBack(t *testing.T) {
 	store := storeFor(t)
 
-	set, err := store.Put(t.Context(), rule("POL-114", nil), "usr_ana")
+	set, err := store.Put(t.Context(), rule("POL-114", nil), "usr_ana", domain.IfMatch{})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -67,13 +69,13 @@ func TestPut_takesASnapshotThatCanBeFetchedBack(t *testing.T) {
 func TestPut_changingAPolicy_leavesTheOldSnapshotReadable(t *testing.T) {
 	store := storeFor(t)
 
-	before, err := store.Put(t.Context(), rule("POL-114", nil), "usr_ana")
+	before, err := store.Put(t.Context(), rule("POL-114", nil), "usr_ana", domain.IfMatch{})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 	after, err := store.Put(t.Context(), rule("POL-114", func(p *domain.Policy) {
 		p.Effect = domain.PolicyEscalate
-	}), "usr_ana")
+	}), "usr_ana", domain.IfMatch{})
 	if err != nil {
 		t.Fatalf("Put again: %v", err)
 	}
@@ -96,13 +98,13 @@ func TestPut_changingAPolicy_leavesTheOldSnapshotReadable(t *testing.T) {
 func TestPut_editingBackToWhatItWas_returnsToTheSameHash(t *testing.T) {
 	store := storeFor(t)
 
-	first, _ := store.Put(t.Context(), rule("POL-114", nil), "usr_ana")
+	first, _ := store.Put(t.Context(), rule("POL-114", nil), "usr_ana", domain.IfMatch{})
 	if _, err := store.Put(t.Context(), rule("POL-114", func(p *domain.Policy) {
 		p.Effect = domain.PolicyAllow
-	}), "usr_ana"); err != nil {
+	}), "usr_ana", domain.IfMatch{}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	back, err := store.Put(t.Context(), rule("POL-114", nil), "usr_ana")
+	back, err := store.Put(t.Context(), rule("POL-114", nil), "usr_ana", domain.IfMatch{})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -117,10 +119,10 @@ func TestPut_editingBackToWhatItWas_returnsToTheSameHash(t *testing.T) {
 func TestActive_hashDoesNotMoveWhenNothingChanged(t *testing.T) {
 	store := storeFor(t)
 
-	if _, err := store.Put(t.Context(), rule("POL-200", nil), "usr_ana"); err != nil {
+	if _, err := store.Put(t.Context(), rule("POL-200", nil), "usr_ana", domain.IfMatch{}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	if _, err := store.Put(t.Context(), rule("POL-100", nil), "usr_ana"); err != nil {
+	if _, err := store.Put(t.Context(), rule("POL-100", nil), "usr_ana", domain.IfMatch{}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
@@ -159,10 +161,10 @@ func TestActive_anInstallationWithNoPolicies_stillHasAHash(t *testing.T) {
 func TestDelete_snapshotsWhatIsLeft(t *testing.T) {
 	store := storeFor(t)
 
-	if _, err := store.Put(t.Context(), rule("POL-114", nil), "usr_ana"); err != nil {
+	if _, err := store.Put(t.Context(), rule("POL-114", nil), "usr_ana", domain.IfMatch{}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	set, err := store.Delete(t.Context(), "POL-114")
+	set, err := store.Delete(t.Context(), "POL-114", domain.IfMatch{})
 	if err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
@@ -198,7 +200,7 @@ func TestPut_roundTripsEveryFieldTheGateReads(t *testing.T) {
 		p.Agents = []domain.AgentID{"triage"}
 		p.Mode = domain.PolicyMonitor
 	})
-	set, err := store.Put(t.Context(), written, "usr_ana")
+	set, err := store.Put(t.Context(), written, "usr_ana", domain.IfMatch{})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -230,7 +232,7 @@ func TestPut_roundTripsEveryFieldTheGateReads(t *testing.T) {
 func TestActive_hashWithNoSnapshotBehindIt_takesOne(t *testing.T) {
 	store := storeFor(t)
 
-	if _, err := store.Put(t.Context(), rule("POL-114", nil), "usr_ana"); err != nil {
+	if _, err := store.Put(t.Context(), rule("POL-114", nil), "usr_ana", domain.IfMatch{}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
@@ -250,5 +252,245 @@ func TestActive_hashWithNoSnapshotBehindIt_takesOne(t *testing.T) {
 	}
 	if _, err := store.Snapshot(t.Context(), set.Hash); err != nil {
 		t.Errorf("the hash Active reported has no snapshot behind it: %v", err)
+	}
+}
+
+func mustIfMatch(t *testing.T, header string) domain.IfMatch {
+	t.Helper()
+	parsed, err := domain.ParseIfMatch(&header)
+	if err != nil {
+		t.Fatalf("ParseIfMatch: %v", err)
+	}
+	return parsed
+}
+
+func TestRevisionOf_absentAndEmptyListsAreTheSameRule(t *testing.T) {
+	t.Parallel()
+	bare := rule("POL-1", nil)
+	bare.Effects, bare.Scopes, bare.Agents, bare.Conditions = nil, nil, nil, nil
+	empty := bare
+	empty.Effects, empty.Scopes, empty.Agents, empty.Conditions =
+		[]domain.Effect{}, []domain.Scope{}, []domain.AgentID{}, []domain.Condition{}
+	if policy.RevisionOf(bare) != policy.RevisionOf(empty) {
+		t.Fatal("the same rule has two revisions")
+	}
+}
+
+func TestPut_whatIsAlreadyStored_changesNothing(t *testing.T) {
+	store := storeFor(t)
+	ctx := context.Background()
+	full := rule("POL-1", func(p *domain.Policy) {
+		p.Effects = []domain.Effect{domain.EffectWrite}
+		p.Conditions = []domain.Condition{{Field: "amount", Op: domain.OpEquals, Value: "10"}}
+		p.Reach, p.Agents = domain.ReachAgents, []domain.AgentID{"a"}
+	})
+	first, err := store.Put(ctx, full, "usr_a", domain.IfMatch{})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if !first.Changed || first.Revision == "" {
+		t.Fatalf("first write = %+v", first)
+	}
+	before := policyRowState(t, "POL-1")
+
+	again, err := store.Put(ctx, full, "usr_b", domain.IfMatch{})
+	if err != nil {
+		t.Fatalf("Put again: %v", err)
+	}
+
+	if again.Changed || again.Revision != first.Revision || again.Hash != first.Hash {
+		t.Fatalf("again = %+v, first = %+v", again, first)
+	}
+	if after := policyRowState(t, "POL-1"); after != before {
+		t.Fatalf("the row moved: %s, then %s", before, after)
+	}
+}
+
+// updated_at, updated_by and the count of snapshots: what a real write moves.
+func policyRowState(t *testing.T, code string) string {
+	t.Helper()
+	var state string
+	if err := testdb.Pool(t).QueryRow(context.Background(), `
+		select p.updated_at::text || '|' || p.updated_by || '|' ||
+		       (select count(*) from policy_snapshots)::text
+		from policies p where p.code = $1`, code).Scan(&state); err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	return state
+}
+
+// A rule a snapshot does not name would be enforced under a hash that cannot be fetched,
+// and the no-op must not depend on the write that would have taken it.
+func TestPut_noChangeOnASetWithNoSnapshot_stillAnswersItsHash(t *testing.T) {
+	store := storeFor(t)
+	ctx := context.Background()
+	p := rule("POL-1", nil)
+	if _, err := store.Put(ctx, p, "usr_a", domain.IfMatch{}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, err := store.Exec(ctx, `delete from policy_snapshots`); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+
+	again, err := store.Put(ctx, p, "usr_a", domain.IfMatch{})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	active, err := store.Active(ctx)
+	if err != nil {
+		t.Fatalf("Active: %v", err)
+	}
+	if again.Hash != active.Hash {
+		t.Fatalf("hash = %s, active = %s", again.Hash, active.Hash)
+	}
+	if _, err := store.Snapshot(ctx, again.Hash); err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+}
+
+func TestPut_ifMatch_decidesOnWhatIsThere(t *testing.T) {
+	store := storeFor(t)
+	ctx := context.Background()
+	first, err := store.Put(ctx, rule("POL-1", nil), "usr_a", domain.IfMatch{})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	changed := rule("POL-1", func(p *domain.Policy) { p.Name = "changed" })
+
+	var stale *domain.StaleError
+	_, err = store.Put(ctx, changed, "usr_a", mustIfMatch(t, `"v1-old"`))
+	if !errors.As(err, &stale) || stale.Current != first.Revision {
+		t.Fatalf("stale write = %v", err)
+	}
+	if got, _ := store.Named(ctx, "POL-1"); got.Name == "changed" {
+		t.Fatal("a refused write was stored")
+	}
+
+	_, err = store.Put(ctx, rule("POL-NEW", nil), "usr_a", mustIfMatch(t, `*`))
+	if !errors.As(err, &stale) || stale.Current != "" {
+		t.Fatalf("star on nothing = %v", err)
+	}
+	if _, err := store.Named(ctx, "POL-NEW"); !errors.Is(err, policy.ErrNoPolicy) {
+		t.Fatalf("it was created: %v", err)
+	}
+
+	written, err := store.Put(ctx, changed, "usr_a", mustIfMatch(t, string(first.Revision)))
+	if err != nil || !written.Changed || written.Revision == first.Revision {
+		t.Fatalf("a current write = %+v, %v", written, err)
+	}
+}
+
+// If-Match is judged before the no-op: a client that named an old revision is told so,
+// even if what it sent happens to be what is there.
+func TestPut_staleButIdentical_isStillRefused(t *testing.T) {
+	store := storeFor(t)
+	p := rule("POL-1", nil)
+	if _, err := store.Put(context.Background(), p, "usr_a", domain.IfMatch{}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	var stale *domain.StaleError
+	if _, err := store.Put(context.Background(), p, "usr_a", mustIfMatch(t, `"v1-old"`)); !errors.As(err, &stale) {
+		t.Fatalf("Put = %v, want it refused", err)
+	}
+}
+
+func TestDelete_ifMatch_decidesOnWhatIsThere(t *testing.T) {
+	store := storeFor(t)
+	ctx := context.Background()
+	first, err := store.Put(ctx, rule("POL-1", nil), "usr_a", domain.IfMatch{})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	var stale *domain.StaleError
+	if _, err := store.Delete(ctx, "POL-1", mustIfMatch(t, `"v1-old"`)); !errors.As(err, &stale) {
+		t.Fatalf("stale delete = %v", err)
+	}
+	if _, err := store.Named(ctx, "POL-1"); err != nil {
+		t.Fatalf("a refused delete removed it: %v", err)
+	}
+	if _, err := store.Delete(ctx, "POL-NOBODY", mustIfMatch(t, `*`)); !errors.As(err, &stale) {
+		t.Fatalf("star on nothing = %v", err)
+	}
+	if _, err := store.Delete(ctx, "POL-1", mustIfMatch(t, string(first.Revision))); err != nil {
+		t.Fatalf("a current delete = %v", err)
+	}
+	if _, err := store.Named(ctx, "POL-1"); !errors.Is(err, policy.ErrNoPolicy) {
+		t.Fatalf("Named = %v", err)
+	}
+}
+
+const holdPolicy = `select 1 from policies where code = $1 for update`
+
+func tally(t *testing.T, results []error) (won, refused int) {
+	t.Helper()
+	for _, err := range results {
+		var stale *domain.StaleError
+		switch {
+		case err == nil:
+			won++
+		case errors.As(err, &stale):
+			refused++
+		default:
+			t.Fatalf("write: %v", err)
+		}
+	}
+	return won, refused
+}
+
+// The race the header exists for. Without the guard, both read the same revision, both
+// pass, and the second silently replaces the first.
+func TestPut_twoWritersWithOneRevision_exactlyOneWins(t *testing.T) {
+	store := storeFor(t)
+	ctx := context.Background()
+	first, err := store.Put(ctx, rule("POL-1", nil), "usr_a", domain.IfMatch{})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	expect := mustIfMatch(t, string(first.Revision))
+
+	const count = 6
+	contention := testdb.NewContention(t, count)
+	racing := policy.NewStore(contention.Pool)
+	writers := make([]func() error, count)
+	for i := range writers {
+		writers[i] = func() error {
+			_, err := racing.Put(ctx, rule("POL-1", func(p *domain.Policy) {
+				p.Name = fmt.Sprintf("writer %d", i)
+			}), "usr_a", expect)
+			return err
+		}
+	}
+
+	won, refused := tally(t, contention.Overlap(t, holdPolicy, []any{"POL-1"}, writers))
+	if won != 1 || refused != count-1 {
+		t.Fatalf("won %d and refused %d of %d", won, refused, count)
+	}
+}
+
+// Once the row is gone there is nothing left to lock. A writer that read it before the
+// delete would otherwise bring back a rule somebody just removed.
+func TestPut_racingADelete_exactlyOneWins(t *testing.T) {
+	store := storeFor(t)
+	ctx := context.Background()
+	first, err := store.Put(ctx, rule("POL-1", nil), "usr_a", domain.IfMatch{})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	expect := mustIfMatch(t, string(first.Revision))
+
+	contention := testdb.NewContention(t, 2)
+	racing := policy.NewStore(contention.Pool)
+	won, refused := tally(t, contention.Overlap(t, holdPolicy, []any{"POL-1"}, []func() error{
+		func() error {
+			_, err := racing.Delete(ctx, "POL-1", expect)
+			return err
+		},
+		func() error {
+			_, err := racing.Put(ctx, rule("POL-1", func(p *domain.Policy) { p.Name = "changed" }), "usr_a", expect)
+			return err
+		},
+	}))
+	if won != 1 || refused != 1 {
+		t.Fatalf("won %d and refused %d", won, refused)
 	}
 }
