@@ -35,7 +35,7 @@ func seedCorpus(t *testing.T, pool *pgxpool.Pool) {
 		        '2026-01-03 00:00:00+00', '2026-02-01 00:00:00+00', 'subject');
 		insert into regression_cases (agent_id, case_id, company_id, area_id, input_ref, from_run, expectations)
 		values ('suporte', 'reg-1', 'acme', 'cx', 'regression://suporte/1/one', 'run-1',
-		        '[{"kind":"says","value":"ana@example.com"}]'),
+		        '[{"kind":"never_calls","value":"ana@example.com"}]'),
 		       ('suporte', 'reg-2', 'acme', 'cx', 'regression://suporte/1/two', 'run-2', '[]');
 	`); err != nil {
 		t.Fatalf("seed: %v", err)

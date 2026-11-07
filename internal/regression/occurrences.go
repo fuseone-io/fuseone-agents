@@ -56,6 +56,9 @@ func (c *Corpus) Occurrences(
 
 	out := make([]simulate.Occurrence, 0, len(cases))
 	for _, one := range cases {
+		if one.Erased {
+			continue
+		}
 		input, err := c.content.Get(ctx, one.InputRef)
 		if errors.Is(err, domain.ErrContentErased) {
 			continue

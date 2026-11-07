@@ -133,7 +133,7 @@ func TestDelete_removesOnlyThatCase(t *testing.T) {
 			t.Fatalf("Record: %v", err)
 		}
 	}
-	if err := store.Delete(ctx, "suporte", "reg-1"); err != nil {
+	if err := store.Delete(ctx, "suporte", "reg-1", "usr_ana"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
@@ -161,7 +161,7 @@ func TestDelete_erasesTheCopyOfTheOccurrence(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	if err := store.Delete(ctx, "suporte", "reg-1"); err != nil {
+	if err := store.Delete(ctx, "suporte", "reg-1", "usr_ana"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
@@ -189,7 +189,7 @@ func TestDelete_keepsACopyAnotherCaseStillNames(t *testing.T) {
 		}
 	}
 
-	if err := store.Delete(ctx, "suporte", "reg-1"); err != nil {
+	if err := store.Delete(ctx, "suporte", "reg-1", "usr_ana"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
@@ -434,7 +434,7 @@ func TestDelete_takesTheReplaysOfATruncatedInput(t *testing.T) {
 	}
 	replayed := replayHolding(t, pool, limited, kept)
 
-	if err := store.Delete(ctx, "suporte", "reg-1"); err != nil {
+	if err := store.Delete(ctx, "suporte", "reg-1", "usr_ana"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
@@ -458,7 +458,7 @@ func TestDelete_waitsForACopyInProgress(t *testing.T) {
 		})
 	}()
 	<-entered
-	go func() { deleted <- store.Delete(ctx, "suporte", "reg-1") }()
+	go func() { deleted <- store.Delete(ctx, "suporte", "reg-1", "usr_ana") }()
 
 	select {
 	case err := <-deleted:
@@ -610,7 +610,7 @@ func TestDelete_takesTheRunsThatReplayedTheCase(t *testing.T) {
 		t.Fatalf("Put: %v", err)
 	}
 
-	if err := store.Delete(ctx, "suporte", "reg-1"); err != nil {
+	if err := store.Delete(ctx, "suporte", "reg-1", "usr_ana"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
