@@ -266,3 +266,35 @@ func pinOfBattery(t *testing.T, store *ledger.Memory, simulation string) int64 {
 	}
 	return started.DatasetVersion
 }
+
+// Two runs of one case in a battery, as a rollout between two key formats opens them.
+// The start gate is what this protects: the run that broke must stop the start, whichever
+// the ledger holds last.
+func TestSetAgentPaused_twoRunsOfOneCaseThatDisagree_startIsRefused(t *testing.T) {
+	t.Parallel()
+	for name, broken := range map[string]domain.RunID{"first": "run-a", "last": "run-b"} {
+		t.Run("the broken one "+name, func(t *testing.T) {
+			t.Parallel()
+			store := ledger.NewMemory()
+			for _, run := range []domain.RunID{"run-a", "run-b"} {
+				appendTo(t, store, run, "v2", domain.StepRunStarted, domain.RunStartedPayload{
+					Trigger: "simulation", Simulated: true, Simulation: "sim-9", Case: "estorno",
+				})
+				if run != broken {
+					withTool("crm.lookup")(t, store, run, "v2")
+				}
+				appendTo(t, store, run, "v2", domain.StepRunFinished,
+					domain.RunFinishedPayload{Outcome: "answered"})
+			}
+
+			resp, err := gated(t, store, brokenCorpus("estorno")).SetAgentPaused(
+				inArea("cx", domain.RoleAuthor), startAgent(false))
+			if err != nil {
+				t.Fatalf("SetAgentPaused: %v", err)
+			}
+			if _, ok := resp.(openapi.SetAgentPaused409ApplicationProblemPlusJSONResponse); !ok {
+				t.Fatalf("response = %T, want it refused", resp)
+			}
+		})
+	}
+}

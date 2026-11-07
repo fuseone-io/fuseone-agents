@@ -159,6 +159,11 @@ func standings(r Report) map[string]standing {
 		if len(c.Unmet) > 0 {
 			stood = Broke
 		}
+		// Two runs of one case, read with no corpus to reduce them. Either one breaking
+		// means it did not hold.
+		if seen, ran := out[c.ID]; ran && seen.standing == Broke {
+			continue
+		}
 		out[c.ID] = standing{standing: stood, cost: c.Cost, steps: c.Steps, expected: c.Expected}
 	}
 	return out

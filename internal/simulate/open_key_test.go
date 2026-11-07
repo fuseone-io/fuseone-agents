@@ -2,6 +2,7 @@ package simulate_test
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"sync"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/simulate"
+	"github.com/fuseone/agents/internal/trigger"
 )
 
 func casesOf(ids ...string) []simulate.Occurrence {
@@ -155,5 +157,71 @@ func TestOpen_theSameBatchAgain_opensNothingNew(t *testing.T) {
 				t.Errorf("runs = %d, want 2", len(got))
 			}
 		})
+	}
+}
+
+func appendStep(t *testing.T, store *ledger.Memory, run domain.RunID, kind domain.StepKind, payload any) {
+	t.Helper()
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	if _, err := store.Append(context.Background(), domain.Step{
+		RunID: run, Kind: kind, AgentID: "suporte", VersionID: "v1", Payload: raw,
+		Scope: domain.Scope{Company: "acme", Area: "cx"},
+	}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+}
+
+/*
+A pod of the previous release and a pod of this one open one window. Their keys differ, so
+"estorno" gets two runs, through the real opener. The first reaches the tool and the second
+does not, in either order, and the case must read as broken: judging only one of them would
+let an agent start on a correction that just failed.
+*/
+func TestBattery_anOldKeyAndANewKeyWithDifferentResults_readAsBroken(t *testing.T) {
+	t.Parallel()
+	for _, heldFirst := range []bool{true, false} {
+		store := ledger.NewMemory()
+		opener := openerFor(store, engine.NewMemoryContent())
+		ctx := context.Background()
+
+		old, err := opener.Open(ctx, trigger.Request{
+			Agent: "triage", IdemKey: "sim:battery:1", Trigger: "simulation", By: "platform",
+			Simulation: "battery", Case: "estorno", Input: []byte(`{}`),
+		})
+		if err != nil {
+			t.Fatalf("Open with the previous key: %v", err)
+		}
+		opened, err := simulate.Open(ctx, opener, simulate.Batch{
+			ID: "battery", Agent: "triage", By: "platform", Cases: casesOf("estorno"),
+		})
+		if err != nil || len(opened.Runs) != 1 || opened.Runs[0] == old.RunID {
+			t.Fatalf("opened = %+v, err = %v, want a second run", opened, err)
+		}
+
+		reached := old.RunID
+		if !heldFirst {
+			reached = opened.Runs[0]
+		}
+		appendStep(t, store, reached, domain.StepGateDecided, domain.GateDecidedPayload{
+			Tool: "crm.lookup", Effect: domain.EffectRead, Verdict: domain.VerdictAllow,
+		})
+		appendStep(t, store, reached, domain.StepToolCalled, domain.ToolCalledPayload{})
+		for _, run := range []domain.RunID{old.RunID, opened.Runs[0]} {
+			appendStep(t, store, run, domain.StepRunFinished, domain.RunFinishedPayload{Outcome: "answered"})
+		}
+
+		report, err := simulate.Gather(ctx, store, "battery")
+		if err != nil {
+			t.Fatalf("Gather: %v", err)
+		}
+		got := simulate.Battery(report, []domain.RegressionCase{{
+			ID: "estorno", Expectations: []domain.Expectation{{Kind: domain.ExpectCalls, Value: "crm.lookup"}},
+		}})
+		if got.Broken != 1 || got.Held != 0 {
+			t.Errorf("heldFirst=%v: broken = %d, held = %d, want it broken", heldFirst, got.Broken, got.Held)
+		}
 	}
 }

@@ -20,15 +20,15 @@ func Battery(report Report, corpus []domain.RegressionCase) Report {
 		return report
 	}
 
-	rows := make(map[string]int, len(report.Cases))
-	for i, c := range report.Cases {
+	out := report
+	out.Cases = oneRowPerCase(report.Cases, corpus)
+	rows := make(map[string]int, len(out.Cases))
+	for i, c := range out.Cases {
 		if c.ID != "" {
 			rows[c.ID] = i
 		}
 	}
 
-	out := report
-	out.Cases = append([]Case(nil), report.Cases...)
 	out.Held, out.Broken, out.Drifted, out.Erased = 0, 0, 0, 0
 
 	for _, corrected := range corpus {
@@ -81,4 +81,49 @@ func Battery(report Report, corpus []domain.RegressionCase) Report {
 		}
 	}
 	return out
+}
+
+/*
+oneRowPerCase reduces a battery to one row for each case, the worst of its runs.
+
+A case can have two: a pod of the previous release keys a battery's runs by position and a
+pod of this one by case, so during a rollout they can open one window twice. The runs can
+disagree, and judging either one alone could report as held a case that just broke, and let
+an agent start. So a case holds only if every run of it did. Both were paid for, so the row
+keeps what both cost. A case with no name is its own row.
+*/
+func oneRowPerCase(cases []Case, corpus []domain.RegressionCase) []Case {
+	expected := make(map[string][]domain.Expectation, len(corpus))
+	for _, c := range corpus {
+		expected[c.ID] = c.Expectations
+	}
+	out := make([]Case, 0, len(cases))
+	at := make(map[string]int, len(cases))
+	for _, c := range cases {
+		first, seen := at[c.ID]
+		if c.ID == "" || !seen {
+			at[c.ID] = len(out)
+			out = append(out, c)
+			continue
+		}
+		worse := out[first]
+		if weight(c, expected[c.ID]) > weight(worse, expected[c.ID]) {
+			worse = c
+		}
+		worse.Cost = out[first].Cost.Add(c.Cost)
+		out[first] = worse
+	}
+	return out
+}
+
+// weight orders the runs of one case: one that broke, then one still going, then the rest.
+func weight(c Case, expected []domain.Expectation) int {
+	switch {
+	case len(Check(c, expected)) > 0:
+		return 2
+	case c.Settled == SettledUnsettled:
+		return 1
+	default:
+		return 0
+	}
 }
