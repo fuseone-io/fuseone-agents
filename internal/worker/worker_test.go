@@ -807,6 +807,7 @@ func TestTurn_leaseLost_cancelsTheTurnAndWalksAwayQuietly(t *testing.T) {
 		p := newGatedPlanner() // nothing closes release: only a cancel can end the plan
 		w := newFencedWorker(t, Config{Lease: 60 * time.Millisecond}, p, q, store)
 		openRun(t, store)
+		start := time.Now()
 
 		worked, err := w.turn(context.Background(), slog.New(slog.DiscardHandler))
 		if err != nil {
@@ -814,6 +815,11 @@ func TestTurn_leaseLost_cancelsTheTurnAndWalksAwayQuietly(t *testing.T) {
 		}
 		if !worked {
 			t.Fatal("turn reported no work after claiming the run")
+		}
+		// The answer that says the lease is gone ends the turn there and then,
+		// not whenever the guard next looks.
+		if took := time.Since(start); took != 20*time.Millisecond {
+			t.Errorf("cancelled after %v, want the first renewal's answer at 20ms", took)
 		}
 
 		select {
@@ -974,6 +980,7 @@ func TestTurn_renewalCannotProveTheLease_turnIsCancelledBeforeExpiry(t *testing.
 		p := newGatedPlanner() // only a cancel can end the plan
 		w := newFencedWorker(t, Config{Lease: 90 * time.Millisecond}, p, q, store)
 		openRun(t, store)
+		start := time.Now()
 
 		done := make(chan error, 1)
 		go func() {
@@ -988,6 +995,11 @@ func TestTurn_renewalCannotProveTheLease_turnIsCancelledBeforeExpiry(t *testing.
 			}
 		case <-time.After(5 * time.Second):
 			t.Fatal("the turn kept running on a lease it could not prove")
+		}
+		// Two refusals at 30ms and 60ms: one missed beat is survivable, the second
+		// is not, and it does not wait for the guard at 75ms.
+		if took := time.Since(start); took != 60*time.Millisecond {
+			t.Errorf("cancelled after %v, want the second failure at 60ms", took)
 		}
 		select {
 		case <-p.sawCancel:
@@ -1035,6 +1047,7 @@ func TestTurn_renewalHangsInsteadOfFailing_turnIsStillCancelledBeforeExpiry(t *t
 		p := newGatedPlanner() // only a cancel can end the plan
 		w := newFencedWorker(t, Config{Lease: 90 * time.Millisecond}, p, q, store)
 		openRun(t, store)
+		start := time.Now()
 
 		done := make(chan error, 1)
 		go func() {
@@ -1052,6 +1065,11 @@ func TestTurn_renewalHangsInsteadOfFailing_turnIsStillCancelledBeforeExpiry(t *t
 			}
 		case <-time.After(5 * time.Second):
 			t.Fatal("the turn outlived a lease nobody could prove was renewed")
+		}
+		// Only the guard gets here in time: the renewals' own deadlines would
+		// report their second failure at 90ms, on the lease's edge.
+		if took := time.Since(start); took != 75*time.Millisecond {
+			t.Errorf("cancelled after %v, want the guard at 75ms, inside the 90ms lease", took)
 		}
 		select {
 		case <-p.sawCancel:
@@ -1234,11 +1252,15 @@ func TestTurn_oneHungRenewal_doesNotWedgeTheAskerForGood(t *testing.T) {
 			done <- err
 		}()
 
-		// The second tick must still ask: an asker stuck inside the first call
+		// The next ticks must still ask: an asker stuck inside the first call
 		// means one slow renewal silently disables renewal for the whole turn.
+		// Five calls is 250ms, past the 125ms the guard gave the claim, so the turn
+		// is alive only because the renewals after the hung one proved the lease.
 		deadline := time.After(5 * time.Second)
-		for q.calls.Load() < 2 {
+		for q.calls.Load() < 5 {
 			select {
+			case <-p.sawCancel:
+				t.Fatalf("the turn was cancelled after %d calls: the recovered renewals proved nothing", q.calls.Load())
 			case <-deadline:
 				t.Fatal("the asker wedged behind one hung renewal and never asked again")
 			case <-time.After(5 * time.Millisecond):
@@ -1256,6 +1278,57 @@ func TestTurn_oneHungRenewal_doesNotWedgeTheAskerForGood(t *testing.T) {
 		}
 		if got := phaseOf(t, store); got != engine.PhaseFinished {
 			t.Errorf("phase = %v, want finished: the recovered renewal should carry the turn", got)
+		}
+	})
+}
+
+// flappingQueue refuses every other renewal, starting with the first.
+type flappingQueue struct {
+	*ledger.Memory
+	calls atomic.Int32
+}
+
+func (q *flappingQueue) Renew(ctx context.Context, runID domain.RunID, epoch int64, lease time.Duration) error {
+	if q.calls.Add(1)%2 == 1 {
+		return errors.New("database hiccup")
+	}
+	return q.Memory.Renew(ctx, runID, epoch, lease)
+}
+
+// Two failures in a row end a turn; two in a whole turn must not. A long turn on
+// a store that blips now and then would otherwise be cancelled for having lasted.
+func TestTurn_renewalsThatFailAndRecover_doNotAddUpToALostLease(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		store := ledger.NewMemory()
+		q := &flappingQueue{Memory: store}
+		p := newGatedPlanner()
+		w := newFencedWorker(t, Config{Lease: 90 * time.Millisecond}, p, q, store)
+		openRun(t, store)
+
+		done := make(chan error, 1)
+		go func() {
+			_, err := w.turn(context.Background(), slog.New(slog.DiscardHandler))
+			done <- err
+		}()
+
+		deadline := time.After(5 * time.Second)
+		for q.calls.Load() < 6 {
+			select {
+			case <-p.sawCancel:
+				t.Fatalf("cancelled after %d calls, with no two failures in a row", q.calls.Load())
+			case <-deadline:
+				t.Fatal("the renewals stopped")
+			case <-time.After(5 * time.Millisecond):
+			}
+		}
+		close(p.release)
+		if err := <-done; err != nil {
+			t.Fatalf("turn: %v", err)
+		}
+		if got := phaseOf(t, store); got != engine.PhaseFinished {
+			t.Errorf("phase = %v, want finished", got)
 		}
 	})
 }
