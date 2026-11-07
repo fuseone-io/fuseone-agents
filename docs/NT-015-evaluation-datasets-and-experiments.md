@@ -238,7 +238,9 @@ as `not_comparable`, never as fixed.
 
 **The gate changes in one way.** It refuses on a case that ran against this version
 and broke. A case added after the last battery is reported as `not_checked`, and
-the author is told to run the battery. It no longer refuses a start by itself.
+the author is told to run the battery, in the report and in the trust center, which no
+longer reads as ready. It no longer refuses a start by itself, and starting returns no
+message about it.
 
 ## Rollout
 
