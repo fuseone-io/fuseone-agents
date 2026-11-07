@@ -190,6 +190,17 @@ A chave inclui definição da ferramenta, argumentos, escopo e `OnBehalfOf`.
 Assim um resultado produzido com credencial pessoal fica com a pessoa que o
 produziu.
 
+## Salvar, reconectar e ferramentas novas
+
+Salvar um servidor sem mudança nenhuma não muda nada. Nenhum worker reconecta, e o servidor mantém a data da última alteração e a posição na trilha. Assim, aplicar a mesma configuração por um pipeline não reinicia nada. Uma mudança real de endereço, ajuste ou credencial continua fazendo todos os workers reconectarem, em cerca de 30 segundos.
+
+**Salvar de novo deixou de ser uma forma de reconectar.** Para alcançar um servidor:
+
+- **Tentar agora** pede a um worker que reconecte e informe o que encontrou: aquele que reivindicar o pedido. Os outros não redescobrem nada.
+- **Uma sessão que caiu ou nunca conectou** é tentada de novo por cada worker, por conta própria, em cerca de 30 segundos.
+
+**Hoje não existe como fazer todos os workers redescobrirem as ferramentas de um servidor sem interrupção.** Se um servidor conectado ganhar uma ferramenta, desligue e religue o servidor. Isso faz todas as réplicas atualizarem, e as ferramentas dele ficam indisponíveis por um momento enquanto isso acontece.
+
 ## Diagnóstico rápido
 
 - Servidor "answering" mas tool falha com credencial pessoal: configure a

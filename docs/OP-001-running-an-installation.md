@@ -261,7 +261,11 @@ what is waiting; the console says which.
 **A tool server shows as not answering.** Its credential, its address, or the
 server itself. **Try now** asks a worker to reconnect through the same path it
 uses in production and report what it found — a failed attempt leaves the
-existing session alone.
+existing session alone. It reaches one worker, whichever claims the request.
+Saving a server, a provider, a channel or a connector with no change writes
+nothing and reconnects nothing, so saving again is not a way to force a
+reconnection. To make every worker rediscover a server's tools, turn it off and
+on again, which interrupts it for a moment.
 
 **A run is parked.** It is waiting for a person. The reason says why, and the
 reason is worth reading: "this writes" and "this writes in a run that read

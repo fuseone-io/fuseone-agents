@@ -43,6 +43,8 @@ no endpoint de botões. O endpoint de eventos termina em `/events`.
 
 ## Socket Mode
 
+Salvar uma conexão sem mudança nenhuma não reabre o socket. Uma mudança real de workspace ou de token reabre, e um socket que cai reconecta sozinho.
+
 Use Socket Mode quando a instalação não tem URL pública de entrada. O worker
 abre uma conexão de saída para o Slack.
 

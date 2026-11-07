@@ -184,6 +184,17 @@ which earlier run and step supplied the bytes.
 The cache key includes the tool definition, arguments, scope and `OnBehalfOf`.
 That keeps a personal credential result with the person who produced it.
 
+## Saving, reconnecting and new tools
+
+Saving a server with no change changes nothing. No worker reconnects, and the server keeps its last-updated time and its place on the trail. So applying the same configuration from a pipeline restarts nothing. A real change of address, setting or credential still makes every worker reconnect, within about 30 seconds.
+
+**Saving again is no longer a way to reconnect.** To reach a server:
+
+- **Try now** asks one worker to reconnect and report what it found: whichever worker claims the request. It does not make the others rediscover anything.
+- **A session that died or never connected** is retried by each worker on its own, within about 30 seconds.
+
+**There is currently no way to make every worker rediscover a server's tools without an interruption.** If a connected server gains a tool, turn the server off and on again. That makes every replica update, and its tools are unavailable for a moment while it happens.
+
 ## Quick diagnosis
 
 - Server is "answering" but a tool fails with personal credential: configure
