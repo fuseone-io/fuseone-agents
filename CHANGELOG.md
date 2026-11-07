@@ -27,6 +27,76 @@ field" is a commit message.
 
 ---
 
+## [0.95.0] — 2026-11-07
+
+### Upgrade notes
+
+- **This upgrade erases data, and it cannot be undone.** Migration `0102` clears what a
+  correction expected wherever its input is already gone, and adds a trigger that does the
+  same whenever a copy is erased from now on. Look at what it would take first:
+
+  ```sql
+  select count(*) from regression_cases c
+  join run_content rc on rc.ref = c.input_ref
+  where rc.erased_at is not null and c.expectations <> '[]'::jsonb;
+  ```
+- **This upgrade removes identity bindings left behind.** Migration `0100` removes bindings
+  whose connection no longer exists, each on the trail with who it spoke for, so anyone who
+  still needs one can be bound again on purpose. To count them first:
+
+  ```sql
+  select count(*) from settings b
+  where b.kind = 'channel_identity' and not exists (
+    select 1 from settings c
+    where c.scope_kind = 'installation' and c.kind = 'channel'
+      and c.name = left(b.name, length(b.name) - position('/' in reverse(b.name))));
+  ```
+- **Some agents will read as needing review after this.** A simulation with an erased case
+  now reads as incomplete, where it could read as ready. Nothing about those agents changed:
+  the coverage was already gone, and running the battery does not bring it back. Recording
+  the case again does.
+- **A past battery can report fewer judged cases.** A case that ran and has since lost its
+  input and expectations now reads as erased, neither held nor broken.
+- **Service and agent principals can no longer approve or manage identity,** whatever role
+  they hold. If something approves with a token today, it stops, and a person has to do it.
+- **Binding an identity on a connection that does not exist is now refused** with a 400. It
+  used to succeed, and the binding waited for the next connection to take that name.
+- **Migration `0101` builds two indexes on `settings`,** blocking writes to that table while
+  it runs.
+
+### Added
+
+- **Service accounts and API tokens over the API,** at `/admin/service-accounts`: create, list
+  and disable an account, then issue, list and revoke its tokens. A token has to expire, and
+  its secret is in the response that issues it and nowhere else. Revoking or disabling takes
+  effect on the next request. The console screen is not in this release.
+- **One MCP server, model provider, channel or policy can be read back by name,** which is what
+  a client needs to compare what it wants with what is there. Credentials never come back.
+  A fingerprint says whether one changed, and it moves when the master key does, so after a
+  key rotation every fingerprint reads as changed once. A read is one instant, so a write
+  landing during it cannot give an answer that mixes the two.
+
+### Changed
+
+- **Changing someone's grants is now on the trail,** for people and machines alike.
+
+### Fixed
+
+- **Erasure now takes what a correction expected.** A subject erasure and retention cleared its
+  note and left its expectations, which are free text. After erasing a person's run, their
+  address could stay in the row. This also holds during a rolling update, when a process on
+  the previous version is still the one erasing.
+- **A simulation with an erased case no longer reads as ready.** The evidence says how many
+  cases were erased, and counts each one once.
+- **A credential is now read together with its configuration,** everywhere the platform opens
+  one. A write landing between the two reads could hand the new key to the old address.
+
+### Security
+
+- **Deleting a connection now takes its identity bindings.** A binding hands whoever holds that
+  account somebody's authority, including deciding approvals. A new connection taking the name
+  used to inherit them, with nobody having decided it.
+
 ## [0.94.0] — 2026-11-06
 
 ### Upgrade notes
