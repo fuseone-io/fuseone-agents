@@ -2828,6 +2828,9 @@
     "noAreas": "No area declared",
     "wholeCompany": "All of {{company}}"
   },
+  "serviceAccounts": {
+    "grantsNote": "Whatever its roles say, a service account can never approve an action, grant a standing approval or change who holds what."
+  },
   "session": {
     "finishSetup": "Finish setup",
     "noProvider": "No identity provider is configured. Whoever administers this installation has to register one before anybody can sign in.",

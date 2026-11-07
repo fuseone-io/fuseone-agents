@@ -2828,6 +2828,9 @@
     "noAreas": "Nenhuma área declarada",
     "wholeCompany": "Toda a {{company}}"
   },
+  "serviceAccounts": {
+    "grantsNote": "Seja qual for o papel, uma conta de serviço nunca pode aprovar uma ação, conceder aprovação permanente nem mudar quem tem qual acesso."
+  },
   "session": {
     "finishSetup": "Concluir configuração",
     "noProvider": "Nenhum provedor de identidade está configurado. Quem administra esta instalação precisa cadastrar um antes que alguém consiga entrar.",

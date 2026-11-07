@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, ShieldCheck } from "lucide-react";
+import { Plus, ShieldCheck, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { GrantRow } from "@/features/admin/grant-row";
@@ -39,6 +39,8 @@ export function GrantEditor({
   );
 
   const asserted = held.filter((g) => g.asserted);
+  // Whichever screen brought a machine here: these are what no role can give it.
+  const machine = person.kind !== "user";
   const hasInstallationAdmin = granted.some(
     (g) => g.company === "*" && g.area === "" && g.role === "admin",
   );
@@ -62,6 +64,15 @@ export function GrantEditor({
 
   return (
     <div className="flex flex-col gap-4">
+      {machine && (
+        <p className="flex items-start gap-2 text-xs text-muted-foreground">
+          <TriangleAlert
+            className="mt-px size-3.5 shrink-0 text-warning"
+            aria-hidden
+          />
+          <span>{t("serviceAccounts.grantsNote")}</span>
+        </p>
+      )}
       {asserted.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <p className="text-xs text-muted-foreground">
@@ -76,15 +87,18 @@ export function GrantEditor({
       )}
 
       <div className="flex flex-col gap-2">
-        <p className="text-xs text-muted-foreground">
-          {t("people.grantedHere")}
-        </p>
+        {!machine && (
+          <p className="text-xs text-muted-foreground">
+            {t("people.grantedHere")}
+          </p>
+        )}
 
         {granted.map((grant, index) => (
           <GrantRow
             key={index}
             grant={grant}
             index={index}
+            machine={machine}
             onChange={(patch) => update(index, patch)}
             onRemove={() => setGranted(granted.filter((_, i) => i !== index))}
           />
@@ -105,21 +119,23 @@ export function GrantEditor({
             <Plus className="size-4" aria-hidden />
             {t("people.addGrant")}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            disabled={hasInstallationAdmin}
-            onClick={() =>
-              setGranted([
-                ...granted,
-                { company: "*", area: "", role: "admin" },
-              ])
-            }
-          >
-            <ShieldCheck className="size-4" aria-hidden />
-            {t("people.addAdminGrant")}
-          </Button>
+          {!machine && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              disabled={hasInstallationAdmin}
+              onClick={() =>
+                setGranted([
+                  ...granted,
+                  { company: "*", area: "", role: "admin" },
+                ])
+              }
+            >
+              <ShieldCheck className="size-4" aria-hidden />
+              {t("people.addAdminGrant")}
+            </Button>
+          )}
         </div>
       </div>
 
