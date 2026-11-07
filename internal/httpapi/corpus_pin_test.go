@@ -427,6 +427,93 @@ func TestGetAgentTrust_aBrokenCaseAndOneNotChecked_readsAsBroken(t *testing.T) {
 		openapi.AgentTrustEvidenceStatusBad, openapi.SimulationBroken)
 }
 
+func simulationEvidence(t *testing.T, trust openapi.AgentTrust) openapi.AgentTrustEvidence {
+	t.Helper()
+	for _, evidence := range trust.Evidence {
+		if evidence.Id == openapi.AgentTrustEvidenceIdSimulation {
+			return evidence
+		}
+	}
+	t.Fatal("no simulation evidence")
+	return openapi.AgentTrustEvidence{}
+}
+
+// The review's first reproduction: it belonged to the version and never opened a run. That
+// is broken, and being told to run the battery for it as well says two different things.
+func TestGetSimulation_aCaseOfTheVersionThatDidNotRun_isBrokenAndNotAlsoNotChecked(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	simulatePinned(t, store, "run-1", "sim-9", "caso-velho", 1)
+	pinned := []domain.RegressionCase{heldCase("caso-velho"), heldCase("caso-sem-run")}
+
+	resp, err := pinnedServer(store, t, pinned, pinned).GetSimulation(
+		inArea("cx", domain.RoleAuthor),
+		openapi.GetSimulationRequestObject{AgentId: "triage", SimulationId: "sim-9"})
+	if err != nil {
+		t.Fatalf("GetSimulation: %v", err)
+	}
+	got := resp.(openapi.GetSimulation200JSONResponse)
+	if got.Broken == nil || *got.Broken != 1 {
+		t.Errorf("broken = %v, want the case that did not run", got.Broken)
+	}
+	if got.NotChecked != nil {
+		t.Errorf("not checked = %v, want none", *got.NotChecked)
+	}
+}
+
+// The second: same id, another expectation. Its run answered a different question.
+func TestGetAgentTrust_aCaseWhoseExpectationsChanged_isNotChecked(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	simulatePinned(t, store, "run-1", "sim-9", "caso", 1)
+	changed := heldCase("caso")
+	changed.Expectations = []domain.Expectation{{Kind: domain.ExpectNeverCalls, Value: "crm.other"}}
+
+	trust := readTrust(t, pinnedServer(store, t, []domain.RegressionCase{changed},
+		[]domain.RegressionCase{heldCase("caso")}), "triage", "")
+
+	assertEvidence(t, trust, openapi.AgentTrustEvidenceIdSimulation,
+		openapi.AgentTrustEvidenceStatusUnknown, openapi.SimulationNotChecked)
+}
+
+// The third: added and already erased. No row of the old report mentions it, so this is
+// the only place that coverage can be said to be gone.
+func TestGetAgentTrust_aCaseAddedAndAlreadyErased_isIncomplete(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	simulatePinned(t, store, "run-1", "sim-9", "caso", 1)
+	working := []domain.RegressionCase{heldCase("caso"), {ID: "sumiu", Agent: "triage", Erased: true}}
+
+	trust := readTrust(t, pinnedServer(store, t, working, []domain.RegressionCase{heldCase("caso")}), "triage", "")
+
+	assertEvidence(t, trust, openapi.AgentTrustEvidenceIdSimulation,
+		openapi.AgentTrustEvidenceStatusBad, openapi.SimulationIncomplete)
+	if got := simulationEvidence(t, trust).Values["erased"]; got != 1 {
+		t.Errorf("erased = %v, want it counted", got)
+	}
+}
+
+func TestGetSimulation_aCaseAddedAndAlreadyErased_isNamedAsLost(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	simulatePinned(t, store, "run-1", "sim-9", "caso", 1)
+	working := []domain.RegressionCase{heldCase("caso"), {ID: "sumiu", Agent: "triage", Erased: true}}
+
+	resp, err := pinnedServer(store, t, working, []domain.RegressionCase{heldCase("caso")}).GetSimulation(
+		inArea("cx", domain.RoleAuthor),
+		openapi.GetSimulationRequestObject{AgentId: "triage", SimulationId: "sim-9"})
+	if err != nil {
+		t.Fatalf("GetSimulation: %v", err)
+	}
+	got := resp.(openapi.GetSimulation200JSONResponse)
+	if got.ErasedSince == nil || len(*got.ErasedSince) != 1 || (*got.ErasedSince)[0] != "sumiu" {
+		t.Errorf("erased since = %v, want sumiu", got.ErasedSince)
+	}
+	if got.NotChecked != nil {
+		t.Errorf("not checked = %v, want none: running the battery would not bring it back", *got.NotChecked)
+	}
+}
+
 func TestGetSimulation_aPinnedBattery_saysItsVersionAndWhatItDidNotCheck(t *testing.T) {
 	t.Parallel()
 	store := ledger.NewMemory()

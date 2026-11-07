@@ -112,36 +112,45 @@ func (s *Server) GetSimulation(
 	if s.regressions == nil || !replaysCorpus(report) {
 		return openapi.GetSimulation200JSONResponse(s.simulationReport(ctx, report)), nil
 	}
-	corpus, err := s.corpusOf(ctx, published.ID, report)
+	out, err := s.batteryReport(ctx, published.ID, report)
 	if err != nil {
 		return nil, fmt.Errorf("read the corpus of %s: %w", published.ID, err)
-	}
-	out := s.simulationReport(ctx, simulate.Battery(report, corpus))
-	if err := s.sayWhichCorpus(ctx, published.ID, report, &out); err != nil {
-		return nil, err
 	}
 	return openapi.GetSimulation200JSONResponse(out), nil
 }
 
-// sayWhichCorpus tells a reader what this battery was read against, and what has joined
-// the corpus since. Without it, a result stays true and reads as if it covered today's
-// corpus, which is the claim nobody can make.
-func (s *Server) sayWhichCorpus(
-	ctx context.Context, agent domain.AgentID, report simulate.Report, out *openapi.SimulationReport,
-) error {
+// batteryReport is a battery read against what it ran, saying how the corpus has moved.
+func (s *Server) batteryReport(
+	ctx context.Context, agent domain.AgentID, report simulate.Report,
+) (openapi.SimulationReport, error) {
+	corpus, err := s.corpusOf(ctx, agent, report)
+	if err != nil {
+		return openapi.SimulationReport{}, err
+	}
+	out := s.simulationReport(ctx, simulate.Battery(report, corpus))
 	if report.DatasetVersion == 0 {
 		out.Unpinned = ptr(true)
-		return nil
+		return out, nil
 	}
-	out.DatasetVersion = ptr(report.DatasetVersion)
 	working, err := s.regressions.List(ctx, agent)
 	if err != nil {
-		return fmt.Errorf("read the corpus of %s: %w", agent, err)
+		return openapi.SimulationReport{}, err
 	}
-	if unchecked := simulate.NotChecked(report, working); len(unchecked) > 0 {
-		out.NotChecked = &unchecked
+	sayWhichCorpus(&out, report.DatasetVersion, simulate.Since(corpus, working))
+	return out, nil
+}
+
+// sayWhichCorpus tells a reader what this battery was read against, and how the corpus has
+// moved since. Without it, a result stays true and reads as if it covered today's corpus,
+// which is the claim nobody can make.
+func sayWhichCorpus(out *openapi.SimulationReport, version int64, change simulate.CorpusChange) {
+	out.DatasetVersion = ptr(version)
+	if len(change.NotChecked) > 0 {
+		out.NotChecked = &change.NotChecked
 	}
-	return nil
+	if len(change.ErasedSince) > 0 {
+		out.ErasedSince = &change.ErasedSince
+	}
 }
 
 // publishedAgent resolves the newest published version this caller may see.

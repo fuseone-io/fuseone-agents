@@ -30,6 +30,16 @@ describe("SimulationCorpusNote", () => {
     expect(screen.getByText(label)).toBeInTheDocument();
   });
 
+  it.each([
+    ["en-US", "Lost since"],
+    ["pt-BR", "Perdidos depois"],
+  ] as const)("names what was lost after the battery, in %s", (locale, title) => {
+    setLocale(locale);
+    render(<SimulationCorpusNote report={{ ...report, erasedSince: ["sumiu"] }} />);
+    expect(screen.getByText(title)).toBeInTheDocument();
+    expect(screen.getByText("sumiu")).toBeInTheDocument();
+  });
+
   it("says nothing about an uploaded set", () => {
     setLocale("en-US");
     const { container } = render(<SimulationCorpusNote report={report} />);

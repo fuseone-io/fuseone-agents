@@ -5538,9 +5538,17 @@ components:
           type: array
           items: { type: string }
           description: >
-            Cases in the corpus now that this battery's version did not have. Not
-            broken and not held: nobody has run them. Run the battery again to
-            check them. Absent when there are none.
+            Cases in the corpus now that differ from this battery's version: added
+            since, or the same id with another input or other expectations. Not
+            broken and not held: nobody has checked them as they are. Run the battery
+            again to check them. Absent when there are none.
+        erasedSince:
+          type: array
+          items: { type: string }
+          description: >
+            Cases added or changed since this battery's version whose input is already
+            gone. This battery never mentions them, and running it again would not
+            bring them back: they have to be recorded again. Absent when there are none.
         id: { type: string }
         agent: { type: string }
         version: { type: string }

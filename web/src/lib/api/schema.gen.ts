@@ -3352,8 +3352,10 @@ export interface components {
             datasetVersion?: number;
             /** @description This battery names no single version of the corpus: it was recorded before versions, or its runs do not agree. It is read against the corpus as it is now. Absent for an uploaded set. */
             unpinned?: boolean;
-            /** @description Cases in the corpus now that this battery's version did not have. Not broken and not held: nobody has run them. Run the battery again to check them. Absent when there are none. */
+            /** @description Cases in the corpus now that differ from this battery's version: added since, or the same id with another input or other expectations. Not broken and not held: nobody has checked them as they are. Run the battery again to check them. Absent when there are none. */
             notChecked?: string[];
+            /** @description Cases added or changed since this battery's version whose input is already gone. This battery never mentions them, and running it again would not bring them back: they have to be recorded again. Absent when there are none. */
+            erasedSince?: string[];
             id: string;
             agent?: string;
             version?: string;

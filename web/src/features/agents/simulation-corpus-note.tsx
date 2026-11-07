@@ -11,7 +11,6 @@ import type { SimulationReport } from "@/features/agents/simulation-api";
  */
 export function SimulationCorpusNote({ report }: { report: SimulationReport }) {
   const { t } = useTranslation();
-  const unchecked = report.notChecked ?? [];
 
   return (
     <>
@@ -26,21 +25,43 @@ export function SimulationCorpusNote({ report }: { report: SimulationReport }) {
           {t("simulation.corpusVersion", { version: report.datasetVersion })}
         </p>
       )}
-      {unchecked.length > 0 && (
-        <div className="flex flex-col gap-1 text-sm">
-          <p className="font-medium">{t("simulation.corpusNotChecked")}</p>
-          <p className="text-muted-foreground">
-            {t("simulation.corpusNotCheckedHint")}
-          </p>
-          <ul className="flex flex-wrap gap-2">
-            {unchecked.map((id) => (
-              <li key={id}>
-                <Mono>{id}</Mono>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <CaseList
+        title={t("simulation.corpusNotChecked")}
+        hint={t("simulation.corpusNotCheckedHint")}
+        ids={report.notChecked}
+      />
+      <CaseList
+        title={t("simulation.corpusErasedSince")}
+        hint={t("simulation.corpusErasedSinceHint")}
+        ids={report.erasedSince}
+      />
     </>
+  );
+}
+
+function CaseList({
+  title,
+  hint,
+  ids = [],
+}: {
+  title: string;
+  hint: string;
+  ids?: string[];
+}) {
+  if (ids.length === 0) {
+    return null;
+  }
+  return (
+    <div className="flex flex-col gap-1 text-sm">
+      <p className="font-medium">{title}</p>
+      <p className="text-muted-foreground">{hint}</p>
+      <ul className="flex flex-wrap gap-2">
+        {ids.map((id) => (
+          <li key={id}>
+            <Mono>{id}</Mono>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
