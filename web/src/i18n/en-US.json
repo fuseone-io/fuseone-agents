@@ -409,7 +409,7 @@
     "trustCodeRunsUnfinished": "{{unfinished}} of {{runs}} run(s) did not finish.",
     "trustCodeRunsWaiting": "{{waiting}} of {{runs}} run(s) are waiting for a person.",
     "trustCodeSimulationBroken": "{{broken}} of {{cases}} saved case(s) broke.",
-    "trustCodeSimulationIncomplete": "The latest simulation has incomplete cases: {{parked}} parked, {{waiting}} waiting, {{unsettled}} unsettled, {{notRun}} not run.",
+    "trustCodeSimulationIncomplete": "The latest simulation has incomplete cases: {{parked}} parked, {{waiting}} waiting, {{unsettled}} unsettled, {{notRun}} not run, {{erased}} erased.",
     "trustCodeSimulationMissingCorpus": "No saved regression case yet. Save corrected runs before trusting the next stage.",
     "trustCodeSimulationNotRun": "{{cases}} saved case(s) exist, but this version has not run them yet.",
     "trustCodeSimulationReady": "{{held}} of {{cases}} saved case(s) still hold.",

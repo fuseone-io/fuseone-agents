@@ -62,6 +62,52 @@ describe("AgentTrustCenter", () => {
     ).toHaveAttribute("href", "/cost");
   });
 
+  it.each([
+    ["en-US", "1 erased."],
+    ["pt-BR", "1 apagados."],
+  ] as const)(
+    "names erased cases as what is missing, in %s",
+    (locale, text) => {
+      setLocale(locale);
+
+      render(
+        <MemoryRouter>
+          <AgentTrustCenter
+            agent={agent()}
+            trust={{
+              versionId: "v2",
+              status: "needs_review",
+              recommendation: "review",
+              summary: "review",
+              window: {
+                from: "2026-08-01T00:00:00.000Z",
+                until: "2026-08-31T00:00:00.000Z",
+              },
+              evidence: [
+                {
+                  id: "simulation",
+                  status: "bad",
+                  code: "simulation_incomplete",
+                  values: {
+                    parked: 0,
+                    waiting: 0,
+                    unsettled: 0,
+                    notRun: 0,
+                    erased: 1,
+                  },
+                },
+              ],
+            }}
+          />
+        </MemoryRouter>,
+      );
+
+      expect(
+        screen.getByText(new RegExp(text.replace(".", "\\."))),
+      ).toBeInTheDocument();
+    },
+  );
+
   it("explains how missing comparison evidence appears and when no action exists", () => {
     setLocale("en-US");
 

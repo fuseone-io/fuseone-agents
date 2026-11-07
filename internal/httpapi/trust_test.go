@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	gocontext "context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -302,4 +303,59 @@ func finishedRun(
 	}
 	appendTo(t, store, run, string(version), domain.StepRunFinished,
 		domain.RunFinishedPayload{Outcome: "answered"})
+}
+
+// Coverage that is gone is not a green light, whether the case ran before it went or
+// never got to. Both lost what they could be judged against, and nothing else about
+// this battery is wrong, so only the gap itself can stop it reading as ready.
+func TestGetAgentTrust_anErasedCaseKeepsTheSimulationFromReadingReady(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		// ran is whether the battery holds a run of the erased case.
+		ran bool
+	}{{name: "it ran and then lost its input and expectations", ran: true}, {name: "it never ran"}}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			store := ledger.NewMemory()
+			batteryFor(t, store, "v2", "sim-gap", "still-held")
+			corpus := []domain.RegressionCase{{
+				ID: "still-held", Agent: "triage",
+				Expectations: []domain.Expectation{{Kind: domain.ExpectSettles, Value: "finished"}},
+			}, {ID: "gone", Agent: "triage", Erased: true}}
+			if tc.ran {
+				base := time.Now().Add(-30 * time.Minute)
+				appendAt(t, store, "run-gone", "v2", domain.StepRunStarted, domain.RunStartedPayload{
+					Trigger: "simulation", Simulated: true, Simulation: "sim-gap", Case: "gone",
+				}, base)
+				appendAt(t, store, "run-gone", "v2", domain.StepRunFinished,
+					domain.RunFinishedPayload{Outcome: "answered"}, base.Add(time.Second))
+			}
+
+			trust := readTrust(t, trustableWithCorpus(t, store, corpus), "triage", "")
+			assertEvidence(t, trust, openapi.AgentTrustEvidenceIdSimulation,
+				openapi.AgentTrustEvidenceStatusBad, openapi.SimulationIncomplete)
+
+			for _, evidence := range trust.Evidence {
+				if evidence.Id != openapi.AgentTrustEvidenceIdSimulation {
+					continue
+				}
+				values := evidence.Values
+				if got := fmt.Sprint(values["erased"]); got != "1" {
+					t.Errorf("erased = %s, want 1", got)
+				}
+				// Counted once: the same gap as both erased and not run would read
+				// as two missing cases.
+				if got := fmt.Sprint(values["notRun"]); got != "0" {
+					t.Errorf("notRun = %s, want 0", got)
+				}
+				if got := fmt.Sprint(values["unsettled"]); got != "0" {
+					t.Errorf("unsettled = %s, want 0", got)
+				}
+			}
+		})
+	}
 }
