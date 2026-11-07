@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -93,13 +94,27 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 		creds.ConfigFile = req.Body.ConfigFile
 	}
 
-	if err := s.integrations.PutMCPServer(ctx, caller, adminScope, server, creds); err != nil {
+	expect, err := domain.ParseIfMatch(req.Params.IfMatch)
+	if err != nil {
+		return openapi.PutMCPServer400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
+		}, nil
+	}
+	revision, err := s.integrations.WriteMCPServer(ctx, admin.MCPServerWrite{
+		By: caller, Scope: adminScope, Server: server, Given: creds, Expect: expect,
+	})
+	if stale, ok := staleFrom(err); ok {
+		return openapi.PutMCPServer412ApplicationProblemPlusJSONResponse{
+			PreconditionFailedApplicationProblemPlusJSONResponse: stale,
+		}, nil
+	}
+	if err != nil {
 		return openapi.PutMCPServer400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				upstreamRefused(err.Error())),
 		}, nil
 	}
-	return openapi.PutMCPServer204Response{}, nil
+	return openapi.PutMCPServer204Response{Headers: openapi.PutMCPServer204ResponseHeaders{ETag: string(revision)}}, nil
 }
 
 func rateLimitFromRequest(limit *openapi.MCPRateLimit) *domain.MCPRateLimit {
@@ -198,67 +213,22 @@ func (s *Server) DeleteMCPServer(ctx context.Context, req openapi.DeleteMCPServe
 		return nil, errNoAdministration
 	}
 
-	if err := s.integrations.DeleteMCPServer(ctx, caller, adminScope, req.Name); err != nil {
+	expect, err := domain.ParseIfMatch(req.Params.IfMatch)
+	if err != nil {
+		return openapi.DeleteMCPServer400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
+		}, nil
+	}
+	err = s.integrations.RemoveMCPServer(ctx, admin.Removal{By: caller, Scope: adminScope, Name: req.Name, Expect: expect})
+	if stale, ok := staleFrom(err); ok {
+		return openapi.DeleteMCPServer412ApplicationProblemPlusJSONResponse{
+			PreconditionFailedApplicationProblemPlusJSONResponse: stale,
+		}, nil
+	}
+	if err != nil {
 		return nil, err
 	}
 	return openapi.DeleteMCPServer204Response{}, nil
-}
-
-func (s *Server) PutModelProvider(ctx context.Context, req openapi.PutModelProviderRequestObject) (openapi.PutModelProviderResponseObject, error) {
-	caller, forbidden := s.configurer(ctx)
-	if forbidden != nil {
-		return openapi.PutModelProvider403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
-		}, nil
-	}
-	if s.integrations == nil {
-		return nil, errNoAdministration
-	}
-
-	provider := domain.ModelProvider{
-		Name: req.Name, Kind: string(req.Body.Kind), BaseURL: valueOr(req.Body.BaseUrl), Enabled: true,
-	}
-	if req.Body.Models != nil {
-		provider.Models = *req.Body.Models
-	}
-	if req.Body.AutoToolChoiceModels != nil {
-		provider.AutoToolChoiceModels = *req.Body.AutoToolChoiceModels
-	}
-	if req.Body.Enabled != nil {
-		provider.Enabled = *req.Body.Enabled
-	}
-
-	// An absent key keeps the stored one. The credential is sealed on arrival
-	// and never comes back out through this API.
-	var apiKey string
-	if req.Body.ApiKey != nil {
-		apiKey = *req.Body.ApiKey
-	}
-
-	if err := s.integrations.PutProvider(ctx, caller, adminScope, provider, apiKey); err != nil {
-		return openapi.PutModelProvider400ApplicationProblemPlusJSONResponse{
-			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				notStored(err.Error())),
-		}, nil
-	}
-	return openapi.PutModelProvider204Response{}, nil
-}
-
-func (s *Server) DeleteModelProvider(ctx context.Context, req openapi.DeleteModelProviderRequestObject) (openapi.DeleteModelProviderResponseObject, error) {
-	caller, forbidden := s.configurer(ctx)
-	if forbidden != nil {
-		return openapi.DeleteModelProvider403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
-		}, nil
-	}
-	if s.integrations == nil {
-		return nil, errNoAdministration
-	}
-
-	if err := s.integrations.DeleteProvider(ctx, caller, adminScope, req.Name); err != nil {
-		return nil, err
-	}
-	return openapi.DeleteModelProvider204Response{}, nil
 }
 
 // configurer checks the permission and returns who is acting, so every change

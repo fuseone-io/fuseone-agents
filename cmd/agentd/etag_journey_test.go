@@ -21,6 +21,9 @@ type etagCall struct {
 	method, path string
 	ifMatch      []string
 	body         any
+	// by is who is calling, and an administrator called usr_ana unless it says otherwise.
+	by   domain.UserID
+	role domain.Role
 }
 
 func (w *readBackWorld) call(t *testing.T, c etagCall) *httptest.ResponseRecorder {
@@ -34,9 +37,15 @@ func (w *readBackWorld) call(t *testing.T, c etagCall) *httptest.ResponseRecorde
 	for _, line := range c.ifMatch {
 		req.Header.Add("If-Match", line)
 	}
+	if c.by == "" {
+		c.by = "usr_ana"
+	}
+	if c.role == "" {
+		c.role = domain.RoleAdmin
+	}
 	req = req.WithContext(auth.WithPrincipal(req.Context(), domain.Principal{
-		ID: "usr_ana", Kind: domain.PrincipalUser,
-		Grants: []domain.Grant{{Scope: domain.Scope{Company: domain.Installation}, Role: domain.RoleAdmin}},
+		ID: c.by, Kind: domain.PrincipalUser,
+		Grants: []domain.Grant{{Scope: domain.Scope{Company: domain.Installation}, Role: c.role}},
 	}))
 	rec := httptest.NewRecorder()
 	w.route.ServeHTTP(rec, req)

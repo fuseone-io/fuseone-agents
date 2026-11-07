@@ -147,6 +147,8 @@ type MCPServer struct {
 	// which opens its sealed document. A listing opens none and leaves them empty.
 	Credential        *MCPCredentialSummary
 	SecretFingerprint string
+	// Revision names this configuration, and is filled by the same read.
+	Revision Revision
 
 	Name string
 	// Transport is stdio or http. Empty reads as stdio: rows written before
@@ -325,8 +327,10 @@ type ModelProvider struct {
 	// SecretFingerprint is filled by a read of this one provider, which opens
 	// its key. A listing opens none and leaves it empty.
 	SecretFingerprint string
-	UpdatedBy         string
-	UpdatedAt         time.Time
+	// Revision names this configuration, and is filled by the same read.
+	Revision  Revision
+	UpdatedBy string
+	UpdatedAt time.Time
 }
 
 // IntegrationHealth is what the platform observed about a connected system the

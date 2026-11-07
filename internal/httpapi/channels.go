@@ -26,8 +26,8 @@ to an agent: the Gate decides effects after the run starts.
 type ChannelAdmin interface {
 	List(ctx context.Context) ([]admin.Channel, error)
 	Named(ctx context.Context, name string) (admin.Channel, []admin.ChannelIdentity, error)
-	PutChannel(ctx context.Context, w admin.ChannelWrite) error
-	DeleteChannel(ctx context.Context, name string, by domain.UserID, governs bool) error
+	WriteChannel(ctx context.Context, w admin.ChannelWrite) (domain.Revision, error)
+	RemoveChannel(ctx context.Context, r admin.ChannelRemoval) error
 	PutConversation(ctx context.Context, channelName string, conv admin.Conversation, by domain.UserID) error
 	DeleteConversation(ctx context.Context, ref admin.ConversationRef, by domain.UserID) error
 	Identities(ctx context.Context) ([]admin.ChannelIdentity, error)
@@ -115,7 +115,13 @@ func (s *Server) PutChannel(
 		delivery = string(*req.Body.DeliveryMode)
 	}
 
-	err := s.channels.PutChannel(ctx, admin.ChannelWrite{
+	expect, err := domain.ParseIfMatch(req.Params.IfMatch)
+	if err != nil {
+		return openapi.PutChannel400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
+		}, nil
+	}
+	revision, err := s.channels.WriteChannel(ctx, admin.ChannelWrite{
 		Channel: admin.Channel{
 			Name:         req.Name,
 			Kind:         string(req.Body.Kind),
@@ -128,8 +134,13 @@ func (s *Server) PutChannel(
 			AppToken: valueOr(req.Body.AppToken),
 			Signing:  valueOr(req.Body.SigningSecret),
 		},
-		By: caller, Governs: ungoverned == nil,
+		By: caller, Governs: ungoverned == nil, Expect: expect,
 	})
+	if stale, ok := staleFrom(err); ok {
+		return openapi.PutChannel412ApplicationProblemPlusJSONResponse{
+			PreconditionFailedApplicationProblemPlusJSONResponse: stale,
+		}, nil
+	}
 	switch {
 	case errors.Is(err, admin.ErrInstallationAuthority):
 		return openapi.PutChannel403ApplicationProblemPlusJSONResponse{
@@ -147,7 +158,7 @@ func (s *Server) PutChannel(
 		// was right.
 		return nil, fmt.Errorf("configure channel: %w", err)
 	}
-	return openapi.PutChannel204Response{}, nil
+	return openapi.PutChannel204Response{Headers: openapi.PutChannel204ResponseHeaders{ETag: string(revision)}}, nil
 }
 
 func (s *Server) DeleteChannel(
@@ -163,7 +174,20 @@ func (s *Server) DeleteChannel(
 		return nil, errNoAdministration
 	}
 	_, ungoverned := s.governs(ctx)
-	err := s.channels.DeleteChannel(ctx, req.Name, caller, ungoverned == nil)
+	expect, err := domain.ParseIfMatch(req.Params.IfMatch)
+	if err != nil {
+		return openapi.DeleteChannel400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
+		}, nil
+	}
+	err = s.channels.RemoveChannel(ctx, admin.ChannelRemoval{
+		Name: req.Name, By: caller, Governs: ungoverned == nil, Expect: expect,
+	})
+	if stale, ok := staleFrom(err); ok {
+		return openapi.DeleteChannel412ApplicationProblemPlusJSONResponse{
+			PreconditionFailedApplicationProblemPlusJSONResponse: stale,
+		}, nil
+	}
 	if errors.Is(err, admin.ErrInstallationAuthority) {
 		return openapi.DeleteChannel403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *ungoverned,

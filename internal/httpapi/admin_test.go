@@ -103,10 +103,13 @@ func (f *fakeAdmin) DeleteMCPPersonalCredential(_ context.Context, by domain.Use
 	f.deleted, f.putBy = name, by
 	return f.err
 }
-func (f *fakeAdmin) PutMCPServer(
-	_ context.Context, by domain.UserID, _ domain.Scope, s domain.MCPServer,
-	creds domain.MCPCredentialPatch,
-) error {
+
+// fakeRevision is what these fakes answer. The conflict rules are the real store's, and
+// its tests are against Postgres: nothing here judges a precondition.
+const fakeRevision = domain.Revision(`"v1-fake"`)
+
+func (f *fakeAdmin) WriteMCPServer(_ context.Context, w admin.MCPServerWrite) (domain.Revision, error) {
+	s, by, creds := w.Server, w.By, w.Given
 	f.putServer, f.putBy, f.putEnv, f.putHeaders = s, by, creds.Env, creds.Headers
 	if creds.Token != nil {
 		f.putToken = *creds.Token
@@ -119,7 +122,7 @@ func (f *fakeAdmin) PutMCPServer(
 		copy := *creds.GitHubApp
 		f.putGitHubApp = &copy
 	}
-	return f.err
+	return fakeRevision, f.err
 }
 
 func (f *fakeAdmin) MCPCredentials(context.Context, string) (domain.MCPCredentials, error) {
@@ -129,16 +132,16 @@ func (f *fakeAdmin) RequestMCPProbe(_ context.Context, by domain.UserID, _ domai
 	f.probed, f.putBy = name, by
 	return f.err
 }
-func (f *fakeAdmin) DeleteMCPServer(_ context.Context, by domain.UserID, _ domain.Scope, name string) error {
-	f.deleted, f.putBy = name, by
+func (f *fakeAdmin) RemoveMCPServer(_ context.Context, r admin.Removal) error {
+	f.deleted, f.putBy = r.Name, r.By
 	return f.err
 }
-func (f *fakeAdmin) PutProvider(_ context.Context, by domain.UserID, _ domain.Scope, p domain.ModelProvider, key string) error {
-	f.putProvider, f.putKey, f.putBy = p, key, by
-	return f.err
+func (f *fakeAdmin) WriteProvider(_ context.Context, w admin.ProviderWrite) (domain.Revision, error) {
+	f.putProvider, f.putKey, f.putBy = w.Provider, w.APIKey, w.By
+	return fakeRevision, f.err
 }
-func (f *fakeAdmin) DeleteProvider(_ context.Context, by domain.UserID, _ domain.Scope, name string) error {
-	f.deleted, f.putBy = name, by
+func (f *fakeAdmin) RemoveProvider(_ context.Context, r admin.Removal) error {
+	f.deleted, f.putBy = r.Name, r.By
 	return f.err
 }
 

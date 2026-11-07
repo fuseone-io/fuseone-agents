@@ -48,6 +48,7 @@ func (i *Integrations) MCPServerNamed(ctx context.Context, name string) (domain.
 	summary := creds.Summary()
 	server.Credential = &summary
 	server.SecretFingerprint = i.settings.Fingerprint(row, creds.FingerprintMaterial())
+	server.Revision = i.mcpRevision(row)
 	return server, nil
 }
 
@@ -66,5 +67,6 @@ func (i *Integrations) ProviderNamed(ctx context.Context, name string) (domain.M
 		return domain.ModelProvider{}, err
 	}
 	provider.SecretFingerprint = i.settings.Fingerprint(row, []byte(row.Secret))
+	provider.Revision = i.providerRevised(domain.IfMatch{}).of(row)
 	return provider, nil
 }

@@ -76,6 +76,7 @@ func (c *Channels) namedOn(ctx context.Context, db settings.DB, name string) (Ch
 		// Over the document this row would be re-sealed as, so a row still holding
 		// a bare token does not appear to change the next time it is saved.
 		SecretFingerprint: c.settings.Fingerprint(row, []byte(creds.Sealed())),
+		Revision:          c.revisionOf(row),
 		Conversations:     conversationsOf(name, conversations),
 	}, bound, nil
 }

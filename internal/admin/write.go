@@ -8,7 +8,6 @@ package admin
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -66,57 +65,9 @@ type folded struct {
 	// of a write that is one act — removing the row this one replaces, under
 	// a name only the store knows.
 	then func(ctx context.Context, conn settings.DB) error
-}
-
-func writeFolded(
-	ctx context.Context, pool *pgxpool.Pool, store *settings.Store, w folded,
-) error {
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("admin: begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if w.guard != nil {
-		if err := w.guard(ctx, tx); err != nil {
-			return err
-		}
-	}
-
-	set, detail := w.set, w.detail
-	if w.fold != nil {
-		stored, err := store.RevealTx(ctx, tx,
-			set.ScopeKind, set.Scope, set.Kind, set.Name)
-		switch {
-		case errors.Is(err, settings.ErrNotFound):
-			// The first write. Nothing to fold onto is exactly what it looks
-			// like, and only this error means it — every other one is a read
-			// that did not happen.
-			stored = settings.Setting{}
-		case err != nil:
-			return fmt.Errorf("admin: read what is stored for %s: %w", set.Name, err)
-		}
-		if set, detail, err = w.fold(stored); err != nil {
-			return err
-		}
-	}
-
-	if err := store.PutTx(ctx, tx, set); err != nil {
-		return err
-	}
-	if w.then != nil {
-		if err := w.then(ctx, tx); err != nil {
-			return err
-		}
-	}
-
-	by, scope, action, target := w.by, w.scope, w.action, w.target
-	if err := Record(ctx, tx, Event{
-		Principal: by, Scope: scope, Action: action, Target: target, Detail: detail,
-	}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	// revised makes the write answer a precondition and leave alone what it would not
+	// change. Absent for a write nobody manages declaratively.
+	revised *revised
 }
 
 // removeSetting deletes an installation-wide setting and records who did.
@@ -144,12 +95,35 @@ func removeScopedSetting(
 	by domain.UserID, at settings.ScopeKind, stored, recorded domain.Scope,
 	kind settings.Kind, name, action string,
 ) error {
+	return removeRevised(ctx, pool, store, removal{
+		by: by, at: at, stored: stored, recorded: recorded, kind: kind, name: name, action: action,
+	})
+}
+
+// removal is one setting going, and the precondition it answers, if any.
+type removal struct {
+	by               domain.UserID
+	at               settings.ScopeKind
+	stored, recorded domain.Scope
+	kind             settings.Kind
+	name, action     string
+	revised          *revised
+}
+
+func removeRevised(ctx context.Context, pool *pgxpool.Pool, store *settings.Store, r removal) error {
+	by, at, stored, recorded, kind, name, action := r.by, r.at, r.stored, r.recorded, r.kind, r.name, r.action
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("admin: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if r.revised != nil {
+		set := settings.Setting{ScopeKind: at, Scope: stored, Kind: kind, Name: name}
+		if err := removalGuard(ctx, tx, store, set, r.revised); err != nil {
+			return err
+		}
+	}
 	if err := store.DeleteTx(ctx, tx, at, stored, kind, name); err != nil {
 		return err
 	}

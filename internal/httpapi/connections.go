@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -30,12 +31,12 @@ type Integrations interface {
 	DeleteMCPPersonalCredential(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
 	Providers(ctx context.Context) ([]domain.ModelProvider, error)
 	ProviderNamed(ctx context.Context, name string) (domain.ModelProvider, error)
-	PutMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, server domain.MCPServer, creds domain.MCPCredentialPatch) error
+	WriteMCPServer(ctx context.Context, w admin.MCPServerWrite) (domain.Revision, error)
 	MCPCredentials(ctx context.Context, name string) (domain.MCPCredentials, error)
 	RequestMCPProbe(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
-	DeleteMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
-	PutProvider(ctx context.Context, by domain.UserID, scope domain.Scope, provider domain.ModelProvider, apiKey string) error
-	DeleteProvider(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
+	RemoveMCPServer(ctx context.Context, r admin.Removal) error
+	WriteProvider(ctx context.Context, w admin.ProviderWrite) (domain.Revision, error)
+	RemoveProvider(ctx context.Context, r admin.Removal) error
 }
 
 func healthFrom(seen domain.IntegrationHealth) openapi.IntegrationHealth {

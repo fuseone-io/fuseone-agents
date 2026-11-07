@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/connectortools"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -32,21 +33,20 @@ func (s *connectorInstanceSpy) ConnectorInstances(context.Context) ([]connectort
 	return s.items, nil
 }
 
-func (s *connectorInstanceSpy) PutConnectorInstance(
-	_ context.Context, by domain.UserID, _ domain.Scope,
-	kind settings.ScopeKind, scope domain.Scope,
-	instance connectortools.Instance, token *string, clearToken bool,
-) error {
-	s.putBy, s.putKind, s.putScope = by, kind, scope
-	s.put, s.putToken, s.clearToken = instance, token, clearToken
-	return nil
+func (s *connectorInstanceSpy) ConnectorInstanceRevision(
+	context.Context, settings.ScopeKind, domain.Scope, string,
+) (domain.Revision, error) {
+	return fakeRevision, nil
 }
 
-func (s *connectorInstanceSpy) DeleteConnectorInstance(
-	_ context.Context, by domain.UserID, _ domain.Scope,
-	kind settings.ScopeKind, scope domain.Scope, name string,
-) error {
-	s.putBy, s.putKind, s.putScope, s.deleted = by, kind, scope, name
+func (s *connectorInstanceSpy) WriteConnectorInstance(_ context.Context, w admin.ConnectorWrite) (domain.Revision, error) {
+	s.putBy, s.putKind, s.putScope = w.By, w.ScopeKind, w.Scope
+	s.put, s.putToken, s.clearToken = w.Instance, w.Token, w.ClearToken
+	return fakeRevision, nil
+}
+
+func (s *connectorInstanceSpy) RemoveConnectorInstance(_ context.Context, r admin.ConnectorRemoval) error {
+	s.putBy, s.putKind, s.putScope, s.deleted = r.By, r.ScopeKind, r.Scope, r.Name
 	return nil
 }
 
@@ -286,7 +286,7 @@ func TestGetConnectorInstance_returnsAuthoredSQLOnlyToAConfigurer(t *testing.T) 
 	if err != nil {
 		t.Fatalf("GetConnectorInstance: %v", err)
 	}
-	body := openapi.ConnectorInstanceDetail(resp.(openapi.GetConnectorInstance200JSONResponse))
+	body := resp.(openapi.GetConnectorInstance200JSONResponse).Body
 	if body.Sql == nil || len(body.Sql.Templates) != 1 || body.Sql.Templates[0].Sql != query {
 		t.Fatalf("sql = %+v, want the complete authored template", body.Sql)
 	}
@@ -332,7 +332,7 @@ func TestGetConnectorInstance_selectsTheExactScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetConnectorInstance: %v", err)
 	}
-	body := openapi.ConnectorInstanceDetail(resp.(openapi.GetConnectorInstance200JSONResponse))
+	body := resp.(openapi.GetConnectorInstance200JSONResponse).Body
 	if body.Sql == nil || body.Sql.Templates[0].Sql != "select 'platform'" {
 		t.Fatalf("sql = %+v, want the platform-scoped instance", body.Sql)
 	}
