@@ -28,9 +28,28 @@ holding the read-only type have no use for it.
 A secret that will not open is an error here, where List reports it as absent. A
 client told a credential is gone would write it back; a listing shows the rest of
 the installation, and this has nothing else to show.
+
+One snapshot, because the answer takes three statements and a client compares all
+of it with what it wants. Read apart, a write landing between them describes a
+connection that never existed: this one's address with conversations it does not
+have yet, or a removal that reads as a failure halfway through.
 */
 func (c *Channels) Named(ctx context.Context, name string) (Channel, []ChannelIdentity, error) {
-	row, err := c.settings.Reveal(ctx, settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
+	var found Channel
+	var bound []ChannelIdentity
+	err := c.settings.ReadSnapshot(ctx, func(db settings.DB) error {
+		var err error
+		found, bound, err = c.namedOn(ctx, db, name)
+		return err
+	})
+	if err != nil {
+		return Channel{}, nil, err
+	}
+	return found, bound, nil
+}
+
+func (c *Channels) namedOn(ctx context.Context, db settings.DB, name string) (Channel, []ChannelIdentity, error) {
+	row, err := c.settings.RevealOn(ctx, db, settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
 	if errors.Is(err, settings.ErrNotFound) {
 		return Channel{}, nil, fmt.Errorf("%w: %s", ErrChannelUnknown, name)
 	}
@@ -41,11 +60,11 @@ func (c *Channels) Named(ctx context.Context, name string) (Channel, []ChannelId
 	_ = json.Unmarshal(row.Value, &conn)
 	creds := channel.ReadCredentials(row.Secret)
 
-	conversations, err := c.settings.ListByChannel(ctx, channel.KindConversation, name)
+	conversations, err := c.settings.ListByChannelTx(ctx, db, channel.KindConversation, name)
 	if err != nil {
 		return Channel{}, nil, fmt.Errorf("admin: read conversations of %s: %w", name, err)
 	}
-	bound, err := c.identitiesOn(ctx, name)
+	bound, err := c.identitiesOn(ctx, db, name)
 	if err != nil {
 		return Channel{}, nil, err
 	}
@@ -62,8 +81,8 @@ func (c *Channels) Named(ctx context.Context, name string) (Channel, []ChannelId
 }
 
 // identitiesOn reads the bindings keyed under one connection, wherever stored.
-func (c *Channels) identitiesOn(ctx context.Context, name string) ([]ChannelIdentity, error) {
-	stored, err := c.settings.ListUnderPrefix(ctx, KindChannelIdentity, name+"/")
+func (c *Channels) identitiesOn(ctx context.Context, db settings.DB, name string) ([]ChannelIdentity, error) {
+	stored, err := c.settings.ListUnderPrefixTx(ctx, db, KindChannelIdentity, name+"/")
 	if err != nil {
 		return nil, fmt.Errorf("admin: read identities on %s: %w", name, err)
 	}

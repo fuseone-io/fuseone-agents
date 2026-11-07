@@ -2,6 +2,7 @@ package admin_test
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"sync"
@@ -10,7 +11,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/settings"
 )
 
 /*
@@ -75,6 +79,131 @@ func bounded(t *testing.T) context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
 	return ctx
+}
+
+type namedChannel struct {
+	found admin.Channel
+	bound []admin.ChannelIdentity
+}
+
+func TestChannelNamed_writesLandingAfterItsFirstRead_answersTheStateItBeganOn(t *testing.T) {
+	const name = "snapshot_slack"
+	cases := []struct {
+		name string
+		// write commits behind the read's back.
+		write func(ctx context.Context, writer *admin.Channels) error
+		// landed proves the write is there for the next read, every part of it.
+		// Without it, a write that changed nothing would pass this test.
+		landed func(t *testing.T, before, after namedChannel, err error)
+	}{{
+		name: "the connection, a conversation and a binding all change",
+		write: func(ctx context.Context, writer *admin.Channels) error {
+			if err := writer.PutChannel(ctx, admin.ChannelWrite{
+				Channel: admin.Channel{
+					Name: name, Kind: "slack", Workspace: "W-new",
+					DeliveryMode: channel.DeliveryHTTP, Enabled: true,
+				},
+				Credentials: channel.Credentials{Token: "bot-new", Signing: "sign-new"},
+				By:          "usr_ana", Governs: true,
+			}); err != nil {
+				return err
+			}
+			if err := writer.PutConversation(ctx, name, admin.Conversation{
+				ID: "C-new", Scope: domain.Scope{Company: "acme"}, Enabled: true,
+			}, "usr_ana"); err != nil {
+				return err
+			}
+			return writer.BindIdentity(ctx, admin.ChannelIdentity{
+				Channel: name, Account: "U-new", Principal: "usr_ana",
+			}, "usr_ana")
+		},
+		landed: func(t *testing.T, before, after namedChannel, err error) {
+			t.Helper()
+			if err != nil {
+				t.Fatalf("read after the write: %v", err)
+			}
+			if after.found.Workspace == before.found.Workspace {
+				t.Error("the workspace did not change, so this proves nothing about it")
+			}
+			if after.found.SecretFingerprint == before.found.SecretFingerprint {
+				t.Error("the fingerprint did not change, so this proves nothing about it")
+			}
+			if len(after.found.Conversations) == len(before.found.Conversations) {
+				t.Error("no conversation arrived, so this proves nothing about them")
+			}
+			if len(after.bound) == len(before.bound) {
+				t.Error("no binding arrived, so this proves nothing about them")
+			}
+		},
+	}, {
+		name: "the connection is removed",
+		write: func(ctx context.Context, writer *admin.Channels) error {
+			return writer.DeleteChannel(ctx, name, "usr_ana", true)
+		},
+		landed: func(t *testing.T, _, _ namedChannel, err error) {
+			t.Helper()
+			if !errors.Is(err, admin.ErrChannelUnknown) {
+				t.Errorf("read after the removal: %v, want ErrChannelUnknown", err)
+			}
+		},
+	}}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := freshPool(t)
+			v := testVault(t)
+			writer := admin.NewChannels(pool, settings.NewStore(pool, v), onlySlack{})
+			trace := &writeAfterFirstRead{}
+			traced := tracedPool(t, trace)
+			reader := admin.NewChannels(traced, settings.NewStore(traced, v), onlySlack{})
+			ctx := context.Background()
+
+			if err := writer.PutChannel(ctx, admin.ChannelWrite{
+				Channel: admin.Channel{
+					Name: name, Kind: "slack", Workspace: "W-old",
+					DeliveryMode: channel.DeliveryHTTP, Enabled: true,
+				},
+				Credentials: channel.Credentials{Token: "bot-old", Signing: "sign-old"},
+				By:          "usr_ana", Governs: true,
+			}); err != nil {
+				t.Fatalf("put: %v", err)
+			}
+			if err := writer.PutConversation(ctx, name, admin.Conversation{
+				ID: "C-old", Scope: domain.Scope{Company: "acme"}, Enabled: true,
+			}, "usr_ana"); err != nil {
+				t.Fatalf("put conversation: %v", err)
+			}
+			if err := writer.BindIdentity(ctx, admin.ChannelIdentity{
+				Channel: name, Account: "U-old", Principal: "usr_ana",
+			}, "usr_ana"); err != nil {
+				t.Fatalf("bind: %v", err)
+			}
+			read := func() (namedChannel, error) {
+				found, bound, err := reader.Named(ctx, name)
+				return namedChannel{found: found, bound: bound}, err
+			}
+			before, err := read()
+			if err != nil {
+				t.Fatalf("read before: %v", err)
+			}
+
+			trace.arm(func() {
+				if err := tc.write(bounded(t), writer); err != nil {
+					t.Errorf("the write landing inside the read: %v", err)
+				}
+			})
+			during, err := read()
+			if err != nil {
+				t.Fatalf("read during: %v", err)
+			}
+			trace.landed(t)
+			if !reflect.DeepEqual(during, before) {
+				t.Errorf("a torn answer:\n got %+v\nwant %+v", during, before)
+			}
+
+			after, err := read()
+			tc.landed(t, before, after, err)
+		})
+	}
 }
 
 func TestMCPServerNamed_aWriteLandingAfterItsFirstRead_answersTheStateItBeganOn(t *testing.T) {

@@ -19,9 +19,9 @@ read of one connection has to cost the same however many others exist.
 
 const settingColumns = `scope_kind, company_id, area_id, name, value, secret is not null, enabled, updated_by, updated_at`
 
-// ListByChannel returns the settings of a kind whose value names this channel.
-func (s *Store) ListByChannel(ctx context.Context, kind Kind, channelName string) ([]Setting, error) {
-	rows, err := s.pool.Query(ctx, `select `+settingColumns+`
+// ListByChannelTx returns the settings of a kind whose value names this channel.
+func (s *Store) ListByChannelTx(ctx context.Context, conn DB, kind Kind, channelName string) ([]Setting, error) {
+	rows, err := conn.Query(ctx, `select `+settingColumns+`
 		from settings where kind = $1 and value->>'channel' = $2
 		order by scope_kind, company_id, area_id, name`, string(kind), channelName)
 	if err != nil {
@@ -30,18 +30,18 @@ func (s *Store) ListByChannel(ctx context.Context, kind Kind, channelName string
 	return scanSettings(rows, kind)
 }
 
-// ListUnderPrefix returns the settings of a kind whose name starts with prefix.
+// ListUnderPrefixTx returns the settings of a kind whose name starts with prefix.
 //
 // A range rather than LIKE: a prefix holding % or _ would match other rows, and
 // a pattern arriving as a parameter cannot use the index. The operators compare
 // bytes, which is the order of the index and of the upper bound worked out here.
-func (s *Store) ListUnderPrefix(ctx context.Context, kind Kind, prefix string) ([]Setting, error) {
+func (s *Store) ListUnderPrefixTx(ctx context.Context, conn DB, kind Kind, prefix string) ([]Setting, error) {
 	if prefix == "" {
 		return nil, fmt.Errorf("settings: list %s under an empty prefix would be all of them", kind)
 	}
 	upper := []byte(prefix)
 	upper[len(upper)-1]++
-	rows, err := s.pool.Query(ctx, `select `+settingColumns+`
+	rows, err := conn.Query(ctx, `select `+settingColumns+`
 		from settings where kind = $1 and name ~>=~ $2 and name ~<~ $3
 		order by scope_kind, company_id, area_id, name`, string(kind), prefix, string(upper))
 	if err != nil {

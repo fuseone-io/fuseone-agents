@@ -220,6 +220,10 @@ func namesTarget(args []any) bool {
 	return false
 }
 
+// transactionControl matches what a snapshot adds around a read. It touches no
+// table, so it has no plan to inspect.
+var transactionControl = regexp.MustCompile(`(?i)^\s*(begin|commit|rollback)\b`)
+
 // One command is not constant work if the database reads a whole table to answer
 // it. Sequential scans switched off, a plan still showing one has no usable index.
 func TestReadByName_everyCommand_isAnsweredFromAnIndex(t *testing.T) {
@@ -252,11 +256,17 @@ func TestReadByName_everyCommand_isAnsweredFromAnIndex(t *testing.T) {
 
 			var plans strings.Builder
 			for _, one := range commands {
+				if transactionControl.MatchString(one.sql) {
+					continue
+				}
 				plan := explain(t, conn, one)
 				plans.WriteString(plan)
 				if strings.Contains(plan, "Seq Scan") {
 					t.Errorf("no index answers: %s\n%s", one.sql, plan)
 				}
+			}
+			if plans.Len() == 0 {
+				t.Fatalf("no plan was inspected among %d commands", len(commands))
 			}
 			for _, index := range r.indexes {
 				if !strings.Contains(plans.String(), index) {
