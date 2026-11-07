@@ -81,7 +81,7 @@ func Open(ctx context.Context, opener Opener, batch Batch) (Opened, error) {
 			// The intention is this case of this simulation. Simulating again
 			// is a new intention and opens its own runs; retrying one that
 			// timed out reaches the runs it already opened.
-			IdemKey:    fmt.Sprintf("sim:%s:%d", batch.ID, i+1),
+			IdemKey:    intentionOf(batch.ID, i, occurrence),
 			Trigger:    "simulation",
 			By:         batch.By,
 			Input:      occurrence.Input,
@@ -98,4 +98,20 @@ func Open(ctx context.Context, opener Opener, batch Batch) (Opened, error) {
 		out.Runs = append(out.Runs, opened.RunID)
 	}
 	return out, nil
+}
+
+/*
+intentionOf names one case of one simulation, in the key the ledger holds to one run.
+
+By the case, never its place in the list. Two workers can open one battery on either
+side of a correction, and a case that sorts first moves every other: keyed by position,
+the opener hands back the run of a different case and says nothing, so one case never
+runs and another runs twice. An uploaded case has no name and its set does not change,
+so its position is its identity.
+*/
+func intentionOf(simulation string, at int, occurrence Occurrence) string {
+	if occurrence.ID != "" {
+		return fmt.Sprintf("sim:%s:case:%s", simulation, occurrence.ID)
+	}
+	return fmt.Sprintf("sim:%s:%d", simulation, at+1)
 }
