@@ -51,6 +51,18 @@ Quando o login é por provedor externo, um grant pode vir de um **grupo** que el
 
 Consequência prática: **revogar esse grant na tela dura até a pessoa entrar de novo.** O que precisa mudar é o grupo, no provedor. A tela de Pessoas marca a origem de cada grant — `local`, `provider` ou `mixed` — exatamente para essa distinção não ser descoberta na segunda-feira.
 
+## Contas de serviço
+
+Um pipeline, um script ou uma execução de Terraform agem por uma conta de serviço, em **Administração > Contas de serviço**. Ali existem três atos, e eles significam coisas diferentes:
+
+- **Revogar um token** encerra aquela credencial em definitivo, na próxima requisição.
+- **Desabilitar a conta** para todos os tokens de uma vez. Dá para desfazer: habilitar traz de volta os tokens não revogados e não expirados, e o diálogo diz quantos são.
+- **Alterar o que ela pode fazer** muda os papéis e não afeta os tokens.
+
+Um token é emitido com validade obrigatória, e o segredo aparece uma única vez. Só o hash fica guardado, então copie antes de fechar o diálogo. Para rotacionar, emita um substituto com o mesmo nome, passe a máquina para ele e depois revogue o antigo: os dois funcionam nesse intervalo, e o id os distingue.
+
+Seja qual for o papel, uma conta de serviço nunca pode aprovar uma ação, conceder aprovação permanente nem mudar quem tem qual acesso. Ela também não pode ter senha nem sessão, então revogar os tokens encerra o acesso dela. Cada um desses atos fica na trilha administrativa, sem o segredo.
+
 ## Casos de uso
 
 ### Um time cuida do próprio agente

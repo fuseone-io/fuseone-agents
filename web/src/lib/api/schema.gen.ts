@@ -1721,7 +1721,8 @@ export interface paths {
         get?: never;
         /**
          * Turn every token of an account off, or back on
-         * @description Takes effect on the next request.
+         * @description Takes effect on the next request. Enabling brings back every token that was not
+         *     revoked and has not expired.
          */
         put: operations["setServiceAccountDisabled"];
         post?: never;
@@ -1820,6 +1821,9 @@ export interface paths {
          *     out of the browser they are typing in would be a surprise. Revoking
          *     sessions is a separate act, and the one to reach for when a password
          *     leaked.
+         *
+         *     Only for a person. A service account is refused, by anybody: its credential
+         *     is a token, and a password would survive that token being revoked.
          */
         put: operations["setPassword"];
         post?: never;
