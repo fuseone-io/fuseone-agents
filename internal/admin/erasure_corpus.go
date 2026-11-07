@@ -149,10 +149,10 @@ func (e *Erasures) eraseCorpusOf(
 		return corpusErasure{}, fmt.Errorf("admin: erase corpus copies: %w", err)
 	}
 	tag, err := tx.Exec(ctx, `
-		update regression_cases set note = ''
+		update regression_cases set note = '', expectations = '[]'::jsonb
 		where input_ref = any($1::text[]) or from_run = any($2::text[])`, refs, runs)
 	if err != nil {
-		return corpusErasure{}, fmt.Errorf("admin: clear corpus notes: %w", err)
+		return corpusErasure{}, fmt.Errorf("admin: clear what corrections say: %w", err)
 	}
 	_, replayed, err := eraseReplays(ctx, tx, replaySearchSQL, 3, digests, owners, "subject")
 	if err != nil {
@@ -186,13 +186,15 @@ func scanStrings(ctx context.Context, conn db, query string, args ...any) ([]str
 	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
-// clearNotesOfErasedCases is retention's half: the copy aged out, and a note is
-// free text about it. The case itself stays, as a visible gap in the corpus.
+// clearNotesOfErasedCases is retention's half: the copy aged out, and a note and an
+// expectation are free text about it. The case itself stays, as a visible gap in the
+// corpus.
 func (e *Erasures) clearNotesOfErasedCases(ctx context.Context, tx pgx.Tx) (int, error) {
 	tag, err := tx.Exec(ctx, `
-		update regression_cases c set note = ''
+		update regression_cases c set note = '', expectations = '[]'::jsonb
 		from run_content rc
-		where rc.ref = c.input_ref and rc.erased_at is not null and c.note <> ''`)
+		where rc.ref = c.input_ref and rc.erased_at is not null
+		  and (c.note <> '' or c.expectations <> '[]'::jsonb)`)
 	if err != nil {
 		return 0, fmt.Errorf("admin: clear notes of erased corrections: %w", err)
 	}

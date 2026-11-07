@@ -1010,3 +1010,89 @@ func TestForSubject_namingManyRuns_leavesOtherRunsAndKindsAlone(t *testing.T) {
 		}
 	}
 }
+
+// expect gives a correction expectations naming a person, which nothing validates.
+func expect(t *testing.T, pool *pgxpool.Pool, id string) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(), `
+		update regression_cases
+		set expectations = '[{"kind":"says","value":"escalate to ana@example.com"}]'
+		where case_id = $1`, id); err != nil {
+		t.Fatalf("set expectations: %v", err)
+	}
+}
+
+func expectationsOf(t *testing.T, pool *pgxpool.Pool, id string) string {
+	t.Helper()
+	var text string
+	if err := pool.QueryRow(context.Background(),
+		`select expectations::text from regression_cases where case_id = $1`, id).Scan(&text); err != nil {
+		t.Fatalf("read expectations: %v", err)
+	}
+	return text
+}
+
+// An expectation is free text about the occurrence, as a note is. The case stays as
+// a visible gap, so what it said has to go without the row going.
+func TestForSubject_clearsTheExpectationsOfTheCorrections_andNoOthers(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+
+	input := []byte(`{"email":"ana@example.com"}`)
+	if _, err := content.Put(ctx, "run-asked", 1, input); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	copied, err := content.PutFor(ctx, "regression", "suporte", 1, input)
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	other, err := content.PutFor(ctx, "regression", "suporte", 1, []byte(`{"email":"bia@example.com"}`))
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	recordCorrection(t, pool, correction{"suporte", "reg-named", "run-asked", copied, ""})
+	recordCorrection(t, pool, correction{"suporte", "reg-sharing", "run-later", copied, ""})
+	recordCorrection(t, pool, correction{"suporte", "reg-other", "run-other", other, ""})
+	for _, id := range []string{"reg-named", "reg-sharing", "reg-other"} {
+		expect(t, pool, id)
+	}
+
+	if _, err := erasures.ForSubject(ctx, "dpo", domain.Scope{}, []domain.RunID{"run-asked"}, "request"); err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	for _, id := range []string{"reg-named", "reg-sharing"} {
+		if got := expectationsOf(t, pool, id); got != "[]" {
+			t.Errorf("%s after erasure = %s, want them gone", id, got)
+		}
+	}
+	if got := expectationsOf(t, pool, "reg-other"); !strings.Contains(got, "ana@example.com") {
+		t.Errorf("another correction's expectations = %s, want them untouched", got)
+	}
+}
+
+func TestSweep_clearsTheExpectationsOfACorrectionWhoseCopyAgedOut(t *testing.T) {
+	future := time.Now().Add(6 * 365 * 24 * time.Hour)
+	erasures, content := erasuresFor(t, func() time.Time { return future })
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+
+	copied, err := content.PutFor(ctx, "regression", "suporte", 1, []byte(`{"email":"ana@example.com"}`))
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	// No note: the sweep must not reach these only on the way to clearing one.
+	recordCorrection(t, pool, correction{"suporte", "reg-1", "run-asked", copied, ""})
+	expect(t, pool, "reg-1")
+
+	if _, err := erasures.Sweep(ctx); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	if got := expectationsOf(t, pool, "reg-1"); got != "[]" {
+		t.Fatalf("expectations after retention = %s, want them gone", got)
+	}
+}

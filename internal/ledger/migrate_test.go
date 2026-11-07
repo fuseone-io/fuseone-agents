@@ -2,6 +2,7 @@ package ledger_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -421,5 +422,44 @@ func TestMigrate_conversationsUnderTheIdAlone_waitForTheConnectionsLock(t *testi
 	}
 	if name != "10:held-slack/C-LOCKED" {
 		t.Errorf("name = %q, want it renamed once the lock was free", name)
+	}
+}
+
+// Corrections erased before erasure took expectations still hold them. The next
+// step turns expectations into content, and these must not arrive there readable.
+func TestMigrate_correctionsAlreadyErased_loseTheirExpectations(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := t.Context()
+
+	if _, err := pool.Exec(ctx, `
+		delete from regression_cases where agent_id = 'migrate-erased';
+		delete from run_content where run_id = 'migrate-erased';
+		delete from schema_migrations where version = '0102_erased_corrections_expectations';
+		insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes, erased_at, erased_reason)
+		values ('regression://migrate-erased/1/gone', 'regression', 'migrate-erased', 1, 'gone', null, 0, now(), 'subject'),
+		       ('regression://migrate-erased/1/kept', 'regression', 'migrate-erased', 1, 'kept', '{}', 2, null, '');
+		insert into regression_cases (agent_id, case_id, input_ref, expectations) values
+		  ('migrate-erased', 'erased', 'regression://migrate-erased/1/gone', '[{"kind":"says","value":"ana@example.com"}]'),
+		  ('migrate-erased', 'readable', 'regression://migrate-erased/1/kept', '[{"kind":"says","value":"keep"}]');
+	`); err != nil {
+		t.Fatalf("restore the state before the migration: %v", err)
+	}
+	if err := ledger.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	read := func(id string) string {
+		var text string
+		if err := pool.QueryRow(ctx, `select expectations::text from regression_cases
+			where agent_id = 'migrate-erased' and case_id = $1`, id).Scan(&text); err != nil {
+			t.Fatalf("read %s: %v", id, err)
+		}
+		return text
+	}
+	if got := read("erased"); got != "[]" {
+		t.Errorf("erased case = %s, want its expectations gone", got)
+	}
+	if got := read("readable"); !strings.Contains(got, "keep") {
+		t.Errorf("readable case = %s, want it untouched", got)
 	}
 }
