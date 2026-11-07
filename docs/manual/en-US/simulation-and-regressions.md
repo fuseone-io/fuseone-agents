@@ -105,6 +105,11 @@ Run the corpus when:
 - the autonomy stage changed;
 - the provider or model changed.
 
+A battery is read against the version of the corpus it ran, so adding a correction later
+does not change a past result. A new correction is not checked until the corpus runs again,
+and it stops an agent from starting only once it has run and broken. Batteries from before
+corpus versions are read against the corpus as it is now.
+
 If a regression starts failing after a policy changed, read the Gate step
 first. The policy may be doing exactly what it was written to do.
 

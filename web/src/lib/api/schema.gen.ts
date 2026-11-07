@@ -4957,10 +4957,10 @@ export interface components {
             steps: number;
         };
         /**
-         * @description How a case stood in one battery. `absent` is a case that battery never ran — reported rather than dropped, because a corpus that grew between the two versions is a real difference.
+         * @description How a case stood in one battery. `absent` is a case that battery never ran — reported rather than dropped. `not_comparable` is a case the two batteries did not ask the same question about: only one version of the corpus had it, or it expected something else in each. It is neither a regression nor a fix.
          * @enum {string}
          */
-        Standing: "held" | "broke" | "absent";
+        Standing: "held" | "broke" | "absent" | "not_comparable";
         /** @description Promotion evidence for one published agent version. Every judgement comes from structured ledger facts and stable codes, never from instruction prose. */
         AgentTrust: {
             versionId: string;

@@ -261,6 +261,13 @@ func (s *Server) trustBattery(
 		return simulate.Report{}, false, fmt.Errorf("simulation %s: %w", simulation, err)
 	}
 	report.Agent, report.Version = a.ID, a.VersionID
+	if report.DatasetVersion != 0 {
+		// Against what it ran. The corpus passed in is the working set, which the
+		// rest of this page is about and this battery may never have seen.
+		if corpus, err = s.regressions.AtVersion(ctx, a.ID, report.DatasetVersion); err != nil {
+			return simulate.Report{}, false, fmt.Errorf("read the corpus of %s: %w", a.ID, err)
+		}
+	}
 	if len(corpus) > 0 {
 		report = simulate.Battery(report, corpus)
 	}

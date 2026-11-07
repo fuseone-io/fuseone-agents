@@ -20,15 +20,15 @@ func Battery(report Report, corpus []domain.RegressionCase) Report {
 		return report
 	}
 
-	rows := make(map[string]int, len(report.Cases))
-	for i, c := range report.Cases {
+	out := report
+	out.Cases = oneRowPerCase(report.Cases, corpus)
+	rows := make(map[string]int, len(out.Cases))
+	for i, c := range out.Cases {
 		if c.ID != "" {
 			rows[c.ID] = i
 		}
 	}
 
-	out := report
-	out.Cases = append([]Case(nil), report.Cases...)
 	out.Held, out.Broken, out.Drifted, out.Erased = 0, 0, 0, 0
 
 	for _, corrected := range corpus {
@@ -67,9 +67,7 @@ func Battery(report Report, corpus []domain.RegressionCase) Report {
 		// Said whether or not the case broke. A case that still holds against
 		// a model that moved is worth knowing about too: it is the one that
 		// will break next.
-		out.Cases[at].Drifted = corrected.Model != "" &&
-			out.Cases[at].Model != "" &&
-			corrected.Model != out.Cases[at].Model
+		out.Cases[at].Drifted = drifted(out.Cases[at], corrected)
 		out.Cases[at].Unmet = Check(out.Cases[at], corrected.Expectations)
 		if out.Cases[at].Drifted {
 			out.Drifted++
@@ -81,4 +79,83 @@ func Battery(report Report, corpus []domain.RegressionCase) Report {
 		}
 	}
 	return out
+}
+
+/*
+oneRowPerCase reduces a battery to one row for each case, the worst of its runs.
+
+A case can have two: a pod of the previous release keys a battery's runs by position and a
+pod of this one by case, so during a rollout they can open one window twice. The runs can
+disagree, and judging either one alone could report as held a case that just broke, and let
+an agent start. So a case holds only if every run of it did.
+
+The row is one real run, because an expectation is about one run: two cheap runs are not
+one expensive one. The others stay on it, for what the whole battery has to say about them:
+what they cost, and whether a Gate stopped them. A case with no name is its own row.
+*/
+func oneRowPerCase(cases []Case, corpus []domain.RegressionCase) []Case {
+	expected := make(map[string][]domain.Expectation, len(corpus))
+	for _, c := range corpus {
+		expected[c.ID] = c.Expectations
+	}
+	out := make([]Case, 0, len(cases))
+	at := make(map[string]int, len(cases))
+	for _, c := range cases {
+		first, seen := at[c.ID]
+		if c.ID == "" || !seen {
+			at[c.ID] = len(out)
+			out = append(out, c)
+			continue
+		}
+		out[first] = worseOf(out[first], c, expected[c.ID])
+	}
+	return out
+}
+
+func worseOf(row, run Case, expected []domain.Expectation) Case {
+	others := row.others
+	row.others = nil
+	worse, other := row, run
+	a, b := weight(row, expected), weight(run, expected)
+	// By the run id when they weigh the same, so the ledger's order decides nothing.
+	if b > a || (b == a && run.RunID < row.RunID) {
+		worse, other = run, row
+	}
+	worse.others = append(others, other)
+	return worse
+}
+
+// weight orders the runs of one case by what a reader must not miss. A block is not in
+// here: the row keeps the other runs, so a block counts wherever it happened.
+func weight(c Case, expected []domain.Expectation) int {
+	switch {
+	case len(Check(c, expected)) > 0:
+		return 5
+	case c.Settled == SettledUnsettled:
+		return 4
+	case c.Settled == SettledParked:
+		return 3
+	case c.Settled == SettledWaiting:
+		return 2
+	default:
+		return 0
+	}
+}
+
+// drifted says whether any run of a case answered on another model than it last held
+// against. Any of them, because a provider moving a model under one run is still moving it.
+func drifted(row Case, corrected domain.RegressionCase) bool {
+	if onAnotherModel(row, corrected) {
+		return true
+	}
+	for _, other := range row.others {
+		if onAnotherModel(other, corrected) {
+			return true
+		}
+	}
+	return false
+}
+
+func onAnotherModel(run Case, corrected domain.RegressionCase) bool {
+	return corrected.Model != "" && run.Model != "" && corrected.Model != run.Model
 }

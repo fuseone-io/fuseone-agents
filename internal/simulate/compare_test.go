@@ -127,3 +127,93 @@ func TestCompare_readTwice_answersInTheSameOrder(t *testing.T) {
 		}
 	}
 }
+
+func pinnedTo(version int64, r Report) Report {
+	r.DatasetVersion = version
+	return r
+}
+
+// A case added after the first battery. It holds on the second, and nothing was fixed:
+// the first never asked.
+func TestCompare_aCaseOnlyOneVersionOfTheCorpusHad_isNotComparable(t *testing.T) {
+	t.Parallel()
+
+	was := pinnedTo(1, reportOf("v3", Case{ID: "estorno"}))
+	now := pinnedTo(2, reportOf("v4", Case{ID: "estorno"}, Case{ID: "novo"}))
+
+	got := Compare(was, now)
+
+	if got.Fixed != 0 || got.Regressed != 0 {
+		t.Errorf("fixed=%d regressed=%d, want neither", got.Fixed, got.Regressed)
+	}
+	row := rowOf(t, got, "novo")
+	if row.Now != NotComparable && row.Was != NotComparable {
+		t.Errorf("row = %+v, want it marked not comparable", row)
+	}
+}
+
+func TestCompare_aCaseDroppedFromTheCorpus_isNotComparable(t *testing.T) {
+	t.Parallel()
+
+	was := pinnedTo(1, reportOf("v3", Case{ID: "antigo"}, Case{ID: "estorno"}))
+	now := pinnedTo(2, reportOf("v4", Case{ID: "estorno"}))
+
+	if row := rowOf(t, Compare(was, now), "antigo"); row.Now != NotComparable {
+		t.Errorf("row = %+v, want it marked not comparable", row)
+	}
+}
+
+// Someone loosened what the case expects, and now it holds. The agent did not get
+// better, so this must never read as a fix.
+func TestCompare_aCaseWhoseExpectationsChanged_isNeverFixed(t *testing.T) {
+	t.Parallel()
+
+	strict := []domain.Expectation{{Kind: domain.ExpectCalls, Value: "a"}}
+	loose := []domain.Expectation{{Kind: domain.ExpectCalls, Value: "b"}}
+	was := pinnedTo(1, reportOf("v3", Case{ID: "estorno", Expected: strict, Unmet: strict}))
+	now := pinnedTo(2, reportOf("v4", Case{ID: "estorno", Expected: loose}))
+
+	got := Compare(was, now)
+
+	if got.Fixed != 0 {
+		t.Errorf("fixed = %d, want none", got.Fixed)
+	}
+	if row := rowOf(t, got, "estorno"); row.Now != NotComparable {
+		t.Errorf("row = %+v, want it marked not comparable", row)
+	}
+}
+
+func TestCompare_theSameVersionOfTheCorpus_stillReportsAFix(t *testing.T) {
+	t.Parallel()
+
+	expected := []domain.Expectation{{Kind: domain.ExpectCalls, Value: "a"}}
+	was := pinnedTo(2, reportOf("v3", Case{ID: "estorno", Expected: expected, Unmet: expected}))
+	now := pinnedTo(2, reportOf("v4", Case{ID: "estorno", Expected: expected}))
+
+	if got := Compare(was, now); got.Fixed != 1 {
+		t.Errorf("fixed = %d, want the one the agent earned", got.Fixed)
+	}
+}
+
+// A pinned battery against one from before versions: one side's corpus is unknown.
+func TestCompare_aPinnedAndAnUnpinnedBattery_doNotCallAOneSidedCaseNew(t *testing.T) {
+	t.Parallel()
+
+	was := reportOf("v3", Case{ID: "estorno"})
+	now := pinnedTo(2, reportOf("v4", Case{ID: "estorno"}, Case{ID: "novo"}))
+
+	if row := rowOf(t, Compare(was, now), "novo"); row.Was != NotComparable {
+		t.Errorf("row = %+v, want it marked not comparable", row)
+	}
+}
+
+func rowOf(t *testing.T, c Comparison, id string) CaseChange {
+	t.Helper()
+	for _, row := range c.Cases {
+		if row.ID == id {
+			return row
+		}
+	}
+	t.Fatalf("no row for %s in %+v", id, c.Cases)
+	return CaseChange{}
+}

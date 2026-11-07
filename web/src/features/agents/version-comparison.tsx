@@ -66,6 +66,7 @@ const STANDING: Record<CaseChange["was"], string> = {
   held: "comparison.standing.held",
   broke: "comparison.standing.broke",
   absent: "comparison.standing.absent",
+  not_comparable: "comparison.standing.not_comparable",
 };
 
 function ChangeRow({ change }: { change: CaseChange }) {

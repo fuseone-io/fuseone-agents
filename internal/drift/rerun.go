@@ -34,7 +34,7 @@ type LastBatteries interface {
 // Hold fences it against an erasure: a battery reads the corpus and then opens runs
 // holding it, and an erasure between the two would leave those runs behind.
 type Occurrences interface {
-	Occurrences(ctx context.Context, agent domain.AgentID) ([]simulate.Occurrence, error)
+	Occurrences(ctx context.Context, agent domain.AgentID) (simulate.Corpus, error)
 	Hold(ctx context.Context, agent domain.AgentID, inside func(context.Context) error) error
 }
 
@@ -126,11 +126,11 @@ func (r *Rerun) run(ctx context.Context, one domain.WatchedCorpus, now time.Time
 }
 
 func (r *Rerun) open(ctx context.Context, one domain.WatchedCorpus, now time.Time) error {
-	cases, err := r.occurrences.Occurrences(ctx, one.Agent)
+	corpus, err := r.occurrences.Occurrences(ctx, one.Agent)
 	if err != nil {
 		return fmt.Errorf("read the corpus of %s: %w", one.Agent, err)
 	}
-	if len(cases) == 0 {
+	if len(corpus.Cases) == 0 {
 		return nil
 	}
 
@@ -140,8 +140,9 @@ func (r *Rerun) open(ctx context.Context, one domain.WatchedCorpus, now time.Tim
 		// The platform asked, and the trail says so. A battery attributed to
 		// the last person who touched the agent would put a cost on somebody
 		// who was asleep.
-		By:    "platform",
-		Cases: cases,
+		By:             "platform",
+		DatasetVersion: corpus.Version,
+		Cases:          corpus.Cases,
 	})
 	if err != nil {
 		return err

@@ -243,10 +243,11 @@ func TestList_saysWhichCasesLostTheirInput(t *testing.T) {
 		t.Fatalf("erased cases = %+v", found)
 	}
 
-	occurrences, err := regression.NewCorpus(store, content).Occurrences(ctx, "suporte")
+	corpus, err := regression.NewCorpus(store, content).Occurrences(ctx, "suporte")
 	if err != nil {
 		t.Fatalf("Occurrences: %v", err)
 	}
+	occurrences := corpus.Cases
 	if len(occurrences) != 1 || occurrences[0].ID != "reg-kept" {
 		t.Fatalf("occurrences = %+v, want the one that can still run", occurrences)
 	}

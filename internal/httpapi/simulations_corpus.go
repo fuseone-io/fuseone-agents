@@ -21,14 +21,15 @@ func (s *Server) openSimulation(
 	ctx context.Context, agent domain.AgentID, id string, body *openapi.SimulationRequest,
 ) (opened simulate.Opened, refused error, err error) {
 	open := func(ctx context.Context) error {
-		occurrences, readErr := s.occurrences(ctx, agent, id, body)
+		corpus, readErr := s.occurrences(ctx, agent, id, body)
 		if readErr != nil {
 			refused = readErr
 			return nil
 		}
 		var openErr error
 		opened, openErr = simulate.Open(ctx, s.opener(), simulate.Batch{
-			ID: id, Agent: agent, By: callerOf(ctx), Cases: occurrences,
+			ID: id, Agent: agent, By: callerOf(ctx),
+			DatasetVersion: corpus.Version, Cases: corpus.Cases,
 		})
 		return openErr
 	}
@@ -50,7 +51,7 @@ whole reason the corpus survives retention.
 func (s *Server) occurrences(
 	ctx context.Context, agent domain.AgentID, simulation string,
 	body *openapi.SimulationRequest,
-) ([]simulate.Occurrence, error) {
+) (simulate.Corpus, error) {
 	if body.Corpus != nil && *body.Corpus {
 		return s.corpusOccurrences(ctx, agent)
 	}
@@ -61,45 +62,60 @@ func (s *Server) occurrences(
 	}
 	cases, err := simulate.Load(ctx, s.cases, simulation, []byte(file))
 	if err != nil {
-		return nil, err
+		return simulate.Corpus{}, err
 	}
 	out := make([]simulate.Occurrence, 0, len(cases))
 	for _, input := range cases {
 		out = append(out, simulate.Occurrence{Input: input})
 	}
-	return out, nil
+	return simulate.Corpus{Cases: out}, nil
 }
 
 func (s *Server) corpusOccurrences(
 	ctx context.Context, agent domain.AgentID,
-) ([]simulate.Occurrence, error) {
+) (simulate.Corpus, error) {
 	if s.regressions == nil {
-		return nil, fmt.Errorf("this installation keeps no corrections")
+		return simulate.Corpus{}, fmt.Errorf("this installation keeps no corrections")
 	}
-	corpus, err := s.regressions.List(ctx, agent)
+	version, corpus, err := s.regressions.Pinned(ctx, agent)
 	if err != nil {
-		return nil, err
+		return simulate.Corpus{}, err
 	}
 	if len(corpus) == 0 {
-		return nil, fmt.Errorf("%s has no corrections to re-check", agent)
+		return simulate.Corpus{}, fmt.Errorf("%s has no corrections to re-check", agent)
 	}
 
-	out := make([]simulate.Occurrence, 0, len(corpus))
+	out := simulate.Corpus{Version: version, Cases: make([]simulate.Occurrence, 0, len(corpus))}
 	for _, c := range corpus {
-		input, err := s.content.Get(ctx, c.InputRef)
 		// Erased is a stated gap, and the report names it. Anything else refuses
 		// the whole set: a battery missing a case for no reason reports green on
 		// a correction nobody checked.
+		if c.Erased {
+			continue
+		}
+		input, err := s.content.Get(ctx, c.InputRef)
 		if errors.Is(err, domain.ErrContentErased) {
 			continue
 		}
 		if err != nil {
-			return nil, fmt.Errorf("the occurrence of %s could not be read: %w", c.ID, err)
+			return simulate.Corpus{}, fmt.Errorf("the occurrence of %s could not be read: %w", c.ID, err)
 		}
-		out = append(out, simulate.Occurrence{ID: c.ID, Input: input})
+		out.Cases = append(out.Cases, simulate.Occurrence{ID: c.ID, Input: input})
 	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("every correction of %s lost its input; record them again", agent)
+	if len(out.Cases) == 0 {
+		return simulate.Corpus{}, fmt.Errorf("every correction of %s lost its input; record them again", agent)
 	}
 	return out, nil
+}
+
+// corpusOf is what a battery is read against: the version it ran. One recorded before
+// versions names none and is read against the corpus as it is now, which is all there is,
+// and says so by having no pin.
+func (s *Server) corpusOf(
+	ctx context.Context, agent domain.AgentID, report simulate.Report,
+) ([]domain.RegressionCase, error) {
+	if report.DatasetVersion == 0 {
+		return s.regressions.List(ctx, agent)
+	}
+	return s.regressions.AtVersion(ctx, agent, report.DatasetVersion)
 }

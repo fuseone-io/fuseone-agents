@@ -35,6 +35,12 @@ type RunStartedPayload struct {
 	// case one's correction reports a failure nobody can act on while hiding
 	// a real one.
 	Case string `json:"case,omitempty"`
+	// DatasetVersion is the version of the corpus this run belongs to, so that a
+	// battery can be read against what it ran and not against the corpus as it is by
+	// then. Zero is a battery recorded before versions, which has no pin and is not
+	// given one: inventing which version it ran would be worse than admitting that
+	// nobody knows.
+	DatasetVersion int64 `json:"dataset_version,omitempty"`
 
 	// Origin is where the ask came from, when it came from a conversation.
 	Origin *RunOrigin `json:"origin,omitempty"`

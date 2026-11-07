@@ -478,3 +478,29 @@ func TestOpen_refusesInputLabelledForAnotherAreaBeforeStoringIt(t *testing.T) {
 		t.Fatalf("ledger holds %d runs, want none", len(runs))
 	}
 }
+
+// The pin lives in the ledger, so a battery can be read long after the corpus moved.
+func TestOpen_aDatasetVersion_isRecordedOnTheRun(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	opener, store := openerFor(t)
+
+	opened, err := opener.Open(ctx, trigger.Request{
+		Agent: "triage", IdemKey: "sim:pin", Trigger: "simulation", Simulation: "sim-1",
+		Case: "reg-1", DatasetVersion: 7, Input: []byte(`{}`),
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	steps, err := store.Read(ctx, opened.RunID, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	var started domain.RunStartedPayload
+	if err := json.Unmarshal(steps[0].Payload, &started); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if started.DatasetVersion != 7 {
+		t.Errorf("dataset version = %d, want 7", started.DatasetVersion)
+	}
+}

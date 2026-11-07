@@ -1099,7 +1099,8 @@
     "standing": {
       "held": "valia",
       "broke": "quebrou",
-      "absent": "não rodou"
+      "absent": "não rodou",
+      "not_comparable": "não comparável"
     },
     "title": "Contra a versão anterior"
   },
