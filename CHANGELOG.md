@@ -27,6 +27,42 @@ field" is a commit message.
 
 ---
 
+## [0.96.1] — 2026-11-07
+
+A security fix on top of 0.96.0, and nothing else. It adds no migration and does not turn
+dataset versions on. It counts as 0.96.0 for what the next release requires of a running pod.
+
+### Upgrade notes
+
+- **Coming from before 0.96.0, the notes of every version in between still apply.** That
+  includes the erasing migrations in 0.95.0 and their preview queries.
+- **Find out whether a machine already acquired a sign-in.** Any installation that has run
+  0.95.0 or 0.96.0 with a service account should look. Upgrading makes what these find stop
+  working, and does not remove it, so the row stays as evidence:
+
+  ```sql
+  select principal_id, kind, password_set_at, last_seen_at from principals
+  where kind <> 'user' and password_hash is not null;
+
+  select s.principal_id, pr.kind, count(*) as sessions, max(s.last_used_at) as last_used
+  from sessions s join principals pr using (principal_id)
+  where pr.kind <> 'user'
+  group by 1, 2;
+  ```
+
+  Setting a password is not on the administration trail, so these rows are the record. A row
+  here means a token or an administrator set one, and that machine could sign in whatever
+  became of its tokens. Treat it as a credential that was out of your control.
+
+### Security
+
+- **A service account can no longer hold a password or a session.** In 0.95.0 and 0.96.0 a
+  token could set a username and password on its own account, through the route that lets
+  somebody change their own, and an administrator could set one on its behalf. The machine
+  could then sign in and keep working after every token was revoked. That route now refuses,
+  with a 403 to the token and a 400 to an administrator. Signing in with a password left
+  behind is refused, and a session of a machine stops working on its next request.
+
 ## [0.96.0] — 2026-11-07
 
 ### Upgrade notes
