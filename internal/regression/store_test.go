@@ -26,7 +26,7 @@ import (
 func storeFor(t *testing.T) *regression.Store {
 	t.Helper()
 	pool := poolFor(t)
-	if _, err := pool.Exec(t.Context(), `delete from regression_cases; delete from run_content`); err != nil {
+	if _, err := pool.Exec(t.Context(), `begin; `+testdb.DeclareWriter+` delete from regression_cases; commit; delete from run_content`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 	return regression.NewStore(pool)
@@ -140,61 +140,6 @@ func TestDelete_removesOnlyThatCase(t *testing.T) {
 	got, _ := store.List(ctx, "suporte")
 	if len(got) != 1 || got[0].ID != "reg-2" {
 		t.Errorf("cases = %v", ids(got))
-	}
-}
-
-// Deleting a case left its copy behind with nothing pointing at it, so no
-// erasure could ever find it again.
-func TestDelete_erasesTheCopyOfTheOccurrence(t *testing.T) {
-	store := storeFor(t)
-	pool := testdb.Pool(t)
-	ctx := context.Background()
-	content := ledger.NewContent(pool)
-
-	ref, err := content.PutFor(ctx, "regression", "suporte", 1, []byte(`{"email":"ana@example.com"}`))
-	if err != nil {
-		t.Fatalf("PutFor: %v", err)
-	}
-	withRef := aCase("reg-1", domain.Expectation{Kind: domain.ExpectAsks})
-	withRef.InputRef = ref
-	if err := store.Record(ctx, withRef); err != nil {
-		t.Fatalf("Record: %v", err)
-	}
-
-	if err := store.Delete(ctx, "suporte", "reg-1", "usr_ana"); err != nil {
-		t.Fatalf("Delete: %v", err)
-	}
-
-	if _, err := content.Get(ctx, ref); !errors.Is(err, ledger.ErrErased) {
-		t.Fatalf("copy after delete: err = %v, want erased", err)
-	}
-}
-
-// Identical input shares one reference, so the copy is another case's too.
-func TestDelete_keepsACopyAnotherCaseStillNames(t *testing.T) {
-	store := storeFor(t)
-	pool := testdb.Pool(t)
-	ctx := context.Background()
-	content := ledger.NewContent(pool)
-
-	ref, err := content.PutFor(ctx, "regression", "suporte", 1, []byte(`{"shared":true}`))
-	if err != nil {
-		t.Fatalf("PutFor: %v", err)
-	}
-	for _, id := range []string{"reg-1", "reg-2"} {
-		c := aCase(id, domain.Expectation{Kind: domain.ExpectAsks})
-		c.InputRef = ref
-		if err := store.Record(ctx, c); err != nil {
-			t.Fatalf("Record: %v", err)
-		}
-	}
-
-	if err := store.Delete(ctx, "suporte", "reg-1", "usr_ana"); err != nil {
-		t.Fatalf("Delete: %v", err)
-	}
-
-	if _, err := content.Get(ctx, ref); err != nil {
-		t.Fatalf("copy another case names: %v", err)
 	}
 }
 
@@ -407,42 +352,6 @@ func TestOrphanedCopiesMigration_staysInsideTheAgentsRehearsals(t *testing.T) {
 	}
 }
 
-// The same input through Delete, which the comment on it promises.
-func TestDelete_takesTheReplaysOfATruncatedInput(t *testing.T) {
-	store := storeFor(t)
-	pool := testdb.Pool(t)
-	ctx := context.Background()
-	limited := ledger.NewContent(pool).WithLimit(64)
-	whole := []byte(strings.Repeat("abcdefgh", 32))
-
-	source, err := limited.Put(ctx, "run-source", 1, whole)
-	if err != nil {
-		t.Fatalf("Put: %v", err)
-	}
-	kept, err := limited.Get(ctx, source)
-	if err != nil || bytes.Equal(kept, whole) {
-		t.Fatalf("kept = %q, %v; the fixture needs a truncated input", kept, err)
-	}
-	ref, err := limited.PutFor(ctx, "regression", "suporte", 1, kept)
-	if err != nil {
-		t.Fatalf("PutFor: %v", err)
-	}
-	withRef := aCase("reg-1", domain.Expectation{Kind: domain.ExpectAsks})
-	withRef.InputRef = ref
-	if err := store.Record(ctx, withRef); err != nil {
-		t.Fatalf("Record: %v", err)
-	}
-	replayed := replayHolding(t, pool, limited, kept)
-
-	if err := store.Delete(ctx, "suporte", "reg-1", "usr_ana"); err != nil {
-		t.Fatalf("Delete: %v", err)
-	}
-
-	if _, err := limited.Get(ctx, replayed); !errors.Is(err, ledger.ErrErased) {
-		t.Fatalf("replay after delete: err = %v, want erased", err)
-	}
-}
-
 // A battery has read this case and has yet to open its runs.
 func TestDelete_waitsForACopyInProgress(t *testing.T) {
 	store := storeFor(t)
@@ -577,44 +486,5 @@ func TestHold_withNoSlotLeft_givesUpWithItsContext(t *testing.T) {
 	})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Hold = %v, want the context's error", err)
-	}
-}
-
-func TestDelete_takesTheRunsThatReplayedTheCase(t *testing.T) {
-	store := storeFor(t)
-	pool := testdb.Pool(t)
-	ctx := context.Background()
-	content := ledger.NewContent(pool)
-	input := []byte(`{"email":"ana@example.com"}`)
-
-	ref, err := content.PutFor(ctx, "regression", "suporte", 1, input)
-	if err != nil {
-		t.Fatalf("PutFor: %v", err)
-	}
-	withRef := aCase("reg-1", domain.Expectation{Kind: domain.ExpectAsks})
-	withRef.InputRef = ref
-	if err := store.Record(ctx, withRef); err != nil {
-		t.Fatalf("Record: %v", err)
-	}
-	run := domain.RunID("run-replay-" + fmt.Sprint(time.Now().UnixNano()))
-	if _, err := ledger.NewPostgres(pool).Append(ctx, domain.Step{
-		RunID: run, Seq: 1, Kind: domain.StepRunStarted, AgentID: "suporte",
-		Scope: domain.Scope{Company: "acme", Area: "suporte"}, IdemKey: string(run), VersionID: "v1",
-		At:      time.Now(),
-		Payload: []byte(`{"trigger":"simulation","simulated":true,"simulation":"b","case":"reg-1"}`),
-	}); err != nil {
-		t.Fatalf("append: %v", err)
-	}
-	replayed, err := content.Put(ctx, run, 1, input)
-	if err != nil {
-		t.Fatalf("Put: %v", err)
-	}
-
-	if err := store.Delete(ctx, "suporte", "reg-1", "usr_ana"); err != nil {
-		t.Fatalf("Delete: %v", err)
-	}
-
-	if _, err := content.Get(ctx, replayed); !errors.Is(err, ledger.ErrErased) {
-		t.Fatalf("replay after delete: err = %v, want erased", err)
 	}
 }

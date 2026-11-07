@@ -9,12 +9,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/testdb"
 )
 
-// Release A cannot turn versions on, and NT-015's rollout rests on what happens when
-// a later release does. So the activation runs here, on a database of its own, and
-// everything an older binary can still do is run against it as the SQL it really sends.
+// NT-015's rollout rests on what the migration finds and on what an older binary can
+// still do after it. So 0104 runs here on a database of its own, and the older binary is
+// the SQL it really sends.
 
 const (
 	copyOne = "regression://suporte/1/one"
@@ -42,18 +43,20 @@ func seedCorpus(t *testing.T, pool *pgxpool.Pool) {
 	}
 }
 
-func activate(t *testing.T, pool *pgxpool.Pool) {
+// beforeActivation is a database as 0104 finds it.
+func beforeActivation(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	if _, err := pool.Exec(t.Context(), testdb.ActivateDatasetVersions); err != nil {
-		t.Fatalf("activate: %v", err)
-	}
+	pool := testdb.IsolatedThrough(t, "0103_dataset_versions")
+	seedCorpus(t, pool)
+	return pool
 }
 
 func activatedCorpus(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	pool := testdb.Isolated(t)
-	seedCorpus(t, pool)
-	activate(t, pool)
+	pool := beforeActivation(t)
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("activate: %v", err)
+	}
 	return pool
 }
 
@@ -315,8 +318,7 @@ func TestActivation_retention_takesTheObjectOfACaseNoLongerInTheWorkingSet(t *te
 // An erasure in flight when activation starts. Seen by neither side, its expectations
 // would become readable content after it reported success.
 func TestActivation_waitsForAnErasureInFlight(t *testing.T) {
-	pool := testdb.Isolated(t)
-	seedCorpus(t, pool)
+	pool := beforeActivation(t)
 	ctx := t.Context()
 
 	tx, err := pool.Begin(ctx)
@@ -332,8 +334,7 @@ func TestActivation_waitsForAnErasureInFlight(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := pool.Exec(ctx, testdb.ActivateDatasetVersions)
-		done <- err
+		done <- ledger.Migrate(ctx, pool)
 	}()
 	select {
 	case err := <-done:
@@ -357,5 +358,139 @@ func TestActivation_waitsForAnErasureInFlight(t *testing.T) {
 	}
 	if readable != 0 {
 		t.Errorf("%d readable objects hold what the erasure took", readable)
+	}
+}
+
+// seedCaseWithNoCopy is an old correction whose input_ref points at nothing, with a
+// note and expectations that nothing has ever aged out.
+func seedCaseWithNoCopy(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `
+		insert into regression_cases
+			(agent_id, case_id, input_ref, from_run, note, expectations, created_at)
+		values ('suporte', 'reg-nocopy', 'regression://suporte/1/never-stored', 'run-nocopy',
+		        'bia asked twice', '[{"kind":"never_calls","value":"bia@example.com"}]',
+		        '2026-01-05 00:00:00+00')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+}
+
+type objectState struct {
+	bytes   []byte
+	erased  *time.Time
+	reason  string
+	created time.Time
+	column  string
+	note    string
+}
+
+func objectOf(t *testing.T, pool *pgxpool.Pool, id string) objectState {
+	t.Helper()
+	var o objectState
+	if err := pool.QueryRow(t.Context(), `
+		select rc.bytes, rc.erased_at, rc.erased_reason, rc.created_at, c.expectations::text, c.note
+		from regression_cases c join run_content rc on rc.ref = c.expectations_ref
+		where c.case_id = $1`, id).Scan(&o.bytes, &o.erased, &o.reason, &o.created, &o.column, &o.note); err != nil {
+		t.Fatalf("read %s: %v", id, err)
+	}
+	return o
+}
+
+// No input to take its age from, and nothing to run. Readable, it would start a whole
+// new retention window at the upgrade, for text about an occurrence nobody can read.
+func TestActivation_aCaseWithNoCopy_arrivesErasedWithTheAgeOfTheCase(t *testing.T) {
+	pool := beforeActivation(t)
+	seedCaseWithNoCopy(t, pool)
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	got := objectOf(t, pool, "reg-nocopy")
+	if got.bytes != nil || got.erased == nil || got.reason != "input_absent" {
+		t.Errorf("bytes = %q, erased at %v, reason %q, want a tombstone", got.bytes, got.erased, got.reason)
+	}
+	if want := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC); !got.created.Equal(want) {
+		t.Errorf("created at = %s, want the age of the case, %s", got.created, want)
+	}
+	if got.column != "[]" || got.note != "" {
+		t.Errorf("column = %s, note = %q, want nothing left that nothing ages out", got.column, got.note)
+	}
+}
+
+// eraseAs096 is what a 0.96.0 pod sends for a subject erasure. A pod of that version
+// is still running during the rollout of this one, and it knows nothing of objects
+// except what the database does for it.
+func eraseAs096(t *testing.T, pool *pgxpool.Pool, refs, runs []string) {
+	t.Helper()
+	ctx := t.Context()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := tx.Exec(ctx, `
+		update run_content set bytes = null, erased_at = now(), erased_reason = $2
+		where ref = any($1::text[]) and erased_at is null`, refs, "subject"); err != nil {
+		t.Fatalf("take the copies: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		update regression_cases set note = '', expectations = '[]'::jsonb
+		where input_ref = any($1::text[]) or from_run = any($2::text[])`, refs, runs); err != nil {
+		t.Fatalf("clear what the corrections say: %v", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+}
+
+// The erasure reports success, so what it did not take has to be taken by the database.
+// Here the object is live and no tombstone happens for the other trigger to follow.
+func TestActivation_theErasureOf096_onACaseWithNoCopy_takesColumnAndObject(t *testing.T) {
+	pool := activatedCorpus(t)
+	ctx := t.Context()
+	if _, err := pool.Exec(ctx, `
+		begin; `+testdb.DeclareWriter+`
+		insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes)
+		values ('expectations://suporte/1/of-nocopy', 'expectations', 'suporte', 1, 'of-nocopy', 'bia', 3);
+		insert into regression_cases (agent_id, case_id, input_ref, from_run, expectations, expectations_ref)
+		values ('suporte', 'reg-nocopy', 'regression://suporte/1/never-stored', 'run-nocopy',
+		        '[{"kind":"never_calls","value":"bia@example.com"}]', 'expectations://suporte/1/of-nocopy');
+		commit`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	eraseAs096(t, pool, nil, []string{"run-nocopy"})
+
+	got := objectOf(t, pool, "reg-nocopy")
+	if got.column != "[]" || got.bytes != nil || got.erased == nil {
+		t.Errorf("column = %s, bytes = %q, erased at %v, want nothing readable", got.column, got.bytes, got.erased)
+	}
+}
+
+// And the case the review asked for: it existed before the migration, and 0.96.0
+// erases it afterwards.
+func TestActivation_theErasureOf096_onACaseWithNoCopyFromBefore_leavesNothingReadable(t *testing.T) {
+	pool := beforeActivation(t)
+	seedCaseWithNoCopy(t, pool)
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	eraseAs096(t, pool, nil, []string{"run-nocopy"})
+
+	got := objectOf(t, pool, "reg-nocopy")
+	if got.column != "[]" || got.bytes != nil || got.erased == nil {
+		t.Errorf("column = %s, bytes = %q, erased at %v, want nothing readable", got.column, got.bytes, got.erased)
+	}
+}
+
+// Taken along with its input, the object keeps saying why: an auditor reads that reason.
+func TestActivation_anObjectTakenWithItsInput_keepsTheInputsReason(t *testing.T) {
+	pool := activatedCorpus(t)
+
+	eraseAs096(t, pool, []string{copyOne}, []string{"run-1"})
+
+	if got := objectOf(t, pool, "reg-1"); got.reason != "subject" {
+		t.Errorf("reason = %q, want the input's", got.reason)
 	}
 }

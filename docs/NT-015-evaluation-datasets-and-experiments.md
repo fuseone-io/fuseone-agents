@@ -258,9 +258,15 @@ A case whose input is already erased is converted to a tombstone. Its expectatio
 never become readable content. A converted object takes the age of the case's input,
 so conversion does not extend how long it lives.
 
-Until that migration exists, its SQL lives in `internal/testdb`, so the writers of
-release A are proved against the real thing and no installation can run it. One limit
-remains for an installation that skips release A: during the rollout, its older pod
+A case whose input is nowhere is treated the same way: it has nothing to run, and with no
+copy nothing would ever age its words out. It takes the age of the case, and it clears
+its note and expectations, because a binary being rolled back to would read them.
+
+Whatever empties a case's expectations also takes its object, by trigger, because a pod
+of the previous release erases too and reports success without knowing objects exist.
+
+That migration is `0104`, and release A is 0.96.0. One limit remains for an
+installation that skips release A: during the rollout, its older pod
 reads a run's input from the ledger and the working row only, so it can miss a case a
 newer pod just deleted when that run's input was too large to keep whole. Upgrading
 through release A closes this.

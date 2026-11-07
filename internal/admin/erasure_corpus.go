@@ -150,6 +150,10 @@ func (e *Erasures) eraseCorpusOf(
 	if err != nil {
 		return corpusErasure{}, fmt.Errorf("admin: find corpus copies: %w", err)
 	}
+	expectations, err := e.eraseExpectationsOf(ctx, tx, refs, runs)
+	if err != nil {
+		return corpusErasure{}, err
+	}
 	objects, err := e.content.EraseRefsTx(ctx, tx, refs, "subject")
 	if err != nil {
 		return corpusErasure{}, fmt.Errorf("admin: erase corpus copies: %w", err)
@@ -164,7 +168,7 @@ func (e *Erasures) eraseCorpusOf(
 	if err != nil {
 		return corpusErasure{}, err
 	}
-	return corpusErasure{cases: int(tag.RowsAffected()), objects: objects + replayed}, nil
+	return corpusErasure{cases: int(tag.RowsAffected()), objects: objects + expectations + replayed}, nil
 }
 
 // inputDigestsOf is the input each run recorded, and the copy any correction made

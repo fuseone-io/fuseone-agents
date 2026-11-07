@@ -34,11 +34,28 @@ type correction struct {
 
 func recordCorrection(t *testing.T, pool *pgxpool.Pool, c correction) {
 	t.Helper()
-	if _, err := pool.Exec(context.Background(), `
+	if err := declared(context.Background(), pool, `
 		insert into regression_cases (agent_id, case_id, input_ref, from_run, note)
 		values ($1, $2, $3, $4, $5)`, c.agent, c.id, c.ref, c.run, c.note); err != nil {
 		t.Fatalf("record correction: %v", err)
 	}
+}
+
+// declared writes the working set directly, as a fixture. Everything else records a
+// version.
+func declared(ctx context.Context, pool *pgxpool.Pool, statement string, args ...any) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := tx.Exec(ctx, testdb.DeclareWriter); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, statement, args...); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // replay opens the simulated run a battery opens for a case.
@@ -70,7 +87,8 @@ func open(
 
 func cleanCorpus(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	if _, err := pool.Exec(context.Background(), `delete from regression_cases`); err != nil {
+	if _, err := pool.Exec(context.Background(),
+		`begin; `+testdb.DeclareWriter+` delete from regression_cases; commit`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 }
@@ -377,10 +395,9 @@ func TestForSubject_waitsForACorrectionBeingRecorded(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			_, err = pool.Exec(ctx, `insert into regression_cases
+			return declared(ctx, pool, `insert into regression_cases
 				(agent_id, case_id, input_ref, from_run) values ('suporte', 'reg-race', $1, $2)`,
 				copied, string(asked))
-			return err
 		})
 	}()
 	<-entered
@@ -1014,7 +1031,7 @@ func TestForSubject_namingManyRuns_leavesOtherRunsAndKindsAlone(t *testing.T) {
 // expect gives a correction expectations naming a person, which nothing validates.
 func expect(t *testing.T, pool *pgxpool.Pool, id string) {
 	t.Helper()
-	if _, err := pool.Exec(context.Background(), `
+	if err := declared(context.Background(), pool, `
 		update regression_cases
 		set expectations = '[{"kind":"says","value":"escalate to ana@example.com"}]'
 		where case_id = $1`, id); err != nil {

@@ -58,19 +58,16 @@ func (s *Store) Record(ctx context.Context, c domain.RegressionCase) error {
 		return fmt.Errorf("regression: encode expectations: %w", err)
 	}
 
-	return s.write(ctx, func(tx pgx.Tx, versioned bool) error {
-		if !versioned {
-			return upsertCase(ctx, tx, caseRow{c, expectations, nil})
-		}
-		return s.recordVersioned(ctx, tx, c, expectations)
+	return s.write(ctx, func(tx pgx.Tx) error {
+		return s.recordCase(ctx, tx, c, expectations)
 	})
 }
 
-// caseRow is what one recorded case writes. Ref is empty until versions are on.
+// caseRow is what one recorded case writes.
 type caseRow struct {
 	domain.RegressionCase
 	expectations []byte
-	ref          *string
+	ref          string
 }
 
 func upsertCase(ctx context.Context, tx pgx.Tx, c caseRow) error {
@@ -145,58 +142,17 @@ func (s *Store) List(ctx context.Context, agent domain.AgentID) ([]domain.Regres
 }
 
 /*
-Delete removes one case from the corpus, with the copy it kept and the runs that
-replayed it.
+Delete removes one case from the corpus, which writes a new version without it.
 
-Left behind, none of those have anything pointing at them. An input too large to
-keep whole does not even match the run it came from, so this is the last moment
-they can be found. Identical input shares one reference, so while another case
-names the copy, it stays and so do the replays. One statement, because a delete
-between the steps would leave exactly what this exists to prevent.
-
-Once versions are on, this no longer erases: an earlier version still names the case,
-because it records what was checked, so the copy and the replays stay until retention
-or a subject erasure takes them.
+It erases nothing. An earlier version still names the case, because it records what
+was checked, so the copy and the replays stay until retention or a subject erasure
+takes them. The fence is still taken: it keeps this apart from anything copying the
+corpus, like every other write.
 */
 func (s *Store) Delete(ctx context.Context, agent domain.AgentID, id string, by domain.UserID) error {
 	return s.Exclusive(ctx, []domain.AgentID{agent}, func(ctx context.Context) error {
-		return s.write(ctx, func(tx pgx.Tx, versioned bool) error {
-			if versioned {
-				return deleteVersioned(ctx, tx, agent, id, by)
-			}
-			return deleteCase(ctx, tx, agent, id)
+		return s.write(ctx, func(tx pgx.Tx) error {
+			return deleteCase(ctx, tx, agent, id, by)
 		})
 	})
-}
-
-func deleteCase(ctx context.Context, tx pgx.Tx, agent domain.AgentID, id string) error {
-	if _, err := tx.Exec(ctx, `
-		with gone as (
-			delete from regression_cases
-			where agent_id = $1 and case_id = $2
-			returning input_ref
-		), orphaned as (
-			select rc.ref, rc.digest from run_content rc
-			join gone on rc.ref = gone.input_ref
-			where not exists (
-				select 1 from regression_cases other
-				where other.input_ref = rc.ref
-				  and not (other.agent_id = $1 and other.case_id = $2)
-			)
-		), replays as (
-			select distinct held.run_id from run_content held
-			join orphaned on held.digest = orphaned.digest
-			join runs r on r.run_id = held.run_id
-			where held.owner_kind = 'run' and held.erased_at is null
-			  and r.simulated and r.agent_id = $1
-		)
-		update run_content rc
-		set bytes = null, erased_at = now(), erased_reason = 'case_deleted'
-		where rc.erased_at is null
-		  and (rc.ref in (select ref from orphaned)
-		       or (rc.owner_kind = 'run' and rc.run_id in (select run_id from replays)))`,
-		string(agent), id); err != nil {
-		return fmt.Errorf("regression: delete %s: %w", id, err)
-	}
-	return nil
 }

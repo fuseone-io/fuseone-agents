@@ -30,7 +30,7 @@ type activatedCorpus struct {
 // when an input was too large to keep whole, so only the case leads from the run to it.
 func activatedCase(t *testing.T) activatedCorpus {
 	t.Helper()
-	pool := testdb.Isolated(t)
+	pool := testdb.IsolatedThrough(t, "0103_dataset_versions")
 	ctx := t.Context()
 	key := make([]byte, 32)
 	v, _ := vault.New(key, "test")
@@ -49,7 +49,7 @@ func activatedCase(t *testing.T) activatedCorpus {
 		copied); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if _, err := pool.Exec(ctx, testdb.ActivateDatasetVersions); err != nil {
+	if err := ledger.Migrate(ctx, pool); err != nil {
 		t.Fatalf("activate: %v", err)
 	}
 	return activatedCorpus{pool, erasures, content, store, copied}
@@ -153,5 +153,125 @@ func TestSweep_waitsForAnExpectationsObjectBeingKept(t *testing.T) {
 	}
 	if err := <-swept; err != nil {
 		t.Fatalf("Sweep: %v", err)
+	}
+}
+
+// A case whose copy was never stored: no tombstone happens, so the trigger never sees
+// it. Naming its run still has to take what it says, in the column and the object.
+func TestForSubject_afterActivation_takesTheObjectOfACaseWithNoCopy(t *testing.T) {
+	c := activatedCase(t)
+	ctx := t.Context()
+	if _, err := c.pool.Exec(ctx, `
+		begin; `+testdb.DeclareWriter+`
+		update regression_cases set from_run = 'run-other';
+		insert into regression_cases (agent_id, case_id, input_ref, from_run, expectations)
+		values ('suporte', 'reg-2', 'regression://suporte/1/never-stored', 'run-named',
+		        '[{"kind":"never_calls","value":"bia@example.com"}]');
+		insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes)
+		values ('expectations://suporte/1/of-reg-2', 'expectations', 'suporte', 1, 'of-reg-2', 'x', 1);
+		update regression_cases set expectations_ref = 'expectations://suporte/1/of-reg-2'
+		where case_id = 'reg-2';
+		insert into dataset_versions (dataset_id, version, digest) values ('default:suporte', 2, 'two');
+		insert into dataset_version_cases
+			(dataset_id, version, case_id, input_ref, input_digest, expectations_ref, expectations_digest, from_run)
+		values ('default:suporte', 2, 'reg-2', 'regression://suporte/1/never-stored', 'none',
+		        'expectations://suporte/1/of-reg-2', 'of-reg-2', 'run-named');
+		commit`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if _, err := c.erasures.ForSubject(ctx, "dpo", domain.Scope{},
+		[]domain.RunID{"run-named"}, "request"); err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	c.expectGone(t, "expectations://suporte/1/of-reg-2")
+	var column string
+	if err := c.pool.QueryRow(ctx,
+		`select expectations::text from regression_cases where case_id = 'reg-2'`).Scan(&column); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if column != "[]" {
+		t.Errorf("column = %s, want it empty", column)
+	}
+}
+
+func (c activatedCorpus) detailOf(t *testing.T, action string) int {
+	t.Helper()
+	var objects int
+	if err := c.pool.QueryRow(t.Context(), `
+		select (detail->>'objects')::int from admin_events
+		where action = $1 order by at desc limit 1`, action).Scan(&objects); err != nil {
+		t.Fatalf("read the event: %v", err)
+	}
+	return objects
+}
+
+// The event is how a DPO proves what went, so an object the trigger took on the way
+// has to be in it. A copy and its object are two.
+func TestForSubject_afterActivation_countsTheObjectItTook(t *testing.T) {
+	c := activatedCase(t)
+
+	erased, err := c.erasures.ForSubject(t.Context(), "dpo", domain.Scope{},
+		[]domain.RunID{"run-named"}, "request")
+	if err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	if erased != 2 {
+		t.Errorf("erased = %d, want the copy and the object", erased)
+	}
+	if got := c.detailOf(t, "content.erased"); got != 2 {
+		t.Errorf("detail.objects = %d, want 2", got)
+	}
+}
+
+// Retention reaches the copy and not the object, which is younger: re-recorded
+// expectations are. The object goes with its input, and it counts.
+func TestSweep_afterActivation_countsAYoungerObjectItTook(t *testing.T) {
+	c := activatedCase(t)
+	ctx := t.Context()
+	object := c.expectationsObject(t)
+	if _, err := c.pool.Exec(ctx, `
+		update run_content set created_at = '2000-01-01 00:00:00+00' where ref = $1;`, c.copied); err != nil {
+		t.Fatalf("age the copy: %v", err)
+	}
+	if _, err := c.pool.Exec(ctx, `update run_content set created_at = now() where ref = $1`, object); err != nil {
+		t.Fatalf("freshen the object: %v", err)
+	}
+
+	erased, err := c.erasures.Sweep(ctx)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	c.expectGone(t, c.copied, object)
+	if erased != 2 {
+		t.Errorf("erased = %d, want the copy and the object", erased)
+	}
+	if got := c.detailOf(t, "content.expired"); got != 2 {
+		t.Errorf("detail.objects = %d, want 2", got)
+	}
+}
+
+// A correction made from another run shares the copy. Only the copy leads to its object.
+func TestForSubject_afterActivation_countsTheObjectOfACorrectionSharingTheCopy(t *testing.T) {
+	c := activatedCase(t)
+	ctx := t.Context()
+	if err := c.store.Record(ctx, domain.RegressionCase{
+		ID: "reg-later", Agent: "suporte", InputRef: c.copied, FromRun: "run-later",
+		Expectations: []domain.Expectation{{Kind: domain.ExpectNeverCalls, Value: "x"}},
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	erased, err := c.erasures.ForSubject(ctx, "dpo", domain.Scope{},
+		[]domain.RunID{"run-named"}, "request")
+	if err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	if erased != 3 {
+		t.Errorf("erased = %d, want the copy and both objects", erased)
 	}
 }

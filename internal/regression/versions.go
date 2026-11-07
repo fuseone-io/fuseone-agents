@@ -15,6 +15,9 @@ import (
 // Content past the limit is cut, and a cut object would never decode again.
 var ErrExpectationsTooLarge = errors.New("regression: these expectations are too large to keep")
 
+// ErrVersionsNotActive means this binary reached a database its migrations have not.
+var ErrVersionsNotActive = errors.New("regression: dataset versions are not active on this database yet")
+
 const (
 	defaultDataset = "default"
 	// expectationsKind owns expectations as content. Not the copies' own kind, because
@@ -27,33 +30,33 @@ func defaultDatasetOf(agent domain.AgentID) string {
 }
 
 /*
-write runs one change to the working set, in the transaction that decides how.
+write runs one change to the working set, in a transaction that declares it.
 
-The switch is read holding its row, and after any wait for it. Activation holds it
-exclusively, so a writer in flight finishes first and the next one reads it on. Read
-without the lock, a writer arriving during activation would see it off and write what
-the trigger refuses. Declaring itself is what gets a version-aware writer past that
-trigger, and it lasts as long as this transaction.
+Declaring itself is what gets a writer past the trigger, and it lasts as long as this
+transaction. The switch is read holding its row, so a writer starting while the
+migration runs waits for it. A database the migration has not reached yet is refused:
+a version written there would have nothing before it.
 */
-func (s *Store) write(ctx context.Context, change func(tx pgx.Tx, versioned bool) error) error {
+func (s *Store) write(ctx context.Context, change func(tx pgx.Tx) error) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("regression: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
-	var versioned bool
+	var active bool
 	if err := tx.QueryRow(ctx,
-		`select active from dataset_versioning where only_row for share`).Scan(&versioned); err != nil {
+		`select active from dataset_versioning where only_row for share`).Scan(&active); err != nil {
 		return fmt.Errorf("regression: read the dataset switch: %w", err)
 	}
-	if versioned {
-		if _, err := tx.Exec(ctx,
-			`select set_config('fuseone.dataset_writer', 'version-aware', true)`); err != nil {
-			return fmt.Errorf("regression: declare this writer: %w", err)
-		}
+	if !active {
+		return ErrVersionsNotActive
 	}
-	if err := change(tx, versioned); err != nil {
+	if _, err := tx.Exec(ctx,
+		`select set_config('fuseone.dataset_writer', 'version-aware', true)`); err != nil {
+		return fmt.Errorf("regression: declare this writer: %w", err)
+	}
+	if err := change(tx); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -62,7 +65,7 @@ func (s *Store) write(ctx context.Context, change func(tx pgx.Tx, versioned bool
 	return nil
 }
 
-func (s *Store) recordVersioned(
+func (s *Store) recordCase(
 	ctx context.Context, tx pgx.Tx, c domain.RegressionCase, expectations []byte,
 ) error {
 	if err := lockDataset(ctx, tx, c.Agent, c.Scope); err != nil {
@@ -72,13 +75,13 @@ func (s *Store) recordVersioned(
 	if err != nil {
 		return err
 	}
-	if err := upsertCase(ctx, tx, caseRow{c, expectations, &ref}); err != nil {
+	if err := upsertCase(ctx, tx, caseRow{c, expectations, ref}); err != nil {
 		return err
 	}
 	return writeVersion(ctx, tx, c.Agent, c.CreatedBy)
 }
 
-func deleteVersioned(
+func deleteCase(
 	ctx context.Context, tx pgx.Tx, agent domain.AgentID, id string, by domain.UserID,
 ) error {
 	var locked string

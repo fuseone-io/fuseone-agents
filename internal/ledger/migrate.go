@@ -50,6 +50,22 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, loggers ...*slog.Logger) e
 	return migrate(ctx, pool, migrationLogger(logger))
 }
 
+// MigrateThrough applies the embedded migrations up to and including version through
+// the production runner, so an upgrade test can stand a database at the boundary a
+// previous release left it at and let Migrate do the rest. Production runs Migrate.
+func MigrateThrough(ctx context.Context, pool *pgxpool.Pool, version string) error {
+	migrations, err := loadMigrations()
+	if err != nil {
+		return err
+	}
+	for i, one := range migrations {
+		if one.version == version {
+			return migrateSet(ctx, pool, migrations[:i+1], migrationLogger(nil))
+		}
+	}
+	return fmt.Errorf("ledger: no migration named %s", version)
+}
+
 func migrationLogger(logger *slog.Logger) *slog.Logger {
 	if logger != nil {
 		return logger

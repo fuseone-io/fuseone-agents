@@ -7104,7 +7104,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Removed from the corpus. */
+            /** @description Removed from the corpus, in a new version of it. Nothing is erased: earlier versions still name the case, so its copy and replays stay until retention or a subject erasure takes them. */
             204: {
                 headers: {
                     [name: string]: unknown;
