@@ -264,6 +264,16 @@ these rows.</p>
 <code dir="auto">dataset_version</code>. The report remains a fold of the ledger, and a battery is read
 against the version it names rather than the corpus as it is now. That removes the
 third defect.</p>
+<p>Two workers can open one scheduled battery on either side of a correction. Each case
+still runs once, because a run’s idempotency key names the case and not its position,
+but the battery did not run one version. Its runs disagree, so it has no pin and is read
+as <code dir="auto">unpinned</code>, because naming either would be a guess.</p>
+<p>During the rollout of those keys, a pod of the previous release and a pod of this one key
+the same window differently, so a case can get two runs that disagree. A battery reduces
+them to one row, the worst real run, whichever order the ledger holds them in. A case
+holds only if every run of it did. An expectation is judged on one run, so two cheap runs
+do not break a per-run ceiling. The total still counts what every run cost and whether a
+Gate stopped any of them, and any run on another model counts as drift.</p>
 <p>A battery recorded before this has no pin. It is read as today and labelled
 <code dir="auto">unpinned</code>, because inventing which version it ran would be worse than admitting
 that we do not know.</p>
