@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/connect"
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/drift"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/regression"
@@ -35,7 +37,7 @@ func watchDrift(ctx context.Context, p *workerParts, store *settings.Store, corp
 	notice := channel.NewNotice(
 		channel.NewConfigured(store), channel.NewRouter(connect.New(store)))
 
-	watch := drift.New(corpora, p.store, folded{p.store}, notice, slog.Default()).WithErased(corpora)
+	watch := drift.New(corpora, p.store, folded{p.store, corpora}, notice, slog.Default()).WithErased(corpora)
 	rerun := drift.NewRerun(corpora,
 		p.store, regression.NewCorpus(corpora, ledger.NewContent(p.configPool)),
 		p.opener(), slog.Default()).Every(drift.Default)
@@ -64,11 +66,36 @@ func watchDrift(ctx context.Context, p *workerParts, store *settings.Store, corp
 	}
 }
 
-// folded reads a simulation back as the report it always was. A named type
-// rather than a method on the store: folding is a question about the ledger's
-// contents, and the ledger has no business knowing what a report is.
-type folded struct{ store Store }
+/*
+folded reads a battery back judged, against the corpus version it ran.
+
+Only that says what stopped holding. A report straight from the ledger has runs and no
+verdicts, and comparing two of those finds nothing to announce, ever. A named type rather
+than a method on the store: folding is a question about the ledger's contents, and the
+ledger has no business knowing what a report is.
+*/
+type folded struct {
+	store   Store
+	corpora *regression.Store
+}
 
 func (f folded) Fold(ctx context.Context, simulation string) (simulate.Report, error) {
-	return simulate.Gather(ctx, f.store, simulation)
+	report, err := simulate.Gather(ctx, f.store, simulation)
+	if err != nil {
+		return simulate.Report{}, err
+	}
+	corpus, err := f.corpusOf(ctx, report)
+	if err != nil {
+		return simulate.Report{}, fmt.Errorf("read the corpus of %s: %w", report.Agent, err)
+	}
+	return simulate.Battery(report, corpus), nil
+}
+
+// corpusOf is the version a battery ran, or for one from before versions, the corpus as
+// it is now, which is all there is to read it against.
+func (f folded) corpusOf(ctx context.Context, report simulate.Report) ([]domain.RegressionCase, error) {
+	if report.DatasetVersion == 0 {
+		return f.corpora.List(ctx, report.Agent)
+	}
+	return f.corpora.AtVersion(ctx, report.Agent, report.DatasetVersion)
 }
