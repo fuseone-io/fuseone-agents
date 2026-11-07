@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { AgentTrustCenter } from "@/features/agents/agent-trust-center";
@@ -63,50 +64,21 @@ describe("AgentTrustCenter", () => {
   });
 
   it.each([
-    ["en-US", "1 erased."],
-    ["pt-BR", "1 apagados."],
-  ] as const)(
-    "names erased cases as what is missing, in %s",
-    (locale, text) => {
-      setLocale(locale);
+    ["en-US", "1 not run, 1 erased."],
+    ["pt-BR", "1 sem rodar, 1 apagado(s)."],
+  ] as const)("names what is missing, in %s", (locale, text) => {
+    setLocale(locale);
 
-      render(
-        <MemoryRouter>
-          <AgentTrustCenter
-            agent={agent()}
-            trust={{
-              versionId: "v2",
-              status: "needs_review",
-              recommendation: "review",
-              summary: "review",
-              window: {
-                from: "2026-08-01T00:00:00.000Z",
-                until: "2026-08-31T00:00:00.000Z",
-              },
-              evidence: [
-                {
-                  id: "simulation",
-                  status: "bad",
-                  code: "simulation_incomplete",
-                  values: {
-                    parked: 0,
-                    waiting: 0,
-                    unsettled: 0,
-                    notRun: 0,
-                    erased: 1,
-                  },
-                },
-              ],
-            }}
-          />
-        </MemoryRouter>,
-      );
+    render(
+      <MemoryRouter>
+        <AgentTrustCenter agent={agent()} trust={incompleteTrust()} />
+      </MemoryRouter>,
+    );
 
-      expect(
-        screen.getByText(new RegExp(text.replace(".", "\\."))),
-      ).toBeInTheDocument();
-    },
-  );
+    expect(
+      screen.getByText((content) => content.includes(text)),
+    ).toBeInTheDocument();
+  });
 
   it("explains how missing comparison evidence appears and when no action exists", () => {
     setLocale("en-US");
@@ -179,5 +151,26 @@ function agent(): Agent {
     latest: true,
     paused: false,
     stage: "copilot",
+  };
+}
+
+function incompleteTrust(): ComponentProps<typeof AgentTrustCenter>["trust"] {
+  return {
+    versionId: "v2",
+    status: "needs_review",
+    recommendation: "review",
+    summary: "review",
+    window: {
+      from: "2026-08-01T00:00:00.000Z",
+      until: "2026-08-31T00:00:00.000Z",
+    },
+    evidence: [
+      {
+        id: "simulation",
+        status: "bad",
+        code: "simulation_incomplete",
+        values: { parked: 0, waiting: 0, unsettled: 0, notRun: 1, erased: 1 },
+      },
+    ],
   };
 }
