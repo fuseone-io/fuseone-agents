@@ -258,6 +258,13 @@ A case whose input is already erased is converted to a tombstone. Its expectatio
 never become readable content. A converted object takes the age of the case's input,
 so conversion does not extend how long it lives.
 
+Until that migration exists, its SQL lives in `internal/testdb`, so the writers of
+release A are proved against the real thing and no installation can run it. One limit
+remains for an installation that skips release A: during the rollout, its older pod
+reads a run's input from the ledger and the working row only, so it can miss a case a
+newer pod just deleted when that run's input was too large to keep whole. Upgrading
+through release A closes this.
+
 Reads prefer the content and fall back to the column only where no reference exists.
 A tombstone is an answer, never a reason to fall back. **The column is dropped only
 once the version that reads it has left the rollback window**, not simply in the next
