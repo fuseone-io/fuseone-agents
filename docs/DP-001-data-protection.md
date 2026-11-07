@@ -174,8 +174,9 @@ agent, every correction's copy holding that run's input, those corrections' note
 the content of every simulated run holding it. It finds them by the digest the run
 recorded, which outlives the correction being deleted. The admin event counts those
 corrections as `corpusCases`. The case itself stays, with no input, and is reported as a
-gap. Deleting a correction takes its copy and the runs that replayed it, unless another
-correction still holds the same input.
+gap. Deleting a correction erases nothing, because the corpus versions before it still
+name it. Those version rows hold only ids, references and digests, so an erasure follows
+them to a correction deleted since, and to what it expected.
 
 Recording a correction and opening a battery wait while content is being erased, and
 erasing waits for them, so neither can put back what was just erased. This covers a

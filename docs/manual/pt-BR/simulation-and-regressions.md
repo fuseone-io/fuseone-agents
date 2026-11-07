@@ -88,8 +88,12 @@ segurou nem quebrou, porque nada foi verificado.
 
 O resto do corpus continua rodando, e a conversa que recebe avisos de drift é informada
 de qual caso deixou de ser verificado. Para voltar a verificá-lo, grave a correção a
-partir de uma execução mais recente da mesma situação. Excluir um caso também apaga a
-cópia dele.
+partir de uma execução mais recente da mesma situação.
+
+Excluir um caso faz com que ele deixe de ser verificado, e não apaga nada. As versões
+anteriores do corpus continuam citando esse caso, porque registram o que foi verificado.
+Por isso, a cópia e as execuções que o reproduziram ficam até a retenção ou um pedido de
+apagamento levá-las.
 
 ## Quando rodar regressões
 

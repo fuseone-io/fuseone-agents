@@ -88,7 +88,11 @@ broken, because nothing was checked.
 
 The rest of the corpus keeps running, and the conversation that receives drift notices
 is told which case stopped being checked. To check it again, record the correction
-from a newer run of the same situation. Deleting a case also erases its copy.
+from a newer run of the same situation.
+
+Deleting a case stops checking it, and erases nothing. Earlier versions of the corpus
+still name it, because they record what was checked, so its copy and the runs that
+replayed it stay until retention or an erasure request takes them.
 
 ## When to run regressions
 
