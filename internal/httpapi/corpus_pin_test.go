@@ -298,3 +298,97 @@ func TestSetAgentPaused_twoRunsOfOneCaseThatDisagree_startIsRefused(t *testing.T
 		})
 	}
 }
+
+// The report is where a person reads it, so the block in the other run has to reach it.
+func TestGetSimulation_twoRunsOfOneCase_showsABlockInTheOtherRun(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	for _, run := range []domain.RunID{"run-a", "run-b"} {
+		appendTo(t, store, run, "v2", domain.StepRunStarted, domain.RunStartedPayload{
+			Trigger: "simulation", Simulated: true, Simulation: "sim-9", Case: "estorno",
+		})
+	}
+	appendTo(t, store, "run-a", "v2", domain.StepGateDecided, domain.GateDecidedPayload{
+		Tool: "crm.lookup", Effect: domain.EffectRead, Verdict: domain.VerdictBlock, Rule: "capability",
+	})
+	appendTo(t, store, "run-a", "v2", domain.StepRunFinished, domain.RunFinishedPayload{Outcome: "answered"})
+	appendTo(t, store, "run-b", "v2", domain.StepParked, domain.ParkedPayload{Reason: "blocked"})
+
+	resp, err := pinnedServer(store, t, []domain.RegressionCase{heldCase("estorno")}, nil).GetSimulation(
+		inArea("cx", domain.RoleAuthor),
+		openapi.GetSimulationRequestObject{AgentId: "triage", SimulationId: "sim-9"})
+	if err != nil {
+		t.Fatalf("GetSimulation: %v", err)
+	}
+	got, ok := resp.(openapi.GetSimulation200JSONResponse)
+	if !ok || len(got.Cases) != 1 {
+		t.Fatalf("response = %+v, want one row", resp)
+	}
+	if got.Cases[0].Acted == nil || len(*got.Cases[0].Acted) != 1 {
+		t.Errorf("acted = %+v, want the block from the run that was not chosen", got.Cases[0].Acted)
+	}
+}
+
+// Both runs were paid for, and the report's rows are how a person adds that up.
+func TestGetSimulation_twoRunsOfOneCase_showsWhatBothCost(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	ctx := gocontext.Background()
+	for _, run := range []domain.RunID{"run-a", "run-b"} {
+		appendTo(t, store, run, "v2", domain.StepRunStarted, domain.RunStartedPayload{
+			Trigger: "simulation", Simulated: true, Simulation: "sim-9", Case: "estorno",
+		})
+		finished, _ := json.Marshal(domain.RunFinishedPayload{Outcome: "answered"})
+		if _, err := store.Append(ctx, domain.Step{
+			RunID: run, Kind: domain.StepRunFinished, AgentID: "triage", VersionID: "v2",
+			Scope: domain.Scope{Company: "acme", Area: "cx"}, Payload: finished,
+			Cost: domain.Cost{Micros: 60},
+		}); err != nil {
+			t.Fatalf("finish: %v", err)
+		}
+	}
+
+	resp, err := pinnedServer(store, t, []domain.RegressionCase{heldCase("estorno")}, nil).GetSimulation(
+		inArea("cx", domain.RoleAuthor),
+		openapi.GetSimulationRequestObject{AgentId: "triage", SimulationId: "sim-9"})
+	if err != nil {
+		t.Fatalf("GetSimulation: %v", err)
+	}
+	got, ok := resp.(openapi.GetSimulation200JSONResponse)
+	if !ok || len(got.Cases) != 1 {
+		t.Fatalf("response = %+v, want one row", resp)
+	}
+	if got.Cases[0].Cost.Micros != 120 {
+		t.Errorf("cost = %+v, want both runs", got.Cases[0].Cost)
+	}
+}
+
+// The review's reproduction: one run finished and one parked, both meeting the expectation.
+// Which the ledger holds first must not decide whether this reads as ready.
+func TestGetAgentTrust_oneRunFinishedAndOneParked_isIncompleteInEitherOrder(t *testing.T) {
+	t.Parallel()
+	for name, parked := range map[string]domain.RunID{"parked first": "run-a", "parked last": "run-b"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			store := ledger.NewMemory()
+			base := time.Now().Add(-30 * time.Minute)
+			for _, run := range []domain.RunID{"run-a", "run-b"} {
+				appendAt(t, store, run, "v2", domain.StepRunStarted, domain.RunStartedPayload{
+					Trigger: "simulation", Simulated: true, Simulation: "sim-9", Case: "estorno",
+				}, base)
+				if run == parked {
+					appendAt(t, store, run, "v2", domain.StepParked,
+						domain.ParkedPayload{Reason: "blocked"}, base.Add(time.Second))
+					continue
+				}
+				appendAt(t, store, run, "v2", domain.StepRunFinished,
+					domain.RunFinishedPayload{Outcome: "answered"}, base.Add(time.Second))
+			}
+
+			trust := readTrust(t, trustableWithCorpus(t, store, []domain.RegressionCase{heldCase("estorno")}), "triage", "")
+
+			assertEvidence(t, trust, openapi.AgentTrustEvidenceIdSimulation,
+				openapi.AgentTrustEvidenceStatusBad, openapi.SimulationIncomplete)
+		})
+	}
+}

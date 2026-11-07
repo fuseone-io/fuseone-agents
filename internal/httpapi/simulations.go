@@ -214,7 +214,7 @@ func (s *Server) caseOut(
 		Id:           someString(c.ID),
 		Settled:      openapi.SimulationSettled(c.Settled),
 		Steps:        c.Steps,
-		Cost:         toCost(c.Cost),
+		Cost:         toCost(c.Spent()),
 		RunId:        someString(string(c.RunID)),
 		Outcome:      someString(outcome),
 		OutcomeState: outcomeState,
@@ -232,9 +232,9 @@ func (s *Server) caseOut(
 		unmet := toExpectations(c.Unmet)
 		out.Unmet = &unmet
 	}
-	if len(c.Acted) > 0 {
-		acts := make([]openapi.SimulationAct, 0, len(c.Acted))
-		for _, a := range c.Acted {
+	if every := c.EveryAct(); len(every) > 0 {
+		acts := make([]openapi.SimulationAct, 0, len(every))
+		for _, a := range every {
 			acts = append(acts, toSimulationAct(a))
 		}
 		out.Acted = &acts

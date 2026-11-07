@@ -60,6 +60,9 @@ type Act struct {
 type Case struct {
 	// datasetVersion is the pin this run recorded. The report says it, once.
 	datasetVersion int64
+	// others are the other runs of this case, when it has more than one. Not part of
+	// what this row is judged on, and part of what the battery cost and what stopped it.
+	others []Case
 
 	// ID is the regression case this row replays, when it replays one.
 	ID      string       `json:"id,omitempty"`
@@ -246,63 +249,4 @@ type Report struct {
 	// tracked: the runs are the queue, so a simulation is still going exactly
 	// when one of its runs is, and a flag kept beside them could say otherwise.
 	Running bool `json:"running"`
-}
-
-// Tally is the line an author reads before any of the rows.
-type Tally struct {
-	Cases     int `json:"cases"`
-	Finished  int `json:"finished"`
-	Parked    int `json:"parked"`
-	Waiting   int `json:"waiting"`
-	Unsettled int `json:"unsettled"`
-	// Stopped counts cases the Gate refused at least once, wherever they
-	// ended. Counted apart from where a case settled because a run that was
-	// refused and carried on is still one somebody has to look at.
-	Stopped int `json:"stopped"`
-	// NotRun counts cases that never opened a run at all.
-	NotRun int         `json:"not_run"`
-	Cost   domain.Cost `json:"cost"`
-}
-
-// Tally counts the report. Derived rather than accumulated, for the same
-// reason the rows are: one source, read twice, cannot disagree with itself.
-func (r Report) Tally() Tally {
-	t := Tally{Cases: len(r.Cases)}
-	for _, c := range r.Cases {
-		t.Cost = t.Cost.Add(c.Cost)
-		if c.RunID == "" {
-			// A case that could not run because its input is gone is the report's
-			// Erased, and counting it here too would read as two missing cases.
-			if c.Settled != SettledErased {
-				t.NotRun++
-			}
-			continue
-		}
-		if stopped(c) {
-			t.Stopped++
-		}
-		switch c.Settled {
-		case SettledFinished:
-			t.Finished++
-		case SettledParked:
-			t.Parked++
-		case SettledWaiting:
-			t.Waiting++
-		// It ran and ended, and what judged it has since been erased. The report
-		// counts it as a gap, and nothing about it is still going.
-		case SettledErased:
-		default:
-			t.Unsettled++
-		}
-	}
-	return t
-}
-
-func stopped(c Case) bool {
-	for _, act := range c.Acted {
-		if act.Verdict == domain.VerdictBlock {
-			return true
-		}
-	}
-	return false
 }
