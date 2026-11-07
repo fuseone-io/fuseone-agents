@@ -221,6 +221,10 @@ still runs once, because a run's idempotency key names the case and not its posi
 but the battery did not run one version. Its runs disagree, so it has no pin and is read
 as `unpinned`, because naming either would be a guess.
 
+During the rollout of those keys, a pod of the previous release and a pod of this one key
+the same window differently, so a case can get two runs that disagree. A battery reduces
+them to one row, the worst, keeping what both cost. A case holds only if every run of it did.
+
 A battery recorded before this has no pin. It is read as today and labelled
 `unpinned`, because inventing which version it ran would be worse than admitting
 that we do not know.
