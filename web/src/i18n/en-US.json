@@ -1099,7 +1099,8 @@
     "standing": {
       "held": "held",
       "broke": "broke",
-      "absent": "did not run"
+      "absent": "did not run",
+      "not_comparable": "not comparable"
     },
     "title": "Against the previous version"
   },

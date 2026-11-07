@@ -34,8 +34,17 @@ type Batch struct {
 	Agent domain.AgentID
 	// By is who asked. A simulation spends real money and the trail says whose
 	// decision that was.
-	By    domain.UserID
-	Cases []Occurrence
+	By domain.UserID
+	// DatasetVersion is the version of the corpus Cases were read from, and zero for
+	// an uploaded set.
+	DatasetVersion int64
+	Cases          []Occurrence
+}
+
+// Corpus is what a battery replays: the cases of one version of a corpus.
+type Corpus struct {
+	Version int64
+	Cases   []Occurrence
 }
 
 // Opened is what a batch produced.
@@ -78,6 +87,8 @@ func Open(ctx context.Context, opener Opener, batch Batch) (Opened, error) {
 			Input:      occurrence.Input,
 			Simulation: batch.ID,
 			Case:       occurrence.ID,
+
+			DatasetVersion: batch.DatasetVersion,
 		})
 		if err != nil {
 			// One case failing never stops the rest.

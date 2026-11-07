@@ -78,6 +78,8 @@ type Request struct {
 	Simulation string
 	// Case names the regression case being replayed, when one is.
 	Case string
+	// DatasetVersion is the version of the corpus that case was read from.
+	DatasetVersion int64
 	// Version pins the run to one published version of the agent. Empty is
 	// the version published now, which is what every trigger but one wants.
 	Version domain.VersionID
@@ -213,7 +215,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		Payload: mustJSON(domain.RunStartedPayload{
 			Trigger: req.Trigger, InputRef: inputRef,
 			Simulated: req.Simulation != "", Simulation: req.Simulation,
-			Case: req.Case, Origin: req.Origin, Ticket: ticket,
+			Case: req.Case, DatasetVersion: req.DatasetVersion, Origin: req.Origin, Ticket: ticket,
 			ContextArtifacts: cloneContextArtifacts(req.ContextArtifacts),
 			SourceRun:        req.SourceRun,
 			Chain:            req.Chain,

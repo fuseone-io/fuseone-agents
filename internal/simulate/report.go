@@ -58,6 +58,9 @@ type Act struct {
 
 // Case is what happened to one occurrence.
 type Case struct {
+	// datasetVersion is the pin this run recorded. The report says it, once.
+	datasetVersion int64
+
 	// ID is the regression case this row replays, when it replays one.
 	ID      string       `json:"id,omitempty"`
 	RunID   domain.RunID `json:"run_id,omitempty"`
@@ -125,6 +128,7 @@ func (f *folder) apply(step domain.Step) error {
 			return err
 		}
 		f.c.ID = p.Case
+		f.c.datasetVersion = p.DatasetVersion
 
 	case domain.StepPlanned:
 		var p domain.PlannedPayload
@@ -219,7 +223,10 @@ type Report struct {
 	ID      string           `json:"id"`
 	Agent   domain.AgentID   `json:"agent"`
 	Version domain.VersionID `json:"version"`
-	Cases   []Case           `json:"cases"`
+	// DatasetVersion is the version of the corpus this battery ran. Zero means it is
+	// unpinned: recorded before versions, or its runs do not agree.
+	DatasetVersion int64  `json:"dataset_version,omitempty"`
+	Cases          []Case `json:"cases"`
 
 	// Held and Broken count the corrections that still stand and the ones
 	// that stopped standing. Zero for a simulation that is not a battery.

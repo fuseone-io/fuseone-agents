@@ -46,5 +46,22 @@ func Gather(ctx context.Context, steps Steps, id string) (Report, error) {
 		report.Running = report.Running || folded.Settled == SettledUnsettled
 		report.Cases = append(report.Cases, folded)
 	}
+	report.DatasetVersion = pinOf(report.Cases)
 	return report, nil
+}
+
+// pinOf is the version of the corpus every run of a battery names, or zero. Two workers
+// can open one window on either side of a correction, and then the battery did not run
+// one version: naming either would be a guess.
+func pinOf(cases []Case) int64 {
+	if len(cases) == 0 {
+		return 0
+	}
+	pin := cases[0].datasetVersion
+	for _, c := range cases {
+		if c.datasetVersion != pin {
+			return 0
+		}
+	}
+	return pin
 }

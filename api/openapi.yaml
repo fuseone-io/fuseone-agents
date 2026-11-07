@@ -7936,9 +7936,11 @@ components:
       type: string
       description: >
         How a case stood in one battery. `absent` is a case that battery never
-        ran — reported rather than dropped, because a corpus that grew between
-        the two versions is a real difference.
-      enum: [held, broke, absent]
+        ran — reported rather than dropped. `not_comparable` is a case the two
+        batteries did not ask the same question about: only one version of the
+        corpus had it, or it expected something else in each. It is neither a
+        regression nor a fix.
+      enum: [held, broke, absent, not_comparable]
 
     AgentTrust:
       type: object

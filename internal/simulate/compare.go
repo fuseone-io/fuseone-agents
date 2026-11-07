@@ -1,6 +1,7 @@
 package simulate
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -29,6 +30,10 @@ const (
 	// a corpus that grew between the two versions is a real difference, and
 	// answering "nothing changed" about it is the one wrong answer.
 	Absent Standing = "absent"
+	// NotComparable is a case the two batteries did not ask the same question about:
+	// only one version of the corpus had it, or it expected something else in each. It
+	// counts as neither a regression nor a fix, because nobody measured either.
+	NotComparable Standing = "not_comparable"
 )
 
 // CaseChange is what happened to one case between the two.
@@ -68,31 +73,29 @@ func Compare(was, now Report) Comparison {
 
 	before := standings(was)
 	after := standings(now)
+	// With one version of the corpus on both sides, a case one side lacks is one it did
+	// not run. Across two, it may be one that side was never asked.
+	missing := Absent
+	if was.DatasetVersion != now.DatasetVersion {
+		missing = NotComparable
+	}
 
 	for id, stood := range before {
-		change := CaseChange{ID: id, Was: stood.standing, Now: Absent}
-		if stands, ran := after[id]; ran {
-			change.Now = stands.standing
-			change.CostMicros = int64(stands.cost.Micros) - int64(stood.cost.Micros)
-			change.Steps = stands.steps - stood.steps
-			out.CostMicros += change.CostMicros
+		stands, ran := after[id]
+		if !ran {
+			out.Cases = append(out.Cases, CaseChange{ID: id, Was: stood.standing, Now: missing})
+			continue
 		}
+		change := changeOf(id, stood, stands)
+		out.CostMicros += change.CostMicros
 		out.Cases = append(out.Cases, change)
 	}
 	for id, stands := range after {
 		if _, ran := before[id]; !ran {
-			out.Cases = append(out.Cases, CaseChange{ID: id, Was: Absent, Now: stands.standing})
+			out.Cases = append(out.Cases, CaseChange{ID: id, Was: missing, Now: stands.standing})
 		}
 	}
-
-	for _, c := range out.Cases {
-		switch {
-		case c.Regressed():
-			out.Regressed++
-		case c.Fixed():
-			out.Fixed++
-		}
-	}
+	out.Regressed, out.Fixed = tally(out.Cases)
 	// Total, and never only by weight: the rows are built from maps, so ties
 	// left unbroken would come back in a different order on every read. This
 	// is read on a screen an approver was shown and in an export somebody
@@ -108,10 +111,36 @@ func Compare(was, now Report) Comparison {
 	return out
 }
 
+func tally(cases []CaseChange) (regressed, fixed int) {
+	for _, c := range cases {
+		switch {
+		case c.Regressed():
+			regressed++
+		case c.Fixed():
+			fixed++
+		}
+	}
+	return regressed, fixed
+}
+
+// changeOf is one case both sides ran. Expecting something else in each, it was not
+// asked the same question twice, and its movement says nothing about the agent.
+func changeOf(id string, was, now standing) CaseChange {
+	if !slices.Equal(was.expected, now.expected) {
+		return CaseChange{ID: id, Was: was.standing, Now: NotComparable}
+	}
+	return CaseChange{
+		ID: id, Was: was.standing, Now: now.standing,
+		CostMicros: int64(now.cost.Micros) - int64(was.cost.Micros),
+		Steps:      now.steps - was.steps,
+	}
+}
+
 type standing struct {
 	standing Standing
 	cost     domain.Cost
 	steps    int
+	expected []domain.Expectation
 }
 
 // standings indexes a report by case id.
@@ -130,7 +159,7 @@ func standings(r Report) map[string]standing {
 		if len(c.Unmet) > 0 {
 			stood = Broke
 		}
-		out[c.ID] = standing{standing: stood, cost: c.Cost, steps: c.Steps}
+		out[c.ID] = standing{standing: stood, cost: c.Cost, steps: c.Steps, expected: c.Expected}
 	}
 	return out
 }
@@ -145,7 +174,7 @@ func weigh(c CaseChange) int {
 		return 1
 	case c.Fixed():
 		return 2
-	case c.Was == Absent || c.Now == Absent:
+	case c.Was == Absent || c.Now == Absent || c.Was == NotComparable || c.Now == NotComparable:
 		return 3
 	default:
 		return 4
