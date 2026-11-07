@@ -17,6 +17,10 @@ import (
 type Regressions interface {
 	Record(ctx context.Context, c domain.RegressionCase) error
 	List(ctx context.Context, agent domain.AgentID) ([]domain.RegressionCase, error)
+	// Pinned is the latest version of the corpus, with its cases: what a battery runs.
+	Pinned(ctx context.Context, agent domain.AgentID) (int64, []domain.RegressionCase, error)
+	// AtVersion is the corpus as one version recorded it: what a battery is read against.
+	AtVersion(ctx context.Context, agent domain.AgentID, version int64) ([]domain.RegressionCase, error)
 	Delete(ctx context.Context, agent domain.AgentID, id string, by domain.UserID) error
 	// Hold fences the corpus against an erasure while it is being copied.
 	Hold(ctx context.Context, agent domain.AgentID, inside func(context.Context) error) error

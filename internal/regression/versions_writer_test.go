@@ -202,7 +202,7 @@ func TestOccurrences_aCaseWhoseExpectationsAreGone_isLeftOutAndNamedAsErased(t *
 	if err != nil {
 		t.Fatalf("Occurrences: %v", err)
 	}
-	if len(got) != 0 {
+	if len(got.Cases) != 0 {
 		t.Errorf("occurrences = %+v, want none", got)
 	}
 	erased, err := store.ErasedCases(ctx)
@@ -413,7 +413,7 @@ func TestOccurrences_aCaseWithNoCopyFromBefore_isAGapAndTheRestRun(t *testing.T)
 	if err != nil {
 		t.Fatalf("Occurrences: %v", err)
 	}
-	if len(got) != 1 || got[0].ID != "reg-1" {
+	if len(got.Cases) != 1 || got.Cases[0].ID != "reg-1" {
 		t.Errorf("occurrences = %+v, want only the case that can run", got)
 	}
 }

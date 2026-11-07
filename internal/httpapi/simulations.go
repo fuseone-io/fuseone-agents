@@ -110,7 +110,7 @@ func (s *Server) GetSimulation(
 	// without the corrections would show what happened while saying nothing
 	// about whether it should have.
 	if s.regressions != nil && replaysCorpus(report) {
-		corpus, err := s.regressions.List(ctx, published.ID)
+		corpus, err := s.corpusOf(ctx, published.ID, report)
 		if err != nil {
 			return nil, fmt.Errorf("read the corpus of %s: %w", published.ID, err)
 		}

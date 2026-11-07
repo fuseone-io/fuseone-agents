@@ -48,13 +48,13 @@ checked, which is the one failure a safety net must not have.
 */
 func (c *Corpus) Occurrences(
 	ctx context.Context, agent domain.AgentID,
-) ([]simulate.Occurrence, error) {
-	cases, err := c.cases.List(ctx, agent)
+) (simulate.Corpus, error) {
+	version, cases, err := c.cases.Pinned(ctx, agent)
 	if err != nil {
-		return nil, err
+		return simulate.Corpus{}, err
 	}
 
-	out := make([]simulate.Occurrence, 0, len(cases))
+	out := simulate.Corpus{Version: version, Cases: make([]simulate.Occurrence, 0, len(cases))}
 	for _, one := range cases {
 		if one.Erased {
 			continue
@@ -64,9 +64,9 @@ func (c *Corpus) Occurrences(
 			continue
 		}
 		if err != nil {
-			return nil, fmt.Errorf("the occurrence of %s could not be read: %w", one.ID, err)
+			return simulate.Corpus{}, fmt.Errorf("the occurrence of %s could not be read: %w", one.ID, err)
 		}
-		out = append(out, simulate.Occurrence{ID: one.ID, Input: input})
+		out.Cases = append(out.Cases, simulate.Occurrence{ID: one.ID, Input: input})
 	}
 	return out, nil
 }

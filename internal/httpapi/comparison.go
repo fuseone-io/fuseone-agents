@@ -105,7 +105,7 @@ func (s *Server) battery(
 	if err != nil {
 		return simulate.Report{}, fmt.Errorf("simulation %s: %w", simulation, err)
 	}
-	corpus, err := s.regressions.List(ctx, agent)
+	corpus, err := s.corpusOf(ctx, agent, report)
 	if err != nil {
 		return simulate.Report{}, fmt.Errorf("read the corpus of %s: %w", agent, err)
 	}

@@ -126,9 +126,11 @@ func (o occurrences) Hold(
 
 func (o occurrences) Occurrences(
 	context.Context, domain.AgentID,
-) ([]simulate.Occurrence, error) {
-	return o, nil
+) (simulate.Corpus, error) {
+	return simulate.Corpus{Version: pinnedByTheFake, Cases: o}, nil
 }
+
+const pinnedByTheFake = 4
 
 type openerSpy struct{ opened []trigger.Request }
 
@@ -161,9 +163,9 @@ type fencedOccurrences struct {
 	readInside bool
 }
 
-func (f *fencedOccurrences) Occurrences(context.Context, domain.AgentID) ([]simulate.Occurrence, error) {
+func (f *fencedOccurrences) Occurrences(context.Context, domain.AgentID) (simulate.Corpus, error) {
 	f.readInside = f.inside
-	return f.cases, nil
+	return simulate.Corpus{Cases: f.cases}, nil
 }
 
 func (f *fencedOccurrences) Hold(
@@ -188,4 +190,20 @@ type neverRan struct{}
 
 func (neverRan) LastBatteryAt(context.Context, domain.AgentID, domain.VersionID) (time.Time, bool, error) {
 	return time.Time{}, false, nil
+}
+
+// The door nobody watches: a battery opened by the clock has to be pinned too, or every
+// nightly battery is read against whatever the corpus says by then.
+func TestSweep_aScheduledBattery_namesTheVersionItRan(t *testing.T) {
+	t.Parallel()
+	opener := &openerSpy{}
+	rerun := drift.NewRerun(corpusOf("triage"), lastAt{"triage@v2": daysAgo(3)},
+		occurrencesOf("estorno"), opener, nil).Every(24 * time.Hour)
+
+	if _, err := rerun.Sweep(context.Background(), at()); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if len(opener.opened) != 1 || opener.opened[0].DatasetVersion != pinnedByTheFake {
+		t.Errorf("runs = %+v, want them pinned to %d", opener.opened, pinnedByTheFake)
+	}
 }

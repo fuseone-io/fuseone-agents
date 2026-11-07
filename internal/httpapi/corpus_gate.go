@@ -59,17 +59,16 @@ func (s *Server) brokenCases(
 		return nil, err
 	}
 
-	corpus, err := s.regressions.List(ctx, agent)
+	report, err := simulate.Gather(ctx, s.store, simulation)
+	if err != nil {
+		return nil, fmt.Errorf("read simulation %s: %w", simulation, err)
+	}
+	corpus, err := s.corpusOf(ctx, agent, report)
 	if err != nil {
 		return nil, fmt.Errorf("read the corpus of %s: %w", agent, err)
 	}
 	if len(corpus) == 0 {
 		return nil, nil
-	}
-
-	report, err := simulate.Gather(ctx, s.store, simulation)
-	if err != nil {
-		return nil, fmt.Errorf("read simulation %s: %w", simulation, err)
 	}
 
 	var broken []string

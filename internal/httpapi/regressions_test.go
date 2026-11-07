@@ -21,6 +21,8 @@ import (
 type fakeCorpus struct {
 	recorded []domain.RegressionCase
 	listed   []domain.RegressionCase
+	latest   int64
+	versions map[int64][]domain.RegressionCase
 	err      error
 	held     int
 	inside   bool
@@ -36,6 +38,18 @@ func (f *fakeCorpus) Record(_ gocontext.Context, c domain.RegressionCase) error 
 
 func (f *fakeCorpus) List(gocontext.Context, domain.AgentID) ([]domain.RegressionCase, error) {
 	return f.listed, nil
+}
+
+func (f *fakeCorpus) Pinned(
+	gocontext.Context, domain.AgentID,
+) (int64, []domain.RegressionCase, error) {
+	return f.latest, f.listed, nil
+}
+
+func (f *fakeCorpus) AtVersion(
+	_ gocontext.Context, _ domain.AgentID, version int64,
+) ([]domain.RegressionCase, error) {
+	return f.versions[version], nil
 }
 
 func (f *fakeCorpus) Delete(gocontext.Context, domain.AgentID, string, domain.UserID) error {
