@@ -106,6 +106,11 @@ Rode o corpus quando:
 - o estágio de autonomia mudou;
 - o provedor ou modelo mudou.
 
+Uma bateria é lida contra a versão do corpus que ela rodou, então adicionar uma correção
+depois não muda um resultado passado. Uma correção nova só é verificada quando o corpus roda
+de novo, e só impede um agente de iniciar depois de rodar e quebrar. Baterias anteriores às
+versões do corpus são lidas contra o corpus como ele está agora.
+
 Se uma regressão começa a falhar depois de uma política mudar, leia primeiro o
 passo do Gate. A política pode estar fazendo exatamente o que foi escrita para
 fazer.
