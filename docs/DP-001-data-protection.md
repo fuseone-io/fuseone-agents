@@ -225,6 +225,9 @@ it erased anything.
 The window is read on every sweep rather than cached, so shortening retention
 takes effect on the next run.
 
+Expectations are cleared by the database when a copy is erased, so this holds during
+a rolling update, when an older process is still the one erasing.
+
 Retention applies to the regression corpus too. A correction's copy ages out like any
 other content, and its note and expectations are cleared with it. The window is a promise the operator
 configured, and a safety net is not a reason to break it. The case stays as a visible

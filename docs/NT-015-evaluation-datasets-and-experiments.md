@@ -249,6 +249,11 @@ activation is separate from the release that can honour it:
    installation that skipped release A, fails without changing the working set rather
    than writing a state no version records.
 
+Release A does not protect erasure the same way, because erasure cannot wait for a
+switch. From `0102`, a database trigger clears a correction's expectations whenever
+its copy is tombstoned, whichever binary did it. The activation trigger has to let
+that write through.
+
 A case whose input is already erased is converted to a tombstone. Its expectations
 never become readable content. A converted object takes the age of the case's input,
 so conversion does not extend how long it lives.

@@ -1096,3 +1096,51 @@ func TestSweep_clearsTheExpectationsOfACorrectionWhoseCopyAgedOut(t *testing.T) 
 		t.Fatalf("expectations after retention = %s, want them gone", got)
 	}
 }
+
+// A row the copy search cannot reach: its copy was never stored. Naming the run is
+// still naming what the correction says about it.
+func TestForSubject_aCorrectionWithNoCopy_stillLosesItsExpectations(t *testing.T) {
+	erasures, _ := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+
+	recordCorrection(t, pool, correction{"suporte", "reg-1", "run-asked", "regression://suporte/1/never-stored", ""})
+	expect(t, pool, "reg-1")
+
+	if _, err := erasures.ForSubject(context.Background(), "dpo", domain.Scope{},
+		[]domain.RunID{"run-asked"}, "request"); err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	if got := expectationsOf(t, pool, "reg-1"); got != "[]" {
+		t.Fatalf("expectations = %s, want them gone", got)
+	}
+}
+
+// Written against a copy already gone, so no tombstoning happens to clear it. Only
+// the sweep is left to notice.
+func TestSweep_aCorrectionWrittenOverATombstone_losesItsExpectations(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+
+	copied, err := content.PutFor(ctx, "regression", "suporte", 1, []byte(`{"email":"ana@example.com"}`))
+	if err != nil {
+		t.Fatalf("PutFor: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `update run_content set bytes = null, erased_at = now(), erased_reason = 'subject'
+		where ref = $1`, copied); err != nil {
+		t.Fatalf("tombstone: %v", err)
+	}
+	recordCorrection(t, pool, correction{"suporte", "reg-1", "run-asked", copied, ""})
+	expect(t, pool, "reg-1")
+
+	if _, err := erasures.Sweep(ctx); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	if got := expectationsOf(t, pool, "reg-1"); got != "[]" {
+		t.Fatalf("expectations = %s, want them gone", got)
+	}
+}
