@@ -264,9 +264,12 @@ func (s *Server) trustBattery(
 	if report.DatasetVersion != 0 {
 		// Against what it ran. The corpus passed in is the working set, which the
 		// rest of this page is about and this battery may never have seen.
-		if corpus, err = s.regressions.AtVersion(ctx, a.ID, report.DatasetVersion); err != nil {
+		pinned, err := s.regressions.AtVersion(ctx, a.ID, report.DatasetVersion)
+		if err != nil {
 			return simulate.Report{}, false, fmt.Errorf("read the corpus of %s: %w", a.ID, err)
 		}
+		report.Change = simulate.Since(pinned, corpus)
+		corpus = pinned
 	}
 	if len(corpus) > 0 {
 		report = simulate.Battery(report, corpus)
@@ -339,16 +342,28 @@ func simulationTrust(
 			openapi.AgentTrustEvidenceStatusBad, openapi.SimulationBroken, vals)
 	// An erased case is coverage this battery no longer has, whether or not it ran
 	// before it went. Reading as ready would be green over something nobody checked.
-	case tally.Parked > 0 || tally.Unsettled > 0 || tally.NotRun > 0 || report.Erased > 0:
+	case tally.Parked > 0 || tally.Unsettled > 0 || tally.NotRun > 0 || erasedCases(report) > 0:
 		return trustEvidence(openapi.AgentTrustEvidenceIdSimulation,
 			openapi.AgentTrustEvidenceStatusBad, openapi.SimulationIncomplete, vals)
 	case tally.Waiting > 0:
 		return trustEvidence(openapi.AgentTrustEvidenceIdSimulation,
 			openapi.AgentTrustEvidenceStatusUnknown, openapi.SimulationIncomplete, vals)
 	default:
-		return trustEvidence(openapi.AgentTrustEvidenceIdSimulation,
-			openapi.AgentTrustEvidenceStatusGood, openapi.SimulationReady, vals)
+		return heldTrust(report, vals)
 	}
+}
+
+// heldTrust is a battery where everything it ran held. If the corpus has moved since, it
+// does not stop a start, and it is not ready either: reading green would claim coverage of
+// something nobody has checked.
+func heldTrust(report simulate.Report, vals map[string]interface{}) openapi.AgentTrustEvidence {
+	if unchecked := report.Change.NotChecked; len(unchecked) > 0 {
+		vals["notChecked"] = len(unchecked)
+		return trustEvidence(openapi.AgentTrustEvidenceIdSimulation,
+			openapi.AgentTrustEvidenceStatusUnknown, openapi.SimulationNotChecked, vals)
+	}
+	return trustEvidence(openapi.AgentTrustEvidenceIdSimulation,
+		openapi.AgentTrustEvidenceStatusGood, openapi.SimulationReady, vals)
 }
 
 func versionTrust(
@@ -494,7 +509,7 @@ func simulationValues(
 		"broken", report.Broken, "finished", tally.Finished,
 		"parked", tally.Parked, "waiting", tally.Waiting,
 		"unsettled", tally.Unsettled, "stopped", tally.Stopped,
-		"notRun", tally.NotRun, "erased", report.Erased, "steps", reportSteps(report),
+		"notRun", tally.NotRun, "erased", erasedCases(report), "steps", reportSteps(report),
 		"costMicros", tally.Cost.Micros)
 	if compared {
 		vals["regressed"] = cmp.Regressed
@@ -502,6 +517,12 @@ func simulationValues(
 		vals["costDeltaMicros"] = cmp.CostMicros
 	}
 	return vals
+}
+
+// erasedCases is all the coverage gone: the battery's own gaps, and what joined the corpus
+// after it and has already lost its input, which no row of its report can mention.
+func erasedCases(report simulate.Report) int {
+	return report.Erased + len(report.Change.ErasedSince)
 }
 
 func reportSteps(report simulate.Report) int64 {

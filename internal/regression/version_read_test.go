@@ -137,3 +137,75 @@ func TestOccurrences_nameTheVersionTheyCameFrom(t *testing.T) {
 }
 
 func contentOf(pool *pgxpool.Pool) *ledger.Content { return ledger.NewContent(pool) }
+
+// The two sides of the comparison come from different queries. If they ever disagreed about
+// an unchanged case, every battery would read as not checked. Activated, recorded and
+// erased cases all have to read as themselves, against the real store.
+func TestSince_againstTheRealStore_saysNothingWhenNothingMoved(t *testing.T) {
+	pool := activatedCorpus(t)
+	store := regression.NewStore(pool)
+	ctx := t.Context()
+	if err := store.Record(ctx, aCase("reg-3", never("x"))); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	version, pinned, err := store.Pinned(ctx, "suporte")
+	if err != nil {
+		t.Fatalf("Pinned: %v", err)
+	}
+	working, err := store.List(ctx, "suporte")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if change := simulate.Since(pinned, working); len(change.NotChecked)+len(change.ErasedSince) != 0 {
+		t.Errorf("version %d against the corpus = %+v, want no change", version, change)
+	}
+}
+
+func TestSince_againstTheRealStore_seesAChangeAndANewCase(t *testing.T) {
+	pool := activatedCorpus(t)
+	store := regression.NewStore(pool)
+	ctx := t.Context()
+	pinned, err := store.AtVersion(ctx, "suporte", 1)
+	if err != nil {
+		t.Fatalf("AtVersion: %v", err)
+	}
+	changed := aCase("reg-1", never("changed"))
+	changed.InputRef = copyOne
+	if err := store.Record(ctx, changed); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if err := store.Record(ctx, aCase("reg-3", never("x"))); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	working, err := store.List(ctx, "suporte")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	change := simulate.Since(pinned, working)
+	if len(change.NotChecked) != 2 || len(change.ErasedSince) != 0 {
+		t.Errorf("change = %+v, want reg-1 and reg-3 not checked", change)
+	}
+}
+
+// Erased on both sides, the comparison has nothing but tombstones. It must not read as a
+// change, or a case that already shows as a gap would also be listed as lost.
+func TestSince_againstTheRealStore_aCaseErasedSinceIsNotAChange(t *testing.T) {
+	pool := activatedCorpus(t)
+	store := regression.NewStore(pool)
+	ctx := t.Context()
+	eraseAs096(t, pool, []string{copyOne}, []string{"run-1"})
+
+	pinned, err := store.AtVersion(ctx, "suporte", 1)
+	if err != nil {
+		t.Fatalf("AtVersion: %v", err)
+	}
+	working, err := store.List(ctx, "suporte")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if change := simulate.Since(pinned, working); len(change.NotChecked)+len(change.ErasedSince) != 0 {
+		t.Errorf("change = %+v, want none", change)
+	}
+}

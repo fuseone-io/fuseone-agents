@@ -220,33 +220,3 @@ func decodeInto(step domain.Step, into any) error {
 	}
 	return nil
 }
-
-// Report is one simulation, ready to be read.
-type Report struct {
-	ID      string           `json:"id"`
-	Agent   domain.AgentID   `json:"agent"`
-	Version domain.VersionID `json:"version"`
-	// DatasetVersion is the version of the corpus this battery ran. Zero means it is
-	// unpinned: recorded before versions, or its runs do not agree.
-	DatasetVersion int64  `json:"dataset_version,omitempty"`
-	Cases          []Case `json:"cases"`
-
-	// Held and Broken count the corrections that still stand and the ones
-	// that stopped standing. Zero for a simulation that is not a battery.
-	Held   int `json:"held"`
-	Broken int `json:"broken"`
-	// Drifted counts the cases whose model is not the one they last held
-	// against. It answers the question a rising broken count cannot: did
-	// somebody change the agent, or did a provider change the model under a
-	// name that did not change? The second is the one nobody notices, because
-	// nothing in this installation moved.
-	Drifted int `json:"drifted"`
-	// Erased counts the corrections that lost their input, which is coverage this
-	// battery does not have.
-	Erased int `json:"erased"`
-
-	// Running is whether any case has yet to settle. Derived rather than
-	// tracked: the runs are the queue, so a simulation is still going exactly
-	// when one of its runs is, and a flag kept beside them could say otherwise.
-	Running bool `json:"running"`
-}

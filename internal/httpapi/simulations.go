@@ -109,14 +109,48 @@ func (s *Server) GetSimulation(
 	// A simulation whose runs name corpus cases is a battery, and reading it
 	// without the corrections would show what happened while saying nothing
 	// about whether it should have.
-	if s.regressions != nil && replaysCorpus(report) {
-		corpus, err := s.corpusOf(ctx, published.ID, report)
-		if err != nil {
-			return nil, fmt.Errorf("read the corpus of %s: %w", published.ID, err)
-		}
-		report = simulate.Battery(report, corpus)
+	if s.regressions == nil || !replaysCorpus(report) {
+		return openapi.GetSimulation200JSONResponse(s.simulationReport(ctx, report)), nil
 	}
-	return openapi.GetSimulation200JSONResponse(s.simulationReport(ctx, report)), nil
+	out, err := s.batteryReport(ctx, published.ID, report)
+	if err != nil {
+		return nil, fmt.Errorf("read the corpus of %s: %w", published.ID, err)
+	}
+	return openapi.GetSimulation200JSONResponse(out), nil
+}
+
+// batteryReport is a battery read against what it ran, saying how the corpus has moved.
+func (s *Server) batteryReport(
+	ctx context.Context, agent domain.AgentID, report simulate.Report,
+) (openapi.SimulationReport, error) {
+	corpus, err := s.corpusOf(ctx, agent, report)
+	if err != nil {
+		return openapi.SimulationReport{}, err
+	}
+	out := s.simulationReport(ctx, simulate.Battery(report, corpus))
+	if report.DatasetVersion == 0 {
+		out.Unpinned = ptr(true)
+		return out, nil
+	}
+	working, err := s.regressions.List(ctx, agent)
+	if err != nil {
+		return openapi.SimulationReport{}, err
+	}
+	sayWhichCorpus(&out, report.DatasetVersion, simulate.Since(corpus, working))
+	return out, nil
+}
+
+// sayWhichCorpus tells a reader what this battery was read against, and how the corpus has
+// moved since. Without it, a result stays true and reads as if it covered today's corpus,
+// which is the claim nobody can make.
+func sayWhichCorpus(out *openapi.SimulationReport, version int64, change simulate.CorpusChange) {
+	out.DatasetVersion = ptr(version)
+	if len(change.NotChecked) > 0 {
+		out.NotChecked = &change.NotChecked
+	}
+	if len(change.ErasedSince) > 0 {
+		out.ErasedSince = &change.ErasedSince
+	}
 }
 
 // publishedAgent resolves the newest published version this caller may see.
