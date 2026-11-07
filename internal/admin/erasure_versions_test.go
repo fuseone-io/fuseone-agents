@@ -30,7 +30,7 @@ type activatedCorpus struct {
 // when an input was too large to keep whole, so only the case leads from the run to it.
 func activatedCase(t *testing.T) activatedCorpus {
 	t.Helper()
-	pool := testdb.Isolated(t)
+	pool := testdb.IsolatedThrough(t, "0103_dataset_versions")
 	ctx := t.Context()
 	key := make([]byte, 32)
 	v, _ := vault.New(key, "test")
@@ -49,7 +49,7 @@ func activatedCase(t *testing.T) activatedCorpus {
 		copied); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if _, err := pool.Exec(ctx, testdb.ActivateDatasetVersions); err != nil {
+	if err := ledger.Migrate(ctx, pool); err != nil {
 		t.Fatalf("activate: %v", err)
 	}
 	return activatedCorpus{pool, erasures, content, store, copied}
@@ -153,5 +153,45 @@ func TestSweep_waitsForAnExpectationsObjectBeingKept(t *testing.T) {
 	}
 	if err := <-swept; err != nil {
 		t.Fatalf("Sweep: %v", err)
+	}
+}
+
+// A case whose copy was never stored: no tombstone happens, so the trigger never sees
+// it. Naming its run still has to take what it says, in the column and the object.
+func TestForSubject_afterActivation_takesTheObjectOfACaseWithNoCopy(t *testing.T) {
+	c := activatedCase(t)
+	ctx := t.Context()
+	if _, err := c.pool.Exec(ctx, `
+		begin; `+testdb.DeclareWriter+`
+		update regression_cases set from_run = 'run-other';
+		insert into regression_cases (agent_id, case_id, input_ref, from_run, expectations)
+		values ('suporte', 'reg-2', 'regression://suporte/1/never-stored', 'run-named',
+		        '[{"kind":"never_calls","value":"bia@example.com"}]');
+		insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes)
+		values ('expectations://suporte/1/of-reg-2', 'expectations', 'suporte', 1, 'of-reg-2', 'x', 1);
+		update regression_cases set expectations_ref = 'expectations://suporte/1/of-reg-2'
+		where case_id = 'reg-2';
+		insert into dataset_versions (dataset_id, version, digest) values ('default:suporte', 2, 'two');
+		insert into dataset_version_cases
+			(dataset_id, version, case_id, input_ref, input_digest, expectations_ref, expectations_digest, from_run)
+		values ('default:suporte', 2, 'reg-2', 'regression://suporte/1/never-stored', 'none',
+		        'expectations://suporte/1/of-reg-2', 'of-reg-2', 'run-named');
+		commit`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if _, err := c.erasures.ForSubject(ctx, "dpo", domain.Scope{},
+		[]domain.RunID{"run-named"}, "request"); err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	c.expectGone(t, "expectations://suporte/1/of-reg-2")
+	var column string
+	if err := c.pool.QueryRow(ctx,
+		`select expectations::text from regression_cases where case_id = 'reg-2'`).Scan(&column); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if column != "[]" {
+		t.Errorf("column = %s, want it empty", column)
 	}
 }

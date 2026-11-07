@@ -429,13 +429,10 @@ func TestMigrate_conversationsUnderTheIdAlone_waitForTheConnectionsLock(t *testi
 // Corrections erased before erasure took expectations still hold them. The next
 // step turns expectations into content, and these must not arrive there readable.
 func TestMigrate_correctionsAlreadyErased_loseTheirExpectations(t *testing.T) {
-	pool := testdb.Pool(t)
+	pool := testdb.IsolatedThrough(t, "0101_settings_read_by_owner")
 	ctx := t.Context()
 
 	if _, err := pool.Exec(ctx, `
-		delete from regression_cases where agent_id = 'migrate-erased';
-		delete from run_content where run_id = 'migrate-erased';
-		delete from schema_migrations where version = '0102_erased_corrections_expectations';
 		insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes, erased_at, erased_reason)
 		values ('regression://migrate-erased/1/gone', 'regression', 'migrate-erased', 1, 'gone', null, 0, now(), 'subject'),
 		       ('regression://migrate-erased/1/kept', 'regression', 'migrate-erased', 1, 'kept', '{}', 2, null, '');
@@ -445,7 +442,7 @@ func TestMigrate_correctionsAlreadyErased_loseTheirExpectations(t *testing.T) {
 	`); err != nil {
 		t.Fatalf("restore the state before the migration: %v", err)
 	}
-	if err := ledger.Migrate(ctx, pool); err != nil {
+	if err := ledger.MigrateThrough(ctx, pool, "0102_erased_corrections_expectations"); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 
@@ -509,12 +506,10 @@ func TestMigrate_theErasureSQLOfThePreviousVersion_leavesNoExpectations(t *testi
 	}}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			pool := testdb.Pool(t)
+			pool := testdb.IsolatedThrough(t, "0102_erased_corrections_expectations")
 			ctx := t.Context()
 			const ref = "regression://old-binary/1/copy"
 			if _, err := pool.Exec(ctx, `
-				delete from regression_cases where agent_id = 'old-binary';
-				delete from run_content where run_id = 'old-binary';
 				insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes)
 				values ('regression://old-binary/1/copy', 'regression', 'old-binary', 1, 'copy', '{}', 2),
 				       ('regression://old-binary/1/other', 'regression', 'old-binary-other', 1, 'other', '{}', 2);
@@ -526,12 +521,6 @@ func TestMigrate_theErasureSQLOfThePreviousVersion_leavesNoExpectations(t *testi
 			`); err != nil {
 				t.Fatalf("seed: %v", err)
 			}
-			t.Cleanup(func() {
-				_, _ = pool.Exec(context.Background(), `
-					delete from regression_cases where agent_id = 'old-binary';
-					delete from run_content where run_id in ('old-binary', 'old-binary-other')`)
-			})
-
 			tx, err := pool.Begin(ctx)
 			if err != nil {
 				t.Fatalf("begin: %v", err)
@@ -568,14 +557,10 @@ func expectationsIn(t *testing.T, pool *pgxpool.Pool, agent, id string) string {
 // reading before that commit, with the trigger arriving after it, would miss the row
 // for good: the old binary has already finished and nothing comes back for it.
 func TestMigrate_anErasureInFlight_isSeenByTheBackfill(t *testing.T) {
-	pool := testdb.Pool(t)
+	pool := testdb.IsolatedThrough(t, "0101_settings_read_by_owner")
 	ctx := t.Context()
 	const ref = "regression://in-flight/1/copy"
 	if _, err := pool.Exec(ctx, `
-		delete from regression_cases where agent_id = 'in-flight';
-		delete from run_content where run_id = 'in-flight';
-		delete from schema_migrations where version = '0102_erased_corrections_expectations';
-		drop trigger if exists corpus_copy_erased on run_content;
 		insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes)
 		values ('regression://in-flight/1/copy', 'regression', 'in-flight', 1, 'copy', '{}', 2);
 		insert into regression_cases (agent_id, case_id, input_ref, expectations)
@@ -595,7 +580,9 @@ func TestMigrate_anErasureInFlight_isSeenByTheBackfill(t *testing.T) {
 	}
 
 	migrated := make(chan error, 1)
-	go func() { migrated <- ledger.Migrate(context.Background(), pool) }()
+	go func() {
+		migrated <- ledger.MigrateThrough(context.Background(), pool, "0102_erased_corrections_expectations")
+	}()
 
 	// The migration has reached the table and is queued behind this transaction.
 	deadline := time.Now().Add(30 * time.Second)
@@ -628,11 +615,9 @@ func TestMigrate_anErasureInFlight_isSeenByTheBackfill(t *testing.T) {
 // Recording a correction again restores the copy before writing what it expects,
 // and clearing is for a copy going away, never for one coming back.
 func TestMigrate_aCopyRestored_doesNotLoseTheExpectationsWrittenAfter(t *testing.T) {
-	pool := testdb.Pool(t)
+	pool := testdb.IsolatedThrough(t, "0102_erased_corrections_expectations")
 	ctx := t.Context()
 	if _, err := pool.Exec(ctx, `
-		delete from regression_cases where agent_id = 'restored';
-		delete from run_content where run_id = 'restored';
 		insert into run_content (ref, owner_kind, run_id, seq, digest, bytes, full_bytes, erased_at, erased_reason)
 		values ('regression://restored/1/copy', 'regression', 'restored', 1, 'copy', null, 2, now(), 'subject');
 		insert into regression_cases (agent_id, case_id, input_ref)

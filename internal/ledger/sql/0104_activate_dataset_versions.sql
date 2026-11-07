@@ -1,6 +1,6 @@
--- What the migration after release A will do (NT-015, Rollout). It lives here until
--- that release, because the writers that honour it have to be proved against it now,
--- and an installation on release A must not run it yet.
+-- Dataset versions turn on (NT-015, Rollout). From here every change to a corpus
+-- records a version, which is only trustworthy if every write produced one, so this
+-- needs the release before it, whose writers already know how.
 
 -- The switch first: a writer in flight holds it shared and finishes first, and the
 -- next one waits here and then reads it on. The table lock is for whatever does not
@@ -68,8 +68,10 @@ update dataset_versioning set active = true, activated_at = now() where only_row
 -- changing the working set, rather than writing a state no version records.
 --
 -- What erasure does passes: a note is outside a version, and expectations may only be
--- emptied once what they describe is already gone, which is what 0102 and every
--- binary's erasure do. That write changes no digest, so no version has to record it.
+-- emptied once there is no readable input left, or their object is gone, which is what
+-- 0102 and every binary's erasure do. A case whose copy was never stored counts: an
+-- erasure naming its run still has to clear it. That write changes no digest, so no
+-- version has to record it.
 create function refuse_undeclared_corpus_writes() returns trigger
 language plpgsql as $$
 begin
@@ -81,10 +83,11 @@ begin
        and new.input_ref = old.input_ref and new.from_run = old.from_run
        and new.expectations_ref is not distinct from old.expectations_ref
        and (new.expectations = old.expectations
-            or (new.expectations = '[]'::jsonb and exists (
-                  select 1 from run_content rc
-                  where rc.ref in (old.input_ref, old.expectations_ref)
-                    and rc.erased_at is not null))) then
+            or (new.expectations = '[]'::jsonb and (
+                  not exists (select 1 from run_content rc
+                              where rc.ref = old.input_ref and rc.erased_at is null)
+                  or exists (select 1 from run_content rc
+                             where rc.ref = old.expectations_ref and rc.erased_at is not null)))) then
         return new;
     end if;
     raise exception 'regression_cases: % refused, this writer does not record dataset versions', tg_op

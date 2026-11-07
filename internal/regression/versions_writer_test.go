@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -14,7 +15,6 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/regression"
-	"github.com/fuseone/agents/internal/testdb"
 )
 
 func never(value string) domain.Expectation {
@@ -43,25 +43,21 @@ func latestVersion(t *testing.T, pool *pgxpool.Pool) (version int, digest string
 	return version, digest
 }
 
-func TestRecord_switchOff_writesTheRowAsTodayAndNoVersion(t *testing.T) {
-	pool := testdb.Isolated(t)
+// A pod ahead of the migration writes nothing. A version there would have nothing
+// before it, and the working set would move under the migration about to convert it.
+func TestWrite_onADatabaseBeforeActivation_refusedAndNothingChanges(t *testing.T) {
+	pool := beforeActivation(t)
 	store := regression.NewStore(pool)
+	before := workingSet(t, pool)
 
-	if err := store.Record(t.Context(), aCase("reg-1", never("x"))); err != nil {
-		t.Fatalf("Record: %v", err)
+	if err := store.Record(t.Context(), aCase("reg-3", never("x"))); !errors.Is(err, regression.ErrVersionsNotActive) {
+		t.Errorf("Record: err = %v", err)
 	}
-
-	var versions, objects int
-	var ref *string
-	if err := pool.QueryRow(t.Context(), `
-		select (select count(*) from dataset_versions),
-		       (select count(*) from run_content where owner_kind = 'expectations'),
-		       (select expectations_ref from regression_cases where case_id = 'reg-1')`,
-	).Scan(&versions, &objects, &ref); err != nil {
-		t.Fatalf("read: %v", err)
+	if err := store.Delete(t.Context(), "suporte", "reg-1", "usr_ana"); !errors.Is(err, regression.ErrVersionsNotActive) {
+		t.Errorf("Delete: err = %v", err)
 	}
-	if versions != 0 || objects != 0 || ref != nil {
-		t.Errorf("versions = %d, objects = %d, ref = %v, want nothing new", versions, objects, ref)
+	if after := workingSet(t, pool); after != before {
+		t.Errorf("working set moved:\n%s\n%s", before, after)
 	}
 }
 
@@ -311,17 +307,20 @@ func TestDelete_onAnAgentWithNoCorpus_changesNothing(t *testing.T) {
 // has to read the switch after the wait: read before it, this writer would write as if
 // versions were off and be refused by the trigger.
 func TestRecord_arrivingDuringActivation_waitsAndWritesAVersion(t *testing.T) {
-	pool := testdb.Isolated(t)
-	seedCorpus(t, pool)
+	pool := beforeActivation(t)
 	store := regression.NewStore(pool)
 	ctx := t.Context()
 
+	migration, err := os.ReadFile("../ledger/sql/0104_activate_dataset_versions.sql")
+	if err != nil {
+		t.Fatalf("read the migration: %v", err)
+	}
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin: %v", err)
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
-	if _, err := tx.Exec(ctx, testdb.ActivateDatasetVersions); err != nil {
+	if _, err := tx.Exec(ctx, string(migration)); err != nil {
 		t.Fatalf("activate: %v", err)
 	}
 

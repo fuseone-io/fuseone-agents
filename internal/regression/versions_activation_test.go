@@ -9,12 +9,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/testdb"
 )
 
-// Release A cannot turn versions on, and NT-015's rollout rests on what happens when
-// a later release does. So the activation runs here, on a database of its own, and
-// everything an older binary can still do is run against it as the SQL it really sends.
+// NT-015's rollout rests on what the migration finds and on what an older binary can
+// still do after it. So 0104 runs here on a database of its own, and the older binary is
+// the SQL it really sends.
 
 const (
 	copyOne = "regression://suporte/1/one"
@@ -42,18 +43,20 @@ func seedCorpus(t *testing.T, pool *pgxpool.Pool) {
 	}
 }
 
-func activate(t *testing.T, pool *pgxpool.Pool) {
+// beforeActivation is a database as 0104 finds it.
+func beforeActivation(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	if _, err := pool.Exec(t.Context(), testdb.ActivateDatasetVersions); err != nil {
-		t.Fatalf("activate: %v", err)
-	}
+	pool := testdb.IsolatedThrough(t, "0103_dataset_versions")
+	seedCorpus(t, pool)
+	return pool
 }
 
 func activatedCorpus(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	pool := testdb.Isolated(t)
-	seedCorpus(t, pool)
-	activate(t, pool)
+	pool := beforeActivation(t)
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("activate: %v", err)
+	}
 	return pool
 }
 
@@ -315,8 +318,7 @@ func TestActivation_retention_takesTheObjectOfACaseNoLongerInTheWorkingSet(t *te
 // An erasure in flight when activation starts. Seen by neither side, its expectations
 // would become readable content after it reported success.
 func TestActivation_waitsForAnErasureInFlight(t *testing.T) {
-	pool := testdb.Isolated(t)
-	seedCorpus(t, pool)
+	pool := beforeActivation(t)
 	ctx := t.Context()
 
 	tx, err := pool.Begin(ctx)
@@ -332,8 +334,7 @@ func TestActivation_waitsForAnErasureInFlight(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := pool.Exec(ctx, testdb.ActivateDatasetVersions)
-		done <- err
+		done <- ledger.Migrate(ctx, pool)
 	}()
 	select {
 	case err := <-done:
