@@ -10,6 +10,7 @@ import { AuthoringPanel } from "@/features/admin/authoring-panel";
 import { PricesPanel } from "@/features/admin/prices-panel";
 import { IdentityPanel } from "@/features/admin/identity-panel";
 import { PeoplePanel } from "@/features/admin/people-panel";
+import { ServiceAccountsPanel } from "@/features/admin/service-accounts-panel";
 import { RetentionPanel } from "@/features/admin/retention-panel";
 import { StandingPanel } from "@/features/admin/standing-panel";
 import { AreasPanel } from "@/features/admin/areas-panel";
@@ -30,6 +31,7 @@ const ADMIN_PANELS = {
   areas: AreasPanel,
   identity: IdentityPanel,
   people: PeoplePanel,
+  serviceAccounts: ServiceAccountsPanel,
   standing: StandingPanel,
   prices: PricesPanel,
   budgets: BudgetsPanel,
