@@ -346,9 +346,23 @@ func simulationTrust(
 		return trustEvidence(openapi.AgentTrustEvidenceIdSimulation,
 			openapi.AgentTrustEvidenceStatusUnknown, openapi.SimulationIncomplete, vals)
 	default:
-		return trustEvidence(openapi.AgentTrustEvidenceIdSimulation,
-			openapi.AgentTrustEvidenceStatusGood, openapi.SimulationReady, vals)
+		return heldTrust(corpus, report, vals)
 	}
+}
+
+// heldTrust is a battery where everything it ran held. If the corpus has grown since, it
+// does not stop a start, and it is not ready either: reading green would claim coverage of
+// a case nobody has run.
+func heldTrust(
+	corpus []domain.RegressionCase, report simulate.Report, vals map[string]interface{},
+) openapi.AgentTrustEvidence {
+	if unchecked := simulate.NotChecked(report, corpus); len(unchecked) > 0 {
+		vals["notChecked"] = len(unchecked)
+		return trustEvidence(openapi.AgentTrustEvidenceIdSimulation,
+			openapi.AgentTrustEvidenceStatusUnknown, openapi.SimulationNotChecked, vals)
+	}
+	return trustEvidence(openapi.AgentTrustEvidenceIdSimulation,
+		openapi.AgentTrustEvidenceStatusGood, openapi.SimulationReady, vals)
 }
 
 func versionTrust(

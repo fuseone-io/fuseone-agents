@@ -109,14 +109,39 @@ func (s *Server) GetSimulation(
 	// A simulation whose runs name corpus cases is a battery, and reading it
 	// without the corrections would show what happened while saying nothing
 	// about whether it should have.
-	if s.regressions != nil && replaysCorpus(report) {
-		corpus, err := s.corpusOf(ctx, published.ID, report)
-		if err != nil {
-			return nil, fmt.Errorf("read the corpus of %s: %w", published.ID, err)
-		}
-		report = simulate.Battery(report, corpus)
+	if s.regressions == nil || !replaysCorpus(report) {
+		return openapi.GetSimulation200JSONResponse(s.simulationReport(ctx, report)), nil
 	}
-	return openapi.GetSimulation200JSONResponse(s.simulationReport(ctx, report)), nil
+	corpus, err := s.corpusOf(ctx, published.ID, report)
+	if err != nil {
+		return nil, fmt.Errorf("read the corpus of %s: %w", published.ID, err)
+	}
+	out := s.simulationReport(ctx, simulate.Battery(report, corpus))
+	if err := s.sayWhichCorpus(ctx, published.ID, report, &out); err != nil {
+		return nil, err
+	}
+	return openapi.GetSimulation200JSONResponse(out), nil
+}
+
+// sayWhichCorpus tells a reader what this battery was read against, and what has joined
+// the corpus since. Without it, a result stays true and reads as if it covered today's
+// corpus, which is the claim nobody can make.
+func (s *Server) sayWhichCorpus(
+	ctx context.Context, agent domain.AgentID, report simulate.Report, out *openapi.SimulationReport,
+) error {
+	if report.DatasetVersion == 0 {
+		out.Unpinned = ptr(true)
+		return nil
+	}
+	out.DatasetVersion = ptr(report.DatasetVersion)
+	working, err := s.regressions.List(ctx, agent)
+	if err != nil {
+		return fmt.Errorf("read the corpus of %s: %w", agent, err)
+	}
+	if unchecked := simulate.NotChecked(report, working); len(unchecked) > 0 {
+		out.NotChecked = &unchecked
+	}
+	return nil
 }
 
 // publishedAgent resolves the newest published version this caller may see.

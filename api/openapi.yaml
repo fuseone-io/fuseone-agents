@@ -5522,6 +5522,25 @@ components:
             change the agent, or did a provider change the model under a name
             that did not change? The second is the one nobody notices, because
             nothing in this installation moved.
+        datasetVersion:
+          type: integer
+          format: int64
+          description: >
+            The version of the corpus this battery ran, which is what it is read
+            against. Absent for an uploaded set and for an unpinned battery.
+        unpinned:
+          type: boolean
+          description: >
+            This battery names no single version of the corpus: it was recorded
+            before versions, or its runs do not agree. It is read against the
+            corpus as it is now. Absent for an uploaded set.
+        notChecked:
+          type: array
+          items: { type: string }
+          description: >
+            Cases in the corpus now that this battery's version did not have. Not
+            broken and not held: nobody has run them. Run the battery again to
+            check them. Absent when there are none.
         id: { type: string }
         agent: { type: string }
         version: { type: string }
@@ -8011,6 +8030,7 @@ components:
         - simulation_broken
         - simulation_regressed
         - simulation_incomplete
+        - simulation_not_checked
         - decisions_waiting
         - decisions_quiet
         - decisions_missing

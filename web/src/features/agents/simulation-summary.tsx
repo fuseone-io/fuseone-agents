@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
+import { SimulationCorpusNote } from "@/features/agents/simulation-corpus-note";
 import { tally } from "@/features/agents/simulation-tally";
 import { formatMicros } from "@/lib/format";
 import type { SimulationReport } from "@/features/agents/simulation-api";
@@ -70,6 +71,7 @@ export function SimulationSummary({ report }: { report: SimulationReport }) {
           </dd>
         </div>
       </dl>
+      <SimulationCorpusNote report={report} />
     </Panel>
   );
 }

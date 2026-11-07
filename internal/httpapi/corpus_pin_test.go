@@ -182,7 +182,7 @@ func TestGetAgentTrust_readsABatteryAgainstItsVersion(t *testing.T) {
 	trust := readTrust(t, pinnedServer(store, t, working, []domain.RegressionCase{heldCase("caso-velho")}), "triage", "")
 
 	assertEvidence(t, trust, openapi.AgentTrustEvidenceIdSimulation,
-		openapi.AgentTrustEvidenceStatusGood, openapi.SimulationReady)
+		openapi.AgentTrustEvidenceStatusUnknown, openapi.SimulationNotChecked)
 }
 
 func TestStartSimulation_theCorpus_namesTheVersionItRan(t *testing.T) {
@@ -390,5 +390,104 @@ func TestGetAgentTrust_oneRunFinishedAndOneParked_isIncompleteInEitherOrder(t *t
 			assertEvidence(t, trust, openapi.AgentTrustEvidenceIdSimulation,
 				openapi.AgentTrustEvidenceStatusBad, openapi.SimulationIncomplete)
 		})
+	}
+}
+
+// NT-015: a case added after the last battery no longer stops a start, and the author is
+// told to run the battery. Reading ready would be green over something nobody checked.
+func TestGetAgentTrust_aCaseAddedAfterTheBattery_isNotCheckedAndNotReady(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	simulatePinned(t, store, "run-1", "sim-9", "caso-velho", 1)
+	working := []domain.RegressionCase{heldCase("caso-velho"), heldCase("caso-novo")}
+
+	trust := readTrust(t, pinnedServer(store, t, working, []domain.RegressionCase{heldCase("caso-velho")}), "triage", "")
+
+	assertEvidence(t, trust, openapi.AgentTrustEvidenceIdSimulation,
+		openapi.AgentTrustEvidenceStatusUnknown, openapi.SimulationNotChecked)
+	for _, evidence := range trust.Evidence {
+		if evidence.Id == openapi.AgentTrustEvidenceIdSimulation {
+			if got := evidence.Values["notChecked"]; got != 1 {
+				t.Errorf("notChecked = %v, want 1", got)
+			}
+		}
+	}
+}
+
+// What broke is the louder thing to say, and stays what is said.
+func TestGetAgentTrust_aBrokenCaseAndOneNotChecked_readsAsBroken(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	simulatePinned(t, store, "run-1", "sim-9", "caso-velho", 1)
+	working := append(brokenCorpus("caso-velho"), heldCase("caso-novo"))
+
+	trust := readTrust(t, pinnedServer(store, t, working, brokenCorpus("caso-velho")), "triage", "")
+
+	assertEvidence(t, trust, openapi.AgentTrustEvidenceIdSimulation,
+		openapi.AgentTrustEvidenceStatusBad, openapi.SimulationBroken)
+}
+
+func TestGetSimulation_aPinnedBattery_saysItsVersionAndWhatItDidNotCheck(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	simulatePinned(t, store, "run-1", "sim-9", "caso-velho", 1)
+	working := []domain.RegressionCase{heldCase("caso-velho"), heldCase("caso-novo")}
+
+	resp, err := pinnedServer(store, t, working, []domain.RegressionCase{heldCase("caso-velho")}).GetSimulation(
+		inArea("cx", domain.RoleAuthor),
+		openapi.GetSimulationRequestObject{AgentId: "triage", SimulationId: "sim-9"})
+	if err != nil {
+		t.Fatalf("GetSimulation: %v", err)
+	}
+	got := resp.(openapi.GetSimulation200JSONResponse)
+	if got.DatasetVersion == nil || *got.DatasetVersion != 1 {
+		t.Errorf("dataset version = %v, want 1", got.DatasetVersion)
+	}
+	if got.Unpinned != nil && *got.Unpinned {
+		t.Error("a pinned battery reads as unpinned")
+	}
+	if got.NotChecked == nil || len(*got.NotChecked) != 1 || (*got.NotChecked)[0] != "caso-novo" {
+		t.Errorf("not checked = %v, want caso-novo", got.NotChecked)
+	}
+}
+
+// Inventing which version it ran would be worse than admitting that nobody knows.
+func TestGetSimulation_aBatteryWithNoPin_saysSoAndNamesNoVersion(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	simulatePinned(t, store, "run-1", "sim-9", "caso-velho", 0)
+
+	resp, err := pinnedServer(store, t, []domain.RegressionCase{heldCase("caso-velho")}, nil).GetSimulation(
+		inArea("cx", domain.RoleAuthor),
+		openapi.GetSimulationRequestObject{AgentId: "triage", SimulationId: "sim-9"})
+	if err != nil {
+		t.Fatalf("GetSimulation: %v", err)
+	}
+	got := resp.(openapi.GetSimulation200JSONResponse)
+	if got.Unpinned == nil || !*got.Unpinned || got.DatasetVersion != nil {
+		t.Errorf("unpinned = %v, version = %v, want unpinned with no version", got.Unpinned, got.DatasetVersion)
+	}
+}
+
+// An uploaded set is not a battery, so neither word applies to it.
+func TestGetSimulation_anUploadedSet_saysNothingAboutACorpus(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	server := simulatable(t, store).WithRegressions(&fakeCorpus{})
+	ctx := inArea("cx", domain.RoleAuthor)
+	started, err := server.StartSimulation(ctx, startSimulation(`{"n":1}`))
+	if err != nil {
+		t.Fatalf("StartSimulation: %v", err)
+	}
+
+	resp, err := server.GetSimulation(ctx, openapi.GetSimulationRequestObject{
+		AgentId: "triage", SimulationId: started.(openapi.StartSimulation202JSONResponse).Id,
+	})
+	if err != nil {
+		t.Fatalf("GetSimulation: %v", err)
+	}
+	got := resp.(openapi.GetSimulation200JSONResponse)
+	if got.Unpinned != nil || got.DatasetVersion != nil || got.NotChecked != nil {
+		t.Errorf("unpinned = %v, version = %v, not checked = %v, want none", got.Unpinned, got.DatasetVersion, got.NotChecked)
 	}
 }

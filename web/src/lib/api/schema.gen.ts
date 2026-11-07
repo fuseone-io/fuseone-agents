@@ -3345,6 +3345,15 @@ export interface components {
              *     nothing in this installation moved.
              */
             drifted?: number;
+            /**
+             * Format: int64
+             * @description The version of the corpus this battery ran, which is what it is read against. Absent for an uploaded set and for an unpinned battery.
+             */
+            datasetVersion?: number;
+            /** @description This battery names no single version of the corpus: it was recorded before versions, or its runs do not agree. It is read against the corpus as it is now. Absent for an uploaded set. */
+            unpinned?: boolean;
+            /** @description Cases in the corpus now that this battery's version did not have. Not broken and not held: nobody has run them. Run the battery again to check them. Absent when there are none. */
+            notChecked?: string[];
             id: string;
             agent?: string;
             version?: string;
@@ -4993,7 +5002,7 @@ export interface components {
          * @description Stable reason for this evidence row.
          * @enum {string}
          */
-        AgentTrustEvidenceCode: "runs_missing" | "runs_finished" | "runs_unfinished" | "runs_waiting" | "runs_in_progress" | "runs_unknown" | "simulation_missing_corpus" | "simulation_not_run" | "simulation_ready" | "simulation_broken" | "simulation_regressed" | "simulation_incomplete" | "decisions_waiting" | "decisions_quiet" | "decisions_missing" | "decisions_approved" | "decisions_refused" | "launch_running" | "launch_paused" | "version_no_previous" | "version_compared" | "version_regressed" | "version_missing_baseline" | "cost_missing" | "cost_stable" | "cost_increased" | "cost_decreased" | "policy_missing" | "policy_no_blocks" | "policy_blocks" | "policy_blocks_increased" | "policy_blocks_decreased" | "capabilities_no_previous" | "capabilities_unchanged" | "capabilities_added" | "capabilities_removed";
+        AgentTrustEvidenceCode: "runs_missing" | "runs_finished" | "runs_unfinished" | "runs_waiting" | "runs_in_progress" | "runs_unknown" | "simulation_missing_corpus" | "simulation_not_run" | "simulation_ready" | "simulation_broken" | "simulation_regressed" | "simulation_incomplete" | "simulation_not_checked" | "decisions_waiting" | "decisions_quiet" | "decisions_missing" | "decisions_approved" | "decisions_refused" | "launch_running" | "launch_paused" | "version_no_previous" | "version_compared" | "version_regressed" | "version_missing_baseline" | "cost_missing" | "cost_stable" | "cost_increased" | "cost_decreased" | "policy_missing" | "policy_no_blocks" | "policy_blocks" | "policy_blocks_increased" | "policy_blocks_decreased" | "capabilities_no_previous" | "capabilities_unchanged" | "capabilities_added" | "capabilities_removed";
         AgentTrustEvidence: {
             id: components["schemas"]["AgentTrustEvidenceId"];
             status: components["schemas"]["AgentTrustEvidenceStatus"];
