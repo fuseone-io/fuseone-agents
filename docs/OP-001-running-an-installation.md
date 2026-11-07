@@ -203,7 +203,8 @@ listing — only whether one is stored.
   narrow it and does not pretend to.
 
 **Service accounts** let a pipeline, a script or Terraform call the API. An
-administrator creates one with `POST /admin/service-accounts`, gives it roles with
+administrator manages them under Administration > Service accounts in the console, or
+creates one with `POST /admin/service-accounts`, gives it roles with
 `PUT /admin/people/{principalId}/grants`, and issues a token with
 `POST /admin/service-accounts/{accountId}/tokens`, which needs an expiry. The secret is
 in that response and nowhere else; only its hash is stored. To rotate, issue a second
@@ -212,7 +213,8 @@ on the next request, and each of these acts is on the admin trail.
 
 Whatever its roles say, a service account can never approve an action, grant a standing
 approval or change who holds what. So a token cannot manage accounts or tokens: that
-stays with a person. Every role that can publish can also start runs, so a token that
+stays with a person. It cannot hold a password or a session either, so revoking its
+tokens is the end of its access. Every role that can publish can also start runs, so a token that
 publishes can start runs too.
 
 Removing a credential is its own gesture, on the server's page. An empty field

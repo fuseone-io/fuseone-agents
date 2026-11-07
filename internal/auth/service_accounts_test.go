@@ -353,3 +353,56 @@ func TestCreateServiceAccount_acceptsTheShortestNameTheContractAllows(t *testing
 		t.Fatalf("a one-letter name: %v", err)
 	}
 }
+
+// A machine's credential is a token, which can be revoked. A password beside it would
+// survive the revocation, whoever set it.
+func TestLocal_aServiceAccount_cannotHoldASignIn(t *testing.T) {
+	store, pool := serviceStore(t)
+	account := aServiceAccount(t, store, "no-sign-in")
+	local := auth.NewLocal(pool, store)
+	ctx := context.Background()
+
+	if err := local.SetPassword(ctx, account.ID, "a-password-long-enough"); !errors.Is(err, auth.ErrNotAPerson) {
+		t.Errorf("SetPassword = %v, want ErrNotAPerson", err)
+	}
+	if err := local.SetUsername(ctx, account.ID, "no-sign-in"); !errors.Is(err, auth.ErrNotAPerson) {
+		t.Errorf("SetUsername = %v, want ErrNotAPerson", err)
+	}
+}
+
+// What a previous binary let through is still in the row, and the fence on the writers
+// does not reach it.
+func TestLocal_aServiceAccountAlreadyHoldingAPassword_cannotSignIn(t *testing.T) {
+	store, pool := serviceStore(t)
+	account := aServiceAccount(t, store, "had-a-password")
+	hash, err := auth.HashPassword("a-password-long-enough")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `update principals set username = 'had-a-password', password_hash = $2
+		where principal_id = $1`, account.ID, hash); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	_, err = auth.NewLocal(pool, store).Verify(ctx, "had-a-password", "a-password-long-enough")
+	if !errors.Is(err, auth.ErrBadCredential) {
+		t.Fatalf("Verify = %v, want ErrBadCredential", err)
+	}
+}
+
+// The session such a password already opened goes with it.
+func TestPrincipalBySession_ofAServiceAccount_isRefused(t *testing.T) {
+	store, _ := serviceStore(t)
+	account := aServiceAccount(t, store, "had-a-session")
+	ctx := context.Background()
+	token, _, err := store.CreateSession(ctx, account.ID, "agent", "127.0.0.1", serviceNow)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	_, _, err = store.PrincipalBySession(ctx, token.Hash, serviceNow)
+	if !errors.Is(err, auth.ErrBadCredential) {
+		t.Fatalf("PrincipalBySession = %v, want ErrBadCredential", err)
+	}
+}

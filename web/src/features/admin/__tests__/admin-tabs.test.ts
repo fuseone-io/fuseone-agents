@@ -15,7 +15,7 @@ describe("administration tabs", () => {
     ]);
     expect(
       visibleAdminTabs(["identity:write"]).map((tab) => tab.value),
-    ).toEqual(["identity", "people"]);
+    ).toEqual(["identity", "people", "serviceAccounts"]);
   });
 
   it("keeps an unknown session different from an open installation", () => {
@@ -29,6 +29,7 @@ describe("administration tabs", () => {
       "companies",
       "areas",
       "people",
+      "serviceAccounts",
       "standing",
       "prices",
       "budgets",
@@ -44,7 +45,7 @@ describe("administration tabs", () => {
       ]),
     ).toEqual([
       ["admin.group.platform", ["identity"]],
-      ["admin.group.people", ["people"]],
+      ["admin.group.people", ["people", "serviceAccounts"]],
     ]);
   });
 

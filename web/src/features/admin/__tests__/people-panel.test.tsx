@@ -165,6 +165,28 @@ describe("people administration", () => {
     expect(roles.at(-1)).toHaveTextContent("Administrador");
   });
 
+  // The directory lists machines too, so this is a second way to their grants.
+  it("offers a machine reached from here no more than its own screen does", async () => {
+    hooks.people = [
+      {
+        id: "svc_publisher",
+        kind: "service",
+        display: "publisher",
+        grants: [],
+        disabled: false,
+      },
+    ];
+    render(<PeoplePanel />);
+
+    await userEvent.click(screen.getByRole("button", { name: /publisher/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Gerenciar" }));
+
+    expect(screen.getByText(/nunca pode aprovar/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Conceder administrador" }),
+    ).toBeNull();
+  });
+
   it("filters the list by sign-in source and missing roles", async () => {
     render(<PeoplePanel />);
 

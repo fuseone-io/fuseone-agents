@@ -24,11 +24,13 @@ const ROLES: GrantInput["role"][] = [
 export function GrantRow({
   grant,
   index,
+  machine = false,
   onChange,
   onRemove,
 }: {
   grant: GrantInput;
   index: number;
+  machine?: boolean;
   onChange: (patch: Partial<GrantInput>) => void;
   onRemove: () => void;
 }) {
@@ -37,6 +39,11 @@ export function GrantRow({
   // repeated headings is noise, and dropping them outright would leave the
   // inputs unnamed to anyone not reading the column by eye.
   const heading = index === 0 ? "text-xs" : "sr-only";
+  // Approving is barred to a machine whatever it holds, so the role is not
+  // offered. One it already holds still shows, or it could not be seen to go.
+  const roles = ROLES.filter(
+    (role) => !machine || role !== "approver" || grant.role === role,
+  );
 
   return (
     <div className="grid grid-cols-[1fr_1fr_140px_32px] items-end gap-2">
@@ -69,7 +76,7 @@ export function GrantRow({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {ROLES.map((role) => (
+            {roles.map((role) => (
               <SelectItem key={role} value={role}>
                 {t(`roles.${role}`)}
               </SelectItem>

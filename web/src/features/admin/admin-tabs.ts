@@ -40,6 +40,11 @@ export const ADMIN_TAB_ACCESS = [
     permission: "identity:write",
   },
   {
+    value: "serviceAccounts",
+    label: "admin.serviceAccounts",
+    permission: "identity:write",
+  },
+  {
     value: "standing",
     label: "admin.standing",
     permission: "approval:grant",
@@ -79,7 +84,7 @@ export const ADMIN_TAB_GROUPS = [
   },
   {
     label: "admin.group.people",
-    tabs: ["people"],
+    tabs: ["people", "serviceAccounts"],
   },
   {
     label: "admin.group.limits",

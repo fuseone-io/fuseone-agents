@@ -51,6 +51,18 @@ When sign-in goes through an external provider, a grant can come from a **group*
 
 The practical consequence: **revoking that grant on the screen lasts until the person signs in again.** What has to change is the group, in the provider. The People screen marks each grant's origin — `local`, `provider` or `mixed` — precisely so this is not discovered on a Monday.
 
+## Service accounts
+
+A pipeline, a script or a Terraform run acts through a service account, under **Administration > Service accounts**. Three acts live there, and they mean different things:
+
+- **Revoking a token** ends that one credential for good, on its next request.
+- **Disabling the account** stops every token at once. It can be undone: enabling brings back the tokens not revoked and not expired, and the dialog says how many.
+- **Changing what it may do** changes its roles and leaves its tokens alone.
+
+A token is issued with a required validity, and its secret appears once. Only its hash is kept, so copy it before closing the dialog. To rotate one, issue a replacement under the same name, move the machine over, then revoke the old one: both work in between, and the id tells them apart.
+
+Whatever its roles say, a service account can never approve an action, grant a standing approval or change who holds what. It also cannot hold a password or a session, so revoking its tokens is the end of its access. Every act here is on the administration trail, without the secret.
+
 ## Use cases
 
 ### A team looks after its own agent

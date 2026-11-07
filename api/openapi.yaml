@@ -2484,7 +2484,9 @@ paths:
       tags: [admin]
       operationId: setServiceAccountDisabled
       summary: Turn every token of an account off, or back on
-      description: Takes effect on the next request.
+      description: |
+        Takes effect on the next request. Enabling brings back every token that was not
+        revoked and has not expired.
       parameters:
         - { name: accountId, in: path, required: true, schema: { type: string } }
       requestBody:
@@ -2627,6 +2629,9 @@ paths:
         out of the browser they are typing in would be a surprise. Revoking
         sessions is a separate act, and the one to reach for when a password
         leaked.
+
+        Only for a person. A service account is refused, by anybody: its credential
+        is a token, and a password would survive that token being revoked.
       parameters:
         - name: principalId
           in: path

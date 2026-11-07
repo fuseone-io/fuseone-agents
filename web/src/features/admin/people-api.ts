@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { serviceAccountKeys } from "@/features/admin/service-account-keys";
 import { api, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema.gen";
 
@@ -40,8 +41,11 @@ export function useSetGrants() {
           body: { grants: input.grants },
         }),
       ),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({ queryKey: peopleKeys.all }),
+    // Either screen can hold a machine's grants, and both show them.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      void queryClient.invalidateQueries({ queryKey: serviceAccountKeys.all });
+    },
   });
 }
 
