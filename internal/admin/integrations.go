@@ -285,7 +285,7 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 	var toolsRemoved int64
 	return writeRevised(ctx, i.pool, i.settings, folded{
 		by: by, scope: scope, action: "mcp_server.configured", target: server.Name,
-		revised: &revised{expect: w.Expect, of: i.mcpRevision, differs: mcpTokensDiffer},
+		revised: &revised{expect: w.Expect, of: i.mcpRevision},
 		// Switched off, its tools go in the same transaction, as on removal:
 		// the worker that published them may be gone, and one that never
 		// reached the server has nothing to withdraw.
@@ -342,7 +342,9 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 				configEnv = *server.ConfigFileEnv
 			}
 
-			merged := given.Apply(domain.ReadMCPCredentials(stored.Secret)).ForTransport(transport)
+			held := domain.ReadMCPCredentials(stored.Secret)
+			merged := given.Apply(held).ForTransport(transport)
+			merged.OAuth = domain.Regranted(held.OAuth, merged.OAuth)
 			if err := domain.CheckHeaderNames(merged.Headers); err != nil {
 				return settings.Setting{}, nil, err
 			}
@@ -415,18 +417,6 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 				}, nil
 		},
 	})
-}
-
-// mcpTokensDiffer reports new OAuth tokens. They are not in the revision, because a worker
-// rotates them with nobody having written anything, but somebody pasting a grant is
-// replacing them, and treating that as no change would drop what they pasted.
-func mcpTokensDiffer(stored, candidate settings.Setting) bool {
-	was, now := domain.ReadMCPCredentials(stored.Secret).OAuth, domain.ReadMCPCredentials(candidate.Secret).OAuth
-	if was == nil || now == nil {
-		return was != now
-	}
-	return was.AccessToken != now.AccessToken || was.RefreshToken != now.RefreshToken ||
-		was.ExpiresAtUnix != now.ExpiresAtUnix
 }
 
 func configFileEnv(name string) *string {
@@ -924,7 +914,8 @@ func (i *Integrations) RefreshMCPServerOAuth(
 			if creds.OAuth == nil || !creds.OAuth.Equal(was) {
 				return settings.Setting{}, nil, ErrOAuthGrantChanged
 			}
-			merged := domain.MCPCredentialPatch{OAuth: &next}.Apply(creds).ForTransport(domain.TransportHTTP)
+			kept := domain.KeptGeneration(*creds.OAuth, next)
+			merged := domain.MCPCredentialPatch{OAuth: &kept}.Apply(creds).ForTransport(domain.TransportHTTP)
 			server.HasOAuth = merged.OAuth != nil && !merged.OAuth.Empty()
 			value, err := json.Marshal(server)
 			if err != nil {
@@ -976,7 +967,8 @@ func (i *Integrations) refreshMCPPersonalOAuth(
 			if creds.OAuth == nil || !creds.OAuth.Equal(was) {
 				return settings.Setting{}, nil, ErrOAuthGrantChanged
 			}
-			merged := domain.MCPCredentialPatch{OAuth: &next}.Apply(creds).ForTransport(domain.TransportHTTP)
+			kept := domain.KeptGeneration(*creds.OAuth, next)
+			merged := domain.MCPCredentialPatch{OAuth: &kept}.Apply(creds).ForTransport(domain.TransportHTTP)
 			value, err := json.Marshal(storedMCPUserCredential{
 				Server: name, Principal: string(principal),
 				HasHeaders: len(merged.Headers) > 0,

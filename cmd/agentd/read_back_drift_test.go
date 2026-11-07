@@ -234,14 +234,13 @@ func TestReadBack_mcpServer_grantRotatedByAWorker_answerHoldsStill(t *testing.T)
 
 	world.put(t, path, mcpHTTP(oauthGrant(nil)))
 	first, _ := world.get(t, path)
-	world.put(t, path, mcpHTTP(oauthGrant(map[string]any{
-		"accessToken": "drift-access-rotated", "refreshToken": "drift-refresh-rotated", "expiresAtUnix": 4102444800,
-	})))
+	// Through the worker's own write: a person pasting tokens is a change, and moves it.
+	rotate(t, world, "readback-rotation")
 	second, raw := world.get(t, path)
 	if !reflect.DeepEqual(withoutMeta(first), withoutMeta(second)) {
 		t.Errorf("rotation read as drift\n before: %v\n  after: %v", first, second)
 	}
-	if strings.Contains(string(raw), "drift-access-rotated") {
+	if strings.Contains(string(raw), "ETAG-ROTATED") {
 		t.Errorf("the answer carries the token: %s", raw)
 	}
 }

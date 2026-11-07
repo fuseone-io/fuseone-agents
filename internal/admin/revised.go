@@ -27,10 +27,6 @@ type revised struct {
 	of func(set settings.Setting) domain.Revision
 	// ofUnreadable names one whose secret will not open.
 	ofUnreadable func(set settings.Setting) domain.Revision
-	// differs reports a change the revision does not cover. Tokens a worker rotates are
-	// left out of a revision, or it would move with nobody having written anything, but
-	// a person pasting new ones is a change.
-	differs func(stored, candidate settings.Setting) bool
 	// lockedByGuard says the write's guard already holds a lock of this resource's own,
 	// taken whether the row exists or not, so a second one would only stack writers up.
 	lockedByGuard bool
@@ -88,10 +84,7 @@ func (r *revised) judge(row storedRow) (domain.Revision, error) {
 // unchanged reports that writing this would leave the resource as it is. A row whose secret
 // will not open is never unchanged: there is no telling what the write would keep.
 func (r *revised) unchanged(row storedRow, current domain.Revision, candidate settings.Setting) bool {
-	if !row.exists || row.unreadable || r.of(candidate) != current {
-		return false
-	}
-	return r.differs == nil || !r.differs(row.set, candidate)
+	return row.exists && !row.unreadable && r.of(candidate) == current
 }
 
 // effective is the row a write would leave, the secret it keeps included.

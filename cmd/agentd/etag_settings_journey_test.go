@@ -365,46 +365,6 @@ func TestSettingsWrite_twoCreators_theSecondFoldsOntoTheFirst(t *testing.T) {
 	}
 }
 
-// Tokens a worker rotates are not in a revision. Somebody pasting new ones is still a
-// write, or re-authorising a server would silently do nothing.
-func TestSettingsETag_pastedOAuthTokens_areWrittenThoughTheRevisionHolds(t *testing.T) {
-	w := newReadBackWorld(t)
-	r := managedResources()[0]
-	grant := func(refresh string) map[string]any {
-		return map[string]any{"transport": "http", "url": "https://mcp.example.com/a", "oauth": map[string]any{
-			"refreshToken": refresh, "tokenURL": "https://auth.example.com/token", "clientID": "client", "clientSecret": "ETAG-CLIENT",
-		}}
-	}
-	t.Cleanup(func() { w.call(t, etagCall{method: http.MethodDelete, path: r.path}) })
-	first := w.call(t, etagCall{method: http.MethodPut, path: r.path, body: grant("ETAG-REFRESH-ONE")})
-	if first.Code != http.StatusNoContent {
-		t.Fatalf("PUT = %d: %s", first.Code, first.Body)
-	}
-	before := held(t, r)
-
-	same := w.call(t, etagCall{method: http.MethodPut, path: r.path, body: grant("ETAG-REFRESH-ONE")})
-	if after := held(t, r); after != before || same.Header().Get("ETag") != first.Header().Get("ETag") {
-		t.Errorf("the same grant moved something: %s, then %s", before, after)
-	}
-
-	w.call(t, etagCall{method: http.MethodPut, path: r.path, body: grant("ETAG-REFRESH-TWO")})
-	row, err := w.store.Reveal(t.Context(), settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, r.row.Name)
-	if err != nil {
-		t.Fatalf("reveal: %v", err)
-	}
-	if !strings.Contains(row.Secret, "ETAG-REFRESH-TWO") {
-		t.Fatal("the pasted token was dropped")
-	}
-
-	// The OAuth client lives only in the sealed document, and a read answers it.
-	another := grant("ETAG-REFRESH-TWO")
-	another["oauth"].(map[string]any)["clientID"] = "another-client"
-	moved := w.call(t, etagCall{method: http.MethodPut, path: r.path, body: another})
-	if moved.Header().Get("ETag") == first.Header().Get("ETag") {
-		t.Error("another OAuth client did not move the revision")
-	}
-}
-
 // A provider key or a connector token sealed under a lost master key could always be
 // replaced, because those writes never needed it. Comparing must not take that away.
 func TestSettingsWrite_aSecretThatNoLongerOpens_canStillBeReplaced(t *testing.T) {

@@ -86,6 +86,9 @@ type MCPOAuthGrant struct {
 	TokenType     string   `json:"tokenType,omitempty"`
 	ExpiresAtUnix int64    `json:"expiresAtUnix,omitempty"`
 	Scopes        []string `json:"scopes,omitempty"`
+	// Generation names the tokens a person last pasted, and a worker's rotation keeps it.
+	// It is what a revision counts in place of the tokens themselves (see Regranted).
+	Generation string `json:"generation,omitempty"`
 }
 
 func (g MCPOAuthGrant) Empty() bool {
