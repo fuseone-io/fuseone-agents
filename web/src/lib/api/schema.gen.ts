@@ -1421,6 +1421,9 @@ export interface paths {
          *     Every write takes a snapshot of the whole set in the same transaction,
          *     so the hash recorded on decisions from this moment names rules that can
          *     be fetched back.
+         *
+         *     Writing what is already stored changes nothing: no snapshot and no new
+         *     `updatedAt`. The answer is the same, with the same `ETag`.
          */
         put: operations["putPolicy"];
         post?: never;
@@ -6178,6 +6181,20 @@ export interface components {
         };
     };
     responses: {
+        /**
+         * @description The resource is no longer at a revision If-Match named, so nothing was
+         *     written. Problem type `fuseone:precondition-failed`. Read it again, and
+         *     decide with what is there now.
+         */
+        PreconditionFailed: {
+            headers: {
+                ETag: components["headers"]["CurrentETag"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description The request is malformed. */
         BadRequest: {
             headers: {
@@ -6217,6 +6234,13 @@ export interface components {
     };
     parameters: {
         /**
+         * @description Refuses the write with a 412 unless the resource is still at one of these
+         *     revisions. `*` means it exists at all. Weak tags never match. Any value on
+         *     something that does not exist is refused, and one that does not parse is a
+         *     400. Without the header, the last write wins.
+         */
+        IfMatch: string;
+        /**
          * @description Which translation to read. An unknown locale falls back rather than
          *     failing: a reader whose browser asks for something the manual does not
          *     have should get the manual, not an error.
@@ -6240,7 +6264,17 @@ export interface components {
         Limit: number;
     };
     requestBodies: never;
-    headers: never;
+    headers: {
+        /**
+         * @description This state of the resource, as a strong validator. It changes when the
+         *     configuration or a stored secret changes, and stays when a write changes
+         *     nothing. Changing the installation's master key changes it for a resource
+         *     that holds a secret. Opaque: compare it, never parse it.
+         */
+        ETag: string;
+        /** @description What the resource is now. Absent when it does not exist. */
+        CurrentETag: string;
+    };
     pathItems: never;
 }
 export type $defs = Record<string, never>;
@@ -8096,6 +8130,7 @@ export interface operations {
             /** @description The policy as stored. */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -8110,7 +8145,15 @@ export interface operations {
     putPolicy: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
+                 *     something that does not exist is refused, and one that does not parse is a
+                 *     400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 code: string;
             };
@@ -8122,9 +8165,10 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The policy as stored, and the new set hash. */
+            /** @description The policy as stored, and the set hash. */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -8134,12 +8178,21 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     deletePolicy: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
+                 *     something that does not exist is refused, and one that does not parse is a
+                 *     400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 code: string;
             };
@@ -8154,9 +8207,11 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     listTools: {

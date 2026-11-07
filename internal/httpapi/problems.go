@@ -30,14 +30,18 @@ parsing them.
 type Code string
 
 const (
-	CodeNotFound        Code = "fuseone:not-found"
-	CodeForbidden       Code = "fuseone:forbidden"
-	CodeInvalidInput    Code = "fuseone:invalid-input"
-	CodeNotStored       Code = "fuseone:not-stored"
-	CodeConflict        Code = "fuseone:conflict"
-	CodeUpstreamRefused Code = "fuseone:upstream-refused"
-	CodeUpstreamBusy    Code = "fuseone:upstream-busy"
-	CodeUnavailable     Code = "fuseone:unavailable"
+	CodeNotFound     Code = "fuseone:not-found"
+	CodeForbidden    Code = "fuseone:forbidden"
+	CodeInvalidInput Code = "fuseone:invalid-input"
+	CodeNotStored    Code = "fuseone:not-stored"
+	CodeConflict     Code = "fuseone:conflict"
+	// CodePreconditionFailed is a write refused by its If-Match: somebody else changed
+	// the resource since the client read it. Its own code because the answer is to read
+	// again and decide, which a generic conflict does not say.
+	CodePreconditionFailed Code = "fuseone:precondition-failed"
+	CodeUpstreamRefused    Code = "fuseone:upstream-refused"
+	CodeUpstreamBusy       Code = "fuseone:upstream-busy"
+	CodeUnavailable        Code = "fuseone:unavailable"
 	// CodeSavedNotReachable is its own condition rather than a failure: the
 	// configuration was stored and the far side did not answer. Saying only
 	// "could not be reached" reads as nothing having been saved, beside a row

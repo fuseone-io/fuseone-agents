@@ -60,7 +60,7 @@ func mergePolicyBody(t *testing.T) openapi.PolicyInput {
 func mergerEnforcer(t *testing.T) *policy.Enforcer {
 	t.Helper()
 	store := policy.NewStore(testdb.Pool(t))
-	if _, err := store.Delete(t.Context(), "FACTORY-MERGE"); err != nil {
+	if _, err := store.Delete(t.Context(), "FACTORY-MERGE", domain.IfMatch{}); err != nil {
 		t.Fatalf("reset the policy: %v", err)
 	}
 	api := httpapi.NewServer(ledger.NewMemory(), "test").WithPolicies(store)

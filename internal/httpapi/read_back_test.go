@@ -345,7 +345,7 @@ func TestGetPolicy_anAuthorInAnotherArea_readsTheRuleAsTheListDoes(t *testing.T)
 	if !ok {
 		t.Fatalf("response = %T, want 200", resp)
 	}
-	if got.Code != "POL-114" || got.Name != "No bulk export" || got.Scopes == nil || len(*got.Scopes) != 1 {
+	if got.Body.Code != "POL-114" || got.Body.Name != "No bulk export" || got.Body.Scopes == nil || len(*got.Body.Scopes) != 1 {
 		t.Errorf("policy = %+v", got)
 	}
 }
@@ -386,8 +386,8 @@ func TestGetPolicy_ruleThatDecidedSomething_answersNoCount(t *testing.T) {
 	if !ok {
 		t.Fatalf("response = %T, want 200", resp)
 	}
-	if got.Hits != nil {
-		t.Errorf("hits = %d, want it left out", *got.Hits)
+	if got.Body.Hits != nil {
+		t.Errorf("hits = %d, want it left out", *got.Body.Hits)
 	}
 }
 

@@ -20,8 +20,8 @@ const hitWindow = 7 * 24 * time.Hour
 type Policies interface {
 	Active(ctx context.Context) (policy.Set, error)
 	Named(ctx context.Context, code string) (domain.Policy, error)
-	Put(ctx context.Context, p domain.Policy, by domain.UserID) (policy.Set, error)
-	Delete(ctx context.Context, code string) (policy.Set, error)
+	Put(ctx context.Context, p domain.Policy, by domain.UserID, expect domain.IfMatch) (policy.Written, error)
+	Delete(ctx context.Context, code string, expect domain.IfMatch) (policy.Set, error)
 }
 
 // WithPolicies wires the authored set.
@@ -94,12 +94,26 @@ func (s *Server) PutPolicy(
 		}, nil
 	}
 
-	set, err := s.policies.Put(ctx, written, callerOf(ctx))
+	expect, err := domain.ParseIfMatch(req.Params.IfMatch)
+	if err != nil {
+		return openapi.PutPolicy400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				invalid(err.Error())),
+		}, nil
+	}
+
+	result, err := s.policies.Put(ctx, written, callerOf(ctx), expect)
+	if stale, ok := staleFrom(err); ok {
+		return openapi.PutPolicy412ApplicationProblemPlusJSONResponse{
+			PreconditionFailedApplicationProblemPlusJSONResponse: stale,
+		}, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("write policy %s: %w", req.Code, err)
 	}
 	return openapi.PutPolicy200JSONResponse{
-		Policy: policyFrom(written), PolicyHash: set.Hash,
+		Body:    openapi.PolicyWritten{Policy: policyFrom(written), PolicyHash: result.Hash},
+		Headers: openapi.PutPolicy200ResponseHeaders{ETag: string(result.Revision)},
 	}, nil
 }
 
@@ -118,7 +132,20 @@ func (s *Server) DeletePolicy(
 	if s.policies == nil {
 		return nil, errNoAdministration
 	}
-	if _, err := s.policies.Delete(ctx, req.Code); err != nil {
+	expect, err := domain.ParseIfMatch(req.Params.IfMatch)
+	if err != nil {
+		return openapi.DeletePolicy400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				invalid(err.Error())),
+		}, nil
+	}
+	_, err = s.policies.Delete(ctx, req.Code, expect)
+	if stale, ok := staleFrom(err); ok {
+		return openapi.DeletePolicy412ApplicationProblemPlusJSONResponse{
+			PreconditionFailedApplicationProblemPlusJSONResponse: stale,
+		}, nil
+	}
+	if err != nil {
 		return nil, fmt.Errorf("delete policy %s: %w", req.Code, err)
 	}
 	return openapi.DeletePolicy204Response{}, nil

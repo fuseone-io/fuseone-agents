@@ -2008,6 +2008,8 @@ paths:
       responses:
         '200':
           description: The policy as stored.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Policy' }
@@ -2026,11 +2028,15 @@ paths:
         Every write takes a snapshot of the whole set in the same transaction,
         so the hash recorded on decisions from this moment names rules that can
         be fetched back.
+
+        Writing what is already stored changes nothing: no snapshot and no new
+        `updatedAt`. The answer is the same, with the same `ETag`.
       parameters:
         - name: code
           in: path
           required: true
           schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
         content:
@@ -2038,13 +2044,16 @@ paths:
             schema: { $ref: '#/components/schemas/PolicyInput' }
       responses:
         '200':
-          description: The policy as stored, and the new set hash.
+          description: The policy as stored, and the set hash.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PolicyWritten' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
 
     delete:
       tags: [policies]
@@ -2059,11 +2068,14 @@ paths:
           in: path
           required: true
           schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
       responses:
         '204': { description: Removed. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
 
   /admin/tools:
     get:
@@ -4652,6 +4664,19 @@ paths:
               schema: { $ref: '#/components/schemas/Problem' }
 
 components:
+  headers:
+    ETag:
+      description: |
+        This state of the resource, as a strong validator. It changes when the
+        configuration or a stored secret changes, and stays when a write changes
+        nothing. Changing the installation's master key changes it for a resource
+        that holds a secret. Opaque: compare it, never parse it.
+      required: true
+      schema: { type: string }
+    CurrentETag:
+      description: What the resource is now. Absent when it does not exist.
+      schema: { type: string }
+
   securitySchemes:
     bearerAuth:
       type: http
@@ -4664,6 +4689,16 @@ components:
         of a human rather than the human alone.
 
   parameters:
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: |
+        Refuses the write with a 412 unless the resource is still at one of these
+        revisions. `*` means it exists at all. Weak tags never match. Any value on
+        something that does not exist is refused, and one that does not parse is a
+        400. Without the header, the last write wins.
+      schema: { type: string }
     ManualLocale:
       name: locale
       in: query
@@ -4709,6 +4744,16 @@ components:
       schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
 
   responses:
+    PreconditionFailed:
+      description: |
+        The resource is no longer at a revision If-Match named, so nothing was
+        written. Problem type `fuseone:precondition-failed`. Read it again, and
+        decide with what is there now.
+      headers:
+        ETag: { $ref: '#/components/headers/CurrentETag' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
     BadRequest:
       description: The request is malformed.
       content:
