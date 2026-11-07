@@ -47,6 +47,8 @@ export function stubAccounts(
   const state = {
     accounts: start.accounts ?? [anAccount()],
     tokens: start.tokens ?? [aToken()],
+    /** Set to hold or refuse the next reads of the token list. */
+    tokensRead: undefined as (() => Promise<Response>) | undefined,
   };
   const requests: Recorded[] = [];
 
@@ -105,11 +107,14 @@ export function stubAccounts(
     vi.fn(async (request: Request) => {
       const path = new URL(request.url).pathname.replace("/api/v1", "");
       const text = await request.clone().text();
-      const body = text ? JSON.parse(text) : undefined;
+      const body: unknown = text ? JSON.parse(text) : undefined;
       if (request.method !== "GET") {
         requests.push({ method: request.method, path, body });
       }
-      return route(request.method, path, body);
+      if (request.method === "GET" && path.endsWith("/tokens") && state.tokensRead) {
+        return state.tokensRead();
+      }
+      return route(request.method, path, body as Body);
     }),
   );
   return { requests, state };

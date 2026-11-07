@@ -2855,6 +2855,8 @@
     "enableConfirm": "Habilitar",
     "enableExplains_one": "{{count}} token ainda válido volta a funcionar na próxima requisição.",
     "enableExplains_other": "{{count}} tokens ainda válidos voltam a funcionar na próxima requisição.",
+    "enableReading": "Lendo quais tokens voltariam a funcionar.",
+    "enableUnread": "Não foi possível ler quais tokens voltariam a funcionar, então habilitar fica indisponível até isso ser conhecido.",
     "enableTitle": "Habilitar {{name}}?",
     "enabled": "Conta habilitada",
     "expiresAt": "expira em {{when}}",

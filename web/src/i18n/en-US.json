@@ -2855,6 +2855,8 @@
     "enableConfirm": "Enable",
     "enableExplains_one": "{{count}} token still valid starts working again on its next request.",
     "enableExplains_other": "{{count}} tokens still valid start working again on their next request.",
+    "enableReading": "Reading which tokens would start working again.",
+    "enableUnread": "Could not read which tokens would start working again, so enabling is not offered until that is known.",
     "enableTitle": "Enable {{name}}?",
     "enabled": "Account enabled",
     "expiresAt": "expires {{when}}",

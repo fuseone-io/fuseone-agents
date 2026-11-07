@@ -303,6 +303,107 @@ describe("disabling an account", () => {
   });
 });
 
+describe("enabling needs to know what it gives back", () => {
+  const disabled = () => ({ accounts: [anAccount({ disabled: true })] });
+  const enableButton = () => screen.getByRole("button", { name: "Enable" });
+
+  async function askToEnable(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: "Enable account" }));
+    return screen.findByRole("alertdialog");
+  }
+
+  it("will not enable while the tokens are still being read", async () => {
+    const user = userEvent.setup();
+    const { requests, state } = stubAccounts(disabled());
+    state.tokensRead = () => new Promise(() => {});
+    mount();
+    await openPublisher(user);
+    const dialog = await askToEnable(user);
+
+    expect(dialog).not.toHaveTextContent(/\d+ tokens?/);
+    expect(enableButton()).toBeDisabled();
+    await user.click(enableButton());
+    expect(requests).toEqual([]);
+  });
+
+  it("will not enable when the tokens could not be read, and offers a retry", async () => {
+    const user = userEvent.setup();
+    const { requests, state } = stubAccounts(disabled());
+    state.tokensRead = async () => new Response(null, { status: 500 });
+    mount();
+    await openPublisher(user);
+    const dialog = await askToEnable(user);
+
+    const retry = await within(dialog).findByRole("button", { name: /try again/i });
+    expect(dialog).not.toHaveTextContent(/\d+ tokens?/);
+    expect(enableButton()).toBeDisabled();
+
+    state.tokensRead = undefined;
+    await user.click(retry);
+    await within(dialog).findByText(/1 token/);
+    expect(requests).toEqual([]);
+    expect(enableButton()).toBeEnabled();
+  });
+
+  // The list on screen can predate somebody else's token. The number is read
+  // when it is asked for, and a failure then is a failure, whatever was cached.
+  it("counts what is there now, not what the screen last read", async () => {
+    const user = userEvent.setup();
+    const { state } = stubAccounts(disabled());
+    mount();
+    await openPublisher(user);
+    await screen.findByText("tok_old");
+    state.tokens = [...state.tokens, aToken({ id: "tok_other" })];
+    const dialog = await askToEnable(user);
+
+    await within(dialog).findByText(/2 tokens/);
+  });
+
+  it("will not enable on an earlier count when reading it again fails", async () => {
+    const user = userEvent.setup();
+    const { requests, state } = stubAccounts(disabled());
+    mount();
+    await openPublisher(user);
+    await screen.findByText("tok_old");
+    state.tokensRead = async () => new Response(null, { status: 500 });
+    const dialog = await askToEnable(user);
+
+    await within(dialog).findByRole("button", { name: /try again/i });
+    expect(dialog).not.toHaveTextContent(/\d+ tokens?/);
+    expect(enableButton()).toBeDisabled();
+    expect(requests).toEqual([]);
+  });
+
+  it("does not take a read it abandoned as the answer to a newer question", async () => {
+    const user = userEvent.setup();
+    const { state } = stubAccounts(disabled());
+    mount();
+    await openPublisher(user);
+    await screen.findByText("tok_old");
+    state.tokensRead = () => new Promise(() => {});
+    await askToEnable(user);
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await askToEnable(user);
+
+    // Long enough for the abandoned read to settle.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(enableButton()).toBeDisabled();
+  });
+
+  it("does not make disabling wait for the list: it is how to stop a machine", async () => {
+    const user = userEvent.setup();
+    const { requests, state } = stubAccounts();
+    state.tokensRead = async () => new Response(null, { status: 500 });
+    mount();
+    await openPublisher(user);
+    await user.click(screen.getByRole("button", { name: "Disable account" }));
+    await user.click(await screen.findByRole("button", { name: "Disable" }));
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0]).toMatchObject({ method: "PUT", body: { disabled: true } });
+  });
+});
+
 describe("what an account may do", () => {
   async function changing(user: ReturnType<typeof userEvent.setup>) {
     await openPublisher(user);
