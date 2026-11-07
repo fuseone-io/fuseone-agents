@@ -108,8 +108,10 @@ Rode o corpus quando:
 
 Uma bateria é lida contra a versão do corpus que ela rodou, então adicionar uma correção
 depois não muda um resultado passado. Uma correção nova só é verificada quando o corpus roda
-de novo, e só impede um agente de iniciar depois de rodar e quebrar. Baterias anteriores às
-versões do corpus são lidas contra o corpus como ele está agora.
+de novo, e só impede um agente de iniciar depois de rodar e quebrar. Até lá, o relatório a
+lista em **Ainda não verificados**, e o centro de confiança não aparece como pronto. Uma
+bateria **Sem versão do corpus** é anterior às versões, ou foi aberta dos dois lados de uma
+correção, e é lida contra o corpus como ele está agora.
 
 Se uma regressão começa a falhar depois de uma política mudar, leia primeiro o
 passo do Gate. A política pode estar fazendo exatamente o que foi escrita para
