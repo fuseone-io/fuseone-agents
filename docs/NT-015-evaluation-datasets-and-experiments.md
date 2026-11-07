@@ -216,6 +216,11 @@ these rows.
 against the version it names rather than the corpus as it is now. That removes the
 third defect.
 
+Two workers can open one scheduled battery on either side of a correction. Each case
+still runs once, because a run's idempotency key names the case and not its position,
+but the battery did not run one version. Its runs disagree, so it has no pin and is read
+as `unpinned`, because naming either would be a guess.
+
 A battery recorded before this has no pin. It is read as today and labelled
 `unpinned`, because inventing which version it ran would be worse than admitting
 that we do not know.
