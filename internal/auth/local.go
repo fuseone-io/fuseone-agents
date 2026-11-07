@@ -78,7 +78,7 @@ func (l *Local) Verify(ctx context.Context, username, password string) (string, 
 	)
 	err := l.pool.QueryRow(ctx, `
 		select principal_id, password_hash, locked_until from principals
-		where lower(username) = lower($1) and disabled_at is null`,
+		where lower(username) = lower($1) and disabled_at is null and kind = 'user'`,
 		username).Scan(&principalID, &hash, &locked)
 
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -112,7 +112,7 @@ func (l *Local) Any(ctx context.Context) (bool, error) {
 	if err := l.pool.QueryRow(ctx, `
 		select exists(select 1 from principals
 		              where username is not null and password_hash is not null
-		                and disabled_at is null)`).Scan(&any); err != nil {
+		                and disabled_at is null and kind = 'user')`).Scan(&any); err != nil {
 		return false, fmt.Errorf("auth: read local accounts: %w", err)
 	}
 	return any, nil
@@ -133,12 +133,12 @@ func (l *Local) SetPassword(ctx context.Context, principalID, password string) e
 		update principals
 		set password_hash = $2, password_set_at = now(),
 		    failed_sign_ins = 0, locked_until = null
-		where principal_id = $1 and disabled_at is null`, principalID, hash)
+		where principal_id = $1 and disabled_at is null and kind = 'user'`, principalID, hash)
 	if err != nil {
 		return fmt.Errorf("auth: set password: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("auth: no such principal: %s", principalID)
+		return l.whyNoSignIn(ctx, principalID)
 	}
 	return nil
 }
@@ -284,7 +284,7 @@ func (l *Local) SetUsername(ctx context.Context, principalID, username string) e
 	}
 	tag, err := l.pool.Exec(ctx, `
 		update principals set username = $2
-		where principal_id = $1 and disabled_at is null`, principalID, username)
+		where principal_id = $1 and disabled_at is null and kind = 'user'`, principalID, username)
 	if isUniqueViolation(err) {
 		return ErrUsernameTaken
 	}
@@ -292,7 +292,7 @@ func (l *Local) SetUsername(ctx context.Context, principalID, username string) e
 		return fmt.Errorf("auth: set username: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("auth: no such principal: %s", principalID)
+		return l.whyNoSignIn(ctx, principalID)
 	}
 	return nil
 }

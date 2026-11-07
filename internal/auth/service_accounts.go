@@ -21,6 +21,9 @@ var (
 	ErrServiceAccountDisabled = errors.New("auth: this service account is disabled")
 	ErrNoServiceToken         = errors.New("auth: no such token")
 	ErrTokenExpiry            = errors.New("auth: a token needs an expiry in the future")
+	// ErrNotAPerson: a machine's credential is a token, which can be revoked. A password
+	// beside it would survive the revocation.
+	ErrNotAPerson = errors.New("auth: only a person signs in with a password")
 )
 
 var serviceAccountName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
@@ -29,6 +32,16 @@ var serviceAccountName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 type IssuedToken struct {
 	domain.ServiceToken
 	Secret string
+}
+
+// whyNoSignIn says why a write to a sign-in found no row to change.
+func (l *Local) whyNoSignIn(ctx context.Context, principalID string) error {
+	var kind string
+	err := l.pool.QueryRow(ctx, `select kind from principals where principal_id = $1`, principalID).Scan(&kind)
+	if err == nil && kind != string(domain.PrincipalUser) {
+		return ErrNotAPerson
+	}
+	return fmt.Errorf("auth: no such principal: %s", principalID)
 }
 
 // CreateServiceAccount records a machine that holds nothing yet. Granting is the next
