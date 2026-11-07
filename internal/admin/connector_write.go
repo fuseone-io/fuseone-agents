@@ -35,29 +35,42 @@ func (c *ConnectorInstances) connectorRevised(expect domain.IfMatch) *revised {
 	}
 }
 
-// ConnectorInstanceRevision names one stored instance. A token that will not open still
-// has a revision: reading a declaration has never needed the token.
-func (c *ConnectorInstances) ConnectorInstanceRevision(
+// ErrConnectorInstanceUnknown means no instance is stored under that name in that scope.
+var ErrConnectorInstanceUnknown = errors.New("admin: no such connector instance")
+
+/*
+ConnectorInstanceNamed reads one stored instance and its revision, both from one row.
+
+Read apart, a write landing between the two answers the old configuration under the new
+one's revision, and a client sending the old one back with it is accepted and erases the
+write it never saw. A token that will not open still has a revision: reading a declaration
+has never needed the token.
+*/
+func (c *ConnectorInstances) ConnectorInstanceNamed(
 	ctx context.Context, scopeKind settings.ScopeKind, scope domain.Scope, name string,
-) (domain.Revision, error) {
+) (connectortools.ConfiguredInstance, domain.Revision, error) {
 	storedScope, _, err := connectorScopes(scopeKind, scope)
 	if err != nil {
-		return "", err
+		return connectortools.ConfiguredInstance{}, "", err
 	}
 	named := c.connectorRevised(domain.IfMatch{})
-	kind := settings.KindConnectorInstance
+	kind, revisionOf := settings.KindConnectorInstance, named.of
 	row, err := c.settings.Reveal(ctx, scopeKind, storedScope, kind, name)
 	if errors.Is(err, vault.ErrCiphertext) || errors.Is(err, settings.ErrNoVault) {
-		held, err := c.settings.Get(ctx, scopeKind, storedScope, kind, name)
-		if err != nil {
-			return "", err
-		}
-		return named.ofUnreadable(held), nil
+		row, err = c.settings.Get(ctx, scopeKind, storedScope, kind, name)
+		revisionOf = named.ofUnreadable
+	}
+	if errors.Is(err, settings.ErrNotFound) {
+		return connectortools.ConfiguredInstance{}, "", fmt.Errorf("%w: %s", ErrConnectorInstanceUnknown, name)
 	}
 	if err != nil {
-		return "", err
+		return connectortools.ConfiguredInstance{}, "", err
 	}
-	return named.of(row), nil
+	configured, err := connectortools.ConfiguredFrom(row)
+	if err != nil {
+		return connectortools.ConfiguredInstance{}, "", err
+	}
+	return configured, revisionOf(row), nil
 }
 
 // WriteConnectorInstance stores an instance and answers its resulting revision.

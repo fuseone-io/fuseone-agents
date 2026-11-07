@@ -383,12 +383,16 @@ func TestSettingsWrite_aSecretThatNoLongerOpens_canStillBeReplaced(t *testing.T)
 		t.Run(r.name, func(t *testing.T) {
 			stored(t, sealer, r, "ETAG-SECRET-ONE")
 
+			// A declaration still reads, and its revision is the one the replacement answers.
+			var read []string
 			if r.name == "connector instance" {
-				if got := opened.call(t, etagCall{method: http.MethodGet, path: r.path}); got.Code != http.StatusOK || got.Header().Get("ETag") == "" {
+				got := opened.call(t, etagCall{method: http.MethodGet, path: r.path})
+				if got.Code != http.StatusOK || got.Header().Get("ETag") == "" {
 					t.Fatalf("reading a declaration = %d with ETag %q: %s", got.Code, got.Header().Get("ETag"), got.Body)
 				}
+				read = []string{got.Header().Get("ETag")}
 			}
-			if got := opened.call(t, etagCall{method: http.MethodPut, path: r.path, body: r.body("ETAG-SECRET-NEW")}); got.Code != http.StatusNoContent {
+			if got := opened.call(t, etagCall{method: http.MethodPut, path: r.path, ifMatch: read, body: r.body("ETAG-SECRET-NEW")}); got.Code != http.StatusNoContent {
 				t.Fatalf("replacing it = %d: %s", got.Code, got.Body)
 			}
 			row, err := store.Reveal(t.Context(), r.row.ScopeKind, r.row.Scope, r.row.Kind, r.row.Name)

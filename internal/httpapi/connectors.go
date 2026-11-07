@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -16,9 +17,9 @@ import (
 
 type ConnectorInstances interface {
 	ConnectorInstances(ctx context.Context) ([]connectortools.ConfiguredInstance, error)
-	ConnectorInstanceRevision(
+	ConnectorInstanceNamed(
 		ctx context.Context, scopeKind settings.ScopeKind, instanceScope domain.Scope, name string,
-	) (domain.Revision, error)
+	) (connectortools.ConfiguredInstance, domain.Revision, error)
 	WriteConnectorInstance(ctx context.Context, w admin.ConnectorWrite) (domain.Revision, error)
 	RemoveConnectorInstance(ctx context.Context, r admin.ConnectorRemoval) error
 }
@@ -99,24 +100,18 @@ func (s *Server) GetConnectorInstance(ctx context.Context, req openapi.GetConnec
 				invalid(err.Error())),
 		}, nil
 	}
-	configured, err := s.connectors.ConnectorInstances(ctx)
+	instance, revision, err := s.connectors.ConnectorInstanceNamed(ctx, settings.ScopeKind(req.Params.ScopeKind), scope, req.Name)
+	if errors.Is(err, admin.ErrConnectorInstanceUnknown) {
+		return openapi.GetConnectorInstance404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
+		}, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get connector instance: %w", err)
 	}
-	for _, instance := range configured {
-		if connectorInstanceAt(instance, req.Name, settings.ScopeKind(req.Params.ScopeKind), scope) {
-			revision, err := s.connectors.ConnectorInstanceRevision(ctx, settings.ScopeKind(req.Params.ScopeKind), scope, req.Name)
-			if err != nil {
-				return nil, fmt.Errorf("get connector instance: %w", err)
-			}
-			return openapi.GetConnectorInstance200JSONResponse{
-				Body:    connectorInstanceDetailResponse(instance),
-				Headers: openapi.GetConnectorInstance200ResponseHeaders{ETag: string(revision)},
-			}, nil
-		}
-	}
-	return openapi.GetConnectorInstance404ApplicationProblemPlusJSONResponse{
-		NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
+	return openapi.GetConnectorInstance200JSONResponse{
+		Body:    connectorInstanceDetailResponse(instance),
+		Headers: openapi.GetConnectorInstance200ResponseHeaders{ETag: string(revision)},
 	}, nil
 }
 

@@ -33,10 +33,18 @@ func (s *connectorInstanceSpy) ConnectorInstances(context.Context) ([]connectort
 	return s.items, nil
 }
 
-func (s *connectorInstanceSpy) ConnectorInstanceRevision(
-	context.Context, settings.ScopeKind, domain.Scope, string,
-) (domain.Revision, error) {
-	return fakeRevision, nil
+// ConnectorInstanceNamed finds an instance the way the store keys one: by name, scope kind
+// and the scope that kind names.
+func (s *connectorInstanceSpy) ConnectorInstanceNamed(
+	_ context.Context, kind settings.ScopeKind, scope domain.Scope, name string,
+) (connectortools.ConfiguredInstance, domain.Revision, error) {
+	s.listCalls++
+	for _, item := range s.items {
+		if item.Name == name && item.ScopeKind == kind && item.Scope == scope {
+			return item, fakeRevision, nil
+		}
+	}
+	return connectortools.ConfiguredInstance{}, "", admin.ErrConnectorInstanceUnknown
 }
 
 func (s *connectorInstanceSpy) WriteConnectorInstance(_ context.Context, w admin.ConnectorWrite) (domain.Revision, error) {

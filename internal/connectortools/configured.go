@@ -25,19 +25,25 @@ func (s *Settings) Configured(ctx context.Context) ([]ConfiguredInstance, error)
 	}
 	out := make([]ConfiguredInstance, 0, len(rows))
 	for _, row := range rows {
-		instance, err := SettingInstance(row)
+		configured, err := ConfiguredFrom(row)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, ConfiguredInstance{
-			Instance:  instance,
-			ScopeKind: row.ScopeKind,
-			HasToken:  row.HasSecret,
-			UpdatedBy: row.UpdatedBy,
-			UpdatedAt: row.UpdatedAt,
-		})
+		out = append(out, configured)
 	}
 	return out, nil
+}
+
+// ConfiguredFrom is what a read says about one stored instance, its token left out.
+func ConfiguredFrom(row settings.Setting) (ConfiguredInstance, error) {
+	instance, err := SettingInstance(row)
+	if err != nil {
+		return ConfiguredInstance{}, err
+	}
+	return ConfiguredInstance{
+		Instance: instance, ScopeKind: row.ScopeKind, HasToken: row.HasSecret,
+		UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
+	}, nil
 }
 
 /*
