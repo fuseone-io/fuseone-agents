@@ -255,7 +255,8 @@ account gives every tool on that server that reach. This platform cannot
 narrow it and does not pretend to.</li>
 </ul>
 <p><strong>Service accounts</strong> let a pipeline, a script or Terraform call the API. An
-administrator creates one with <code dir="auto">POST /admin/service-accounts</code>, gives it roles with
+administrator manages them under Administration > Service accounts in the console, or
+creates one with <code dir="auto">POST /admin/service-accounts</code>, gives it roles with
 <code dir="auto">PUT /admin/people/{principalId}/grants</code>, and issues a token with
 <code dir="auto">POST /admin/service-accounts/{accountId}/tokens</code>, which needs an expiry. The secret is
 in that response and nowhere else; only its hash is stored. To rotate, issue a second
@@ -263,7 +264,8 @@ token, move the machine over, then revoke the first. Revoking or disabling takes
 on the next request, and each of these acts is on the admin trail.</p>
 <p>Whatever its roles say, a service account can never approve an action, grant a standing
 approval or change who holds what. So a token cannot manage accounts or tokens: that
-stays with a person. Every role that can publish can also start runs, so a token that
+stays with a person. It cannot hold a password or a session either, so revoking its
+tokens is the end of its access. Every role that can publish can also start runs, so a token that
 publishes can start runs too.</p>
 <p>Removing a credential is its own gesture, on the server’s page. An empty field
 means “leave what is stored”, so there has to be a way to say the other thing.</p>
