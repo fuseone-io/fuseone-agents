@@ -27,6 +27,25 @@ field" is a commit message.
 
 ---
 
+## [0.96.0] — 2026-11-07
+
+### Upgrade notes
+
+- **Do not skip this version when upgrading to the one that turns dataset versions on.** A
+  later release will start recording a version of an agent's corpus on every change, and it
+  needs every running pod to already know how. Going straight past this release makes corrections
+  from older pods fail during the rollout, without changing the corpus. A subject erasure on
+  such a pod can also miss a correction a newer pod has just deleted, if the run's input was
+  too large to keep whole.
+
+### Added
+
+- **The groundwork for versioned corpora, switched off.** Migration `0103` adds the tables and a
+  switch that nothing in this release can turn on. Recording, deleting and running corrections
+  work exactly as they did, and no version is written yet.
+
+---
+
 ## [0.95.0] — 2026-11-07
 
 ### Upgrade notes
