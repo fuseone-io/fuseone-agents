@@ -277,6 +277,9 @@ func (r Report) Tally() Tally {
 			t.Parked++
 		case SettledWaiting:
 			t.Waiting++
+		// It ran and ended, and what judged it has since been erased. The report
+		// counts it as a gap, and nothing about it is still going.
+		case SettledErased:
 		default:
 			t.Unsettled++
 		}

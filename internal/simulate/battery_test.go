@@ -171,7 +171,7 @@ func TestBattery_aCaseErasedWithItsExpectationsAfterItRan_isAGapNotAHold(t *test
 	erased := corpusCase("gone")
 	erased.Erased = true
 	report := simulate.Battery(simulate.Report{
-		Cases: []simulate.Case{{ID: "gone", Settled: "finished"}},
+		Cases: []simulate.Case{{ID: "gone", RunID: "run-1", Settled: simulate.SettledFinished}},
 	}, []domain.RegressionCase{erased})
 
 	if report.Erased != 1 || report.Held != 0 || report.Broken != 0 {
@@ -180,5 +180,10 @@ func TestBattery_aCaseErasedWithItsExpectationsAfterItRan_isAGapNotAHold(t *test
 	}
 	if report.Cases[0].Settled != simulate.SettledErased {
 		t.Fatalf("settled = %q, want %q", report.Cases[0].Settled, simulate.SettledErased)
+	}
+	// It ran and ended. Nothing about it is still going, so the evidence read from
+	// this tally must not call it an incomplete run.
+	if tally := report.Tally(); tally.Unsettled != 0 || tally.Finished != 0 {
+		t.Fatalf("unsettled=%d finished=%d, want neither for a gap", tally.Unsettled, tally.Finished)
 	}
 }
