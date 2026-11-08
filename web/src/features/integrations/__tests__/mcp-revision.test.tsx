@@ -30,12 +30,8 @@ function world(listed?: MCPServer[]) {
     if (path === "/admin/tools") {
       return json({
         items: [
-          {
-            toolId: "github.search",
-            server: "github",
-            effect: "read",
-            untrusted: true,
-          },
+          { toolId: "github.search", server: "github", effect: "read", untrusted: true },
+          { toolId: "github.issues", server: "github", effect: "read", untrusted: true },
         ],
       });
     }
@@ -207,5 +203,20 @@ describe("a tool server written over what was read", () => {
 
     await waitFor(() => expect(net.writes("PUT")).toHaveLength(1));
     expect(net.writes("PUT")[0]?.body).toMatchObject({ url: "https://mcp.example.com/theirs" });
+  });
+  // The listing still shows the surface somebody replaced; the server read by
+  // name has the new one. What is shown and sent must be the one the ETag names.
+  it("starts the surface from the server read by name, not the listing", async () => {
+    const user = userEvent.setup();
+    const net = world([{ ...github, surface: [] }]);
+    net.servers.state.items = [{ ...github, surface: ["search"] }];
+    show(null, "/integrations/mcp/github");
+
+    expect(await screen.findByLabelText("github.search")).toBeChecked();
+    expect(screen.getByLabelText("github.issues")).not.toBeChecked();
+    await user.click(screen.getByLabelText("github.search"));
+    await user.click(screen.getByRole("button", { name: "Save what we brought in" }));
+    await waitFor(() => expect(net.writes("PUT")).toHaveLength(1));
+    expect(net.writes("PUT")[0]?.body).toMatchObject({ surface: [] });
   });
 });

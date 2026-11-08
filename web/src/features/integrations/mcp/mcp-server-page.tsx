@@ -34,13 +34,14 @@ import { useMCPServer } from "@/features/integrations/mcp/use-mcp-server";
 export function MCPServerPage() {
   const { t } = useTranslation();
   const { name } = useParams();
+  // The record both writes send back, and the surface shown, come from the
+  // server read by name, with the revision they answer; the listing still says
+  // how it is answering.
+  const read = useMCPServerRevision(name);
   const {
     server: listed, tools, catalogue, chosen, dirty, toggle, reset,
     isLoading, error, refetch,
-  } = useMCPServer(name);
-  // The record both writes send back comes from the server read by name, with
-  // the revision they answer; the listing still says how it is answering.
-  const read = useMCPServerRevision(name);
+  } = useMCPServer(name, read.data?.body);
   const server = listed && read.data ? { ...listed, ...read.data.body } : undefined;
   const save = useSetSurface();
   const [ruling, setRuling] = useState<Tool | null>(null);

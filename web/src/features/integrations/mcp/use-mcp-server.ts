@@ -14,7 +14,15 @@ import { remoteNameOf } from "@/features/integrations/mcp/tool-names";
  * which is what the runtime does with it. The alternative would show an empty
  * surface for a server that is offering all of them.
  */
-export function useMCPServer(name: string | undefined) {
+export function useMCPServer(
+  name: string | undefined,
+  /**
+   * The server as read by name. Its surface is the one shown and edited,
+   * because its revision is the one a save answers: the listing may still
+   * hold a surface somebody has since replaced.
+   */
+  stored?: MCPServer,
+) {
   const integrations = useIntegrations();
   const tools = useTools();
   const [edited, setEdited] = useState<Set<string> | null>(null);
@@ -29,12 +37,12 @@ export function useMCPServer(name: string | undefined) {
     [tools.data, name],
   );
 
-  const stored = useMemo(() => {
-    if (server?.surface) return new Set(server.surface);
+  const surface = useMemo(() => {
+    if (stored?.surface) return new Set(stored.surface);
     return new Set(its.map(remoteNameOf));
-  }, [server, its]);
+  }, [stored, its]);
 
-  const chosen = edited ?? stored;
+  const chosen = edited ?? surface;
 
   return {
     server,
