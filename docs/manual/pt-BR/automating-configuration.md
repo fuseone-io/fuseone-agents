@@ -27,7 +27,10 @@ ficam sob `/api/v1`, e o contrato é o `api/openapi.yaml` do repositório.
 | Canal | `/admin/channels/{name}` | `provider:write` |
 | Instância de conector | `/admin/integrations/connectors/instances/{name}` | `provider:write` |
 
-Cada um aceita `GET`, `PUT` e `DELETE` pelo nome. A permissão é verificada onde
+Cada um aceita `GET`, `PUT` e `DELETE` pelo nome. Uma instância de conector
+também é nomeada dentro de um escopo: `GET` e `DELETE` recebem `scopeKind` na
+query, mais `company` e `area` conforme o escopo pede, e o `PUT` leva o mesmo no
+corpo. Sem isso, a requisição é 400. A permissão é verificada onde
 fica a administração, então o papel precisa ter sido concedido ali; hoje Admin e
 Curador têm as duas. Ler exige a mesma permissão que gravar, exceto no caso de
 uma política, que qualquer `policy:read` basta para ler: uma regra que barra
@@ -36,13 +39,19 @@ você tem que ser uma regra que você consegue ler.
 ## Ler de volta o que foi gravado
 
 O `GET` responde o que o `PUT` guardou. Um segredo nunca volta: a resposta diz
-se há um guardado (`hasSecret`, `hasKey` e afins) e traz uma impressão digital
-com chave, que muda quando o segredo muda e não revela mais nada sobre ele. A
-resposta também traz o que o servidor mantém para si, como `updatedAt` e
-`updatedBy`, que uma gravação não envia.
+apenas se há um guardado (`hasSecret`, `hasKey`, `hasToken` e afins). Um
+servidor de ferramentas, um provedor de modelo e um canal também trazem um
+`secretFingerprint`, com chave, que muda quando um segredo muda e não revela
+mais nada sobre ele. Uma instância de conector não traz nenhum; o único sinal de
+que o token dela mudou é o `ETag`, que nomeia o recurso inteiro. A resposta
+também traz o que o servidor mantém para si, como `updatedAt` e `updatedBy`, que
+uma gravação não envia.
 
-Então o cliente compara os campos que o seu `PUT` envia com os mesmos campos da
-resposta do `GET`, e uma diferença é mudança de verdade.
+Então o cliente compara os campos não secretos que o seu `PUT` envia com os
+mesmos campos da resposta do `GET`, e uma diferença é mudança de verdade. Saber
+se o segredo que ele tem é o que está guardado é pergunta para a impressão
+digital, onde houver uma, e senão para o `ETag` que ele guardou da última
+gravação.
 
 **Gravar o que já está guardado não muda nada.** Nenhum `updatedAt` novo,
 nenhuma linha na trilha, nenhum snapshot novo de política, e volta o mesmo
@@ -91,7 +100,10 @@ cliente escreve usam todos os mesmos caminhos.
 - um caminho novo, uma operação nova ou um campo opcional novo numa requisição;
 - um campo novo numa resposta. Um cliente tem que ignorar campos que não
   conhece;
-- um tipo de problema novo para uma condição que a API não recusava antes.
+- um tipo de problema novo para a recusa de algo novo, como um valor de um
+  campo novo ou uma requisição a um caminho novo. Ele não transforma em recusa
+  uma requisição que antes funcionava nem substitui o tipo de uma recusa que já
+  existe; qualquer um dos dois é mudança incompatível, abaixo.
 
 **É mudança incompatível:**
 

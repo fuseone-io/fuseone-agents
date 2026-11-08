@@ -27,7 +27,10 @@ A pipeline acts through a service account (see
 | Channel | `/admin/channels/{name}` | `provider:write` |
 | Connector instance | `/admin/integrations/connectors/instances/{name}` | `provider:write` |
 
-Each one takes `GET`, `PUT` and `DELETE` by name. The permission is checked
+Each one takes `GET`, `PUT` and `DELETE` by name. A connector instance is
+named within a scope as well: `GET` and `DELETE` take `scopeKind` in the query,
+plus `company` and `area` as that scope needs, and `PUT` carries the same in its
+body. Without them the request is a 400. The permission is checked
 where administration is held, so the role has to be granted there; today Admin
 and Curator carry both. Reading takes the same permission as writing, except
 for a policy, which `policy:read` anywhere is enough to read: a rule that stops
@@ -36,13 +39,18 @@ you should be one you can read.
 ## Reading back what was written
 
 `GET` answers what `PUT` stored. A secret never comes back: the answer says
-whether one is stored (`hasSecret`, `hasKey` and the like) and gives a keyed
-fingerprint that changes when the secret does and says nothing else about it.
-The answer also carries what the server keeps for itself, such as `updatedAt`
-and `updatedBy`, which a write does not send.
+only whether one is stored (`hasSecret`, `hasKey`, `hasToken` and the like).
+A tool server, a model provider and a channel also give a `secretFingerprint`,
+keyed, that changes when a secret does and says nothing else about it. A
+connector instance gives none; the only sign that its token changed is its
+`ETag`, which names the whole resource. The answer also carries what the server
+keeps for itself, such as `updatedAt` and `updatedBy`, which a write does not
+send.
 
-So a client compares the fields its `PUT` sends with the same fields in what
-`GET` answers, and a difference is real drift.
+So a client compares the non-secret fields its `PUT` sends with the same fields
+in what `GET` answers, and a difference is real drift. Whether a secret it
+holds is the one stored is a question for the fingerprint where there is one,
+and otherwise for the `ETag` it kept from its last write.
 
 **Writing what is already stored changes nothing.** No new `updatedAt`, no
 trail line, no new policy snapshot, and the same `ETag` comes back. A pipeline
@@ -91,7 +99,10 @@ customer writes are all clients of the same paths.
 
 - a new path, a new operation, or a new optional field in a request;
 - a new field in a response. A client must ignore fields it does not know;
-- a new problem type for a condition the API did not refuse before.
+- a new problem type for a refusal of something new, such as a value of a new
+  field or a request to a new path. It neither turns a request that used to
+  succeed into a refusal nor replaces the type of a refusal that already
+  exists; either of those is a breaking change, below.
 
 **A breaking change:**
 
