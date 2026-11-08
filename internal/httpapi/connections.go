@@ -34,6 +34,8 @@ type Integrations interface {
 	WriteMCPServer(ctx context.Context, w admin.MCPServerWrite) (domain.Revision, error)
 	MCPCredentials(ctx context.Context, name string) (domain.MCPCredentials, error)
 	RequestMCPProbe(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
+	RequestMCPRediscovery(ctx context.Context, by domain.UserID, scope domain.Scope, name string) (int64, error)
+	MCPRediscovery(ctx context.Context, name string) (domain.MCPRediscoveryStatus, error)
 	RemoveMCPServer(ctx context.Context, r admin.Removal) error
 	WriteProvider(ctx context.Context, w admin.ProviderWrite) (domain.Revision, error)
 	RemoveProvider(ctx context.Context, r admin.Removal) error

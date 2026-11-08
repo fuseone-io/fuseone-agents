@@ -130,6 +130,9 @@ type Catalog struct {
 	// timeouts are the per-server call ceilings; absent means the default.
 	timeouts map[string]time.Duration
 	caches   map[string]*resultCache
+	// provenance is what each server's registration established, kept so a
+	// rediscovery on the open session describes new tools as AddServer would.
+	provenance map[string]domain.ToolProvenance
 
 	content engine.ContentStore
 	timeout time.Duration
@@ -211,14 +214,15 @@ func (c *Catalog) Lookup(id domain.ToolID) (Entry, bool) {
 
 func NewCatalog(content engine.ContentStore) *Catalog {
 	return &Catalog{
-		sessions: make(map[string]Session),
-		entries:  make(map[domain.ToolID]Entry),
-		limiters: make(map[string]*serverLimiter),
-		timeouts: make(map[string]time.Duration),
-		caches:   make(map[string]*resultCache),
-		content:  content,
-		timeout:  60 * time.Second,
-		clock:    time.Now,
+		sessions:   make(map[string]Session),
+		entries:    make(map[domain.ToolID]Entry),
+		limiters:   make(map[string]*serverLimiter),
+		timeouts:   make(map[string]time.Duration),
+		caches:     make(map[string]*resultCache),
+		provenance: make(map[string]domain.ToolProvenance),
+		content:    content,
+		timeout:    60 * time.Second,
+		clock:      time.Now,
 	}
 }
 
