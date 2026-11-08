@@ -47,6 +47,13 @@ field" is a commit message.
   is on the admin trail and does not change the server's configuration. Turning the server off
   and on is no longer needed for this.
 
+### Fixed
+
+- **A tool catalogue publication that failed is sent again.** A worker that could not publish
+  what it discovered logged it and waited for an unrelated change, so a tool could be offered
+  to agents while no screen listed it for classification. The worker now publishes again on its
+  next pass, about 30 seconds later, until one is taken.
+
 ---
 
 ## [0.98.0] — 2026-11-08
