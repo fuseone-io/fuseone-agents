@@ -247,4 +247,19 @@ describe("a tool server written over what was read", () => {
     expect(await screen.findByRole("button", { name: "Try again" })).toBeVisible();
     expect(screen.queryByLabelText("github.search")).toBeNull();
   });
+
+  // Removed elsewhere, with the listing still behind: the read by name is the
+  // answer, and the copy cached by the last opening must not stand in for it.
+  it("opens no cached copy of a server that is gone, whatever the listing says", async () => {
+    const net = world([github]);
+    const client = fresh();
+    const first = show(null, "/integrations/mcp/github", client);
+    await screen.findByLabelText("github.search");
+    first.unmount();
+    net.servers.state.items = [];
+    show(null, "/integrations/mcp/github", client);
+
+    expect(await screen.findByRole("button", { name: "Try again" })).toBeVisible();
+    expect(screen.queryByLabelText("github.search")).toBeNull();
+  });
 });

@@ -115,4 +115,17 @@ describe("a policy written over what was read", () => {
 
     expect(await screen.findByLabelText("Name")).toHaveValue("Theirs");
   });
+
+  it("opens no cached copy of a rule that is gone", async () => {
+    const net = stubPolicies();
+    const client = fresh();
+    const first = at("/policies/POL-200", client);
+    await screen.findByLabelText("Name");
+    first.unmount();
+    net.state.policies = [];
+    at("/policies/POL-200", client);
+
+    expect(await screen.findByRole("alert")).toBeVisible();
+    expect(screen.queryByLabelText("Name")).toBeNull();
+  });
 });

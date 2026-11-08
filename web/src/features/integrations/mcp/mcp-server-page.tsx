@@ -83,12 +83,14 @@ export function MCPServerPage() {
   // Only a read made as the page opened seeds its writes, never a cached copy.
   if (isLoading || (name && !read.isFetchedAfterMount)) return <LoadingRows />;
   if (error) return <ErrorState error={error} onRetry={refetch} />;
-  // A detail that could not be read is that, not a server that does not
-  // exist; and a cached copy is never opened in its place.
-  if (read.error && !(read.error instanceof ApiError && read.error.status === 404)) {
+  // The read by name is the answer, before any cached copy of it. Gone is no
+  // such server, whatever a listing still behind says; a detail that could not
+  // be read is that; neither ever opens the copy the last opening cached.
+  const gone = read.error instanceof ApiError && read.error.status === 404;
+  if (read.error && !gone) {
     return <ErrorState error={read.error} onRetry={() => void read.refetch()} />;
   }
-  if (!server) {
+  if (gone || !server) {
     return (
       <ErrorState
         error={new Error(t("mcp.noSuchServer"))}

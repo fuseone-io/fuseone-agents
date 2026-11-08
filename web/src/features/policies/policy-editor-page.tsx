@@ -41,15 +41,14 @@ export function PolicyEditorPage() {
     return <LoadingRows rows={6} />;
   }
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
-  if (
-    read.error &&
-    !(read.error instanceof ApiError && read.error.status === 404)
-  ) {
+  // Gone is no such rule, before any copy the last opening cached.
+  const gone = read.error instanceof ApiError && read.error.status === 404;
+  if (read.error && !gone) {
     return (
       <ErrorState error={read.error} onRetry={() => void read.refetch()} />
     );
   }
-  if (!creating && !loaded) {
+  if (!creating && (gone || !loaded)) {
     return (
       <ErrorState
         error={new Error(t("policies.noneWithCode", { code: routeCode }))}
