@@ -18,6 +18,7 @@ import { ClassifyDialog } from "@/features/admin/classify-dialog";
 import type { Tool } from "@/features/admin/api";
 import { useSetSurface } from "@/features/integrations/mcp/api";
 import { useMCPServer } from "@/features/integrations/mcp/use-mcp-server";
+import { useOrderedWrites } from "@/features/integrations/mcp/use-ordered-writes";
 
 /**
  * One tool server, in the order the decisions are actually made.
@@ -45,6 +46,7 @@ export function MCPServerPage() {
   } = useMCPServer(name, read.data?.body);
   const server = listed && read.data ? { ...listed, ...read.data.body } : undefined;
   const save = useSetSurface();
+  const inOrder = useOrderedWrites(name);
   const [ruling, setRuling] = useState<Tool | null>(null);
   const [stale, setStale] = useState(false);
   // Counted, not keyed by the revision: what is typed in the panel survives a
@@ -61,18 +63,20 @@ export function MCPServerPage() {
   async function saveSurface() {
     if (!server) return;
     try {
-      await save.mutateAsync({
-        name: server.name,
-        surface: [...chosen],
-        transport: server.transport ?? "stdio",
-        protocolMode: server.protocolMode ?? "auto",
-        command: server.command ?? "",
-        args: server.args ?? [],
-        url: server.url ?? "",
-        enabled: server.enabled,
-        acceptsLocalExecution: server.acceptsLocalExecution ?? false,
-        etag: read.data!.etag,
-      });
+      await inOrder(({ body, etag }) =>
+        save.mutateAsync({
+          name: body.name,
+          surface: [...chosen],
+          transport: body.transport ?? "stdio",
+          protocolMode: body.protocolMode ?? "auto",
+          command: body.command ?? "",
+          args: body.args ?? [],
+          url: body.url ?? "",
+          enabled: body.enabled,
+          acceptsLocalExecution: body.acceptsLocalExecution ?? false,
+          etag,
+        }),
+      );
       reset();
       toast.success(t("mcp.surfaceSaved"), {
         description: t("integrations.toolsAppearHint"),
@@ -118,7 +122,7 @@ export function MCPServerPage() {
       <ConnectionPanel
         key={reloads}
         server={server}
-        revision={{ etag: read.data!.etag, onStale: () => setStale(true) }}
+        revision={{ inOrder, onStale: () => setStale(true) }}
       />
 
       <Panel title={t("mcp.surface")} action={<Counted chosen={chosen.size} of={tools.length} />}>

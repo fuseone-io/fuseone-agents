@@ -262,6 +262,7 @@ describe("a tool server written over what was read", () => {
     expect(await screen.findByRole("button", { name: "Try again" })).toBeVisible();
     expect(screen.queryByLabelText("github.search")).toBeNull();
   });
+
   // Saving the surface writes a new revision; a credential being typed in the
   // panel beside it is not part of that, and must still be there.
   it("keeps a credential being typed when the surface is saved", async () => {
@@ -274,5 +275,40 @@ describe("a tool server written over what was read", () => {
 
     expect(await screen.findByText("Saved.")).toBeVisible();
     expect(screen.getByLabelText("Bearer token")).toHaveValue("typed-secret");
+  });
+
+  // The second write waits for the revision the first one made, rather than
+  // being refused over a change of its own.
+  it("writes again under the revision its own last write made", async () => {
+    const user = userEvent.setup();
+    const net = world();
+    net.servers.state.items = [{ ...github, hasSecret: true, hasOAuth: true }];
+    show(null, "/integrations/mcp/github");
+    await user.click(await screen.findByLabelText("github.search"));
+    const release = net.servers.hold();
+    await user.click(screen.getByRole("button", { name: "Save what we brought in" }));
+    await waitFor(() => expect(net.writes("PUT")).toHaveLength(1));
+    await user.click(screen.getByRole("button", { name: /Remove stored OAuth grant/i }));
+    release();
+
+    await waitFor(() => expect(net.writes("PUT")).toHaveLength(2));
+    expect(net.writes("PUT")[1]?.ifMatch).toBe('"v1-github-2"');
+    expect(screen.queryByText("Somebody changed this while you were editing")).toBeNull();
+  });
+
+  it("saves the surface under the revision a credential write just made", async () => {
+    const user = userEvent.setup();
+    const net = world();
+    net.servers.state.items = [{ ...github, hasSecret: true, hasOAuth: true }];
+    show(null, "/integrations/mcp/github");
+    await user.click(await screen.findByLabelText("github.search"));
+    const release = net.servers.hold();
+    await user.click(screen.getByRole("button", { name: /Remove stored OAuth grant/i }));
+    await waitFor(() => expect(net.writes("PUT")).toHaveLength(1));
+    await user.click(screen.getByRole("button", { name: "Save what we brought in" }));
+    release();
+
+    await waitFor(() => expect(net.writes("PUT")).toHaveLength(2));
+    expect(net.writes("PUT")[1]?.ifMatch).toBe('"v1-github-2"');
   });
 });

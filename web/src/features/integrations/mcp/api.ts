@@ -63,8 +63,9 @@ export function useSetSurface() {
           },
         }),
       ),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: integrationKeys.all });
-    },
+    // Returned, so the write is not done until the server has been read
+    // again: the next write on the page answers the revision this one made.
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
   });
 }
