@@ -28,6 +28,26 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **A manual page for automating configuration.** *Automating configuration*, under
+  Reference, says how a pipeline reads a policy, tool server, model provider, channel or
+  connector instance, tells whether it drifted, and writes it with `If-Match`. It also says
+  what counts as a breaking change to the API and how one is announced.
+
+### Changed
+
+- **The console no longer overwrites a change it has not seen.** Saving or removing a policy,
+  tool server, model provider, channel or connector instance sends the revision the console
+  read. When somebody else changed it first, nothing is written, the edit stays on the screen,
+  and it is replaced only when the person asks to reload. A removal reads the revision again
+  each time its confirmation opens. An editor opens only on a fresh read that came back with a
+  revision; a resource that is gone says so instead of showing an old copy.
+
+---
+
 ## [0.97.0] — 2026-11-08
 
 ### Upgrade notes
