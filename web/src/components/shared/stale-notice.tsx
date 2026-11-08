@@ -25,6 +25,9 @@ export function StaleNotice({
       <AlertDescription className="flex flex-col items-start gap-2">
         <span>{t("revision.staleBody")}</span>
         <Button
+          // It sits inside the form it reloads. Left to submit, reloading would
+          // also save the draft it is meant to throw away.
+          type="button"
           variant="outline"
           size="sm"
           onClick={onReload}

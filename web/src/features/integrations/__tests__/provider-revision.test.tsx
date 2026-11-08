@@ -63,6 +63,8 @@ describe("a model provider written over what was read", () => {
     expect(screen.getByLabelText("Address")).toHaveValue("https://llm.example.com/mine");
     await user.click(screen.getByRole("button", { name: "Reload what is stored" }));
     await waitFor(() => expect(screen.getByLabelText("Address")).toHaveValue("https://llm.example.com/theirs"));
+    // Reloading throws the draft away; it never sends it.
+    expect(net.writes("PUT")).toHaveLength(1);
   });
 
   it("is removed under the revision read when its confirmation opened", async () => {
