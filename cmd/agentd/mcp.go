@@ -715,6 +715,8 @@ type reconciler struct {
 	// rediscovery is what the administration asked every worker to look at
 	// again, and what this one has answered (#287).
 	rediscovery rediscoveries
+	// unpublished is a publication the administration refused, still owed.
+	unpublished bool
 }
 
 func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorder) *reconciler {
@@ -812,10 +814,16 @@ func (r *reconciler) reconcile(ctx context.Context) {
 	// server that connected later offered its tools to every agent and
 	// appeared on no screen, so the one place an operator goes to classify a
 	// new tool would not list it.
-	if changed && r.publisher != nil {
-		if err := r.publisher.Publish(ctx, r.publication()); err != nil {
-			slog.Error("could not publish the tool catalogue", "err", err)
+	//
+	// A publication refused is owed until one is taken: nothing else would send
+	// it again before the next change, and until then the worker offers tools
+	// no screen lists.
+	if (changed || r.unpublished) && r.publisher != nil {
+		err := r.publisher.Publish(ctx, r.publication())
+		if err != nil {
+			slog.Error("could not publish the tool catalogue; will try again", "err", err)
 		}
+		r.unpublished = err != nil
 	}
 }
 
