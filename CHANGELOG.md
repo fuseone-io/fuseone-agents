@@ -5,9 +5,10 @@ to upgrade an installation that is currently working.
 
 Versions are [semantic](https://semver.org). A release is a `v`-prefixed tag,
 and pushing one builds the image and chart that carry that version — nothing is
-released by merging. The cut is a `docs(changelog): cut X.Y.Z` pull request;
-once it has merged, `make release V=X.Y.Z` tags the merged commit on `main`
-(see [Releases](README.md#releases)).
+released by merging. The cut is a `docs(changelog): cut X.Y.Z` pull request.
+`make release V=X.Y.Z` tags whatever commit is checked out, so run it with the
+cut's merge commit on `main` checked out, and nothing after it; a later commit
+would be released without its notes (see [Releases](README.md#releases)).
 
 ## What each section is for
 
@@ -58,9 +59,12 @@ field" is a commit message.
   agent version, is now announced to the agent's conversation. The first sweep compares the last
   two batteries already recorded, so an old regression between them can be announced. A restart
   can repeat a notice.
-- **Readiness can drop to unknown.** When everything a battery ran held but the corpus changed
-  since, the trust center reports `simulation_not_checked` with status `unknown`, where it read
-  as ready. Run the battery again to clear it.
+- **Readiness can drop.** When everything a battery ran held but cases were added or changed
+  since that can still run, the trust center reports `simulation_not_checked` with status
+  `unknown`, where it read as ready; running the battery again clears it. A case added or
+  changed since whose input is already gone is coverage lost: that reads as
+  `simulation_incomplete` with status `bad`, and running the battery again does not bring it
+  back.
 - **During the rollout, a scheduled battery window can run each case twice.** An old and a new
   pod key a corpus run differently. Those runs are paid twice, and the case is judged on the
   one that ended worst.
@@ -77,8 +81,8 @@ field" is a commit message.
 
 - **Conflict detection on configuration.** A `GET` of a policy, tool server, model provider,
   channel or connector instance answers an `ETag`, and `PUT` and `DELETE` take `If-Match`. A
-  stale one is refused with 412, `fuseone:precondition-failed`, carrying the current `ETag`, and
-  writes nothing. A malformed header is a 400. Without the header, the last write wins, as
+  stale one is refused with 412, `fuseone:precondition-failed`, and writes nothing. The 412
+  carries the current `ETag` when the resource exists, and none when it does not. A malformed header is a 400. Without the header, the last write wins, as
   before. A channel's `ETag` also moves when a conversation or an identity is attached to it,
   and a tool server's when somebody pastes an OAuth grant, but not when a worker rotates one.
 - **Dataset versions are on.** Every change to an agent's corpus records a version, and a
