@@ -30,3 +30,11 @@ describe("a revision", () => {
     expect(isStale(new Error("network"))).toBe(false);
   });
 });
+
+describe("a read with no revision", () => {
+  // Read as no revision, the next write would send no If-Match and quietly go
+  // back to last-write-wins. A resource that exists always has one.
+  it("is refused rather than read as nothing to answer", () => {
+    expect(() => revised(read(null))).toThrow();
+  });
+});

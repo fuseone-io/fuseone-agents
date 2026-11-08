@@ -2402,7 +2402,8 @@
     "memory-secret-warned": "Parte desse texto é longa e aleatória o bastante para ser uma credencial. Confira e, se não for, confirme.",
     "standing-forbidden": "A definição de {{detail}} proíbe aprovações permanentes: toda aprovação que ele pedir espera uma pessoa. Mude isso no agente, não aqui.",
     "source-input-erased": "A entrada que esta execução registrou foi apagada ou expirou, então nenhuma execução foi aberta. Ela não pode ser recuperada.",
-    "no-master-key": "Este webhook vem do GitHub e a instalação não tem chave mestra (FUSEONE_MASTER_KEY). Sem ela, a chave só poderia ser guardada às claras, então o webhook continua fechado até a chave mestra ser configurada."
+    "no-master-key": "Este webhook vem do GitHub e a instalação não tem chave mestra (FUSEONE_MASTER_KEY). Sem ela, a chave só poderia ser guardada às claras, então o webhook continua fechado até a chave mestra ser configurada.",
+    "revision-missing": "O servidor respondeu sem a revisão que um salvamento precisa responder, então nada pode ser salvo aqui. Tente de novo; se continuar, o servidor precisa ser verificado."
   },
   "retention": {
     "byDefault": "padrão, ninguém escolheu",

@@ -27,7 +27,8 @@ describe("connector instance editor", () => {
         async () =>
           new Response(null, {
             status: 200,
-            headers: { "Content-Length": "0" },
+            // A revision, so what is refused is the empty body itself.
+            headers: { "Content-Length": "0", ETag: '"v1-read"' },
           }),
       );
       const client = new QueryClient({
@@ -85,7 +86,7 @@ describe("connector instance editor", () => {
       async () =>
         new Response(JSON.stringify({ ...summary, evidence: declaration }), {
           status: 200,
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ETag: '"v1-read"' },
         }),
     );
     const client = new QueryClient({

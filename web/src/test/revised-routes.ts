@@ -34,6 +34,8 @@ export function revisedCollection<T extends { name: string }>(
 ) {
   const state = { items: start, generations: new Map<string, number>() };
   let held: Promise<void> | undefined;
+  /** How reads answer: as the server does, without an ETag, or failing. */
+  const reads = { mode: "normal" as "normal" | "no-etag" | "failing" };
   const etag = (name: string) =>
     `"v1-${name}-${state.generations.get(name) ?? 1}"`;
   const bump = (name: string) =>
@@ -47,7 +49,9 @@ export function revisedCollection<T extends { name: string }>(
     if (method !== "GET") return undefined;
     const answer = () => {
       const found = state.items.find((item) => item.name === name);
-      return found ? json(found, 200, { ETag: etag(name) }) : json({}, 404);
+      if (reads.mode === "failing") return json({ title: "boom", status: 500 }, 500);
+      if (!found) return json({}, 404);
+      return json(found, 200, reads.mode === "no-etag" ? {} : { ETag: etag(name) });
     };
     return held ? held.then(answer) : answer();
   };
@@ -94,7 +98,7 @@ export function revisedCollection<T extends { name: string }>(
     );
   };
 
-  return { state, etag, route, write, elsewhere, hold, base };
+  return { state, etag, route, write, elsewhere, hold, reads, base };
 }
 
 /**

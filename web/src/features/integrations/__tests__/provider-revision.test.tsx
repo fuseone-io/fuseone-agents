@@ -77,4 +77,13 @@ describe("a model provider written over what was read", () => {
     await waitFor(() => expect(net.writes("DELETE")).toHaveLength(1));
     expect(net.writes("DELETE")[0]?.ifMatch).toBe('"v1-gateway-2"');
   });
+
+  it("offers no form over a read that came back without a revision", async () => {
+    const net = world();
+    net.providers.reads.mode = "no-etag";
+    show(<ProviderEditor provider={gateway} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole("button", { name: "Try again" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
 });

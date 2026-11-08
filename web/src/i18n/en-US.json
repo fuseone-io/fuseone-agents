@@ -2402,7 +2402,8 @@
     "memory-secret-warned": "Part of that text is long and random enough to be a credential. Check it, then confirm if it is not one.",
     "standing-forbidden": "{{detail}}'s definition forbids standing approvals: every approval it asks for waits for a person. Change that on the agent, not here.",
     "source-input-erased": "The input this run was recorded with was erased or has expired, so no run was opened. It cannot be brought back.",
-    "no-master-key": "This webhook comes from GitHub and the installation has no master key (FUSEONE_MASTER_KEY). Without it the key could only be stored in the clear, so the webhook stays closed until the master key is configured."
+    "no-master-key": "This webhook comes from GitHub and the installation has no master key (FUSEONE_MASTER_KEY). Without it the key could only be stored in the clear, so the webhook stays closed until the master key is configured.",
+    "revision-missing": "The server answered without the revision a save has to answer, so nothing can be saved here. Try again; if it persists, the server needs looking at."
   },
   "retention": {
     "byDefault": "default, nobody chose it",

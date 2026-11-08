@@ -21,10 +21,18 @@ export function revised<T>(result: {
   error?: unknown;
   response: Response;
 }): Revised<T> {
-  return {
-    body: unwrap(result),
-    etag: result.response.headers.get("ETag") ?? "",
-  };
+  const body = unwrap(result);
+  const etag = result.response.headers.get("ETag");
+  // Fails closed. Read as no revision, the next write would send no If-Match
+  // and quietly go back to last-write-wins; a resource that exists has one.
+  if (!etag) {
+    throw new ApiError(result.response.status, {
+      type: "fuseone:revision-missing",
+      title: "The answer carried no revision",
+      status: result.response.status,
+    });
+  }
+  return { body, etag };
 }
 
 /**
