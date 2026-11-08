@@ -6,13 +6,16 @@ import { integrationKeys } from "@/features/integrations/api";
 export type MCPRediscovery = components["schemas"]["MCPRediscovery"];
 export type MCPRediscoveryReceipt = components["schemas"]["MCPRediscoveryReceipt"];
 
-// While a worker is still behind the request, the answers are read again: a
-// worker answers on its next pass, and the screen should notice without a
-// reload. Once every listed worker has answered there is nothing to wait for.
+// While the latest request may still be answered, the answers are read again:
+// a worker answers on its next pass, and the screen should notice without a
+// reload. That is while a recorded worker is behind, and while none has
+// recorded anything yet, since the first answer is then still to come. Once
+// every recorded worker has answered there is nothing left to wait for.
 const waitingEvery = 5_000;
 
 export function behind(status: MCPRediscovery | undefined): boolean {
   if (!status || status.generation === 0) return false;
+  if (status.receipts.length === 0) return true;
   return status.receipts.some((r) => r.generation < status.generation);
 }
 

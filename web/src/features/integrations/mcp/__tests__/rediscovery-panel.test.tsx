@@ -15,7 +15,8 @@ type Receipt = { worker: string; generation: number; succeeded: boolean; at: str
 function world(generation: number, receipts: Receipt[], readFails = false) {
   const status = { server: "crm", generation, requestedBy: "usr_bia", requestedAt: at, receipts };
   const answer = (worker: string) => {
-    status.receipts = status.receipts.map((r) => (r.worker === worker ? { ...r, generation } : r));
+    const others = status.receipts.filter((r) => r.worker !== worker);
+    status.receipts = [...others, { worker, generation, succeeded: true, at }];
   };
   const requests = stubNetwork([], (method, p) => {
     if (p !== path) return undefined;
@@ -86,6 +87,19 @@ describe("asking every worker to rediscover a tool server", () => {
     await vi.advanceTimersByTimeAsync(5_000);
 
     expect(await screen.findByText("Answered")).toBeVisible();
+    vi.useRealTimers();
+  });
+
+  it("keeps reading while no worker has answered at all", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const net = world(1, []);
+    show();
+    expect(await screen.findByText("No worker has recorded an answer to this server yet.")).toBeVisible();
+
+    net.answer("worker-a");
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(await screen.findByText("worker-a")).toBeVisible();
     vi.useRealTimers();
   });
 
