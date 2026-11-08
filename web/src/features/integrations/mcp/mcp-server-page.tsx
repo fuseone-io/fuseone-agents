@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { problemMessage } from "@/lib/api/problem-message";
 import { isStale } from "@/lib/api/revision";
+import { ApiError } from "@/lib/api/client";
 import { StaleNotice } from "@/components/shared/stale-notice";
 import { useMCPServerRevision } from "@/features/integrations/api";
 import { SurfacePicker } from "@/features/integrations/mcp/surface-picker";
@@ -82,8 +83,21 @@ export function MCPServerPage() {
   // Only a read made as the page opened seeds its writes, never a cached copy.
   if (isLoading || (name && !read.isFetchedAfterMount)) return <LoadingRows />;
   if (error) return <ErrorState error={error} onRetry={refetch} />;
+  // A detail that could not be read is that, not a server that does not
+  // exist; and a cached copy is never opened in its place.
+  if (read.error && !(read.error instanceof ApiError && read.error.status === 404)) {
+    return <ErrorState error={read.error} onRetry={() => void read.refetch()} />;
+  }
   if (!server) {
-    return <ErrorState error={new Error(t("mcp.noSuchServer"))} onRetry={refetch} />;
+    return (
+      <ErrorState
+        error={new Error(t("mcp.noSuchServer"))}
+        onRetry={() => {
+          refetch();
+          void read.refetch();
+        }}
+      />
+    );
   }
 
   return (

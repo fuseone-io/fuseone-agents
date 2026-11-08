@@ -204,6 +204,7 @@ describe("a tool server written over what was read", () => {
     await waitFor(() => expect(net.writes("PUT")).toHaveLength(1));
     expect(net.writes("PUT")[0]?.body).toMatchObject({ url: "https://mcp.example.com/theirs" });
   });
+
   // The listing still shows the surface somebody replaced; the server read by
   // name has the new one. What is shown and sent must be the one the ETag names.
   it("starts the surface from the server read by name, not the listing", async () => {
@@ -218,5 +219,32 @@ describe("a tool server written over what was read", () => {
     await user.click(screen.getByRole("button", { name: "Save what we brought in" }));
     await waitFor(() => expect(net.writes("PUT")).toHaveLength(1));
     expect(net.writes("PUT")[0]?.body).toMatchObject({ surface: [] });
+  });
+
+  it("says the server could not be read, and retries that read", async () => {
+    const user = userEvent.setup();
+    const net = world();
+    net.servers.reads.mode = "failing";
+    show(null, "/integrations/mcp/github");
+    const retry = await screen.findByRole("button", { name: "Try again" });
+    // What failed is the read, so the server's own problem is what is said.
+    expect(screen.getByText("boom")).toBeVisible();
+    net.servers.reads.mode = "normal";
+    await user.click(retry);
+
+    expect(await screen.findByLabelText("github.search")).toBeVisible();
+  });
+
+  it("opens no cached copy when reading the server again fails", async () => {
+    const net = world();
+    const client = fresh();
+    const first = show(null, "/integrations/mcp/github", client);
+    await screen.findByLabelText("github.search");
+    first.unmount();
+    net.servers.reads.mode = "failing";
+    show(null, "/integrations/mcp/github", client);
+
+    expect(await screen.findByRole("button", { name: "Try again" })).toBeVisible();
+    expect(screen.queryByLabelText("github.search")).toBeNull();
   });
 });
