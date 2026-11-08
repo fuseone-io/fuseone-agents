@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import {
   PropertiesSheet,
@@ -28,14 +28,22 @@ export function RevisedEditor<T>({
   onClose: () => void;
   children: (body: T, revision: FormRevision) => ReactNode;
 }) {
+  // Counted, because a revision is named by what is stored: a state that came
+  // back has the revision it had, and keying by it alone would keep the draft
+  // a reload was asked to replace.
+  const [reloads, setReloads] = useState(0);
   // Only a read made as this editor opened seeds it: a copy cached by an
   // earlier opening may be older than what is stored now.
   if (read.data && read.isFetchedAfterMount && !read.isError) {
-    return children(read.data.body, {
-      etag: read.data.etag,
-      reload: () => void read.refetch(),
-      reloading: read.isFetching,
-    });
+    return (
+      <Fragment key={`${read.data.etag}:${reloads}`}>
+        {children(read.data.body, {
+          etag: read.data.etag,
+          reload: () => void read.refetch().then(() => setReloads((n) => n + 1)),
+          reloading: read.isFetching,
+        })}
+      </Fragment>
+    );
   }
   return (
     <PropertiesSheet

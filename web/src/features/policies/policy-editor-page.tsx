@@ -34,6 +34,9 @@ export function PolicyEditorPage() {
   // its code, with the revision the save answers.
   const { data, isLoading, error, refetch } = usePolicies();
   const read = usePolicy(creating ? undefined : routeCode);
+  // Counted: a state that came back has the revision it had, and a reload
+  // asked for still replaces the draft.
+  const [reloads, setReloads] = useState(0);
   const loaded = read.data?.body;
 
   // Only a read made as the editor opened seeds it, never a cached copy.
@@ -59,7 +62,7 @@ export function PolicyEditorPage() {
   return (
     <PolicyForm
       // A new revision is a new form: reloading replaces the draft with it.
-      key={creating ? "new" : `${loaded!.code}:${read.data!.etag}`}
+      key={creating ? "new" : `${loaded!.code}:${read.data!.etag}:${reloads}`}
       creating={creating}
       loaded={loaded}
       policies={data?.items ?? []}
@@ -67,7 +70,8 @@ export function PolicyEditorPage() {
       revision={
         read.data && {
           etag: read.data.etag,
-          reload: () => void read.refetch(),
+          reload: () =>
+            void read.refetch().then(() => setReloads((n) => n + 1)),
           reloading: read.isFetching,
         }
       }

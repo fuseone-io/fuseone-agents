@@ -31,13 +31,21 @@ export const json = (
 export function revisedCollection<T extends { name: string }>(
   base: string,
   start: T[],
+  /**
+   * Revisions named by content, as the server names them, so a state that
+   * comes back comes back under the revision it had. By default each write
+   * gives a new one.
+   */
+  by: "write" | "content" = "write",
 ) {
   const state = { items: start, generations: new Map<string, number>() };
   let held: Promise<void> | undefined;
   /** How reads answer: as the server does, without an ETag, or failing. */
   const reads = { mode: "normal" as "normal" | "no-etag" | "failing" };
   const etag = (name: string) =>
-    `"v1-${name}-${state.generations.get(name) ?? 1}"`;
+    by === "content"
+      ? `"v1-${name}-${JSON.stringify(state.items.find((item) => item.name === name) ?? null)}"`
+      : `"v1-${name}-${state.generations.get(name) ?? 1}"`;
   const bump = (name: string) =>
     state.generations.set(name, (state.generations.get(name) ?? 1) + 1);
 

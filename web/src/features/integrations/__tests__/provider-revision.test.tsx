@@ -15,8 +15,8 @@ const gateway: ModelProvider = {
   models: ["m1"], enabled: true, hasKey: true,
 };
 
-function world() {
-  const providers = revisedCollection("/admin/integrations/providers", [gateway]);
+function world(by: "write" | "content" = "write") {
+  const providers = revisedCollection("/admin/integrations/providers", [gateway], by);
   const requests = stubNetwork([providers], (_method, path) =>
     path === "/admin/integrations" ? json({ mcpServers: [], providers: providers.state.items, presets: [] }) : undefined,
   );
@@ -87,5 +87,25 @@ describe("a model provider written over what was read", () => {
 
     expect(await screen.findByRole("button", { name: "Try again" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
+
+  // Revisions are named by content: a state that came back has the revision it
+  // had. Reloading still replaces the draft, because reloading was asked for.
+  it("replaces the draft on reload even when the stored state came back", async () => {
+    const user = userEvent.setup();
+    const net = world("content");
+    show(<ProviderEditor provider={gateway} onClose={vi.fn()} />);
+    const address = await screen.findByLabelText("Address");
+    await user.clear(address);
+    await user.type(address, "https://llm.example.com/mine");
+    net.providers.elsewhere("gateway", { baseUrl: "https://llm.example.com/theirs" });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText("Somebody changed this while you were editing");
+    net.providers.elsewhere("gateway", { baseUrl: "https://llm.example.com/a" });
+    await user.click(screen.getByRole("button", { name: "Reload what is stored" }));
+
+    await waitFor(() => expect(screen.getByLabelText("Address")).toHaveValue("https://llm.example.com/a"));
+    // Reloading throws the draft away; it never saves it.
+    expect(net.writes("PUT")).toHaveLength(1);
   });
 });

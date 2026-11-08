@@ -26,10 +26,17 @@ export function aPolicy(over: Partial<Policy> = {}): Policy {
  * The policy routes at the network boundary, judging If-Match the way the
  * server does: every write moves the revision, and a stale one gets a 412.
  */
-export function stubPolicies(start: Policy[] = [aPolicy()]) {
+export function stubPolicies(
+  start: Policy[] = [aPolicy()],
+  /** Revisions by content, as the server names them; by default, by write. */
+  by: "write" | "content" = "write",
+) {
   const state = { policies: start, generation: 1 };
   const requests: Recorded[] = [];
-  const etag = () => `"v1-gen${state.generation}"`;
+  const etag = () =>
+    by === "content"
+      ? `"v1-${JSON.stringify(state.policies)}"`
+      : `"v1-gen${state.generation}"`;
   const json = (
     body: unknown,
     status = 200,

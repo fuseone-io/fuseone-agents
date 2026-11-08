@@ -128,4 +128,21 @@ describe("a policy written over what was read", () => {
     expect(await screen.findByRole("alert")).toBeVisible();
     expect(screen.queryByLabelText("Name")).toBeNull();
   });
+
+  it("replaces the draft on reload even when the stored rule came back", async () => {
+    const user = userEvent.setup();
+    const net = stubPolicies(undefined, "content");
+    at("/policies/POL-200");
+    const name = await screen.findByLabelText("Name");
+    await user.clear(name);
+    await user.type(name, "Mine");
+    net.elsewhere({ name: "Theirs" });
+    await user.click(screen.getByRole("button", { name: "Save and enforce" }));
+    await screen.findByText("Somebody changed this while you were editing");
+    net.elsewhere({ name: "Guard exports" });
+    await user.click(screen.getByRole("button", { name: "Reload what is stored" }));
+
+    await waitFor(() => expect(screen.getByLabelText("Name")).toHaveValue("Guard exports"));
+    expect(net.requests.filter((r) => r.method === "PUT")).toHaveLength(1);
+  });
 });
