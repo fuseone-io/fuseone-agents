@@ -203,9 +203,9 @@ Quando um servidor conectado ganhar uma ferramenta, use **Redescobrir em todos o
 
 - Cada worker que tem o servidor pergunta de novo o que ele oferece, uma vez, **na sessão que já está aberta**. Nada reconecta, e nenhuma chamada em andamento é interrompida.
 - Uma ferramenta nova, ou uma cuja definição mudou, chega **sem classificação** e continua recusada até alguém classificá-la. Uma ferramenta que não mudou mantém a classificação. Uma ferramenta que o servidor não oferece mais sai.
-- O painel lista cada worker que já conectou o servidor e diz se ele respondeu ao último pedido, se falhou ou se ainda não respondeu. Um worker que falha mantém as ferramentas que tinha e só tenta de novo quando alguém pedir de novo.
+- O painel lista as respostas que os workers registraram e diz, para cada worker, se ele respondeu ao último pedido, se falhou ou se ainda não respondeu. Um worker nesta versão registra uma resposta quando conecta o servidor, então aparece a partir daí. Um worker que falha mantém as ferramentas que tinha e só tenta de novo quando alguém pedir de novo.
 - Um worker que sobe depois do pedido responde com a própria primeira conexão.
-- A lista mostra os workers que já conectaram o servidor, não os que estão rodando: um que parou continua listado como sem resposta.
+- **A lista não é um registro de quais workers estão rodando.** Um worker que parou mantém a última resposta que registrou, qualquer que tenha sido. Um worker numa versão anterior não registra nada, então nem aparece. Uma lista vazia quer dizer só que nenhuma resposta foi registrada ainda.
 
 O pedido fica na trilha de administração e não muda a configuração do servidor. Um pipeline pode fazer o mesmo pedido com `POST /api/v1/admin/integrations/mcp-servers/{name}/rediscovery` e ler as respostas com `GET` no mesmo caminho.
 

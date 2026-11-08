@@ -26,10 +26,10 @@ const badge: Record<Answer, "secondary" | "destructive" | "outline"> = {
 };
 
 /**
- * Who answered the latest request. A worker is listed once it has connected
- * the server, and there is no record of which workers are alive: one listed
- * as not answered may simply have stopped, and the screen does not say more
- * than it knows.
+ * Who answered the latest request, as far as the recorded answers say. They
+ * are not a record of which workers are running: one that stopped keeps the
+ * last answer it recorded, and one on an older version records none and is
+ * absent. The screen says so rather than more than it knows.
  */
 export function RediscoveryStatus({ server }: { server: string }) {
   const { t } = useTranslation();
@@ -50,6 +50,7 @@ export function RediscoveryStatus({ server }: { server: string }) {
         })}
       </p>
       <Receipts status={status} />
+      <p className="text-xs text-muted-foreground">{t("mcp.rediscovery.notPresence")}</p>
     </div>
   );
 }

@@ -2243,10 +2243,12 @@ export interface paths {
         };
         /**
          * Read which workers answered a tool server's rediscovery request
-         * @description The latest request and each worker's newest answer. A worker appears
-         *     once it has connected the server; one whose generation is behind the
-         *     request has not answered it yet, or was not running. Generation zero
-         *     is a server nobody has asked about.
+         * @description The latest request and each worker's newest recorded answer. A worker
+         *     on this version records one when it connects the server; one on an
+         *     older version records none and is absent. This is not a record of
+         *     which workers are running: a worker that stopped keeps the last answer
+         *     it recorded. One whose generation is behind the request has not
+         *     answered it. Generation zero is a server nobody has asked about.
          */
         get: operations["getMCPRediscovery"];
         put?: never;

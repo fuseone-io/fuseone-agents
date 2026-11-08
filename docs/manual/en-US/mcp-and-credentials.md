@@ -197,9 +197,9 @@ When a connected server gains a tool, use **Rediscover on every worker** on the 
 
 - Every worker that holds the server asks it again what it offers, once, **on the session it already has**. Nothing reconnects, and no call in flight is interrupted.
 - A new tool, or one whose definition changed, arrives **unclassified** and stays refused until somebody classifies it. A tool that is unchanged keeps its classification. A tool the server no longer offers leaves.
-- The panel lists each worker that has connected the server, and says whether it answered the latest request, failed, or has not answered yet. A worker that fails keeps the tools it had and does not try again until somebody asks again.
+- The panel lists the answers workers have recorded, and says for each worker whether it answered the latest request, failed, or has not answered yet. A worker on this version records an answer when it connects the server, so it appears from then on. A worker that fails keeps the tools it had and does not try again until somebody asks again.
 - A worker that starts after the request answers it with its own first connection.
-- The list shows workers that have connected the server, not workers that are running: one that stopped stays listed as not having answered.
+- **The list is not a record of which workers are running.** A worker that stopped keeps the last answer it recorded, whatever it was. A worker on an older version records nothing, so it does not appear at all. An empty list means only that no answer has been recorded yet.
 
 The request is on the administration trail, and does not change the server's configuration. A pipeline can make the same request: `POST /api/v1/admin/integrations/mcp-servers/{name}/rediscovery`, and read the answers with `GET` on the same path.
 

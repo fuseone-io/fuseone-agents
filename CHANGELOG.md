@@ -32,9 +32,9 @@ field" is a commit message.
 
 ### Upgrade notes
 
-- **A worker still on an older version ignores rediscovery requests.** During the rollout it
-  stays listed as not having answered; it answers once it runs this release. Migration `0105`
-  only adds two tables.
+- **A worker still on an older version ignores rediscovery requests and records no answer,** so
+  during the rollout it does not appear in the list at all. Once it runs this release it records
+  an answer when it connects. Migration `0105` only adds two tables.
 
 ### Added
 
@@ -42,8 +42,9 @@ field" is a commit message.
   asks every worker to look again from the server's page, or a pipeline with
   `POST /admin/integrations/mcp-servers/{name}/rediscovery`. Each worker asks once, on the
   session it already holds: nothing reconnects and no call is interrupted. New or changed tools
-  arrive unclassified; unchanged ones keep their classification. The page lists each worker that
-  has connected the server and whether it answered, failed or has not answered yet. The request
+  arrive unclassified; unchanged ones keep their classification. The page lists the answers
+  workers have recorded: answered, failed or not answered yet. It is not a record of which
+  workers are running; a stopped worker keeps its last answer. The request
   is on the admin trail and does not change the server's configuration. Turning the server off
   and on is no longer needed for this.
 

@@ -73,6 +73,7 @@ describe("asking every worker to rediscover a tool server", () => {
     expect(within(await row("worker-a")).getByText("Answered")).toBeVisible();
     expect(within(await row("worker-b")).getByText("Not answered yet")).toBeVisible();
     expect(within(await row("worker-c")).getByText("Failed; tools unchanged")).toBeVisible();
+    expect(screen.getByText(/not the workers that are running/)).toBeVisible();
   });
 
   it("reads the answers again while a worker is still behind", async () => {
