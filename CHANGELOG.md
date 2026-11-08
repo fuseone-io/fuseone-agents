@@ -28,6 +28,27 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Upgrade notes
+
+- **A worker still on an older version ignores rediscovery requests.** During the rollout it
+  stays listed as not having answered; it answers once it runs this release. Migration `0105`
+  only adds two tables.
+
+### Added
+
+- **Rediscovery on every worker.** When a connected tool server gains a tool, an administrator
+  asks every worker to look again from the server's page, or a pipeline with
+  `POST /admin/integrations/mcp-servers/{name}/rediscovery`. Each worker asks once, on the
+  session it already holds: nothing reconnects and no call is interrupted. New or changed tools
+  arrive unclassified; unchanged ones keep their classification. The page lists each worker that
+  has connected the server and whether it answered, failed or has not answered yet. The request
+  is on the admin trail and does not change the server's configuration. Turning the server off
+  and on is no longer needed for this.
+
+---
+
 ## [0.98.0] — 2026-11-08
 
 The console side of conflict detection, and the API's compatibility statement. No migration,

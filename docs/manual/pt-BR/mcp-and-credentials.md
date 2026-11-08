@@ -199,7 +199,15 @@ Salvar um servidor sem mudança nenhuma não muda nada. Nenhum worker reconecta,
 - **Tentar agora** pede a um worker que reconecte e informe o que encontrou: aquele que reivindicar o pedido. Os outros não redescobrem nada.
 - **Uma sessão que caiu ou nunca conectou** é tentada de novo por cada worker, por conta própria, em cerca de 30 segundos.
 
-**Hoje não existe como fazer todos os workers redescobrirem as ferramentas de um servidor sem interrupção.** Se um servidor conectado ganhar uma ferramenta, desligue e religue o servidor. Isso faz todas as réplicas atualizarem, e as ferramentas dele ficam indisponíveis por um momento enquanto isso acontece.
+Quando um servidor conectado ganhar uma ferramenta, use **Redescobrir em todos os workers** na página do servidor:
+
+- Cada worker que tem o servidor pergunta de novo o que ele oferece, uma vez, **na sessão que já está aberta**. Nada reconecta, e nenhuma chamada em andamento é interrompida.
+- Uma ferramenta nova, ou uma cuja definição mudou, chega **sem classificação** e continua recusada até alguém classificá-la. Uma ferramenta que não mudou mantém a classificação. Uma ferramenta que o servidor não oferece mais sai.
+- O painel lista cada worker que já conectou o servidor e diz se ele respondeu ao último pedido, se falhou ou se ainda não respondeu. Um worker que falha mantém as ferramentas que tinha e só tenta de novo quando alguém pedir de novo.
+- Um worker que sobe depois do pedido responde com a própria primeira conexão.
+- A lista mostra os workers que já conectaram o servidor, não os que estão rodando: um que parou continua listado como sem resposta.
+
+O pedido fica na trilha de administração e não muda a configuração do servidor. Um pipeline pode fazer o mesmo pedido com `POST /api/v1/admin/integrations/mcp-servers/{name}/rediscovery` e ler as respostas com `GET` no mesmo caminho.
 
 ## Diagnóstico rápido
 
