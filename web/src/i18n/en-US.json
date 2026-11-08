@@ -1325,7 +1325,9 @@
     "models": "Models this endpoint serves",
     "modelsHint": "One per line. Suggestions for whoever writes an agent, never a limit — behind a proxy the names are the ones you configured there, and nothing shipped in the binary can guess them.",
     "autoToolChoiceModels": "Models driven with tool_choice auto",
-    "autoToolChoiceModelsHint": "One per line. These models refuse the required-tool mode; behind a gateway with fallback routing the refusal never reaches the platform, so declare them here instead."
+    "autoToolChoiceModelsHint": "One per line. These models refuse the required-tool mode; behind a gateway with fallback routing the refusal never reaches the platform, so declare them here instead.",
+    "removeProviderTitle": "Remove {{name}}?",
+    "providerRemoved": "{{name}} removed"
   },
   "connectors": {
     "title": "Governed connectors",

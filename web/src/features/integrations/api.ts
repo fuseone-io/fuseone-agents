@@ -27,6 +27,8 @@ export const integrationKeys = {
   mcpCredentials: () => [...integrationKeys.all, "mcp-credentials"] as const,
   mcpServer: (name: string) =>
     [...integrationKeys.all, "mcp-server", name] as const,
+  provider: (name: string) =>
+    [...integrationKeys.all, "provider", name] as const,
   connectorCatalog: () =>
     [...integrationKeys.all, "connectors", "catalog"] as const,
   connectorInstances: () =>
@@ -326,6 +328,25 @@ export function useProbeMCPServer() {
   });
 }
 
+/** One model provider as it is stored now, with the revision a write over it answers. */
+export async function readProvider(name: string) {
+  return revised(
+    await api.GET("/admin/integrations/providers/{name}", {
+      params: { path: { name } },
+    }),
+  );
+}
+
+/** One model provider, read by name where it is edited, and again on every mount. */
+export function useProviderRevision(name: string | undefined) {
+  return useQuery({
+    queryKey: integrationKeys.provider(name ?? ""),
+    queryFn: () => readProvider(name!),
+    enabled: Boolean(name),
+    refetchOnMount: "always",
+  });
+}
+
 /**
  * An omitted key keeps the stored one, so the form sends nothing rather than
  * an empty string when the operator left the field alone.
@@ -341,10 +362,12 @@ export function usePutProvider() {
       autoToolChoiceModels?: string[];
       apiKey?: string;
       enabled: boolean;
+      /** The revision this write answers; adding a provider has none. */
+      etag?: string;
     }) =>
       unwrap(
         await api.PUT("/admin/integrations/providers/{name}", {
-          params: { path: { name: input.name } },
+          params: { path: { name: input.name }, header: ifMatch(input.etag) },
           body: {
             kind: input.kind,
             baseUrl: input.baseUrl,
@@ -363,13 +386,13 @@ export function usePutProvider() {
 export function useDeleteProvider() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (name: string) =>
+    mutationFn: async ({ name, etag }: { name: string; etag: string }) =>
       unwrap(
         await api.DELETE("/admin/integrations/providers/{name}", {
-          params: { path: { name } },
+          params: { path: { name }, header: ifMatch(etag) },
         }),
       ),
-    onSuccess: () =>
+    onSettled: () =>
       void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
   });
 }

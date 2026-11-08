@@ -18,7 +18,7 @@ import {
   LoadingRows,
 } from "@/components/shared/states";
 import { ServerEditor } from "@/features/integrations/server-editor";
-import { ProviderForm } from "@/features/integrations/provider-form";
+import { ProviderEditor } from "@/features/integrations/provider-editor";
 import { ServerCard } from "@/features/integrations/server-card";
 import { ProviderCard } from "@/features/integrations/provider-card";
 import {
@@ -249,7 +249,7 @@ export function IntegrationsPage({
         <ServerEditor server={editing.value} onClose={() => setEditing(null)} />
       )}
       {editing?.kind === "provider" && (
-        <ProviderForm
+        <ProviderEditor
           provider={editing.value}
           onClose={() => setEditing(null)}
         />
