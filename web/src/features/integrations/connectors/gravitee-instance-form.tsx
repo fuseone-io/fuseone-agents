@@ -29,19 +29,25 @@ import { GraviteeVaultFields } from "@/features/integrations/connectors/gravitee
 import { vaultChoices } from "@/features/integrations/connectors/vault-instance-options";
 import { useActiveScope } from "@/features/scope/active-scope";
 import { problemMessage } from "@/lib/api/problem-message";
+import { useStaleRevision } from "@/hooks/use-stale-revision";
+import type { FormRevision } from "@/lib/api/revision";
 
 export function GraviteeInstanceForm({
   instance,
   instances,
   onClose,
   onSave,
+  revision,
 }: {
   instance: ConnectorInstanceDetail | null;
   instances: ConnectorInstance[];
   onClose: () => void;
   onSave: ConnectorInstanceSaver;
+  /** What the editor read; a new instance has none. */
+  revision?: FormRevision;
 }) {
   const { t } = useTranslation();
+  const stale = useStaleRevision(revision);
   const company = useActiveScope((state) => state.company);
   const area = useActiveScope((state) => state.area);
   const form = useForm<GraviteeInstanceValues>({
@@ -87,7 +93,7 @@ export function GraviteeInstanceForm({
       toast.success(t("connectors.instanceSaved"));
       onClose();
     } catch (error) {
-      toast.error(problemMessage(error, t));
+      if (!stale.refused(error)) toast.error(problemMessage(error, t));
     }
   }
 
@@ -109,6 +115,7 @@ export function GraviteeInstanceForm({
           className="flex min-h-0 flex-1 flex-col"
         >
           <PropertiesSheetBody className="space-y-6">
+            {stale.notice}
             <ConnectorIdentityFields
               editing={instance !== null}
               connector="gravitee"

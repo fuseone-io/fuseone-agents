@@ -3,8 +3,12 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { RemoveButton } from "@/components/shared/remove-button";
-import type { ConnectorInstance } from "@/features/integrations/api";
+import { RevisedRemoveButton } from "@/components/shared/revised-remove-button";
+import {
+  integrationKeys,
+  readConnectorInstance,
+  type ConnectorInstance,
+} from "@/features/integrations/api";
 import { GraviteeInstanceFacts } from "@/features/integrations/connectors/gravitee-instance-facts";
 import { formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -16,7 +20,8 @@ export function ConnectorInstanceCard({
 }: {
   instance: ConnectorInstance;
   onEdit?: () => void;
-  onDelete?: () => void;
+  /** Removes the instance under the revision read as its confirmation opened. */
+  onDelete?: (etag: string) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -47,11 +52,15 @@ export function ConnectorInstanceCard({
           </Button>
         )}
         {onDelete && (
-          <RemoveButton
+          <RevisedRemoveButton
             title={t("connectors.removeInstance")}
             description={t("connectors.removeInstanceHint", {
               name: instance.name,
             })}
+            revision={{
+              queryKey: integrationKeys.connectorInstance(instance),
+              read: async () => (await readConnectorInstance(instance)).etag,
+            }}
             onConfirm={onDelete}
           />
         )}

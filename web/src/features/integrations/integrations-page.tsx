@@ -1,4 +1,7 @@
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+import { problemMessage } from "@/lib/api/problem-message";
+import { isStale } from "@/lib/api/revision";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { PAGE_ICONS } from "@/components/layout/nav";
@@ -219,8 +222,18 @@ export function IntegrationsPage({
               retryCatalog: () => void connectorCatalog.refetch(),
               retryInstances: () => void connectorInstances.refetch(),
               saveInstance: (input) => putConnectorInstance.mutateAsync(input),
-              deleteInstance: (instance) =>
-                void deleteConnectorInstance.mutate(instance),
+              deleteInstance: (instance, etag) =>
+                void deleteConnectorInstance.mutate(
+                  { instance, etag },
+                  {
+                    onError: (error) =>
+                      toast.error(
+                        isStale(error)
+                          ? t("revision.removeStale")
+                          : problemMessage(error, t),
+                      ),
+                  },
+                ),
             }}
           />
         ) : section === "credentials" ? (

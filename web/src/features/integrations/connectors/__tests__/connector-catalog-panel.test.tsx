@@ -1,4 +1,6 @@
-import { render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render as renderBare, screen, within } from "@testing-library/react";
+import type { ReactElement } from "react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ConnectorCatalogPanel } from "@/features/integrations/connectors/connector-catalog-panel";
@@ -6,6 +8,10 @@ import type {
   ConnectorInstance,
   GovernedConnector,
 } from "@/features/integrations/api";
+
+// The cards read a revision before a removal is confirmed, so they need a client.
+const render = (ui: ReactElement) =>
+  renderBare(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
 
 const vault: GovernedConnector = {
   id: "vault",

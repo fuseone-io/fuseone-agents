@@ -70,6 +70,6 @@ describe("connector instance detail", () => {
       company: "acme",
       area: "platform",
     });
-    expect(result.current.data?.sql?.templates).toEqual([]);
+    expect(result.current.data?.body.sql?.templates).toEqual([]);
   });
 });

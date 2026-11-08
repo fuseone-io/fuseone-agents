@@ -32,7 +32,7 @@ type ConnectorInstancesActions = {
   retry: () => void;
   create: (connector: ConfigurableConnector) => void;
   edit: (instance: ConnectorInstance) => void;
-  remove: (instance: ConnectorInstance) => void;
+  remove: (instance: ConnectorInstance, etag: string) => void;
 };
 
 export function ConnectorInstancesPanel({
@@ -95,7 +95,9 @@ export function ConnectorInstancesPanel({
                   : undefined
               }
               onDelete={
-                view.canConfigure ? () => actions.remove(instance) : undefined
+                view.canConfigure
+                    ? (etag) => actions.remove(instance, etag)
+                    : undefined
               }
             />
           ))}

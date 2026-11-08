@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { answering } from "@/features/integrations/connectors/connector-instance-model";
 import {
   PropertiesSheet,
   PropertiesSheetBody,
@@ -88,10 +89,17 @@ function ExistingSQLInstanceEditor({
   }
   return (
     <SQLInstanceForm
-      instance={detail.data}
+      // A new revision is a new form: reloading replaces the draft with it.
+      key={detail.data.etag}
+      instance={detail.data.body}
       instances={instances}
       onClose={onClose}
-      onSave={onSave}
+      onSave={answering(onSave, detail.data.etag)}
+      revision={{
+        etag: detail.data.etag,
+        reload: () => void detail.refetch(),
+        reloading: detail.isFetching,
+      }}
     />
   );
 }

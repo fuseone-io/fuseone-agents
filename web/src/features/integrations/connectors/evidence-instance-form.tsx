@@ -29,17 +29,23 @@ import { EvidenceSourceFields } from "@/features/integrations/connectors/evidenc
 import { EvidenceTokenFields } from "@/features/integrations/connectors/evidence-token-fields";
 import { useActiveScope } from "@/features/scope/active-scope";
 import { problemMessage } from "@/lib/api/problem-message";
+import { useStaleRevision } from "@/hooks/use-stale-revision";
+import type { FormRevision } from "@/lib/api/revision";
 
 export function EvidenceInstanceForm({
   instance,
   onClose,
   onSave,
+  revision,
 }: {
   instance: ConnectorInstanceDetail | null;
   onClose: () => void;
   onSave: ConnectorInstanceSaver;
+  /** What the editor read; a new instance has none. */
+  revision?: FormRevision;
 }) {
   const { t } = useTranslation();
+  const stale = useStaleRevision(revision);
   const company = useActiveScope((state) => state.company);
   const area = useActiveScope((state) => state.area);
   const form = useForm<EvidenceInstanceValues>({
@@ -73,7 +79,7 @@ export function EvidenceInstanceForm({
       toast.success(t("connectors.instanceSaved"));
       onClose();
     } catch (error) {
-      toast.error(problemMessage(error, t));
+      if (!stale.refused(error)) toast.error(problemMessage(error, t));
     }
   }
 
@@ -93,6 +99,7 @@ export function EvidenceInstanceForm({
           className="flex min-h-0 flex-1 flex-col"
         >
           <PropertiesSheetBody className="space-y-6">
+            {stale.notice}
             <ConnectorIdentityFields
               editing={instance !== null}
               connector="evidence"
