@@ -51,9 +51,11 @@ export function revisedCollection<T extends { name: string }>(
 
   const route: Route = (method, path) => {
     if (!path.startsWith(`${base}/`)) return undefined;
-    const name = decodeURIComponent(
-      path.slice(base.length + 1).split("/")[0] ?? "",
-    );
+    // The resource itself and nothing under it: a route below a name, such as
+    // a server's rediscovery, is its own answer, as it is on the server.
+    const rest = path.slice(base.length + 1);
+    if (rest.includes("/")) return undefined;
+    const name = decodeURIComponent(rest);
     if (method !== "GET") return undefined;
     const answer = () => {
       const found = state.items.find((item) => item.name === name);
