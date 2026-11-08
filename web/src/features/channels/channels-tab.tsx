@@ -8,7 +8,7 @@ import {
 } from "@/components/shared/states";
 import { useChannels } from "@/features/channels/api";
 import { ChannelCard } from "@/features/channels/channel-card";
-import { ChannelForm } from "@/features/channels/channel-form";
+import { ChannelEditor } from "@/features/channels/channel-editor";
 import { ConversationForm } from "@/features/channels/conversation-form";
 import { ChannelsToolbar } from "@/features/channels/channels-toolbar";
 import {
@@ -90,7 +90,7 @@ export function ChannelsTab() {
       </section>
 
       {editing !== undefined && (
-        <ChannelForm
+        <ChannelEditor
           channel={editing}
           kinds={data?.kinds ?? []}
           onClose={() => setEditing(undefined)}

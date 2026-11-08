@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
@@ -30,6 +31,8 @@ import { useSaveChannel } from "@/features/channels/api";
 import { knownDelivery } from "@/features/channels/channel-model";
 import { UnknownConfiguration } from "@/features/channels/unknown-configuration";
 import { problemMessage } from "@/lib/api/problem-message";
+import { isStale, type FormRevision } from "@/lib/api/revision";
+import { StaleNotice } from "@/components/shared/stale-notice";
 import type { components } from "@/lib/api/schema.gen";
 
 const schema = z.object({
@@ -65,14 +68,18 @@ export function ChannelForm({
   channel,
   kinds,
   onClose,
+  revision,
 }: {
   channel: components["schemas"]["Channel"] | null;
   /** What this installation can connect, answered by the process. */
   kinds: string[];
   onClose: () => void;
+  /** What the editor read; a connection being added has none. */
+  revision?: FormRevision;
 }) {
   const { t } = useTranslation();
   const save = useSaveChannel();
+  const [stale, setStale] = useState(false);
   // What is stored, which may be a way of being reached that this console
   // cannot draw. Narrowed here and refused below: a form filled with the
   // nearest value it knows is a form whose save opens the door this version
@@ -109,11 +116,13 @@ export function ChannelForm({
         token: values.token.trim() || undefined,
         appToken: values.appToken.trim() || undefined,
         signingSecret: values.signingSecret.trim() || undefined,
+        etag: revision?.etag,
       });
       toast.success(t("channels.saved"));
       onClose();
     } catch (error) {
-      toast.error(problemMessage(error, t));
+      if (revision && isStale(error)) setStale(true);
+      else toast.error(problemMessage(error, t));
     }
   }
 
@@ -140,6 +149,9 @@ export function ChannelForm({
           className="flex min-h-0 flex-1 flex-col"
         >
           <PropertiesSheetBody className="space-y-4">
+            {stale && revision && (
+              <StaleNotice onReload={revision.reload} reloading={revision.reloading} />
+            )}
             <FormField
               control={form.control}
               name="name"
