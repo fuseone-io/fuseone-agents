@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
-import { ifMatch, revised, revisionReads } from "@/lib/api/revision";
+import { ifMatch, revised, revisionReads, written } from "@/lib/api/revision";
 import type { components } from "@/lib/api/schema.gen";
 
 export type MCPServer = components["schemas"]["MCPServer"];
@@ -138,7 +138,7 @@ export function usePutMCPServer() {
       /** The revision this write answers; connecting a new server has none. */
       etag?: string;
     }) =>
-      unwrap(
+      written(
         await api.PUT("/admin/integrations/mcp-servers/{name}", {
           params: { path: { name: input.name }, header: ifMatch(input.etag) },
           body: {

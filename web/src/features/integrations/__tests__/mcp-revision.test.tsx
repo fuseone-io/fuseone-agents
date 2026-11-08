@@ -27,6 +27,7 @@ function world(listed?: MCPServer[]) {
     if (path === "/admin/integrations") {
       return json({ mcpServers: listed ?? servers.state.items, providers: [] });
     }
+    if (path.endsWith("/probe")) return json({}, 202);
     if (path === "/admin/tools") {
       return json({
         items: [
@@ -310,5 +311,78 @@ describe("a tool server written over what was read", () => {
 
     await waitFor(() => expect(net.writes("PUT")).toHaveLength(2));
     expect(net.writes("PUT")[1]?.ifMatch).toBe('"v1-github-2"');
+  });
+
+  // A write waiting in line answers the revision its page knows: the one its
+  // own write before it made. Somebody else's write in between is a refusal,
+  // not a revision to adopt.
+  it("refuses a waiting write when somebody else wrote while it waited", async () => {
+    const user = userEvent.setup();
+    const net = world();
+    net.servers.state.items = [{ ...github, hasSecret: true, hasOAuth: true }];
+    show(null, "/integrations/mcp/github");
+    await user.click(await screen.findByLabelText("github.search"));
+    const release = net.servers.hold();
+    await user.click(screen.getByRole("button", { name: /Remove stored OAuth grant/i }));
+    await waitFor(() => expect(net.writes("PUT")).toHaveLength(1));
+    await user.click(screen.getByRole("button", { name: "Save what we brought in" }));
+    net.servers.elsewhere("github", { surface: ["issues"] });
+    release();
+
+    expect(await screen.findByText("Somebody changed this while you were editing")).toBeVisible();
+    expect(net.writes("PUT")).toHaveLength(1);
+    expect(net.servers.state.items[0]?.surface).toEqual(["issues"]);
+  });
+
+  it("refuses a waiting write when the server could not be read again", async () => {
+    const user = userEvent.setup();
+    const net = world();
+    net.servers.state.items = [{ ...github, hasSecret: true, hasOAuth: true }];
+    show(null, "/integrations/mcp/github");
+    await user.click(await screen.findByLabelText("github.search"));
+    const release = net.servers.hold();
+    net.servers.reads.mode = "failing";
+    await user.click(screen.getByRole("button", { name: /Remove stored OAuth grant/i }));
+    await waitFor(() => expect(net.writes("PUT")).toHaveLength(1));
+    await user.click(screen.getByRole("button", { name: "Save what we brought in" }));
+    release();
+
+    expect(await screen.findByText("boom")).toBeVisible();
+    expect(net.writes("PUT")).toHaveLength(1);
+  });
+
+  // Anything else that reads the server again (asking a worker to try it, here)
+  // does not make a later change what an edit begun before it answers.
+  it("refuses a write over a change another read brought in", async () => {
+    const user = userEvent.setup();
+    const net = world();
+    show(null, "/integrations/mcp/github");
+    await user.click(await screen.findByLabelText("github.search"));
+    net.servers.elsewhere("github", { surface: ["issues"] });
+    await user.click(screen.getByRole("button", { name: "Try now" }));
+    await waitFor(() => expect(net.requests.filter((r) => r.path === "/admin/integrations/mcp-servers/github")).toHaveLength(2));
+    await user.click(screen.getByRole("button", { name: "Save what we brought in" }));
+
+    expect(await screen.findByText("Somebody changed this while you were editing")).toBeVisible();
+    expect(net.writes("PUT")).toHaveLength(0);
+  });
+
+  it("writes under the revision a reload brought, after its own writes before", async () => {
+    const user = userEvent.setup();
+    const net = world();
+    show(null, "/integrations/mcp/github");
+    await user.click(await screen.findByLabelText("github.search"));
+    await user.click(screen.getByRole("button", { name: "Save what we brought in" }));
+    await screen.findByText("Saved.");
+    net.servers.elsewhere("github", { surface: ["issues"] });
+    await user.click(screen.getByLabelText("github.search"));
+    await user.click(screen.getByRole("button", { name: "Save what we brought in" }));
+    await user.click(await screen.findByRole("button", { name: "Reload what is stored" }));
+    await user.click(await screen.findByLabelText("github.search"));
+    await user.click(screen.getByRole("button", { name: "Save what we brought in" }));
+
+    // The second was refused by the server, over the change made elsewhere.
+    await waitFor(() => expect(net.writes("PUT")).toHaveLength(3));
+    expect(net.writes("PUT")[2]?.ifMatch).toBe('"v1-github-3"');
   });
 });

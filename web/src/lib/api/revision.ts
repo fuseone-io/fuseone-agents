@@ -35,6 +35,25 @@ export function revised<T>(result: {
   return { body, etag };
 }
 
+/** The revision a write made, as its answer names it; none if it named none. */
+export function written(result: {
+  data?: unknown;
+  error?: unknown;
+  response: Response;
+}): string | undefined {
+  unwrap(result);
+  return result.response.headers.get("ETag") ?? undefined;
+}
+
+/** A write refused here, before it is sent, for answering a revision no longer stored. */
+export function staleRefusal(): ApiError {
+  return new ApiError(412, {
+    type: "fuseone:precondition-failed",
+    title: "Somebody changed this since it was read",
+    status: 412,
+  });
+}
+
 /**
  * The precondition for a write over what was read. A first write answers none:
  * the server refuses any If-Match on something that does not exist.

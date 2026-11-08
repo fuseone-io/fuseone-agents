@@ -46,7 +46,13 @@ export function MCPServerPage() {
   } = useMCPServer(name, read.data?.body);
   const server = listed && read.data ? { ...listed, ...read.data.body } : undefined;
   const save = useSetSurface();
-  const inOrder = useOrderedWrites(name);
+  // The revision the page opened on, kept until a reload: a re-read brought
+  // by anything else must not become what an edit begun before it answers.
+  const [opened, setOpened] = useState<string>();
+  if (opened === undefined && read.data && read.isFetchedAfterMount) {
+    setOpened(read.data.etag);
+  }
+  const { inOrder, rebase } = useOrderedWrites(name, opened);
   const [ruling, setRuling] = useState<Tool | null>(null);
   const [stale, setStale] = useState(false);
   // Counted, not keyed by the revision: what is typed in the panel survives a
@@ -57,7 +63,11 @@ export function MCPServerPage() {
     setStale(false);
     reset();
     refetch();
-    void read.refetch().then(() => setReloads((n) => n + 1));
+    void read.refetch().then((again) => {
+      rebase();
+      setOpened(again.data?.etag);
+      setReloads((n) => n + 1);
+    });
   }
 
   async function saveSurface() {
