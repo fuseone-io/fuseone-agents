@@ -3241,5 +3241,11 @@
       "reasonOther_other": "indisponíveis",
       "standingAgainstPolicy": "A política do agente proíbe aprovações permanentes"
     }
+  },
+  "revision": {
+    "staleTitle": "Alguém alterou isto enquanto você editava",
+    "staleBody": "Nada foi salvo, e suas edições continuam aqui. Recarregue para ver o que está gravado agora; recarregar substitui suas edições pelo que está lá.",
+    "reload": "Recarregar o que está gravado",
+    "removeStale": "Alguém alterou isto depois que você abriu a confirmação, então nada foi removido. Olhe de novo antes de remover."
   }
 }

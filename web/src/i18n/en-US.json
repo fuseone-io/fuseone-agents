@@ -3241,5 +3241,11 @@
       "reasonOther_other": "unavailable",
       "standingAgainstPolicy": "The agent's policy forbids standing approvals"
     }
+  },
+  "revision": {
+    "staleTitle": "Somebody changed this while you were editing",
+    "staleBody": "Nothing was saved, and your edits are still here. Reload to see what is stored now; reloading replaces your edits with it.",
+    "reload": "Reload what is stored",
+    "removeStale": "Somebody changed this since you opened the confirmation, so nothing was removed. Look at it again before removing it."
   }
 }
