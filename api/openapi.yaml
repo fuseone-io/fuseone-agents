@@ -3426,6 +3426,62 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/integrations/mcp-servers/{name}/rediscovery:
+    post:
+      tags: [admin]
+      operationId: requestMCPRediscovery
+      summary: Ask every worker to rediscover a tool server's tools
+      description: |
+        Records a request that every worker holding the server asks it again
+        what it offers, once, on the session it already has. Nothing is
+        reconnected and no call in flight is interrupted. A tool that is new,
+        or whose definition changed, arrives unclassified; a tool no longer
+        offered leaves.
+
+        Not a change to the configuration: the server's `ETag` and `updatedAt`
+        stay. Each request is the next generation, and a worker that starts
+        later answers it with its own first discovery. The request is on the
+        admin trail. A worker that fails keeps the tools it had and says so;
+        it does not try again until somebody asks again.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '202':
+          description: Recorded. Each worker answers it on its next pass.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MCPRediscoveryRequested' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    get:
+      tags: [admin]
+      operationId: getMCPRediscovery
+      summary: Read which workers answered a tool server's rediscovery request
+      description: |
+        The latest request and each worker's newest answer. A worker appears
+        once it has connected the server; one whose generation is behind the
+        request has not answered it yet, or was not running. Generation zero
+        is a server nobody has asked about.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The request and the answers.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MCPRediscovery' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /admin/companies:
     get:
       tags: [admin]
@@ -7341,6 +7397,43 @@ components:
         note:
           type: string
           description: Provider-specific caveat about this auth mode.
+
+    MCPRediscoveryRequested:
+      type: object
+      required: [generation]
+      properties:
+        generation: { type: integer, format: int64, minimum: 1 }
+
+    MCPRediscovery:
+      type: object
+      required: [server, generation, receipts]
+      properties:
+        server: { type: string }
+        generation:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The latest request. Zero when nobody has asked.
+        requestedBy: { type: string }
+        requestedAt: { type: string, format: date-time }
+        receipts:
+          type: array
+          items: { $ref: '#/components/schemas/MCPRediscoveryReceipt' }
+
+    MCPRediscoveryReceipt:
+      type: object
+      required: [worker, generation, succeeded, at]
+      properties:
+        worker:
+          type: string
+          description: The worker process, as it publishes its catalogue. Never a person.
+        generation:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The request this answer is for. Zero is a connection made before any request.
+        succeeded: { type: boolean }
+        at: { type: string, format: date-time }
 
     IntegrationHealth:
       type: object

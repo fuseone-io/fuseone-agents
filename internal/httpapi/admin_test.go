@@ -40,7 +40,11 @@ type fakeAdmin struct {
 	putBy        domain.UserID
 	deleted      string
 	probed       string
-	err          error
+	// rediscovered is the server a rediscovery was requested for, and
+	// rediscoveries the answers the store holds, by server.
+	rediscovered  string
+	rediscoveries map[string]domain.MCPRediscoveryStatus
+	err           error
 }
 
 func (f *fakeAdmin) MCPServers(context.Context) ([]domain.MCPServer, error) {

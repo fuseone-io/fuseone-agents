@@ -168,3 +168,14 @@ func TestMCPRediscovery_aServerNeverAsked_isGenerationZero(t *testing.T) {
 		t.Errorf("status = %+v, want generation zero and no receipts", status)
 	}
 }
+
+// Reading the answers about a server that is not configured is a server not
+// found, not an empty status that reads as "nobody asked".
+func TestMCPRediscovery_anUnknownServer_isNotFound(t *testing.T) {
+	i := newIntegrations(t)
+	putRediscoverable(t, i, "rediscovery-crm", true)
+
+	if _, err := i.MCPRediscovery(context.Background(), "rediscovery-billing"); !errors.Is(err, admin.ErrMCPServerUnknown) {
+		t.Errorf("err = %v, want %v", err, admin.ErrMCPServerUnknown)
+	}
+}

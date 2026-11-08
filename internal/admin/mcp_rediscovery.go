@@ -112,6 +112,12 @@ func (i *Integrations) RecordMCPRediscovery(ctx context.Context, r domain.MCPRed
 // receipt, newest first.
 func (i *Integrations) MCPRediscovery(ctx context.Context, name string) (domain.MCPRediscoveryStatus, error) {
 	status := domain.MCPRediscoveryStatus{Server: name}
+	if _, err := i.settings.Get(ctx,
+		settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, name); errors.Is(err, settings.ErrNotFound) {
+		return status, ErrMCPServerUnknown
+	} else if err != nil {
+		return status, err
+	}
 	var by string
 	err := i.pool.QueryRow(ctx, `
 		select generation, requested_by, requested_at from mcp_rediscoveries where server = $1`,

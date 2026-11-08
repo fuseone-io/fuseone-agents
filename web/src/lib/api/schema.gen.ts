@@ -2234,6 +2234,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/integrations/mcp-servers/{name}/rediscovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read which workers answered a tool server's rediscovery request
+         * @description The latest request and each worker's newest answer. A worker appears
+         *     once it has connected the server; one whose generation is behind the
+         *     request has not answered it yet, or was not running. Generation zero
+         *     is a server nobody has asked about.
+         */
+        get: operations["getMCPRediscovery"];
+        put?: never;
+        /**
+         * Ask every worker to rediscover a tool server's tools
+         * @description Records a request that every worker holding the server asks it again
+         *     what it offers, once, on the session it already has. Nothing is
+         *     reconnected and no call in flight is interrupted. A tool that is new,
+         *     or whose definition changed, arrives unclassified; a tool no longer
+         *     offered leaves.
+         *
+         *     Not a change to the configuration: the server's `ETag` and `updatedAt`
+         *     stay. Each request is the next generation, and a worker that starts
+         *     later answers it with its own first discovery. The request is on the
+         *     admin trail. A worker that fails keeps the tools it had and says so;
+         *     it does not try again until somebody asks again.
+         */
+        post: operations["requestMCPRediscovery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/companies": {
         parameters: {
             query?: never;
@@ -4468,6 +4505,34 @@ export interface components {
             scopes?: string[];
             /** @description Provider-specific caveat about this auth mode. */
             note?: string;
+        };
+        MCPRediscoveryRequested: {
+            /** Format: int64 */
+            generation: number;
+        };
+        MCPRediscovery: {
+            server: string;
+            /**
+             * Format: int64
+             * @description The latest request. Zero when nobody has asked.
+             */
+            generation: number;
+            requestedBy?: string;
+            /** Format: date-time */
+            requestedAt?: string;
+            receipts: components["schemas"]["MCPRediscoveryReceipt"][];
+        };
+        MCPRediscoveryReceipt: {
+            /** @description The worker process, as it publishes its catalogue. Never a person. */
+            worker: string;
+            /**
+             * Format: int64
+             * @description The request this answer is for. Zero is a connection made before any request.
+             */
+            generation: number;
+            succeeded: boolean;
+            /** Format: date-time */
+            at: string;
         };
         IntegrationHealth: {
             reachable: boolean;
@@ -9558,6 +9623,57 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getMCPRediscovery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request and the answers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPRediscovery"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    requestMCPRediscovery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recorded. Each worker answers it on its next pass. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPRediscoveryRequested"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listCompanies: {
