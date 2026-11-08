@@ -2158,7 +2158,17 @@ export interface paths {
         get: operations["getConnectorInstance"];
         /**
          * Configure a governed connector instance
-         * @description A runtime instance creates native tools named connector.instance.operation; planned connectors remain configuration only. Omit token to keep the stored one on connectors that authenticate directly. Send clearToken to remove it; an enabled direct-token instance must still have a token after the write.
+         * @description >
+         *
+         *     Writing what is already stored changes nothing: no new `updatedAt` or
+         *     `updatedBy`, no line on the trail, and no worker reconnects. A secret sent
+         *     again is not sealed again. So saving again is not a way to force a
+         *     reconnection.
+         *     A runtime instance creates native tools named connector.instance.operation;
+         *     planned connectors remain configuration only. Omit token to keep the
+         *     stored one on connectors that authenticate directly. Send clearToken
+         *     to remove it; an enabled direct-token instance must still have a token
+         *     after the write.
          */
         put: operations["putConnectorInstance"];
         post?: never;
@@ -2184,7 +2194,16 @@ export interface paths {
         get: operations["getMCPServer"];
         /**
          * Configure a tool server
-         * @description Adding a server changes what agents can do, so it is recorded like any other administrative change. The tools it offers arrive unclassified and do nothing until somebody says what they do; that stays a separate act.
+         * @description >
+         *
+         *     Writing what is already stored changes nothing: no new `updatedAt` or
+         *     `updatedBy`, no line on the trail, and no worker reconnects. A secret sent
+         *     again is not sealed again. So saving again is not a way to force a
+         *     reconnection.
+         *     Adding a server changes what agents can do, so it is recorded like any
+         *     other administrative change. The tools it offers arrive unclassified
+         *     and do nothing until somebody says what they do; that stays a separate
+         *     act.
          */
         put: operations["putMCPServer"];
         post?: never;
@@ -2310,10 +2329,17 @@ export interface paths {
         /**
          * Read one channel connection as it is configured
          * @description What PUT stored, for a client deciding whether the connection drifted, with the conversations and identities attached to it. Those have PUTs of their own: this one ignores them when the answer is sent back, and leaves them as they are.
+         *     The ETag names all of it. Attaching a conversation or binding an identity moves it, so a PUT or DELETE answering an older one is refused: removing the connection removes its conversations too.
          *     The credentials are never returned; hasCredential, hasSigning and hasAppToken report which are stored, secretFingerprint moves when one changes, and sending the answer back unchanged keeps them. Accounts seen interacting stay on the listing: they change with nobody having written anything.
          */
         get: operations["getChannel"];
-        /** Configure a channel connection */
+        /**
+         * Configure a channel connection
+         * @description Writing what is already stored changes nothing: no new `updatedAt` or
+         *     `updatedBy`, no line on the trail, and no worker reconnects. A secret sent
+         *     again is not sealed again. So saving again is not a way to force a
+         *     reconnection.
+         */
         put: operations["putChannel"];
         post?: never;
         /** Remove a channel connection */
@@ -2444,7 +2470,13 @@ export interface paths {
          * @description What PUT stored, for a client deciding whether the provider drifted. The credential is never returned; hasKey reports that one is stored, secretFingerprint moves when it changes, and sending the answer back unchanged keeps it.
          */
         get: operations["getModelProvider"];
-        /** Configure a model provider */
+        /**
+         * Configure a model provider
+         * @description Writing what is already stored changes nothing: no new `updatedAt` or
+         *     `updatedBy`, no line on the trail, and no worker reconnects. A secret sent
+         *     again is not sealed again. So saving again is not a way to force a
+         *     reconnection.
+         */
         put: operations["putModelProvider"];
         post?: never;
         /** Remove a model provider */
@@ -9277,6 +9309,7 @@ export interface operations {
             /** @description The complete non-secret configuration of the instance. */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -9292,7 +9325,15 @@ export interface operations {
     putConnectorInstance: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
+                 *     something that does not exist is refused, and one that does not parse is a
+                 *     400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 name: string;
             };
@@ -9307,6 +9348,7 @@ export interface operations {
             /** @description The connector instance is configured. */
             204: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -9314,6 +9356,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     deleteConnectorInstance: {
@@ -9323,7 +9366,15 @@ export interface operations {
                 company?: string;
                 area?: string;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
+                 *     something that does not exist is refused, and one that does not parse is a
+                 *     400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 name: string;
             };
@@ -9341,6 +9392,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     getMCPServer: {
@@ -9357,6 +9409,7 @@ export interface operations {
             /** @description The server's stored configuration. */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -9371,7 +9424,15 @@ export interface operations {
     putMCPServer: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
+                 *     something that does not exist is refused, and one that does not parse is a
+                 *     400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 /** @description Namespaces the tools this server offers. */
                 name: string;
@@ -9433,6 +9494,7 @@ export interface operations {
             /** @description The server is configured. */
             204: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -9440,12 +9502,21 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     deleteMCPServer: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
+                 *     something that does not exist is refused, and one that does not parse is a
+                 *     400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 name: string;
             };
@@ -9460,8 +9531,10 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     probeMCPServer: {
@@ -9624,6 +9697,7 @@ export interface operations {
             /** @description The connection's stored configuration. */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -9638,7 +9712,15 @@ export interface operations {
     putChannel: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
+                 *     something that does not exist is refused, and one that does not parse is a
+                 *     400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 /** @description Names the connection, not the vendor. Conversations refer to it. */
                 name: string;
@@ -9693,6 +9775,7 @@ export interface operations {
             /** @description The channel is configured. */
             204: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -9700,12 +9783,21 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     deleteChannel: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
+                 *     something that does not exist is refused, and one that does not parse is a
+                 *     400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 name: string;
             };
@@ -9720,8 +9812,10 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     listAvailableConversations: {
@@ -9984,6 +10078,7 @@ export interface operations {
             /** @description The provider's stored configuration. */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -9998,7 +10093,15 @@ export interface operations {
     putModelProvider: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
+                 *     something that does not exist is refused, and one that does not parse is a
+                 *     400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 name: string;
             };
@@ -10041,6 +10144,7 @@ export interface operations {
             /** @description The provider is configured. */
             204: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -10048,12 +10152,21 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     deleteModelProvider: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
+                 *     something that does not exist is refused, and one that does not parse is a
+                 *     400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 name: string;
             };
@@ -10068,8 +10181,10 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     listBudgets: {

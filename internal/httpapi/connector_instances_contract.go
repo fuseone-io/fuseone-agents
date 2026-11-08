@@ -310,25 +310,6 @@ func graviteeReferencesToAPI(in []connectortools.GraviteeReference) []openapi.Co
 	return out
 }
 
-func connectorInstanceAt(
-	instance connectortools.ConfiguredInstance, name string,
-	kind settings.ScopeKind, scope domain.Scope,
-) bool {
-	if instance.Name != name || instance.ScopeKind != kind {
-		return false
-	}
-	switch kind {
-	case settings.ScopeInstallation:
-		return true
-	case settings.ScopeCompany:
-		return instance.Scope.Company == scope.Company
-	case settings.ScopeArea:
-		return instance.Scope == scope
-	default:
-		return false
-	}
-}
-
 // sqlConfigToResponse is addressing plus the safe identity of the binding.
 // Built field by field rather than by copying the struct: a field added to
 // SQLConfig later must be a decision to expose it, not an inheritance.

@@ -108,7 +108,9 @@ type Channel struct {
 	// SecretFingerprint is filled by a read of this one connection, which opens
 	// its secrets. A listing leaves it empty.
 	SecretFingerprint string
-	Conversations     []Conversation
+	// Revision names this configuration, and is filled by the same read.
+	Revision      domain.Revision
+	Conversations []Conversation
 }
 
 // Conversation is one place, and the scope it speaks for.
@@ -293,15 +295,23 @@ type ChannelWrite struct {
 	// Governs says the caller holds authority over the whole installation. It
 	// is only consulted when this connection carries the room for it.
 	Governs bool
+	// Expect is the precondition the write answers.
+	Expect domain.IfMatch
 }
 
 func (c *Channels) PutChannel(ctx context.Context, w ChannelWrite) error {
+	_, err := c.WriteChannel(ctx, w)
+	return err
+}
+
+// WriteChannel stores a connection and answers its resulting revision.
+func (c *Channels) WriteChannel(ctx context.Context, w ChannelWrite) (domain.Revision, error) {
 	ch, by := w.Channel, w.By
 	if strings.TrimSpace(ch.Kind) == "" {
-		return ErrNoChannelKind
+		return "", ErrNoChannelKind
 	}
 	if !channel.KnownDeliveryMode(ch.DeliveryMode) {
-		return fmt.Errorf("%w: %q", ErrUnknownDeliveryMode, ch.DeliveryMode)
+		return "", fmt.Errorf("%w: %q", ErrUnknownDeliveryMode, ch.DeliveryMode)
 	}
 
 	mode := channel.StoredDeliveryMode(ch.DeliveryMode)
@@ -310,7 +320,7 @@ func (c *Channels) PutChannel(ctx context.Context, w ChannelWrite) error {
 		DeliveryMode: mode,
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	base := settings.Setting{
@@ -318,16 +328,22 @@ func (c *Channels) PutChannel(ctx context.Context, w ChannelWrite) error {
 		Kind:      channel.KindChannel, Name: ch.Name,
 		Value: value, Enabled: ch.Enabled, UpdatedBy: string(by),
 	}
+	precondition := &channelRevised{c: c}
 	guard := func(ctx context.Context, conn settings.DB) error {
 		if err := c.guardInstallationRoom(ctx, conn, ch.Name, w.Governs); err != nil {
 			return err
 		}
-		return c.refuseStartingConversations(ctx, conn, ch.Name, ch.Kind)
+		if err := c.refuseStartingConversations(ctx, conn, ch.Name, ch.Kind); err != nil {
+			return err
+		}
+		return precondition.read(ctx, conn, ch.Name)
 	}
-	return writeGuarded(ctx, c.pool, c.settings, guard, folded{
-		by: by, scope: domain.Scope{},
+	return writeRevised(ctx, c.pool, c.settings, folded{
+		guard: guard,
+		by:    by, scope: domain.Scope{},
 		action: "channel.configured", target: ch.Name,
-		set: base,
+		set:     base,
+		revised: precondition.of(w.Expect),
 		// The credentials are folded inside the transaction, onto the row this
 		// write has already locked. Read before it, a request carrying one
 		// half and meaning "leave the other" is a lost update waiting for two
@@ -624,13 +640,36 @@ exists.
 func (c *Channels) DeleteChannel(
 	ctx context.Context, name string, by domain.UserID, governs bool,
 ) error {
+	return c.RemoveChannel(ctx, ChannelRemoval{Name: name, By: by, Governs: governs})
+}
+
+// ChannelRemoval is a connection going, and the precondition it answers.
+type ChannelRemoval struct {
+	Name    string
+	By      domain.UserID
+	Governs bool
+	Expect  domain.IfMatch
+}
+
+// RemoveChannel deletes a connection, if it is still at a revision the caller named.
+func (c *Channels) RemoveChannel(ctx context.Context, r ChannelRemoval) error {
+	name, by := r.Name, r.By
 	tx, err := c.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("admin: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := c.guardInstallationRoom(ctx, tx, name, governs); err != nil {
+	if err := c.guardInstallationRoom(ctx, tx, name, r.Governs); err != nil {
+		return err
+	}
+	precondition := &channelRevised{c: c}
+	if err := precondition.read(ctx, tx, name); err != nil {
+		return err
+	}
+	if err := removalGuard(ctx, tx, c.settings, settings.Setting{
+		ScopeKind: settings.ScopeInstallation, Kind: channel.KindChannel, Name: name,
+	}, precondition.of(r.Expect)); err != nil {
 		return err
 	}
 	stored, err := c.settings.ListTx(ctx, tx, channel.KindConversation)

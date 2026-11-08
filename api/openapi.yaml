@@ -3120,6 +3120,8 @@ paths:
       responses:
         '200':
           description: The complete non-secret configuration of the instance.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ConnectorInstanceDetail' }
@@ -3131,13 +3133,20 @@ paths:
       tags: [admin]
       operationId: putConnectorInstance
       summary: Configure a governed connector instance
-      description: >
+      description: |
+        >
+
+        Writing what is already stored changes nothing: no new `updatedAt` or
+        `updatedBy`, no line on the trail, and no worker reconnects. A secret sent
+        again is not sealed again. So saving again is not a way to force a
+        reconnection.
         A runtime instance creates native tools named connector.instance.operation;
         planned connectors remain configuration only. Omit token to keep the
         stored one on connectors that authenticate directly. Send clearToken
         to remove it; an enabled direct-token instance must still have a token
         after the write.
       parameters:
+        - $ref: '#/components/parameters/IfMatch'
         - name: name
           in: path
           required: true
@@ -3148,15 +3157,20 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ConnectorInstanceInput' }
       responses:
-        '204': { description: The connector instance is configured. }
+        '204':
+          description: The connector instance is configured.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
     delete:
       tags: [admin]
       operationId: deleteConnectorInstance
       summary: Remove a governed connector instance
       parameters:
+        - $ref: '#/components/parameters/IfMatch'
         - name: name
           in: path
           required: true
@@ -3176,6 +3190,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
 
   /admin/integrations/mcp-servers/{name}:
     get:
@@ -3202,6 +3217,8 @@ paths:
       responses:
         '200':
           description: The server's stored configuration.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MCPServer' }
@@ -3212,12 +3229,19 @@ paths:
       tags: [admin]
       operationId: putMCPServer
       summary: Configure a tool server
-      description: >
+      description: |
+        >
+
+        Writing what is already stored changes nothing: no new `updatedAt` or
+        `updatedBy`, no line on the trail, and no worker reconnects. A secret sent
+        again is not sealed again. So saving again is not a way to force a
+        reconnection.
         Adding a server changes what agents can do, so it is recorded like any
         other administrative change. The tools it offers arrive unclassified
         and do nothing until somebody says what they do; that stays a separate
         act.
       parameters:
+        - $ref: '#/components/parameters/IfMatch'
         - name: name
           in: path
           required: true
@@ -3355,15 +3379,20 @@ paths:
                     transport implies, and it is recorded with their name.
                 enabled: { type: boolean, default: true }
       responses:
-        '204': { description: The server is configured. }
+        '204':
+          description: The server is configured.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
     delete:
       tags: [admin]
       operationId: deleteMCPServer
       summary: Remove a tool server
       parameters:
+        - $ref: '#/components/parameters/IfMatch'
         - name: name
           in: path
           required: true
@@ -3372,6 +3401,8 @@ paths:
         '204': { description: The server is removed. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
 
   /admin/integrations/mcp-servers/{name}/probe:
     post:
@@ -3547,6 +3578,10 @@ paths:
         of their own: this one ignores them when the answer is sent back, and
         leaves them as they are.
 
+        The ETag names all of it. Attaching a conversation or binding an
+        identity moves it, so a PUT or DELETE answering an older one is
+        refused: removing the connection removes its conversations too.
+
         The credentials are never returned; hasCredential, hasSigning and
         hasAppToken report which are stored, secretFingerprint moves when one
         changes, and sending the answer back unchanged keeps them. Accounts
@@ -3560,6 +3595,8 @@ paths:
       responses:
         '200':
           description: The connection's stored configuration.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Channel' }
@@ -3570,7 +3607,13 @@ paths:
       tags: [admin]
       operationId: putChannel
       summary: Configure a channel connection
+      description: |
+        Writing what is already stored changes nothing: no new `updatedAt` or
+        `updatedBy`, no line on the trail, and no worker reconnects. A secret sent
+        again is not sealed again. So saving again is not a way to force a
+        reconnection.
       parameters:
+        - $ref: '#/components/parameters/IfMatch'
         - name: name
           in: path
           required: true
@@ -3626,15 +3669,20 @@ paths:
                     reading of a channel nobody has switched it on for.
                 enabled: { type: boolean, default: true }
       responses:
-        '204': { description: The channel is configured. }
+        '204':
+          description: The channel is configured.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
     delete:
       tags: [admin]
       operationId: deleteChannel
       summary: Remove a channel connection
       parameters:
+        - $ref: '#/components/parameters/IfMatch'
         - name: name
           in: path
           required: true
@@ -3643,6 +3691,8 @@ paths:
         '204': { description: The channel is removed, with its conversations. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
 
   /admin/channels/{name}/available:
     get:
@@ -3943,6 +3993,8 @@ paths:
       responses:
         '200':
           description: The provider's stored configuration.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ModelProvider' }
@@ -3953,7 +4005,13 @@ paths:
       tags: [admin]
       operationId: putModelProvider
       summary: Configure a model provider
+      description: |
+        Writing what is already stored changes nothing: no new `updatedAt` or
+        `updatedBy`, no line on the trail, and no worker reconnects. A secret sent
+        again is not sealed again. So saving again is not a way to force a
+        reconnection.
       parameters:
+        - $ref: '#/components/parameters/IfMatch'
         - name: name
           in: path
           required: true
@@ -4002,15 +4060,20 @@ paths:
                     refusal a fallback-routing gateway would swallow.
                 enabled: { type: boolean, default: true }
       responses:
-        '204': { description: The provider is configured. }
+        '204':
+          description: The provider is configured.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
     delete:
       tags: [admin]
       operationId: deleteModelProvider
       summary: Remove a model provider
       parameters:
+        - $ref: '#/components/parameters/IfMatch'
         - name: name
           in: path
           required: true
@@ -4019,6 +4082,8 @@ paths:
         '204': { description: The provider is removed. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
 
   /admin/budgets:
     get:

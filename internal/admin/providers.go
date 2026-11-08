@@ -109,47 +109,79 @@ func (i *Integrations) ProvidersWithCredentials(ctx context.Context) ([]Configur
 // changing a base URL does not require re-entering a credential — which is how
 // operators end up pasting keys into chat to look them up.
 func (i *Integrations) PutProvider(ctx context.Context, by domain.UserID, scope domain.Scope, provider domain.ModelProvider, apiKey string) error {
+	_, err := i.WriteProvider(ctx, ProviderWrite{By: by, Scope: scope, Provider: provider, APIKey: apiKey})
+	return err
+}
+
+// ProviderWrite is a provider being configured, and the precondition it answers.
+type ProviderWrite struct {
+	By       domain.UserID
+	Scope    domain.Scope
+	Provider domain.ModelProvider
+	APIKey   string
+	Expect   domain.IfMatch
+}
+
+// providerRevised names a provider by its configuration and its key. The write does not
+// need the stored key, so one sealed under a lost master key can still be replaced.
+func (i *Integrations) providerRevised(expect domain.IfMatch) *revised {
+	return &revised{
+		expect:             expect,
+		of:                 func(set settings.Setting) domain.Revision { return i.settings.Revision(set, []byte(set.Secret), nil) },
+		ofUnreadable:       func(set settings.Setting) domain.Revision { return i.settings.RevisionUnreadable(set, nil) },
+		replacesUnreadable: true,
+	}
+}
+
+// WriteProvider stores a provider and answers its resulting revision.
+func (i *Integrations) WriteProvider(ctx context.Context, w ProviderWrite) (domain.Revision, error) {
+	by, scope, provider, apiKey := w.By, w.Scope, w.Provider, w.APIKey
 	switch {
 	case strings.TrimSpace(provider.Name) == "":
-		return ErrNoName
+		return "", ErrNoName
 	// Required only where the client cannot already know it. Anthropic's does;
 	// an OpenAI-compatible endpoint, including a self-hosted one, is known
 	// only to the installation. Demanding it from everybody asked for a value
 	// nobody has and made the reference provider impossible to configure.
 	case provider.Kind != "anthropic" && strings.TrimSpace(provider.BaseURL) == "":
-		return ErrNoBaseURL
+		return "", ErrNoBaseURL
 	}
 
 	models, err := cleanModels(provider.Models)
 	if err != nil {
-		return err
+		return "", err
 	}
 	// Cleaned and bounded exactly like the model list: it is the same kind
 	// of paste, decoded by every process on every refresh.
 	declared, err := cleanModels(provider.AutoToolChoiceModels)
 	if err != nil {
-		return err
+		return "", err
 	}
 	value, err := json.Marshal(storedProvider{
 		Kind: provider.Kind, BaseURL: provider.BaseURL, Models: models,
 		AutoToolChoiceModels: declared,
 	})
 	if err != nil {
-		return fmt.Errorf("admin: encode provider: %w", err)
+		return "", fmt.Errorf("admin: encode provider: %w", err)
 	}
 
-	return writeSetting(ctx, i.pool, i.settings, by, scope, settings.Setting{
-		ScopeKind: settings.ScopeInstallation,
-		Kind:      settings.KindModelProvider,
-		Name:      provider.Name,
-		Value:     value,
-		Secret:    apiKey,
-		Enabled:   provider.Enabled,
-		UpdatedBy: string(by),
-	}, "provider.configured", provider.Name, map[string]any{
-		// The credential is never in the trail, only the fact that one arrived.
-		"kind": provider.Kind, "baseURL": provider.BaseURL,
-		"enabled": provider.Enabled, "keyChanged": apiKey != "",
+	return writeRevised(ctx, i.pool, i.settings, folded{
+		by: by, scope: scope, action: "provider.configured", target: provider.Name,
+		revised: i.providerRevised(w.Expect),
+		set: settings.Setting{
+			ScopeKind: settings.ScopeInstallation,
+			Kind:      settings.KindModelProvider,
+			Name:      provider.Name,
+			Value:     value,
+			Secret:    apiKey,
+			Enabled:   provider.Enabled,
+			UpdatedBy: string(by),
+		},
+		detail: map[string]any{
+			// The credential is never in the trail, only the fact that one arrived.
+			"kind": provider.Kind, "baseURL": provider.BaseURL,
+			"enabled": provider.Enabled, "keyChanged": apiKey != "",
+		},
 	})
 }
 
@@ -222,7 +254,24 @@ func cleanModels(in []string) ([]string, error) {
 }
 
 func (i *Integrations) DeleteProvider(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error {
-	return removeSetting(ctx, i.pool, i.settings, by, scope, settings.KindModelProvider, name, "provider.removed")
+	return i.RemoveProvider(ctx, Removal{By: by, Scope: scope, Name: name})
+}
+
+// Removal is a named thing going, and the precondition it answers.
+type Removal struct {
+	By     domain.UserID
+	Scope  domain.Scope
+	Name   string
+	Expect domain.IfMatch
+}
+
+// RemoveProvider deletes a provider, if it is still at a revision the caller named.
+func (i *Integrations) RemoveProvider(ctx context.Context, r Removal) error {
+	return removeRevised(ctx, i.pool, i.settings, removal{
+		by: r.By, at: settings.ScopeInstallation, recorded: r.Scope,
+		kind: settings.KindModelProvider, name: r.Name, action: "provider.removed",
+		revised: i.providerRevised(r.Expect),
+	})
 }
 
 // Credential opens a provider's key. Separate and explicit: reading

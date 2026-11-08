@@ -310,18 +310,16 @@ func (c *channelSpy) Named(_ context.Context, name string) (admin.Channel, []adm
 	return admin.Channel{}, nil, admin.ErrChannelUnknown
 }
 
-func (c *channelSpy) PutChannel(_ context.Context, w admin.ChannelWrite) error {
+func (c *channelSpy) WriteChannel(_ context.Context, w admin.ChannelWrite) (domain.Revision, error) {
 	c.putChannel, c.governs = w.Channel.Name, w.Governs
 	if c.refuse != nil {
-		return c.refuse
+		return "", c.refuse
 	}
-	return nil
+	return fakeRevision, nil
 }
 
-func (c *channelSpy) DeleteChannel(
-	_ context.Context, name string, _ domain.UserID, governs bool,
-) error {
-	c.deleted, c.governs = name, governs
+func (c *channelSpy) RemoveChannel(_ context.Context, r admin.ChannelRemoval) error {
+	c.deleted, c.governs = r.Name, r.Governs
 	if c.refuse != nil {
 		return c.refuse
 	}

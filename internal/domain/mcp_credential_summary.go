@@ -25,7 +25,9 @@ field that is sometimes a secret is to treat it as one.
 
 Neither, because a worker changes them with nobody having decided anything: the
 access token, the refresh token and when the access token expires. Counted, every
-server on OAuth would read as drifted every hour.
+server on OAuth would read as drifted every hour. What is fingerprinted in their
+place is the grant's generation, which moves when a person pastes tokens and
+stays put when a worker rotates them.
 */
 type MCPCredentialSummary struct {
 	HeaderNames []string
@@ -67,9 +69,11 @@ func (c MCPCredentials) FingerprintMaterial() []byte {
 		ClientSecret string            `json:"clientSecret,omitempty"`
 		TokenURL     string            `json:"tokenURL,omitempty"`
 		PrivateKey   string            `json:"privateKey,omitempty"`
+		Generation   string            `json:"oauthGeneration,omitempty"`
 	}{Token: c.Token, Headers: c.Headers, Env: c.Env, ConfigFile: c.ConfigFile}
 	if c.OAuth != nil {
 		material.ClientSecret, material.TokenURL = c.OAuth.ClientSecret, c.OAuth.TokenURL
+		material.Generation = c.OAuth.Generation
 	}
 	if c.GitHubApp != nil {
 		material.PrivateKey = c.GitHubApp.PrivateKey

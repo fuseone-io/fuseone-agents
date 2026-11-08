@@ -44,7 +44,9 @@ func (s *Server) GetMCPServer(ctx context.Context, req openapi.GetMCPServerReque
 	out := mcpServerConfig(server)
 	out.SecretFingerprint = someString(server.SecretFingerprint)
 	applyCredentialSummary(&out, server.Credential)
-	return openapi.GetMCPServer200JSONResponse(out), nil
+	return openapi.GetMCPServer200JSONResponse{
+		Body: out, Headers: openapi.GetMCPServer200ResponseHeaders{ETag: string(server.Revision)},
+	}, nil
 }
 
 func (s *Server) GetModelProvider(ctx context.Context, req openapi.GetModelProviderRequestObject) (openapi.GetModelProviderResponseObject, error) {
@@ -67,7 +69,9 @@ func (s *Server) GetModelProvider(ctx context.Context, req openapi.GetModelProvi
 	}
 	out := modelProviderConfig(provider)
 	out.SecretFingerprint = someString(provider.SecretFingerprint)
-	return openapi.GetModelProvider200JSONResponse(out), nil
+	return openapi.GetModelProvider200JSONResponse{
+		Body: out, Headers: openapi.GetModelProvider200ResponseHeaders{ETag: string(provider.Revision)},
+	}, nil
 }
 
 func (s *Server) GetChannel(ctx context.Context, req openapi.GetChannelRequestObject) (openapi.GetChannelResponseObject, error) {
@@ -93,7 +97,9 @@ func (s *Server) GetChannel(ctx context.Context, req openapi.GetChannelRequestOb
 	// Left out, not empty. Who interacted changes with nobody having
 	// written anything, and an empty list would say nobody did.
 	out.SeenAccounts = nil
-	return openapi.GetChannel200JSONResponse(out), nil
+	return openapi.GetChannel200JSONResponse{
+		Body: out, Headers: openapi.GetChannel200ResponseHeaders{ETag: string(found.Revision)},
+	}, nil
 }
 
 // GetPolicy takes what the list takes, not what the write takes. A policy

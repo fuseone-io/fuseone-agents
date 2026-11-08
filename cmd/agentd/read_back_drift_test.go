@@ -1,6 +1,7 @@
 package main
 
 import (
+	"maps"
 	"net/http"
 	"reflect"
 	"strings"
@@ -233,14 +234,13 @@ func TestReadBack_mcpServer_grantRotatedByAWorker_answerHoldsStill(t *testing.T)
 
 	world.put(t, path, mcpHTTP(oauthGrant(nil)))
 	first, _ := world.get(t, path)
-	world.put(t, path, mcpHTTP(oauthGrant(map[string]any{
-		"accessToken": "drift-access-rotated", "refreshToken": "drift-refresh-rotated", "expiresAtUnix": 4102444800,
-	})))
+	// Through the worker's own write: a person pasting tokens is a change, and moves it.
+	rotate(t, world, "readback-rotation")
 	second, raw := world.get(t, path)
 	if !reflect.DeepEqual(withoutMeta(first), withoutMeta(second)) {
 		t.Errorf("rotation read as drift\n before: %v\n  after: %v", first, second)
 	}
-	if strings.Contains(string(raw), "drift-access-rotated") {
+	if strings.Contains(string(raw), "ETAG-ROTATED") {
 		t.Errorf("the answer carries the token: %s", raw)
 	}
 }
@@ -286,10 +286,13 @@ func TestReadBack_mcpServer_rowStoredBeforeTheDocument_readsAsItWouldAfter(t *te
 		t.Fatalf("a stored token reads as %s", raw)
 	}
 
-	world.put(t, path, stored)
+	// A real change is what re-seals it now: putting the same answer back writes nothing.
+	changed := maps.Clone(stored)
+	changed["url"] = "https://mcp.example.test/other"
+	world.put(t, path, changed)
 	after, _ := world.get(t, path)
-	if !reflect.DeepEqual(withoutMeta(stored), withoutMeta(after)) {
-		t.Errorf("re-sealing the row moved the answer\n before: %v\n  after: %v", stored, after)
+	if stored["secretFingerprint"] != after["secretFingerprint"] {
+		t.Errorf("re-sealing the row moved the fingerprint: %v, then %v", stored["secretFingerprint"], after["secretFingerprint"])
 	}
 	row, err := world.store.Reveal(t.Context(), settings.ScopeInstallation, domain.Scope{},
 		settings.KindMCPServer, "readback-legacy")

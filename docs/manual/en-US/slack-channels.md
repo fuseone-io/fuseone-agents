@@ -44,6 +44,8 @@ on the button endpoint. The events endpoint ends in `/events`.
 
 ## Socket Mode
 
+Saving a connection with no change does not reopen its socket. A real change of workspace or token does, and a socket that drops reconnects by itself.
+
 Use Socket Mode when the installation has no public inbound URL. The worker
 opens an outbound connection to Slack.
 

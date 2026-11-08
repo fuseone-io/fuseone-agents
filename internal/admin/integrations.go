@@ -207,45 +207,68 @@ func (i *Integrations) PutMCPServer(
 	ctx context.Context, by domain.UserID, scope domain.Scope,
 	server domain.MCPServer, given domain.MCPCredentialPatch,
 ) error {
+	_, err := i.WriteMCPServer(ctx, MCPServerWrite{By: by, Scope: scope, Server: server, Given: given})
+	return err
+}
+
+// MCPServerWrite is a server being configured, and the precondition it answers.
+type MCPServerWrite struct {
+	By     domain.UserID
+	Scope  domain.Scope
+	Server domain.MCPServer
+	Given  domain.MCPCredentialPatch
+	Expect domain.IfMatch
+}
+
+// mcpRevision names a server by its configuration, what a read says about its credentials
+// (the OAuth client lives only in the sealed document), and a fingerprint of those.
+func (i *Integrations) mcpRevision(set settings.Setting) domain.Revision {
+	creds := domain.ReadMCPCredentials(set.Secret)
+	return i.settings.Revision(set, creds.FingerprintMaterial(), creds.Summary())
+}
+
+// WriteMCPServer stores a server and answers its resulting revision.
+func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (domain.Revision, error) {
+	by, scope, server, given := w.By, w.Scope, w.Server, w.Given
 	transport := server.TransportOf()
 	switch {
 	case strings.TrimSpace(server.Name) == "":
-		return ErrNoName
+		return "", ErrNoName
 	case transport == domain.TransportStdio && strings.TrimSpace(server.Command) == "":
-		return ErrNoCommand
+		return "", ErrNoCommand
 	case transport == domain.TransportStdio && !server.AcceptsLocalExecution:
-		return ErrLocalExecutionNotAccepted
+		return "", ErrLocalExecutionNotAccepted
 	case transport == domain.TransportHTTP && strings.TrimSpace(server.URL) == "":
-		return ErrNoURL
+		return "", ErrNoURL
 	case transport == domain.TransportHTTP:
 		if err := netguard.ValidateHTTPURL(server.URL); errors.Is(err, netguard.ErrBlockedAddress) {
-			return fmt.Errorf("%w: %v", ErrBlockedMCPURL, err)
+			return "", fmt.Errorf("%w: %v", ErrBlockedMCPURL, err)
 		} else if err != nil {
-			return fmt.Errorf("%w: %v", ErrBadMCPURL, err)
+			return "", fmt.Errorf("%w: %v", ErrBadMCPURL, err)
 		}
 	case server.MCPProtocolModeOf() != domain.MCPProtocolAuto &&
 		server.MCPProtocolModeOf() != domain.MCPProtocolLegacy:
-		return ErrBadMCPProtocol
+		return "", ErrBadMCPProtocol
 	case transport != domain.TransportHTTP && server.MCPProtocolModeOf() != domain.MCPProtocolAuto:
-		return ErrBadMCPProtocol
+		return "", ErrBadMCPProtocol
 	case server.ConfigFileEnv != nil && !validConfigFileEnv(*server.ConfigFileEnv):
-		return ErrBadConfigFileEnv
+		return "", ErrBadConfigFileEnv
 	}
 	if server.CallTimeout != nil && *server.CallTimeout != 0 &&
 		(*server.CallTimeout < 5 || *server.CallTimeout > 600) {
-		return ErrBadMCPCallTimeout
+		return "", ErrBadMCPCallTimeout
 	}
 	rateLimit, err := normalizedRateLimit(server.RateLimit)
 	if err != nil {
-		return err
+		return "", err
 	}
 	cache, err := normalizedResultCache(server.Cache)
 	if err != nil {
-		return err
+		return "", err
 	}
 	stdioEgress, stdioEgressMentioned, err := normalizedStdioEgress(server.StdioEgress)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	/*
@@ -260,8 +283,9 @@ func (i *Integrations) PutMCPServer(
 		somebody believes they revoked.
 	*/
 	var toolsRemoved int64
-	return writeFolded(ctx, i.pool, i.settings, folded{
+	return writeRevised(ctx, i.pool, i.settings, folded{
 		by: by, scope: scope, action: "mcp_server.configured", target: server.Name,
+		revised: &revised{expect: w.Expect, of: i.mcpRevision},
 		// Switched off, its tools go in the same transaction, as on removal:
 		// the worker that published them may be gone, and one that never
 		// reached the server has nothing to withdraw.
@@ -318,7 +342,9 @@ func (i *Integrations) PutMCPServer(
 				configEnv = *server.ConfigFileEnv
 			}
 
-			merged := given.Apply(domain.ReadMCPCredentials(stored.Secret)).ForTransport(transport)
+			held := domain.ReadMCPCredentials(stored.Secret)
+			merged := given.Apply(held).ForTransport(transport)
+			merged.OAuth = domain.Regranted(held.OAuth, merged.OAuth)
 			if err := domain.CheckHeaderNames(merged.Headers); err != nil {
 				return settings.Setting{}, nil, err
 			}
@@ -888,7 +914,8 @@ func (i *Integrations) RefreshMCPServerOAuth(
 			if creds.OAuth == nil || !creds.OAuth.Equal(was) {
 				return settings.Setting{}, nil, ErrOAuthGrantChanged
 			}
-			merged := domain.MCPCredentialPatch{OAuth: &next}.Apply(creds).ForTransport(domain.TransportHTTP)
+			kept := domain.KeptGeneration(*creds.OAuth, next)
+			merged := domain.MCPCredentialPatch{OAuth: &kept}.Apply(creds).ForTransport(domain.TransportHTTP)
 			server.HasOAuth = merged.OAuth != nil && !merged.OAuth.Empty()
 			value, err := json.Marshal(server)
 			if err != nil {
@@ -940,7 +967,8 @@ func (i *Integrations) refreshMCPPersonalOAuth(
 			if creds.OAuth == nil || !creds.OAuth.Equal(was) {
 				return settings.Setting{}, nil, ErrOAuthGrantChanged
 			}
-			merged := domain.MCPCredentialPatch{OAuth: &next}.Apply(creds).ForTransport(domain.TransportHTTP)
+			kept := domain.KeptGeneration(*creds.OAuth, next)
+			merged := domain.MCPCredentialPatch{OAuth: &kept}.Apply(creds).ForTransport(domain.TransportHTTP)
 			value, err := json.Marshal(storedMCPUserCredential{
 				Server: name, Principal: string(principal),
 				HasHeaders: len(merged.Headers) > 0,
@@ -979,11 +1007,24 @@ func (i *Integrations) ForgettingHealth(h *Health) *Integrations {
 }
 
 func (i *Integrations) DeleteMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error {
+	return i.RemoveMCPServer(ctx, Removal{By: by, Scope: scope, Name: name})
+}
+
+// RemoveMCPServer deletes a server, if it is still at a revision the caller named.
+func (i *Integrations) RemoveMCPServer(ctx context.Context, r Removal) error {
+	by, scope, name := r.By, r.Scope, r.Name
 	tx, err := i.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("admin: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	// First of all, before the catalogue's lock below and before anything is dropped.
+	if err := removalGuard(ctx, tx, i.settings, settings.Setting{
+		ScopeKind: settings.ScopeInstallation, Kind: settings.KindMCPServer, Name: name,
+	}, &revised{expect: r.Expect, of: i.mcpRevision}); err != nil {
+		return err
+	}
 
 	// Its tools go with it, in the same transaction: a worker may not be
 	// running to notice, and the console would go on offering them.

@@ -56,9 +56,9 @@ type readBack struct {
 	secrets []string
 }
 
-// readBackMeta moves on every write, by design: it says who last wrote and when,
-// not what the resource is. Whether an unchanged write should move it is for
-// the slice that introduces ETag; everything else here has to hold still.
+// readBackMeta says who last wrote and when, not what the resource is. A write that
+// changes nothing leaves it where it was; walk checks that separately, because a
+// first write has to be compared without it.
 var readBackMeta = []string{"updatedAt", "updatedBy"}
 
 type readBackWorld struct {
@@ -81,6 +81,7 @@ func readBackWorldOn(t *testing.T, pool *pgxpool.Pool) *readBackWorld {
 	api := httpapi.NewServer(ledger.NewMemory(), "test").
 		WithAdministration(admin.NewCurator(pool), nil, admin.NewIntegrations(pool, store)).
 		WithChannels(admin.NewChannels(pool, store, readBackDrivers{}), nil).
+		WithConnectorInstances(admin.NewConnectorInstances(pool, store)).
 		WithPolicies(policy.NewStore(pool))
 	return &readBackWorld{route: apiHandlerFor(api), store: store}
 }
@@ -181,6 +182,11 @@ func (w *readBackWorld) walk(t *testing.T, c readBack) {
 	assertNoSecretIn(t, c, raw)
 	if a, b := withoutMeta(first), withoutMeta(second); !reflect.DeepEqual(a, b) {
 		t.Errorf("putting back what GET answered changed it\n before: %v\n  after: %v", a, b)
+	}
+	for _, field := range readBackMeta {
+		if first[field] != second[field] {
+			t.Errorf("putting back what GET answered moved %s: %v, then %v", field, first[field], second[field])
+		}
 	}
 	if after := w.sealedHalf(t, c); after != sealed {
 		t.Error("putting back what GET answered changed the stored secrets")

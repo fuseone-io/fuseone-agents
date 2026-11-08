@@ -107,13 +107,13 @@ func TestGetMCPServer_asAConfigurer_answersConfigurationAndNothingObserved(t *te
 	if !ok {
 		t.Fatalf("response = %T, want 200", resp)
 	}
-	if got.Name != "github" || valueOr(got.Url) != "https://mcp.example.test" ||
-		!valueOr(got.HasSecret) || got.Surface == nil || len(*got.Surface) != 1 {
+	if got.Body.Name != "github" || valueOr(got.Body.Url) != "https://mcp.example.test" ||
+		!valueOr(got.Body.HasSecret) || got.Body.Surface == nil || len(*got.Body.Surface) != 1 {
 		t.Errorf("configuration = %+v", got)
 	}
 	// What a worker saw and who is asking both vary with nobody having written
 	// anything, and a client diffing this body would read them as drift.
-	if got.Health != nil || got.CallAuth != nil || got.Egress != nil {
+	if got.Body.Health != nil || got.Body.CallAuth != nil || got.Body.Egress != nil {
 		t.Errorf("the read carries what was observed: %+v", got)
 	}
 }
@@ -182,8 +182,8 @@ func TestGetModelProvider_asAConfigurer_answersWhatIsStoredOrNotFound(t *testing
 	if !ok {
 		t.Fatalf("response = %T, want 200", resp)
 	}
-	if got.Name != "gateway" || got.BaseUrl != "https://models.example.test" || !got.HasKey ||
-		got.Models == nil || len(*got.Models) != 1 {
+	if got.Body.Name != "gateway" || got.Body.BaseUrl != "https://models.example.test" || !got.Body.HasKey ||
+		got.Body.Models == nil || len(*got.Body.Models) != 1 {
 		t.Errorf("provider = %+v", got)
 	}
 
@@ -253,17 +253,17 @@ func TestGetChannel_asAConfigurer_answersConfigurationAndNoAccountsSeen(t *testi
 	if !ok {
 		t.Fatalf("response = %T, want 200", resp)
 	}
-	if got.Name != "acme-slack" || valueOr(got.Workspace) != "Acme" || !got.HasCredential ||
-		len(got.Conversations) != 1 {
+	if got.Body.Name != "acme-slack" || valueOr(got.Body.Workspace) != "Acme" || !got.Body.HasCredential ||
+		len(got.Body.Conversations) != 1 {
 		t.Errorf("channel = %+v", got)
 	}
-	if got.Identities == nil || len(*got.Identities) != 1 || (*got.Identities)[0].Account != "U1" {
-		t.Errorf("identities = %+v, want this connection's own", got.Identities)
+	if got.Body.Identities == nil || len(*got.Body.Identities) != 1 || (*got.Body.Identities)[0].Account != "U1" {
+		t.Errorf("identities = %+v, want this connection's own", got.Body.Identities)
 	}
 	// Who interacted changes with nobody having written anything, and an empty
 	// list here would say nobody did.
-	if got.SeenAccounts != nil {
-		t.Errorf("seenAccounts = %+v, want it left out", *got.SeenAccounts)
+	if got.Body.SeenAccounts != nil {
+		t.Errorf("seenAccounts = %+v, want it left out", *got.Body.SeenAccounts)
 	}
 }
 

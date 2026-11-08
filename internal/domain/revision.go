@@ -57,7 +57,7 @@ func (e *StaleError) Error() string {
 	if e.Current == "" {
 		return "the resource does not exist"
 	}
-	return "the resource has changed: it is now " + string(e.Current)
+	return "the resource is now at " + string(e.Current)
 }
 
 // IfMatch is a parsed If-Match header. The zero value is no header, which asks nothing.
@@ -129,6 +129,9 @@ func afterListElement(s string) (string, error) {
 	}
 	return trimmed, nil
 }
+
+// Present reports that the request carried the header at all.
+func (m IfMatch) Present() bool { return m.present }
 
 // Allows reports whether a write may go ahead against what is there now. No header
 // allows anything. Any header on something that does not exist refuses, `*` included:
