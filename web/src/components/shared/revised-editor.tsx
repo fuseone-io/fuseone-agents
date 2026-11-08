@@ -28,7 +28,9 @@ export function RevisedEditor<T>({
   onClose: () => void;
   children: (body: T, revision: FormRevision) => ReactNode;
 }) {
-  if (read.data) {
+  // Only a read made as this editor opened seeds it: a copy cached by an
+  // earlier opening may be older than what is stored now.
+  if (read.data && read.isFetchedAfterMount && !read.isError) {
     return children(read.data.body, {
       etag: read.data.etag,
       reload: () => void read.refetch(),

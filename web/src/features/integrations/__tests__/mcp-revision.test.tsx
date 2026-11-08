@@ -46,13 +46,12 @@ function world(listed?: MCPServer[]) {
   return { servers, requests, writes };
 }
 
-function show(node: ReactNode, path = "/") {
-  render(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
-    >
+const fresh = () =>
+  new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+function show(node: ReactNode, path = "/", client = fresh()) {
+  return render(
+    <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/integrations/mcp/:name" element={<MCPServerPage />} />
@@ -183,5 +182,30 @@ describe("a tool server written over what was read", () => {
     expect(net.writes("PUT")[0]?.body).toMatchObject({
       url: "https://mcp.example.com/a",
     });
+  });
+
+  // Its writes send the whole record back, so a cached one would put back
+  // whatever changed since the page was last opened.
+  it("sends back the server as read when its page opened, not a cached copy", async () => {
+    const user = userEvent.setup();
+    const net = world();
+    const client = fresh();
+    const first = show(null, "/integrations/mcp/github", client);
+    await screen.findByLabelText("github.search");
+    first.unmount();
+    net.servers.elsewhere("github", { url: "https://mcp.example.com/theirs" });
+    const release = net.servers.hold();
+    show(null, "/integrations/mcp/github", client);
+
+    // Nothing is offered to write while the page's own read is unanswered.
+    const reads = () => net.requests.filter((r) => r.path === "/admin/integrations/mcp-servers/github");
+    await waitFor(() => expect(reads()).toHaveLength(2));
+    expect(screen.queryByLabelText("github.search")).toBeNull();
+    release();
+    await user.click(await screen.findByLabelText("github.search"));
+    await user.click(screen.getByRole("button", { name: "Save what we brought in" }));
+
+    await waitFor(() => expect(net.writes("PUT")).toHaveLength(1));
+    expect(net.writes("PUT")[0]?.body).toMatchObject({ url: "https://mcp.example.com/theirs" });
   });
 });

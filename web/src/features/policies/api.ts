@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
 import type { PolicyInput } from "@/lib/api/client";
-import { ifMatch, revised } from "@/lib/api/revision";
+import { ifMatch, revised, revisionReads } from "@/lib/api/revision";
 
 export const policyKeys = {
   all: ["policies"] as const,
@@ -28,7 +28,7 @@ export function usePolicy(code: string | undefined) {
     queryKey: policyKeys.detail(code ?? ""),
     queryFn: () => readPolicy(code!),
     enabled: Boolean(code),
-    refetchOnMount: "always",
+    ...revisionReads,
   });
 }
 

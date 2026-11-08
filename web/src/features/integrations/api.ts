@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
-import { ifMatch, revised } from "@/lib/api/revision";
+import { ifMatch, revised, revisionReads } from "@/lib/api/revision";
 import type { components } from "@/lib/api/schema.gen";
 
 export type MCPServer = components["schemas"]["MCPServer"];
@@ -73,7 +73,7 @@ export function useMCPServerRevision(name: string | undefined) {
     queryKey: integrationKeys.mcpServer(name ?? ""),
     queryFn: () => readMCPServer(name!),
     enabled: Boolean(name),
-    refetchOnMount: "always",
+    ...revisionReads,
   });
 }
 
@@ -247,7 +247,7 @@ export function useConnectorInstance(
     enabled: Boolean(instance),
     // A cached authored boundary must not seed a read-edit-write form while a
     // fresher detail is loading. The form reads defaultValues only once.
-    refetchOnMount: "always",
+    ...revisionReads,
   });
 }
 
@@ -370,7 +370,7 @@ export function useProviderRevision(name: string | undefined) {
     queryKey: integrationKeys.provider(name ?? ""),
     queryFn: () => readProvider(name!),
     enabled: Boolean(name),
-    refetchOnMount: "always",
+    ...revisionReads,
   });
 }
 

@@ -9,13 +9,12 @@ import { Toaster } from "@/components/ui/sonner";
 import { setLocale } from "@/i18n";
 import { stubPolicies } from "@/features/policies/__tests__/policy-network";
 
-function at(path: string) {
-  render(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
-    >
+const fresh = () =>
+  new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+function at(path: string, client = fresh()) {
+  return render(
+    <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/policies" element={<PoliciesPage />} />
@@ -103,5 +102,17 @@ describe("a policy written over what was read", () => {
 
     expect(await screen.findByText(/nothing was removed/)).toBeVisible();
     expect(net.state.policies).toHaveLength(1);
+  });
+
+  it("is not seeded from a copy cached by an earlier opening", async () => {
+    const net = stubPolicies();
+    const client = fresh();
+    const first = at("/policies/POL-200", client);
+    await screen.findByLabelText("Name");
+    first.unmount();
+    net.elsewhere({ name: "Theirs" });
+    at("/policies/POL-200", client);
+
+    expect(await screen.findByLabelText("Name")).toHaveValue("Theirs");
   });
 });

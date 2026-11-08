@@ -36,7 +36,10 @@ export function PolicyEditorPage() {
   const read = usePolicy(creating ? undefined : routeCode);
   const loaded = read.data?.body;
 
-  if (isLoading || read.isLoading) return <LoadingRows rows={6} />;
+  // Only a read made as the editor opened seeds it, never a cached copy.
+  if (isLoading || (!creating && !read.isFetchedAfterMount)) {
+    return <LoadingRows rows={6} />;
+  }
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
   if (
     read.error &&

@@ -25,6 +25,7 @@ vi.mock("@/features/policies/api", () => ({
     return {
       data: found && { body: found, etag: '"v1-read"' },
       isLoading: Boolean(code) && hooks.policies.isLoading,
+      isFetchedAfterMount: !hooks.policies.isLoading,
       isFetching: false,
       error: null,
       refetch: vi.fn(),

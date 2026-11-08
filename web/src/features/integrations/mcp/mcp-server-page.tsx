@@ -78,7 +78,8 @@ export function MCPServerPage() {
     }
   }
 
-  if (isLoading || read.isLoading) return <LoadingRows />;
+  // Only a read made as the page opened seeds its writes, never a cached copy.
+  if (isLoading || (name && !read.isFetchedAfterMount)) return <LoadingRows />;
   if (error) return <ErrorState error={error} onRetry={refetch} />;
   if (!server) {
     return <ErrorState error={new Error(t("mcp.noSuchServer"))} onRetry={refetch} />;

@@ -35,6 +35,18 @@ export function ifMatch(etag: string | undefined): { "If-Match"?: string } {
   return etag ? { "If-Match": etag } : {};
 }
 
+/**
+ * How a read that seeds an editor is kept: read again whenever an editor
+ * opens, and at no other moment but a reload somebody asked for. A read on
+ * focus or on reconnect would bring a newer revision under a form being
+ * filled in and replace it, edits and all, without saying so.
+ */
+export const revisionReads = {
+  refetchOnMount: "always",
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+} as const;
+
 /** Somebody else wrote since this was read, and nothing was saved. */
 export function isStale(error: unknown): boolean {
   return error instanceof ApiError && error.status === 412;

@@ -11,7 +11,7 @@ type Route = (
   method: string,
   path: string,
   body: unknown,
-) => Response | undefined;
+) => Response | Promise<Response> | undefined;
 
 export const json = (
   body: unknown,
@@ -33,6 +33,7 @@ export function revisedCollection<T extends { name: string }>(
   start: T[],
 ) {
   const state = { items: start, generations: new Map<string, number>() };
+  let held: Promise<void> | undefined;
   const etag = (name: string) =>
     `"v1-${name}-${state.generations.get(name) ?? 1}"`;
   const bump = (name: string) =>
@@ -43,11 +44,22 @@ export function revisedCollection<T extends { name: string }>(
     const name = decodeURIComponent(
       path.slice(base.length + 1).split("/")[0] ?? "",
     );
-    const found = state.items.find((item) => item.name === name);
-    if (method === "GET") {
+    if (method !== "GET") return undefined;
+    const answer = () => {
+      const found = state.items.find((item) => item.name === name);
       return found ? json(found, 200, { ETag: etag(name) }) : json({}, 404);
-    }
-    return undefined;
+    };
+    return held ? held.then(answer) : answer();
+  };
+
+  /** Holds every read until released, answering with what is stored then. */
+  const hold = () => {
+    let release = () => {};
+    held = new Promise<void>((done) => (release = done));
+    return () => {
+      held = undefined;
+      release();
+    };
   };
 
   const write = (
@@ -82,7 +94,7 @@ export function revisedCollection<T extends { name: string }>(
     );
   };
 
-  return { state, etag, route, write, elsewhere, base };
+  return { state, etag, route, write, elsewhere, hold, base };
 }
 
 /**
@@ -113,10 +125,10 @@ export function stubNetwork(
       if (writeOf && name !== undefined && !name.includes("/")) {
         return c.write(request.method, name, ifMatch, body);
       }
-      const answered = c.route(request.method, path, body);
+      const answered = await c.route(request.method, path, body);
       if (answered) return answered;
     }
-    return others(request.method, path, body) ?? json({}, 404);
+    return (await others(request.method, path, body)) ?? json({}, 404);
   });
   return requests;
 }

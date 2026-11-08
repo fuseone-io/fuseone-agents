@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
-import { ifMatch, revised } from "@/lib/api/revision";
+import { ifMatch, revised, revisionReads } from "@/lib/api/revision";
 
 export const channelKeys = {
   all: ["channels"] as const,
@@ -23,7 +23,7 @@ export function useChannelRevision(name: string | undefined) {
     queryKey: channelKeys.detail(name ?? ""),
     queryFn: () => readChannel(name!),
     enabled: Boolean(name),
-    refetchOnMount: "always",
+    ...revisionReads,
   });
 }
 
