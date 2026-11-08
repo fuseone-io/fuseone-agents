@@ -20,6 +20,16 @@ const hooks = vi.hoisted(() => ({
 
 vi.mock("@/features/policies/api", () => ({
   usePolicies: () => hooks.policies,
+  usePolicy: (code?: string) => {
+    const found = hooks.policies.data?.items.find((p) => p.code === code);
+    return {
+      data: found && { body: found, etag: '"v1-read"' },
+      isLoading: Boolean(code) && hooks.policies.isLoading,
+      isFetching: false,
+      error: null,
+      refetch: vi.fn(),
+    };
+  },
   usePutPolicy: () => ({ mutate: hooks.put, isPending: false }),
   useSimulatePolicy: () => ({
     mutate: hooks.simulate,
@@ -79,6 +89,7 @@ describe("the policy editor", () => {
             effect: "allow",
             mode: "enforce",
           }),
+          etag: '"v1-read"',
         },
         expect.anything(),
       ),

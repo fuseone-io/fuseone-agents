@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -5,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
+import { StaleNotice } from "@/components/shared/stale-notice";
 import { IdentitySection } from "@/features/policies/identity-section";
 import { ReachSection } from "@/features/policies/reach-section";
 import { ScopeSection } from "@/features/policies/scope-section";
@@ -12,9 +14,13 @@ import { ConditionSection } from "@/features/policies/condition-section";
 import { EffectSection } from "@/features/policies/effect-section";
 import { PolicySideRail } from "@/features/policies/policy-side-rail";
 import { usePolicyDraft } from "@/features/policies/policy-form";
-import { usePolicies, usePutPolicy } from "@/features/policies/api";
+import { usePolicies, usePolicy, usePutPolicy } from "@/features/policies/api";
 import { useCode } from "@/features/policies/use-code";
-import type { Policy, PolicyInput } from "@/lib/api/client";
+import { ApiError, type Policy, type PolicyInput } from "@/lib/api/client";
+import { isStale } from "@/lib/api/revision";
+
+/** The revision a form read, and how to read the stored version again. */
+type Revision = { etag: string; reload: () => void; reloading: boolean };
 
 /**
  * One rule, written or rewritten.
@@ -27,11 +33,22 @@ export function PolicyEditorPage() {
   const { code: routeCode } = useParams();
   const creating = routeCode === undefined || routeCode === "new";
 
+  // The list is for the code a new rule may take; the rule itself is read by
+  // its code, with the revision the save answers.
   const { data, isLoading, error, refetch } = usePolicies();
-  const loaded = data?.items.find((p) => p.code === routeCode);
+  const read = usePolicy(creating ? undefined : routeCode);
+  const loaded = read.data?.body;
 
-  if (isLoading) return <LoadingRows rows={6} />;
+  if (isLoading || read.isLoading) return <LoadingRows rows={6} />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
+  if (
+    read.error &&
+    !(read.error instanceof ApiError && read.error.status === 404)
+  ) {
+    return (
+      <ErrorState error={read.error} onRetry={() => void read.refetch()} />
+    );
+  }
   if (!creating && !loaded) {
     return (
       <ErrorState
@@ -42,11 +59,19 @@ export function PolicyEditorPage() {
 
   return (
     <PolicyForm
-      key={creating ? "new" : loaded!.code}
+      // A new revision is a new form: reloading replaces the draft with it.
+      key={creating ? "new" : `${loaded!.code}:${read.data!.etag}`}
       creating={creating}
       loaded={loaded}
       policies={data?.items ?? []}
       routeCode={routeCode}
+      revision={
+        read.data && {
+          etag: read.data.etag,
+          reload: () => void read.refetch(),
+          reloading: read.isFetching,
+        }
+      }
     />
   );
 }
@@ -56,21 +81,24 @@ function PolicyForm({
   loaded,
   policies,
   routeCode,
+  revision,
 }: {
   creating: boolean;
   loaded?: Policy;
   policies: Policy[];
   routeCode?: string;
+  revision?: Revision;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { code, setCode } = useCode(creating, policies, routeCode);
   const { form, draft, patch, valid, changes } = usePolicyDraft(loaded);
   const save = usePutPolicy();
+  const [stale, setStale] = useState(false);
 
   const submit = (policy: PolicyInput) => {
     save.mutate(
-      { code, policy },
+      { code, policy, etag: revision?.etag },
       {
         onSuccess: () => {
           toast.success(creating ? `${code} criada` : `${code} salva`, {
@@ -81,10 +109,14 @@ function PolicyForm({
           });
           navigate("/policies");
         },
+        // Refused because somebody wrote first: the draft stays, and the
+        // notice offers the stored version instead of a toast that fades.
         onError: (e) =>
-          toast.error(t("policies.saveFailed"), {
-            description: e instanceof Error ? e.message : undefined,
-          }),
+          isStale(e)
+            ? setStale(true)
+            : toast.error(t("policies.saveFailed"), {
+                description: e instanceof Error ? e.message : undefined,
+              }),
       },
     );
   };
@@ -122,6 +154,12 @@ function PolicyForm({
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_316px] lg:items-start">
         <div className="flex min-w-0 flex-col gap-4">
+          {stale && revision && (
+            <StaleNotice
+              onReload={revision.reload}
+              reloading={revision.reloading}
+            />
+          )}
           <IdentitySection
             draft={draft}
             patch={patch}

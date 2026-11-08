@@ -20,6 +20,7 @@ import { useDeletePolicy, usePolicies } from "@/features/policies/api";
 import { useMe } from "@/features/session/api";
 import { sinceFor } from "@/features/runs/runs-filters";
 import { useVisibleItems } from "@/hooks/use-visible-items";
+import { isStale } from "@/lib/api/revision";
 
 /**
  * Every rule the installation runs under.
@@ -116,17 +117,26 @@ export function PoliciesPage() {
             <PoliciesTable
               policies={page.visible}
               canManage={canManage}
-              deletingCode={remove.isPending ? remove.variables : undefined}
-              onDelete={(code) =>
-                remove.mutate(code, {
-                  onSuccess: () =>
-                    toast.success(t("policies.removed", { code })),
-                  onError: (cause) =>
-                    toast.error(t("common.removeFailed"), {
-                      description:
-                        cause instanceof Error ? cause.message : undefined,
-                    }),
-                })
+              deletingCode={
+                remove.isPending ? remove.variables?.code : undefined
+              }
+              onDelete={(code, etag) =>
+                remove.mutate(
+                  { code, etag },
+                  {
+                    onSuccess: () =>
+                      toast.success(t("policies.removed", { code })),
+                    onError: (cause) =>
+                      isStale(cause)
+                        ? toast.error(t("revision.removeStale"))
+                        : toast.error(t("common.removeFailed"), {
+                            description:
+                              cause instanceof Error
+                                ? cause.message
+                                : undefined,
+                          }),
+                  },
+                )
               }
             />
             <div className="px-4 pb-3">
