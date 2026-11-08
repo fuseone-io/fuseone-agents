@@ -6,6 +6,7 @@ import { Panel } from "@/components/shared/panel";
 import { Button } from "@/components/ui/button";
 import { Mono } from "@/components/shared/mono";
 import { problemMessage } from "@/lib/api/problem-message";
+import { isStale } from "@/lib/api/revision";
 import { CredentialFields } from "@/features/integrations/mcp/credential-fields";
 import {
   dsnEnvMode,
@@ -56,9 +57,12 @@ import {
 export function ConnectionPanel({
   server,
   recipe,
+  revision,
 }: {
   server: MCPServer;
   recipe?: ServerRecipe | null;
+  /** The revision its page read, and what to do when a write is refused as stale. */
+  revision?: { etag: string; onStale: () => void };
 }) {
   const { t } = useTranslation();
   const put = usePutMCPServer();
@@ -116,12 +120,14 @@ export function ConnectionPanel({
         env: credential.env,
         configFile: credential.configFile,
         configFileEnv: credential.configFileEnv,
+        etag: revision?.etag,
       });
       setValue(blankCredential(credential.configFileEnv ?? storedConfigEnv));
       toast.success(t("mcp.credentialSaved"));
       return true;
     } catch (problem) {
-      toast.error(problemMessage(problem, t));
+      if (revision && isStale(problem)) revision.onStale();
+      else toast.error(problemMessage(problem, t));
       return false;
     }
   }

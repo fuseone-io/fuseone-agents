@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
+import { ifMatch } from "@/lib/api/revision";
 import type { components } from "@/lib/api/schema.gen";
 import { integrationKeys } from "@/features/integrations/api";
 
@@ -44,10 +45,12 @@ export function useSetSurface() {
       url: string;
       enabled: boolean;
       acceptsLocalExecution: boolean;
+      /** The revision the server's page read. */
+      etag: string;
     }) =>
       unwrap(
         await api.PUT("/admin/integrations/mcp-servers/{name}", {
-          params: { path: { name: input.name } },
+          params: { path: { name: input.name }, header: ifMatch(input.etag) },
           body: {
             transport: input.transport,
             protocolMode: input.protocolMode,

@@ -17,7 +17,7 @@ import {
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
-import { ServerForm } from "@/features/integrations/server-form";
+import { ServerEditor } from "@/features/integrations/server-editor";
 import { ProviderForm } from "@/features/integrations/provider-form";
 import { ServerCard } from "@/features/integrations/server-card";
 import { ProviderCard } from "@/features/integrations/provider-card";
@@ -246,7 +246,7 @@ export function IntegrationsPage({
       </IntegrationsShell>
 
       {editing?.kind === "server" && (
-        <ServerForm server={editing.value} onClose={() => setEditing(null)} />
+        <ServerEditor server={editing.value} onClose={() => setEditing(null)} />
       )}
       {editing?.kind === "provider" && (
         <ProviderForm

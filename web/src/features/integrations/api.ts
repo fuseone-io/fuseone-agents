@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
+import { ifMatch, revised } from "@/lib/api/revision";
 import type { components } from "@/lib/api/schema.gen";
 
 export type MCPServer = components["schemas"]["MCPServer"];
@@ -24,6 +25,8 @@ export const integrationKeys = {
   all: ["integrations"] as const,
   list: () => [...integrationKeys.all, "list"] as const,
   mcpCredentials: () => [...integrationKeys.all, "mcp-credentials"] as const,
+  mcpServer: (name: string) =>
+    [...integrationKeys.all, "mcp-server", name] as const,
   connectorCatalog: () =>
     [...integrationKeys.all, "connectors", "catalog"] as const,
   connectorInstances: () =>
@@ -42,6 +45,28 @@ export function useIntegrations() {
   return useQuery({
     queryKey: integrationKeys.list(),
     queryFn: async () => unwrap(await api.GET("/admin/integrations")),
+  });
+}
+
+/** One tool server as it is stored now, with the revision a write over it answers. */
+export async function readMCPServer(name: string) {
+  return revised(
+    await api.GET("/admin/integrations/mcp-servers/{name}", {
+      params: { path: { name } },
+    }),
+  );
+}
+
+/**
+ * One tool server, read by name where it is edited. Read again on every mount:
+ * a form seeded from a cached copy would save over a version nobody saw.
+ */
+export function useMCPServerRevision(name: string | undefined) {
+  return useQuery({
+    queryKey: integrationKeys.mcpServer(name ?? ""),
+    queryFn: () => readMCPServer(name!),
+    enabled: Boolean(name),
+    refetchOnMount: "always",
   });
 }
 
@@ -103,10 +128,12 @@ export function usePutMCPServer() {
       stdioEgress?: components["schemas"]["MCPStdioEgress"];
       acceptsLocalExecution: boolean;
       enabled: boolean;
+      /** The revision this write answers; connecting a new server has none. */
+      etag?: string;
     }) =>
       unwrap(
         await api.PUT("/admin/integrations/mcp-servers/{name}", {
-          params: { path: { name: input.name } },
+          params: { path: { name: input.name }, header: ifMatch(input.etag) },
           body: {
             transport: input.transport,
             protocolMode: input.protocolMode,
@@ -139,13 +166,15 @@ export function usePutMCPServer() {
 export function useDeleteMCPServer() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (name: string) =>
+    mutationFn: async ({ name, etag }: { name: string; etag: string }) =>
       unwrap(
         await api.DELETE("/admin/integrations/mcp-servers/{name}", {
-          params: { path: { name } },
+          params: { path: { name }, header: ifMatch(etag) },
         }),
       ),
-    onSuccess: () =>
+    // Refused as stale or not, what is on screen may be older than what is
+    // stored: show it again either way.
+    onSettled: () =>
       void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
   });
 }

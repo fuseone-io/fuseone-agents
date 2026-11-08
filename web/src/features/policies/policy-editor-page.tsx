@@ -17,10 +17,7 @@ import { usePolicyDraft } from "@/features/policies/policy-form";
 import { usePolicies, usePolicy, usePutPolicy } from "@/features/policies/api";
 import { useCode } from "@/features/policies/use-code";
 import { ApiError, type Policy, type PolicyInput } from "@/lib/api/client";
-import { isStale } from "@/lib/api/revision";
-
-/** The revision a form read, and how to read the stored version again. */
-type Revision = { etag: string; reload: () => void; reloading: boolean };
+import { isStale, type FormRevision } from "@/lib/api/revision";
 
 /**
  * One rule, written or rewritten.
@@ -87,7 +84,7 @@ function PolicyForm({
   loaded?: Policy;
   policies: Policy[];
   routeCode?: string;
-  revision?: Revision;
+  revision?: FormRevision;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();

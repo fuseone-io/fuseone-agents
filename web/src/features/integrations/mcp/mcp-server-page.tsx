@@ -8,6 +8,9 @@ import { Panel } from "@/components/shared/panel";
 import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { problemMessage } from "@/lib/api/problem-message";
+import { isStale } from "@/lib/api/revision";
+import { StaleNotice } from "@/components/shared/stale-notice";
+import { useMCPServerRevision } from "@/features/integrations/api";
 import { SurfacePicker } from "@/features/integrations/mcp/surface-picker";
 import { ConnectionPanel } from "@/features/integrations/mcp/connection-panel";
 import { ClassifyDialog } from "@/features/admin/classify-dialog";
@@ -32,11 +35,23 @@ export function MCPServerPage() {
   const { t } = useTranslation();
   const { name } = useParams();
   const {
-    server, tools, catalogue, chosen, dirty, toggle, reset,
+    server: listed, tools, catalogue, chosen, dirty, toggle, reset,
     isLoading, error, refetch,
   } = useMCPServer(name);
+  // The record both writes send back comes from the server read by name, with
+  // the revision they answer; the listing still says how it is answering.
+  const read = useMCPServerRevision(name);
+  const server = listed && read.data ? { ...listed, ...read.data.body } : undefined;
   const save = useSetSurface();
   const [ruling, setRuling] = useState<Tool | null>(null);
+  const [stale, setStale] = useState(false);
+
+  function reload() {
+    setStale(false);
+    reset();
+    void read.refetch();
+    refetch();
+  }
 
   async function saveSurface() {
     if (!server) return;
@@ -51,17 +66,19 @@ export function MCPServerPage() {
         url: server.url ?? "",
         enabled: server.enabled,
         acceptsLocalExecution: server.acceptsLocalExecution ?? false,
+        etag: read.data!.etag,
       });
       reset();
       toast.success(t("mcp.surfaceSaved"), {
         description: t("integrations.toolsAppearHint"),
       });
     } catch (problem) {
-      toast.error(problemMessage(problem, t));
+      if (isStale(problem)) setStale(true);
+      else toast.error(problemMessage(problem, t));
     }
   }
 
-  if (isLoading) return <LoadingRows />;
+  if (isLoading || read.isLoading) return <LoadingRows />;
   if (error) return <ErrorState error={error} onRetry={refetch} />;
   if (!server) {
     return <ErrorState error={new Error(t("mcp.noSuchServer"))} onRetry={refetch} />;
@@ -75,7 +92,13 @@ export function MCPServerPage() {
         description={t("mcp.subtitle")}
       />
 
-      <ConnectionPanel server={server} />
+      {stale && <StaleNotice onReload={reload} reloading={read.isFetching} />}
+
+      <ConnectionPanel
+        key={read.data!.etag}
+        server={server}
+        revision={{ etag: read.data!.etag, onStale: () => setStale(true) }}
+      />
 
       <Panel title={t("mcp.surface")} action={<Counted chosen={chosen.size} of={tools.length} />}>
         <div className="space-y-3">

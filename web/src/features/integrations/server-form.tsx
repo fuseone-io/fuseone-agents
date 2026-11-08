@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,16 +10,27 @@ import { Form } from "@/components/ui/form";
 import { ServerFormBody } from "@/features/integrations/server-form-body";
 import { useServerForm } from "@/features/integrations/mcp/use-server-form";
 import { type MCPServer } from "@/features/integrations/api";
+import { StaleNotice } from "@/components/shared/stale-notice";
+import type { FormRevision } from "@/lib/api/revision";
 
 export function ServerForm({
   server,
   onClose,
+  revision,
 }: {
   server: MCPServer | null;
   onClose: () => void;
+  /** What the editor read; a server being connected has none. */
+  revision?: FormRevision;
 }) {
   const { t } = useTranslation();
-  const { form, submit } = useServerForm(server, onClose);
+  const [stale, setStale] = useState(false);
+  const { form, submit } = useServerForm(
+    server,
+    onClose,
+    undefined,
+    revision && { etag: revision.etag, onStale: () => setStale(true) },
+  );
 
   return (
     <PropertiesSheet
@@ -38,6 +50,9 @@ export function ServerForm({
             data-testid="server-form-scroll"
             className="space-y-4"
           >
+              {stale && revision && (
+                <StaleNotice onReload={revision.reload} reloading={revision.reloading} />
+              )}
               <ServerFormBody
                 form={form}
                 editing={server !== null}

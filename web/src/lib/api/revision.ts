@@ -9,6 +9,13 @@ import { ApiError, unwrap } from "@/lib/api/client";
  */
 export type Revised<T> = { body: T; etag: string };
 
+/** The revision a form read, and how to read the stored version again. */
+export type FormRevision = {
+  etag: string;
+  reload: () => void;
+  reloading: boolean;
+};
+
 export function revised<T>(result: {
   data?: T;
   error?: unknown;
