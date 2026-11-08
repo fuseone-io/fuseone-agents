@@ -28,7 +28,19 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.98.0] — 2026-11-08
+
+The console side of conflict detection, and the API's compatibility statement. No migration,
+and nothing changes on the server.
+
+### Upgrade notes
+
+- **Coming from 0.96.x, the 0.97.0 notes apply in full,** including that every pod must be on
+  0.96.0 or 0.96.1 first and that migration `0104` erases. During that rollout, a console
+  served by a new pod sends `If-Match`, and a pod still on 0.96.x ignores it and can overwrite.
+  Upgrading to 0.97.0 first, and letting it finish, closes that window.
+- **A console tab opened before the upgrade keeps the old behaviour until it is reloaded.** It
+  sends no `If-Match`, so its saves are last-write-wins, as before.
 
 ### Added
 
