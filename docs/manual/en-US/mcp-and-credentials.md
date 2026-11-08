@@ -193,7 +193,15 @@ Saving a server with no change changes nothing. No worker reconnects, and the se
 - **Try now** asks one worker to reconnect and report what it found: whichever worker claims the request. It does not make the others rediscover anything.
 - **A session that died or never connected** is retried by each worker on its own, within about 30 seconds.
 
-**There is currently no way to make every worker rediscover a server's tools without an interruption.** If a connected server gains a tool, turn the server off and on again. That makes every replica update, and its tools are unavailable for a moment while it happens.
+When a connected server gains a tool, use **Rediscover on every worker** on the server's page:
+
+- Every worker that holds the server asks it again what it offers, once, **on the session it already has**. Nothing reconnects, and no call in flight is interrupted.
+- A new tool, or one whose definition changed, arrives **unclassified** and stays refused until somebody classifies it. A tool that is unchanged keeps its classification. A tool the server no longer offers leaves.
+- The panel lists the answers workers have recorded, and says for each worker whether it answered the latest request, failed, or has not answered yet. A worker on this version records an answer when it connects the server, so it appears from then on. A worker that fails keeps the tools it had and does not try again until somebody asks again.
+- A worker that starts after the request answers it with its own first connection.
+- **The list is not a record of which workers are running.** A worker that stopped keeps the last answer it recorded, whatever it was. A worker on an older version records nothing, so it does not appear at all. An empty list means only that no answer has been recorded yet.
+
+The request is on the administration trail, and does not change the server's configuration. A pipeline can make the same request: `POST /api/v1/admin/integrations/mcp-servers/{name}/rediscovery`, and read the answers with `GET` on the same path.
 
 ## Quick diagnosis
 

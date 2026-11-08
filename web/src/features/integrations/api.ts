@@ -32,6 +32,8 @@ export const integrationKeys = {
   mcpCredentials: () => [...integrationKeys.all, "mcp-credentials"] as const,
   mcpServer: (name: string) =>
     [...integrationKeys.all, "mcp-server", name] as const,
+  mcpRediscovery: (name: string) =>
+    [...integrationKeys.all, "mcp-rediscovery", name] as const,
   provider: (name: string) =>
     [...integrationKeys.all, "provider", name] as const,
   connectorCatalog: () =>

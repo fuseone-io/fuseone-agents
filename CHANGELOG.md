@@ -28,6 +28,35 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Upgrade notes
+
+- **A worker still on an older version ignores rediscovery requests and records no answer,** so
+  during the rollout it does not appear in the list at all. Once it runs this release it records
+  an answer when it connects. Migration `0105` only adds two tables.
+
+### Added
+
+- **Rediscovery on every worker.** When a connected tool server gains a tool, an administrator
+  asks every worker to look again from the server's page, or a pipeline with
+  `POST /admin/integrations/mcp-servers/{name}/rediscovery`. Each worker asks once, on the
+  session it already holds: nothing reconnects and no call is interrupted. New or changed tools
+  arrive unclassified; unchanged ones keep their classification. The page lists the answers
+  workers have recorded: answered, failed or not answered yet. It is not a record of which
+  workers are running; a stopped worker keeps its last answer. The request
+  is on the admin trail and does not change the server's configuration. Turning the server off
+  and on is no longer needed for this.
+
+### Fixed
+
+- **A tool catalogue publication that failed is sent again.** A worker that could not publish
+  what it discovered logged it and waited for an unrelated change, so a tool could be offered
+  to agents while no screen listed it for classification. The worker now publishes again on its
+  next pass, about 30 seconds later, until one is taken.
+
+---
+
 ## [0.98.0] — 2026-11-08
 
 The console side of conflict detection, and the API's compatibility statement. No migration,
