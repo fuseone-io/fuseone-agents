@@ -128,3 +128,31 @@ func revealed(t *testing.T, w *readBackWorld, r managed) string {
 	}
 	return row.Secret
 }
+
+// A removal leaves no generation behind. The same grant pasted again names the state it
+// named before, under the same revision; another grant does not.
+func TestSettingsETag_aGrantRemovedAndPastedAgain_isTheStateItWas(t *testing.T) {
+	w := newReadBackWorld(t)
+	r := managedResources()[0]
+	t.Cleanup(func() { w.call(t, etagCall{method: http.MethodDelete, path: r.path}) })
+	put := func(body map[string]any) string {
+		t.Helper()
+		got := w.call(t, etagCall{method: http.MethodPut, path: r.path, body: body})
+		if got.Code != http.StatusNoContent {
+			t.Fatalf("PUT = %d: %s", got.Code, got.Body)
+		}
+		return got.Header().Get("ETag")
+	}
+	first := put(grantBody("ETAG-REFRESH-T"))
+	removed := grantBody("")
+	removed["oauth"] = map[string]any{}
+	if gone := put(removed); gone == first || strings.Contains(revealed(t, w, r), "ETAG-REFRESH-T") {
+		t.Fatalf("removing the grant left it, or its revision (%s)", gone)
+	}
+	if again := put(grantBody("ETAG-REFRESH-T")); again != first {
+		t.Errorf("pasted, removed and pasted again: %s, then %s", first, again)
+	}
+	if other := put(grantBody("ETAG-REFRESH-U")); other == first {
+		t.Error("another grant took the first one's revision")
+	}
+}

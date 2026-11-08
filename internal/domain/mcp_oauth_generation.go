@@ -12,8 +12,11 @@ land and the other be told. The generation is what lets the revision tell them a
 moves when a person sends tokens other than the ones held, and only then; a worker's
 rotation carries it across (see KeptGeneration).
 
-Chained to the generation before it, so a grant removed and then pasted again does not come
-back under a revision a client read before the removal.
+Chained to the generation before it while the grant exists, so the tokens first pasted, sent
+back over their rotation, are a change. A removal leaves nothing to chain to: pasting the same
+tokens again gives the generation they had, and with the same configuration the revision a
+client read before the removal. That revision then names a state identical to the one it
+named, so a write answering it lands on what its author read.
 */
 func Regranted(stored, merged *MCPOAuthGrant) *MCPOAuthGrant {
 	if merged == nil {
