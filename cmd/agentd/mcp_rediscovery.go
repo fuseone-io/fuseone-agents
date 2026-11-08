@@ -34,6 +34,9 @@ type rediscoveryStore interface {
 type rediscoveries struct {
 	requested map[string]int64
 	answered  map[string]int64
+	// unrecorded is each answer the store has not kept yet. The answer stands
+	// and is not repeated; only its record is retried, on every pass.
+	unrecorded map[string]domain.MCPRediscoveryReceipt
 }
 
 // readRediscoveries takes this pass's requests. A failed read asks nothing of
@@ -60,6 +63,7 @@ func (r *reconciler) answeredByConnecting(ctx context.Context, server string) {
 // rediscover answers every request this worker is behind on, for the servers
 // it holds, and reports whether any found something to publish.
 func (r *reconciler) rediscover(ctx context.Context, wanted map[string]domain.MCPServer) bool {
+	r.recordUnrecorded(ctx)
 	changed := false
 	for name, generation := range r.rediscovery.requested {
 		server, held := wanted[name]
@@ -71,12 +75,11 @@ func (r *reconciler) rediscover(ctx context.Context, wanted map[string]domain.MC
 			// The replacement's own discovery answers the request.
 			continue
 		}
-		if err == nil && r.rulings != nil {
-			_, err = r.catalog.Sync(ctx, r.rulings, domain.Scope{})
-		}
 		if err != nil {
 			slog.Error("tool server rediscovery failed; its tools are unchanged",
 				"server", name, "generation", generation, "err", err)
+		} else {
+			r.applyRulingsAfterRediscovery(ctx, name)
 		}
 		r.answer(ctx, name, generation, err == nil)
 		changed = changed || err == nil
@@ -84,18 +87,54 @@ func (r *reconciler) rediscover(ctx context.Context, wanted map[string]domain.MC
 	return changed
 }
 
+/*
+applyRulingsAfterRediscovery is the second half of a rediscovery that already
+happened, so it cannot undo the first. By now the catalogue holds what the
+server offers: an unchanged tool kept its ruling, and a new or changed one is
+unclassified, which the Gate refuses. A failure to read the rulings leaves that
+safe state for the periodic refresh to settle, and the rediscovery stands.
+*/
+func (r *reconciler) applyRulingsAfterRediscovery(ctx context.Context, server string) {
+	if r.rulings == nil {
+		return
+	}
+	if _, err := r.catalog.Sync(ctx, r.rulings, domain.Scope{}); err != nil {
+		slog.Warn("tool server rediscovered, but its rulings could not be read yet; new tools stay unclassified",
+			"server", server, "err", err)
+	}
+}
+
 func (r *reconciler) answer(ctx context.Context, server string, generation int64, succeeded bool) {
 	if r.rediscovery.answered == nil {
 		r.rediscovery.answered = map[string]int64{}
 	}
 	r.rediscovery.answered[server] = generation
-	store, ok := r.servers.(rediscoveryStore)
-	if !ok || r.holder == "" {
+	if r.holder == "" {
 		return
 	}
-	if err := store.RecordMCPRediscovery(ctx, domain.MCPRediscoveryReceipt{
+	if r.rediscovery.unrecorded == nil {
+		r.rediscovery.unrecorded = map[string]domain.MCPRediscoveryReceipt{}
+	}
+	// A newer answer replaces one still waiting: the store keeps only the newest.
+	r.rediscovery.unrecorded[server] = domain.MCPRediscoveryReceipt{
 		Server: server, Worker: r.holder, Generation: generation, Succeeded: succeeded,
-	}); err != nil {
-		slog.Error("could not record a tool server rediscovery", "server", server, "err", err)
+	}
+	r.recordUnrecorded(ctx)
+}
+
+// recordUnrecorded hands the store every answer it has not kept yet, and keeps
+// the ones it refused for the next pass.
+func (r *reconciler) recordUnrecorded(ctx context.Context) {
+	store, ok := r.servers.(rediscoveryStore)
+	if !ok {
+		return
+	}
+	for server, receipt := range r.rediscovery.unrecorded {
+		if err := store.RecordMCPRediscovery(ctx, receipt); err != nil {
+			slog.Error("could not record a tool server rediscovery; will try again",
+				"server", server, "err", err)
+			continue
+		}
+		delete(r.rediscovery.unrecorded, server)
 	}
 }
