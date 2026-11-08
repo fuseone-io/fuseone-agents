@@ -28,6 +28,9 @@ function world(listed?: MCPServer[]) {
       return json({ mcpServers: listed ?? servers.state.items, providers: [] });
     }
     if (path.endsWith("/probe")) return json({}, 202);
+    if (path.endsWith("/rediscovery")) {
+      return json({ server: "github", generation: 0, receipts: [] });
+    }
     if (path === "/admin/tools") {
       return json({
         items: [
@@ -67,6 +70,15 @@ describe("a tool server written over what was read", () => {
     Element.prototype.scrollIntoView ??= () => {};
   });
   afterEach(() => vi.unstubAllGlobals());
+
+  it("offers, on the server's page, to ask every worker to look again", async () => {
+    world();
+    show(null, "/integrations/mcp/github");
+
+    expect(
+      await screen.findByRole("button", { name: "Rediscover on every worker" }),
+    ).toBeEnabled();
+  });
 
   it("is read by name when its editor opens, and saved under that revision", async () => {
     const net = world();

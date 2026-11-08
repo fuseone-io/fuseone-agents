@@ -14,6 +14,7 @@ import { StaleNotice } from "@/components/shared/stale-notice";
 import { useMCPServerRevision } from "@/features/integrations/api";
 import { SurfacePicker } from "@/features/integrations/mcp/surface-picker";
 import { ConnectionPanel } from "@/features/integrations/mcp/connection-panel";
+import { RediscoveryPanel } from "@/features/integrations/mcp/rediscovery-panel";
 import { ClassifyDialog } from "@/features/admin/classify-dialog";
 import type { Tool } from "@/features/admin/api";
 import { useSetSurface } from "@/features/integrations/mcp/api";
@@ -134,6 +135,8 @@ export function MCPServerPage() {
         server={server}
         revision={{ inOrder, onStale: () => setStale(true) }}
       />
+
+      <RediscoveryPanel server={server.name} enabled={server.enabled} />
 
       <Panel title={t("mcp.surface")} action={<Counted chosen={chosen.size} of={tools.length} />}>
         <div className="space-y-3">

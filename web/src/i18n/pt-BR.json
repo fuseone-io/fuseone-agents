@@ -1863,6 +1863,27 @@
     "savePersonalCredential": "Salvar minha credencial",
     "probe": "Tentar agora",
     "probeRequested": "Teste de conexão solicitado.",
+    "rediscovery": {
+      "title": "Redescoberta em todos os workers",
+      "is": "Pede a cada worker que tem este servidor que pergunte de novo o que ele oferece, na sessão que já está aberta. Nada reconecta e nenhuma chamada em andamento é interrompida. Ferramentas novas chegam sem classificação. Tentar agora é diferente: faz um único worker reconectar.",
+      "ask": "Redescobrir em todos os workers",
+      "confirmTitle": "Pedir a todos os workers que olhem de novo?",
+      "confirmBody": "Cada worker pergunta de novo a este servidor o que ele oferece, uma vez, na sessão aberta. Nada reconecta. Uma ferramenta nova, ou uma cuja definição mudou, chega sem classificação e continua recusada até alguém classificá-la. Uma ferramenta que o servidor não oferece mais sai.",
+      "confirm": "Redescobrir",
+      "requested": "Cada worker vai olhar de novo na próxima passada.",
+      "noneTitle": "Ninguém pediu aos workers que olhassem de novo",
+      "noneHint": "Quando um servidor ganha ferramentas enquanto está conectado, peça aqui. A resposta de cada worker aparece abaixo conforme chega.",
+      "latest": "Último pedido de {{by}}, {{when}}.",
+      "noWorkers": "Nenhum worker conectou este servidor ainda. Um worker responde quando conecta.",
+      "worker": "Worker",
+      "answer": "Resposta",
+      "when": "Quando",
+      "answers": {
+        "answered": "Respondeu",
+        "failed": "Falhou; ferramentas inalteradas",
+        "behind": "Ainda não respondeu"
+      }
+    },
     "saveCredential": "Salvar a credencial",
     "openServer": "Ferramentas e superfície",
     "startFromARecipe": "Começar de algo que conhecemos",

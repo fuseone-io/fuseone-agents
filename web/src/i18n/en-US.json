@@ -1863,6 +1863,27 @@
     "savePersonalCredential": "Save my credential",
     "probe": "Try now",
     "probeRequested": "Connection check requested.",
+    "rediscovery": {
+      "title": "Rediscovery on every worker",
+      "is": "Asks every worker holding this server to ask it again what it offers, on the session it already has. Nothing reconnects and no call in flight is interrupted. New tools arrive unclassified. Try now is different: it makes one worker reconnect.",
+      "ask": "Rediscover on every worker",
+      "confirmTitle": "Ask every worker to look again?",
+      "confirmBody": "Each worker asks this server again what it offers, once, on its open session. Nothing reconnects. A new tool, or one whose definition changed, arrives unclassified and stays refused until somebody classifies it. A tool the server no longer offers leaves.",
+      "confirm": "Rediscover",
+      "requested": "Every worker will look again on its next pass.",
+      "noneTitle": "Nobody has asked the workers to look again",
+      "noneHint": "When a server gains tools while connected, ask here. Each worker's answer appears below as it comes.",
+      "latest": "Latest request by {{by}}, {{when}}.",
+      "noWorkers": "No worker has connected this server yet. A worker answers when it connects.",
+      "worker": "Worker",
+      "answer": "Answer",
+      "when": "When",
+      "answers": {
+        "answered": "Answered",
+        "failed": "Failed; tools unchanged",
+        "behind": "Not answered yet"
+      }
+    },
     "saveCredential": "Save the credential",
     "openServer": "Tools and surface",
     "startFromARecipe": "Start from something we know about",
