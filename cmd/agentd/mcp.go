@@ -712,6 +712,9 @@ type reconciler struct {
 	leases toolLeases
 	// flags is each server a --mcp flag names, as the flag describes it.
 	flags map[string]domain.MCPServer
+	// rediscovery is what the administration asked every worker to look at
+	// again, and what this one has answered (#287).
+	rediscovery rediscoveries
 }
 
 func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorder) *reconciler {
@@ -773,6 +776,7 @@ func (r *reconciler) reconcile(ctx context.Context) {
 		return
 	}
 
+	r.readRediscoveries(ctx)
 	wanted := make(map[string]domain.MCPServer, len(configured))
 	for _, server := range configured {
 		if server.Enabled {
@@ -802,6 +806,7 @@ func (r *reconciler) reconcile(ctx context.Context) {
 	if r.consumeProbes(ctx, wanted) {
 		changed = true
 	}
+	changed = r.rediscover(ctx, wanted) || changed
 
 	// Published after the pass rather than only at start-up. Without this a
 	// server that connected later offered its tools to every agent and
@@ -951,6 +956,7 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool 
 
 	r.connected[server.Name] = fingerprint(server)
 	r.generations[server.Name] = server.UpdatedAt
+	r.answeredByConnecting(ctx, server.Name)
 	count := r.catalog.CountFrom(server.Name)
 	slog.Info("tool server connected",
 		"server", server.Name, "transport", server.TransportOf(), "tools", count)
