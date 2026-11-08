@@ -63,13 +63,9 @@ func (c *Catalog) AddServer(
 		is a server this platform cannot describe, and saying so out loud is
 		the only answer that stays true when the value moves.
 	*/
-	digests := make(map[string]string, len(listed.Tools))
-	for _, t := range listed.Tools {
-		digest, err := digestOf(name, t.Name, t.Description, t.InputSchema)
-		if err != nil {
-			return fmt.Errorf("tools: describe %s.%s: %w", name, t.Name, err)
-		}
-		digests[t.Name] = digest
+	digests, err := digestsOf(name, listed.Tools)
+	if err != nil {
+		return err
 	}
 
 	c.mu.Lock()
@@ -92,26 +88,15 @@ func (c *Catalog) AddServer(
 	} else {
 		delete(c.caches, name)
 	}
+	c.provenance[name] = opts.provenance
 	for id, entry := range c.entries {
 		if entry.Server == name {
 			delete(c.entries, id)
 		}
 	}
 	for _, t := range listed.Tools {
-		id := domain.ToolID(name + "." + t.Name)
-		c.entries[id] = Entry{
-			ID:          id,
-			Server:      name,
-			OnSurface:   chosen(surface, t.Name),
-			RemoteName:  t.Name,
-			Description: t.Description,
-			Schema:      schemaProperties(t.InputSchema),
-			Digest:      digests[t.Name],
-			Effect:      domain.EffectUnknown,
-			Untrusted:   true,
-			Suggested:   c.suggestion(name, t.Name),
-			Provenance:  opts.provenance,
-		}
+		entry := c.newEntry(name, t, surface, digests[t.Name], opts.provenance)
+		c.entries[entry.ID] = entry
 	}
 	if old != nil {
 		// The new session is already live. A stale session that resists close
@@ -142,6 +127,7 @@ func (c *Catalog) RemoveServer(name string) error {
 	delete(c.limiters, name)
 	delete(c.timeouts, name)
 	delete(c.caches, name)
+	delete(c.provenance, name)
 	for id, entry := range c.entries {
 		if entry.Server == name {
 			delete(c.entries, id)
@@ -170,6 +156,7 @@ func (c *Catalog) Close() error {
 	clear(c.sessions)
 	clear(c.limiters)
 	clear(c.caches)
+	clear(c.provenance)
 	return errors.Join(errs...)
 }
 
