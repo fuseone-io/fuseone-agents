@@ -5,9 +5,10 @@ to upgrade an installation that is currently working.
 
 Versions are [semantic](https://semver.org). A release is a `v`-prefixed tag,
 and pushing one builds the image and chart that carry that version — nothing is
-released by merging. The cut is a `docs(changelog): cut X.Y.Z` pull request;
-once it has merged, `make release V=X.Y.Z` tags the merged commit on `main`
-(see [Releases](README.md#releases)).
+released by merging. The cut is a `docs(changelog): cut X.Y.Z` pull request.
+`make release V=X.Y.Z` tags whatever commit is checked out, so run it with the
+cut's merge commit on `main` checked out, and nothing after it; a later commit
+would be released without its notes (see [Releases](README.md#releases)).
 
 ## What each section is for
 
@@ -24,6 +25,136 @@ notice. A refactor nobody can observe does not belong in any of them.
 Entries say what happens, not what was implemented. "Local tool servers stop
 until somebody accepts running them" is useful; "added AcceptsLocalExecution
 field" is a commit message.
+
+---
+
+## [0.97.0] — 2026-11-08
+
+### Upgrade notes
+
+- **Every running pod must be on 0.96.0 or 0.96.1 first.** This release turns dataset versions
+  on, and migration `0104` needs pods whose writers already declare themselves. From 0.95.0 or
+  earlier, upgrade to 0.96.1 and let it finish rolling out before this one. Skipping it fails
+  safely, but corrections from older pods fail during the rollout. Coming from before 0.96.0,
+  the notes of every version in between still apply.
+- **`0104` erases data, and it cannot be undone.** It clears the note and expectations of every
+  correction whose copy of the input is nowhere. Such a case has nothing to run, and nothing would
+  ever age its words out. It stays as a gap, where before it refused the whole corpus. Count them
+  first:
+
+  ```sql
+  select count(*) from regression_cases c
+  where not exists (select 1 from run_content i where i.ref = c.input_ref)
+    and (c.note <> '' or c.expectations <> '[]'::jsonb);
+  ```
+
+- **Deleting a case no longer erases its data.** It records a new version of the corpus, and the
+  case's copy of the input and its replays stay under the retention they already had. Subject
+  erasure still takes them.
+- **During the rollout, `detail.objects` on an erasure from a 0.96.x pod is only a floor.** That
+  pod's SQL cannot count what the trigger takes. The objects do go; the count is short only as
+  long as such a pod is running.
+- **The drift notice is heard for the first time.** The `drifted` event is on by default and never
+  reached anyone before. A correction that held in one battery and broke in the next, on the same
+  agent version, is now announced to the agent's conversation. The first sweep compares the last
+  two batteries already recorded, so an old regression between them can be announced. A restart
+  can repeat a notice.
+- **Readiness can drop.** When everything a battery ran held but cases were added or changed
+  since that can still run, the trust center reports `simulation_not_checked` with status
+  `unknown`, where it read as ready; running the battery again clears it. A case added or
+  changed since whose input is already gone is coverage lost: that reads as
+  `simulation_incomplete` with status `bad`, and running the battery again does not bring it
+  back.
+- **During the rollout, a scheduled battery window can run each case twice.** An old and a new
+  pod key a corpus run differently. Those runs are paid twice, and the case is judged on the
+  one that ended worst.
+- **Saving a configuration with no change now changes nothing.** This applies to policies, tool
+  servers, model providers, channels and connector instances. No `updated_at`, no `updated_by`,
+  no trail line and no new policy snapshot. **Saving again is no longer a way to reconnect.** A
+  tool server's **Try now** reaches the one worker that claims it. To make every worker
+  rediscover a server's tools, turn it off and on, which makes its tools unavailable for a
+  moment. The first save of a row written by an older version can be a real write, once.
+- **`If-Match` is not honoured by a pod still on an older version.** During the rollout such a
+  pod ignores the header and can overwrite. Send it only once every replica runs this release.
+
+### Added
+
+- **Conflict detection on configuration.** A `GET` of a policy, tool server, model provider,
+  channel or connector instance answers an `ETag`, and `PUT` and `DELETE` take `If-Match`. A
+  stale one is refused with 412, `fuseone:precondition-failed`, and writes nothing. The 412
+  carries the current `ETag` when the resource exists, and none when it does not. A malformed header is a 400. Without the header, the last write wins, as
+  before. A channel's `ETag` also moves when a conversation or an identity is attached to it,
+  and a tool server's when somebody pastes an OAuth grant, but not when a worker rotates one.
+- **Dataset versions are on.** Every change to an agent's corpus records a version, and a
+  battery names the version it ran and is read against it, so a past result stops moving when
+  the corpus changes.
+- **A battery says what it has not checked.** The report says which corpus version it read and
+  lists cases added or changed since, and those already lost. `SimulationReport` gains
+  `datasetVersion`, `unpinned`, `notChecked` and `erasedSince`, all additions.
+- **Service accounts in the console.** Under **Administration > Service accounts**, an
+  administrator creates an account, grants access, issues and rotates tokens, revokes them and
+  disables the account. A token's secret is shown once, and its validity is required.
+
+### Changed
+
+- **The start gate refuses only on a case that ran against this agent version and broke.** A
+  case added after the last battery no longer stops a start by itself; a case that broke and was
+  deleted since still does.
+- **Comparing two batteries across corpus versions** marks a case only one side had, or that
+  expected something else on each, as `not_comparable`. It counts as neither fixed nor
+  regressed.
+- **Policy writes are serialised,** so two writes to different codes can no longer each snapshot
+  a set missing the other.
+
+### Fixed
+
+- **The drift watcher never announced a regression** since it shipped in August. It now judges a
+  battery before comparing it.
+- **A battery could run another case's run back,** when two workers read different versions of
+  the corpus. A corpus run is now keyed by the case.
+
+### Security
+
+- **A service account cannot hold a password or a session.** Shipped first in 0.96.1, and
+  included here.
+
+---
+
+## [0.96.1] — 2026-11-07
+
+A security fix on top of 0.96.0, and nothing else. It adds no migration and does not turn
+dataset versions on. It counts as 0.96.0 for what the next release requires of a running pod.
+
+### Upgrade notes
+
+- **Coming from before 0.96.0, the notes of every version in between still apply.** That
+  includes the erasing migrations in 0.95.0 and their preview queries.
+- **Find out whether a machine already acquired a sign-in.** Any installation that has run
+  0.95.0 or 0.96.0 with a service account should look. Upgrading makes what these find stop
+  working, and does not remove it, so the row stays as evidence:
+
+  ```sql
+  select principal_id, kind, password_set_at, last_seen_at from principals
+  where kind <> 'user' and password_hash is not null;
+
+  select s.principal_id, pr.kind, count(*) as sessions, max(s.last_used_at) as last_used
+  from sessions s join principals pr using (principal_id)
+  where pr.kind <> 'user'
+  group by 1, 2;
+  ```
+
+  Setting a password is not on the administration trail, so these rows are the record. A row
+  here means a token or an administrator set one, and that machine could sign in whatever
+  became of its tokens. Treat it as a credential that was out of your control.
+
+### Security
+
+- **A service account can no longer hold a password or a session.** In 0.95.0 and 0.96.0 a
+  token could set a username and password on its own account, through the route that lets
+  somebody change their own, and an administrator could set one on its behalf. The machine
+  could then sign in and keep working after every token was revoked. That route now refuses,
+  with a 403 to the token and a 400 to an administrator. Signing in with a password left
+  behind is refused, and a session of a machine stops working on its next request.
 
 ---
 
