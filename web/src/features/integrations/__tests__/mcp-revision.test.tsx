@@ -262,4 +262,17 @@ describe("a tool server written over what was read", () => {
     expect(await screen.findByRole("button", { name: "Try again" })).toBeVisible();
     expect(screen.queryByLabelText("github.search")).toBeNull();
   });
+  // Saving the surface writes a new revision; a credential being typed in the
+  // panel beside it is not part of that, and must still be there.
+  it("keeps a credential being typed when the surface is saved", async () => {
+    const user = userEvent.setup();
+    world();
+    show(null, "/integrations/mcp/github");
+    await user.type(await screen.findByLabelText("Bearer token"), "typed-secret");
+    await user.click(screen.getByLabelText("github.search"));
+    await user.click(screen.getByRole("button", { name: "Save what we brought in" }));
+
+    expect(await screen.findByText("Saved.")).toBeVisible();
+    expect(screen.getByLabelText("Bearer token")).toHaveValue("typed-secret");
+  });
 });

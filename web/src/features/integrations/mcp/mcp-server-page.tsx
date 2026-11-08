@@ -47,12 +47,15 @@ export function MCPServerPage() {
   const save = useSetSurface();
   const [ruling, setRuling] = useState<Tool | null>(null);
   const [stale, setStale] = useState(false);
+  // Counted, not keyed by the revision: what is typed in the panel survives a
+  // write elsewhere on the page, and is replaced only by a reload asked for.
+  const [reloads, setReloads] = useState(0);
 
   function reload() {
     setStale(false);
     reset();
-    void read.refetch();
     refetch();
+    void read.refetch().then(() => setReloads((n) => n + 1));
   }
 
   async function saveSurface() {
@@ -113,7 +116,7 @@ export function MCPServerPage() {
       {stale && <StaleNotice onReload={reload} reloading={read.isFetching} />}
 
       <ConnectionPanel
-        key={read.data!.etag}
+        key={reloads}
         server={server}
         revision={{ etag: read.data!.etag, onStale: () => setStale(true) }}
       />
