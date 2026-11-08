@@ -299,7 +299,15 @@ produziu.</p>
 <li><strong>Tentar agora</strong> pede a um worker que reconecte e informe o que encontrou: aquele que reivindicar o pedido. Os outros não redescobrem nada.</li>
 <li><strong>Uma sessão que caiu ou nunca conectou</strong> é tentada de novo por cada worker, por conta própria, em cerca de 30 segundos.</li>
 </ul>
-<p><strong>Hoje não existe como fazer todos os workers redescobrirem as ferramentas de um servidor sem interrupção.</strong> Se um servidor conectado ganhar uma ferramenta, desligue e religue o servidor. Isso faz todas as réplicas atualizarem, e as ferramentas dele ficam indisponíveis por um momento enquanto isso acontece.</p>
+<p>Quando um servidor conectado ganhar uma ferramenta, use <strong>Redescobrir em todos os workers</strong> na página do servidor:</p>
+<ul>
+<li>Cada worker que tem o servidor pergunta de novo o que ele oferece, uma vez, <strong>na sessão que já está aberta</strong>. Nada reconecta, e nenhuma chamada em andamento é interrompida.</li>
+<li>Uma ferramenta nova, ou uma cuja definição mudou, chega <strong>sem classificação</strong> e continua recusada até alguém classificá-la. Uma ferramenta que não mudou mantém a classificação. Uma ferramenta que o servidor não oferece mais sai.</li>
+<li>O painel lista as respostas que os workers registraram e diz, para cada worker, se ele respondeu ao último pedido, se falhou ou se ainda não respondeu. Um worker nesta versão registra uma resposta quando conecta o servidor, então aparece a partir daí. Um worker que falha mantém as ferramentas que tinha e só tenta de novo quando alguém pedir de novo.</li>
+<li>Um worker que sobe depois do pedido responde com a própria primeira conexão.</li>
+<li><strong>A lista não é um registro de quais workers estão rodando.</strong> Um worker que parou mantém a última resposta que registrou, qualquer que tenha sido. Um worker numa versão anterior não registra nada, então nem aparece. Uma lista vazia quer dizer só que nenhuma resposta foi registrada ainda.</li>
+</ul>
+<p>O pedido fica na trilha de administração e não muda a configuração do servidor. Um pipeline pode fazer o mesmo pedido com <code dir="auto">POST /api/v1/admin/integrations/mcp-servers/{name}/rediscovery</code> e ler as respostas com <code dir="auto">GET</code> no mesmo caminho.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="diagnóstico-rápido">Diagnóstico rápido</h2><a class="sl-anchor-link" href="#diagnóstico-rápido"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Diagnóstico rápido”</span></a></div>
 <ul>
 <li>Servidor “answering” mas tool falha com credencial pessoal: configure a

@@ -293,7 +293,15 @@ That keeps a personal credential result with the person who produced it.</p>
 <li><strong>Try now</strong> asks one worker to reconnect and report what it found: whichever worker claims the request. It does not make the others rediscover anything.</li>
 <li><strong>A session that died or never connected</strong> is retried by each worker on its own, within about 30 seconds.</li>
 </ul>
-<p><strong>There is currently no way to make every worker rediscover a server’s tools without an interruption.</strong> If a connected server gains a tool, turn the server off and on again. That makes every replica update, and its tools are unavailable for a moment while it happens.</p>
+<p>When a connected server gains a tool, use <strong>Rediscover on every worker</strong> on the server’s page:</p>
+<ul>
+<li>Every worker that holds the server asks it again what it offers, once, <strong>on the session it already has</strong>. Nothing reconnects, and no call in flight is interrupted.</li>
+<li>A new tool, or one whose definition changed, arrives <strong>unclassified</strong> and stays refused until somebody classifies it. A tool that is unchanged keeps its classification. A tool the server no longer offers leaves.</li>
+<li>The panel lists the answers workers have recorded, and says for each worker whether it answered the latest request, failed, or has not answered yet. A worker on this version records an answer when it connects the server, so it appears from then on. A worker that fails keeps the tools it had and does not try again until somebody asks again.</li>
+<li>A worker that starts after the request answers it with its own first connection.</li>
+<li><strong>The list is not a record of which workers are running.</strong> A worker that stopped keeps the last answer it recorded, whatever it was. A worker on an older version records nothing, so it does not appear at all. An empty list means only that no answer has been recorded yet.</li>
+</ul>
+<p>The request is on the administration trail, and does not change the server’s configuration. A pipeline can make the same request: <code dir="auto">POST /api/v1/admin/integrations/mcp-servers/{name}/rediscovery</code>, and read the answers with <code dir="auto">GET</code> on the same path.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="quick-diagnosis">Quick diagnosis</h2><a class="sl-anchor-link" href="#quick-diagnosis"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Quick diagnosis”</span></a></div>
 <ul>
 <li>Server is “answering” but a tool fails with personal credential: configure
