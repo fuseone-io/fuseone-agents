@@ -11,11 +11,13 @@ describe("removing a policy", () => {
   it("deletes the selected code and refreshes the active list", async () => {
     let items = [policy("POL-100"), policy("POL-200")];
     let deletedPath = "";
+    let deletedUnder: string | null = null;
     let listReads = 0;
     vi.stubGlobal("fetch", async (request: Request) => {
       const url = new URL(request.url);
       if (request.method === "DELETE") {
         deletedPath = url.pathname;
+        deletedUnder = request.headers.get("If-Match");
         items = items.filter((item) => item.code !== "POL-200");
         return new Response(null, { status: 204 });
       }
@@ -39,9 +41,12 @@ describe("removing a policy", () => {
     await waitFor(() =>
       expect(result.current.policies.data?.items).toHaveLength(2),
     );
-    await act(() => result.current.remove.mutateAsync("POL-200"));
+    await act(() =>
+      result.current.remove.mutateAsync({ code: "POL-200", etag: '"v1-read"' }),
+    );
 
     expect(deletedPath).toBe("/api/v1/policies/POL-200");
+    expect(deletedUnder).toBe('"v1-read"');
     await waitFor(() =>
       expect(
         result.current.policies.data?.items.map((item) => item.code),

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
+import { ifMatch, written } from "@/lib/api/revision";
 import type { components } from "@/lib/api/schema.gen";
 import { integrationKeys } from "@/features/integrations/api";
 
@@ -44,10 +45,12 @@ export function useSetSurface() {
       url: string;
       enabled: boolean;
       acceptsLocalExecution: boolean;
+      /** The revision the server's page read. */
+      etag: string;
     }) =>
-      unwrap(
+      written(
         await api.PUT("/admin/integrations/mcp-servers/{name}", {
-          params: { path: { name: input.name } },
+          params: { path: { name: input.name }, header: ifMatch(input.etag) },
           body: {
             transport: input.transport,
             protocolMode: input.protocolMode,
@@ -60,8 +63,9 @@ export function useSetSurface() {
           },
         }),
       ),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: integrationKeys.all });
-    },
+    // Returned, so the write is not done until the server has been read
+    // again: the next write on the page answers the revision this one made.
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
   });
 }

@@ -1325,7 +1325,9 @@
     "models": "Models this endpoint serves",
     "modelsHint": "One per line. Suggestions for whoever writes an agent, never a limit — behind a proxy the names are the ones you configured there, and nothing shipped in the binary can guess them.",
     "autoToolChoiceModels": "Models driven with tool_choice auto",
-    "autoToolChoiceModelsHint": "One per line. These models refuse the required-tool mode; behind a gateway with fallback routing the refusal never reaches the platform, so declare them here instead."
+    "autoToolChoiceModelsHint": "One per line. These models refuse the required-tool mode; behind a gateway with fallback routing the refusal never reaches the platform, so declare them here instead.",
+    "removeProviderTitle": "Remove {{name}}?",
+    "providerRemoved": "{{name}} removed"
   },
   "connectors": {
     "title": "Governed connectors",
@@ -2400,7 +2402,8 @@
     "memory-secret-warned": "Part of that text is long and random enough to be a credential. Check it, then confirm if it is not one.",
     "standing-forbidden": "{{detail}}'s definition forbids standing approvals: every approval it asks for waits for a person. Change that on the agent, not here.",
     "source-input-erased": "The input this run was recorded with was erased or has expired, so no run was opened. It cannot be brought back.",
-    "no-master-key": "This webhook comes from GitHub and the installation has no master key (FUSEONE_MASTER_KEY). Without it the key could only be stored in the clear, so the webhook stays closed until the master key is configured."
+    "no-master-key": "This webhook comes from GitHub and the installation has no master key (FUSEONE_MASTER_KEY). Without it the key could only be stored in the clear, so the webhook stays closed until the master key is configured.",
+    "revision-missing": "The server answered without the revision a save has to answer, so nothing can be saved here. Try again; if it persists, the server needs looking at."
   },
   "retention": {
     "byDefault": "default, nobody chose it",
@@ -3241,5 +3244,11 @@
       "reasonOther_other": "unavailable",
       "standingAgainstPolicy": "The agent's policy forbids standing approvals"
     }
+  },
+  "revision": {
+    "staleTitle": "Somebody changed this while you were editing",
+    "staleBody": "Nothing was saved, and your edits are still here. Reload to see what is stored now; reloading replaces your edits with it.",
+    "reload": "Reload what is stored",
+    "removeStale": "Somebody changed this since you opened the confirmation, so nothing was removed. Look at it again before removing it."
   }
 }

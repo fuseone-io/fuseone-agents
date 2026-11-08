@@ -1,4 +1,7 @@
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+import { problemMessage } from "@/lib/api/problem-message";
+import { isStale } from "@/lib/api/revision";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { PAGE_ICONS } from "@/components/layout/nav";
@@ -17,8 +20,8 @@ import {
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
-import { ServerForm } from "@/features/integrations/server-form";
-import { ProviderForm } from "@/features/integrations/provider-form";
+import { ServerEditor } from "@/features/integrations/server-editor";
+import { ProviderEditor } from "@/features/integrations/provider-editor";
 import { ServerCard } from "@/features/integrations/server-card";
 import { ProviderCard } from "@/features/integrations/provider-card";
 import {
@@ -219,8 +222,18 @@ export function IntegrationsPage({
               retryCatalog: () => void connectorCatalog.refetch(),
               retryInstances: () => void connectorInstances.refetch(),
               saveInstance: (input) => putConnectorInstance.mutateAsync(input),
-              deleteInstance: (instance) =>
-                void deleteConnectorInstance.mutate(instance),
+              deleteInstance: (instance, etag) =>
+                void deleteConnectorInstance.mutate(
+                  { instance, etag },
+                  {
+                    onError: (error) =>
+                      toast.error(
+                        isStale(error)
+                          ? t("revision.removeStale")
+                          : problemMessage(error, t),
+                      ),
+                  },
+                ),
             }}
           />
         ) : section === "credentials" ? (
@@ -246,10 +259,10 @@ export function IntegrationsPage({
       </IntegrationsShell>
 
       {editing?.kind === "server" && (
-        <ServerForm server={editing.value} onClose={() => setEditing(null)} />
+        <ServerEditor server={editing.value} onClose={() => setEditing(null)} />
       )}
       {editing?.kind === "provider" && (
-        <ProviderForm
+        <ProviderEditor
           provider={editing.value}
           onClose={() => setEditing(null)}
         />

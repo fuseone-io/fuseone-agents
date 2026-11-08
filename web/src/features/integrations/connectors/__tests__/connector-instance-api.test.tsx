@@ -37,7 +37,10 @@ describe("connector instance detail", () => {
             templates: [],
           },
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json", ETag: '"v1-read"' },
+        },
       );
     });
     const instance: ConnectorInstance = {
@@ -70,6 +73,6 @@ describe("connector instance detail", () => {
       company: "acme",
       area: "platform",
     });
-    expect(result.current.data?.sql?.templates).toEqual([]);
+    expect(result.current.data?.body.sql?.templates).toEqual([]);
   });
 });

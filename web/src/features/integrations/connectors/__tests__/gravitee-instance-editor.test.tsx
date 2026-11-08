@@ -65,7 +65,7 @@ describe("Gravitee connector instance editor", () => {
             },
           },
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+        { status: 200, headers: { "Content-Type": "application/json", ETag: '"v1-read"' } },
       );
     });
     const client = new QueryClient({
@@ -146,7 +146,7 @@ describe("Gravitee connector instance editor", () => {
             ...listed,
             gravitee: graviteeDetail("integrations/gravitee/current"),
           }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
+          { status: 200, headers: { "Content-Type": "application/json", ETag: '"v1-read"' } },
         ),
       );
     });

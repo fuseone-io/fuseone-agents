@@ -28,6 +28,7 @@ import {
   githubAppHeaders,
 } from "@/features/integrations/mcp/github-app-credential";
 import { problemMessage } from "@/lib/api/problem-message";
+import { isStale } from "@/lib/api/revision";
 
 /**
  * The connection form, wherever it is shown.
@@ -41,6 +42,8 @@ export function useServerForm(
   server: MCPServer | null,
   onDone: (name: string) => void,
   recipe?: ServerRecipe | null,
+  /** The revision the editor read, and what to do when a save is refused as stale. */
+  revision?: { etag: string; onStale: () => void },
 ) {
   const { t } = useTranslation();
   const put = usePutMCPServer();
@@ -98,6 +101,7 @@ export function useServerForm(
         stdioEgress: stdioEgressFromValues(values),
         acceptsLocalExecution: values.acceptsLocalExecution,
         enabled: values.enabled,
+        etag: revision?.etag,
       });
       toast.success(t("integrations.serverConfigured", { name: values.name }), {
         // A worker picks the change up on its next pass rather than at its
@@ -106,7 +110,8 @@ export function useServerForm(
       });
       onDone(values.name);
     } catch (error) {
-      toast.error(problemMessage(error, t));
+      if (revision && isStale(error)) revision.onStale();
+      else toast.error(problemMessage(error, t));
     }
   }
 

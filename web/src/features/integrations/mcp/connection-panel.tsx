@@ -6,6 +6,8 @@ import { Panel } from "@/components/shared/panel";
 import { Button } from "@/components/ui/button";
 import { Mono } from "@/components/shared/mono";
 import { problemMessage } from "@/lib/api/problem-message";
+import { isStale } from "@/lib/api/revision";
+import type { InOrder } from "@/features/integrations/mcp/use-ordered-writes";
 import { CredentialFields } from "@/features/integrations/mcp/credential-fields";
 import {
   dsnEnvMode,
@@ -56,9 +58,12 @@ import {
 export function ConnectionPanel({
   server,
   recipe,
+  revision,
 }: {
   server: MCPServer;
   recipe?: ServerRecipe | null;
+  /** How its page orders writes to the server, and what to do when one is refused as stale. */
+  revision?: { inOrder: InOrder; onStale: () => void };
 }) {
   const { t } = useTranslation();
   const put = usePutMCPServer();
@@ -99,16 +104,16 @@ export function ConnectionPanel({
     // Passed through exactly as given. An undefined token means this write is
     // not about the token, and an empty one means somebody is removing it —
     // collapsing the two is how a revoke button stops revoking.
-    try {
-      await put.mutateAsync({
-        name: server.name,
-        transport: server.transport ?? "stdio",
-        protocolMode: server.protocolMode ?? "auto",
-        command: server.command ?? "",
-        args: server.args ?? [],
-        url: server.url ?? "",
-        enabled: server.enabled,
-        acceptsLocalExecution: server.acceptsLocalExecution ?? false,
+    const send = (record: MCPServer, etag?: string) =>
+      put.mutateAsync({
+        name: record.name,
+        transport: record.transport ?? "stdio",
+        protocolMode: record.protocolMode ?? "auto",
+        command: record.command ?? "",
+        args: record.args ?? [],
+        url: record.url ?? "",
+        enabled: record.enabled,
+        acceptsLocalExecution: record.acceptsLocalExecution ?? false,
         token: credential.token,
         headers: credential.headers,
         oauth: credential.oauth,
@@ -116,12 +121,20 @@ export function ConnectionPanel({
         env: credential.env,
         configFile: credential.configFile,
         configFileEnv: credential.configFileEnv,
+        etag,
       });
+    try {
+      // On the server's page, after any write before it and with the record
+      // stored then; alone, with the server it was given and no revision.
+      await (revision
+        ? revision.inOrder(({ body, etag }) => send(body, etag))
+        : send(server));
       setValue(blankCredential(credential.configFileEnv ?? storedConfigEnv));
       toast.success(t("mcp.credentialSaved"));
       return true;
     } catch (problem) {
-      toast.error(problemMessage(problem, t));
+      if (revision && isStale(problem)) revision.onStale();
+      else toast.error(problemMessage(problem, t));
       return false;
     }
   }

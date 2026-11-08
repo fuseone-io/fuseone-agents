@@ -1,7 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
+import { ifMatch, revised, revisionReads } from "@/lib/api/revision";
 
-export const channelKeys = { all: ["channels"] as const };
+export const channelKeys = {
+  all: ["channels"] as const,
+  detail: (name: string) => ["channels", "detail", name] as const,
+};
+
+/**
+ * One connection as it is stored now, with the revision a write over it
+ * answers. The revision also names its conversations and identities.
+ */
+export async function readChannel(name: string) {
+  return revised(
+    await api.GET("/admin/channels/{name}", { params: { path: { name } } }),
+  );
+}
+
+/** One connection, read by name where it is edited, and again on every mount. */
+export function useChannelRevision(name: string | undefined) {
+  return useQuery({
+    queryKey: channelKeys.detail(name ?? ""),
+    queryFn: () => readChannel(name!),
+    enabled: Boolean(name),
+    ...revisionReads,
+  });
+}
 
 /** The connections runs report through, with the conversations inside them. */
 export function useChannels(enabled = true) {
@@ -25,15 +49,17 @@ export interface ChannelInput {
   appToken?: string;
   signingSecret?: string;
   enabled?: boolean;
+  /** The revision this write answers; connecting a new one has none. */
+  etag?: string;
 }
 
 export function useSaveChannel() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async ({ name, ...body }: ChannelInput) =>
+    mutationFn: async ({ name, etag, ...body }: ChannelInput) =>
       unwrap(
         await api.PUT("/admin/channels/{name}", {
-          params: { path: { name } },
+          params: { path: { name }, header: ifMatch(etag) },
           body,
         }),
       ),
@@ -45,10 +71,12 @@ export function useSaveChannel() {
 export function useDeleteChannel() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async (name: string) =>
+    // The revision a removal answers is required: removing a connection also
+    // removes its conversations, which an older read may not have shown.
+    mutationFn: async ({ name, etag }: { name: string; etag: string }) =>
       unwrap(
         await api.DELETE("/admin/channels/{name}", {
-          params: { path: { name } },
+          params: { path: { name }, header: ifMatch(etag) },
         }),
       ),
     onSuccess: () =>

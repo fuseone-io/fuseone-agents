@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type {
   ConnectorInstance,
+  ConnectorInstanceDetail,
   ConnectorInstanceInput,
   ConnectorScopeKind,
 } from "@/features/integrations/api";
@@ -51,10 +52,42 @@ export type ConnectorInstanceValues = z.infer<typeof connectorInstanceSchema>;
 export type ConnectorInstanceSaveInput = {
   name: string;
   body: ConnectorInstanceInput;
+  /** The revision the editor read; a new instance has none. */
+  etag?: string;
 };
 export type ConnectorInstanceSaver = (
   input: ConnectorInstanceSaveInput,
 ) => Promise<void>;
+
+/**
+ * The stored instance, in the shape the Vault, Cloudflare and Elasticsearch
+ * forms read. Their blocks are the same in the listing and in the detail; the
+ * blocks that differ belong to other connectors and are left out.
+ */
+export function listedShape(stored: ConnectorInstanceDetail): ConnectorInstance {
+  return {
+    name: stored.name,
+    connector: stored.connector,
+    enabled: stored.enabled,
+    scopeKind: stored.scopeKind,
+    company: stored.company,
+    area: stored.area,
+    hasToken: stored.hasToken,
+    updatedBy: stored.updatedBy,
+    updatedAt: stored.updatedAt,
+    vault: stored.vault,
+    cloudflare: stored.cloudflare,
+    elasticsearch: stored.elasticsearch,
+  };
+}
+
+/** A save that answers the revision its editor read. */
+export function answering(
+  onSave: ConnectorInstanceSaver,
+  etag: string,
+): ConnectorInstanceSaver {
+  return (input) => onSave({ ...input, etag });
+}
 
 export function connectorInstanceDefaults(
   instance: ConnectorInstance | null,

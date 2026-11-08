@@ -1,8 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render as renderBare, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectorInstance } from "@/features/integrations/api";
 import { ConnectorInstancesPanel } from "@/features/integrations/connectors/connector-instances-panel";
 import { setLocale } from "@/i18n";
+
+// The cards read a revision before a removal is confirmed, so they need a client.
+const render = (ui: ReactElement) =>
+  renderBare(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
 
 const evidence: ConnectorInstance = {
   name: "gateway",

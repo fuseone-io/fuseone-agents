@@ -1,10 +1,13 @@
-import { render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PoliciesTable } from "@/features/policies/policies-table";
 import { setLocale } from "@/i18n";
 import type { Policy } from "@/lib/api/client";
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("policy list actions", () => {
   beforeEach(() => setLocale("en-US"));
@@ -49,10 +52,13 @@ describe("policy list actions", () => {
     expect(screen.getByRole("alertdialog")).toHaveTextContent("POL-200");
     expect(screen.getByRole("alertdialog")).toHaveTextContent("Guard exports");
 
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Remove" })).toBeEnabled(),
+    );
     await user.click(screen.getByRole("button", { name: "Remove" }));
 
     expect(onDelete).toHaveBeenCalledOnce();
-    expect(onDelete).toHaveBeenCalledWith("POL-200");
+    expect(onDelete).toHaveBeenCalledWith("POL-200", '"v1-POL-200"');
     expect(screen.getByTestId("location")).toHaveTextContent("/policies");
   });
 
@@ -66,24 +72,32 @@ describe("policy list actions", () => {
 });
 
 function renderTable(onDelete = vi.fn(), canManage = true) {
+  // A removal reads the rule's revision as its confirmation opens.
+  vi.stubGlobal("fetch", async (request: Request) => {
+    const code = new URL(request.url).pathname.split("/").pop() ?? "";
+    const found = policies.find((p) => p.code === code);
+    return Response.json(found, { headers: { ETag: `"v1-${code}"` } });
+  });
   render(
-    <MemoryRouter initialEntries={["/policies"]}>
-      <Routes>
-        <Route
-          path="*"
-          element={
-            <>
-              <PoliciesTable
-                policies={policies}
-                canManage={canManage}
-                onDelete={onDelete}
-              />
-              <Location />
-            </>
-          }
-        />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter initialEntries={["/policies"]}>
+        <Routes>
+          <Route
+            path="*"
+            element={
+              <>
+                <PoliciesTable
+                  policies={policies}
+                  canManage={canManage}
+                  onDelete={onDelete}
+                />
+                <Location />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

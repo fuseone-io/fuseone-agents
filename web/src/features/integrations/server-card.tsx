@@ -3,11 +3,14 @@ import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { IntegrationCard } from "@/features/integrations/integration-card";
-import { RemoveButton } from "@/components/shared/remove-button";
+import { RevisedRemoveButton } from "@/components/shared/revised-remove-button";
 import {
+  integrationKeys,
+  readMCPServer,
   useDeleteMCPServer,
   type MCPServer,
 } from "@/features/integrations/api";
+import { isStale } from "@/lib/api/revision";
 
 /** A tool server: what it runs, and whether it answered. */
 export function ServerCard({
@@ -51,20 +54,31 @@ export function ServerCard({
             <Button variant="ghost" size="sm" className="h-7" onClick={onEdit}>
               {t("agents.edit")}
             </Button>
-            <RemoveButton
+            <RevisedRemoveButton
               title={t("integrations.removeServerTitle", { name: server.name })}
               description={t("integrations.removeServer")}
-              onConfirm={() =>
-                remove.mutate(server.name, {
-                  onSuccess: () =>
-                    toast.success(
-                      t("integrations.serverRemoved", { name: server.name }),
-                    ),
-                  onError: (e) =>
-                    toast.error(
-                      e instanceof Error ? e.message : t("common.removeFailed"),
-                    ),
-                })
+              revision={{
+                queryKey: integrationKeys.mcpServer(server.name),
+                read: async () => (await readMCPServer(server.name)).etag,
+              }}
+              onConfirm={(etag) =>
+                remove.mutate(
+                  { name: server.name, etag },
+                  {
+                    onSuccess: () =>
+                      toast.success(
+                        t("integrations.serverRemoved", { name: server.name }),
+                      ),
+                    onError: (e) =>
+                      toast.error(
+                        isStale(e)
+                          ? t("revision.removeStale")
+                          : e instanceof Error
+                            ? e.message
+                            : t("common.removeFailed"),
+                      ),
+                  },
+                )
               }
             />
           </div>

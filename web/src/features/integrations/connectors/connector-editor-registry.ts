@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import type { ConnectorInstance } from "@/features/integrations/api";
+import type { FormRevision } from "@/lib/api/revision";
 import { ConnectorInstanceForm } from "@/features/integrations/connectors/connector-instance-form";
 import { CloudflareInstanceForm } from "@/features/integrations/connectors/cloudflare-instance-form";
 import { ElasticsearchInstanceForm } from "@/features/integrations/connectors/elasticsearch-instance-form";
@@ -16,12 +17,15 @@ import type { ConnectorInstanceSaver } from "@/features/integrations/connectors/
 import { EvidenceInstanceEditor } from "@/features/integrations/connectors/evidence-instance-editor";
 import { GraviteeInstanceEditor } from "@/features/integrations/connectors/gravitee-instance-editor";
 import { SQLInstanceEditor } from "@/features/integrations/connectors/sql-instance-editor";
+import { storedFirst } from "@/features/integrations/connectors/stored-instance-editor";
 
 export type ConnectorEditorProps = {
   instance: ConnectorInstance | null;
   instances: ConnectorInstance[];
   onClose: () => void;
   onSave: ConnectorInstanceSaver;
+  /** What the editor read; a new instance has none. */
+  revision?: FormRevision;
 };
 
 type EditorDefinition = {
@@ -36,7 +40,7 @@ const editors = [
     connector: "vault",
     label: "connectors.newVault",
     icon: ShieldCheck,
-    Editor: ConnectorInstanceForm,
+    Editor: storedFirst(ConnectorInstanceForm),
   },
   {
     connector: "sql",
@@ -54,13 +58,13 @@ const editors = [
     connector: "cloudflare",
     label: "connectors.newCloudflare",
     icon: Globe,
-    Editor: CloudflareInstanceForm,
+    Editor: storedFirst(CloudflareInstanceForm),
   },
   {
     connector: "elasticsearch",
     label: "connectors.newElasticsearch",
     icon: ScrollText,
-    Editor: ElasticsearchInstanceForm,
+    Editor: storedFirst(ElasticsearchInstanceForm),
   },
   {
     connector: "evidence",

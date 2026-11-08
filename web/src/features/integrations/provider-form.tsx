@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,6 +35,8 @@ import {
   type ModelProvider,
 } from "@/features/integrations/api";
 import { problemMessage } from "@/lib/api/problem-message";
+import { isStale, type FormRevision } from "@/lib/api/revision";
+import { StaleNotice } from "@/components/shared/stale-notice";
 
 const schema = z.object({
   name: z.string().min(1, "integrations.nameProvider"),
@@ -58,12 +61,16 @@ const schema = z.object({
 export function ProviderForm({
   provider,
   onClose,
+  revision,
 }: {
   provider: ModelProvider | null;
   onClose: () => void;
+  /** What the editor read; a provider being added has none. */
+  revision?: FormRevision;
 }) {
   const { t } = useTranslation();
   const put = usePutProvider();
+  const [stale, setStale] = useState(false);
   const presets = useIntegrations().data?.presets ?? [];
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
@@ -117,11 +124,13 @@ export function ProviderForm({
                 .filter((one) => one !== "")
             : [],
         apiKey: values.apiKey || undefined,
+        etag: revision?.etag,
       });
       toast.success(t("integrations.saved", { name: values.name }));
       onClose();
     } catch (error) {
-      toast.error(problemMessage(error, t));
+      if (revision && isStale(error)) setStale(true);
+      else toast.error(problemMessage(error, t));
     }
   }
 
@@ -142,6 +151,9 @@ export function ProviderForm({
           className="flex min-h-0 flex-1 flex-col"
         >
           <PropertiesSheetBody className="space-y-4">
+            {stale && revision && (
+              <StaleNotice onReload={revision.reload} reloading={revision.reloading} />
+            )}
             <FormField
               control={form.control}
               name="name"

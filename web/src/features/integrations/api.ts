@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
+import { ifMatch, revised, revisionReads, written } from "@/lib/api/revision";
 import type { components } from "@/lib/api/schema.gen";
 
 export type MCPServer = components["schemas"]["MCPServer"];
@@ -17,6 +18,11 @@ export type ConnectorInstanceDetail =
 export type ConnectorInstanceInput =
   components["schemas"]["ConnectorInstanceInput"];
 export type ConnectorScopeKind = components["schemas"]["ConnectorScopeKind"];
+/** What names one instance: a read by name needs nothing else. */
+export type ConnectorInstanceKey = Pick<
+  ConnectorInstance,
+  "name" | "scopeKind" | "company" | "area"
+>;
 export type ConnectorVaultConfig =
   components["schemas"]["ConnectorVaultConfig"];
 
@@ -24,11 +30,15 @@ export const integrationKeys = {
   all: ["integrations"] as const,
   list: () => [...integrationKeys.all, "list"] as const,
   mcpCredentials: () => [...integrationKeys.all, "mcp-credentials"] as const,
+  mcpServer: (name: string) =>
+    [...integrationKeys.all, "mcp-server", name] as const,
+  provider: (name: string) =>
+    [...integrationKeys.all, "provider", name] as const,
   connectorCatalog: () =>
     [...integrationKeys.all, "connectors", "catalog"] as const,
   connectorInstances: () =>
     [...integrationKeys.all, "connectors", "instances"] as const,
-  connectorInstance: (instance: ConnectorInstance) =>
+  connectorInstance: (instance: ConnectorInstanceKey) =>
     [
       ...integrationKeys.connectorInstances(),
       instance.scopeKind,
@@ -42,6 +52,28 @@ export function useIntegrations() {
   return useQuery({
     queryKey: integrationKeys.list(),
     queryFn: async () => unwrap(await api.GET("/admin/integrations")),
+  });
+}
+
+/** One tool server as it is stored now, with the revision a write over it answers. */
+export async function readMCPServer(name: string) {
+  return revised(
+    await api.GET("/admin/integrations/mcp-servers/{name}", {
+      params: { path: { name } },
+    }),
+  );
+}
+
+/**
+ * One tool server, read by name where it is edited. Read again on every mount:
+ * a form seeded from a cached copy would save over a version nobody saw.
+ */
+export function useMCPServerRevision(name: string | undefined) {
+  return useQuery({
+    queryKey: integrationKeys.mcpServer(name ?? ""),
+    queryFn: () => readMCPServer(name!),
+    enabled: Boolean(name),
+    ...revisionReads,
   });
 }
 
@@ -103,10 +135,12 @@ export function usePutMCPServer() {
       stdioEgress?: components["schemas"]["MCPStdioEgress"];
       acceptsLocalExecution: boolean;
       enabled: boolean;
+      /** The revision this write answers; connecting a new server has none. */
+      etag?: string;
     }) =>
-      unwrap(
+      written(
         await api.PUT("/admin/integrations/mcp-servers/{name}", {
-          params: { path: { name: input.name } },
+          params: { path: { name: input.name }, header: ifMatch(input.etag) },
           body: {
             transport: input.transport,
             protocolMode: input.protocolMode,
@@ -131,21 +165,25 @@ export function usePutMCPServer() {
           },
         }),
       ),
+    // Returned, so the write is not done until the server has been read
+    // again: the next write on the page answers the revision this one made.
     onSuccess: () =>
-      void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
+      queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
   });
 }
 
 export function useDeleteMCPServer() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (name: string) =>
+    mutationFn: async ({ name, etag }: { name: string; etag: string }) =>
       unwrap(
         await api.DELETE("/admin/integrations/mcp-servers/{name}", {
-          params: { path: { name } },
+          params: { path: { name }, header: ifMatch(etag) },
         }),
       ),
-    onSuccess: () =>
+    // Refused as stale or not, what is on screen may be older than what is
+    // stored: show it again either way.
+    onSettled: () =>
       void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
   });
 }
@@ -176,42 +214,57 @@ export function useConnectorInstances(enabled = true) {
   });
 }
 
-export function useConnectorInstance(instance: ConnectorInstance | undefined) {
+/**
+ * One connector instance as it is stored now, with the revision a write over
+ * it answers. Body and revision come from one read of one row.
+ */
+export async function readConnectorInstance(instance: ConnectorInstanceKey) {
+  const detail = revised(
+    await api.GET("/admin/integrations/connectors/instances/{name}", {
+      params: {
+        path: { name: instance.name },
+        query: {
+          scopeKind: instance.scopeKind,
+          company: instance.company,
+          area: instance.area,
+        },
+      },
+    }),
+  );
+  if (!detail.body) throw new Error("connector instance detail is missing");
+  return detail;
+}
+
+export function useConnectorInstance(
+  instance: ConnectorInstanceKey | undefined,
+) {
   return useQuery({
     queryKey: instance
       ? integrationKeys.connectorInstance(instance)
       : [...integrationKeys.connectorInstances(), "detail", "idle"],
     queryFn: async () => {
       if (!instance) throw new Error("connector instance is required");
-      const detail = unwrap(
-        await api.GET("/admin/integrations/connectors/instances/{name}", {
-          params: {
-            path: { name: instance.name },
-            query: {
-              scopeKind: instance.scopeKind,
-              company: instance.company,
-              area: instance.area,
-            },
-          },
-        }),
-      );
-      if (!detail) throw new Error("connector instance detail is missing");
-      return detail;
+      return readConnectorInstance(instance);
     },
     enabled: Boolean(instance),
     // A cached authored boundary must not seed a read-edit-write form while a
     // fresher detail is loading. The form reads defaultValues only once.
-    refetchOnMount: "always",
+    ...revisionReads,
   });
 }
 
 export function usePutConnectorInstance() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { name: string; body: ConnectorInstanceInput }) =>
+    mutationFn: async (input: {
+      name: string;
+      body: ConnectorInstanceInput;
+      /** The revision this write answers; a new instance has none. */
+      etag?: string;
+    }) =>
       unwrap(
         await api.PUT("/admin/integrations/connectors/instances/{name}", {
-          params: { path: { name: input.name } },
+          params: { path: { name: input.name }, header: ifMatch(input.etag) },
           body: input.body,
         }),
       ),
@@ -223,10 +276,17 @@ export function usePutConnectorInstance() {
 export function useDeleteConnectorInstance() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (instance: ConnectorInstance) =>
+    mutationFn: async ({
+      instance,
+      etag,
+    }: {
+      instance: ConnectorInstance;
+      etag: string;
+    }) =>
       unwrap(
         await api.DELETE("/admin/integrations/connectors/instances/{name}", {
           params: {
+            header: ifMatch(etag),
             path: { name: instance.name },
             query: {
               scopeKind: instance.scopeKind,
@@ -236,7 +296,7 @@ export function useDeleteConnectorInstance() {
           },
         }),
       ),
-    onSuccess: () =>
+    onSettled: () =>
       void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
   });
 }
@@ -297,6 +357,25 @@ export function useProbeMCPServer() {
   });
 }
 
+/** One model provider as it is stored now, with the revision a write over it answers. */
+export async function readProvider(name: string) {
+  return revised(
+    await api.GET("/admin/integrations/providers/{name}", {
+      params: { path: { name } },
+    }),
+  );
+}
+
+/** One model provider, read by name where it is edited, and again on every mount. */
+export function useProviderRevision(name: string | undefined) {
+  return useQuery({
+    queryKey: integrationKeys.provider(name ?? ""),
+    queryFn: () => readProvider(name!),
+    enabled: Boolean(name),
+    ...revisionReads,
+  });
+}
+
 /**
  * An omitted key keeps the stored one, so the form sends nothing rather than
  * an empty string when the operator left the field alone.
@@ -312,10 +391,12 @@ export function usePutProvider() {
       autoToolChoiceModels?: string[];
       apiKey?: string;
       enabled: boolean;
+      /** The revision this write answers; adding a provider has none. */
+      etag?: string;
     }) =>
       unwrap(
         await api.PUT("/admin/integrations/providers/{name}", {
-          params: { path: { name: input.name } },
+          params: { path: { name: input.name }, header: ifMatch(input.etag) },
           body: {
             kind: input.kind,
             baseUrl: input.baseUrl,
@@ -334,13 +415,13 @@ export function usePutProvider() {
 export function useDeleteProvider() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (name: string) =>
+    mutationFn: async ({ name, etag }: { name: string; etag: string }) =>
       unwrap(
         await api.DELETE("/admin/integrations/providers/{name}", {
-          params: { path: { name } },
+          params: { path: { name }, header: ifMatch(etag) },
         }),
       ),
-    onSuccess: () =>
+    onSettled: () =>
       void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
   });
 }

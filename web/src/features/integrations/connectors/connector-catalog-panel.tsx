@@ -110,7 +110,7 @@ export type ConnectorPanelActions = {
   retryCatalog: () => void;
   retryInstances: () => void;
   saveInstance: ConnectorInstanceSaver;
-  deleteInstance: (instance: ConnectorInstance) => void;
+  deleteInstance: (instance: ConnectorInstance, etag: string) => void;
 };
 
 function ConnectorIntro() {

@@ -2,11 +2,14 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { IntegrationCard } from "@/features/integrations/integration-card";
-import { RemoveButton } from "@/components/shared/remove-button";
+import { RevisedRemoveButton } from "@/components/shared/revised-remove-button";
 import {
+  integrationKeys,
+  readProvider,
   useDeleteProvider,
   type ModelProvider,
 } from "@/features/integrations/api";
+import { isStale } from "@/lib/api/revision";
 
 /**
  * A model provider.
@@ -38,17 +41,35 @@ export function ProviderCard({
           <Button variant="ghost" size="sm" className="h-7" onClick={onEdit}>
             {t("agents.edit")}
           </Button>
-          <RemoveButton
-            title={`Remover ${provider.name}?`}
+          <RevisedRemoveButton
+            title={t("integrations.removeProviderTitle", {
+              name: provider.name,
+            })}
             description={t("integrations.removeProvider")}
-            onConfirm={() =>
-              remove.mutate(provider.name, {
-                onSuccess: () => toast.success(`${provider.name} removido`),
-                onError: (e) =>
-                  toast.error(
-                    e instanceof Error ? e.message : t("common.removeFailed"),
-                  ),
-              })
+            revision={{
+              queryKey: integrationKeys.provider(provider.name),
+              read: async () => (await readProvider(provider.name)).etag,
+            }}
+            onConfirm={(etag) =>
+              remove.mutate(
+                { name: provider.name, etag },
+                {
+                  onSuccess: () =>
+                    toast.success(
+                      t("integrations.providerRemoved", {
+                        name: provider.name,
+                      }),
+                    ),
+                  onError: (e) =>
+                    toast.error(
+                      isStale(e)
+                        ? t("revision.removeStale")
+                        : e instanceof Error
+                          ? e.message
+                          : t("common.removeFailed"),
+                    ),
+                },
+              )
             }
           />
         </div>

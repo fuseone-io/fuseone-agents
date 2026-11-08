@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Mono } from "@/components/shared/mono";
-import { RemoveButton } from "@/components/shared/remove-button";
+import { RevisedRemoveButton } from "@/components/shared/revised-remove-button";
+import { policyKeys, readPolicy } from "@/features/policies/api";
 import { effectOf, stateOf } from "@/features/policies/policy-effect";
 import { cn } from "@/lib/utils";
 import type { Policy } from "@/lib/api/client";
@@ -32,7 +33,8 @@ export function PoliciesTable({
   policies: Policy[];
   canManage: boolean;
   deletingCode?: string;
-  onDelete: (code: string) => void;
+  /** Removes the rule under the revision read as its confirmation opened. */
+  onDelete: (code: string, etag: string) => void;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -139,13 +141,17 @@ export function PoliciesTable({
                       <Pencil className="size-4" aria-hidden />
                     </Link>
                   </Button>
-                  <RemoveButton
+                  <RevisedRemoveButton
                     title={t("policies.removeNamed", { name: policy.name })}
                     description={t("policies.removeDescription", {
                       code: policy.code,
                     })}
                     disabled={deletingCode === policy.code}
-                    onConfirm={() => onDelete(policy.code)}
+                    revision={{
+                      queryKey: policyKeys.detail(policy.code),
+                      read: async () => (await readPolicy(policy.code)).etag,
+                    }}
+                    onConfirm={(etag) => onDelete(policy.code, etag)}
                   />
                 </div>
               </TableCell>

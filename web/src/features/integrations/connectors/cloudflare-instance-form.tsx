@@ -30,13 +30,16 @@ import {
 } from "@/features/integrations/connectors/cloudflare-instance-model";
 import type { ConnectorEditorProps } from "@/features/integrations/connectors/connector-editor-registry";
 import { problemMessage } from "@/lib/api/problem-message";
+import { useStaleRevision } from "@/hooks/use-stale-revision";
 
 export function CloudflareInstanceForm({
   instance,
   onClose,
   onSave,
+  revision,
 }: ConnectorEditorProps) {
   const { t } = useTranslation();
+  const stale = useStaleRevision(revision);
   const company = useActiveScope((s) => s.company);
   const area = useActiveScope((s) => s.area);
   const form = useForm<CloudflareInstanceValues>({
@@ -63,7 +66,7 @@ export function CloudflareInstanceForm({
       toast.success(t("connectors.instanceSaved"));
       onClose();
     } catch (error) {
-      toast.error(problemMessage(error, t));
+      if (!stale.refused(error)) toast.error(problemMessage(error, t));
     }
   }
 
@@ -82,6 +85,7 @@ export function CloudflareInstanceForm({
           className="flex min-h-0 flex-1 flex-col"
         >
           <PropertiesSheetBody className="space-y-4">
+            {stale.notice}
             <ConnectorIdentityFields
               editing={instance !== null}
               connector="cloudflare"
