@@ -28,6 +28,26 @@ field" is a commit message.
 
 ---
 
+## [0.100.0] — 2026-11-09
+
+A compatibility release for experiments (#297). There is no experiment endpoint and nothing
+writes an experiment yet. This version only teaches every replica to tell an experiment
+apart from a battery, so that the release which starts writing them is safe to roll out.
+It adds no migration.
+
+### Upgrade notes
+
+- **Every `serve` and `worker` replica must run 0.100.0 before the release that writes
+  experiments.** From this version, a simulated run that names an experiment never counts
+  as the version's battery: it does not start or stop the version, does not reset the clock
+  of the nightly battery, and does not let an agent leave Draft. An older replica counts any
+  simulated run, so a single one left behind would read an experiment as evidence about a
+  version that was never simulated as published.
+- **Once the first experiment exists, rolling back below 0.100.0 is not safe.** A replica
+  on an older version would read the recorded experiments as batteries and simulations.
+
+---
+
 ## [0.99.1] — 2026-11-09
 
 A fix on top of 0.99.0, and nothing else. It adds no migration.
