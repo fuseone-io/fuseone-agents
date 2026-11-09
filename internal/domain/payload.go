@@ -41,6 +41,10 @@ type RunStartedPayload struct {
 	// given one: inventing which version it ran would be worse than admitting that
 	// nobody knows.
 	DatasetVersion int64 `json:"dataset_version,omitempty"`
+	// Experiment names the experiment this simulated run belongs to, and is what keeps it
+	// from ever counting as a battery, whatever its configuration (NT-015).
+	Experiment       string            `json:"experiment,omitempty"`
+	ExperimentConfig *ExperimentConfig `json:"experiment_config,omitempty"`
 
 	// Origin is where the ask came from, when it came from a conversation.
 	Origin *RunOrigin `json:"origin,omitempty"`

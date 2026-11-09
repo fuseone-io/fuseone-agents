@@ -50,12 +50,18 @@ simulation exists — not that anybody read it. Reviewing is the half of that
 requirement this platform cannot observe: it can put the report in front of a
 person and record that somebody asked for it, and it cannot know they thought
 about it. Claiming otherwise in a check would be worse than the gap.
+
+An experiment does not count (NT-015): the agent has to be simulated as it is, and an
+experiment may have run it on a model it would never use.
 */
 func (p *Postgres) HasSimulation(ctx context.Context, agent domain.AgentID) (bool, error) {
 	var exists bool
 	err := p.pool.QueryRow(ctx, `
 		select exists (
-			select 1 from runs where agent_id = $1 and simulated
+			select 1 from runs r
+			join run_steps s on s.run_id = r.run_id and s.seq = 1 and s.kind = 'run_started'
+			where r.agent_id = $1 and r.simulated
+			  and coalesce(s.payload->>'experiment', '') = ''
 		)`, string(agent)).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("ledger: read simulations of %s: %w", agent, err)
@@ -73,6 +79,10 @@ recording it could disagree with them.
 Simulated corpus runs only. A real run is not a rehearsal, and an ad-hoc
 simulation is not evidence about the saved corpus. Counting either one would
 let an agent be started on the strength of something the corpus never checked.
+
+An experiment replays the same cases and is not a battery either, whatever its
+configuration (NT-015): counted, it would be the evidence the start gate and the drift
+sweep read about this version, and the clock that decides when a real battery runs.
 */
 func (p *Postgres) Batteries(
 	ctx context.Context, agent domain.AgentID, version domain.VersionID, limit int,
@@ -90,6 +100,7 @@ func (p *Postgres) Batteries(
 		      and s.seq = 1
 		      and s.kind = 'run_started'
 		      and coalesce(s.payload->>'case', '') <> ''
+		      and coalesce(s.payload->>'experiment', '') = ''
 		  )
 		group by r.simulation
 		order by opened desc, r.simulation desc
@@ -145,6 +156,7 @@ func (p *Postgres) LastBatteryAt(
 		      and s.seq = 1
 		      and s.kind = 'run_started'
 		      and coalesce(s.payload->>'case', '') <> ''
+		      and coalesce(s.payload->>'experiment', '') = ''
 		  )`,
 		string(agent), string(version)).Scan(&at)
 
