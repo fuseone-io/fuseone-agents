@@ -115,7 +115,7 @@ What a worker loaded becomes what the installation has published, so the API
 can answer "which agents exist" without reading somebody's disk. Publishing the
 same version twice is a no-op: the version is the digest of the content.
 */
-func (p *workerParts) loadAndPublish(ctx context.Context, dir string) (worker.Specs, error) {
+func (p *workerParts) loadAndPublish(ctx context.Context, dir string) (*spec.Resolver, error) {
 	specs, err := loadSpecs(ctx, dir, p.toolSchemas(), p.integrations, p.registry)
 	if err != nil {
 		return nil, err
@@ -156,7 +156,7 @@ screen for a set of a few dozen rather than the installation's steady load —
 and because the budget it spends is real.
 */
 func (p *workerParts) pools(
-	cfg workerFlags, deps engine.Deps, specs worker.Specs, metrics *worker.MetricsRegistry,
+	cfg workerFlags, deps engine.Deps, specs *spec.Resolver, metrics *worker.MetricsRegistry,
 ) (*worker.Worker, *worker.Worker) {
 	// What takes each tool back, for a run somebody abandons. The same
 	// catalogue that says what a tool does: the Curator rules on both in one
@@ -173,7 +173,10 @@ func (p *workerParts) pools(
 		Lease:       cfg.lease,
 	}, simulations(p.store), simulate.Deps(deps), specs, engine.SystemClock{}, slog.Default()).
 		WithUndos(p.catalog).
-		WithMetrics(metrics.Pool("simulations", simulationSlots(cfg.concurrency)))
+		WithMetrics(metrics.Pool("simulations", simulationSlots(cfg.concurrency))).
+		// Only the simulation pool resolves an experiment's configuration: the pool
+		// with real tools never plans on a model nobody published (NT-015).
+		WithExperiments(specs)
 
 	if p.configPool != nil {
 		// How far each agent is trusted. Without it the pool treats every

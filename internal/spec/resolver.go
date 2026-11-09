@@ -69,7 +69,10 @@ func NewResolver(specs Definitions, providers *model.Registry, tools model.ToolS
 	}
 }
 
-var _ worker.Specs = (*Resolver)(nil)
+var (
+	_ worker.Specs           = (*Resolver)(nil)
+	_ worker.ExperimentSpecs = (*Resolver)(nil)
+)
 
 // Resolve returns the run configuration and planner for one agent version.
 //

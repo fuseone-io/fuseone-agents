@@ -24,7 +24,6 @@ import (
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/tools"
 	"github.com/fuseone/agents/internal/trigger"
-	"github.com/fuseone/agents/internal/worker"
 )
 
 // What start-up reconciles between the specification files and the database.
@@ -168,7 +167,7 @@ type toolSchemas interface {
 func loadSpecs(
 	ctx context.Context, dir string, catalog toolSchemas,
 	integrations *admin.Integrations, registry *spec.Registry,
-) (worker.Specs, error) {
+) (*spec.Resolver, error) {
 	/*
 		Where definitions are resolved from, which is the difference between
 		the two ways this platform is installed.

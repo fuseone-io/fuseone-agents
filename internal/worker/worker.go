@@ -131,8 +131,10 @@ type Worker struct {
 	// per run from the agent's own definition.
 	deps  engine.Deps
 	specs Specs
-	clock engine.Clock
-	log   *slog.Logger
+	// experiments is wired on the simulation pool only (experiment.go).
+	experiments ExperimentSpecs
+	clock       engine.Clock
+	log         *slog.Logger
 
 	// ceilings is optional; nil means the only budget is the agent's own.
 	ceilings Ceilings

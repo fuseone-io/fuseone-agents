@@ -48,7 +48,7 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	ctx, stopRenewing := w.keepLease(ctx, claim)
 	defer stopRenewing()
 
-	resolved, err := w.specs.Resolve(ctx, claim.AgentID, claim.VersionID)
+	resolved, err := w.resolve(ctx, claim)
 	if err == nil && resolved.Planner == nil {
 		// A resolution with no planner is a misconfiguration, not a transient
 		// fault. Handing the nil to the runner panics mid-run and leaves the
