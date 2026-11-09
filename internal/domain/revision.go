@@ -64,11 +64,20 @@ func (e *StaleError) Error() string {
 type IfMatch struct {
 	present bool
 	any     bool
-	strong  []Revision
+	tags    []Revision
 }
 
-// ParseIfMatch reads the header as RFC 9110 §13.1.1 defines it. Nil is no header. A weak
-// tag parses and never matches: If-Match compares strongly.
+/*
+ParseIfMatch reads the header as RFC 9110 §13.1.1 defines it. Nil is no header.
+
+A weak tag matches the strong tag it weakens, which is a departure from the RFC's strong
+comparison, and a deliberate one. Every tag this server mints is strong, and only an
+intermediary turns it weak: a proxy that compresses a response marks its ETag W/, because
+the bytes it sends are no longer the bytes that tag was given to. The browser hands that
+weakened tag back. Compared strongly, every write behind such a proxy was refused as stale,
+whatever anybody had changed. What the RFC protects is byte identity, and a revision here
+was never about bytes: it names a configuration, so W/"v1-x" and "v1-x" name the same one.
+*/
 func ParseIfMatch(header *string) (IfMatch, error) {
 	if header == nil {
 		return IfMatch{}, nil
@@ -84,14 +93,12 @@ func ParseIfMatch(header *string) (IfMatch, error) {
 		if rest == "" {
 			break
 		}
-		tag, weak, after, err := nextEntityTag(rest)
+		tag, after, err := nextEntityTag(rest)
 		if err != nil {
 			return IfMatch{}, err
 		}
 		found = true
-		if !weak {
-			parsed.strong = append(parsed.strong, Revision(tag))
-		}
+		parsed.tags = append(parsed.tags, Revision(tag))
 		rest, err = afterListElement(after)
 		if err != nil {
 			return IfMatch{}, err
@@ -103,22 +110,21 @@ func ParseIfMatch(header *string) (IfMatch, error) {
 	return parsed, nil
 }
 
-func nextEntityTag(s string) (tag string, weak bool, rest string, err error) {
-	if strings.HasPrefix(s, `W/`) {
-		weak, s = true, s[2:]
-	}
+// nextEntityTag reads one tag, with its quotes and without any W/ before it.
+func nextEntityTag(s string) (tag string, rest string, err error) {
+	s = strings.TrimPrefix(s, `W/`)
 	if !strings.HasPrefix(s, `"`) {
-		return "", false, "", ErrBadIfMatch
+		return "", "", ErrBadIfMatch
 	}
 	for i := 1; i < len(s); i++ {
 		switch c := s[i]; {
 		case c == '"':
-			return s[:i+1], weak, s[i+1:], nil
+			return s[:i+1], s[i+1:], nil
 		case c < 0x21 || c == 0x7f:
-			return "", false, "", fmt.Errorf("%w: a tag holds a control character or a space", ErrBadIfMatch)
+			return "", "", fmt.Errorf("%w: a tag holds a control character or a space", ErrBadIfMatch)
 		}
 	}
-	return "", false, "", ErrBadIfMatch
+	return "", "", ErrBadIfMatch
 }
 
 // afterListElement allows only whitespace before the next comma or the end.
@@ -145,5 +151,5 @@ func (m IfMatch) Allows(exists bool, current Revision) bool {
 	case m.any:
 		return true
 	}
-	return slices.Contains(m.strong, current)
+	return slices.Contains(m.tags, current)
 }

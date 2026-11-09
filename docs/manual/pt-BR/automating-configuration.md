@@ -79,8 +79,12 @@ If-Match: "v1-3f9c…"
   com o que está lá; nunca reenvie o mesmo corpo com o tag novo sem olhar.
 - **`If-Match: *`** quer dizer "só se existir". Qualquer `If-Match` num recurso
   que não existe é 412, `*` incluído.
-- **Tags fracos (`W/"…"`) nunca casam.** Um cabeçalho que não se consegue ler é
-  400, nunca ignorado: ignorá-lo desligaria a proteção que o cliente pediu.
+- **Um tag fraco (`W/"…"`) casa com a revisão que ele enfraquece.** Um proxy
+  que comprime respostas marca como fraco o `ETag` que repassa, e o cliente
+  devolve esse tag; a revisão nomeia uma configuração, não bytes, então continua
+  sendo a mesma.
+- **Um cabeçalho que não se consegue ler é 400**, nunca ignorado: ignorá-lo
+  desligaria a proteção que o cliente pediu.
 - **Sem `If-Match`, vale a última gravação**, como sempre foi.
 
 O `ETag` nomeia o conteúdo do recurso, não o momento em que foi gravado. Ele

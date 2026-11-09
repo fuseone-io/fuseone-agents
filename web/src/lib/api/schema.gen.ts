@@ -6334,9 +6334,10 @@ export interface components {
     parameters: {
         /**
          * @description Refuses the write with a 412 unless the resource is still at one of these
-         *     revisions. `*` means it exists at all. Weak tags never match. Any value on
-         *     something that does not exist is refused, and one that does not parse is a
-         *     400. Without the header, the last write wins.
+         *     revisions. `*` means it exists at all. A weak tag matches the revision it
+         *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+         *     on something that does not exist is refused, and one that does not parse is
+         *     a 400. Without the header, the last write wins.
          */
         IfMatch: string;
         /**
@@ -8247,9 +8248,10 @@ export interface operations {
             header?: {
                 /**
                  * @description Refuses the write with a 412 unless the resource is still at one of these
-                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
-                 *     something that does not exist is refused, and one that does not parse is a
-                 *     400. Without the header, the last write wins.
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
                  */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
@@ -8286,9 +8288,10 @@ export interface operations {
             header?: {
                 /**
                  * @description Refuses the write with a 412 unless the resource is still at one of these
-                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
-                 *     something that does not exist is refused, and one that does not parse is a
-                 *     400. Without the header, the last write wins.
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
                  */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
@@ -9395,9 +9398,10 @@ export interface operations {
             header?: {
                 /**
                  * @description Refuses the write with a 412 unless the resource is still at one of these
-                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
-                 *     something that does not exist is refused, and one that does not parse is a
-                 *     400. Without the header, the last write wins.
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
                  */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
@@ -9436,9 +9440,10 @@ export interface operations {
             header?: {
                 /**
                  * @description Refuses the write with a 412 unless the resource is still at one of these
-                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
-                 *     something that does not exist is refused, and one that does not parse is a
-                 *     400. Without the header, the last write wins.
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
                  */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
@@ -9494,9 +9499,10 @@ export interface operations {
             header?: {
                 /**
                  * @description Refuses the write with a 412 unless the resource is still at one of these
-                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
-                 *     something that does not exist is refused, and one that does not parse is a
-                 *     400. Without the header, the last write wins.
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
                  */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
@@ -9578,9 +9584,10 @@ export interface operations {
             header?: {
                 /**
                  * @description Refuses the write with a 412 unless the resource is still at one of these
-                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
-                 *     something that does not exist is refused, and one that does not parse is a
-                 *     400. Without the header, the last write wins.
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
                  */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
@@ -9833,9 +9840,10 @@ export interface operations {
             header?: {
                 /**
                  * @description Refuses the write with a 412 unless the resource is still at one of these
-                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
-                 *     something that does not exist is refused, and one that does not parse is a
-                 *     400. Without the header, the last write wins.
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
                  */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
@@ -9910,9 +9918,10 @@ export interface operations {
             header?: {
                 /**
                  * @description Refuses the write with a 412 unless the resource is still at one of these
-                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
-                 *     something that does not exist is refused, and one that does not parse is a
-                 *     400. Without the header, the last write wins.
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
                  */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
@@ -10214,9 +10223,10 @@ export interface operations {
             header?: {
                 /**
                  * @description Refuses the write with a 412 unless the resource is still at one of these
-                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
-                 *     something that does not exist is refused, and one that does not parse is a
-                 *     400. Without the header, the last write wins.
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
                  */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
@@ -10279,9 +10289,10 @@ export interface operations {
             header?: {
                 /**
                  * @description Refuses the write with a 412 unless the resource is still at one of these
-                 *     revisions. `*` means it exists at all. Weak tags never match. Any value on
-                 *     something that does not exist is refused, and one that does not parse is a
-                 *     400. Without the header, the last write wins.
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
                  */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };

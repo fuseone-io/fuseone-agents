@@ -78,9 +78,12 @@ If-Match: "v1-3f9c…"
   retry the same body under the new tag without looking.
 - **`If-Match: *`** means "only if it exists". Any `If-Match` on a resource
   that does not exist is a 412, `*` included.
-- **Weak tags (`W/"…"`) never match.** A header that does not parse is a 400,
-  never ignored: ignoring it would turn off the protection the client asked
-  for.
+- **A weak tag (`W/"…"`) matches the revision it weakens.** A proxy that
+  compresses responses marks the `ETag` it forwards as weak, and a client hands
+  that tag back; the revision names a configuration, not bytes, so it is still
+  the same one.
+- **A header that does not parse is a 400**, never ignored: ignoring it would
+  turn off the protection the client asked for.
 - **Without `If-Match`, the last write wins**, as it always has.
 
 The `ETag` names the resource's content, not when it was written. It moves when
