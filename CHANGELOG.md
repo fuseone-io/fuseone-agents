@@ -28,7 +28,7 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.99.0] — 2026-11-09
 
 ### Upgrade notes
 
