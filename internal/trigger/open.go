@@ -80,6 +80,10 @@ type Request struct {
 	Case string
 	// DatasetVersion is the version of the corpus that case was read from.
 	DatasetVersion int64
+	// Experiment names the experiment a simulated run belongs to, and ExperimentConfig is
+	// what it overrides. Only an experiment carries a configuration (experiment.go).
+	Experiment       string
+	ExperimentConfig *domain.ExperimentConfig
 	// Version pins the run to one published version of the agent. Empty is
 	// the version published now, which is what every trigger but one wants.
 	Version domain.VersionID
@@ -124,6 +128,10 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		return Result{}, fmt.Errorf("trigger: invalid ticket context")
 	}
 	workItem, err := workItemOf(req)
+	if err != nil {
+		return Result{}, err
+	}
+	experimentConfig, err := experimentOf(req)
 	if err != nil {
 		return Result{}, err
 	}
@@ -220,6 +228,8 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 			SourceRun:        req.SourceRun,
 			Chain:            req.Chain,
 			WorkItem:         workItem,
+			Experiment:       req.Experiment,
+			ExperimentConfig: experimentConfig,
 		}),
 	})
 	if err != nil {
