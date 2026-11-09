@@ -134,7 +134,9 @@ func TestPolicyETag_headerForms_meanWhatHTTPSays(t *testing.T) {
 		{"a list holding it", []string{`"v1-old", ` + current}, http.StatusOK},
 		{"two lines holding it", []string{`"v1-old"`, current}, http.StatusOK},
 		{"a list without it", []string{`"v1-old", "v1-older"`}, http.StatusPreconditionFailed},
-		{"weak", []string{`W/` + current}, http.StatusPreconditionFailed},
+		// What a compressing proxy hands back: the same revision, marked weak.
+		{"it, weakened", []string{`W/` + current}, http.StatusOK},
+		{"another, weakened", []string{`W/"v1-old"`}, http.StatusPreconditionFailed},
 		{"unquoted", []string{strings.Trim(current, `"`)}, http.StatusBadRequest},
 		{"empty", []string{``}, http.StatusBadRequest},
 		{"star in a list", []string{`*, ` + current}, http.StatusBadRequest},
