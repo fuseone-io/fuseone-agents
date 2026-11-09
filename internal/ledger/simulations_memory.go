@@ -48,7 +48,8 @@ func (m *Memory) SimulationRuns(ctx context.Context, simulation string) ([]domai
 }
 
 // HasSimulation reports whether an agent has ever been simulated. The gate on
-// leaving Draft (FU-10), and the same fold the durable store does in SQL.
+// leaving Draft (FU-10), and the same fold the durable store does in SQL, which
+// leaves experiments out.
 func (m *Memory) HasSimulation(ctx context.Context, agent domain.AgentID) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
@@ -58,7 +59,8 @@ func (m *Memory) HasSimulation(ctx context.Context, agent domain.AgentID) (bool,
 	defer m.mu.RUnlock()
 
 	for _, steps := range m.runs {
-		if len(steps) > 0 && steps[0].AgentID == agent && isSimulated(steps) {
+		if len(steps) > 0 && steps[0].AgentID == agent && isSimulated(steps) &&
+			startedPayload(steps[0]).Experiment == "" {
 			return true, nil
 		}
 	}
@@ -119,6 +121,9 @@ func (m *Memory) Batteries(
 			continue
 		}
 		if !started.Simulated || started.Simulation == "" || started.Case == "" {
+			continue
+		}
+		if started.Experiment != "" {
 			continue
 		}
 		if at, seen := opened[started.Simulation]; !seen || first.At.After(at) {
@@ -184,6 +189,9 @@ func (m *Memory) LastBatteryAt(
 			continue
 		}
 		if !started.Simulated || started.Simulation == "" || started.Case == "" {
+			continue
+		}
+		if started.Experiment != "" {
 			continue
 		}
 		if first.At.After(newest) {
