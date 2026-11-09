@@ -765,6 +765,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/experiments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run one agent version against a dataset version under another configuration
+         * @description An experiment is a simulation with three things pinned: a dataset version, an agent
+         *     version and a configuration (NT-015). Every run is simulated: the Gate decides, the
+         *     ledger records, the budget reserves, and the tool layer answers with nothing.
+         *
+         *     An experiment is never a battery, whatever its configuration. It does not start or
+         *     stop a version, it does not count as the version's last battery, and it does not let
+         *     an agent leave Draft. It changes nothing about the agent: moving to the model that
+         *     won is an ordinary new version, with its own battery.
+         *
+         *     Any non-empty configuration runs without the version's declared fallback, so a
+         *     result never reports one model while measuring another. When the chosen model's
+         *     retries run out, the run parks. An empty configuration is the version as published,
+         *     fallback included.
+         *
+         *     Returns immediately, like a simulation.
+         */
+        post: operations["startExperiment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/webhooks": {
         parameters: {
             query?: never;
@@ -3346,6 +3380,34 @@ export interface components {
              *     a report somebody reads as real.
              */
             cases?: string;
+        };
+        /** @description What the experiment overrides. Every field is optional, and an absent one is the version's own: a provider alone runs the published model under it, a model alone runs under the published provider, and an effort alone changes only the effort. The effective pair must be one this installation serves. */
+        ExperimentConfig: {
+            provider?: string;
+            model?: string;
+            effort?: string;
+        };
+        ExperimentRequest: {
+            /** @description The agent version to run. Absent is the version published now. */
+            version?: string;
+            /**
+             * Format: int64
+             * @description The dataset version to replay. Absent is the latest.
+             */
+            datasetVersion?: number;
+            config?: components["schemas"]["ExperimentConfig"];
+            /** @description How many times each case runs, for structural certainty rather than an average: a case broken in any repetition is broken. Absent is once. */
+            repetitions?: number;
+        };
+        ExperimentAccepted: {
+            id: string;
+            /** @description The cases of the dataset version that were run. */
+            cases: number;
+            repetitions: number;
+            /** @description How many runs actually opened, at most cases times repetitions. */
+            runs: number;
+            /** Format: int64 */
+            datasetVersion: number;
         };
         SimulationAccepted: {
             id: string;
@@ -7419,6 +7481,65 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    startExperiment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Unique per intention. It names the experiment, so a caller that never saw the
+                 *     answer can ask again and reach the runs it already opened.
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentRequest"];
+            };
+        };
+        responses: {
+            /** @description The experiment was accepted and its runs are being advanced. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentAccepted"];
+                };
+            };
+            /**
+             * @description A configuration whose effective provider this installation does not configure,
+             *     repetitions outside 1 to 5, or a dataset version that does not exist.
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description Not one run could be opened: a paused agent, or an agent version that does not
+             *     exist.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listWebhooks: {

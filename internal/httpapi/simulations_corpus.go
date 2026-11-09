@@ -53,7 +53,7 @@ func (s *Server) occurrences(
 	body *openapi.SimulationRequest,
 ) (simulate.Corpus, error) {
 	if body.Corpus != nil && *body.Corpus {
-		return s.corpusOccurrences(ctx, agent)
+		return s.corpusOccurrences(ctx, agent, 0)
 	}
 
 	file := ""
@@ -71,13 +71,15 @@ func (s *Server) occurrences(
 	return simulate.Corpus{Cases: out}, nil
 }
 
+// corpusOccurrences reads the cases of one version of the corpus, the latest when the
+// version asked is zero.
 func (s *Server) corpusOccurrences(
-	ctx context.Context, agent domain.AgentID,
+	ctx context.Context, agent domain.AgentID, asked int64,
 ) (simulate.Corpus, error) {
 	if s.regressions == nil {
 		return simulate.Corpus{}, fmt.Errorf("this installation keeps no corrections")
 	}
-	version, corpus, err := s.regressions.Pinned(ctx, agent)
+	version, corpus, err := s.corpusAt(ctx, agent, asked)
 	if err != nil {
 		return simulate.Corpus{}, err
 	}
@@ -118,4 +120,14 @@ func (s *Server) corpusOf(
 		return s.regressions.List(ctx, agent)
 	}
 	return s.regressions.AtVersion(ctx, agent, report.DatasetVersion)
+}
+
+func (s *Server) corpusAt(
+	ctx context.Context, agent domain.AgentID, asked int64,
+) (int64, []domain.RegressionCase, error) {
+	if asked == 0 {
+		return s.regressions.Pinned(ctx, agent)
+	}
+	corpus, err := s.regressions.AtVersion(ctx, agent, asked)
+	return asked, corpus, err
 }
