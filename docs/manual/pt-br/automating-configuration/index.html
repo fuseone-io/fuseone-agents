@@ -153,8 +153,12 @@ agora. Não há <code dir="auto">ETag</code> quando o recurso deixou de existir.
 com o que está lá; nunca reenvie o mesmo corpo com o tag novo sem olhar.</li>
 <li><strong><code dir="auto">If-Match: *</code></strong> quer dizer “só se existir”. Qualquer <code dir="auto">If-Match</code> num recurso
 que não existe é 412, <code dir="auto">*</code> incluído.</li>
-<li><strong>Tags fracos (<code dir="auto">W/"…"</code>) nunca casam.</strong> Um cabeçalho que não se consegue ler é
-400, nunca ignorado: ignorá-lo desligaria a proteção que o cliente pediu.</li>
+<li><strong>Um tag fraco (<code dir="auto">W/"…"</code>) casa com a revisão que ele enfraquece.</strong> Um proxy
+que comprime respostas marca como fraco o <code dir="auto">ETag</code> que repassa, e o cliente
+devolve esse tag; a revisão nomeia uma configuração, não bytes, então continua
+sendo a mesma.</li>
+<li><strong>Um cabeçalho que não se consegue ler é 400</strong>, nunca ignorado: ignorá-lo
+desligaria a proteção que o cliente pediu.</li>
 <li><strong>Sem <code dir="auto">If-Match</code>, vale a última gravação</strong>, como sempre foi.</li>
 </ul>
 <p>O <code dir="auto">ETag</code> nomeia o conteúdo do recurso, não o momento em que foi gravado. Ele

@@ -152,9 +152,12 @@ resource no longer exists. Read again and decide with what is there; never
 retry the same body under the new tag without looking.</li>
 <li><strong><code dir="auto">If-Match: *</code></strong> means “only if it exists”. Any <code dir="auto">If-Match</code> on a resource
 that does not exist is a 412, <code dir="auto">*</code> included.</li>
-<li><strong>Weak tags (<code dir="auto">W/"…"</code>) never match.</strong> A header that does not parse is a 400,
-never ignored: ignoring it would turn off the protection the client asked
-for.</li>
+<li><strong>A weak tag (<code dir="auto">W/"…"</code>) matches the revision it weakens.</strong> A proxy that
+compresses responses marks the <code dir="auto">ETag</code> it forwards as weak, and a client hands
+that tag back; the revision names a configuration, not bytes, so it is still
+the same one.</li>
+<li><strong>A header that does not parse is a 400</strong>, never ignored: ignoring it would
+turn off the protection the client asked for.</li>
 <li><strong>Without <code dir="auto">If-Match</code>, the last write wins</strong>, as it always has.</li>
 </ul>
 <p>The <code dir="auto">ETag</code> names the resource’s content, not when it was written. It moves when
