@@ -28,6 +28,21 @@ field" is a commit message.
 
 ---
 
+## [0.99.1] — 2026-11-09
+
+A fix on top of 0.99.0, and nothing else. It adds no migration.
+
+### Fixed
+
+- **Saving a configuration behind a compressing proxy no longer fails as stale.** A proxy that
+  compresses responses marks the `ETag` it forwards as weak (`W/"…"`), and the console sends
+  that tag back in `If-Match`. Weak tags never matched, so every save of an MCP server, model
+  provider, connector, channel or policy was refused with *Somebody changed this while you
+  were editing*, even when nothing had changed. A weak tag now matches the revision it
+  weakens. A weakened tag of another revision is still refused.
+
+---
+
 ## [0.99.0] — 2026-11-09
 
 ### Upgrade notes
