@@ -33,6 +33,8 @@ func TestOpen_configurationOutsideAnExperiment_isRefusedAndOpensNothing(t *testi
 			trigger.Request{Experiment: "exp-1", ExperimentConfig: another}},
 		{"an experiment with no configuration, not simulated",
 			trigger.Request{Experiment: "exp-1"}},
+		{"repetitions on a battery",
+			trigger.Request{Simulation: "sim-1", Case: "case-1", ExperimentRepetitions: 2}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -52,9 +54,10 @@ func TestOpen_configurationOutsideAnExperiment_isRefusedAndOpensNothing(t *testi
 	}
 }
 
-// An experiment opens as a simulated run that records its id and what it overrode, and a
-// configuration that overrides nothing is recorded as no configuration at all: one way to
-// say "the version as published", so the worker cannot read two.
+// An experiment opens as a simulated run that records its id, how many times each case
+// runs and what it overrode, and a configuration that overrides nothing is recorded as no
+// configuration at all: one way to say "the version as published", so the worker cannot
+// read two.
 func TestOpen_experiment_recordsItsIdAndConfiguration(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -74,6 +77,7 @@ func TestOpen_experiment_recordsItsIdAndConfiguration(t *testing.T) {
 			got, err := opener.Open(t.Context(), trigger.Request{
 				Agent: "triage", IdemKey: "intent-1", Trigger: "simulation",
 				Simulation: "exp-1", Case: "case-1", Experiment: "exp-1", ExperimentConfig: c.config,
+				ExperimentRepetitions: 3,
 			})
 			if err != nil {
 				t.Fatalf("Open: %v", err)
@@ -84,8 +88,8 @@ func TestOpen_experiment_recordsItsIdAndConfiguration(t *testing.T) {
 			}
 			var started domain.RunStartedPayload
 			decode(t, steps[0].Payload, &started)
-			if !started.Simulated || started.Experiment != "exp-1" {
-				t.Fatalf("started = %+v, want a simulated run of exp-1", started)
+			if !started.Simulated || started.Experiment != "exp-1" || started.ExperimentRepetitions != 3 {
+				t.Fatalf("started = %+v, want a simulated run of exp-1, three times", started)
 			}
 			if (started.ExperimentConfig == nil) != (c.want == nil) ||
 				(c.want != nil && *started.ExperimentConfig != *c.want) {

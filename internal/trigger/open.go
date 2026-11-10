@@ -81,9 +81,11 @@ type Request struct {
 	// DatasetVersion is the version of the corpus that case was read from.
 	DatasetVersion int64
 	// Experiment names the experiment a simulated run belongs to, and ExperimentConfig is
-	// what it overrides. Only an experiment carries a configuration (experiment.go).
-	Experiment       string
-	ExperimentConfig *domain.ExperimentConfig
+	// what it overrides. Only an experiment carries a configuration or a repetition count
+	// (experiment.go).
+	Experiment            string
+	ExperimentConfig      *domain.ExperimentConfig
+	ExperimentRepetitions int
 	// Version pins the run to one published version of the agent. Empty is
 	// the version published now, which is what every trigger but one wants.
 	Version domain.VersionID
@@ -230,6 +232,8 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 			WorkItem:         workItem,
 			Experiment:       req.Experiment,
 			ExperimentConfig: experimentConfig,
+
+			ExperimentRepetitions: req.ExperimentRepetitions,
 		}),
 	})
 	if err != nil {

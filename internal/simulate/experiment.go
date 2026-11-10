@@ -55,7 +55,7 @@ func drawsOf(batch Batch) ([]draw, error) {
 	return out, nil
 }
 
-// withExperiment marks an experiment's request with its id and configuration.
+// withExperiment marks an experiment's request with its id and the whole of its intention.
 func withExperiment(req *trigger.Request, batch Batch) {
 	if batch.Experiment == nil {
 		return
@@ -63,5 +63,6 @@ func withExperiment(req *trigger.Request, batch Batch) {
 	config := batch.Experiment.Config
 	req.Experiment = batch.ID
 	req.ExperimentConfig = &config
+	req.ExperimentRepetitions = batch.Experiment.Repetitions
 	req.Version = batch.Experiment.Version
 }

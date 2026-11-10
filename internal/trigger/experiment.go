@@ -18,7 +18,8 @@ An experiment is a simulation, so its id needs a simulation beside it: the dry t
 layer is chosen by the run being simulated, and nothing else keeps a configured run away
 from real tools. A configuration needs an experiment, so a battery carrying one is
 refused as well as a real run: a battery is the evidence the start gate reads, and it has
-to be the version as published.
+to be the version as published. A repetition count needs an experiment for the same
+reason: it is part of an experiment's intention and of nothing else.
 
 An empty configuration is returned as none, so "the version as published" is recorded
 one way only and the worker never has two to tell apart.
@@ -26,6 +27,9 @@ one way only and the worker never has two to tell apart.
 func experimentOf(req Request) (*domain.ExperimentConfig, error) {
 	if req.Experiment != "" && req.Simulation == "" {
 		return nil, fmt.Errorf("%w: experiment %s is not simulated", ErrNotAnExperiment, req.Experiment)
+	}
+	if req.ExperimentRepetitions != 0 && req.Experiment == "" {
+		return nil, ErrNotAnExperiment
 	}
 	if req.ExperimentConfig == nil || req.ExperimentConfig.IsZero() {
 		return nil, nil
