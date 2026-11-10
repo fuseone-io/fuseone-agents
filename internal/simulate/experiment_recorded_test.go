@@ -36,8 +36,27 @@ func TestRecorded_anExperiment_isWhatItsRunsWereOpenedUnder(t *testing.T) {
 		},
 		DatasetVersion: 2,
 	}
-	if got != want {
-		t.Errorf("Recorded = %+v, want %+v", got, want)
+	if got.Intention != want {
+		t.Errorf("Recorded = %+v, want %+v", got.Intention, want)
+	}
+}
+
+// A retry the installation can no longer add to still has an answer: the runs the
+// experiment opened, and how many of its cases they cover.
+func TestRecorded_anExperiment_countsTheRunsAndCasesItOpened(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	opened, err := simulate.Open(t.Context(), openerFor(store, engine.NewMemoryContent()), experimentBatch(3))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	got, _, err := simulate.Recorded(t.Context(), store, "exp-1")
+	if err != nil {
+		t.Fatalf("Recorded: %v", err)
+	}
+	if len(got.Runs) != len(opened.Runs) || len(got.Runs) != 6 || got.Cases != 2 {
+		t.Errorf("Recorded = %d runs over %d cases, want 6 runs over 2", len(got.Runs), got.Cases)
 	}
 }
 

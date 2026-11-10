@@ -83,11 +83,11 @@ func (s *Server) openExperiment(
 	ctx context.Context, published domain.AgentSummary, id string, ask experimentAsk,
 ) (out experimentOpened, err error) {
 	err = s.regressions.Exclusive(ctx, []domain.AgentID{published.ID}, func(ctx context.Context) error {
-		recorded, found, err := simulate.Recorded(ctx, s.store, id)
+		record, found, err := simulate.Recorded(ctx, s.store, id)
 		if err != nil {
 			return err
 		}
-		if out.intent, out.conflict = settle(ask, recorded, found, published.VersionID); out.conflict != nil {
+		if out.intent, out.conflict = settle(ask, record.Intention, found, published.VersionID); out.conflict != nil {
 			return nil
 		}
 		if out.refused, err = s.unservedPair(ctx, published, out.intent); err != nil || out.refused != nil {
