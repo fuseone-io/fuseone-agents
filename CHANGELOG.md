@@ -30,7 +30,7 @@ field" is a commit message.
 
 ## [Unreleased]
 
-Experiments (#297), and two reads that crossed a scope boundary. It adds no migration.
+Experiments (#297), and three reads that crossed a scope boundary. It adds no migration.
 
 ### Upgrade notes
 
@@ -48,7 +48,7 @@ Experiments (#297), and two reads that crossed a scope boundary. It adds no migr
   running experiments settle first: a 0.100.0 worker does not know an experiment's
   configuration, and plans any run it still has to advance on the version as published. The
   report shows the model each run actually used.
-- **Two reads now answer 404 where they used to answer.** Reading a simulation by an id that
+- **Three reads now answer 404 where they used to answer.** Reading a simulation by an id that
   names nothing, another agent's simulation, or one recorded under a scope the caller may not
   read is a 404; the first used to be an empty report and the others the report itself. A
   version comparison naming, or falling back to, a version published under a scope the caller
