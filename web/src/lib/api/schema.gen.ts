@@ -781,7 +781,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * An agent's experiments, newest first
+         * @description The 20 most recently opened experiments of this agent, each with what it pinned:
+         *     dataset version, agent version, configuration and repetitions. Read from the runs,
+         *     as a report is. An experiment recorded under a scope the caller may not read is
+         *     left out — an agent republished elsewhere keeps its old experiments where they were
+         *     recorded — so a page may hold fewer than 20.
+         */
+        get: operations["listExperiments"];
         put?: never;
         /**
          * Run one agent version against a dataset version under another configuration
@@ -3498,6 +3506,24 @@ export interface components {
             broken: number;
             cost: components["schemas"]["Cost"];
             running: boolean;
+        };
+        ExperimentList: {
+            experiments: components["schemas"]["ExperimentListing"][];
+        };
+        /** @description One experiment, by what it pinned. What it found is in its report. */
+        ExperimentListing: {
+            id: string;
+            /** Format: date-time */
+            openedAt: string;
+            /** Format: int64 */
+            datasetVersion: number;
+            version: string;
+            config: components["schemas"]["ExperimentConfig"];
+            repetitions: number;
+            /** @description Runs the experiment opened. */
+            runs: number;
+            /** @description Cases those runs cover. */
+            cases: number;
         };
         ExperimentReport: {
             summary: components["schemas"]["ExperimentSummary"];
@@ -7613,6 +7639,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimulationReport"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listExperiments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The experiments, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentList"];
                 };
             };
             401: components["responses"]["Unauthorized"];
