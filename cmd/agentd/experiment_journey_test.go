@@ -242,7 +242,33 @@ func TestExperiment_fromTheRoute_plansOnTheModelItNamesAndIsNeverABattery(t *tes
 	if got := world.declared.models(); len(got) != 0 {
 		t.Errorf("the version's own provider was asked %v, want nothing", got)
 	}
+	assertReported(t, world, accepted.Id)
 	assertNotABattery(t, world)
+}
+
+// The report reads the runs back from Postgres with the configuration visible, and the one
+// case ran twice, on the model the experiment named (NT-015, "Journey").
+func assertReported(t *testing.T, world *experimentWorld, id string) {
+	t.Helper()
+	resp, err := world.server.GetExperiment(author(t.Context()),
+		openapi.GetExperimentRequestObject{AgentId: string(world.agent), ExperimentId: id})
+	if err != nil {
+		t.Fatalf("GetExperiment: %v", err)
+	}
+	report, ok := resp.(openapi.GetExperiment200JSONResponse)
+	if !ok {
+		t.Fatalf("GetExperiment answered %T %+v", resp, resp)
+	}
+	got := report.Summary
+	if got.Config.Provider == nil || *got.Config.Provider != "elsewhere" || got.Config.Model == nil ||
+		*got.Config.Model != "tested-model" || got.Repetitions != 2 || got.CasesRun != 1 ||
+		got.CasesInVersion != 1 || got.Running {
+		t.Errorf("summary = %+v, want the configuration, two repetitions of the one case, settled", got)
+	}
+	if len(report.Cases) != 1 || report.Cases[0].Ran != 2 || report.Cases[0].Case.Model == nil ||
+		*report.Cases[0].Case.Model != "tested-model" {
+		t.Errorf("cases = %+v, want the one case run twice on tested-model", report.Cases)
+	}
 }
 
 // What the experiment must not be, read through the same doors the start gate, the drift
