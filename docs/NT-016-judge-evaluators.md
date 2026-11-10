@@ -372,7 +372,7 @@ So this ships in two releases, as experiments did:
    - Nothing opens a judge run yet.
 2. **Writers.** The API, the console and the manual. They ship only once production
    `readyz` shows release 1 on every replica, and once the FinOps issue for measurement
-   spend exists.
+   spend exists ([#317](https://github.com/fuseone-io/fuseone-agents/issues/317)).
 
 After the first judgment, rolling back below release 1 is not safe. Rolling back to
 release 1 itself is: it knows judge runs and cannot start them. As with experiments, any
@@ -458,7 +458,8 @@ Decided by the reviewer on 2026-11-10:
    - a separate period ceiling waits for phase 4.
 
    **This is conditional:** the issue for a FinOps line for measurement spend must exist
-   before the writers (release 2) ship.
+   before the writers (release 2) ship. It is
+   [#317](https://github.com/fuseone-io/fuseone-agents/issues/317).
 2. **Broken runs are not judged.**
 3. **The rubric lives in the request, addressed by its digest,** not in the agent
    definition.
