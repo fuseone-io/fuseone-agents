@@ -1223,6 +1223,87 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /agents/{agentId}/experiments/{experimentId}:
+    get:
+      tags: [agents]
+      operationId: getExperiment
+      summary: What an experiment ran, and what it found
+      description: |
+        A fold of the runs the experiment opened, read against the dataset version it
+        pinned (NT-015). The summary is in the order a result is read: dataset version,
+        agent version, configuration, cases run out of the cases in the version, erased
+        cases, repetitions, and only then held, broken and cost.
+
+        Each case is the worst of its repetitions, as in a battery: a case broken in any
+        repetition is broken. `brokenIn` and `ran` say in how many it broke, out of how
+        many that opened — "1 of 5".
+
+        Readable while it is still going; `running` says so.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: experimentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The report so far.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExperimentReport' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No experiment of this agent has that id. A battery's id is not one.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /agents/{agentId}/experiment-comparison:
+    get:
+      tags: [agents]
+      operationId: compareExperiments
+      summary: What changed from one experiment to another
+      description: |
+        Two experiments of one agent, case by case (NT-015). On one dataset version they
+        asked the same questions, and every case is compared. Across two versions a case
+        one side lacks is a question it was never asked: only the cases both versions have
+        and did not erase are listed, `sharedOnly` says so, and `onlyFrom` and `onlyTo`
+        count what was left out of each side.
+
+        Nothing is stored for this: it is a fold of two folds.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: from
+          in: query
+          required: true
+          description: The experiment compared from.
+          schema: { type: string }
+        - name: to
+          in: query
+          required: true
+          description: The experiment compared to.
+          schema: { type: string }
+      responses:
+        '200':
+          description: What changed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExperimentComparison' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: One of the two is not an experiment of this agent.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /agents/{agentId}/webhooks:
     get:
       tags: [agents]
@@ -5689,6 +5770,108 @@ components:
           type: integer
           description: How many runs actually opened, at most cases times repetitions.
         datasetVersion: { type: integer, format: int64 }
+
+    ExperimentSummary:
+      type: object
+      description: >
+        What an experiment ran and what it found, in the order a result is read (NT-015).
+      required: [id, datasetVersion, version, config, casesRun, casesInVersion, erased,
+        repetitions, held, broken, cost, running]
+      properties:
+        id: { type: string }
+        datasetVersion: { type: integer, format: int64 }
+        version: { type: string, description: The agent version every run was pinned to. }
+        config: { $ref: '#/components/schemas/ExperimentConfig' }
+        casesRun:
+          type: integer
+          description: Cases of the dataset version that got at least one run.
+        casesInVersion:
+          type: integer
+          description: Every case of the dataset version, erased ones included.
+        erased:
+          type: integer
+          description: Cases whose input or expectations were erased, which did not run.
+        repetitions: { type: integer }
+        held: { type: integer }
+        broken:
+          type: integer
+          description: Cases broken in any repetition, or that did not run.
+        cost:
+          $ref: '#/components/schemas/Cost'
+        running: { type: boolean }
+
+    ExperimentReport:
+      type: object
+      required: [summary, cases]
+      properties:
+        summary: { $ref: '#/components/schemas/ExperimentSummary' }
+        cases:
+          type: array
+          items: { $ref: '#/components/schemas/ExperimentCase' }
+
+    ExperimentCase:
+      type: object
+      description: >
+        One case across its repetitions. `case` is the worst run, as in a battery.
+      required: [case, brokenIn, ran]
+      properties:
+        case: { $ref: '#/components/schemas/SimulationCase' }
+        brokenIn:
+          type: integer
+          description: Repetitions in which this case broke.
+        ran:
+          type: integer
+          description: >
+            Repetitions that opened a run. Fewer than the experiment's repetitions is a
+            case not every repetition reached, and none is a case that did not run.
+
+    ExperimentComparison:
+      type: object
+      required: [from, to, sharedOnly, onlyFrom, onlyTo, regressed, fixed, costMicros, cases]
+      properties:
+        from: { $ref: '#/components/schemas/ExperimentSummary' }
+        to: { $ref: '#/components/schemas/ExperimentSummary' }
+        sharedOnly:
+          type: boolean
+          description: >
+            The two ran different dataset versions, so only the cases both have are listed.
+        onlyFrom:
+          type: integer
+          description: Cases only `from` had, left out. Zero on one dataset version.
+        onlyTo:
+          type: integer
+          description: Cases only `to` had, left out. Zero on one dataset version.
+        regressed: { type: integer }
+        fixed: { type: integer }
+        costMicros:
+          type: integer
+          format: int64
+          description: >
+            The movement per run over the cases both ran, new minus old, so five
+            repetitions at one price are not five times dearer than one.
+        cases:
+          type: array
+          description: Ordered as a version comparison is, the answer first.
+          items: { $ref: '#/components/schemas/ExperimentCaseChange' }
+
+    ExperimentCaseChange:
+      type: object
+      required: [id, was, now, costMicros, steps, wasBrokenIn, wasRan, nowBrokenIn, nowRan]
+      properties:
+        id: { type: string }
+        was: { $ref: '#/components/schemas/Standing' }
+        now: { $ref: '#/components/schemas/Standing' }
+        costMicros:
+          type: integer
+          format: int64
+          description: The movement per run, new minus old.
+        steps:
+          type: integer
+          description: The movement in steps per run, new minus old.
+        wasBrokenIn: { type: integer }
+        wasRan: { type: integer }
+        nowBrokenIn: { type: integer }
+        nowRan: { type: integer }
 
     SimulationAccepted:
       type: object
