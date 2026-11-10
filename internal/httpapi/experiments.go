@@ -93,15 +93,20 @@ func (s *Server) openExperiment(
 		if err != nil {
 			return err
 		}
+		// Where it was recorded first, and only then what it asked for: a conflict answered
+		// to a caller with no claim there would confirm the experiment, and name its fields.
+		if found {
+			if out.hidden, err = s.hiddenFrom(ctx, published, before.Intention, &before); err != nil || out.hidden {
+				return err
+			}
+		}
 		if out.intent, out.conflict = settle(ask, before.Intention, found, published.VersionID); out.conflict != nil {
 			return nil
 		}
-		recorded := &before
 		if !found {
-			recorded = nil
-		}
-		if out.hidden, err = s.hiddenFrom(ctx, published, out.intent, recorded); err != nil || out.hidden {
-			return err
+			if out.hidden, err = s.hiddenFrom(ctx, published, out.intent, nil); err != nil || out.hidden {
+				return err
+			}
 		}
 		refused, err := s.addMissing(ctx, experimentBatch{published, id, &out})
 		if err != nil {

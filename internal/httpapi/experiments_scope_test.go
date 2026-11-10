@@ -108,3 +108,24 @@ func TestStartExperiment_aVersionOnlyPublishedInAnotherScope_isNotFoundAndOpensN
 		t.Errorf("%d runs opened on the finance version", len(runs))
 	}
 }
+
+// A retry that states another intention is still answered as if the experiment did not
+// exist: a 409 would confirm it, and which field it names would let a caller probe what the
+// finance experiment asked for. The scope is checked before the intentions are compared.
+func TestStartExperiment_aDivergentRetryOfOneRecordedInAnotherScope_isNotFound(t *testing.T) {
+	t.Parallel()
+	server, store, _, id := movedToCx(t)
+	before := len(startedRuns(t, store, id))
+
+	resp, err := server.StartExperiment(inArea("cx", domain.RoleAuthor),
+		startExperimentKeyed("exp-intent-0001", openapi.ExperimentRequest{Repetitions: ptr(3)}))
+	if err != nil {
+		t.Fatalf("StartExperiment: %v", err)
+	}
+	if _, ok := resp.(openapi.StartExperiment404ApplicationProblemPlusJSONResponse); !ok {
+		t.Errorf("response = %T %+v, want the finance experiment hidden, not its divergence named", resp, resp)
+	}
+	if after := len(startedRuns(t, store, id)); after != before {
+		t.Errorf("%d runs after the retry, want the %d finance opened", after, before)
+	}
+}
