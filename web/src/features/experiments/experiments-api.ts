@@ -62,30 +62,32 @@ export function useExperiment(agentId: string, id: string) {
 /**
  * Starts an experiment.
  *
- * The key is minted once per intention and retired once the experiment exists.
- * It names the experiment: clicking again after a request that never answered
- * reaches the runs already opened, and a key minted per request would open a
- * second experiment and pay for every case again.
+ * The key names one intention, so it is minted per body and kept until that
+ * body's experiment exists. Asking again with the same body after a request
+ * that never answered reaches the runs it already opened; a key minted per
+ * request would open a second experiment and pay for every case again. A
+ * changed body is another intention and gets its own key — reusing the old one
+ * is refused by the server and would stay refused. A body that comes back gets
+ * its own key back, because that key may already name runs.
  */
 export function useStartExperiment(agentId: string) {
   const queryClient = useQueryClient();
-  const intention = useRef<string | undefined>(undefined);
+  const intentions = useRef(new Map<string, string>());
 
   return useMutation({
     mutationFn: async (body: ExperimentRequest) => {
-      intention.current ??= `exp-${crypto.randomUUID()}`;
+      const intention = JSON.stringify(body);
+      const key = intentions.current.get(intention) ?? `exp-${crypto.randomUUID()}`;
+      intentions.current.set(intention, key);
       return unwrap(
         await api.POST("/agents/{agentId}/experiments", {
-          params: {
-            path: { agentId },
-            header: { "Idempotency-Key": intention.current },
-          },
+          params: { path: { agentId }, header: { "Idempotency-Key": key } },
           body,
         }),
       );
     },
-    onSuccess: () => {
-      intention.current = undefined;
+    onSuccess: (_, body) => {
+      intentions.current.delete(JSON.stringify(body));
       void queryClient.invalidateQueries({ queryKey: experimentKeys.all(agentId) });
     },
   });
