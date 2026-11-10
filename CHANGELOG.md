@@ -49,6 +49,8 @@ These are decisions recorded in a note. Nothing below is implemented yet.
     corpus fence. One idempotency key names one judgment, as it does for an experiment.
   - The platform guarantees structural isolation from the judged output and measures
     the judge's resistance to persuasion; it does not promise it.
+  - A reason is off unless the rubric declares it. Declared or not, it is part of the
+    rubric's digest, so judgments with and without one are not compared.
   - Broken runs are not judged. Two experiments compare on quality only under the same
     rubric and judge, and only over the cases held on both sides.
   - It needs two releases: workers and readers first, because a 0.101.0 worker would run

@@ -112,9 +112,16 @@ judge answers with a code. `ok` and `high_risk`, or `3` and `10`, are then the s
 in every answer. The reason for this is in
 [Nothing left after erasure gives the value back](#nothing-left-after-erasure-gives-the-value-back).
 
-**A reason is off unless the rubric asks for one.** Without one, the judge answers with
-a code alone. With one, it also writes a reason, and the rubric accepts what that costs
-(see the same section).
+**A reason is off unless the rubric asks for one.** The rubric declares `reason: true`
+or leaves it out, and the declaration is part of the rubric's digest.
+
+- **Off.** The judge answers with a code alone. The parser refuses any other text,
+  whitespace included. A code followed by a reason is `judge_unparseable`, not a
+  judgment with the reason dropped.
+- **On.** The judge writes a code and a reason. Before the judgment starts, the console
+  states what the reason costs, and its residual risk: the reason's length shows in the
+  token count, and across many judgments it may correlate with the value (see the same
+  section).
 
 ## What the ledger holds
 
@@ -290,7 +297,7 @@ second time and spend it all again.
   own key is the judgment id, the judged run and the repetition, so opening the same run
   twice is refused by the ledger.
 - **The intention is recorded on every judge run's opening:** the experiment, the rubric
-  digest, the judge configuration, the per-run ceiling and the repetitions. It is read
+  digest (which covers whether a reason is asked for), the judge configuration, the per-run ceiling and the repetitions. It is read
   back from the ledger, never kept anywhere else.
 - **An identical retry completes and answers.** It opens only the judge runs that are
   missing and answers from the ledger, whatever has changed since. A field it leaves out
@@ -335,7 +342,9 @@ two experiments still compares what the agent cost.
 
 Two experiments can be compared on quality only when **both have a judgment with the
 same rubric digest and the same judge provider, model and effort**. A different rubric
-or judge is a different question, and its numbers are not comparable. Otherwise the
+or judge is a different question, and its numbers are not comparable. That includes a
+rubric that differs only in asking for a reason: an answer that has to be justified is
+not the same measurement as one that does not. Otherwise the
 comparison shows the structural side and says why there is no quality side.
 
 When they are comparable, quality is compared over the cases that **held on both sides**
@@ -472,6 +481,11 @@ judgment still running should settle first.
     - store the objects unsalted;
     - drop the padding;
     - let the judge write the value instead of its code.
+- **Reason off:** with the reason off, an answer of a valid code followed by any text,
+  even a space or a newline, is `judge_unparseable`. Sabotage: trim the answer before
+  parsing, or accept a valid prefix, and the test must fail.
+- **Reason declared:** changing only `reason` changes the rubric's digest. A retry under
+  the same key that changes it is a 409.
 - **Oversized:** an answer one byte over the fixed size is `judge_oversized`, and never a
   stored, truncated object.
 - **Nothing personal in the chain:** a test reads the `run_started` and `run_finished`
@@ -493,6 +507,7 @@ judgment still running should settle first.
 - **Structure first:** a run broken in a repetition is not sent to the judge, and no
   judged result changes `held` or `broken`.
 - **Comparison:** different rubric digests, or different judges, give no quality side.
+  The same rubric with and without a reason has two digests, and gives none either.
   Comparable judgments compare only cases held on both sides.
 - **Erasure:** a subject erasure of the run a case came from erases every judge run of
   that case's replays: the copy of the output, the reason and the judgment object, value
@@ -522,9 +537,16 @@ Decided by the reviewer on 2026-11-10:
 3. **The rubric lives in the request, addressed by its digest,** not in the agent
    definition.
 4. **The judge model may be the judged model,** with the screen saying so.
-5. **A reason is off unless a rubric asks for one.** This is proposed in this revision
-   and not yet decided: a reason's length survives in the token count (see
+5. **A reason is off by default** and asked for only when the rubric declares it,
+   because a reason's length survives in the token count (see
    [Nothing left after erasure gives the value back](#nothing-left-after-erasure-gives-the-value-back)).
+   The declaration:
+   - is part of the rubric's digest;
+   - is part of the idempotent intention;
+   - makes a judgment with a reason not comparable with one without;
+   - when off, makes the parser refuse any text beyond the code;
+   - when on, means the cost and the residual risk of correlation through the token
+     count are stated before the judgment starts.
 6. **The untrusted-output requirement is narrowed.** The platform guarantees structural
    isolation and measures resistance to persuasion; it does not promise it (see
    [Untrusted output](#untrusted-output)).
