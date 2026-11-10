@@ -30,37 +30,49 @@ and honours a configuration only on a simulated run that names an experiment (NT
 rule 2). The opener refuses any other already; this is the second door, so a run that
 reached the pool with a configuration some other way plans as the version published it.
 An experiment with no configuration is the version as published too, fallback and all.
+
+A judge run is never resolved as the version it judges (NT-016): it parks, whatever else
+its opening carries. See judgeRefusal.
 */
 func (w *Worker) resolve(ctx context.Context, claim domain.Claim) (Resolution, error) {
 	if w.experiments == nil {
 		return w.specs.Resolve(ctx, claim.AgentID, claim.VersionID)
 	}
-	config, err := w.experimentConfig(ctx, claim.RunID)
+	started, err := w.openingOf(ctx, claim.RunID)
 	if err != nil {
 		return Resolution{}, err
 	}
+	if started.Judge != nil {
+		return Resolution{}, judgeRefusal(claim.RunID, started)
+	}
+	config := experimentConfigOf(started)
 	if config == nil {
 		return w.specs.Resolve(ctx, claim.AgentID, claim.VersionID)
 	}
 	return w.experiments.ResolveExperiment(ctx, claim.AgentID, claim.VersionID, *config)
 }
 
-// experimentConfig is the configuration an experiment run recorded, or none.
-func (w *Worker) experimentConfig(ctx context.Context, run domain.RunID) (*domain.ExperimentConfig, error) {
+// openingOf is what a run recorded when it opened.
+func (w *Worker) openingOf(ctx context.Context, run domain.RunID) (domain.RunStartedPayload, error) {
 	steps, err := w.deps.Ledger.Read(ctx, run, domain.FirstSeq)
 	if err != nil {
-		return nil, fmt.Errorf("read the opening of %s: %w", run, err)
+		return domain.RunStartedPayload{}, fmt.Errorf("read the opening of %s: %w", run, err)
 	}
 	if len(steps) == 0 || steps[0].Kind != domain.StepRunStarted {
-		return nil, fmt.Errorf("%s has no opening step", run)
+		return domain.RunStartedPayload{}, fmt.Errorf("%s has no opening step", run)
 	}
 	var started domain.RunStartedPayload
 	if err := json.Unmarshal(steps[0].Payload, &started); err != nil {
-		return nil, fmt.Errorf("decode the opening of %s: %w", run, err)
+		return domain.RunStartedPayload{}, fmt.Errorf("decode the opening of %s: %w", run, err)
 	}
+	return started, nil
+}
+
+// experimentConfigOf is the configuration an experiment run recorded, or none.
+func experimentConfigOf(started domain.RunStartedPayload) *domain.ExperimentConfig {
 	if !started.Simulated || started.Experiment == "" ||
 		started.ExperimentConfig == nil || started.ExperimentConfig.IsZero() {
-		return nil, nil
+		return nil
 	}
-	return started.ExperimentConfig, nil
+	return started.ExperimentConfig
 }
