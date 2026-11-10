@@ -34,7 +34,7 @@ func Gather(ctx context.Context, steps Steps, id string) (Report, error) {
 			return Report{}, fmt.Errorf("simulate: read %s: %w", runID, err)
 		}
 		if report.Agent == "" && len(read) > 0 {
-			report.Agent, report.Version = read[0].AgentID, read[0].VersionID
+			report.Agent, report.Version, report.Scope = read[0].AgentID, read[0].VersionID, read[0].Scope
 		}
 
 		folded, err := Fold(read)

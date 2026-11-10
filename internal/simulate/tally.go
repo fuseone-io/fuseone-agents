@@ -7,6 +7,9 @@ type Report struct {
 	ID      string           `json:"id"`
 	Agent   domain.AgentID   `json:"agent"`
 	Version domain.VersionID `json:"version"`
+	// Scope is where the runs were recorded, which is not necessarily where the agent is
+	// published today: an agent republished elsewhere keeps its old runs where they were.
+	Scope domain.Scope `json:"-"`
 	// DatasetVersion is the version of the corpus this battery ran. Zero means it is
 	// unpinned: recorded before versions, or its runs do not agree.
 	DatasetVersion int64  `json:"dataset_version,omitempty"`
