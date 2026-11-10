@@ -49,6 +49,8 @@ type Store interface {
 	SimulationRuns(ctx context.Context, simulation string) ([]domain.RunID, error)
 	// HasSimulation is the gate on an agent leaving Draft (FU-10).
 	HasSimulation(ctx context.Context, agent domain.AgentID) (bool, error)
+	// Experiments are an agent's experiments, newest first, at most limit of them.
+	Experiments(ctx context.Context, agent domain.AgentID, limit int) ([]domain.ExperimentListing, error)
 }
 
 // Server implements openapi.StrictServerInterface.

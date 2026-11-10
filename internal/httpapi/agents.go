@@ -41,7 +41,8 @@ func (s *Server) GetAgent(ctx context.Context, req openapi.GetAgentRequestObject
 	if len(versions) == 0 {
 		return absent, nil
 	}
-	if !readable(versions[0].Scope, auth.VisibleScopes(ctx, domain.PermAgentRead)) {
+	visible := auth.VisibleScopes(ctx, domain.PermAgentRead)
+	if !readable(versions[0].Scope, visible) {
 		return absent, nil
 	}
 
@@ -56,7 +57,10 @@ func (s *Server) GetAgent(ctx context.Context, req openapi.GetAgentRequestObject
 				break
 			}
 		}
-		if !found {
+		// Read where it was published, not where the agent is now: one republished from
+		// another area keeps its old versions there, and a reader of the new area has no
+		// claim on their definitions, or on knowing they exist.
+		if !found || !readable(wanted.Scope, visible) {
 			return absent, nil
 		}
 	}
@@ -83,8 +87,7 @@ func (s *Server) GetAgent(ctx context.Context, req openapi.GetAgentRequestObject
 	}
 
 	out := openapi.AgentDetail{
-		Agent:    agentFrom(wanted),
-		Versions: make([]openapi.AgentVersion, 0, len(versions)),
+		Agent: agentFrom(wanted),
 	}
 	if text != "" {
 		out.Instructions = ptr(text)
@@ -111,15 +114,7 @@ func (s *Server) GetAgent(ctx context.Context, req openapi.GetAgentRequestObject
 		// leaves out, and publishing again deletes it.
 		out.Approvals = approvalsFrom(declared.Approvals)
 	}
-	for _, v := range versions {
-		version := openapi.AgentVersion{
-			VersionId: string(v.VersionID), PublishedAt: v.PublishedAt, Latest: v.Latest,
-		}
-		if v.PublishedBy != "" {
-			version.PublishedBy = ptr(string(v.PublishedBy))
-		}
-		out.Versions = append(out.Versions, version)
-	}
+	out.Versions = readableHistory(versions, visible)
 
 	if activity, err := s.activityOf(ctx, wanted); err != nil {
 		return nil, err

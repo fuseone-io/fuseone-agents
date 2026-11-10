@@ -499,6 +499,10 @@ paths:
         This is the only place the definition's text is returned. The list
         deliberately omits it: a page of twenty agents would carry twenty
         bodies of prose nobody asked to read.
+
+        Each version is read where it was published. An agent republished
+        under another scope keeps its old versions there: one the caller may
+        not read is a 404 when asked for, and is left out of `versions`.
       parameters:
         - name: agentId
           in: path
@@ -1157,6 +1161,30 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 
   /agents/{agentId}/experiments:
+    get:
+      tags: [agents]
+      operationId: listExperiments
+      summary: An agent's experiments, newest first
+      description: |
+        The 20 most recently opened experiments of this agent, each with what it pinned:
+        dataset version, agent version, configuration and repetitions. Read from the runs,
+        as a report is. An experiment recorded under a scope the caller may not read is
+        left out — an agent republished elsewhere keeps its old experiments where they were
+        recorded — so a page may hold fewer than 20.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The experiments, newest first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExperimentList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
     post:
       tags: [agents]
       operationId: startExperiment
@@ -5813,6 +5841,33 @@ components:
         cost:
           $ref: '#/components/schemas/Cost'
         running: { type: boolean }
+
+    ExperimentList:
+      type: object
+      required: [experiments]
+      properties:
+        experiments:
+          type: array
+          items: { $ref: '#/components/schemas/ExperimentListing' }
+
+    ExperimentListing:
+      type: object
+      description: >
+        One experiment, by what it pinned. What it found is in its report.
+      required: [id, openedAt, datasetVersion, version, config, repetitions, runs, cases]
+      properties:
+        id: { type: string }
+        openedAt: { type: string, format: date-time }
+        datasetVersion: { type: integer, format: int64 }
+        version: { type: string }
+        config: { $ref: '#/components/schemas/ExperimentConfig' }
+        repetitions: { type: integer }
+        runs:
+          type: integer
+          description: Runs the experiment opened.
+        cases:
+          type: integer
+          description: Cases those runs cover.
 
     ExperimentReport:
       type: object

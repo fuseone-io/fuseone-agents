@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -24,8 +25,10 @@ type Record struct {
 	// old runs where they were recorded.
 	Agent domain.AgentID
 	Scope domain.Scope
-	Runs  []domain.RunID
-	Cases int
+	// OpenedAt is when the first of its runs opened.
+	OpenedAt time.Time
+	Runs     []domain.RunID
+	Cases    int
 }
 
 /*
@@ -59,6 +62,7 @@ func Recorded(ctx context.Context, steps Steps, id string) (Record, bool, error)
 		cases[started.Case] = true
 		if i == 0 {
 			out.Intention, out.Agent, out.Scope = recordedIntention(step, started), step.AgentID, step.Scope
+			out.OpenedAt = step.At
 		}
 	}
 	out.Cases = len(cases)
@@ -79,6 +83,19 @@ func opening(ctx context.Context, steps Steps, run domain.RunID) (domain.Step, d
 		return domain.Step{}, started, fmt.Errorf("simulate: decode the opening of %s: %w", run, err)
 	}
 	return first[0], started, nil
+}
+
+// IntentionOf is the intention one experiment run's opening step records, which is the
+// whole experiment's: every run of one is opened from one intention.
+func IntentionOf(step domain.Step) (Intention, error) {
+	if step.Kind != domain.StepRunStarted {
+		return Intention{}, fmt.Errorf("simulate: %s is not an opening step", step.Kind)
+	}
+	var started domain.RunStartedPayload
+	if err := json.Unmarshal(step.Payload, &started); err != nil {
+		return Intention{}, fmt.Errorf("simulate: decode the opening of %s: %w", step.RunID, err)
+	}
+	return recordedIntention(step, started), nil
 }
 
 func recordedIntention(step domain.Step, started domain.RunStartedPayload) Intention {

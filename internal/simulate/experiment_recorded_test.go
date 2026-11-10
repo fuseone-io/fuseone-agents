@@ -113,3 +113,48 @@ func TestRecorded_keepsTheScopeItsRunsWereOpenedUnder(t *testing.T) {
 		t.Errorf("Recorded scope = %+v err=%v, want the scope the opener resolved", got.Scope, err)
 	}
 }
+
+// The record says when the experiment opened: the first of its runs, which is what a list
+// of experiments is ordered and read by.
+func TestRecorded_saysWhenTheExperimentOpened(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	if _, err := simulate.Open(t.Context(), openerFor(store, engine.NewMemoryContent()), experimentBatch(1)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	got, _, err := simulate.Recorded(t.Context(), store, "exp-1")
+	if err != nil || !got.OpenedAt.Equal(clock{}.Now()) {
+		t.Errorf("Recorded opened at %v err=%v, want the opener's clock %v", got.OpenedAt, err, clock{}.Now())
+	}
+}
+
+// A list reads the intention from an experiment's first opening alone, and it is the same
+// intention the record reads from every run.
+func TestIntentionOf_anOpening_isTheIntentionTheRecordReads(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	batch := experimentBatch(3)
+	batch.Experiment.Config = domain.ExperimentConfig{Model: "other-model"}
+	opened, err := simulate.Open(t.Context(), openerFor(store, engine.NewMemoryContent()), batch)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	steps, err := store.Read(t.Context(), opened.Runs[0], domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	record, _, _ := simulate.Recorded(t.Context(), store, "exp-1")
+
+	got, err := simulate.IntentionOf(steps[0])
+	if err != nil || got != record.Intention {
+		t.Errorf("IntentionOf = %+v err=%v, want %+v", got, err, record.Intention)
+	}
+}
+
+func TestIntentionOf_aStepThatIsNotAnOpening_isRefused(t *testing.T) {
+	t.Parallel()
+	if _, err := simulate.IntentionOf(domain.Step{Kind: domain.StepRunFinished}); err == nil {
+		t.Error("IntentionOf accepted a step that opens nothing")
+	}
+}
