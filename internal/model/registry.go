@@ -150,6 +150,17 @@ func (r *Registry) Configured(name string) bool {
 	return held || r.configured[name]
 }
 
+// Usable reports whether name is a provider this process built and would ask: switched
+// on, its credential opened, its address whole. Configured also answers for a name that
+// is claimed and none of those, which is right for a fallback a worker may still reach
+// and wrong for an experiment, whose runs on such a name could only park.
+func (r *Registry) Usable(name string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, held := r.providers[name]
+	return held
+}
+
 func (r *Registry) Names() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

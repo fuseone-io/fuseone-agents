@@ -10,10 +10,11 @@ import (
 )
 
 // ProviderNames answers whether a model provider is one this installation
-// configures, from the administration area or the environment. Declared here
-// by the consumer.
+// configures, from the administration area or the environment, and whether it is
+// one this process could ask. Declared here by the consumer.
 type ProviderNames interface {
 	Configured(name string) bool
+	Usable(name string) bool
 }
 
 // WithProviderNames wires where a fallback provider is checked at publish.

@@ -26,6 +26,8 @@ type fakeCorpus struct {
 	err      error
 	held     int
 	inside   bool
+	// exclusive counts the fences taken alone, as an experiment opens.
+	exclusive int
 }
 
 func (f *fakeCorpus) Record(_ gocontext.Context, c domain.RegressionCase) error {
@@ -60,6 +62,14 @@ func (f *fakeCorpus) Hold(
 	ctx gocontext.Context, _ domain.AgentID, inside func(gocontext.Context) error,
 ) error {
 	f.held, f.inside = f.held+1, true
+	defer func() { f.inside = false }()
+	return inside(ctx)
+}
+
+func (f *fakeCorpus) Exclusive(
+	ctx gocontext.Context, _ []domain.AgentID, inside func(gocontext.Context) error,
+) error {
+	f.exclusive, f.inside = f.exclusive+1, true
 	defer func() { f.inside = false }()
 	return inside(ctx)
 }

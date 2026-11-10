@@ -39,6 +39,8 @@ type Batch struct {
 	// an uploaded set.
 	DatasetVersion int64
 	Cases          []Occurrence
+	// Experiment, when set, makes this batch an experiment (experiment.go).
+	Experiment *Experiment
 }
 
 // Corpus is what a battery replays: the cases of one version of a corpus.
@@ -70,29 +72,35 @@ is why it happens inside the request that asked for it, and why the number
 answered is the number that actually opened.
 */
 func Open(ctx context.Context, opener Opener, batch Batch) (Opened, error) {
+	draws, err := drawsOf(batch)
+	if err != nil {
+		return Opened{}, err
+	}
 	var out Opened
-	for i, occurrence := range batch.Cases {
+	for _, d := range draws {
 		if err := ctx.Err(); err != nil {
 			return out, err
 		}
 
-		opened, err := opener.Open(ctx, trigger.Request{
+		req := trigger.Request{
 			Agent: batch.Agent,
 			// The intention is this case of this simulation. Simulating again
 			// is a new intention and opens its own runs; retrying one that
 			// timed out reaches the runs it already opened.
-			IdemKey:    intentionOf(batch.ID, i, occurrence),
+			IdemKey:    d.key,
 			Trigger:    "simulation",
 			By:         batch.By,
-			Input:      occurrence.Input,
+			Input:      d.occurrence.Input,
 			Simulation: batch.ID,
-			Case:       occurrence.ID,
+			Case:       d.occurrence.ID,
 
 			DatasetVersion: batch.DatasetVersion,
-		})
+		}
+		withExperiment(&req, batch)
+		opened, err := opener.Open(ctx, req)
 		if err != nil {
 			// One case failing never stops the rest.
-			out.Failed = append(out.Failed, fmt.Sprintf("case %d: %v", i+1, err))
+			out.Failed = append(out.Failed, fmt.Sprintf("case %d: %v", d.at+1, err))
 			continue
 		}
 		out.Runs = append(out.Runs, opened.RunID)

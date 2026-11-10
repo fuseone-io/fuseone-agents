@@ -45,6 +45,10 @@ type RunStartedPayload struct {
 	// from ever counting as a battery, whatever its configuration (NT-015).
 	Experiment       string            `json:"experiment,omitempty"`
 	ExperimentConfig *ExperimentConfig `json:"experiment_config,omitempty"`
+	// ExperimentRepetitions is how many times the experiment runs each case. Recorded on
+	// every run with the rest of the intention, so a retry can read what the first attempt
+	// asked for from any run it opened, and run that rather than whatever it asks today.
+	ExperimentRepetitions int `json:"experiment_repetitions,omitempty"`
 
 	// Origin is where the ask came from, when it came from a conversation.
 	Origin *RunOrigin `json:"origin,omitempty"`

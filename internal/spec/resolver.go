@@ -50,9 +50,14 @@ type Resolver struct {
 // the key while a version had one pair; a declared fallback is a second
 // planner of the same version, and keyed by version it resolved to whichever
 // pair was built first.
+//
+// The effort is in the key for the same reason: an experiment plans one version at
+// another effort, and keyed without it the next run of that version would plan at the
+// experiment's.
 type plannerKey struct {
 	version domain.VersionID
 	pair    domain.ModelPair
+	effort  string
 }
 
 func NewResolver(specs Definitions, providers *model.Registry, tools model.ToolSchemas) *Resolver {
@@ -64,7 +69,10 @@ func NewResolver(specs Definitions, providers *model.Registry, tools model.ToolS
 	}
 }
 
-var _ worker.Specs = (*Resolver)(nil)
+var (
+	_ worker.Specs           = (*Resolver)(nil)
+	_ worker.ExperimentSpecs = (*Resolver)(nil)
+)
 
 // Resolve returns the run configuration and planner for one agent version.
 //
@@ -81,7 +89,11 @@ func (r *Resolver) Resolve(ctx context.Context, agent domain.AgentID, version do
 	if err != nil {
 		return worker.Resolution{}, err
 	}
+	return resolution(spec, planner, r.fallback(spec)), nil
+}
 
+// resolution is what a worker runs one version with, on the planner it was resolved to.
+func resolution(spec Spec, planner engine.Planner, fallback *worker.Fallback) worker.Resolution {
 	return worker.Resolution{
 		Start: engine.Start{
 			// The pack is frozen here, at the start of the run, and only ever
@@ -99,12 +111,12 @@ func (r *Resolver) Resolve(ctx context.Context, agent domain.AgentID, version do
 			PublishesEvents: len(spec.Emits) > 0,
 		},
 		Planner:  planner,
-		Fallback: r.fallback(spec),
-	}, nil
+		Fallback: fallback,
+	}
 }
 
 func (r *Resolver) planner(spec Spec, pair domain.ModelPair) (engine.Planner, error) {
-	key := plannerKey{version: spec.Version, pair: pair}
+	key := plannerKey{version: spec.Version, pair: pair, effort: spec.Effort}
 	for {
 		priceRevision := r.providers.Revision()
 		r.mu.RLock()

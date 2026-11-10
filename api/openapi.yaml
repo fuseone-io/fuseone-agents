@@ -1147,6 +1147,77 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /agents/{agentId}/experiments:
+    post:
+      tags: [agents]
+      operationId: startExperiment
+      summary: Run one agent version against a dataset version under another configuration
+      description: |
+        An experiment is a simulation with three things pinned: a dataset version, an agent
+        version and a configuration (NT-015). Every run is simulated: the Gate decides, the
+        ledger records, the budget reserves, and the tool layer answers with nothing.
+
+        An experiment is never a battery, whatever its configuration. It does not start or
+        stop a version, it does not count as the version's last battery, and it does not let
+        an agent leave Draft. It changes nothing about the agent: moving to the model that
+        won is an ordinary new version, with its own battery.
+
+        Any non-empty configuration runs without the version's declared fallback, so a
+        result never reports one model while measuring another. When the chosen model's
+        retries run out, the run parks. An empty configuration is the version as published,
+        fallback included.
+
+        Returns immediately, like a simulation.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: |
+            Unique per intention. It names the experiment, so a caller that never saw the
+            answer can ask again and reach the runs it already opened. Asking again runs
+            what the first attempt recorded, a field the retry leaves out included, even
+            when the dataset or the agent has a newer version by then. A retry that states
+            nothing else is never refused: it answers with the runs the experiment holds, and
+            opens the ones a first attempt cut short left unopened when it still can. A
+            retry that states something else is refused with a 409 and opens nothing.
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExperimentRequest' }
+      responses:
+        '202':
+          description: The experiment was accepted and its runs are being advanced.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExperimentAccepted' }
+        '400':
+          description: |
+            A pair this installation cannot ask — the configuration over the version, field
+            by field, on a provider that is not configured, is switched off, or whose
+            credential does not open — repetitions outside 1 to 5, or a dataset version that
+            does not exist. Only on a first attempt: once an experiment has runs, a retry is
+            answered with them whatever has changed since.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            A retry under this key stating another intention than the one it names, or not
+            one run could be opened: a paused agent, or an agent version that does not
+            exist.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /agents/{agentId}/webhooks:
     get:
       tags: [agents]
@@ -5565,6 +5636,54 @@ components:
             ends in a newline, and counting it would put an empty occurrence in
             a report somebody reads as real.
           maxLength: 1048576
+
+    ExperimentConfig:
+      type: object
+      description: >
+        What the experiment overrides. Every field is optional, and an absent one is the
+        version's own: a provider alone runs the published model under it, a model alone
+        runs under the published provider, and an effort alone changes only the effort.
+        The effective pair must be one this installation serves.
+      properties:
+        provider: { type: string, maxLength: 128 }
+        model: { type: string, maxLength: 256 }
+        effort: { type: string, maxLength: 32 }
+
+    ExperimentRequest:
+      type: object
+      properties:
+        version:
+          type: string
+          description: >
+            The agent version to run. Absent is the version published now, pinned when the
+            experiment opens, so a version published while it runs reaches none of its runs.
+        datasetVersion:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The dataset version to replay. Absent is the latest.
+        config: { $ref: '#/components/schemas/ExperimentConfig' }
+        repetitions:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: >
+            How many times each case runs, for structural certainty rather than an average:
+            a case broken in any repetition is broken. Absent is once.
+
+    ExperimentAccepted:
+      type: object
+      required: [id, cases, repetitions, runs, datasetVersion]
+      properties:
+        id: { type: string }
+        cases:
+          type: integer
+          description: The cases of the dataset version that were run.
+        repetitions: { type: integer }
+        runs:
+          type: integer
+          description: How many runs actually opened, at most cases times repetitions.
+        datasetVersion: { type: integer, format: int64 }
 
     SimulationAccepted:
       type: object
