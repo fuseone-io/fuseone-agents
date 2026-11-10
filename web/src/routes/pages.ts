@@ -22,6 +22,9 @@ export const AgentEditorPage = lazy(() =>
 export const AgentDetailPage = lazy(() =>
   import("@/features/agents/agent-detail-page").then((m) => ({ default: m.AgentDetailPage })),
 );
+export const ExperimentsPage = lazy(() =>
+  import("@/features/experiments/experiments-page").then((m) => ({ default: m.ExperimentsPage })),
+);
 export const SimulationPage = lazy(() =>
   import("@/features/agents/simulation-page").then((m) => ({ default: m.SimulationPage })),
 );
