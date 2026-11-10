@@ -36,10 +36,21 @@ func (s *Server) CompareVersions(
 		}, nil
 	}
 
+	// A named `to` first, before looking for the version before it: the oldest version has
+	// none, and the 409 that says so would confirm a version the caller may not read. A named
+	// `from` needs no lookup, and is checked with the pair below.
+	if to := req.Params.To; to != nil && *to != "" {
+		if hidden, err := s.hiddenVersion(ctx, published.ID, domain.VersionID(*to)); err != nil || hidden != "" {
+			return hiddenComparison(hidden, err)
+		}
+	}
 	from, to, err := s.twoVersions(ctx, published, req.Params)
 	if err != nil {
 		return openapi.CompareVersions409ApplicationProblemPlusJSONResponse(
 			conflicted(err.Error())), nil
+	}
+	if hidden, err := s.hiddenVersion(ctx, published.ID, from, to); err != nil || hidden != "" {
+		return hiddenComparison(hidden, err)
 	}
 
 	was, err := s.battery(ctx, published.ID, from)
@@ -80,6 +91,39 @@ func (s *Server) twoVersions(
 	}
 	return "", "", fmt.Errorf(
 		"%s has nothing published before %s to compare it with", published.ID, to)
+}
+
+/*
+hiddenVersion names the first of the versions the caller may not read where it was
+published, if any.
+
+The agent is read where it is published today, and that is all the route authorized. An
+agent republished from finance to cx keeps its finance versions and their batteries, and
+somebody who may read cx has no claim on them — named as either side, or picked as the
+version before. A version that does not exist is left to the battery lookup, which says so.
+*/
+func (s *Server) hiddenVersion(
+	ctx context.Context, agent domain.AgentID, ids ...domain.VersionID,
+) (domain.VersionID, error) {
+	versions, err := s.agents.Versions(ctx, agent)
+	if err != nil {
+		return "", fmt.Errorf("agent versions: %w", err)
+	}
+	visible := auth.VisibleScopes(ctx, domain.PermAgentRead)
+	for _, id := range ids {
+		for _, v := range versions {
+			if v.VersionID == id && !readable(v.Scope, visible) {
+				return id, nil
+			}
+		}
+	}
+	return "", nil
+}
+
+func hiddenComparison(hidden domain.VersionID, err error) (openapi.CompareVersionsResponseObject, error) {
+	return openapi.CompareVersions404ApplicationProblemPlusJSONResponse{
+		NotFoundApplicationProblemPlusJSONResponse: notFound(string(hidden)),
+	}, err
 }
 
 // battery folds the newest battery run against one version, read against the

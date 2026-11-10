@@ -663,6 +663,10 @@ export interface paths {
          *
          *     Both versions default to the obvious ones: the current version, and
          *     the one published before it.
+         *
+         *     Each side is read only where it was published. A version published under a
+         *     scope the caller may not read — an agent republished elsewhere keeps its old
+         *     versions — is a 404, whether it was named or picked as the one before.
          */
         get: operations["compareVersions"];
         put?: never;
