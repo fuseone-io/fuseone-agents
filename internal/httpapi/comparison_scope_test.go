@@ -20,6 +20,9 @@ func TestCompareVersions_aVersionPublishedInAnotherScope_isNotFound(t *testing.T
 		{"named as from", openapi.CompareVersionsParams{From: ptr("v1"), To: ptr("v2")}},
 		{"named as to", openapi.CompareVersionsParams{From: ptr("v2"), To: ptr("v1")}},
 		{"picked as the version before", openapi.CompareVersionsParams{}},
+		// The oldest version has none before it, so looking for one fails: the named version
+		// has to be hidden before that, or the 409 that says so confirms it exists.
+		{"named as to, alone, with nothing before it", openapi.CompareVersionsParams{To: ptr("v1")}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -36,15 +36,21 @@ func (s *Server) CompareVersions(
 		}, nil
 	}
 
+	// A named `to` first, before looking for the version before it: the oldest version has
+	// none, and the 409 that says so would confirm a version the caller may not read. A named
+	// `from` needs no lookup, and is checked with the pair below.
+	if to := req.Params.To; to != nil && *to != "" {
+		if hidden, err := s.hiddenVersion(ctx, published.ID, domain.VersionID(*to)); err != nil || hidden != "" {
+			return hiddenComparison(hidden, err)
+		}
+	}
 	from, to, err := s.twoVersions(ctx, published, req.Params)
 	if err != nil {
 		return openapi.CompareVersions409ApplicationProblemPlusJSONResponse(
 			conflicted(err.Error())), nil
 	}
 	if hidden, err := s.hiddenVersion(ctx, published.ID, from, to); err != nil || hidden != "" {
-		return openapi.CompareVersions404ApplicationProblemPlusJSONResponse{
-			NotFoundApplicationProblemPlusJSONResponse: notFound(string(hidden)),
-		}, err
+		return hiddenComparison(hidden, err)
 	}
 
 	was, err := s.battery(ctx, published.ID, from)
@@ -112,6 +118,12 @@ func (s *Server) hiddenVersion(
 		}
 	}
 	return "", nil
+}
+
+func hiddenComparison(hidden domain.VersionID, err error) (openapi.CompareVersionsResponseObject, error) {
+	return openapi.CompareVersions404ApplicationProblemPlusJSONResponse{
+		NotFoundApplicationProblemPlusJSONResponse: notFound(string(hidden)),
+	}, err
 }
 
 // battery folds the newest battery run against one version, read against the
