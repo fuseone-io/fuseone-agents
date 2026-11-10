@@ -105,6 +105,14 @@ func (s *Server) GetSimulation(
 	if err != nil {
 		return nil, fmt.Errorf("simulation %s: %w", req.SimulationId, err)
 	}
+	// The id is whatever the caller typed. Only runs of this agent, recorded where the caller
+	// may read, are this agent's simulation: an agent republished elsewhere keeps its old
+	// runs where they were recorded, and an id that names nothing names no agent.
+	if report.Agent != published.ID || auth.Require(ctx, domain.PermAgentRead, report.Scope) != nil {
+		return openapi.GetSimulation404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(req.SimulationId),
+		}, nil
+	}
 
 	// A simulation whose runs name corpus cases is a battery, and reading it
 	// without the corrections would show what happened while saying nothing

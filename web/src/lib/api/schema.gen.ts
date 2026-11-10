@@ -755,6 +755,11 @@ export interface paths {
          *     where some cases never opened a run at all. That is reported rather
          *     than hidden, because a report that quietly drops what it could not run
          *     tells an author the set was covered when it was not.
+         *
+         *     Only a simulation of this agent, recorded under a scope the caller may read, is
+         *     answered. Another agent's, one that does not exist, and one recorded before the
+         *     agent was republished under another scope are all a 404: an agent republished
+         *     elsewhere keeps its old runs where they were recorded.
          */
         get: operations["getSimulation"];
         put?: never;

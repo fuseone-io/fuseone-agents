@@ -172,3 +172,18 @@ func TestGather_readsWhichCorpusCaseARunReplayed(t *testing.T) {
 		t.Errorf("cases = %+v, want the corpus case named", got.Cases)
 	}
 }
+
+// The report keeps the scope its runs were recorded under, so a route can authorize against
+// it rather than against where the agent is published today.
+func TestGather_keepsTheScopeItsRunsWereRecordedUnder(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	if _, err := simulate.Open(t.Context(), openerFor(store, engine.NewMemoryContent()), batchOf(`{"n":1}`)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	got, err := simulate.Gather(t.Context(), store, "sim-1")
+	if err != nil || got.Agent != "suporte" || got.Scope != (domain.Scope{Company: "acme", Area: "cx"}) {
+		t.Errorf("Gather = agent %q scope %+v err=%v, want what the opener recorded", got.Agent, got.Scope, err)
+	}
+}
