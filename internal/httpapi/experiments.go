@@ -83,28 +83,61 @@ func (s *Server) openExperiment(
 	ctx context.Context, published domain.AgentSummary, id string, ask experimentAsk,
 ) (out experimentOpened, err error) {
 	err = s.regressions.Exclusive(ctx, []domain.AgentID{published.ID}, func(ctx context.Context) error {
-		record, found, err := simulate.Recorded(ctx, s.store, id)
+		before, found, err := simulate.Recorded(ctx, s.store, id)
 		if err != nil {
 			return err
 		}
-		if out.intent, out.conflict = settle(ask, record.Intention, found, published.VersionID); out.conflict != nil {
+		if out.intent, out.conflict = settle(ask, before.Intention, found, published.VersionID); out.conflict != nil {
 			return nil
 		}
-		if out.refused, err = s.unservedPair(ctx, published, out.intent); err != nil || out.refused != nil {
+		refused, err := s.addMissing(ctx, experimentBatch{published, id, &out})
+		if err != nil {
 			return err
 		}
-		corpus, readErr := s.corpusOccurrences(ctx, published.ID, out.intent.DatasetVersion)
-		if out.refused = readErr; readErr != nil {
+		// Refused only before anything was opened. After, it decides whether a retry can
+		// still add what the first attempt left unopened, never whether it happened.
+		if !found && refused != nil {
+			out.refused = refused
 			return nil
 		}
-		out.intent.DatasetVersion, out.cases = corpus.Version, len(corpus.Cases)
-		out.opened, err = simulate.Open(ctx, s.opener(), simulate.Batch{
-			ID: id, Agent: published.ID, By: callerOf(ctx),
-			DatasetVersion: corpus.Version, Cases: corpus.Cases, Experiment: &out.intent.Experiment,
-		})
-		return err
+		return s.answerFromRecord(ctx, id, &out)
 	})
 	return out, err
+}
+
+// experimentBatch is one experiment being opened: its agent, its id and its result so far.
+type experimentBatch struct {
+	published domain.AgentSummary
+	id        string
+	out       *experimentOpened
+}
+
+// addMissing opens the runs of the settled intention that are not open yet, unless its
+// pair cannot be asked or its cases cannot be read, which is the refusal it returns.
+func (s *Server) addMissing(ctx context.Context, b experimentBatch) (refused error, err error) {
+	if refused, err = s.unservedPair(ctx, b.published, b.out.intent); err != nil || refused != nil {
+		return refused, err
+	}
+	corpus, readErr := s.corpusOccurrences(ctx, b.published.ID, b.out.intent.DatasetVersion)
+	if readErr != nil {
+		return readErr, nil
+	}
+	b.out.opened, err = simulate.Open(ctx, s.opener(), simulate.Batch{
+		ID: b.id, Agent: b.published.ID, By: callerOf(ctx),
+		DatasetVersion: corpus.Version, Cases: corpus.Cases, Experiment: &b.out.intent.Experiment,
+	})
+	return nil, err
+}
+
+// answerFromRecord reports the experiment as the ledger holds it once this attempt is done,
+// so the answer does not shrink with a corpus erased or a provider removed since.
+func (s *Server) answerFromRecord(ctx context.Context, id string, out *experimentOpened) error {
+	after, found, err := simulate.Recorded(ctx, s.store, id)
+	if err != nil || !found {
+		return err
+	}
+	out.intent, out.opened.Runs, out.cases = after.Intention, after.Runs, after.Cases
+	return nil
 }
 
 // experimentID names an experiment after its agent and the intention alone, so asking

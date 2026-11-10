@@ -8,6 +8,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/simulate"
 )
 
 /*
@@ -219,5 +220,75 @@ func TestStartExperiment_opensInsideTheExclusiveFence(t *testing.T) {
 	if corpus.exclusive != 1 || corpus.held != 0 {
 		t.Errorf("exclusive=%d shared=%d, want the experiment opened under the exclusive fence alone",
 			corpus.exclusive, corpus.held)
+	}
+}
+
+/*
+A retry that states nothing else reaches the experiment its key names, whatever moved
+since it was accepted (the Idempotency-Key contract). The runs exist, and so does their
+cost, so answering 400 tells a caller nothing happened when it did. What changed decides
+only whether the retry can still add the runs the first attempt left unopened.
+*/
+func TestStartExperiment_askedAgainAfterTheWorldMoved_reachesTheRunsItOpened(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		moved func(*Server, *fakeCorpus)
+	}{
+		{"its provider removed", func(s *Server, _ *fakeCorpus) {
+			s.providerNames.(serving).usable["anthropic"] = false
+		}},
+		{"one of its cases erased", func(_ *Server, corpus *fakeCorpus) {
+			corpus.versions[2][1].Erased = true
+		}},
+		{"its corpus erased", func(_ *Server, corpus *fakeCorpus) {
+			for i := range corpus.versions[2] {
+				corpus.versions[2][i].Erased = true
+			}
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			store := ledger.NewMemory()
+			server, corpus := experimentFixture(t, store, servedAgent())
+			body := openapi.ExperimentRequest{Repetitions: ptr(2)}
+			first := accept(t, server, body)
+
+			c.moved(server, corpus)
+			again := accept(t, server, body)
+
+			if again != first {
+				t.Errorf("retry = %+v, want the answer the first attempt got, %+v", again, first)
+			}
+			if runs := startedRuns(t, store, first.Id); len(runs) != first.Runs {
+				t.Errorf("%d runs after the retry, want the %d already opened", len(runs), first.Runs)
+			}
+		})
+	}
+}
+
+// A first attempt cut short — its caller timed out and the request was cancelled — leaves
+// cases unopened, and the retry is what opens them, under the intention already recorded.
+func TestStartExperiment_askedAgainAfterAnInterruptedFirstAttempt_opensWhatIsMissing(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	server, _ := experimentFixture(t, store, servedAgent())
+	id := experimentID("triage", "exp-intent-0001")
+	occurrences, err := server.corpusOccurrences(gocontext.Background(), "triage", 2)
+	if err != nil {
+		t.Fatalf("corpus: %v", err)
+	}
+	if _, err := simulate.Open(gocontext.Background(), server.opener(), simulate.Batch{
+		ID: id, Agent: "triage", By: "usr_ana", DatasetVersion: 2, Cases: occurrences.Cases[:1],
+		Experiment: &simulate.Experiment{Version: "v2", Repetitions: 1},
+	}); err != nil {
+		t.Fatalf("the interrupted attempt: %v", err)
+	}
+
+	again := accept(t, server, openapi.ExperimentRequest{})
+
+	if again.Id != id || again.Runs != 2 || again.Cases != 2 {
+		t.Errorf("retry = %+v, want both cases of %s opened", again, id)
 	}
 }

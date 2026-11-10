@@ -7492,7 +7492,9 @@ export interface operations {
                  *     answer can ask again and reach the runs it already opened. Asking again runs
                  *     what the first attempt recorded, a field the retry leaves out included, even
                  *     when the dataset or the agent has a newer version by then. A retry that states
-                 *     something else is refused with a 409 and opens nothing.
+                 *     nothing else is never refused: it answers with the runs the experiment holds, and
+                 *     opens the ones a first attempt cut short left unopened when it still can. A
+                 *     retry that states something else is refused with a 409 and opens nothing.
                  */
                 "Idempotency-Key": string;
             };
@@ -7520,7 +7522,8 @@ export interface operations {
              * @description A pair this installation cannot ask — the configuration over the version, field
              *     by field, on a provider that is not configured, is switched off, or whose
              *     credential does not open — repetitions outside 1 to 5, or a dataset version that
-             *     does not exist.
+             *     does not exist. Only on a first attempt: once an experiment has runs, a retry is
+             *     answered with them whatever has changed since.
              */
             400: {
                 headers: {
