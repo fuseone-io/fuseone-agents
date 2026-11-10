@@ -28,6 +28,79 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+Experiments (#297), and two reads that crossed a scope boundary. It adds no migration.
+
+### Upgrade notes
+
+- **Every `serve` and `worker` replica must have run 0.100.0 before this release.** This is
+  the release that writes experiments. 0.100.0 is the one that taught every replica to tell
+  an experiment apart from a battery; a replica on anything older would read an experiment
+  as evidence about a version that was never simulated as published.
+- **Once the first experiment exists, rolling back below 0.100.0 is not safe.** A replica on
+  an older version reads the recorded experiments as batteries and simulations: an
+  experiment could then start or stop a version, reset the nightly battery's clock, or let
+  an agent leave Draft.
+- **Rolling back to 0.100.0 itself stays safe.** It is the compatible floor: it keeps every
+  recorded experiment out of batteries and simulations. What it lacks is a way to start, read
+  or compare them; the experiments stay in the ledger, and this release reads them again. Let
+  running experiments settle first: a 0.100.0 worker does not know an experiment's
+  configuration, and plans any run it still has to advance on the version as published. The
+  report shows the model each run actually used.
+- **Two reads now answer 404 where they used to answer.** Reading a simulation by an id that
+  names nothing, another agent's simulation, or one recorded under a scope the caller may not
+  read is a 404; the first used to be an empty report and the others the report itself. A
+  version comparison naming, or falling back to, a version published under a scope the caller
+  may not read is a 404 as well. A client that read an unknown simulation id as "no runs yet"
+  must expect a 404.
+
+### Added
+
+- **Experiments.** An experiment runs one agent version against a dataset version under a
+  configuration: another provider, model or effort, each optional and the version's own when
+  left out. Each case runs 1 to 5 times. Any change, even effort alone, runs without the
+  version's declared fallback, so a result never reports one model while measuring another;
+  an experiment that changes nothing keeps it. An experiment is never a battery and changes
+  nothing about the agent.
+  - **Console:** **Experiments** in an agent's menu lists the newest ones, starts one with the
+    cost stated first (cases × repetitions = runs), and compares two.
+  - **Report:** in a fixed order. First what ran: dataset version, agent version,
+    configuration, cases run out of the cases in the version, erased cases and repetitions.
+    Then what was found: held, broken and cost. A case broken in any repetition is broken,
+    and says in how many: `1 of 5`.
+  - **Comparison:** on one dataset version, every case is compared. Across two, only the
+    cases both have are listed, the screen says so, and it counts what was left out of each
+    side. Cost moves per run.
+  - **API:** `POST` and `GET /agents/{agentId}/experiments`, `GET
+    /agents/{agentId}/experiments/{experimentId}` and `GET
+    /agents/{agentId}/experiment-comparison`. The `Idempotency-Key` names the experiment. A
+    retry reaches its runs whatever has changed since and completes an interrupted start; a
+    retry that asks for something else is a 409.
+  - **Manual:** a new page, *Experiments*, in pt-BR and en-US.
+
+### Security
+
+- **A simulation is read only under its agent and where it was recorded** (#312). Reading
+  one folded whatever id the caller typed, under the route's agent and the scope that agent is
+  published in today. That showed another agent's simulation, and runs recorded before the
+  agent was republished under another scope.
+- **A version comparison reads each side only where it was published** (#313). An agent
+  republished from one area to another keeps its old versions there, and anybody who may read
+  the new area could compare against one, named or picked as the version before.
+- **An experiment is read, listed and added to only where its runs were recorded.** Every door
+  answers 404 before any other answer, so a retry cannot confirm an experiment it has no
+  claim on.
+
+### Fixed
+
+- **A version comparison no longer reports a saving on a case one side never ran.** A battery
+  stands in for a corpus case that opened no run with a row that costs nothing, and the
+  comparison read it as a run that got cheaper. The case still counts as broken on that side,
+  and moves no cost or steps.
+
+---
+
 ## [0.100.0] — 2026-11-09
 
 A compatibility release for experiments (#297). There is no experiment endpoint and nothing
