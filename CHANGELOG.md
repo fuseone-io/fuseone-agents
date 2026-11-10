@@ -28,7 +28,7 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.101.0] — 2026-11-10
 
 Experiments (#297), and three reads that crossed a scope boundary. It adds no migration.
 
@@ -58,12 +58,12 @@ Experiments (#297), and three reads that crossed a scope boundary. It adds no mi
 
 ### Added
 
-- **Experiments.** An experiment runs one agent version against a dataset version under a
-  configuration: another provider, model or effort, each optional and the version's own when
-  left out. Each case runs 1 to 5 times. Any change, even effort alone, runs without the
-  version's declared fallback, so a result never reports one model while measuring another;
-  an experiment that changes nothing keeps it. An experiment is never a battery and changes
-  nothing about the agent.
+- **Experiments** (#309, #311, #314). An experiment runs one agent version against a dataset
+  version under a configuration: another provider, model or effort, each optional and the
+  version's own when left out. Each case runs 1 to 5 times. Any change, even effort alone,
+  runs without the version's declared fallback, so a result never reports one model while
+  measuring another; an experiment that changes nothing keeps it. An experiment is never a
+  battery and changes nothing about the agent.
   - **Console:** **Experiments** in an agent's menu lists the newest ones, starts one with the
     cost stated first (cases × repetitions = runs), and compares two.
   - **Report:** in a fixed order. First what ran: dataset version, agent version,
@@ -89,21 +89,21 @@ Experiments (#297), and three reads that crossed a scope boundary. It adds no mi
 - **A version comparison reads each side only where it was published** (#313). An agent
   republished from one area to another keeps its old versions there, and anybody who may read
   the new area could compare against one, named or picked as the version before.
-- **An agent's version is read only where it was published.** Reading an agent by version
-  checked only the scope of its current version, so after it was republished under another
-  scope anybody who could read the new one could read an old version's whole definition, and
-  its history listed every version. A version the caller may not read is now a 404, and the
-  history lists only the versions they may read.
-- **An experiment is read, listed and added to only where its runs were recorded.** Every door
-  answers 404 before any other answer, so a retry cannot confirm an experiment it has no
-  claim on.
+- **An agent's version is read only where it was published** (#314). Reading an agent by
+  version checked only the scope of its current version, so after it was republished under
+  another scope anybody who could read the new one could read an old version's whole
+  definition, and its history listed every version. A version the caller may not read is now a
+  404, and the history lists only the versions they may read.
+- **An experiment is read, listed and added to only where its runs were recorded** (#311,
+  #314). Every door answers 404 before any other answer, so a retry cannot confirm an
+  experiment it has no claim on.
 
 ### Fixed
 
-- **A version comparison no longer reports a saving on a case one side never ran.** A battery
-  stands in for a corpus case that opened no run with a row that costs nothing, and the
-  comparison read it as a run that got cheaper. The case still counts as broken on that side,
-  and moves no cost or steps.
+- **A version comparison no longer reports a saving on a case one side never ran** (#311). A
+  battery stands in for a corpus case that opened no run with a row that costs nothing, and
+  the comparison read it as a run that got cheaper. The case still counts as broken on that
+  side, and moves no cost or steps.
 
 ---
 
