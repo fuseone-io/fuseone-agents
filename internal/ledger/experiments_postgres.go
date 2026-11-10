@@ -53,6 +53,9 @@ func (p *Postgres) Experiments(
 
 // experimentGroups is a page of an agent's experiments with their counts, and the first
 // run of each, in the same order.
+//
+// A judge run names the experiment it judges and is not one of its runs (NT-016), so it
+// counts in no group and is never a group's first.
 func (p *Postgres) experimentGroups(
 	ctx context.Context, agent domain.AgentID, limit int,
 ) ([]domain.ExperimentListing, []string, error) {
@@ -64,6 +67,7 @@ func (p *Postgres) experimentGroups(
 		join run_steps s on s.run_id = r.run_id and s.seq = 1 and s.kind = 'run_started'
 		where r.agent_id = $1 and r.simulated
 		  and coalesce(s.payload->>'experiment', '') <> ''
+		  and coalesce(jsonb_typeof(s.payload->'judge'), '') <> 'object'
 		group by experiment
 		order by opened desc, experiment desc
 		limit $2`, string(agent), limit)

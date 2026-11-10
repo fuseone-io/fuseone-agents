@@ -33,7 +33,8 @@ func (m *Memory) Experiments(
 		if err := json.Unmarshal(steps[0].Payload, &started); err != nil {
 			continue
 		}
-		if !started.Simulated || started.Experiment == "" {
+		// A judge run names the experiment it judges and is not one of its runs (NT-016).
+		if !started.Simulated || started.Experiment == "" || started.Judge != nil {
 			continue
 		}
 		e, seen := found[started.Experiment]
