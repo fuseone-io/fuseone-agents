@@ -52,7 +52,8 @@ Experiments (#297), and two reads that crossed a scope boundary. It adds no migr
   names nothing, another agent's simulation, or one recorded under a scope the caller may not
   read is a 404; the first used to be an empty report and the others the report itself. A
   version comparison naming, or falling back to, a version published under a scope the caller
-  may not read is a 404 as well. A client that read an unknown simulation id as "no runs yet"
+  may not read is a 404 as well, and so is reading such a version of an agent; the agent's
+  history no longer lists it. A client that read an unknown simulation id as "no runs yet"
   must expect a 404.
 
 ### Added
@@ -88,6 +89,11 @@ Experiments (#297), and two reads that crossed a scope boundary. It adds no migr
 - **A version comparison reads each side only where it was published** (#313). An agent
   republished from one area to another keeps its old versions there, and anybody who may read
   the new area could compare against one, named or picked as the version before.
+- **An agent's version is read only where it was published.** Reading an agent by version
+  checked only the scope of its current version, so after it was republished under another
+  scope anybody who could read the new one could read an old version's whole definition, and
+  its history listed every version. A version the caller may not read is now a 404, and the
+  history lists only the versions they may read.
 - **An experiment is read, listed and added to only where its runs were recorded.** Every door
   answers 404 before any other answer, so a retry cannot confirm an experiment it has no
   claim on.

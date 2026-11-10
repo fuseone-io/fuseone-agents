@@ -341,6 +341,10 @@ export interface paths {
          *     This is the only place the definition's text is returned. The list
          *     deliberately omits it: a page of twenty agents would carry twenty
          *     bodies of prose nobody asked to read.
+         *
+         *     Each version is read where it was published. An agent republished
+         *     under another scope keeps its old versions there: one the caller may
+         *     not read is a 404 when asked for, and is left out of `versions`.
          */
         get: operations["getAgent"];
         put?: never;
