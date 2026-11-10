@@ -31,11 +31,14 @@ export function stubApi(routes: Record<string, unknown>) {
     "fetch",
     vi.fn(async (input: Request | RequestInfo | URL, init?: RequestInit) => {
       const request = input instanceof Request ? input : new Request(input, init);
-      const path = new URL(request.url).pathname.replace(/^\/api\/v1/, "");
+      const url = new URL(request.url);
+      const path = url.pathname.replace(/^\/api\/v1/, "");
       if (request.method === "POST") {
         posted.push({ path, body: await request.json() });
       }
-      const key = `${request.method} ${path}`;
+      // The query first, so two versions of one agent can answer differently.
+      const withQuery = `${request.method} ${path}${url.search}`;
+      const key = withQuery in routes ? withQuery : `${request.method} ${path}`;
       const found = key in routes;
       return new Response(JSON.stringify(found ? routes[key] : { title: "not found" }), {
         status: found ? (request.method === "POST" ? 202 : 200) : 404,

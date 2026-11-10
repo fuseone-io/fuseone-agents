@@ -3,22 +3,16 @@ import { useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Form } from "@/components/ui/form";
 import {
   PropertiesSheet,
   PropertiesSheetBody,
   PropertiesSheetFooter,
 } from "@/components/shared/properties-sheet";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAgent } from "@/features/agents/agent-detail-api";
 import { ExperimentConfigFields } from "@/features/experiments/experiment-config-fields";
 import { ExperimentCost } from "@/features/experiments/experiment-cost";
+import { RepetitionsField, VersionField } from "@/features/experiments/experiment-pin-fields";
 import {
   experimentDefaults,
   experimentForm,
@@ -47,16 +41,19 @@ export function ExperimentStart({
   const { t } = useTranslation();
   const detail = useAgent(agentId);
   const start = useStartExperiment(agentId);
-  const agent = detail.data?.agent;
   const versions = detail.data?.versions ?? [];
 
   const form = useForm<ExperimentForm>({
     resolver: zodResolver(experimentForm),
-    values: experimentDefaults(agent?.versionId ?? ""),
+    values: experimentDefaults(detail.data?.agent.versionId ?? ""),
     resetOptions: { keepDirtyValues: true },
   });
 
   const repetitions = useWatch({ control: form.control, name: "repetitions" });
+  // The version chosen, read as itself: its provider is what the models are offered for and
+  // its ceiling is what the cost is stated at, since that is the version whose runs open.
+  const version = useWatch({ control: form.control, name: "version" });
+  const agent = useAgent(agentId, version || undefined).data?.agent;
 
   async function submit(values: ExperimentForm) {
     try {
@@ -78,52 +75,9 @@ export function ExperimentStart({
       <Form {...form}>
         <form onSubmit={form.handleSubmit(submit)} className="flex min-h-0 flex-1 flex-col">
           <PropertiesSheetBody className="space-y-4">
-            <FormField
-              control={form.control}
-              name="version"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("experiments.agentVersion")}</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full font-mono">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {versions.map((v) => (
-                        <SelectItem key={v.versionId} value={v.versionId} className="font-mono">
-                          {v.versionId.slice(0, 9)}
-                          {v.latest ? ` · ${t("experiments.current")}` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormItem>
-              )}
-            />
+            <VersionField form={form} versions={versions} />
             <ExperimentConfigFields form={form} publishedProvider={agent?.provider ?? ""} />
-            <FormField
-              control={form.control}
-              name="repetitions"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("experiments.repetitions")}</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {["1", "2", "3", "4", "5"].map((n) => (
-                        <SelectItem key={n} value={n}>{n}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormItem>
-              )}
-            />
+            <RepetitionsField form={form} />
             <ExperimentCost
               agentId={agentId}
               agent={agent}
