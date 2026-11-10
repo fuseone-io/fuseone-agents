@@ -111,3 +111,51 @@ func TestCompareExperiments_acrossDatasetVersions_aSharedCaseThatDidNotRun_isLis
 		t.Errorf("comparison = %+v, want b listed as regressed with no run, c left out", got)
 	}
 }
+
+// A case one side never ran is still broken there, and moves no cost or steps: the synthetic
+// row of a case that did not run costs nothing because nothing ran, not because it got cheaper.
+func TestCompareExperiments_aCaseOneSideNeverRan_movesNoCost(t *testing.T) {
+	t.Parallel()
+	corpus := []domain.RegressionCase{expectsLookup("estorno"), expectsLookup("consulta")}
+	priced := repeated("estorno", 1)
+	priced[0].Cost, priced[0].Steps = domain.Cost{Micros: 100}, 7
+	ran := experimentOn(3, 1, append(priced, repeated("consulta", 1)...), corpus...)
+	never := experimentOn(3, 1, repeated("consulta", 1), corpus...)
+
+	for name, sides := range map[string][2]simulate.ExperimentReport{
+		"the newer side never ran it": {ran, never},
+		"the older side never ran it": {never, ran},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got := simulate.CompareExperiments(sides[0], sides[1])
+
+			estorno := changeOf(t, got, "estorno")
+			if (estorno.Now != simulate.Broke && estorno.Was != simulate.Broke) ||
+				estorno.CostMicros != 0 || estorno.Steps != 0 || got.CostMicros != 0 {
+				t.Errorf("estorno = %+v, total %d; want broken on the side that never ran it, moving no cost or steps",
+					estorno, got.CostMicros)
+			}
+		})
+	}
+}
+
+// The same for two versions: a correction one battery never ran is broken there, and is not
+// a saving of what the other battery spent on it.
+func TestCompare_aCaseOneBatteryNeverRan_movesNoCost(t *testing.T) {
+	t.Parallel()
+	corpus := []domain.RegressionCase{
+		corpusCase("reg-1", domain.Expectation{Kind: domain.ExpectSettles, Value: "finished"}),
+	}
+	was := simulate.Battery(simulate.Report{Version: "v1", Cases: []simulate.Case{{
+		ID: "reg-1", RunID: "run-a", Settled: simulate.SettledFinished, Steps: 7, Cost: domain.Cost{Micros: 100},
+	}}}, corpus)
+	now := simulate.Battery(simulate.Report{Version: "v2"}, corpus)
+
+	got := simulate.Compare(was, now)
+
+	if len(got.Cases) != 1 || got.Cases[0].Now != simulate.Broke || got.Cases[0].CostMicros != 0 ||
+		got.Cases[0].Steps != 0 || got.CostMicros != 0 {
+		t.Errorf("comparison = %+v, want reg-1 broken, moving no cost or steps", got)
+	}
+}

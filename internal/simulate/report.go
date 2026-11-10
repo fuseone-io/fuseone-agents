@@ -63,6 +63,10 @@ type Case struct {
 	// others are the other runs of this case, when it has more than one. Not part of
 	// what this row is judged on, and part of what the battery cost and what stopped it.
 	others []Case
+	// didNotRun marks the row a battery writes for a case of its corpus that opened no
+	// run: broken, and costing nothing because nothing ran, which a comparison must not
+	// read as cheaper.
+	didNotRun bool
 
 	// ID is the regression case this row replays, when it replays one.
 	ID      string       `json:"id,omitempty"`

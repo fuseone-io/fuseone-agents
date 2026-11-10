@@ -46,7 +46,7 @@ func Battery(report Report, corpus []domain.RegressionCase) Report {
 		}
 		if !ran {
 			out.Cases = append(out.Cases, Case{
-				ID: corrected.ID, Settled: SettledUnsettled,
+				ID: corrected.ID, Settled: SettledUnsettled, didNotRun: true,
 				Expected: corrected.Expectations, Unmet: corrected.Expectations,
 				Error: "the case did not run",
 			})
