@@ -97,3 +97,19 @@ func TestRecorded_namesTheAgentItsRunsBelongTo(t *testing.T) {
 		t.Errorf("Recorded = %q err=%v, want the agent the opener resolved", got.Agent, err)
 	}
 }
+
+// The record keeps the scope its runs were opened under. An agent republished elsewhere is
+// read under its new scope, and its old experiment is not: whoever may read the new one has
+// no claim on runs recorded under the old.
+func TestRecorded_keepsTheScopeItsRunsWereOpenedUnder(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	if _, err := simulate.Open(t.Context(), openerFor(store, engine.NewMemoryContent()), experimentBatch(1)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	got, _, err := simulate.Recorded(t.Context(), store, "exp-1")
+	if err != nil || got.Scope != (domain.Scope{Company: "acme", Area: "cx"}) {
+		t.Errorf("Recorded scope = %+v err=%v, want the scope the opener resolved", got.Scope, err)
+	}
+}

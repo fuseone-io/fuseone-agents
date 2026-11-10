@@ -19,8 +19,11 @@ type Intention struct {
 // and how many of its cases they cover.
 type Record struct {
 	Intention
-	// Agent is the agent the runs belong to, as the opener resolved it.
+	// Agent and Scope are what the runs belong to, as the opener resolved them. The scope
+	// is the one recorded, not the agent's today: an agent republished elsewhere keeps its
+	// old runs where they were recorded.
 	Agent domain.AgentID
+	Scope domain.Scope
 	Runs  []domain.RunID
 	Cases int
 }
@@ -55,7 +58,7 @@ func Recorded(ctx context.Context, steps Steps, id string) (Record, bool, error)
 		}
 		cases[started.Case] = true
 		if i == 0 {
-			out.Intention, out.Agent = recordedIntention(step, started), step.AgentID
+			out.Intention, out.Agent, out.Scope = recordedIntention(step, started), step.AgentID, step.Scope
 		}
 	}
 	out.Cases = len(cases)
