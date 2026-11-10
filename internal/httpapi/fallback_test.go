@@ -17,6 +17,7 @@ import (
 type configuredProviders map[string]bool
 
 func (k configuredProviders) Configured(name string) bool { return k[name] }
+func (k configuredProviders) Usable(name string) bool     { return k[name] }
 
 func withFallbackPair(provider, model string) func(*openapi.AgentDefinition) {
 	return func(d *openapi.AgentDefinition) {

@@ -17,6 +17,32 @@ import (
 
 func experimentServer(t *testing.T, store *ledger.Memory) *Server {
 	t.Helper()
+	server, _ := experimentFixture(t, store, servedAgent())
+	return server
+}
+
+// servedAgent is the agent an experiment runs: one version, on a pair this installation
+// serves.
+func servedAgent() *fakeDetail {
+	return &fakeDetail{versions: []domain.AgentSummary{servedVersion("v2")}}
+}
+
+func servedVersion(id domain.VersionID) domain.AgentSummary {
+	return domain.AgentSummary{
+		ID: "triage", VersionID: id, Name: "Atendimento", Latest: true,
+		Scope:    domain.Scope{Company: "acme", Area: "cx"},
+		Provider: "anthropic", Model: "test-model",
+	}
+}
+
+// serving is which providers this installation configures, and which of them it could ask.
+type serving struct{ configured, usable map[string]bool }
+
+func (s serving) Configured(name string) bool { return s.configured[name] || s.usable[name] }
+func (s serving) Usable(name string) bool     { return s.usable[name] }
+
+func experimentFixture(t *testing.T, store *ledger.Memory, agents Agents) (*Server, *fakeCorpus) {
+	t.Helper()
 	content := engine.NewMemoryContent()
 	corpusCase := func(id string) domain.RegressionCase {
 		ref, err := content.Put(gocontext.Background(), domain.RunID("origin-"+id), 1, []byte(`{"case":"`+id+`"}`))
@@ -26,11 +52,15 @@ func experimentServer(t *testing.T, store *ledger.Memory) *Server {
 		return domain.RegressionCase{ID: id, Agent: "triage", InputRef: ref}
 	}
 	at2 := []domain.RegressionCase{corpusCase("a"), corpusCase("b")}
-	return NewServer(store, "test").WithAgents(triggerable(t)).
+	corpus := &fakeCorpus{listed: at2, latest: 2,
+		versions: map[int64][]domain.RegressionCase{1: {corpusCase("a")}, 2: at2}}
+	return NewServer(store, "test").WithAgents(agents).
 		WithContent(content).WithCases(content).
-		WithRegressions(&fakeCorpus{listed: at2, latest: 2,
-			versions: map[int64][]domain.RegressionCase{1: {corpusCase("a")}, 2: at2}}).
-		WithProviderNames(configuredProviders{"openai": true})
+		WithRegressions(corpus).
+		WithProviderNames(serving{
+			configured: map[string]bool{"switched-off": true},
+			usable:     map[string]bool{"anthropic": true, "openai": true},
+		}), corpus
 }
 
 func startExperiment(body openapi.ExperimentRequest) openapi.StartExperimentRequestObject {

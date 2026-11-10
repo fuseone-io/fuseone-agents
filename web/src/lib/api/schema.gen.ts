@@ -3388,7 +3388,7 @@ export interface components {
             effort?: string;
         };
         ExperimentRequest: {
-            /** @description The agent version to run. Absent is the version published now. */
+            /** @description The agent version to run. Absent is the version published now, pinned when the experiment opens, so a version published while it runs reaches none of its runs. */
             version?: string;
             /**
              * Format: int64
@@ -7489,7 +7489,10 @@ export interface operations {
             header: {
                 /**
                  * @description Unique per intention. It names the experiment, so a caller that never saw the
-                 *     answer can ask again and reach the runs it already opened.
+                 *     answer can ask again and reach the runs it already opened. Asking again runs
+                 *     what the first attempt recorded, a field the retry leaves out included, even
+                 *     when the dataset or the agent has a newer version by then. A retry that states
+                 *     something else is refused with a 409 and opens nothing.
                  */
                 "Idempotency-Key": string;
             };
@@ -7514,8 +7517,10 @@ export interface operations {
                 };
             };
             /**
-             * @description A configuration whose effective provider this installation does not configure,
-             *     repetitions outside 1 to 5, or a dataset version that does not exist.
+             * @description A pair this installation cannot ask — the configuration over the version, field
+             *     by field, on a provider that is not configured, is switched off, or whose
+             *     credential does not open — repetitions outside 1 to 5, or a dataset version that
+             *     does not exist.
              */
             400: {
                 headers: {
@@ -7529,7 +7534,8 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             /**
-             * @description Not one run could be opened: a paused agent, or an agent version that does not
+             * @description A retry under this key stating another intention than the one it names, or not
+             *     one run could be opened: a paused agent, or an agent version that does not
              *     exist.
              */
             409: {

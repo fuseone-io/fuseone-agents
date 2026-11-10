@@ -24,6 +24,9 @@ type Regressions interface {
 	Delete(ctx context.Context, agent domain.AgentID, id string, by domain.UserID) error
 	// Hold fences the corpus against an erasure while it is being copied.
 	Hold(ctx context.Context, agent domain.AgentID, inside func(context.Context) error) error
+	// Exclusive fences the corpus against every other copy as well, while an experiment
+	// reads what it recorded and acts on it.
+	Exclusive(ctx context.Context, agents []domain.AgentID, inside func(context.Context) error) error
 }
 
 // WithRegressions wires the corrections a future version is checked against.

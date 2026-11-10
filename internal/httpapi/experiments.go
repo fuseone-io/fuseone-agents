@@ -36,76 +36,75 @@ func (s *Server) StartExperiment(
 			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish, published.Scope),
 		}, nil
 	}
-	experiment, asked, refused := s.experimentOf(req.Body)
+	ask, refused := askOf(req.Body)
 	if refused != nil {
 		return openapi.StartExperiment400ApplicationProblemPlusJSONResponse(invalid(refused.Error())), nil
 	}
 
 	id := experimentID(published.ID, req.Params.IdempotencyKey)
-	corpus, opened, refused, err := s.openExperiment(ctx, published.ID, id, asked, experiment)
+	out, err := s.openExperiment(ctx, published, id, ask)
 	switch {
 	case err != nil:
 		return nil, fmt.Errorf("open experiment %s: %w", id, err)
-	case refused != nil:
-		return openapi.StartExperiment400ApplicationProblemPlusJSONResponse(invalid(refused.Error())), nil
-	case len(opened.Runs) == 0:
+	case out.conflict != nil:
+		return openapi.StartExperiment409ApplicationProblemPlusJSONResponse(conflicted(out.conflict.Error())), nil
+	case out.refused != nil:
+		return openapi.StartExperiment400ApplicationProblemPlusJSONResponse(invalid(out.refused.Error())), nil
+	case len(out.opened.Runs) == 0:
 		return openapi.StartExperiment409ApplicationProblemPlusJSONResponse(
-			conflicted(firstOr(opened.Failed, "no case opened a run"))), nil
+			conflicted(firstOr(out.opened.Failed, "no case opened a run"))), nil
 	}
 	return openapi.StartExperiment202JSONResponse{
-		Id: id, Cases: len(corpus.Cases), Repetitions: experiment.Repetitions,
-		Runs: len(opened.Runs), DatasetVersion: corpus.Version,
+		Id: id, Cases: out.cases, Repetitions: out.intent.Repetitions,
+		Runs: len(out.opened.Runs), DatasetVersion: out.intent.DatasetVersion,
 	}, nil
 }
 
-// openExperiment reads the dataset version and opens its runs inside the erasure fence.
-func (s *Server) openExperiment(
-	ctx context.Context, agent domain.AgentID, id string, asked int64, experiment simulate.Experiment,
-) (corpus simulate.Corpus, opened simulate.Opened, refused error, err error) {
-	err = s.regressions.Hold(ctx, agent, func(ctx context.Context) error {
-		var readErr error
-		if corpus, readErr = s.corpusOccurrences(ctx, agent, asked); readErr != nil {
-			refused = readErr
-			return nil
-		}
-		var openErr error
-		opened, openErr = simulate.Open(ctx, s.opener(), simulate.Batch{
-			ID: id, Agent: agent, By: callerOf(ctx),
-			DatasetVersion: corpus.Version, Cases: corpus.Cases, Experiment: &experiment,
-		})
-		return openErr
-	})
-	return corpus, opened, refused, err
+// experimentOpened is what opening an experiment came to, refusals included.
+type experimentOpened struct {
+	intent simulate.Intention
+	cases  int
+	opened simulate.Opened
+	// conflict is a retry stating another intention than its key's; refused is an
+	// intention nobody could run.
+	conflict, refused error
 }
 
-// experimentOf is what the request asks for, refused when it cannot be run as asked.
-func (s *Server) experimentOf(body *openapi.ExperimentRequest) (simulate.Experiment, int64, error) {
-	out := simulate.Experiment{Repetitions: 1}
-	if body == nil {
-		return out, 0, nil
-	}
-	if body.Repetitions != nil {
-		out.Repetitions = *body.Repetitions
-	}
-	if out.Repetitions < 1 || out.Repetitions > simulate.MaxRepetitions {
-		return out, 0, fmt.Errorf("an experiment runs each case 1 to %d times", simulate.MaxRepetitions)
-	}
-	if body.Version != nil {
-		out.Version = domain.VersionID(*body.Version)
-	}
-	if body.Config != nil {
-		out.Config = domain.ExperimentConfig{
-			Provider: deref(body.Config.Provider), Model: deref(body.Config.Model), Effort: deref(body.Config.Effort),
+/*
+openExperiment settles the intention and opens its runs, inside the corpus fence taken
+alone.
+
+Alone, and not shared as a battery takes it, because the intention is read and then acted
+on: two first attempts under one key, with different bodies, would otherwise both find
+nothing recorded and open their runs into one experiment. Taken alone, the second reads
+what the first recorded. The fence still keeps an erasure out while the corpus is copied.
+*/
+func (s *Server) openExperiment(
+	ctx context.Context, published domain.AgentSummary, id string, ask experimentAsk,
+) (out experimentOpened, err error) {
+	err = s.regressions.Exclusive(ctx, []domain.AgentID{published.ID}, func(ctx context.Context) error {
+		recorded, found, err := simulate.Recorded(ctx, s.store, id)
+		if err != nil {
+			return err
 		}
-	}
-	if p := out.Config.Provider; p != "" && s.providerNames != nil && !s.providerNames.Configured(p) {
-		return out, 0, fmt.Errorf("provider %q is not configured on this installation", p)
-	}
-	var asked int64
-	if body.DatasetVersion != nil {
-		asked = *body.DatasetVersion
-	}
-	return out, asked, nil
+		if out.intent, out.conflict = settle(ask, recorded, found, published.VersionID); out.conflict != nil {
+			return nil
+		}
+		if out.refused, err = s.unservedPair(ctx, published, out.intent); err != nil || out.refused != nil {
+			return err
+		}
+		corpus, readErr := s.corpusOccurrences(ctx, published.ID, out.intent.DatasetVersion)
+		if out.refused = readErr; readErr != nil {
+			return nil
+		}
+		out.intent.DatasetVersion, out.cases = corpus.Version, len(corpus.Cases)
+		out.opened, err = simulate.Open(ctx, s.opener(), simulate.Batch{
+			ID: id, Agent: published.ID, By: callerOf(ctx),
+			DatasetVersion: corpus.Version, Cases: corpus.Cases, Experiment: &out.intent.Experiment,
+		})
+		return err
+	})
+	return out, err
 }
 
 // experimentID names an experiment after its agent and the intention alone, so asking
