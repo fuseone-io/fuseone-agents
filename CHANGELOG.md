@@ -28,6 +28,34 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Design decisions
+
+These are decisions recorded in a note. Nothing below is implemented yet.
+
+- **NT-016: judge evaluators** (#298). A judge applies a rubric to the outputs of a
+  settled experiment. Its result is an opinion with the rubric digest, judge model and
+  cost, shown beside held and broken and never counted in them.
+  - Each judgment is a set of simulated runs that name the experiment. The doors that
+    guard the start gate, the battery and FU-10 already leave them out on every replica
+    since 0.100.0.
+  - The value and the reason are content, under retention and erasure. A rubric can
+    classify a person, so the chain holds only references, digests and provenance, and
+    every object about a verdict is salted, fixed in size and answered as a fixed-width
+    code, so no digest, length or token count left after erasure gives the value back. An
+    answer of any other shape is a failed judgment, never a score.
+  - A judgment requires the whole experiment to be materialized, checked under the
+    corpus fence. One idempotency key names one judgment, as it does for an experiment.
+  - The platform guarantees structural isolation from the judged output and measures
+    the judge's resistance to persuasion; it does not promise it.
+  - A reason is off unless the rubric declares it. Declared or not, it is part of the
+    rubric's digest, so judgments with and without one are not compared.
+  - Broken runs are not judged. Two experiments compare on quality only under the same
+    rubric and judge, and only over the cases held on both sides.
+  - It needs two releases: workers and readers first, because a 0.101.0 worker would run
+    the judged agent itself on a judge run.
+
 ## [0.101.0] — 2026-11-10
 
 Experiments (#297), and three reads that crossed a scope boundary. It adds no migration.
