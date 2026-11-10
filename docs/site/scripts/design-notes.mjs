@@ -20,6 +20,7 @@ export const designDocs = [
   ["NT-013-software-factory-pilot.md", "A software factory of governed agent roles, piloted on this repository."],
   ["NT-014-governed-evidence-collection.md", "Collecting events from a declared source, with the coverage of every number stated."],
   ["NT-015-evaluation-datasets-and-experiments.md", "Versioned evaluation datasets and experiments, and what the corpus does today."],
+  ["NT-016-judge-evaluators.md", "Judging an experiment's outputs with a rubric, as an opinion beside the structural verdict."],
 ];
 
 // Design notes left off the site on purpose. Leaving one out is a decision,

@@ -28,6 +28,26 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Design decisions
+
+These are decisions recorded in a note. Nothing below is implemented yet.
+
+- **NT-016: judge evaluators** (#298). A judge applies a rubric to the outputs of a
+  settled experiment. Its result is an opinion with the rubric digest, judge model and
+  cost, shown beside held and broken and never counted in them.
+  - Each judgment is a set of simulated runs that name the experiment. The doors that
+    guard the start gate, the battery and FU-10 already leave them out on every replica
+    since 0.100.0.
+  - The judge's value is sealed in the ledger as `pass` or `fail`, an integer or a
+    declared identifier. Its reason is content, under retention and erasure. An answer
+    of any other shape is a failed judgment, never a score.
+  - Broken runs are not judged. Two experiments compare on quality only under the same
+    rubric and judge, and only over the cases held on both sides.
+  - It needs two releases: workers and readers first, because a 0.101.0 worker would run
+    the judged agent itself on a judge run.
+
 ## [0.101.0] — 2026-11-10
 
 Experiments (#297), and three reads that crossed a scope boundary. It adds no migration.
