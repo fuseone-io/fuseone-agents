@@ -67,3 +67,33 @@ func TestRecorded_anExperimentNeverOpened_isNotFound(t *testing.T) {
 		t.Errorf("Recorded = %v found=%v, want nothing recorded", err, found)
 	}
 }
+
+// Only an experiment's runs are an experiment's record. A battery's id names runs too, and
+// reading them as an experiment would report a battery as one, under no configuration.
+func TestRecorded_runsThatAreNotThatExperiments_areNotFound(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	opener := openerFor(store, engine.NewMemoryContent())
+	if _, err := simulate.Open(t.Context(), opener, batchOf(`{"n":1}`)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if _, found, err := simulate.Recorded(t.Context(), store, "sim-1"); err != nil || found {
+		t.Errorf("Recorded(a battery) = %v found=%v, want it not found", err, found)
+	}
+}
+
+// The record names the agent its runs belong to, so a route under one agent never reads
+// another's experiment.
+func TestRecorded_namesTheAgentItsRunsBelongTo(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	if _, err := simulate.Open(t.Context(), openerFor(store, engine.NewMemoryContent()), experimentBatch(1)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	got, _, err := simulate.Recorded(t.Context(), store, "exp-1")
+	if err != nil || got.Agent != "suporte" {
+		t.Errorf("Recorded = %q err=%v, want the agent the opener resolved", got.Agent, err)
+	}
+}

@@ -19,12 +19,15 @@ type Intention struct {
 // and how many of its cases they cover.
 type Record struct {
 	Intention
+	// Agent is the agent the runs belong to, as the opener resolved it.
+	Agent domain.AgentID
 	Runs  []domain.RunID
 	Cases int
 }
 
 /*
-Recorded is what an experiment's runs were opened under, and false when it has opened none.
+Recorded is what an experiment's runs were opened under, and false when it has opened none
+or the runs under that id are not that experiment's — a battery's, say.
 
 Read from the ledger rather than kept anywhere else, for the reason a report is: it is
 what every process reads the same, and it does not move when the corpus or the providers
@@ -47,9 +50,12 @@ func Recorded(ctx context.Context, steps Steps, id string) (Record, bool, error)
 		if err != nil {
 			return Record{}, false, err
 		}
+		if started.Experiment != id {
+			return Record{}, false, nil
+		}
 		cases[started.Case] = true
 		if i == 0 {
-			out.Intention = recordedIntention(step, started)
+			out.Intention, out.Agent = recordedIntention(step, started), step.AgentID
 		}
 	}
 	out.Cases = len(cases)
