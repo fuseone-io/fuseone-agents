@@ -47,8 +47,36 @@ func TestExperiments_listsOnlyTheAgentsExperimentsNewestFirst(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Experiments: %v", err)
 		}
-		if len(got) != 2 || got[0] != "exp-new" || got[1] != "exp-old" {
-			t.Errorf("experiments = %v, want exp-new then exp-old, and nothing else", got)
+		if len(got) != 2 || got[0].ID != "exp-new" || got[1].ID != "exp-old" {
+			t.Fatalf("experiments = %+v, want exp-new then exp-old, and nothing else", got)
+		}
+	})
+}
+
+// Each listing carries what a list shows, read with the experiments and not run by run:
+// how many runs and cases it opened, when, and the opening step of its first run.
+func TestExperiments_carryTheirCountsAndFirstOpening(t *testing.T) {
+	base := time.Date(2026, 11, 10, 9, 0, 0, 0, time.UTC)
+	run(t, "counts and the first opening", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		second := openedExperiment(t, "run-2", "triage", "exp-1", base.Add(time.Minute))
+		second.Payload = mustJSON(t, domain.RunStartedPayload{
+			Trigger: "simulation", Simulated: true, Simulation: "exp-1",
+			Case: "case-2", DatasetVersion: 2, Experiment: "exp-1",
+		})
+		mustAppend(t, s, openedExperiment(t, "run-1", "triage", "exp-1", base))
+		mustAppend(t, s, second)
+		mustAppend(t, s, openedExperiment(t, "run-3", "triage", "exp-1", base.Add(2*time.Minute)))
+
+		got, err := s.Experiments(ctx, "triage", 10)
+		if err != nil || len(got) != 1 {
+			t.Fatalf("Experiments = %+v err=%v, want one", got, err)
+		}
+		e := got[0]
+		if e.Runs != 3 || e.Cases != 2 || e.Opening.RunID != "run-1" ||
+			e.Opening.Kind != domain.StepRunStarted || !e.OpenedAt.Equal(base) {
+			t.Errorf("listing = runs %d cases %d first %s/%s at %v; want 3 runs, 2 cases, run-1 opening at %v",
+				e.Runs, e.Cases, e.Opening.RunID, e.Opening.Kind, e.OpenedAt, base)
 		}
 	})
 }
@@ -61,7 +89,7 @@ func TestExperiments_returnsNoMoreThanAsked(t *testing.T) {
 		mustAppend(t, s, openedExperiment(t, "run-b", "triage", "exp-b", base.Add(time.Hour)))
 
 		got, err := s.Experiments(ctx, "triage", 1)
-		if err != nil || len(got) != 1 || got[0] != "exp-b" {
+		if err != nil || len(got) != 1 || got[0].ID != "exp-b" {
 			t.Errorf("Experiments(limit 1) = %v err=%v, want only the newest", got, err)
 		}
 		if none, err := s.Experiments(ctx, "triage", 0); err != nil || len(none) != 0 {

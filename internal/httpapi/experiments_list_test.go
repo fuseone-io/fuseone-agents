@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	gocontext "context"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -54,5 +55,38 @@ func TestListExperiments_leavesOutOneRecordedInAnotherScope(t *testing.T) {
 
 	if len(got) != 1 || got[0].Id != cx {
 		t.Errorf("listed %+v, want only %s and not %s", got, cx, finance)
+	}
+}
+
+// countingStore counts the reads a list would make run by run.
+type countingStore struct {
+	*ledger.Memory
+	reads int
+}
+
+func (c *countingStore) Read(ctx gocontext.Context, run domain.RunID, from int64) ([]domain.Step, error) {
+	c.reads++
+	return c.Memory.Read(ctx, run, from)
+}
+
+func (c *countingStore) SimulationRuns(ctx gocontext.Context, simulation string) ([]domain.RunID, error) {
+	c.reads++
+	return c.Memory.SimulationRuns(ctx, simulation)
+}
+
+// A page is read with the experiments, not run by run: forty cases five times over, twenty
+// times, was thousands of round trips for one page.
+func TestListExperiments_readsNoRunOneByOne(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	server, _ := experimentFixture(t, store, servedAgent())
+	acceptKeyed(t, server, "exp-intent-0001", openapi.ExperimentRequest{Repetitions: ptr(5)})
+	counting := &countingStore{Memory: store}
+	server.store = counting
+
+	got := listExperiments(t, server, "cx")
+
+	if len(got) != 1 || got[0].Runs != 10 || counting.reads != 0 {
+		t.Errorf("listed %+v with %d run reads, want the ten runs counted and none read", got, counting.reads)
 	}
 }

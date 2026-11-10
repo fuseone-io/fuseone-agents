@@ -16,8 +16,8 @@ const listedExperiments = 20
 /*
 ListExperiments is an agent's newest experiments, by what each pinned.
 
-Each one is read from its own runs and shown only where they were recorded, as its report
-is: an agent republished elsewhere keeps its old experiments there, and a reader of where it
+Read with the experiments, in one pass over their runs, and never run by run. Each one is
+shown only where its runs were recorded, as its report is: an agent republished elsewhere keeps its old experiments there, and a reader of where it
 is published now is not shown them. Leaving one out can make a page shorter than the limit,
 which is a page, not an error.
 */
@@ -35,28 +35,29 @@ func (s *Server) ListExperiments(
 			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentRead, published.Scope),
 		}, nil
 	}
-	ids, err := s.store.Experiments(ctx, published.ID, listedExperiments)
+	listed, err := s.store.Experiments(ctx, published.ID, listedExperiments)
 	if err != nil {
 		return nil, fmt.Errorf("experiments of %s: %w", published.ID, err)
 	}
-	out := openapi.ExperimentList{Experiments: make([]openapi.ExperimentListing, 0, len(ids))}
-	for _, id := range ids {
-		record, found, err := simulate.Recorded(ctx, s.store, id)
-		if err != nil {
-			return nil, fmt.Errorf("experiment %s: %w", id, err)
-		}
-		if !found || record.Agent != published.ID || auth.Require(ctx, domain.PermAgentRead, record.Scope) != nil {
+	out := openapi.ExperimentList{Experiments: make([]openapi.ExperimentListing, 0, len(listed))}
+	for _, e := range listed {
+		if e.Opening.AgentID != published.ID ||
+			auth.Require(ctx, domain.PermAgentRead, e.Opening.Scope) != nil {
 			continue
 		}
-		out.Experiments = append(out.Experiments, experimentListingOut(id, record))
+		intent, err := simulate.IntentionOf(e.Opening)
+		if err != nil {
+			return nil, fmt.Errorf("experiment %s: %w", e.ID, err)
+		}
+		out.Experiments = append(out.Experiments, experimentListingOut(e, intent))
 	}
 	return openapi.ListExperiments200JSONResponse(out), nil
 }
 
-func experimentListingOut(id string, r simulate.Record) openapi.ExperimentListing {
+func experimentListingOut(e domain.ExperimentListing, intent simulate.Intention) openapi.ExperimentListing {
 	return openapi.ExperimentListing{
-		Id: id, OpenedAt: r.OpenedAt, DatasetVersion: r.DatasetVersion, Version: string(r.Version),
-		Config: experimentConfigOut(r.Config), Repetitions: r.Repetitions,
-		Runs: len(r.Runs), Cases: r.Cases,
+		Id: e.ID, OpenedAt: e.OpenedAt, DatasetVersion: intent.DatasetVersion,
+		Version: string(intent.Version), Config: experimentConfigOut(intent.Config),
+		Repetitions: intent.Repetitions, Runs: e.Runs, Cases: e.Cases,
 	}
 }

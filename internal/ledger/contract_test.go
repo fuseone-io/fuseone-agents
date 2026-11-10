@@ -57,7 +57,7 @@ type Store interface {
 	Batteries(ctx context.Context, agent domain.AgentID, version domain.VersionID, limit int) ([]string, error)
 	LastBatteryAt(ctx context.Context, agent domain.AgentID, version domain.VersionID) (time.Time, bool, error)
 	HasSimulation(ctx context.Context, agent domain.AgentID) (bool, error)
-	Experiments(ctx context.Context, agent domain.AgentID, limit int) ([]string, error)
+	Experiments(ctx context.Context, agent domain.AgentID, limit int) ([]domain.ExperimentListing, error)
 	Agreement(ctx context.Context, since time.Time) ([]domain.Agreement, error)
 	Simulations() ledger.SimulationQueue
 	WorkItemCost(ctx context.Context, filter domain.RunFilter, ref domain.WorkItemRef) (domain.WorkItemCost, error)
