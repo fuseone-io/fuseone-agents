@@ -72,9 +72,10 @@ func (s *Server) CompareExperiments(
 experimentReport reads one experiment of agent: its record, its runs, and the corpus of the
 dataset version it pinned.
 
-The agent is checked against the record, not the id: an id is whatever a caller typed, and
-an experiment of another agent behind this agent's route would be read under this agent's
-grants.
+The agent and the scope are checked against the record, not the id or the agent as it is
+published today: an id is whatever a caller typed, and an agent republished elsewhere keeps
+its old runs where they were recorded. Somebody who may read the agent now has no claim on
+them, and is answered as if they did not exist.
 */
 func (s *Server) experimentReport(
 	ctx context.Context, agent domain.AgentID, id string,
@@ -83,7 +84,7 @@ func (s *Server) experimentReport(
 	if err != nil {
 		return simulate.ExperimentReport{}, fmt.Errorf("experiment %s: %w", id, err)
 	}
-	if !found || record.Agent != agent {
+	if !found || record.Agent != agent || auth.Require(ctx, domain.PermAgentRead, record.Scope) != nil {
 		return simulate.ExperimentReport{}, errNoExperiment
 	}
 	runs, err := simulate.Gather(ctx, s.store, id)

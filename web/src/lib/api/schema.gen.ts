@@ -796,6 +796,11 @@ export interface paths {
          *     fallback included.
          *
          *     Returns immediately, like a simulation.
+         *
+         *     Runs are opened where the version they run on was published, and a retry adds to
+         *     the experiment where it was recorded. When either is a scope the caller may not
+         *     publish in — an agent republished elsewhere keeps its old versions and runs — the
+         *     answer is a 404, as for an experiment that does not exist.
          */
         post: operations["startExperiment"];
         delete?: never;
@@ -7702,7 +7707,11 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            /** @description No experiment of this agent has that id. A battery's id is not one. */
+            /**
+             * @description No experiment of this agent has that id, or it was recorded under a scope the
+             *     caller may not read — an agent republished elsewhere keeps its old experiments
+             *     where they were recorded. A battery's id is not one.
+             */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -7740,7 +7749,10 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            /** @description One of the two is not an experiment of this agent. */
+            /**
+             * @description One of the two is not an experiment of this agent, or was recorded under a scope
+             *     the caller may not read.
+             */
             404: {
                 headers: {
                     [name: string]: unknown;

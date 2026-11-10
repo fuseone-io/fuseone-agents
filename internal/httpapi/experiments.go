@@ -46,6 +46,10 @@ func (s *Server) StartExperiment(
 	switch {
 	case err != nil:
 		return nil, fmt.Errorf("open experiment %s: %w", id, err)
+	case out.hidden:
+		return openapi.StartExperiment404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(id),
+		}, nil
 	case out.conflict != nil:
 		return openapi.StartExperiment409ApplicationProblemPlusJSONResponse(conflicted(out.conflict.Error())), nil
 	case out.refused != nil:
@@ -66,8 +70,10 @@ type experimentOpened struct {
 	cases  int
 	opened simulate.Opened
 	// conflict is a retry stating another intention than its key's; refused is an
-	// intention nobody could run.
+	// intention nobody could run; hidden is one whose runs live where the caller may not
+	// publish, answered as if it did not exist.
 	conflict, refused error
+	hidden            bool
 }
 
 /*
@@ -89,6 +95,13 @@ func (s *Server) openExperiment(
 		}
 		if out.intent, out.conflict = settle(ask, before.Intention, found, published.VersionID); out.conflict != nil {
 			return nil
+		}
+		recorded := &before
+		if !found {
+			recorded = nil
+		}
+		if out.hidden, err = s.hiddenFrom(ctx, published, out.intent, recorded); err != nil || out.hidden {
+			return err
 		}
 		refused, err := s.addMissing(ctx, experimentBatch{published, id, &out})
 		if err != nil {

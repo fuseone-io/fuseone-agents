@@ -1173,6 +1173,11 @@ paths:
         fallback included.
 
         Returns immediately, like a simulation.
+
+        Runs are opened where the version they run on was published, and a retry adds to
+        the experiment where it was recorded. When either is a scope the caller may not
+        publish in — an agent republished elsewhere keeps its old versions and runs — the
+        answer is a 404, as for an experiment that does not exist.
       parameters:
         - name: agentId
           in: path
@@ -1257,7 +1262,10 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404':
-          description: No experiment of this agent has that id. A battery's id is not one.
+          description: |
+            No experiment of this agent has that id, or it was recorded under a scope the
+            caller may not read — an agent republished elsewhere keeps its old experiments
+            where they were recorded. A battery's id is not one.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -1299,7 +1307,9 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404':
-          description: One of the two is not an experiment of this agent.
+          description: |
+            One of the two is not an experiment of this agent, or was recorded under a scope
+            the caller may not read.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
