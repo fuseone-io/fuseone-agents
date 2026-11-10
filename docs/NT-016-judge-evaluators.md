@@ -130,9 +130,40 @@ records for the model answers older runs wrote inline.
   says what went wrong with the judge, not what it thought of the output. There is no
   default value.
 
+### A digest must not give the value back
+
+Erasing the bytes is not enough when the bytes can be guessed. The content store
+derives a digest as SHA-256 of the bytes exactly (`ledger.Content.PutFor`). That digest
+stays in the chain, stays on the tombstone's `digest` column, and its first 64 bits are
+part of the reference. A rubric declares at most eleven values. Anybody holding the
+digest after an erasure could hash each possible object until one matched, and read
+back `high_risk` from the hash.
+
+So **every object a judge run stores about its verdict is salted**:
+
+- When a judge run is opened, it gets a **salt**: 32 bytes from `crypto/rand`, stored as
+  content owned by that run and under its retention and erasure. The opening holds only
+  the salt's reference and digest. A hash of 256 random bits gives back nothing.
+- The **judgment object** is the salt, the value and the pass, and `JudgmentRef` and
+  `JudgmentDigest` cover all three.
+- The **judge's answer as written** is stored the same way, salt first, under
+  `OutcomeRef` and `OutcomeDigest`. A judge can answer with the value and an empty
+  reason, which is as enumerable as the value alone.
+- The salt itself is **never written into a step**. Once the run's content is erased,
+  the salt is gone with it, and no enumeration of the declared outputs reproduces either
+  digest.
+
+The salt is not an auditable decision, and nothing branches on it. The rule against
+unrecorded randomness on an auditable path does not reach it: a salt that were recorded
+would defeat its purpose.
+
+The copy of the judged output that a judge run holds keeps the digest the judged run
+already sealed, and this changes nothing about that run.
+
 The chain keeps the provenance: the rubric digest and the judge configuration on the
-opening, and the judgment's digest on the close. An auditor can prove which value was
-recorded while it exists, and, once it is erased, that one existed.
+opening, the salt's reference, and the salted judgment's digest on the close. An auditor
+can prove which value was recorded while the content exists, and, once it is erased,
+only that one existed.
 
 Only the engine writes `JudgmentRef`, and only on a run whose opening names a `judge`. A
 worker that does not know judges never writes it, so a run it planned can never read as
@@ -220,11 +251,12 @@ second time and spend it all again.
   missing and answers from the ledger, whatever has changed since. A field it leaves out
   is inherited from the recorded intention. The rubric's text is read back from a judge
   run's copy, while one is still retained.
-- **Once judge runs exist, a retry is never refused.** It is answered from the ledger
-  even when it can open nothing more, because the pair has stopped being served or the
-  rubric's text has been erased. The answer then says what it could not open.
-- **A divergent retry is a 409.** This covers another experiment, rubric, judge,
-  ceiling or number of repetitions.
+- **A non-divergent retry is never refused because something changed underneath.** This
+  covers a provider no longer served, an erased corpus, or erased rubric content. It is
+  answered from the ledger even when it can open nothing more, and the answer says what
+  it could not open.
+- **A divergent retry is a 409.** This covers another experiment, rubric, judge, ceiling
+  or number of repetitions.
 - **Scope first.** The recorded scope is authorized before anything that could answer
   differently. A caller with no claim gets 404 before any 409, so a retry cannot confirm
   a judgment it has no claim on.
@@ -315,8 +347,8 @@ search:
 
 What survives erasure is what NT-015 already keeps: the run, its steps, digests,
 references and provenance. The judgment object goes with the rest of the judge run's
-content, value and pass included, so no classification of the person outlives the
-erasure. The report then shows that judgment as erased and recomputes its numbers
+content, value and pass included, and the salt goes with it. No classification of
+the person outlives the erasure, whether in the bytes or recovered from a digest. The report then shows that judgment as erased and recomputes its numbers
 without it, saying how many it left out.
 
 ## Rollout
@@ -379,9 +411,15 @@ judgment still running should settle first.
   runs exist, a retry whose pair is no longer served is still answered. A caller outside
   the recorded scope gets 404 before any 409. Sabotage: generate the id per request, and
   the duplicate test must fail.
+- **No digest gives the value back:** after a judge run's content is erased, enumerate
+  every output its rubric declares, as a judgment object and as a bare answer with an
+  empty reason. No candidate may reproduce `JudgmentDigest`, `OutcomeDigest`, the
+  tombstones' `digest` or the 64 bits in either reference. Sabotage: store the objects
+  unsalted, and the test must find `high_risk`.
 - **Nothing personal in the chain:** a test reads the `run_started` and `run_finished`
   payloads of a judge run and fails on any field that is not an id, reference, digest,
-  configuration or closed failure code. The value and the pass have to be absent. Use
+  configuration or closed failure code. The value, the pass and the salt have to be
+  absent. Use
   the value the bug would accept: a category such as `high_risk`.
 - **Fence:** a `judge` on a non-simulated run, or on one with no experiment, is refused
   by the opener and again by the pool.
