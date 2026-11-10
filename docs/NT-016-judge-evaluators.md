@@ -376,8 +376,8 @@ Two things stay open and are not part of phase 3:
 ## Erasure
 
 A judge run holds the case input, a copy of the judged output, the rubric, the judge's
-reason and the judgment object. All of these are reached by the erasure that already exists, with no new
-search:
+reason and the judgment object. All of these are reached by the erasure that already
+exists, with no new search:
 
 - A subject erasure follows a named run's input digest to its corpus copies and to the
   simulated runs of the same agent that hold the same bytes (`replaySearchSQL`). It then
@@ -392,9 +392,10 @@ search:
 
 What survives erasure is what NT-015 already keeps: the run, its steps, digests,
 references and provenance. The judgment object goes with the rest of the judge run's
-content, value and pass included, and the salt goes with it. No classification of
-the person outlives the erasure, whether in the bytes or recovered from a digest. The report then shows that judgment as erased and recomputes its numbers
-without it, saying how many it left out.
+content, value and pass included, and the salt goes with it. No classification of the
+person outlives the erasure, whether in the bytes or recovered from a digest or a
+length. The report then shows that judgment as erased and recomputes its numbers without
+it, saying how many it left out.
 
 ## Rollout
 
