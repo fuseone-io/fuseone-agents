@@ -49,6 +49,9 @@ type RunStartedPayload struct {
 	// every run with the rest of the intention, so a retry can read what the first attempt
 	// asked for from any run it opened, and run that rather than whatever it asks today.
 	ExperimentRepetitions int `json:"experiment_repetitions,omitempty"`
+	// Judge marks a judge run and names the judgment it belongs to (NT-016). Known to
+	// every reader and worker one release before anything writes it.
+	Judge *JudgeOpening `json:"judge,omitempty"`
 
 	// Origin is where the ask came from, when it came from a conversation.
 	Origin *RunOrigin `json:"origin,omitempty"`
