@@ -67,6 +67,9 @@ type Case struct {
 	// run: broken, and costing nothing because nothing ran, which a comparison must not
 	// read as cheaper.
 	didNotRun bool
+	// judge marks a judge run (NT-016): a run that judges another, and not a case of
+	// any simulation a person can read.
+	judge bool
 
 	// ID is the regression case this row replays, when it replays one.
 	ID      string       `json:"id,omitempty"`
@@ -136,6 +139,7 @@ func (f *folder) apply(step domain.Step) error {
 		}
 		f.c.ID = p.Case
 		f.c.datasetVersion = p.DatasetVersion
+		f.c.judge = p.Judge != nil
 
 	case domain.StepPlanned:
 		var p domain.PlannedPayload

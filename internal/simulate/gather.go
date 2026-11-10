@@ -44,6 +44,7 @@ func Gather(ctx context.Context, steps Steps, id string) (Report, error) {
 		// A case that has not settled is a case still being advanced by the
 		// pool. There is nothing else a simulation could be waiting on.
 		report.Running = report.Running || folded.Settled == SettledUnsettled
+		report.Judgment = report.Judgment || folded.judge
 		report.Cases = append(report.Cases, folded)
 	}
 	report.DatasetVersion = pinOf(report.Cases)
