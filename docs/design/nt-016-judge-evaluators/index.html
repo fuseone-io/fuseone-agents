@@ -1,0 +1,651 @@
+<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-vdxcvpsm"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>NT-016 — Judge evaluators | FuseOne Agents</title><link rel="canonical" href="https://fuseone-io.github.io/fuseone-agents/docs/design/nt-016-judge-evaluators/"/><link rel="sitemap" href="/fuseone-agents/docs/sitemap-index.xml"/><link rel="icon" type="image/svg+xml" href="/fuseone-agents/docs/favicon.svg"/><link rel="shortcut icon" href="/fuseone-agents/docs/favicon.svg" type="image/svg+xml"/><meta name="generator" content="Astro v7.4.2"/><meta name="generator" content="Starlight v0.41.11"/><meta property="og:title" content="NT-016 — Judge evaluators"/><meta property="og:type" content="article"/><meta property="og:url" content="https://fuseone-io.github.io/fuseone-agents/docs/design/nt-016-judge-evaluators/"/><meta property="og:locale" content="en"/><meta property="og:description" content="Judging an experiment's outputs with a rubric, as an opinion beside the structural verdict."/><meta property="og:site_name" content="FuseOne Agents"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="Judging an experiment's outputs with a rubric, as an opinion beside the structural verdict."/><script>
+	window.StarlightThemeProvider = (() => {
+		const storedTheme =
+			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+		const theme =
+			storedTheme ||
+			(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers(theme = storedTheme || 'auto') {
+				document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+					const select = picker.querySelector('select');
+					if (select) select.value = theme;
+					/** @type {HTMLTemplateElement | null} */
+					const tmpl = document.querySelector(`#theme-icons`);
+					const newIcon = tmpl && tmpl.content.querySelector('.' + theme);
+					if (newIcon) {
+						const oldIcon = picker.querySelector('svg.label-icon');
+						if (oldIcon) {
+							oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+						}
+					}
+				});
+			},
+		};
+	})();
+</script><template id="theme-icons"><svg aria-hidden="true" class="light astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M5 12a1 1 0 0 0-1-1H3a1 1 0 0 0 0 2h1a1 1 0 0 0 1-1Zm.64 5-.71.71a1 1 0 0 0 0 1.41 1 1 0 0 0 1.41 0l.71-.71A1 1 0 0 0 5.64 17ZM12 5a1 1 0 0 0 1-1V3a1 1 0 0 0-2 0v1a1 1 0 0 0 1 1Zm5.66 2.34a1 1 0 0 0 .7-.29l.71-.71a1 1 0 1 0-1.41-1.41l-.66.71a1 1 0 0 0 0 1.41 1 1 0 0 0 .66.29Zm-12-.29a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.71-.71a1.004 1.004 0 1 0-1.43 1.41l.73.71ZM21 11h-1a1 1 0 0 0 0 2h1a1 1 0 0 0 0-2Zm-2.64 6A1 1 0 0 0 17 18.36l.71.71a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.76-.66ZM12 6.5a5.5 5.5 0 1 0 5.5 5.5A5.51 5.51 0 0 0 12 6.5Zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm0 3.5a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1Z"/></svg><svg aria-hidden="true" class="dark astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.64 13a1 1 0 0 0-1.05-.14 8.049 8.049 0 0 1-3.37.73 8.15 8.15 0 0 1-8.14-8.1 8.59 8.59 0 0 1 .25-2A1 1 0 0 0 8 2.36a10.14 10.14 0 1 0 14 11.69 1 1 0 0 0-.36-1.05Zm-9.5 6.69A8.14 8.14 0 0 1 7.08 5.22v.27a10.15 10.15 0 0 0 10.14 10.14 9.784 9.784 0 0 0 2.1-.22 8.11 8.11 0 0 1-7.18 4.32v-.04Z"/></svg><svg aria-hidden="true" class="auto astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg></template><link rel="stylesheet" href="/fuseone-agents/docs/_astro/print.ehPL0gv-.css" media="print"><link rel="stylesheet" href="/fuseone-agents/docs/_astro/common.Cd80cwrF.css"><script type="module" src="/fuseone-agents/docs/_astro/page.cNngjUgL.js"></script></head><body class="astro-vdxcvpsm"><a class="sl-skip-link astro-vxeigawq" href="#_top">Skip to content</a><div class="page sl-flex astro-gqpr5s5a"><header class="header astro-gqpr5s5a"><div class="header astro-nczgtkxc"><div class="title-wrapper sl-flex astro-nczgtkxc"><a href="/fuseone-agents/docs/" class="site-title sl-flex astro-clw6ags5"><img class="light:sl-hidden print:hidden astro-clw6ags5" alt src="/fuseone-agents/docs/_astro/logo-docs-dark.RgwYBWE_.svg" width="302" height="34"><img class="dark:sl-hidden print:block astro-clw6ags5" alt src="/fuseone-agents/docs/_astro/logo-docs-light.DMrXalo7.svg" width="302" height="34"><span class="sr-only astro-clw6ags5" translate="no">FuseOne Agents</span></a></div><div class="sl-flex print:hidden astro-nczgtkxc"><site-search class="astro-nczgtkxc astro-r5ar4xm7" data-translations="{&quot;placeholder&quot;:&quot;Search&quot;}"><button data-open-modal disabled aria-label="Search" aria-keyshortcuts="Control+K" class="astro-r5ar4xm7"><svg aria-hidden="true" class="astro-r5ar4xm7 astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg><span class="sl-hidden md:sl-block astro-r5ar4xm7" aria-hidden="true">Search</span><kbd class="sl-hidden md:sl-flex astro-r5ar4xm7" style="display: none;"><kbd class="astro-r5ar4xm7">Ctrl</kbd><kbd class="astro-r5ar4xm7">K</kbd></kbd></button><dialog style="padding:0" aria-label="Search" class="astro-r5ar4xm7"><div class="dialog-frame sl-flex astro-r5ar4xm7"><button data-close-modal class="sl-flex md:sl-hidden astro-r5ar4xm7">Cancel</button><div class="search-container astro-r5ar4xm7"><div id="starlight__search" class="astro-r5ar4xm7"></div></div></div></dialog></site-search><script>
+	(() => {
+		const openBtn = document.querySelector('button[data-open-modal]');
+		const shortcut = openBtn?.querySelector('kbd');
+		if (!openBtn || !(shortcut instanceof HTMLElement)) return;
+		const platformKey = shortcut.querySelector('kbd');
+		if (platformKey && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)) {
+			platformKey.textContent = '⌘';
+			openBtn.setAttribute('aria-keyshortcuts', 'Meta+K');
+		}
+		shortcut.style.display = '';
+	})();
+</script><script type="module" src="/fuseone-agents/docs/_astro/Search.astro_astro_type_script_index_0_lang.C1XVqlf5.js"></script></div><div class="sl-hidden md:sl-flex print:hidden right-group astro-nczgtkxc"><div class="sl-flex social-icons astro-nczgtkxc"><a href="https://github.com/fuseone-io/fuseone-agents" rel="me" class="sl-flex astro-cg55etiy"><span class="sr-only astro-cg55etiy">GitHub</span><svg aria-hidden="true" class="astro-cg55etiy astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-r2p65idu"><span class="sr-only astro-r2p65idu">Select theme</span><svg aria-hidden="true" class="icon label-icon astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-r2p65idu"><option value="dark" class="astro-r2p65idu">Dark</option><option value="light" class="astro-r2p65idu">Light</option><option value="auto" selected class="astro-r2p65idu">Auto</option></select><svg aria-hidden="true" class="icon caret astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script><script type="module">var e=`starlight-theme`,t=e=>e===`auto`||e===`dark`||e===`light`?e:`auto`,n=()=>t(typeof localStorage<`u`&&localStorage.getItem(e));function r(t){typeof localStorage<`u`&&localStorage.setItem(e,t===`light`||t===`dark`?t:``)}var i=()=>matchMedia(`(prefers-color-scheme: light)`).matches?`light`:`dark`;function a(e){StarlightThemeProvider.updatePickers(e),document.documentElement.dataset.theme=e===`auto`?i():e,r(e)}matchMedia(`(prefers-color-scheme: light)`).addEventListener(`change`,()=>{n()===`auto`&&a(`auto`)});var o=class extends HTMLElement{constructor(){super(),a(n()),this.querySelector(`select`)?.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&a(t(e.currentTarget.value))})}};customElements.define(`starlight-theme-select`,o);</script><script type="module">var e=class extends HTMLElement{constructor(){super();let e=this.querySelector(`select`);e&&(e.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&(window.location.pathname=e.currentTarget.value)}),window.addEventListener(`pageshow`,t=>{if(!t.persisted)return;let n=e.querySelector(`option[selected]`)?.index;n!==e.selectedIndex&&(e.selectedIndex=n??0)}))}};customElements.define(`starlight-lang-select`,e);</script></div></div></header><nav class="sidebar print:hidden astro-gqpr5s5a" aria-label="Main"><starlight-menu-button class="print:hidden astro-vvx7mffu"><button aria-expanded="false" aria-label="Menu" aria-controls="starlight__sidebar" class="sl-flex md:sl-hidden astro-vvx7mffu"><svg aria-hidden="true" class="open-menu astro-vvx7mffu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M3 8h18a1 1 0 1 0 0-2H3a1 1 0 0 0 0 2Zm18 8H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Zm0-5H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Z"/></svg><svg aria-hidden="true" class="close-menu astro-vvx7mffu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="m13.41 12 6.3-6.29a1.004 1.004 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1.004 1.004 0 0 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 0 1.42.998.998 0 0 0 1.42 0l6.29-6.3 6.29 6.3a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.42L13.41 12Z"/></svg></button></starlight-menu-button><script type="module">var e=class extends HTMLElement{btn=this.querySelector(`button`);constructor(){super(),this.btn.addEventListener(`click`,()=>this.toggleExpanded());let e=this.closest(`nav`);e&&e.addEventListener(`keyup`,e=>this.closeOnEscape(e)),matchMedia(`(min-width: 50em)`).addEventListener(`change`,()=>this.setExpanded(!1))}setExpanded(e){this.setAttribute(`aria-expanded`,String(e)),document.body.toggleAttribute(`data-mobile-menu-expanded`,e),document.querySelectorAll(`.main-frame, .sl-skip-link`).forEach(t=>{t.toggleAttribute(`inert`,e)})}toggleExpanded(){this.setExpanded(this.getAttribute(`aria-expanded`)!==`true`)}closeOnEscape(e){e.code===`Escape`&&(this.setExpanded(!1),this.btn.focus())}};customElements.define(`starlight-menu-button`,e);</script><div id="starlight__sidebar" class="sidebar-pane astro-gqpr5s5a"><div class="sidebar-content sl-flex astro-gqpr5s5a"><sl-sidebar-state-persist data-hash="0g0ij4w" class="astro-f5yvicm7"><script aria-hidden="true">
+		(() => {
+			try {
+				if (!matchMedia('(min-width: 50em)').matches) return;
+				/** @type {HTMLElement | null} */
+				const target = document.querySelector('sl-sidebar-state-persist');
+				const state = JSON.parse(sessionStorage.getItem('sl-sidebar-state') || '0');
+				if (!target || !state || target.dataset.hash !== state.hash) return;
+				window._starlightScrollRestore = state.scroll;
+				customElements.define(
+					'sl-sidebar-restore',
+					class SidebarRestore extends HTMLElement {
+						connectedCallback() {
+							try {
+								const idx = parseInt(this.dataset.index || '');
+								const details = this.closest('details');
+								if (details && typeof state.open[idx] === 'boolean') details.open = state.open[idx];
+							} catch {}
+						}
+					}
+				);
+			} catch {}
+		})();
+	</script><ul class="top-level astro-ojxuodky"><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Start</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="0"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/" class="astro-ojxuodky"><span class="astro-ojxuodky">What is FuseOne?</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/start/install/" class="astro-ojxuodky"><span class="astro-ojxuodky">Install</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/reference/helm-chart/" class="astro-ojxuodky"><span class="astro-ojxuodky">Helm chart</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Core concepts</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="1"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/durable-execution/" class="astro-ojxuodky"><span class="astro-ojxuodky">Durable execution</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/gate/" class="astro-ojxuodky"><span class="astro-ojxuodky">Gate and labels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/integrations/" class="astro-ojxuodky"><span class="astro-ojxuodky">Integrations</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Duplicate effects</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed memory</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Operate</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="2"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/operate/runtime-finops/" class="astro-ojxuodky"><span class="astro-ojxuodky">Runtime and FinOps</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Manual</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="3"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/" class="astro-ojxuodky"><span class="astro-ojxuodky">Manual overview</span></a></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">English</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="4"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/" class="astro-ojxuodky"><span class="astro-ojxuodky">English overview</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/first-agent/" class="astro-ojxuodky"><span class="astro-ojxuodky">Your first agent, end to end</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/agents-and-runs/" class="astro-ojxuodky"><span class="astro-ojxuodky">Agents, versions and runs</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/what-the-gate-stops/" class="astro-ojxuodky"><span class="astro-ojxuodky">What the platform stops before it happens</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/writing-agent-blocks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Writing good blocks</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/slack-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">Slack and channels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/mcp-and-credentials/" class="astro-ojxuodky"><span class="astro-ojxuodky">MCPs and credentials</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/costs-and-limits/" class="astro-ojxuodky"><span class="astro-ojxuodky">Costs and limits</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/policies/" class="astro-ojxuodky"><span class="astro-ojxuodky">Policies</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/autonomy-stages/" class="astro-ojxuodky"><span class="astro-ojxuodky">Draft, copilot and autonomous</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/scopes-and-roles/" class="astro-ojxuodky"><span class="astro-ojxuodky">Companies, areas and roles</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/approving/" class="astro-ojxuodky"><span class="astro-ojxuodky">Approving an action</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/reading-a-run/" class="astro-ojxuodky"><span class="astro-ojxuodky">Reading a run</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/data-barriers/" class="astro-ojxuodky"><span class="astro-ojxuodky">Data labels and barriers</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/context-sharing/" class="astro-ojxuodky"><span class="astro-ojxuodky">Context sharing between agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/simulation-and-regressions/" class="astro-ojxuodky"><span class="astro-ojxuodky">Simulation and regressions</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/auditor-guide/" class="astro-ojxuodky"><span class="astro-ojxuodky">Auditor guide</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed memory</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Duplicate effect recognition</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/gravitee-tickets/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed Gravitee tickets</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/cloudflare-blocklist/" class="astro-ojxuodky"><span class="astro-ojxuodky">Cloudflare block list</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/standing-approvals/" class="astro-ojxuodky"><span class="astro-ojxuodky">Standing approvals</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/elasticsearch-window/" class="astro-ojxuodky"><span class="astro-ojxuodky">Elasticsearch window</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/software-factory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Software factory</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/github-webhooks/" class="astro-ojxuodky"><span class="astro-ojxuodky">GitHub webhooks</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/monitoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">Monitoring event dispatch</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/evidence-collection/" class="astro-ojxuodky"><span class="astro-ojxuodky">Evidence collection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/automating-configuration/" class="astro-ojxuodky"><span class="astro-ojxuodky">Automating configuration</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/experiments/" class="astro-ojxuodky"><span class="astro-ojxuodky">Experiments</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Portuguese</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="5"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/" class="astro-ojxuodky"><span class="astro-ojxuodky">Portuguese overview</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/first-agent/" class="astro-ojxuodky"><span class="astro-ojxuodky">Seu primeiro agente, do começo ao fim</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/agents-and-runs/" class="astro-ojxuodky"><span class="astro-ojxuodky">Agentes, versões e execuções</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/what-the-gate-stops/" class="astro-ojxuodky"><span class="astro-ojxuodky">O que a plataforma para antes de acontecer</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/writing-agent-blocks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Como escrever bons blocos</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/slack-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">Slack e canais</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/mcp-and-credentials/" class="astro-ojxuodky"><span class="astro-ojxuodky">MCPs e credenciais</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/costs-and-limits/" class="astro-ojxuodky"><span class="astro-ojxuodky">Custos e limites</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/policies/" class="astro-ojxuodky"><span class="astro-ojxuodky">Políticas</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/autonomy-stages/" class="astro-ojxuodky"><span class="astro-ojxuodky">Rascunho, copiloto e autônomo</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/scopes-and-roles/" class="astro-ojxuodky"><span class="astro-ojxuodky">Empresas, áreas e papéis</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/approving/" class="astro-ojxuodky"><span class="astro-ojxuodky">Aprovar uma ação</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/reading-a-run/" class="astro-ojxuodky"><span class="astro-ojxuodky">Ler uma execução</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/data-barriers/" class="astro-ojxuodky"><span class="astro-ojxuodky">Labels e barreiras de dados</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/context-sharing/" class="astro-ojxuodky"><span class="astro-ojxuodky">Compartilhamento de contexto entre agentes</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/simulation-and-regressions/" class="astro-ojxuodky"><span class="astro-ojxuodky">Simulação e regressões</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/auditor-guide/" class="astro-ojxuodky"><span class="astro-ojxuodky">Guia do auditor</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Memória governada</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Reconhecimento de efeito duplicado</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/gravitee-tickets/" class="astro-ojxuodky"><span class="astro-ojxuodky">Chamados governados no Gravitee</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/cloudflare-blocklist/" class="astro-ojxuodky"><span class="astro-ojxuodky">Lista de bloqueio Cloudflare</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/standing-approvals/" class="astro-ojxuodky"><span class="astro-ojxuodky">Aprovações permanentes</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/elasticsearch-window/" class="astro-ojxuodky"><span class="astro-ojxuodky">Janela Elasticsearch</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/software-factory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Fábrica de software</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/github-webhooks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Webhooks do GitHub</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/monitoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">Monitorando o despacho de eventos</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/evidence-collection/" class="astro-ojxuodky"><span class="astro-ojxuodky">Coleta de evidências</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/automating-configuration/" class="astro-ojxuodky"><span class="astro-ojxuodky">Automatizando a configuração</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/experiments/" class="astro-ojxuodky"><span class="astro-ojxuodky">Experimentos</span></a></li></ul></details></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Design record</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="6"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/reference/manual-and-design-notes/" class="astro-ojxuodky"><span class="astro-ojxuodky">Manual and design notes</span></a></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Rendered source docs</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="7"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/prd-001-fuseone-agents/" class="astro-ojxuodky"><span class="astro-ojxuodky">PRD-001 · FuseOne Agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/dp-001-data-protection/" class="astro-ojxuodky"><span class="astro-ojxuodky">DP-001 — Data protection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/op-001-running-an-installation/" class="astro-ojxuodky"><span class="astro-ojxuodky">OP-001 — Running an installation</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-001-integration-boundary-and-execution-model/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-001 · Integration boundary and execution model</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-003-conversational-authoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-003 · Conversational authoring</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-004-ledger-volume-and-paging/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-004 · Ledger volume and paging</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-005-interaction-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-005 · Interaction channels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-006-evaluating-agents/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-006 · Evaluating agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-007-drawing-a-process/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-007 · Drawing a process</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-007-standing-approvals/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-007 — Standing approvals, and the taint waiver we rejected</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-008-a-catalogue-by-shape/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-008 · A catalogue by shape</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-009-governed-connectors/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-009 — Governed connectors</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-010-the-shape-of-the-platform/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-010 — The shape of the platform</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-011-durable-agent-execution-and-workflow-engines/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-011 — Durable agent execution and workflow engines</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-012-governed-slack-tickets/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-012 - Governed Slack tickets for Gravitee subscription approval</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-013-software-factory-pilot/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-013 — A software factory, piloted on this repository</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-014-governed-evidence-collection/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-014 — Governed evidence collection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-015-evaluation-datasets-and-experiments/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-015 — Evaluation datasets and experiments</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-016-judge-evaluators/" aria-current="page" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-016 — Judge evaluators</span></a></li></ul></details></li></ul></details></li></ul><script aria-hidden="true">
+		(() => {
+			const scroller = document.getElementById('starlight__sidebar');
+			if (!window._starlightScrollRestore || !scroller) return;
+			scroller.scrollTop = window._starlightScrollRestore;
+			delete window._starlightScrollRestore;
+		})();
+	</script></sl-sidebar-state-persist><div class="md:sl-hidden"><div class="mobile-preferences sl-flex astro-b5gddk54"><div class="social-icons astro-b5gddk54"><a href="https://github.com/fuseone-io/fuseone-agents" rel="me" class="sl-flex astro-cg55etiy"><span class="sr-only astro-cg55etiy">GitHub</span><svg aria-hidden="true" class="astro-cg55etiy astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-r2p65idu"><span class="sr-only astro-r2p65idu">Select theme</span><svg aria-hidden="true" class="icon label-icon astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-r2p65idu"><option value="dark" class="astro-r2p65idu">Dark</option><option value="light" class="astro-r2p65idu">Light</option><option value="auto" selected class="astro-r2p65idu">Auto</option></select><svg aria-hidden="true" class="icon caret astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script></div></div></div></div></nav><div class="main-frame astro-gqpr5s5a"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-abfeecmu"><aside class="right-sidebar-container print:hidden astro-abfeecmu"><div class="right-sidebar astro-abfeecmu"><div class="lg:sl-hidden astro-q5mffni3"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-5ulgm6bh"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-5ulgm6bh"><details id="starlight__mobile-toc" class="astro-5ulgm6bh"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-5ulgm6bh"><span class="toggle sl-flex astro-5ulgm6bh">On this page<svg aria-hidden="true" class="caret astro-5ulgm6bh astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-5ulgm6bh"></span></summary><div class="dropdown astro-5ulgm6bh"><ul class="isMobile astro-cxyftcne" style="--depth: 0;"><li style="--depth: 0;" class="astro-cxyftcne"><a href="#_top" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Overview</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-is-already-decided" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What is already decided</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#a-judgment-is-a-set-of-runs" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">A judgment is a set of runs</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#the-rubric" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">The rubric</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-the-ledger-holds" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What the ledger holds</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#nothing-left-after-erasure-gives-the-value-back" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Nothing left after erasure gives the value back</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#untrusted-output" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Untrusted output</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#which-outputs-are-judged" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Which outputs are judged</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#one-judgment-per-key" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">One judgment per key</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#reading-a-judgment" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Reading a judgment</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#comparing" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Comparing</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#cost-and-whose-budget-pays" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Cost and whose budget pays</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#erasure" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Erasure</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#rollout" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Rollout</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is-not" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is not</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#tests-that-must-exist" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Tests that must exist</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#decided" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Decided</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/fuseone-agents/docs/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.BcSo_yiZ.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-q5mffni3"><div class="sl-container astro-q5mffni3"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">On this page</h2><ul class="astro-cxyftcne" style="--depth: 0;"><li style="--depth: 0;" class="astro-cxyftcne"><a href="#_top" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Overview</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-is-already-decided" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What is already decided</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#a-judgment-is-a-set-of-runs" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">A judgment is a set of runs</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#the-rubric" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">The rubric</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-the-ledger-holds" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What the ledger holds</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#nothing-left-after-erasure-gives-the-value-back" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Nothing left after erasure gives the value back</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#untrusted-output" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Untrusted output</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#which-outputs-are-judged" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Which outputs are judged</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#one-judgment-per-key" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">One judgment per key</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#reading-a-judgment" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Reading a judgment</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#comparing" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Comparing</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#cost-and-whose-budget-pays" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Cost and whose budget pays</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#erasure" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Erasure</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#rollout" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Rollout</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is-not" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is not</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#tests-that-must-exist" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Tests that must exist</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#decided" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Decided</span></a></li></ul></nav></starlight-toc><script type="module" src="/fuseone-agents/docs/_astro/TableOfContents.astro_astro_type_script_index_0_lang.Csloo1VZ.js"></script></div></div></div></aside><div class="main-pane astro-abfeecmu"><main data-pagefind-body class="astro-vdxcvpsm" lang="en" dir="ltr"><div class="content-panel astro-oil7k7jf"><div class="sl-container astro-oil7k7jf"><h1 id="_top" class="astro-2sm4b3ln">NT-016 — Judge evaluators</h1></div></div><div class="content-panel astro-oil7k7jf"><div class="sl-container astro-oil7k7jf"><div class="sl-markdown-content"><p>Status: proposed · 2026-11-10 · extends <a href="../nt-006-evaluating-agents/">NT-006</a> and
+<a href="../nt-015-evaluation-datasets-and-experiments/">NT-015</a> · issue
+<a href="https://github.com/fuseone-io/fuseone-agents/issues/298">#298</a>, phase 3 of
+<a href="https://github.com/fuseone-io/fuseone-agents/issues/261">#261</a></p>
+<div class="sl-heading-wrapper level-h2"><h2 id="what-this-is">What this is</h2><a class="sl-anchor-link" href="#what-this-is"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “What this is”</span></a></div>
+<p>An experiment answers <em>did this configuration break what we already corrected?</em>
+Every expectation it checks is structural and binary: which tool was reached, whether
+the run asked, what it cost. It cannot answer <em>is the answer any good?</em>, because that
+question is about text, and only a model reads text.</p>
+<p>This note specifies a judge: a rubric, run by a model, over the outputs of an
+experiment that has already settled. Its result is an opinion with a provenance. It
+sits beside the structural verdict and never changes it.</p>
+<p><strong>Who does what.</strong> An author with <code dir="auto">agent:publish</code> on the scope where the experiment was
+recorded asks for a judgment of that experiment, in the console or through the API, and
+sees what it may cost before it starts. Reading one needs <code dir="auto">agent:read</code> on that scope,
+as reading the experiment does. Nothing here is done by an agent, and nothing runs
+unattended: online evaluation is phase 4, and it needs its own decision.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="what-is-already-decided">What is already decided</h2><a class="sl-anchor-link" href="#what-is-already-decided"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “What is already decided”</span></a></div>
+<p>From NT-006 §5, NT-015 and #298:</p>
+<ul>
+<li><strong>Provenance.</strong> A judged result is an opinion: rubric digest, model and cost, recorded
+apart from the Gate’s verdicts.</li>
+<li><strong>No effect on structure.</strong> It never enters the <code dir="auto">held</code> and <code dir="auto">broken</code> counts, so a
+structural breach fails the case whatever its score.</li>
+<li><strong>Untrusted output.</strong> #298 asks that a run must not be able to talk its way to a high
+score, shown by a hostile test. <strong>This note narrows that requirement</strong>, because no
+mechanism can meet it as written (see <a href="#untrusted-output">Untrusted output</a>). The
+platform guarantees structural isolation. It measures how well a judge resists
+persuasion, and it does not promise that it does.</li>
+<li><strong>Same execution path.</strong> Judges run through the model registry, and their cost is in
+the ledger.</li>
+<li><strong>No schema change.</strong> Results attach to a run and a case.</li>
+<li><strong>No ensemble.</strong> NT-006 §5 leaves it out: it multiplies cost for the less important
+column.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="a-judgment-is-a-set-of-runs">A judgment is a set of runs</h2><a class="sl-anchor-link" href="#a-judgment-is-a-set-of-runs"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “A judgment is a set of runs”</span></a></div>
+<p>Three ways to run a judge were considered.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Option</th><th>Why not</th></tr></thead><tbody><tr><td>A call outside any run, the way the authoring assistant uses <code dir="auto">model.Completer</code></td><td><code dir="auto">Completer</code> exists because the assistant spends outside a run, and its cost comes back with the answer and goes nowhere. A judge would be the same: no ledger, no ceiling, no trail.</td></tr><tr><td>A step appended to the judged run, after <code dir="auto">run_finished</code></td><td>It gives the run a second writer once its owner is done (NF-15), and the experiment’s cost per run would start including the judge’s.</td></tr><tr><td><strong>A run of its own</strong></td><td>It gets the worker pool, the lease, the per-run ceiling, the ledger and erasure without anything new.</td></tr></tbody></table>
+<p>So a <strong>judgment</strong> is one rubric, one judge configuration and a number of repetitions,
+applied to one settled experiment. Each judged output gets one <strong>judge run</strong> per
+repetition. A judge run:</p>
+<ul>
+<li>is <strong>simulated</strong>, under the judged run’s agent and version and the <strong>scope the
+experiment was recorded in</strong>, not the scope the agent is published in today;</li>
+<li>records on <code dir="auto">run_started</code> the <strong>same <code dir="auto">experiment</code> id</strong> as the runs it judges, the
+judged run’s <code dir="auto">case</code>, the judgment’s id as its <code dir="auto">simulation</code> (see
+<a href="#one-judgment-per-key">One judgment per key</a>), and a <code dir="auto">judge</code> field: the judged run,
+the rubric digest and reference, the judge configuration, the per-run ceiling, the
+repetitions asked for and this run’s repetition;</li>
+<li>is opened <strong>with the case’s input as its input</strong>, held as its own content, as a
+battery run’s is, plus a copy of the judged run’s output, whose digest equals that
+run’s <code dir="auto">OutcomeDigest</code>;</li>
+<li>is offered <strong>no tools</strong>: its pack is empty, whatever the judged agent declares. It
+runs in the simulation pool anyway, where <code dir="auto">simulate.Deps</code> puts <code dir="auto">DryTools</code> in place of
+the tool layer, and it gets no memory and no context artifacts.</li>
+</ul>
+<p>Carrying the experiment id is what keeps the gate safe on binaries that know nothing of
+judges. <code dir="auto">HasSimulation</code>, <code dir="auto">Batteries</code> and <code dir="auto">LastBatteryAt</code> exclude every run that names an
+experiment, and every replica has done so since 0.100.0. A judge run therefore cannot
+let an agent leave Draft, start or stop a version, or reset the battery clock, even on a
+binary that was never told about it.</p>
+<p>Its own simulation id is what keeps the experiment’s own record intact.
+<code dir="auto">simulate.Recorded</code>, <code dir="auto">Gather</code> and the experiment report read the runs under the
+experiment’s simulation id, so a judge run is in none of them. A retry of the experiment
+does not count judge runs as repetitions, and the experiment’s cost stays the agent’s
+cost.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="the-rubric">The rubric</h2><a class="sl-anchor-link" href="#the-rubric"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “The rubric”</span></a></div>
+<p>A rubric is the judge’s instructions plus a declared output type. Its version is its
+digest: the same text and declaration give the same digest, and any change gives a new
+one. It is carried by the judgment request and is not part of the agent definition.
+Putting it there would make every rubric edit a new agent version, with its own battery,
+for something that does not change the agent.</p>
+<p>The text is content, like an agent’s answer. Each judge run holds a copy under its own
+retention and erasure, and its opening step holds only the reference and the digest
+(see <a href="#what-the-ledger-holds">What the ledger holds</a>). After retention, the
+judgment still states which rubric it used, and a rubric kept in the author’s own
+repository can be proved to be the same one.</p>
+<p><strong>Output types</strong>, each with its pass criterion declared beside it:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Type</th><th>The judge answers</th><th>Passes when</th></tr></thead><tbody><tr><td><code dir="auto">pass_fail</code></td><td><code dir="auto">pass</code> or <code dir="auto">fail</code></td><td><code dir="auto">pass</code></td></tr><tr><td><code dir="auto">score</code></td><td>an integer between a declared minimum and maximum, at most 11 values</td><td>at or above a declared threshold</td></tr><tr><td><code dir="auto">category</code></td><td>one of 2 to 10 declared identifiers</td><td>in a declared passing set</td></tr></tbody></table>
+<p>A category is an identifier (<code dir="auto">^[a-z][a-z0-9_]{0,31}$</code>) rather than prose, so it can be
+parsed without judgment. There is no free-form JSON type and no float.</p>
+<p><strong>The judge never writes the value itself.</strong> The platform presents the declared values
+as option codes of one fixed width, <code dir="auto">A</code>, <code dir="auto">B</code>, <code dir="auto">C</code> and so on in the rubric’s order, and the
+judge answers with a code. <code dir="auto">ok</code> and <code dir="auto">high_risk</code>, or <code dir="auto">3</code> and <code dir="auto">10</code>, are then the same size
+in every answer. The reason for this is in
+<a href="#nothing-left-after-erasure-gives-the-value-back">Nothing left after erasure gives the value back</a>.</p>
+<p><strong>A reason is off unless the rubric asks for one.</strong> The rubric declares <code dir="auto">reason: true</code>
+or leaves it out, and the declaration is part of the rubric’s digest.</p>
+<ul>
+<li><strong>Off.</strong> The judge answers with a code alone. The parser refuses any other text,
+whitespace included. A code followed by a reason is <code dir="auto">judge_unparseable</code>, not a
+judgment with the reason dropped.</li>
+<li><strong>On.</strong> The judge writes a code and a reason. Before the judgment starts, the console
+states what the reason costs, and its residual risk: the reason’s length shows in the
+token count, and across many judgments it may correlate with the value (see the same
+section).</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="what-the-ledger-holds">What the ledger holds</h2><a class="sl-anchor-link" href="#what-the-ledger-holds"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “What the ledger holds”</span></a></div>
+<p>The judge answers with a value and a reason. <strong>Both are content. The chain holds only
+where they are and what they were.</strong></p>
+<p>A value is not harmless because it is short. A rubric can declare <code dir="auto">fraud_suspect</code> or
+<code dir="auto">high_risk</code>, or score how a person behaved, and the value is then a classification of
+that person. Sealed in <code dir="auto">run_finished</code>, it would be outside retention and erasure: the
+defect <a href="../dp-001-data-protection/#the-split-is-not-absolute-and-the-exception-matters">DP-001</a>
+records for the model answers older runs wrote inline.</p>
+<ul>
+<li>The engine parses the judge’s answer against the rubric’s declared type. A conforming
+answer is written as a <strong>judgment object</strong> in the content store: the value and whether
+it passes. <code dir="auto">run_finished</code> carries its reference and digest (<code dir="auto">JudgmentRef</code>,
+<code dir="auto">JudgmentDigest</code>), owned by the judge run and under its retention and erasure.</li>
+<li>The reason, and the answer as the model wrote it, go where every closing answer goes:
+<code dir="auto">OutcomeRef</code> and <code dir="auto">OutcomeDigest</code>.</li>
+<li>Anything else is a <strong>failed judgment</strong>, never a score: two values, a value outside the
+declared range or set, an answer that is not the declared shape, a ceiling reached, or
+a model error. The run finishes with no judgment object and a closed failure code on
+<code dir="auto">run_finished</code> (<code dir="auto">judge_unparseable</code>, <code dir="auto">judge_oversized</code>, <code dir="auto">judge_ceiling</code>,
+<code dir="auto">judge_model_error</code>). The code
+says what went wrong with the judge, not what it thought of the output. There is no
+default value.</li>
+</ul>
+<div class="sl-heading-wrapper level-h3"><h3 id="nothing-left-after-erasure-gives-the-value-back">Nothing left after erasure gives the value back</h3><a class="sl-anchor-link" href="#nothing-left-after-erasure-gives-the-value-back"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Nothing left after erasure gives the value back”</span></a></div>
+<p>Erasing the bytes is not enough when what survives them can be matched against a short
+list. A rubric declares at most eleven values. Whatever survives an erasure and differs
+between those values gives the value back. Three things survive:</p>
+<ul>
+<li><strong>The digest.</strong> The content store derives it as SHA-256 of the bytes exactly
+(<code dir="auto">ledger.Content.PutFor</code>). It stays in the chain and on the tombstone’s <code dir="auto">digest</code>
+column, and its first 64 bits are part of the reference. Hashing each possible object
+until one matched would read <code dir="auto">high_risk</code> back.</li>
+<li><strong>The length.</strong> An erasure sets <code dir="auto">bytes</code> to null and keeps <code dir="auto">full_bytes</code> and <code dir="auto">truncated</code>
+(<code dir="auto">EraseOwnersTx</code>, and every other erasure statement). Two objects that differ only in
+<code dir="auto">ok</code> against <code dir="auto">high_risk</code> differ in <code dir="auto">full_bytes</code>.</li>
+<li><strong>The tokens.</strong> Each planning call’s cost is sealed in its step, output tokens
+included, and so is the run’s consumption. That is the money record and it stays. An
+answer that is longer for one value than another says which value in a count nobody
+can erase.</li>
+</ul>
+<p>So <strong>every object a judge run stores about its verdict is salted and has a fixed size,
+and the answer it is parsed from has the same shape whatever the value</strong>:</p>
+<ul>
+<li><strong>Salt.</strong> When a judge run is opened, it gets 32 bytes from <code dir="auto">crypto/rand</code>, stored as
+content owned by that run, under its retention and erasure. The opening holds only the
+salt’s reference and digest, and a hash of 256 random bits gives back nothing. The salt
+is never written into a step.</li>
+<li><strong>The judgment object</strong> is the salt, the option code and the pass, encoded at one fixed
+width and padded to one fixed size. <code dir="auto">JudgmentRef</code> and <code dir="auto">JudgmentDigest</code> cover all of it.</li>
+<li><strong>The judge’s answer as written</strong> is stored salt first and padded to one fixed size
+(8 KiB), under <code dir="auto">OutcomeRef</code> and <code dir="auto">OutcomeDigest</code>. That size is below the content limit,
+so <code dir="auto">truncated</code> is always false. An answer longer than that is a failed judgment
+(<code dir="auto">judge_oversized</code>), never truncated.</li>
+<li><strong>Nothing else holds the answer.</strong> These two are the only content a judge run writes
+about its verdict. A run with no tools stores no arguments, a judge publishes no
+artifacts, and the engine stores no proposal: <code dir="auto">PlannedPayload.ProposalRef</code> exists, but
+nothing writes it.</li>
+<li><strong>The answer’s shape.</strong> The value is a fixed-width code (see <a href="#the-rubric">The rubric</a>),
+so an answer without a reason has the same length for every value, and so does the
+answer the platform expects.</li>
+</ul>
+<p>Fixed size is chosen over clearing the length when content is erased. The length is
+cleared by none of the eight statements that erase content today, and these include
+migrations already applied. A binary from before this note would keep clearing nothing.
+A size the writer fixes holds against every binary that erases, including the previous
+one.</p>
+<p><strong>What remains, stated rather than hidden:</strong></p>
+<ul>
+<li><strong>A reason’s length.</strong> When a rubric asks for a reason, its length shows in the
+output tokens, and a reason may tend to be longer for one value than another. The
+value cannot be read back from one judgment by matching. It may be guessed from many,
+by correlation. That is why a reason is off unless the rubric asks for one, and the
+console says what asking costs.</li>
+<li><strong>The tokenizer.</strong> Whether a provider counts <code dir="auto">A</code> and <code dir="auto">K</code> as the same number of tokens
+is the provider’s tokenizer, which the platform does not control. The platform
+guarantees its own side: the prompt is identical and the expected answer is the same
+length for every value.</li>
+</ul>
+<p>The salt is not an auditable decision, and nothing branches on it. The rule against
+unrecorded randomness on an auditable path does not reach it: a salt that were recorded
+would defeat its purpose.</p>
+<p>The copy of the judged output that a judge run holds keeps the digest the judged run
+already sealed, and this changes nothing about that run.</p>
+<p>The chain keeps the provenance: the rubric digest and the judge configuration on the
+opening, the salt’s reference, and the salted judgment’s digest on the close. An auditor
+can prove which value was recorded while the content exists, and, once it is erased,
+only that one existed.</p>
+<p>Only the engine writes <code dir="auto">JudgmentRef</code>, and only on a run whose opening names a <code dir="auto">judge</code>. A
+worker that does not know judges never writes it, so a run it planned can never read as
+a judged result.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="untrusted-output">Untrusted output</h2><a class="sl-anchor-link" href="#untrusted-output"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Untrusted output”</span></a></div>
+<p>The platform defends untrusted content today at the Gate: a label taints what derives
+from it, and a high-effect act on tainted arguments needs a person. A judge has no tools,
+so there is nothing for the Gate to stop. This needs a defense of its own, and each part
+is a mechanism a test can assert:</p>
+<ol>
+<li><strong>Position.</strong> The platform’s judge preamble and the rubric are the system
+instructions. The case input and the judged output appear only in the user turn,
+each inside a block marked as data to be judged and never as instructions.</li>
+<li><strong>A boundary the output cannot forge.</strong> Each block’s delimiter carries a value
+derived from the judge run’s id. That id is generated after the judged output was
+written, so the agent could not have known it. An output that contains a closing
+delimiter, with any other value, stays inside its block.</li>
+<li><strong>A closed answer.</strong> Only a value of the declared type counts, and everything else is
+a failed judgment (above). An output that persuades the judge to write prose has
+produced no score.</li>
+<li><strong>Nothing to anchor on.</strong> The judge does not see the structural verdict, the other
+repetitions, other runs or the agent’s own instructions.</li>
+<li><strong>Provenance on every number.</strong> A judged result is always shown with its rubric
+digest and judge model, labelled as an opinion, and after held and broken.</li>
+</ol>
+<p><strong>These mechanisms do not stop an output from persuading the judge to answer exactly
+<code dir="auto">pass</code>.</strong> A well-formed <code dir="auto">pass</code> is the one answer the closed parser has to accept. No
+prompt makes a model immune to persuasion. The requirement in #298 is therefore narrowed,
+and the narrowing is the decision this note records:</p>
+<ul>
+<li><strong>What the platform guarantees, and tests in CI:</strong>
+<ul>
+<li>whatever an output says reaches the judge only as data;</li>
+<li>it cannot alter the rubric, the boundary or the shape of the answer;</li>
+<li>it cannot change <code dir="auto">held</code> or <code dir="auto">broken</code>.</li>
+</ul>
+</li>
+<li><strong>What the platform measures, and does not promise:</strong> whether a given judge model,
+under a given rubric, can be talked into a pass. The hostile set below is also a
+rubric’s calibration. The installation’s owner runs it against a real model, outside
+CI, as a judgment like any other, and its result is that judge’s resistance, stated
+with its sample size.</li>
+</ul>
+<p>A judged result is therefore never more than what it is labelled: one model’s opinion
+under one rubric, which a determined output may have bent.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="which-outputs-are-judged">Which outputs are judged</h2><a class="sl-anchor-link" href="#which-outputs-are-judged"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Which outputs are judged”</span></a></div>
+<ul>
+<li>
+<p><strong>Broken runs are not judged.</strong> A case broken in a repetition is broken, and a score
+for that repetition would be the second grade NT-006 §5 rules out. Not judging it also
+saves its cost. The report counts these as <em>not judged: broken</em>.</p>
+</li>
+<li>
+<p><strong>Runs without an answer are not judged:</strong> parked, failed, or erased. Each is counted
+with its cause.</p>
+</li>
+<li>
+<p><strong>The experiment must be complete, not only quiet.</strong> Having no open runs is not
+enough. An interrupted opening can leave some cases unopened, and its runs then finish
+and nothing is running. A retry with the experiment’s key may still open the rest, as
+<code dir="auto">addMissing</code> does. So a judgment requires the experiment’s whole intention to be
+materialized:</p>
+<ul>
+<li>every case its dataset version pins has a run for each repetition, or is reported
+as erased;</li>
+<li>every one of those runs has finished.</li>
+</ul>
+<p>The check and the opening of judge runs happen inside the same exclusive corpus fence
+an experiment’s opening and its retries take (<code dir="auto">regressions.Exclusive</code>). No retry can
+add a run between the check and the judgment. Anything short of this is a 409 that
+names what is missing.</p>
+<p>An experiment that can no longer be completed, because its pair is no longer served or
+its cases can no longer be read, cannot be judged. It stays a stated gap, never a
+judgment over part of it.</p>
+</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="one-judgment-per-key">One judgment per key</h2><a class="sl-anchor-link" href="#one-judgment-per-key"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “One judgment per key”</span></a></div>
+<p>A judgment has the idempotency contract an experiment has (NT-015), for the same
+reason. A response lost on the way back must not, on a retry, open every judge run a
+second time and spend it all again.</p>
+<ul>
+<li><strong>The key names the judgment.</strong> Its id is derived from the agent and the
+<code dir="auto">Idempotency-Key</code>, as <code dir="auto">experimentID</code> is, never generated per request. Each judge run’s
+own key is the judgment id, the judged run and the repetition, so opening the same run
+twice is refused by the ledger.</li>
+<li><strong>The intention is recorded on every judge run’s opening:</strong> the experiment, the rubric
+digest (which covers whether a reason is asked for), the judge configuration, the per-run ceiling and the repetitions. It is read
+back from the ledger, never kept anywhere else.</li>
+<li><strong>An identical retry completes and answers.</strong> It opens only the judge runs that are
+missing and answers from the ledger, whatever has changed since. A field it leaves out
+is inherited from the recorded intention. The rubric’s text is read back from a judge
+run’s copy, while one is still retained.</li>
+<li><strong>A non-divergent retry is never refused because something changed underneath.</strong> This
+covers a provider no longer served, an erased corpus, or erased rubric content. It is
+answered from the ledger even when it can open nothing more, and the answer says what
+it could not open.</li>
+<li><strong>A divergent retry is a 409.</strong> This covers another experiment, rubric, judge, ceiling
+or number of repetitions.</li>
+<li><strong>Scope first.</strong> The recorded scope is authorized before anything that could answer
+differently. A caller with no claim gets 404 before any 409, so a retry cannot confirm
+a judgment it has no claim on.</li>
+<li><strong>Under the fence.</strong> Settling the intention, opening what is missing and checking that
+the experiment is complete happen inside the one exclusive fence.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="reading-a-judgment">Reading a judgment</h2><a class="sl-anchor-link" href="#reading-a-judgment"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Reading a judgment”</span></a></div>
+<p>A judgment shows, in this order:</p>
+<ol>
+<li>what it judged: the experiment, with its dataset version, agent version and
+configuration;</li>
+<li>the rubric digest, output type and pass criterion, and the judge’s provider, model and
+effort;</li>
+<li>outputs judged out of the experiment’s outputs, with each reason for one not being
+judged, and the repetitions. A judgment whose object has been erased is counted as
+<strong>erased</strong>, never as a pass, a fail or a failed judgment;</li>
+<li>the results: passing judgments out of judgments (<code dir="auto">k of n</code>); for a <code dir="auto">score</code> or
+<code dir="auto">category</code>, the count for each value; and how many outputs were <strong>unstable</strong>, meaning
+their repetitions disagreed on passing;</li>
+<li>the cost.</li>
+</ol>
+<p>Each case shows its own <code dir="auto">k of n</code>, beside its structural result and never in its place.
+When the judge model is the model being judged, the screen says so. It is allowed,
+because it is often the only model available.</p>
+<p>The judgment’s cost is its own. It is not added to the experiment’s cost, so comparing
+two experiments still compares what the agent cost.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="comparing">Comparing</h2><a class="sl-anchor-link" href="#comparing"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Comparing”</span></a></div>
+<p>Two experiments can be compared on quality only when <strong>both have a judgment with the
+same rubric digest and the same judge provider, model and effort</strong>. A different rubric
+or judge is a different question, and its numbers are not comparable. That includes a
+rubric that differs only in asking for a reason: an answer that has to be justified is
+not the same measurement as one that does not. Otherwise the
+comparison shows the structural side and says why there is no quality side.</p>
+<p>When they are comparable, quality is compared over the cases that <strong>held on both sides</strong>
+and whose judgments are still readable on both, on top of NT-015’s rule for dataset
+versions. Without this, the side that broke its hard
+cases would be judged only on its easy ones and look better for it.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="cost-and-whose-budget-pays">Cost and whose budget pays</h2><a class="sl-anchor-link" href="#cost-and-whose-budget-pays"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Cost and whose budget pays”</span></a></div>
+<p>#261 asked whether judges spend the agent’s budget or a separate evaluation budget. What
+the code does today decides most of it:</p>
+<ul>
+<li>A simulated run, whether a battery or an experiment run, is limited by its per-run
+ceiling, narrowed by its scope’s remaining headroom (<code dir="auto">Worker.scopedBudget</code>).</li>
+<li>What it spends never counts against that scope’s period ceiling. <code dir="auto">SpentSince</code> sums
+real runs only.</li>
+<li>What it spends never reaches the FinOps projection. <code dir="auto">finops.writeSpend</code> skips every
+simulated planning call.</li>
+</ul>
+<p><strong>For phase 3, a judge pays the way an experiment does,</strong> and the person who asked for
+the judgment approved its stated cost:</p>
+<ul>
+<li>the request declares a <strong>per-run ceiling for the judge</strong>, required and greater than
+zero, because a judge’s call is not shaped like the agent’s;</li>
+<li>the console states, before it starts, the number of judge runs (outputs judged ×
+repetitions) and their ceiling, as it does for an experiment;</li>
+<li>a judgment never consumes the agent’s period ceiling, so measuring an agent cannot
+stop it working.</li>
+</ul>
+<p>Two things stay open and are not part of phase 3:</p>
+<ul>
+<li><strong>Measurement is invisible in FinOps today</strong>, for batteries and experiments as well as
+judges. Showing it as its own line, apart from operating spend, is a FinOps change of
+its own. Judges make the gap bigger, so it should get an issue before they ship.</li>
+<li><strong>A separate evaluation ceiling over a period</strong> is needed when something spends with
+nobody asking each time. That is phase 4, and it is decided there.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="erasure">Erasure</h2><a class="sl-anchor-link" href="#erasure"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Erasure”</span></a></div>
+<p>A judge run holds the case input, a copy of the judged output, the rubric, the judge’s
+reason and the judgment object. All of these are reached by the erasure that already
+exists, with no new search:</p>
+<ul>
+<li>A subject erasure follows a named run’s input digest to its corpus copies and to the
+simulated runs of the same agent that hold the same bytes (<code dir="auto">replaySearchSQL</code>). It then
+erases each such run’s content whole. A judge run holds the case input as its own
+content, so it is found the way a battery or experiment run is.</li>
+<li>Retention does the same through <code dir="auto">expiredReplaysSQL</code>.</li>
+<li>A simulated run’s tools answer with nothing (<code dir="auto">DryTools</code>), so a judged output holds
+nothing a tool fetched. What it says about the case’s subject came from the case
+input, and following the input digest therefore reaches every judgment of it.
+Anything else an output repeats came from the agent’s instructions or its memory,
+which have erasure of their own.</li>
+</ul>
+<p>What survives erasure is what NT-015 already keeps: the run, its steps, digests,
+references and provenance. The judgment object goes with the rest of the judge run’s
+content, value and pass included, and the salt goes with it. No classification of the
+person outlives the erasure, whether in the bytes or recovered from a digest or a
+length. The report then shows that judgment as erased and recomputes its numbers without
+it, saying how many it left out.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="rollout">Rollout</h2><a class="sl-anchor-link" href="#rollout"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Rollout”</span></a></div>
+<p>A worker on 0.101.0 that claims a judge run resolves it as an ordinary experiment run
+with no configuration (<code dir="auto">worker.resolve</code>). It would plan <strong>the judged agent itself</strong> on
+the case input and spend its money on an answer nobody asked for. It would never write a
+<code dir="auto">JudgmentRef</code>, so no false score could result. It is still a wrong run.</p>
+<p>The experiment listing on 0.101.0 also groups every simulated run that names the
+experiment (<code dir="auto">experimentGroups</code>), so it would count judge runs among the experiment’s
+runs.</p>
+<p>So this ships in two releases, as experiments did:</p>
+<ol>
+<li><strong>Readers and workers.</strong>
+<ul>
+<li>The simulation pool resolves a judge run as a judge, and refuses one whose opening
+is not simulated or names no experiment.</li>
+<li>Every reader that groups an experiment’s runs leaves judge runs out.</li>
+<li>Reading a judgment’s simulation id as a simulation is a 404.</li>
+<li>Nothing opens a judge run yet.</li>
+</ul>
+</li>
+<li><strong>Writers.</strong> The API, the console and the manual. They ship only once production
+<code dir="auto">readyz</code> shows release 1 on every replica, and once the FinOps issue for measurement
+spend exists (<a href="https://github.com/fuseone-io/fuseone-agents/issues/317">#317</a>).</li>
+</ol>
+<p>After the first judgment, rolling back below release 1 is not safe. Rolling back to
+release 1 itself is: it knows judge runs and cannot start them. As with experiments, any
+judgment still running should settle first.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="what-this-is-not">What this is not</h2><a class="sl-anchor-link" href="#what-this-is-not"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “What this is not”</span></a></div>
+<ul>
+<li><strong>A judge in the start gate, the battery or the drift sweep.</strong> Those stay structural.
+An opinion does not decide whether an agent may run.</li>
+<li><strong>A comparison with an expected answer.</strong> NT-015 leaves expected output out of a
+dataset, so a rubric judges an output on its own merits, with the case input as
+context.</li>
+<li><strong>Online sampling, the review queue, or an ensemble.</strong></li>
+<li><strong>A model leaderboard</strong> (NT-006 §8). A judgment belongs to one agent’s experiment.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="tests-that-must-exist">Tests that must exist</h2><a class="sl-anchor-link" href="#tests-that-must-exist"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Tests that must exist”</span></a></div>
+<ul>
+<li><strong>Gate:</strong> a judge run, from the writer’s own opening, neither lets a version start nor
+stops it, does not count as a battery, and does not let an agent leave Draft. The
+readers are the ones already deployed, on Postgres and on the fake.</li>
+<li><strong>Experiment intact:</strong> after a judgment, the experiment’s report, its listing counts,
+its cost and the answer to a retry with its key are the same as before. Sabotage:
+remove the exclusion from each experiment reader in turn, and a test must fail each
+time.</li>
+<li><strong>Old worker:</strong> a judge run claimed by a pool without judge resolution never writes a
+<code dir="auto">JudgmentRef</code>, and the report counts it as failed.</li>
+<li><strong>Complete, not quiet:</strong> an experiment whose opening was interrupted, whose runs have
+all finished and which a retry could still extend, is a 409 to a judgment. So is one
+that can no longer be completed. A retry of the experiment racing a judgment cannot
+add a run the judgment then misses. Sabotage: check only for open runs, and the test
+must fail.</li>
+<li><strong>Idempotency:</strong> a retry with the same key after a lost response opens no second judge
+run for any judged run and repetition, completes one interrupted halfway, and answers
+from the ledger. A retry that leaves fields out inherits them. One that changes the
+rubric, the judge, the ceiling, the repetitions or the experiment is a 409. Once judge
+runs exist, a retry whose pair is no longer served is still answered. A caller outside
+the recorded scope gets 404 before any 409. Sabotage: generate the id per request, and
+the duplicate test must fail.</li>
+<li><strong>No surviving metadata tells the outputs apart:</strong>
+<ul>
+<li>With a fake model, run one judge run per declared value, without a reason, then
+erase them.</li>
+<li>A judge run’s content rows are exactly the salt, the input, the copy of the output,
+the rubric, the answer and the judgment object. A seventh row fails the test.</li>
+<li>Compare everything that survives: each content row’s <code dir="auto">digest</code>, <code dir="auto">full_bytes</code>,
+<code dir="auto">truncated</code>, <code dir="auto">seq</code> and owner kind, and each step’s payload other than ids and
+digests of salted objects.</li>
+<li>It must be identical across values. No enumeration of the declared outputs, as a
+judgment object or as a bare answer, may reproduce any digest or the 64 bits in any
+reference.</li>
+<li>Sabotage, one at a time, and the test must find <code dir="auto">high_risk</code> each time:
+<ul>
+<li>store the objects unsalted;</li>
+<li>drop the padding;</li>
+<li>let the judge write the value instead of its code.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>Reason off:</strong> with the reason off, an answer of a valid code followed by any text,
+even a space or a newline, is <code dir="auto">judge_unparseable</code>. Sabotage: trim the answer before
+parsing, or accept a valid prefix, and the test must fail.</li>
+<li><strong>Reason declared:</strong> changing only <code dir="auto">reason</code> changes the rubric’s digest. A retry under
+the same key that changes it is a 409.</li>
+<li><strong>Oversized:</strong> an answer one byte over the fixed size is <code dir="auto">judge_oversized</code>, and never a
+stored, truncated object.</li>
+<li><strong>Nothing personal in the chain:</strong> a test reads the <code dir="auto">run_started</code> and <code dir="auto">run_finished</code>
+payloads of a judge run and fails on any field that is not an id, reference, digest,
+configuration or closed failure code. The value, the pass and the salt have to be
+absent. Use
+the value the bug would accept: a category such as <code dir="auto">high_risk</code>.</li>
+<li><strong>Fence:</strong> a <code dir="auto">judge</code> on a non-simulated run, or on one with no experiment, is refused
+by the opener and again by the pool.</li>
+<li><strong>No tools:</strong> a judge run’s pack is empty, whatever the judged agent declares.</li>
+<li><strong>Hostile, structural isolation only:</strong> this test does not claim the judge resists
+persuasion. That is measured, as described in <a href="#untrusted-output">Untrusted output</a>.
+With a fake model that records what it was sent, outputs that impersonate the rubric,
+forge a closing delimiter, or announce their own score appear only inside their data
+block, never in the system instructions. Every answer that is not a single
+value of the declared type is a failed judgment, and never a pass. Use the values a
+permissive parser would accept: a value with trailing prose, two values, an
+out-of-range integer, an undeclared category.</li>
+<li><strong>Structure first:</strong> a run broken in a repetition is not sent to the judge, and no
+judged result changes <code dir="auto">held</code> or <code dir="auto">broken</code>.</li>
+<li><strong>Comparison:</strong> different rubric digests, or different judges, give no quality side.
+The same rubric with and without a reason has two digests, and gives none either.
+Comparable judgments compare only cases held on both sides.</li>
+<li><strong>Erasure:</strong> a subject erasure of the run a case came from erases every judge run of
+that case’s replays: the copy of the output, the reason and the judgment object, value
+included. The report then counts those judgments as erased and nothing else changes.
+Retention does the same.</li>
+<li><strong>Ceiling:</strong> a judgment request without a positive per-run ceiling is refused, and a
+judge run that reaches its ceiling is a failed judgment.</li>
+<li><strong>Scope:</strong> a judgment is read, listed and requested only in the scope the experiment
+was recorded in, and every door answers 404 before any other answer.</li>
+<li><strong>Journey:</strong> from the API, through a settled experiment and real judge runs, to the
+report, on real Postgres.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="decided">Decided</h2><a class="sl-anchor-link" href="#decided"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Decided”</span></a></div>
+<p>Decided by the reviewer on 2026-11-10:</p>
+<ol>
+<li>
+<p><strong>Budget, for phase 3:</strong></p>
+<ul>
+<li>the judge pays as an experiment does;</li>
+<li>a per-run ceiling is required;</li>
+<li>the agent’s period ceiling is never touched;</li>
+<li>a separate period ceiling waits for phase 4.</li>
+</ul>
+<p><strong>This is conditional:</strong> the issue for a FinOps line for measurement spend must exist
+before the writers (release 2) ship. It is
+<a href="https://github.com/fuseone-io/fuseone-agents/issues/317">#317</a>.</p>
+</li>
+<li>
+<p><strong>Broken runs are not judged.</strong></p>
+</li>
+<li>
+<p><strong>The rubric lives in the request, addressed by its digest,</strong> not in the agent
+definition.</p>
+</li>
+<li>
+<p><strong>The judge model may be the judged model,</strong> with the screen saying so.</p>
+</li>
+<li>
+<p><strong>A reason is off by default</strong> and asked for only when the rubric declares it,
+because a reason’s length survives in the token count (see
+<a href="#nothing-left-after-erasure-gives-the-value-back">Nothing left after erasure gives the value back</a>).
+The declaration:</p>
+<ul>
+<li>is part of the rubric’s digest;</li>
+<li>is part of the idempotent intention;</li>
+<li>makes a judgment with a reason not comparable with one without;</li>
+<li>when off, makes the parser refuse any text beyond the code;</li>
+<li>when on, means the cost and the residual risk of correlation through the token
+count are stated before the judgment starts.</li>
+</ul>
+</li>
+<li>
+<p><strong>The untrusted-output requirement is narrowed.</strong> The platform guarantees structural
+isolation and measures resistance to persuasion; it does not promise it (see
+<a href="#untrusted-output">Untrusted output</a>).</p>
+</li>
+</ol></div><footer class="sl-flex astro-xhxjzfa7"><div class="meta sl-flex astro-xhxjzfa7"></div><div class="pagination-links print:hidden astro-jgq3vlii" dir="ltr"><a href="/fuseone-agents/docs/design/nt-015-evaluation-datasets-and-experiments/" rel="prev" class="astro-jgq3vlii"><svg aria-hidden="true" class="astro-jgq3vlii astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z"/></svg><span class="astro-jgq3vlii">Previous<br class="astro-jgq3vlii"><span class="link-title astro-jgq3vlii">NT-015 — Evaluation datasets and experiments</span></span></a></div></footer></div></div></main></div></div></div></div></body></html>
