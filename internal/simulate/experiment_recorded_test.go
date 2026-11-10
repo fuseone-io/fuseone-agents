@@ -113,3 +113,18 @@ func TestRecorded_keepsTheScopeItsRunsWereOpenedUnder(t *testing.T) {
 		t.Errorf("Recorded scope = %+v err=%v, want the scope the opener resolved", got.Scope, err)
 	}
 }
+
+// The record says when the experiment opened: the first of its runs, which is what a list
+// of experiments is ordered and read by.
+func TestRecorded_saysWhenTheExperimentOpened(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	if _, err := simulate.Open(t.Context(), openerFor(store, engine.NewMemoryContent()), experimentBatch(1)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	got, _, err := simulate.Recorded(t.Context(), store, "exp-1")
+	if err != nil || !got.OpenedAt.Equal(clock{}.Now()) {
+		t.Errorf("Recorded opened at %v err=%v, want the opener's clock %v", got.OpenedAt, err, clock{}.Now())
+	}
+}

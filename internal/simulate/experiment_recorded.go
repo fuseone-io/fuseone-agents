@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -24,8 +25,10 @@ type Record struct {
 	// old runs where they were recorded.
 	Agent domain.AgentID
 	Scope domain.Scope
-	Runs  []domain.RunID
-	Cases int
+	// OpenedAt is when the first of its runs opened.
+	OpenedAt time.Time
+	Runs     []domain.RunID
+	Cases    int
 }
 
 /*
@@ -59,6 +62,7 @@ func Recorded(ctx context.Context, steps Steps, id string) (Record, bool, error)
 		cases[started.Case] = true
 		if i == 0 {
 			out.Intention, out.Agent, out.Scope = recordedIntention(step, started), step.AgentID, step.Scope
+			out.OpenedAt = step.At
 		}
 	}
 	out.Cases = len(cases)
