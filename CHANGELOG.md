@@ -42,7 +42,8 @@ These are decisions recorded in a note. Nothing below is implemented yet.
     since 0.100.0.
   - The value and the reason are content, under retention and erasure. A rubric can
     classify a person, so the chain holds only references, digests and provenance, and
-    every object about a verdict is salted so its digest cannot give the value back. An
+    every object about a verdict is salted, fixed in size and answered as a fixed-width
+    code, so no digest, length or token count left after erasure gives the value back. An
     answer of any other shape is a failed judgment, never a score.
   - A judgment requires the whole experiment to be materialized, checked under the
     corpus fence. One idempotency key names one judgment, as it does for an experiment.

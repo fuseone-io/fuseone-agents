@@ -106,6 +106,16 @@ repository can be proved to be the same one.
 A category is an identifier (`^[a-z][a-z0-9_]{0,31}$`) rather than prose, so it can be
 parsed without judgment. There is no free-form JSON type and no float.
 
+**The judge never writes the value itself.** The platform presents the declared values
+as option codes of one fixed width, `A`, `B`, `C` and so on in the rubric's order, and the
+judge answers with a code. `ok` and `high_risk`, or `3` and `10`, are then the same size
+in every answer. The reason for this is in
+[Nothing left after erasure gives the value back](#nothing-left-after-erasure-gives-the-value-back).
+
+**A reason is off unless the rubric asks for one.** Without one, the judge answers with
+a code alone. With one, it also writes a reason, and the rubric accepts what that costs
+(see the same section).
+
 ## What the ledger holds
 
 The judge answers with a value and a reason. **Both are content. The chain holds only
@@ -126,32 +136,67 @@ records for the model answers older runs wrote inline.
 - Anything else is a **failed judgment**, never a score: two values, a value outside the
   declared range or set, an answer that is not the declared shape, a ceiling reached, or
   a model error. The run finishes with no judgment object and a closed failure code on
-  `run_finished` (`judge_unparseable`, `judge_ceiling`, `judge_model_error`). The code
+  `run_finished` (`judge_unparseable`, `judge_oversized`, `judge_ceiling`,
+  `judge_model_error`). The code
   says what went wrong with the judge, not what it thought of the output. There is no
   default value.
 
-### A digest must not give the value back
+### Nothing left after erasure gives the value back
 
-Erasing the bytes is not enough when the bytes can be guessed. The content store
-derives a digest as SHA-256 of the bytes exactly (`ledger.Content.PutFor`). That digest
-stays in the chain, stays on the tombstone's `digest` column, and its first 64 bits are
-part of the reference. A rubric declares at most eleven values. Anybody holding the
-digest after an erasure could hash each possible object until one matched, and read
-back `high_risk` from the hash.
+Erasing the bytes is not enough when what survives them can be matched against a short
+list. A rubric declares at most eleven values. Whatever survives an erasure and differs
+between those values gives the value back. Three things survive:
 
-So **every object a judge run stores about its verdict is salted**:
+- **The digest.** The content store derives it as SHA-256 of the bytes exactly
+  (`ledger.Content.PutFor`). It stays in the chain and on the tombstone's `digest`
+  column, and its first 64 bits are part of the reference. Hashing each possible object
+  until one matched would read `high_risk` back.
+- **The length.** An erasure sets `bytes` to null and keeps `full_bytes` and `truncated`
+  (`EraseOwnersTx`, and every other erasure statement). Two objects that differ only in
+  `ok` against `high_risk` differ in `full_bytes`.
+- **The tokens.** Each planning call's cost is sealed in its step, output tokens
+  included, and so is the run's consumption. That is the money record and it stays. An
+  answer that is longer for one value than another says which value in a count nobody
+  can erase.
 
-- When a judge run is opened, it gets a **salt**: 32 bytes from `crypto/rand`, stored as
-  content owned by that run and under its retention and erasure. The opening holds only
-  the salt's reference and digest. A hash of 256 random bits gives back nothing.
-- The **judgment object** is the salt, the value and the pass, and `JudgmentRef` and
-  `JudgmentDigest` cover all three.
-- The **judge's answer as written** is stored the same way, salt first, under
-  `OutcomeRef` and `OutcomeDigest`. A judge can answer with the value and an empty
-  reason, which is as enumerable as the value alone.
-- The salt itself is **never written into a step**. Once the run's content is erased,
-  the salt is gone with it, and no enumeration of the declared outputs reproduces either
-  digest.
+So **every object a judge run stores about its verdict is salted and has a fixed size,
+and the answer it is parsed from has the same shape whatever the value**:
+
+- **Salt.** When a judge run is opened, it gets 32 bytes from `crypto/rand`, stored as
+  content owned by that run, under its retention and erasure. The opening holds only the
+  salt's reference and digest, and a hash of 256 random bits gives back nothing. The salt
+  is never written into a step.
+- **The judgment object** is the salt, the option code and the pass, encoded at one fixed
+  width and padded to one fixed size. `JudgmentRef` and `JudgmentDigest` cover all of it.
+- **The judge's answer as written** is stored salt first and padded to one fixed size
+  (8 KiB), under `OutcomeRef` and `OutcomeDigest`. That size is below the content limit,
+  so `truncated` is always false. An answer longer than that is a failed judgment
+  (`judge_oversized`), never truncated.
+- **Nothing else holds the answer.** These two are the only content a judge run writes
+  about its verdict. A run with no tools stores no arguments, a judge publishes no
+  artifacts, and the engine stores no proposal: `PlannedPayload.ProposalRef` exists, but
+  nothing writes it.
+- **The answer's shape.** The value is a fixed-width code (see [The rubric](#the-rubric)),
+  so an answer without a reason has the same length for every value, and so does the
+  answer the platform expects.
+
+Fixed size is chosen over clearing the length when content is erased. The length is
+cleared by none of the eight statements that erase content today, and these include
+migrations already applied. A binary from before this note would keep clearing nothing.
+A size the writer fixes holds against every binary that erases, including the previous
+one.
+
+**What remains, stated rather than hidden:**
+
+- **A reason's length.** When a rubric asks for a reason, its length shows in the
+  output tokens, and a reason may tend to be longer for one value than another. The
+  value cannot be read back from one judgment by matching. It may be guessed from many,
+  by correlation. That is why a reason is off unless the rubric asks for one, and the
+  console says what asking costs.
+- **The tokenizer.** Whether a provider counts `A` and `K` as the same number of tokens
+  is the provider's tokenizer, which the platform does not control. The platform
+  guarantees its own side: the prompt is identical and the expected answer is the same
+  length for every value.
 
 The salt is not an auditable decision, and nothing branches on it. The rule against
 unrecorded randomness on an auditable path does not reach it: a salt that were recorded
@@ -411,11 +456,23 @@ judgment still running should settle first.
   runs exist, a retry whose pair is no longer served is still answered. A caller outside
   the recorded scope gets 404 before any 409. Sabotage: generate the id per request, and
   the duplicate test must fail.
-- **No digest gives the value back:** after a judge run's content is erased, enumerate
-  every output its rubric declares, as a judgment object and as a bare answer with an
-  empty reason. No candidate may reproduce `JudgmentDigest`, `OutcomeDigest`, the
-  tombstones' `digest` or the 64 bits in either reference. Sabotage: store the objects
-  unsalted, and the test must find `high_risk`.
+- **No surviving metadata tells the outputs apart:**
+  - With a fake model, run one judge run per declared value, without a reason, then
+    erase them.
+  - A judge run's content rows are exactly the salt, the input, the copy of the output,
+    the rubric, the answer and the judgment object. A seventh row fails the test.
+  - Compare everything that survives: each content row's `digest`, `full_bytes`,
+    `truncated`, `seq` and owner kind, and each step's payload other than ids and
+    digests of salted objects.
+  - It must be identical across values. No enumeration of the declared outputs, as a
+    judgment object or as a bare answer, may reproduce any digest or the 64 bits in any
+    reference.
+  - Sabotage, one at a time, and the test must find `high_risk` each time:
+    - store the objects unsalted;
+    - drop the padding;
+    - let the judge write the value instead of its code.
+- **Oversized:** an answer one byte over the fixed size is `judge_oversized`, and never a
+  stored, truncated object.
 - **Nothing personal in the chain:** a test reads the `run_started` and `run_finished`
   payloads of a judge run and fails on any field that is not an id, reference, digest,
   configuration or closed failure code. The value, the pass and the salt have to be
@@ -464,6 +521,9 @@ Decided by the reviewer on 2026-11-10:
 3. **The rubric lives in the request, addressed by its digest,** not in the agent
    definition.
 4. **The judge model may be the judged model,** with the screen saying so.
-5. **The untrusted-output requirement is narrowed.** The platform guarantees structural
+5. **A reason is off unless a rubric asks for one.** This is proposed in this revision
+   and not yet decided: a reason's length survives in the token count (see
+   [Nothing left after erasure gives the value back](#nothing-left-after-erasure-gives-the-value-back)).
+6. **The untrusted-output requirement is narrowed.** The platform guarantees structural
    isolation and measures resistance to persuasion; it does not promise it (see
    [Untrusted output](#untrusted-output)).
