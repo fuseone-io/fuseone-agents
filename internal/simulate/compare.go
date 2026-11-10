@@ -123,11 +123,16 @@ func tally(cases []CaseChange) (regressed, fixed int) {
 	return regressed, fixed
 }
 
-// changeOf is one case both sides ran. Expecting something else in each, it was not
-// asked the same question twice, and its movement says nothing about the agent.
+// changeOf is one case both sides have. Expecting something else in each, it was not
+// asked the same question twice, and its movement says nothing about the agent. One side
+// that never ran it stands broken there, and moves no cost or steps: its row costs nothing
+// because nothing ran, which is not a saving.
 func changeOf(id string, was, now standing) CaseChange {
 	if !slices.Equal(was.expected, now.expected) {
 		return CaseChange{ID: id, Was: was.standing, Now: NotComparable}
+	}
+	if !was.ran || !now.ran {
+		return CaseChange{ID: id, Was: was.standing, Now: now.standing}
 	}
 	return CaseChange{
 		ID: id, Was: was.standing, Now: now.standing,
@@ -138,6 +143,9 @@ func changeOf(id string, was, now standing) CaseChange {
 
 type standing struct {
 	standing Standing
+	// ran is whether a run of this case opened at all: a battery's row for a case that did
+	// not run is a stand-in.
+	ran      bool
 	cost     domain.Cost
 	steps    int
 	expected []domain.Expectation
@@ -164,7 +172,9 @@ func standings(r Report) map[string]standing {
 		if seen, ran := out[c.ID]; ran && seen.standing == Broke {
 			continue
 		}
-		out[c.ID] = standing{standing: stood, cost: c.Cost, steps: c.Steps, expected: c.Expected}
+		out[c.ID] = standing{
+			standing: stood, ran: !c.didNotRun, cost: c.Cost, steps: c.Steps, expected: c.Expected,
+		}
 	}
 	return out
 }

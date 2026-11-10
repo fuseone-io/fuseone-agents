@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/simulate"
@@ -117,11 +118,9 @@ func (s *Server) unservedPair(
 	if s.providerNames == nil {
 		return nil, nil
 	}
-	version, found := published, intent.Version == published.VersionID
-	if !found {
-		if version, found, err = s.versionOf(ctx, published.ID, intent.Version); err != nil || !found {
-			return nil, err
-		}
+	version, found, err := s.chosenVersion(ctx, published, intent.Version)
+	if err != nil || !found {
+		return nil, err
 	}
 	provider := version.Provider
 	if intent.Config.Provider != "" {
@@ -132,6 +131,41 @@ func (s *Server) unservedPair(
 	}
 	return fmt.Errorf("the experiment would run on provider %q, which this installation cannot ask",
 		provider), nil
+}
+
+/*
+hiddenFrom says whether the runs this attempt would add live where the caller may not
+publish.
+
+A retry adds to the experiment where its runs were recorded, and a first attempt opens them
+on the version it chose. Neither is necessarily where the agent is published today: an agent
+republished from finance to cx keeps its finance runs and its finance versions, and an
+author of cx has no claim on either. A version that does not exist is left to the opener.
+*/
+func (s *Server) hiddenFrom(
+	ctx context.Context, published domain.AgentSummary, intent simulate.Intention, recorded *simulate.Record,
+) (bool, error) {
+	var scope domain.Scope
+	if recorded != nil {
+		scope = recorded.Scope
+	} else {
+		version, found, err := s.chosenVersion(ctx, published, intent.Version)
+		if err != nil || !found {
+			return false, err
+		}
+		scope = version.Scope
+	}
+	return auth.Require(ctx, domain.PermAgentPublish, scope) != nil, nil
+}
+
+// chosenVersion is the version an intention runs, read once when it is the published one.
+func (s *Server) chosenVersion(
+	ctx context.Context, published domain.AgentSummary, id domain.VersionID,
+) (domain.AgentSummary, bool, error) {
+	if id == published.VersionID {
+		return published, true, nil
+	}
+	return s.versionOf(ctx, published.ID, id)
 }
 
 func (s *Server) versionOf(

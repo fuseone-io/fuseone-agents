@@ -796,8 +796,68 @@ export interface paths {
          *     fallback included.
          *
          *     Returns immediately, like a simulation.
+         *
+         *     Runs are opened where the version they run on was published, and a retry adds to
+         *     the experiment where it was recorded. When either is a scope the caller may not
+         *     publish in — an agent republished elsewhere keeps its old versions and runs — the
+         *     answer is a 404, as for an experiment that does not exist.
          */
         post: operations["startExperiment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/experiments/{experimentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What an experiment ran, and what it found
+         * @description A fold of the runs the experiment opened, read against the dataset version it
+         *     pinned (NT-015). The summary is in the order a result is read: dataset version,
+         *     agent version, configuration, cases run out of the cases in the version, erased
+         *     cases, repetitions, and only then held, broken and cost.
+         *
+         *     Each case is the worst of its repetitions, as in a battery: a case broken in any
+         *     repetition is broken. `brokenIn` and `ran` say in how many it broke, out of how
+         *     many that opened — "1 of 5".
+         *
+         *     Readable while it is still going; `running` says so.
+         */
+        get: operations["getExperiment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/experiment-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What changed from one experiment to another
+         * @description Two experiments of one agent, case by case (NT-015). On one dataset version they
+         *     asked the same questions, and every case is compared. Across two versions a case
+         *     one side lacks is a question it was never asked: only the cases both versions have
+         *     and did not erase are listed, `sharedOnly` says so, and `onlyFrom` and `onlyTo`
+         *     count what was left out of each side.
+         *
+         *     Nothing is stored for this: it is a fold of two folds.
+         */
+        get: operations["compareExperiments"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3413,6 +3473,74 @@ export interface components {
             runs: number;
             /** Format: int64 */
             datasetVersion: number;
+        };
+        /** @description What an experiment ran and what it found, in the order a result is read (NT-015). */
+        ExperimentSummary: {
+            id: string;
+            /** Format: int64 */
+            datasetVersion: number;
+            /** @description The agent version every run was pinned to. */
+            version: string;
+            config: components["schemas"]["ExperimentConfig"];
+            /** @description Cases of the dataset version that got at least one run. */
+            casesRun: number;
+            /** @description Every case of the dataset version, erased ones included. */
+            casesInVersion: number;
+            /** @description Cases whose input or expectations were erased, which did not run. */
+            erased: number;
+            repetitions: number;
+            held: number;
+            /** @description Cases broken in any repetition, or that did not run. */
+            broken: number;
+            cost: components["schemas"]["Cost"];
+            running: boolean;
+        };
+        ExperimentReport: {
+            summary: components["schemas"]["ExperimentSummary"];
+            cases: components["schemas"]["ExperimentCase"][];
+        };
+        /** @description One case across its repetitions. `case` is the worst run, as in a battery. */
+        ExperimentCase: {
+            case: components["schemas"]["SimulationCase"];
+            /** @description Repetitions in which this case broke. */
+            brokenIn: number;
+            /** @description Repetitions that opened a run. Fewer than the experiment's repetitions is a case not every repetition reached, and none is a case that did not run. */
+            ran: number;
+        };
+        ExperimentComparison: {
+            from: components["schemas"]["ExperimentSummary"];
+            to: components["schemas"]["ExperimentSummary"];
+            /** @description The two ran different dataset versions, so only the cases both have are listed. */
+            sharedOnly: boolean;
+            /** @description Cases only `from` had, left out. Zero on one dataset version. */
+            onlyFrom: number;
+            /** @description Cases only `to` had, left out. Zero on one dataset version. */
+            onlyTo: number;
+            regressed: number;
+            fixed: number;
+            /**
+             * Format: int64
+             * @description The movement per run over the cases both ran, new minus old, so five repetitions at one price are not five times dearer than one.
+             */
+            costMicros: number;
+            /** @description Ordered as a version comparison is, the answer first. */
+            cases: components["schemas"]["ExperimentCaseChange"][];
+        };
+        ExperimentCaseChange: {
+            id: string;
+            was: components["schemas"]["Standing"];
+            now: components["schemas"]["Standing"];
+            /**
+             * Format: int64
+             * @description The movement per run, new minus old.
+             */
+            costMicros: number;
+            /** @description The movement in steps per run, new minus old. */
+            steps: number;
+            wasBrokenIn: number;
+            wasRan: number;
+            nowBrokenIn: number;
+            nowRan: number;
         };
         SimulationAccepted: {
             id: string;
@@ -7547,6 +7675,85 @@ export interface operations {
              *     exist.
              */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getExperiment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                experimentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report so far. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentReport"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /**
+             * @description No experiment of this agent has that id, or it was recorded under a scope the
+             *     caller may not read — an agent republished elsewhere keeps its old experiments
+             *     where they were recorded. A battery's id is not one.
+             */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    compareExperiments: {
+        parameters: {
+            query: {
+                /** @description The experiment compared from. */
+                from: string;
+                /** @description The experiment compared to. */
+                to: string;
+            };
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentComparison"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /**
+             * @description One of the two is not an experiment of this agent, or was recorded under a scope
+             *     the caller may not read.
+             */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
