@@ -27,3 +27,28 @@ func TestConfigured_namesTheProvidersThisInstallationKnows(t *testing.T) {
 		}
 	}
 }
+
+// Usable is narrower than Configured: a provider this process could build and would ask.
+// A name claimed but switched off, or whose credential did not open, is configured and
+// still answers nothing, and an experiment pinned to it would open runs that can only park.
+func TestUsable_onlyAProviderThisProcessBuilt(t *testing.T) {
+	t.Parallel()
+
+	r := model.NewRegistry(nil)
+	if err := r.Register(model.Provider{
+		Name: "from-env", Kind: model.KindOpenAICompatible, BaseURL: "http://127.0.0.1:1",
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	r.SetConfigured([]model.Provider{{
+		Name: "built", Kind: model.KindOpenAICompatible, BaseURL: "http://127.0.0.1:2",
+	}}, "built", "switched-off", "sealed")
+
+	for name, want := range map[string]bool{
+		"from-env": true, "built": true, "switched-off": false, "sealed": false, "nobody": false,
+	} {
+		if got := r.Usable(name); got != want {
+			t.Errorf("Usable(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
