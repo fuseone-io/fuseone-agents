@@ -30,6 +30,18 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Changed
+
+- **Readers and workers know judge runs** (#298), one release before anything opens one
+  (NT-016 § Rollout). Nothing in this release starts a judgment.
+  - An agent's experiment list leaves out runs that judge an experiment: they count as
+    neither runs nor cases of it, and none is its first.
+  - Reading a judgment's id as a simulation answers 404.
+  - No worker plans the judged agent on a judge run, in the simulation pool or the real
+    one. It parks one, as an unresolved specification, until a worker that runs judges
+    takes it. One outside an experiment stays refused whatever the worker can do. To
+    check this, every turn now reads the run's first step: one row, however long the run.
+
 ### Design decisions
 
 These are decisions recorded in a note. Nothing below is implemented yet.

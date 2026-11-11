@@ -15,6 +15,11 @@ type Report struct {
 	DatasetVersion int64  `json:"dataset_version,omitempty"`
 	Cases          []Case `json:"cases"`
 
+	// Judgment is a judgment's id read as a simulation: its runs judge another run's
+	// output (NT-016), and folded as cases they would show a judge's answer as an
+	// agent's. A reader answers it as an id that names nothing.
+	Judgment bool `json:"-"`
+
 	// Held and Broken count the corrections that still stand and the ones
 	// that stopped standing. Zero for a simulation that is not a battery.
 	Held   int `json:"held"`

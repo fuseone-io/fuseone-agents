@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	gocontext "context"
+	"encoding/json"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -71,5 +72,53 @@ func TestGetSimulation_recordedBeforeTheAgentWasRepublishedElsewhere_isNotFound(
 	}
 	if _, ok := getSimulation(t, server, "sim_triage_cx").(openapi.GetSimulation200JSONResponse); !ok {
 		t.Error("the cx simulation was not answered, want it read")
+	}
+}
+
+// openRun records one simulated run's opening under a simulation id, for a reader to find.
+func openRun(t *testing.T, store *ledger.Memory, run domain.RunID, started domain.RunStartedPayload) {
+	t.Helper()
+	payload, err := json.Marshal(started)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if _, err := store.Append(gocontext.Background(), domain.Step{
+		RunID: run, Kind: domain.StepRunStarted, Scope: domain.Scope{Company: "acme", Area: "cx"},
+		AgentID: "triage", VersionID: "v2", OnBehalfOf: "ana", IdemKey: string(run), Payload: payload,
+	}); err != nil {
+		t.Fatalf("append %s: %v", run, err)
+	}
+}
+
+/*
+A judgment's id is not a simulation to read (NT-016). Its runs are this agent's, recorded
+where the caller may read, so every other door lets them through. Folded as a simulation,
+a judge's answer would be shown as an agent's.
+
+The anchor is the same run without the judge: it is read, so the 404 is the judge's.
+*/
+func TestGetSimulation_aJudgmentsID_isNotFound(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	server, _ := experimentFixture(t, store, &fakeDetail{versions: []domain.AgentSummary{servedVersion("v2")}})
+	opening := func(simulation string) domain.RunStartedPayload {
+		return domain.RunStartedPayload{
+			Trigger: "simulation", Simulated: true, Simulation: simulation,
+			Case: "a", DatasetVersion: 2, Experiment: "exp_triage_1",
+		}
+	}
+	judged := opening("jdg_triage_1")
+	judged.Judge = &domain.JudgeOpening{
+		Run: "run-exp-1", RubricDigest: "sha256:rubric", Provider: "anthropic", Model: "judge",
+		CeilingMicros: 1000, Repetitions: 1, Repetition: 1,
+	}
+	openRun(t, store, "run-judge-1", judged)
+	openRun(t, store, "run-anchor-1", opening("jdg_triage_anchor"))
+
+	if _, ok := getSimulation(t, server, "jdg_triage_1").(openapi.GetSimulation404ApplicationProblemPlusJSONResponse); !ok {
+		t.Error("a judgment was read as a simulation, want it not found")
+	}
+	if _, ok := getSimulation(t, server, "jdg_triage_anchor").(openapi.GetSimulation200JSONResponse); !ok {
+		t.Error("the same run without a judge was not read; the 404 above proves nothing")
 	}
 }

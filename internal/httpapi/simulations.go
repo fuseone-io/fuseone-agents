@@ -107,8 +107,9 @@ func (s *Server) GetSimulation(
 	}
 	// The id is whatever the caller typed. Only runs of this agent, recorded where the caller
 	// may read, are this agent's simulation: an agent republished elsewhere keeps its old
-	// runs where they were recorded, and an id that names nothing names no agent.
-	if report.Agent != published.ID || auth.Require(ctx, domain.PermAgentRead, report.Scope) != nil {
+	// runs where they were recorded. An id naming nothing names no agent; a judgment's, no simulation.
+	judgment := report.Judgment // NT-016: a judge's answer must never be shown as an agent's.
+	if report.Agent != published.ID || judgment || auth.Require(ctx, domain.PermAgentRead, report.Scope) != nil {
 		return openapi.GetSimulation404ApplicationProblemPlusJSONResponse{
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.SimulationId),
 		}, nil
