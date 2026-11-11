@@ -334,9 +334,9 @@ today resolve without any update:
 
 | Case | Result |
 |---|---|
-| The draft's digest is already published | No seal is written. The workbench rehearses, experiments on and activates that published version. Activating it means `MakeCurrent`, under the same steps. |
+| The draft's digest is already published | No seal is written. The workbench rehearses, experiments on and activates that published version. Activation takes the already-published path of step 13. |
 | Two authors seal the same digest | Two seals, one candidate. The trail records both. |
-| An ordinary publication of the same digest while a candidate exists | `agent_specs` gains the row, and from then on the version is published. Its seals stay as history, and activating it means `MakeCurrent`. |
+| An ordinary publication of the same digest while a candidate exists | `agent_specs` gains the row, and from then on the version is published. Its seals stay as history. Activation takes the already-published path of step 13, even if every seal has since expired. |
 | The candidate's text aged out or was erased | Re-sealing from the draft writes a **new** seal, with a new content reference. Nothing is restored over a tombstone. |
 
 That last row matters. `Content.RestoreFor` clears any tombstone, including
@@ -418,10 +418,13 @@ lock was read before it.
 1. **Headers, by syntax only.** Exactly one of `If-Match` and `If-None-Match: *`
    must be present, or the answer is 428. A value that does not parse is 400.
    Neither header is judged yet.
-2. **The sealed scope.** Read the seal's row, and check `agent:publish` on the
-   scope recorded there. If the seal does not exist or the caller lacks the
-   permission, the answer is 404. A caller who passes this has already been
-   allowed to know the candidate exists.
+2. **The version's scope.** Look the version up in `agent_specs` first, then in
+   `agent_seals`. Take the scope from whichever row is found: the published
+   version's company and area, or the seal's. Check `agent:publish` on that
+   scope. If neither row exists, or the caller lacks the permission, the answer
+   is 404. A caller who passes this step has been allowed to know the version
+   exists. The two lookups cannot disagree about scope: the same `version_id`
+   means the same bytes, and the bytes carry company and area.
 
 **Under the locks**, acquired in the one order every writer uses:
 
@@ -435,10 +438,14 @@ lock was read before it.
    `agent:publish` on it. If the caller lacks the permission, the answer is 404.
    For a first version, the scope is the sealed one. Because this read happens
    under the lock, the scope cannot move between this check and the decision.
-7. **The precondition.** Judge `If-Match` against the current version, or
-   `If-None-Match: *` against whether any version exists. A mismatch answers
-   412. Only a caller who passed step 6 can receive this, so a 412 never tells an
-   outsider that the agent exists or changed.
+7. **The precondition.** Judge `If-Match` against **the agent's `ETag` as
+   NT-017 defines it** (in review, #321): one tag covering the current version and whether the
+   agent is retired. It is the same tag publication and retirement honour, not a
+   weaker one derived here. Retiring or restoring the agent during the
+   experiment therefore stales the tag, as publishing does. `If-None-Match: *`
+   is judged against whether any version exists. A mismatch answers 412 with
+   the current `ETag`. Only a caller who passed step 6 can receive this, so a 412
+   never tells an outsider that the agent exists or changed.
 8. **The scope move.** If the sealed scope differs from the current one, the
    answer is 409 `fuseone:candidate-scope-moved`.
 9. **The stage.** `refuseStage` with `autonomous`, on the row already locked.
@@ -451,10 +458,20 @@ lock was read before it.
 11. **The graph.** `p.judge` again, against the graph as it is now.
 12. **The checklist.** The `never` block must be answered (see
     [the checklist](#3-the-seven-questions-become-a-checklist)).
-13. **The bytes.** Read the bytes of the seal from step 2. If they are
-    unreadable, the answer is 409 `fuseone:candidate-unreadable`. Then check
-    `versionOf(bytes) == version_id`, insert the `agent_specs` row from those
-    bytes, make it current, and record the activation's provenance.
+13. **The version.** Under the event graph lock, check `agent_specs` again,
+    because a publication can only have happened before step 4. There are two
+    paths, and which one applies is decided here:
+    - **Already published.** The version has a row in `agent_specs`, either
+      because the draft matched a published digest or because an ordinary
+      publication sealed the same bytes. Make that row current. No seal is
+      read, and none has to be readable: an expired or erased seal does not
+      block activating a version that is already published.
+    - **Still a candidate.** Read the bytes of a seal of this version. If no
+      seal is readable, the answer is 409 `fuseone:candidate-unreadable`. Check
+      `versionOf(bytes) == version_id`, insert the `agent_specs` row from those
+      bytes, and make it current.
+
+    Either way, record the activation's provenance.
 
 ### Lock order
 
@@ -549,9 +566,29 @@ rehearsals and experiments alike:
 - the `seal_id` it read;
 - the thread it was started from, if any.
 
-The origin goes in `run_started`. A row in an insert-only index,
-`authoring_run_origins (run_id, seal_id, thread_id)`, lets an erasure find the
-runs without scanning the ledger. The row holds only ids.
+The origin goes in `run_started`, and nowhere else first. **The index an erasure
+reads is a projection of that step, written in the same transaction.**
+`upsertRun` (`ledger/append.go:207`) already projects `runs` from each step
+inside the append transaction, and reads `simulated` and `simulation` from the
+`run_started` payload. It gains `seal_id` and `authoring_thread` the same way, as
+two id columns on `runs` with an index each. A run that exists therefore always
+carries its origin: there is no second write that can fail on its own. The
+contract suite that checks the projection against a Go fold covers the two new
+columns.
+
+**An experiment fixes its seal in the intention, not per run.** An experiment
+opens its runs under an idempotency key, and a retry reads what the first
+attempt recorded (`openExperiment`, `simulate.Recorded`). The seal and the
+thread join the recorded intention:
+
+- the first run the experiment opens fixes `seal_id` and `thread`;
+- a retry that omits them inherits the recorded ones;
+- a retry that names a different seal is the existing conflict, "a retry
+  stating another intention than its key's";
+- if the fixed seal is unreadable, the retry fails closed with
+  `fuseone:candidate-unreadable`, even if a sibling seal of the same version is
+  readable. Every run of one experiment read the same seal, so one erasure
+  reaches all of them.
 
 A run is pinned to the seal it opened with. Every turn resolves **that** seal,
 never another seal of the same version. If that seal is unreadable, the turn
@@ -856,6 +893,22 @@ Each is written red first. Each sabotage uses the value the bug would accept.
   the experiment run where the string survived.
 - A run opened on one seal does not switch to a sibling seal of the same
   version when its own seal is erased; its next turn fails closed.
+- Activation of a version already in `agent_specs` succeeds with every seal of
+  it expired. One test covers a draft that matched a published digest, and one
+  covers an ordinary publication made while a candidate existed.
+- Activation with a tag taken before the agent was retired answers 412, and so
+  does a tag taken before it was restored. The current version is the same in
+  both cases; only `retired` changed. Sabotage: compare only the version; both
+  tests must fail.
+- An experiment's first attempt is interrupted after opening some runs on seal
+  A. A sibling seal B is then written, and the experiment is retried. Every run
+  of the experiment names seal A. If A is erased before the retry, the retry
+  opens nothing on B.
+- `seal_id` and `authoring_thread` are written with `run_started` or not at all.
+  The test makes the append fail after the step's insert and before the
+  projection. Neither the step nor the origin is left behind. Sabotage: write
+  the origin in a second transaction; the test must find a run without its
+  origin.
 - No 412, 409 or 428 that depends on the agent is returned before both scopes
   are authorized. The test calls activation as a `finance`-only author, with a
   stale `If-Match`, on an agent moved to `cx`, and expects 404. Sabotage: judge
