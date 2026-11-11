@@ -153,7 +153,10 @@ What the card offers depends on who is looking:
 - **Someone holding `policy:write`** gets a link that opens the policies screen
   with the rule pre-filled. Review, simulation and saving stay on that screen,
   behind its own administrative boundary.
-- **Anyone else** is told who in the scope holds `policy:write`.
+- **Anyone else** is told to ask a policy administrator. The card never names
+  who holds `policy:write`. Finding that out means reading the directory and the
+  grants, which is administrative and reveals identities, and no API grants it
+  to an author.
 
 An author's acceptance never becomes `policy:write`.
 
@@ -246,11 +249,18 @@ Subject erasure is promised only where the platform can know the subject:
   the composer, so the author is not left assuming a promise the platform cannot
   keep.
 
-**The promise stops at activation.** An activated version is a published
-version. Versions are never erased, because runs are pinned to them
-(`spec/retire.go`). The activation screen shows the full text going live and
-says that it is kept. That is the last point where the author can remove what
-should not stay.
+**Only the published row is out of reach.** Activation writes the sealed bytes
+into `agent_specs`, and that row is never erased, because runs are pinned to it
+(`spec/retire.go`). Everything else stays erasable after activation, along the
+same chain:
+
+- the transcript;
+- the operation bodies;
+- the draft's values;
+- the seal's own copy in the content store.
+
+The activation screen shows the full text going live and says that this text is
+kept. That is the last point where the author can remove what should not stay.
 
 ### 5. What the author pastes is untrusted
 
@@ -298,13 +308,24 @@ activating are two acts, with different checks.
 
 **`agent_specs` is not touched.** It stays insert-only (`0006_agent_specs.sql`),
 and a row there still means "published". Candidates live in a table of their
-own, `agent_seals`, which is also insert-only. Each row is one act of sealing:
+own, `agent_seals`, which is also insert-only.
+
+**A seal keeps the whole definition, as bytes.** `version_id` is the digest of
+the specification file's bytes (`versionOf`, `spec.go:286`). The only copy that
+cannot drift from the digest is therefore those exact bytes. They carry every
+field the definition has: name, company and area, provider, model, effort,
+fallback, cache TTL, reply locale, tools, budget, triggers, steps, emits, memory
+learning, approvals and instructions. The bytes go to the content store under
+owner kind `authoring` and owner `seal_id`. `p.judge`, the rehearsal, the
+experiment and activation all parse those bytes, never a reconstruction.
+
+Each row of `agent_seals` is one act of sealing, and holds only indexable
+metadata and the reference:
 
 - `(agent_id, version_id, seal_id)`;
+- the **sealed scope**, company and area as they stood in the bytes;
 - who sealed it, and when;
-- the columns that are not free text: tools, provider, model, budget, triggers;
-- a reference to the free text (instructions, steps) in the content store,
-  under owner kind `authoring` and owner `seal_id`;
+- the reference to the bytes;
 - the provenance of the draft values it sealed.
 
 A *candidate* is a `version_id` with at least one seal and no row in
@@ -323,6 +344,21 @@ one left by subject erasure. A candidate that restored its text by digest could
 bring back what an erasure removed. A seal never restores. Text erased from the
 draft also gives a different digest when re-sealed, so it cannot come back that
 way either.
+
+### Who can see and use a candidate
+
+**Every door authorizes against the sealed scope, never the agent's current
+scope.** This covers listing, reading, rehearsing, experimenting and
+activating. Each of them needs `agent:publish` on the sealed scope. A candidate
+is unpublished work, so `agent:read` is not enough to see it. Outside that
+scope the answer is 404, as for a version that does not exist.
+
+So when an agent moves from `finance` to `cx`, an author in `cx` gains nothing
+sealed in `finance`. **Activation refuses a candidate whose sealed scope differs
+from the agent's current scope**, with 409 `fuseone:candidate-scope-moved`.
+Publishing those bytes would move the agent back without anyone deciding to.
+The way forward is to re-seal from the draft in the new scope, as an author
+there.
 
 ### Sealing
 
@@ -373,12 +409,29 @@ In semantic order, activation:
 5. runs `p.judge` again, against the graph as it is now;
 6. checks that the `never` block is answered (see
    [the checklist](#3-the-seven-questions-become-a-checklist));
-7. reads the candidate's text from a readable seal, checks it against
-   `version_id`, inserts the `agent_specs` row and makes it current.
+7. checks that the sealed scope is the agent's current scope;
+8. reads a seal's bytes, checks `versionOf(bytes) == version_id`, inserts the
+   `agent_specs` row from those bytes and makes it current.
 
 **Lock order is the publication's, and it is the only one.** Every writer that
 can change a current version acquires locks in this order:
 
+0. **The agent's content fence, shared.** This is the fence an erasure and
+   anything copying an agent's content already share (`regression/fence.go`,
+   `domain.CorpusFence`). Activation and the opening of a candidate run hold it
+   shared, around their whole transaction, because each of them reads a seal's
+   bytes and writes them somewhere else. Every erasure that can reach a seal
+   holds it exclusively: by thread, by referenced run, by subject, and by
+   retention. So two orders are possible, and both are safe:
+   - **activation first:** the erasure waits, and then erases the seal's copy.
+     The published row is the one copy erasure never reaches, and the screen
+     said so;
+   - **erasure first:** activation reads a tombstone and fails closed with
+     `fuseone:candidate-unreadable`.
+
+   The fence is taken first, before any database lock, on its own connection,
+   as it is today. An erasure takes only the fence and the content rows, so it
+   never waits on the event graph or on an agent row.
 1. **The event graph lock** (`lockEventGraph`), first, as `Publisher.Publish`
    takes it today (`publisher.go:71`).
 2. **The agent's `agent_state` row**, `FOR UPDATE`. Step 1's `If-Match` and
@@ -387,8 +440,8 @@ can change a current version acquires locks in this order:
 3. **The named resources**, `FOR SHARE`, in ascending order of their ids. Step 3
    is judged here.
 
-Then, with nothing left to acquire, activation runs `p.judge`, the `never` check
-and the insert. Step 2 takes no lock and runs before the transaction begins.
+Then, with nothing left to acquire, activation runs `p.judge`, the `never` and
+scope checks, the read of the seal and the insert. Step 2 takes no lock and runs before the transaction begins.
 Ordinary publication adopts the same third tier when NT-017's fence lands, so
 activation and publication can never wait on each other in a cycle.
 
@@ -566,7 +619,7 @@ new route `/agents/:agentId/workbench`. The form editor stays where it is.
 |---|---|---|
 | 0 | Close the doors | `DecideApproval` refuses simulated runs. `HasSimulation`, `Batteries` and `LastBatteryAt` exclude `rehearsal`, in Postgres and in memory. This must be released and deployed on every replica before phase 4 ships. |
 | 1 | Server draft and operations | Draft table, operations with validation, policy card, trail, ETag. Workbench with the draft panel and hand editing. |
-| 2 | Candidates | Insert-only `agent_seals`, with text in the content store and provenance per seal. The `Opener` fences candidates. Activation runs the seven steps in the publication's lock order. Unreadable candidates fail closed. |
+| 2 | Candidates | Insert-only `agent_seals` holding metadata, the sealed scope and provenance, with the full specification bytes in the content store. Every door authorizes against the sealed scope. The `Opener` fences candidates. Activation runs the eight steps in the publication's lock order, behind the shared content fence. Unreadable candidates fail closed. |
 | 3 | The conversation | One thread per author: turns, proposals, checklist, transcript in the content store, references to runs, thread erasure, ceiling per turn. |
 | 4 | Live rehearsal | Parking tool layer, `rehearsal` marker, `world_*` and `rehearsal_decided` steps and their endpoints, one-second polling, Ensaio tab. |
 | 5 | Cases with the world, experiments in the thread | Ordered recording in the case, replay layer that consumes it once, `not_comparable` on divergence, Experimento and Casos tabs. |
@@ -625,7 +678,32 @@ Each is written red first. Each sabotage uses the value the bug would accept.
   - the agent became autonomous;
   - a tool, the provider or the area the candidate names no longer exists;
   - the author lost `agent:publish`;
-  - the `never` block is empty.
+  - the `never` block is empty;
+  - the agent's scope differs from the sealed scope.
+- The definition that is activated is byte-for-byte the definition that was
+  sealed. A test seals an agent that uses every field: emits, memory learning,
+  approvals, fallback, cache TTL, locale and effort. It activates the agent, and
+  checks that the published row's `version_id` equals the sealed one and that
+  `p.judge` at the seal saw its `emits`. Sabotage: rebuild the definition from
+  metadata columns; the test must name the field that was lost.
+- Each door, run in both directions, answers 404 outside the sealed scope:
+  listing, reading, rehearsing, experimenting and activating. A `cx` author
+  cannot see a candidate sealed in `finance`, and a `finance` author cannot see
+  one sealed in `cx`. After the agent moves from `finance` to `cx`, the
+  `finance` candidate is still invisible to `cx` and cannot be activated.
+- Activation and erasure, run concurrently with `testdb.NewContention`, in both
+  orders, with one stalled at the point where it holds what the other needs:
+  - with activation first, the erasure waits, the published row holds the
+    bytes, and the seal's own copy is erased;
+  - with erasure first, activation answers `fuseone:candidate-unreadable` and
+    no `agent_specs` row exists.
+
+  Sabotage: drop the shared fence from activation. Erasure first must then
+  publish erased bytes, and the test must name that.
+- After activation, erasing the thread still clears the transcript, the
+  operation bodies, the draft values and the seal's copy, and leaves only the
+  published row.
+- The policy card never names a person, for any author.
 - Sealing a candidate for an autonomous agent is accepted.
 - A rehearsal does not satisfy `HasSimulation` and does not move
   `LastBatteryAt`, in Postgres and in `ledger.Memory`.
