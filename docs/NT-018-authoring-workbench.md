@@ -354,11 +354,21 @@ is unpublished work, so `agent:read` is not enough to see it. Outside that
 scope the answer is 404, as for a version that does not exist.
 
 So when an agent moves from `finance` to `cx`, an author in `cx` gains nothing
-sealed in `finance`. **Activation refuses a candidate whose sealed scope differs
-from the agent's current scope**, with 409 `fuseone:candidate-scope-moved`.
-Publishing those bytes would move the agent back without anyone deciding to.
-The way forward is to re-seal from the draft in the new scope, as an author
-there.
+sealed in `finance`. Activation also needs the agent's **current** scope, and
+the order of the checks is what keeps the move from leaking:
+
+1. `agent:publish` on the **sealed** scope, or 404;
+2. read the agent's current scope;
+3. `agent:publish` on the **current** scope, or 404. A `finance` author must not
+   learn that the agent now lives in `cx`, so an author who cannot act there
+   gets the same answer as for a candidate that does not exist;
+4. only a caller who can act in both scopes, and finds them different, gets 409
+   `fuseone:candidate-scope-moved`. Publishing those bytes would move the agent
+   back without anyone deciding to. The way forward is to re-seal from the draft
+   in the new scope.
+
+A first version has no current scope, so step 3 checks the sealed scope again
+(see [the first version](#the-first-version-of-an-agent)).
 
 ### Sealing
 
@@ -397,11 +407,15 @@ publication, in one transaction.
 
 In semantic order, activation:
 
-1. checks `If-Match` on the agent's current version. If the agent moved since
-   the experiment started, the answer is 412 and the author re-runs the
-   experiment;
-2. checks `agent:publish` on the scope again, since it may have been revoked
-   after the seal;
+1. checks the precondition. For an agent that already has a published version,
+   this is `If-Match` on its current version. If the agent moved since the
+   experiment started, the answer is 412 and the author re-runs the experiment.
+   For an agent's first version, it is `If-None-Match: *`; see
+   [the first version](#the-first-version-of-an-agent). Activation requires
+   exactly one of the two headers, and answers 428 without either;
+2. checks `agent:publish` on both scopes, in the order given in
+   [who can see and use a candidate](#who-can-see-and-use-a-candidate), since
+   either may have been revoked after the seal;
 3. checks that every resource the candidate names still exists: tools,
    provider, connector instances, area. This is the fence NT-017 specifies for
    publishing (in review, #321);
@@ -416,13 +430,23 @@ In semantic order, activation:
 **Lock order is the publication's, and it is the only one.** Every writer that
 can change a current version acquires locks in this order:
 
-0. **The agent's content fence, shared.** This is the fence an erasure and
-   anything copying an agent's content already share (`regression/fence.go`,
-   `domain.CorpusFence`). Activation and the opening of a candidate run hold it
-   shared, around their whole transaction, because each of them reads a seal's
-   bytes and writes them somewhere else. Every erasure that can reach a seal
-   holds it exclusively: by thread, by referenced run, by subject, and by
-   retention. So two orders are possible, and both are safe:
+0. **The agent's content fence, acquired once per request.** This is the
+   fence an erasure and anything copying an agent's content already share
+   (`regression/fence.go`, `domain.CorpusFence`). Each acquisition opens its own
+   connection (`fence.go:53`), so a request that enters the fence twice waits on
+   itself. **A request enters the fence exactly once, from the outside, and
+   everything that reads a seal inside that request runs within that single
+   acquisition:**
+   - **Experiment opening** already runs inside `regressions.Exclusive`
+     (`openExperiment`, `httpapi/experiments.go:79`). It resolves the candidate
+     there and takes no second fence.
+   - **Rehearsal opening** and **activation** take it shared, with `Hold`,
+     around their whole transaction.
+
+   Each of these reads a seal's bytes and writes them somewhere else. Every
+   erasure that can reach a seal holds the fence exclusively: by thread, by
+   referenced run, by subject, and by retention. So two orders are possible, and
+   both are safe:
    - **activation first:** the erasure waits, and then erases the seal's copy.
      The published row is the one copy erasure never reaches, and the screen
      said so;
@@ -447,6 +471,60 @@ activation and publication can never wait on each other in a cycle.
 
 If any step fails, nothing changes, and the candidate stays a candidate.
 
+### The first version of an agent
+
+An agent the workbench creates has no published version, so there is no
+current version to match and no current scope. `If-Match` refuses any value on a
+resource that does not exist (`openapi.yaml`, `IfMatch`), so a first activation
+cannot use it. It uses the opposite precondition instead:
+
+- **`If-None-Match: *`** means "this agent has no published version". It is
+  judged under the event graph lock as a read of `agent_specs` for the agent. If
+  any version exists, the answer is 412 and nothing is written.
+- **The scope comes from the seal.** It is authorized as the sealed scope, twice:
+  step 3 of the scope checks has no other scope to read.
+- **The agent is born paused**, in stage `draft`. `makeCurrentOn` already
+  creates the `agent_state` row paused when the agent has none, and a missing
+  stage reads as `draft`. So a first activation, like a first publication, starts
+  nothing.
+
+**Serialization does not depend on an `agent_state` row existing.** `FOR
+UPDATE` on a row that is not there locks nothing. But the event graph lock is a
+single installation-wide advisory lock (`event_graph_lock.go:30`), taken first
+by `Publish` and by activation alike. A first activation and an ordinary first
+publication of the same agent therefore run one after the other:
+
+- **publication first:** the activation's `If-None-Match: *` finds a version and
+  answers 412;
+- **activation first:** the publication sees a published agent, and proceeds as
+  any publication over an existing version does.
+
+### Reading a candidate during a run
+
+The fence guards opening a run. The worker reads the specification again on
+every turn (`worker/turn.go:51` calls `resolve`), in another process and long
+after the opening request returned. Holding the fence across a turn would hold
+it across a model call. Erasure would then wait on the model, and a fence slot
+(`FenceSlots` is 4) would be held for as long as the model takes.
+
+A turn does not need the fence, because it **reads and does not copy**. The
+bytes go into the prompt, and nothing durable is written from them except what
+the run records as its own content. A single read sees either the bytes or the
+tombstone, so the linearization point is that read. The promise is stated
+exactly:
+
+- **a turn whose read happens after the erasure commits** finds the tombstone,
+  ends with a failed step carrying `fuseone:candidate-unreadable`, and plans
+  nothing;
+- **a turn whose read came first** may finish its one model call with the old
+  text. No later turn of that run, or of any other run, reads it.
+
+So erasure of a candidate takes effect at the **next turn** of a run already
+open, never mid-turn. The model's answer to that last turn is the run's own
+content, and erasing a thread also erases the content of the rehearsal runs the
+thread opened. That erasure is by owner (`EraseOwnersTx` with `run`), so text the
+model echoed back goes with them.
+
 ### Retention
 
 A seal's text lives in the content store under the installation's retention,
@@ -458,9 +536,11 @@ fails closed**:
   publishes text that does not match `version_id`.
 - **Opening a rehearsal or experiment run** on such a candidate is refused with
   the same code, before any run exists.
-- **A run already open** that cannot read its candidate's text when it next
-  needs it ends with a failed step carrying that code. It never continues on a
-  partial specification. An experiment counts that case as `not_comparable`.
+- **A run already open** that cannot read its candidate's text at its next turn
+  ends with a failed step carrying that code, as
+  [reading a candidate during a run](#reading-a-candidate-during-a-run) states.
+  It never continues on a partial specification. An experiment counts that case
+  as `not_comparable`.
 
 The way back is to re-seal from the draft. If the text is unchanged, the new
 seal has the same `version_id`, so the experiment evidence still applies to the
@@ -619,7 +699,7 @@ new route `/agents/:agentId/workbench`. The form editor stays where it is.
 |---|---|---|
 | 0 | Close the doors | `DecideApproval` refuses simulated runs. `HasSimulation`, `Batteries` and `LastBatteryAt` exclude `rehearsal`, in Postgres and in memory. This must be released and deployed on every replica before phase 4 ships. |
 | 1 | Server draft and operations | Draft table, operations with validation, policy card, trail, ETag. Workbench with the draft panel and hand editing. |
-| 2 | Candidates | Insert-only `agent_seals` holding metadata, the sealed scope and provenance, with the full specification bytes in the content store. Every door authorizes against the sealed scope. The `Opener` fences candidates. Activation runs the eight steps in the publication's lock order, behind the shared content fence. Unreadable candidates fail closed. |
+| 2 | Candidates | Insert-only `agent_seals` holding metadata, the sealed scope and provenance, with the full specification bytes in the content store. Every door authorizes against the sealed scope. The `Opener` fences candidates. Activation runs the eight steps in the publication's lock order, with one fence acquisition per request. A first version activates with `If-None-Match: *`. Unreadable candidates fail closed, at opening and at each turn. |
 | 3 | The conversation | One thread per author: turns, proposals, checklist, transcript in the content store, references to runs, thread erasure, ceiling per turn. |
 | 4 | Live rehearsal | Parking tool layer, `rehearsal` marker, `world_*` and `rehearsal_decided` steps and their endpoints, one-second polling, Ensaio tab. |
 | 5 | Cases with the world, experiments in the thread | Ordered recording in the case, replay layer that consumes it once, `not_comparable` on divergence, Experimento and Casos tabs. |
@@ -704,6 +784,29 @@ Each is written red first. Each sabotage uses the value the bug would accept.
   operation bodies, the draft values and the seal's copy, and leaves only the
   published row.
 - The policy card never names a person, for any author.
+- An experiment on a candidate, through the real route (`openExperiment`), opens
+  its runs and does not wait on itself. Sabotage: take `Hold` inside
+  `Exclusive`; the test must time out and say so.
+- Activation without `If-Match` or `If-None-Match` answers 428.
+- A first activation with `If-None-Match: *` creates the agent paused and in
+  `draft`.
+- A first activation and an ordinary first publication of the same agent, run
+  concurrently in both orders, give the two results listed in
+  [the first version](#the-first-version-of-an-agent). Neither leaves two
+  current versions.
+- The scope checks run in their stated order. After a move from `finance` to
+  `cx`:
+  - a `finance`-only author activating the `finance` candidate gets 404, not
+    409;
+  - an author who can publish in both scopes gets 409
+    `fuseone:candidate-scope-moved`.
+
+  Sabotage: check the scope move before step 3; the test must name the leaked
+  409.
+- A turn that reads a candidate after an erasure commits fails closed. The test
+  stalls a run between two turns, commits the erasure, then resumes the run.
+  The next turn must answer `fuseone:candidate-unreadable` and plan nothing.
+- Erasing a thread erases the content of the rehearsal runs it opened.
 - Sealing a candidate for an autonomous agent is accepted.
 - A rehearsal does not satisfy `HasSimulation` and does not move
   `LastBatteryAt`, in Postgres and in `ledger.Memory`.
