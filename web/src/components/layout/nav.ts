@@ -40,6 +40,12 @@ export interface NavItem {
    * and every request the screen makes would answer 403.
    */
   platformPermission?: string;
+  /**
+   * Like anyPermission, held at the platform's administration scope. For a
+   * permission whose only surface in a hub is served there: an area's
+   * audit:read reads that area's runs, and opens no administration tab.
+   */
+  platformAnyPermission?: string[];
 }
 
 export interface NavGroup {
@@ -124,8 +130,10 @@ export const NAV: NavGroup[] = [
         to: "/admin",
         label: "nav.admin",
         icon: Settings2,
+        // audit:read opens only the administrative trail, which is the
+        // platform's, so it counts when held there.
+        platformAnyPermission: ["audit:read"],
         anyPermission: [
-          "audit:read",
           "identity:write",
           "brand:write",
           "provider:write",
@@ -148,7 +156,9 @@ export function navItemVisible(
   platform?: string[],
 ): boolean {
   if (can === null) return true;
-  if (can === undefined) return !item.permission && !item.anyPermission;
+  if (can === undefined) {
+    return !item.permission && !item.anyPermission && !item.platformAnyPermission;
+  }
   if (item.permission && !can.includes(item.permission)) return false;
   if (
     item.platformPermission &&
@@ -157,8 +167,13 @@ export function navItemVisible(
   ) {
     return false;
   }
-  if (item.anyPermission) {
-    return item.anyPermission.some((permission) => can.includes(permission));
+  if (item.anyPermission || item.platformAnyPermission) {
+    // Absent from a server that predates it, platform falls back to can.
+    const atPlatform = platform ?? can;
+    return (
+      (item.anyPermission ?? []).some((p) => can.includes(p)) ||
+      (item.platformAnyPermission ?? []).some((p) => atPlatform.includes(p))
+    );
   }
   return true;
 }
