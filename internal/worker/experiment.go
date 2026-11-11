@@ -31,19 +31,22 @@ rule 2). The opener refuses any other already; this is the second door, so a run
 reached the pool with a configuration some other way plans as the version published it.
 An experiment with no configuration is the version as published too, fallback and all.
 
-A judge run is never resolved as the version it judges (NT-016): it parks, whatever else
-its opening carries. See judgeRefusal.
+A judge run is never resolved as the version it judges (NT-016), in either pool: it parks,
+whatever else its opening carries. See judgeRefusal.
 */
 func (w *Worker) resolve(ctx context.Context, claim domain.Claim) (Resolution, error) {
-	if w.experiments == nil {
-		return w.specs.Resolve(ctx, claim.AgentID, claim.VersionID)
-	}
+	// Every pool reads the opening, the real one included: the judge mark is checked
+	// before any resolver, so a judge run that reached the real pool never plans with
+	// real tools (NT-016).
 	started, err := w.openingOf(ctx, claim.RunID)
 	if err != nil {
 		return Resolution{}, err
 	}
 	if started.Judge != nil {
 		return Resolution{}, judgeRefusal(claim.RunID, started)
+	}
+	if w.experiments == nil {
+		return w.specs.Resolve(ctx, claim.AgentID, claim.VersionID)
 	}
 	config := experimentConfigOf(started)
 	if config == nil {
@@ -61,7 +64,12 @@ func (w *Worker) openingOf(ctx context.Context, run domain.RunID) (domain.RunSta
 	if len(steps) == 0 || steps[0].Kind != domain.StepRunStarted {
 		return domain.RunStartedPayload{}, fmt.Errorf("%s has no opening step", run)
 	}
+	// Read as the engine's fold reads it: no payload is an empty opening, so the fence
+	// never parks a run the engine would advance.
 	var started domain.RunStartedPayload
+	if len(steps[0].Payload) == 0 {
+		return started, nil
+	}
 	if err := json.Unmarshal(steps[0].Payload, &started); err != nil {
 		return domain.RunStartedPayload{}, fmt.Errorf("decode the opening of %s: %w", run, err)
 	}
