@@ -535,7 +535,10 @@ anything.
 
 **Decided by Kleber on 2026-11-11:** a publication or a seal whose `version_id`
 lands on a `NULL` claim is refused with 409 `fuseone:version-digest-unknown`.
-The way forward is to change the definition. Any change gives another id.
+The way forward is to change the definition. A change almost always gives
+another id. Because the id is 48 bits, it may instead land on another claim, and
+that too is refused, never resolved silently. The author then changes the
+definition again.
 
 This is a change in behaviour. Today, republishing identical bytes of an old
 version makes it current again (`publishOn` is `on conflict do nothing`,
@@ -549,6 +552,57 @@ whose claim is `NULL` is refused there too. The sync **reports it and skips it**
 (a log line naming agent and version, and a counter) instead of failing the boot.
 The version stays in `agent_specs` as it was, and stays current if it is.
 Rewriting the file, which gives a new id, is how it gets a digest.
+
+#### The database enforces it, against the previous binary too
+
+A rule kept only in the new binary is not yet a guarantee. Migrations run as a
+`pre-upgrade` hook (`deploy/helm/fuseone-agents/templates/migrate-job.yaml`),
+and the previous release's `serve` replicas keep answering through the rolling
+update. Those binaries insert into `agent_specs` and call `makeCurrentOn`
+knowing nothing of claims (`publisher.go:99`). Left unchecked, they could:
+
+- publish a new version with no claim;
+- make a legacy version with a `NULL` claim current again;
+- do either again after a rollback to that release.
+
+So the claim is enforced **in the database**, by two triggers. They are
+installed only once every replica writes claims, which takes two releases.
+
+**Release C1, the claimers.** Its migration creates `agent_version_digests` and
+inserts `NULL` claims for every row of `agent_specs`. Its binary claims on every
+write, in all three writers. It installs no trigger. While C1 rolls out, a C0
+replica can still write an unclaimed row or make a `NULL` version current. That
+is exactly today's behaviour, it ends when C1 runs on every replica, and nothing
+in the workbench exists yet to collide with.
+
+**Release C2, the enforcers**, ships only after C1 is deployed on every replica.
+Its migration does three things, in one transaction:
+
+1. **It claims the gap.** Every `agent_specs` row still without a claim gets a
+   `NULL` one. Those rows are C0 writes from C1's rollout. Their bytes were never
+   kept, so they are legacy by definition.
+2. **It refuses an unclaimed version.** A trigger `BEFORE INSERT` on
+   `agent_specs` requires a claim for `(agent_id, version_id)` whose digest is
+   not `NULL`.
+3. **It refuses an unproven current version.** A trigger
+   `BEFORE INSERT OR UPDATE OF current_version` on `agent_state` refuses a
+   `current_version` whose claim is missing or `NULL`. The trigger fires only
+   when the value changes, or on insert. The disk sync's `MakeCurrent` of the
+   version that is already current therefore still passes, and so does every
+   legacy version that is current today.
+
+Because C2's migration runs while C1 replicas serve, and C1 already claims, the
+triggers refuse nothing C1 does legitimately. They refuse exactly the C0 paths
+listed above.
+
+**Rollback floor.** Once C2's migration has run, rolling back below C1 is not
+supported. C0's publications would be refused by the trigger. That fails closed,
+with no wrong row written, but publishing stops until C1 is back. Rolling back
+from C2 to C1 is safe, because C1 claims. The release notes of C2 state the
+floor.
+
+**The workbench writes seals only after C2.** The collision guarantee rests on
+the triggers, so phase 2 ships in C2 or later.
 
 #### The digest travels from the bytes, never from a `Spec`
 
@@ -879,6 +933,7 @@ new route `/agents/:agentId/workbench`. The form editor stays where it is.
 
 | # | Phase | Ships |
 |---|---|---|
+| C1, C2 | Claims, then their triggers | C1: `agent_version_digests`, `NULL` backfill, `Spec.Digest`, every writer claims, the disk sync skips `NULL` claims. C2, after C1 is on every replica: claim the gap, the two triggers, and the rollback floor stated in the release notes. Phase 2 ships in C2 or later. |
 | 0 | Close the doors | `DecideApproval` refuses simulated runs. `HasSimulation`, `Batteries` and `LastBatteryAt` exclude `rehearsal`, in Postgres and in memory. This must be released and deployed on every replica before phase 4 ships. |
 | 1 | Server draft and operations | Draft table, operations with validation, policy card, trail, ETag. Workbench with the draft panel and hand editing. |
 | 2 | Candidates | Insert-only `agent_seals` holding metadata, the sealed scope and provenance, with the full specification bytes in the content store. Every door authorizes against the sealed scope. The `Opener` fences candidates. Activation runs the eight steps in the publication's lock order, with one fence acquisition per request. A first version activates with `If-None-Match: *`. Unreadable candidates fail closed, at opening and at each turn. |
@@ -1032,7 +1087,21 @@ Each is written red first. Each sabotage uses the value the bug would accept.
   on the HTTP path and on the disk path. Each test uses bytes that do not
   survive re-serialization, such as CRLF line endings and key order. Sabotage:
   recompute the digest from a re-serialized `Spec`; the test must name the path.
-- `Registry.Publish` refuses a `Spec` with no `Digest`.
+- `Registry.Publish` refuses a `Spec` with no `Digest`, and separately a `Spec`
+  whose `Digest` does not begin with the hex in `Version`. The second test uses
+  a well-formed digest of other bytes. Sabotage: remove the prefix check alone;
+  that test must fail and the first must still pass.
+- **The previous binary's SQL is refused after C2's migration.** The test runs
+  that migration, then runs C0's exact statements against the database:
+  - `publishOn`'s `insert … on conflict do nothing` with no claim;
+  - `makeCurrentOn` onto a version whose claim is `NULL`;
+  - `makeCurrentOn` onto a version with no claim.
+
+  All three are refused by the triggers. `makeCurrentOn` of the version that is
+  already current still passes, and so does C1's claim-then-insert. Sabotage:
+  drop either trigger; the test must name the statement that got through.
+- C2's migration claims an `agent_specs` row written without a claim, with
+  `NULL`, before it installs the triggers.
 
 - `seal_id` and `authoring_thread` are written with `run_started` or not at all.
   The test makes the append fail after the step's insert and before the
