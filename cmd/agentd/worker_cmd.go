@@ -176,7 +176,10 @@ func (p *workerParts) pools(
 		WithMetrics(metrics.Pool("simulations", simulationSlots(cfg.concurrency))).
 		// Only the simulation pool resolves an experiment's configuration: the pool
 		// with real tools never plans on a model nobody published (NT-015).
-		WithExperiments(specs)
+		WithExperiments(specs).
+		// And only it runs judges, reading their material where the run holds it
+		// (NT-016). The real pool parks any judge run that reaches it.
+		WithJudges(specs.Judges(deps.Content))
 
 	if p.configPool != nil {
 		// How far each agent is trusted. Without it the pool treats every
