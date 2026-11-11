@@ -53,8 +53,6 @@ const (
 	minCategories   = 2
 	maxCategories   = 10
 	maxInstructions = 16 << 10
-	// scoreBound keeps every score small enough that no range arithmetic can overflow.
-	scoreBound = 1000
 )
 
 // A category is an identifier rather than prose, so it can be parsed without judgment.
@@ -65,6 +63,9 @@ var errInvalidRubric = errors.New("judge: invalid rubric")
 // ParseRubric reads a rubric, refusing unknown fields, trailing data and any declaration
 // the platform could not present as a closed list of codes.
 func ParseRubric(raw []byte) (Rubric, error) {
+	if err := strictJSON(raw); err != nil {
+		return Rubric{}, fmt.Errorf("%w: %v", errInvalidRubric, err)
+	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	var r Rubric
@@ -99,6 +100,13 @@ func (r Rubric) validate() error {
 	}
 }
 
+// scoreWidth is high minus low for low < high, exact for any two ints: the unsigned
+// difference wraps the way the signed one would overflow, and the true difference always
+// fits in it.
+func scoreWidth(low, high int) uint64 {
+	return uint64(high) - uint64(low)
+}
+
 // declaresRange is whether any of a score's fields is present, zero included.
 func declaresRange(o Output) bool {
 	return o.Min != nil || o.Max != nil || o.Threshold != nil
@@ -112,13 +120,7 @@ func validScore(o Output) error {
 		return errors.New("a score declares min, max and threshold")
 	}
 	low, high, threshold := *o.Min, *o.Max, *o.Threshold
-	// Bounded before any subtraction, so the count below cannot overflow.
-	for _, v := range []int{low, high, threshold} {
-		if v < -scoreBound || v > scoreBound {
-			return fmt.Errorf("a score's values are within ±%d", scoreBound)
-		}
-	}
-	if low >= high || high-low+1 > maxValues {
+	if low >= high || scoreWidth(low, high) >= maxValues {
 		return fmt.Errorf("a score has 2 to %d values", maxValues)
 	}
 	if threshold < low || threshold > high {
@@ -188,8 +190,9 @@ func (r Rubric) Options() []Option {
 	case OutputPassFail:
 		values, passes = []string{"pass", "fail"}, []bool{true, false}
 	case OutputScore:
-		for i := 0; i <= *o.Max-*o.Min; i++ {
-			v := *o.Min + i
+		// By count, never by value: a range ending at the largest int would wrap.
+		for i := uint64(0); i <= scoreWidth(*o.Min, *o.Max); i++ {
+			v := *o.Min + int(i)
 			values, passes = append(values, strconv.Itoa(v)), append(passes, v >= *o.Threshold)
 		}
 	case OutputCategory:

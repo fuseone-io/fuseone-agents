@@ -19,6 +19,10 @@ func TestParseRubric_validDeclarations_areAccepted(t *testing.T) {
 		"pass_fail": `{"instructions":"Is the answer polite?","output":{"type":"pass_fail"}}`,
 		"score":     `{"instructions":"Rate completeness.","output":{"type":"score","min":0,"max":10,"threshold":7}}`,
 		"category":  `{"instructions":"Classify.","output":{"type":"category","categories":["ok","high_risk"],"passing":["ok"]},"reason":true}`,
+		// Any integers, as long as there are at most eleven values (NT-016).
+		"far from zero":          `{"instructions":"x","output":{"type":"score","min":2000,"max":2010,"threshold":2005}}`,
+		"ending at the top":      `{"instructions":"x","output":{"type":"score","min":9223372036854775797,"max":9223372036854775807,"threshold":9223372036854775807}}`,
+		"starting at the bottom": `{"instructions":"x","output":{"type":"score","min":-9223372036854775808,"max":-9223372036854775798,"threshold":-9223372036854775808}}`,
 	} {
 		if _, err := ParseRubric([]byte(raw)); err != nil {
 			t.Errorf("%s: ParseRubric = %v, want accepted", name, err)
@@ -53,8 +57,17 @@ func TestParseRubric_invalidDeclarations_areRefused(t *testing.T) {
 		"score with passing":        `{"instructions":"x","output":{"type":"score","min":0,"max":5,"threshold":3,"passing":[]}}`,
 		// A range that overflows, and one that ends where a loop would wrap.
 		"overflowing range": `{"instructions":"x","output":{"type":"score","min":-9223372036854775808,"max":9223372036854775807,"threshold":0}}`,
-		"range at the top":  `{"instructions":"x","output":{"type":"score","min":9223372036854775800,"max":9223372036854775807,"threshold":9223372036854775807}}`,
-		"range past bounds": `{"instructions":"x","output":{"type":"score","min":1000,"max":1005,"threshold":1001}}`,
+		"twelve at the top": `{"instructions":"x","output":{"type":"score","min":9223372036854775796,"max":9223372036854775807,"threshold":9223372036854775807}}`,
+		// null is not absence: a field written as null was written.
+		"null min on pass_fail":        `{"instructions":"x","output":{"type":"pass_fail","min":null}}`,
+		"null min on a category":       `{"instructions":"x","output":{"type":"category","categories":["ok","bad"],"passing":["ok"],"min":null}}`,
+		"null categories on pass_fail": `{"instructions":"x","output":{"type":"pass_fail","categories":null}}`,
+		"null categories on a score":   `{"instructions":"x","output":{"type":"score","min":0,"max":5,"threshold":3,"categories":null}}`,
+		"null reason":                  `{"instructions":"x","output":{"type":"pass_fail"},"reason":null}`,
+		"null output":                  `{"instructions":"x","output":null}`,
+		"duplicate type":               `{"instructions":"x","output":{"type":"score","type":"pass_fail"}}`,
+		"duplicate instructions":       `{"instructions":"x","instructions":"y","output":{"type":"pass_fail"}}`,
+		"null inside categories":       `{"instructions":"x","output":{"type":"category","categories":["ok",null],"passing":["ok"]}}`,
 	} {
 		if _, err := ParseRubric([]byte(raw)); err == nil {
 			t.Errorf("%s: accepted, want refused", name)
@@ -97,11 +110,21 @@ func TestRubricDigest_namesTheDeclarationNotItsSpelling(t *testing.T) {
 // range that wraps would never end.
 func TestOptions_ofAnUnvalidatedRubric_areNone(t *testing.T) {
 	t.Parallel()
-	top, low := int(^uint(0)>>1), 0
-	low = top - 3
+	top := int(^uint(0) >> 1)
+	low := -top - 1
 	r := Rubric{Instructions: "x", Output: Output{Type: OutputScore, Min: &low, Max: &top, Threshold: &top}}
 	if got := r.Options(); got != nil {
 		t.Errorf("options = %d, want none", len(got))
+	}
+}
+
+// The widest range at the top of the integers walks its eleven values and stops.
+func TestOptions_aRangeEndingAtTheTop_endsThere(t *testing.T) {
+	t.Parallel()
+	r := mustRubric(t, `{"instructions":"x","output":{"type":"score","min":9223372036854775797,"max":9223372036854775807,"threshold":9223372036854775807}}`)
+	got := r.Options()
+	if len(got) != 11 || got[10].Value != "9223372036854775807" || got[10].Code != 'K' || !got[10].Passes {
+		t.Errorf("options = %+v, want eleven ending at the top", got)
 	}
 }
 
