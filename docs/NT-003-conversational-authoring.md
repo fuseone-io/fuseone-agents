@@ -83,6 +83,12 @@ unused — is where a proposal records which one it came from.
 
 ## 4. The interview is a wizard, not a chat
 
+> **Revised by [NT-018](NT-018-authoring-workbench.md) on 2026-11-11.** The
+> conversation is now free: the assistant chooses what to ask. What stays fixed
+> is the schema, checked against the draft, and the rule that nothing reaches
+> the draft without a person accepting a validated operation. The argument below
+> is kept as the reason those rules exist.
+
 The PRD is explicit: *"It is not a free-form prompt. It is a guided
 conversation that fills a fixed schema."*
 
