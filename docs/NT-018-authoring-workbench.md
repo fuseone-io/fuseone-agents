@@ -56,6 +56,12 @@ Decided in review of `e27dfcf7`:
    trail are common, and `ETag` settles concurrency.
 5. **SSE is deferred.** Polling is the first version's contract.
 
+Decided in review of `39c96e0a`:
+
+6. **Policies are created only on the policies screen.** For someone holding
+   `policy:write`, the policy card opens that screen with the rule pre-filled.
+   Review, simulation and saving stay behind its administrative boundary.
+
 ## What exists today
 
 Verified against `origin/main` at `b028e09a`.
@@ -128,15 +134,28 @@ enforces. So when the author says "above R$ 500 the finance team approves", the
 assistant does two things:
 
 - it proposes the `never` or `howToAct` text that tells the agent;
-- it shows a **policy card**, marked as not part of the draft. The card says
-  which rule the Gate would need, whether a current policy already covers it
-  (read with `POST /policies/simulate`), and links to the policies screen.
+- it shows a **policy card**, marked as not part of the draft. The card states
+  the rule the author described, in the policy editor's terms.
 
-An author's acceptance never becomes `policy:write`. A rehearsal shows the
-installation's policies as they are, so the author sees whether the hold they
-asked for actually happens. Making a policy from the workbench, for someone who
-holds `policy:write`, is [open](#open). The mockup shows the R$ 500 rule this
-way: as the installation's policy, outside the draft.
+**The card never says a current policy covers the request.** The platform
+cannot prove that. `POST /policies/simulate` replays a *new* rule against past
+decisions; it does not test whether the installed rules imply the one asked
+for. It also needs `policy:read`, which an author holding only `agent:publish`
+may lack. A card reading "already covered" on that basis could lead someone to
+leave a needed approval with no rule. What the author can observe is the
+rehearsal. It runs under the installation's policies as they are, so on that
+case the author sees whether the Gate held the action or let it through. The
+card says exactly that much: "the rehearsal will show what the current policies
+do on this case".
+
+What the card offers depends on who is looking:
+
+- **Someone holding `policy:write`** gets a link that opens the policies screen
+  with the rule pre-filled. Review, simulation and saving stay on that screen,
+  behind its own administrative boundary.
+- **Anyone else** is told who in the scope holds `policy:write`.
+
+An author's acceptance never becomes `policy:write`.
 
 ### 3. The seven questions become a checklist
 
@@ -183,18 +202,55 @@ store under owner kind `authoring`, under the installation's retention.
 diff and the trail of accepted operations are common; the threads are not. That
 keeps one author's pasted tickets out of another's context.
 
+#### Where text ends up, and how erasure follows it
+
+A sentence typed in a turn can be copied to four places:
+
+- the transcript;
+- the body of the operation proposed from it;
+- the draft value that operation wrote;
+- the content of every candidate sealed while that value stood.
+
+Erasure has to reach all four, so provenance is kept on the **values**, not just
+on the conversation.
+
+- Each draft value carries its provenance: the ids of the operations that wrote
+  its current text, and through them the turns and any run those turns
+  referenced. A value the author typed by hand carries the author's id instead.
+- Each seal records the provenance of every value it sealed.
+
+Erasing a thread, or erasing a run a turn referenced, clears four things in one
+transaction:
+
+1. the transcript turns involved;
+2. their operation bodies;
+3. every draft value whose current provenance includes one of those
+   operations. The value is replaced by an erasure marker, the draft's ETag
+   moves, and the checklist shows the part as missing;
+4. the content of every unpublished seal that sealed such a value. That
+   candidate becomes impossible to activate (see [Retention](#retention)).
+
+A value later overwritten by hand no longer carries the erased operation, so it
+stays.
+
 Subject erasure is promised only where the platform can know the subject:
 
 - **Content brought in by reference.** When the author starts a rehearsal from
   a run, or imports a case, the turn records that run's id. Subject erasure of
-  that run follows the reference into the transcript and into the operations
-  made in that turn, as NT-015 makes it follow the corpus copy.
-- **Anything typed or pasted.** A partial paste, or text rewritten into an
-  operation, has no digest in common with any run, so subject erasure cannot
-  find it. It is covered by retention, and by erasing the conversation: its
-  author, or anyone with `data:erase` on the scope, can erase a thread. The
-  screen tells the author this at the composer, rather than leaving them to
-  assume a promise the platform cannot keep.
+  that run follows the reference along the chain above, as NT-015 makes it
+  follow the corpus copy.
+- **Anything typed or pasted.** A partial paste has no digest in common with any
+  run, so subject erasure cannot find it. It is covered by retention, and by
+  erasing the thread. The thread's author, or anyone with `data:erase` on the
+  scope, can erase it, and that follows the same chain. The screen says this at
+  the composer, so the author is not left assuming a promise the platform cannot
+  keep.
+
+**The promise stops at activation.** An activated version is a published
+version. Versions are never erased, because runs are pinned to them
+(`spec/retire.go`). The activation screen shows the full text going live and
+says that it is kept. That is the last point where the author can remove what
+should not stay.
 
 ### 5. What the author pastes is untrusted
 
@@ -224,8 +280,8 @@ survives a reload and that a second tab can see. Today the draft is in
 - **One draft per agent**, shared by its authors. Applying an operation takes
   `If-Match` and answers 412 when the draft moved. The same pattern is used for
   the API in NT-017.
-- The draft's content (instructions are free text) is subject to the same
-  retention and erasure as the trail's content.
+- The draft's values carry provenance, and erasure clears them along the chain
+  in [where text ends up](#where-text-ends-up-and-how-erasure-follows-it).
 
 ## Candidate versions
 
@@ -233,66 +289,130 @@ A rehearsal and an experiment have to run a specification that cannot change
 under them. A draft can change. Publishing makes a version current
 (`publisher.go:102`), which would put an untested draft into production.
 
-So the workbench **seals a candidate**: an immutable version, with a digest,
-that is not current and has never been published. Sealing and activating are
-two acts, with different checks.
+So the workbench **seals a candidate**: a version digest that is not current and
+has never been published. The digest is computed exactly as publication
+computes `version_id`, so a candidate that goes live keeps its id. Sealing and
+activating are two acts, with different checks.
+
+### How a candidate is stored
+
+**`agent_specs` is not touched.** It stays insert-only (`0006_agent_specs.sql`),
+and a row there still means "published". Candidates live in a table of their
+own, `agent_seals`, which is also insert-only. Each row is one act of sealing:
+
+- `(agent_id, version_id, seal_id)`;
+- who sealed it, and when;
+- the columns that are not free text: tools, provider, model, budget, triggers;
+- a reference to the free text (instructions, steps) in the content store,
+  under owner kind `authoring` and owner `seal_id`;
+- the provenance of the draft values it sealed.
+
+A *candidate* is a `version_id` with at least one seal and no row in
+`agent_specs`. Because one version can have many seals, the cases that collide
+today resolve without any update:
+
+| Case | Result |
+|---|---|
+| The draft's digest is already published | No seal is written. The workbench rehearses, experiments on and activates that published version. Activating it means `MakeCurrent`, under the same steps. |
+| Two authors seal the same digest | Two seals, one candidate. The trail records both. |
+| An ordinary publication of the same digest while a candidate exists | `agent_specs` gains the row, and from then on the version is published. Its seals stay as history, and activating it means `MakeCurrent`. |
+| The candidate's text aged out or was erased | Re-sealing from the draft writes a **new** seal, with a new content reference. Nothing is restored over a tombstone. |
+
+That last row matters. `Content.RestoreFor` clears any tombstone, including
+one left by subject erasure. A candidate that restored its text by digest could
+bring back what an erasure removed. A seal never restores. Text erased from the
+draft also gives a different digest when re-sealed, so it cannot come back that
+way either.
 
 ### Sealing
 
-`Publisher` gains a path that seals without `makeCurrentOn`. Sealing checks
-that the author holds `agent:publish` on the scope and runs `p.judge`, so the
-rehearsal shows the same graph findings a publication would. It does **not**
-run `refuseStage`: rehearsing an improvement to an autonomous agent is safe.
-Putting it live is what must be refused.
+Sealing checks that the author holds `agent:publish` on the scope, and runs
+`p.judge` so the rehearsal shows the same graph findings a publication would.
+It takes **no lock**: its judgment is informational, and activation judges
+again under the lock. It does **not** run `refuseStage`. Rehearsing an
+improvement to an autonomous agent is safe; putting it live is what must be
+refused.
 
 ### A candidate never opens a real run
 
-A candidate is a row of `agent_specs` marked `candidate`. Three places must
-never treat it as published.
+A candidate has no row in `agent_specs`, so it is invisible by construction to
+three places:
 
-- **The current-version fallback.** When nobody has chosen a version, the query
-  takes the newest one: `catalogue.go:41`, `event_graph.go:79` and
-  `standing/create.go:39`. All three must skip candidates. Otherwise an agent
-  with no `agent_state` row would start running the first candidate anyone
-  rehearsed.
-- **The version list a run is pinned from.** `trigger.Pin` accepts any version
-  `Registry.Versions` returns (`trigger/version.go:15`), and a rerun can name a
-  version. A candidate in that list could be pinned by a real run.
-- **The fence lives in the `Opener`**, after `Pin` (`trigger/open.go:187`). A
-  candidate opens only a simulated run marked as a rehearsal or an experiment.
-  Every other request naming one is refused, with the same error as a version
-  the agent never published, so a candidate's id reveals nothing.
+- the current-version fallback (`catalogue.go:41`, `event_graph.go:79`,
+  `standing/create.go:39`);
+- `Registry.Versions`;
+- `trigger.Pin` (`trigger/version.go:15`).
+
+A real run, a rerun included, can only pin a version `Pin` finds. A rehearsal or
+experiment request resolves a candidate through a separate lookup on
+`agent_seals`. The `Opener` (`trigger/open.go:187`) accepts that lookup only for
+a simulated run marked as a rehearsal or an experiment. Any other request naming
+a candidate gets the same error as a version the agent never published, so a
+candidate's id reveals nothing. The tests below hold this fence even though the
+table split already enforces it, so that a later change merging the lists breaks
+a test, not production.
 
 ### Activating
 
 **Publishing from the workbench activates the candidate that was experimented
 on.** It does not seal a fresh one, so the digest that went through the
 experiment is the digest that goes live. Activation repeats every guarantee of a
-publication, in one transaction:
+publication, in one transaction.
 
-1. `If-Match` on the agent's current version. If the agent moved since the
-   experiment started, the answer is 412 and the author re-runs it.
-2. `agent:publish` on the scope, checked again. It may have been revoked since
-   the seal.
-3. Every resource the candidate names is held `FOR SHARE` and checked to exist:
-   tools, provider, connector instances, area. This is the same fence that NT-017 (in
-   review, #321) specifies for publishing.
-4. `refuseStage` with `autonomous`.
-5. `p.judge` again, against the graph as it is now.
-6. The `never` block is answered (see [the checklist](#3-the-seven-questions-become-a-checklist)).
-7. The candidate is marked published and made current, atomically.
+In semantic order, activation:
+
+1. checks `If-Match` on the agent's current version. If the agent moved since
+   the experiment started, the answer is 412 and the author re-runs the
+   experiment;
+2. checks `agent:publish` on the scope again, since it may have been revoked
+   after the seal;
+3. checks that every resource the candidate names still exists: tools,
+   provider, connector instances, area. This is the fence NT-017 specifies for
+   publishing (in review, #321);
+4. runs `refuseStage` with `autonomous`;
+5. runs `p.judge` again, against the graph as it is now;
+6. checks that the `never` block is answered (see
+   [the checklist](#3-the-seven-questions-become-a-checklist));
+7. reads the candidate's text from a readable seal, checks it against
+   `version_id`, inserts the `agent_specs` row and makes it current.
+
+**Lock order is the publication's, and it is the only one.** Every writer that
+can change a current version acquires locks in this order:
+
+1. **The event graph lock** (`lockEventGraph`), first, as `Publisher.Publish`
+   takes it today (`publisher.go:71`).
+2. **The agent's `agent_state` row**, `FOR UPDATE`. Step 1's `If-Match` and
+   step 4's stage are both judged here, under this lock. This is the order
+   `refuseStage` already follows inside `Publish`.
+3. **The named resources**, `FOR SHARE`, in ascending order of their ids. Step 3
+   is judged here.
+
+Then, with nothing left to acquire, activation runs `p.judge`, the `never` check
+and the insert. Step 2 takes no lock and runs before the transaction begins.
+Ordinary publication adopts the same third tier when NT-017's fence lands, so
+activation and publication can never wait on each other in a cycle.
 
 If any step fails, nothing changes, and the candidate stays a candidate.
 
 ### Retention
 
-A candidate that was never activated holds free text, in its instructions and
-steps, that nobody published. That text is moved out of the version row into
-the content store, under owner kind `authoring` and the installation's
-retention. What remains in the row is ids, the tool list and the digest. A
-rehearsal or experiment run pinned to it still names a version whose digest
-verifies, and whose text may have aged out. Activation copies the text back
-into the row, which from then on is a version like any other.
+A seal's text lives in the content store under the installation's retention,
+counted from the seal. When it is gone, through age or erasure, **the platform
+fails closed**:
+
+- **Activation** with no readable seal for the version answers 409
+  `fuseone:candidate-unreadable`. It never publishes partial text, and never
+  publishes text that does not match `version_id`.
+- **Opening a rehearsal or experiment run** on such a candidate is refused with
+  the same code, before any run exists.
+- **A run already open** that cannot read its candidate's text when it next
+  needs it ends with a failed step carrying that code. It never continues on a
+  partial specification. An experiment counts that case as `not_comparable`.
+
+The way back is to re-seal from the draft. If the text is unchanged, the new
+seal has the same `version_id`, so the experiment evidence still applies to the
+same digest. If erasure changed the text, the new seal has a different digest
+and needs its own experiment.
 
 ## Live rehearsal
 
@@ -446,7 +566,7 @@ new route `/agents/:agentId/workbench`. The form editor stays where it is.
 |---|---|---|
 | 0 | Close the doors | `DecideApproval` refuses simulated runs. `HasSimulation`, `Batteries` and `LastBatteryAt` exclude `rehearsal`, in Postgres and in memory. This must be released and deployed on every replica before phase 4 ships. |
 | 1 | Server draft and operations | Draft table, operations with validation, policy card, trail, ETag. Workbench with the draft panel and hand editing. |
-| 2 | Candidates | Seal without making current. Candidate text moves to the content store. The three fallback queries skip candidates. The `Opener` fences candidates. Activation runs the seven steps. |
+| 2 | Candidates | Insert-only `agent_seals`, with text in the content store and provenance per seal. The `Opener` fences candidates. Activation runs the seven steps in the publication's lock order. Unreadable candidates fail closed. |
 | 3 | The conversation | One thread per author: turns, proposals, checklist, transcript in the content store, references to runs, thread erasure, ceiling per turn. |
 | 4 | Live rehearsal | Parking tool layer, `rehearsal` marker, `world_*` and `rehearsal_decided` steps and their endpoints, one-second polling, Ensaio tab. |
 | 5 | Cases with the world, experiments in the thread | Ordered recording in the case, replay layer that consumes it once, `not_comparable` on divergence, Experimento and Casos tabs. |
@@ -512,11 +632,34 @@ Each is written red first. Each sabotage uses the value the bug would accept.
 - The world and rehearsal-decision endpoints refuse each of these: a real run,
   a battery run, an experiment run, and a rehearsal stopped at a different
   `atSeq`.
-- Erasing a run that a turn referenced clears that turn's transcript and its
-  operations. Erasing a thread clears all of it.
+- Erasing a run that a turn referenced, and separately erasing a thread, must
+  leave the text in none of these places:
+  - the transcript;
+  - the operation bodies;
+  - the shared draft's values;
+  - the content of every unpublished seal that sealed them.
 
-## Open
+  The test searches for the pasted string in all four. Sabotage: skip the draft
+  values, then skip the seals; each sabotage must fail the test by naming where
+  the string survived. A value overwritten by hand after the operation keeps
+  its text.
+- Re-sealing after a seal's text was erased by subject erasure writes a new
+  seal and leaves the old tombstone erased. Sabotage: seal through
+  `RestoreFor`, which must fail the test.
+- Activation, and opening a rehearsal or an experiment, on a candidate with no
+  readable seal answer `fuseone:candidate-unreadable`. No `agent_specs` row and
+  no run appear.
+- Activation reads text that does not match `version_id` and is refused, with
+  no row written.
+- Each of the three idempotent cases in
+  [How a candidate is stored](#how-a-candidate-is-stored) holds. The ordinary
+  publication case runs with a candidate of the same digest already sealed.
+- An activation and an ordinary publication of the same agent, run
+  concurrently with `testdb.NewContention`, both finish: one succeeds and the
+  other is refused or waits. Neither deadlocks. Sabotage: take the agent row
+  before the event graph lock in activation; the test must time out and name
+  the order.
+- The policy card's text never claims coverage. A test renders a card for an
+  author without `policy:read`, and one for an author with it, and checks that
+  neither reads as covered.
 
-| # | Question | Blocks |
-|---|---|---|
-| D | Should someone holding `policy:write` be able to turn a policy card into a policy from the workbench, or always go through the policies screen? | Nothing; phase 1 ships with the link |
