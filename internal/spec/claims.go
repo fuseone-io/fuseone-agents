@@ -31,8 +31,9 @@ var (
 	ErrVersionCollision = errors.New("spec: another definition already holds this version id")
 	// ErrDigestUnknown is a version id whose bytes were never kept: published
 	// before claims, or by a binary that does not claim. Nothing can show that
-	// new bytes are the same, so the id is not published again; changing the
-	// definition gives another one.
+	// new bytes are the same, so the id is not published again. Changing the
+	// definition almost always gives another id; one that lands on another
+	// claim is refused the same way.
 	ErrDigestUnknown = errors.New("spec: this version id was published without a digest")
 )
 
@@ -113,4 +114,20 @@ func claimNew(ctx context.Context, q claimer, s Spec) (*string, error) {
 	}
 	digest, _, err := claimOf(ctx, q, s)
 	return digest, err
+}
+
+// Proven reports whether s's bytes are the ones its version id is claimed for.
+//
+// What reconciles anything from a file, such as its schedules and webhook
+// paths, asks this first. A file the registry refused is not what the
+// installation runs, and its triggers must not be either.
+func Proven(ctx context.Context, q claimer, s Spec) (bool, error) {
+	if !carriesDigest(s) {
+		return false, nil
+	}
+	claimed, found, err := claimOf(ctx, q, s)
+	if err != nil || !found || claimed == nil {
+		return false, err
+	}
+	return *claimed == s.Digest, nil
 }

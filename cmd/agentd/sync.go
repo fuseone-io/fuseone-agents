@@ -48,6 +48,12 @@ func syncSchedules(ctx context.Context, pool *pgxpool.Pool, specDir *string) err
 		if err != nil {
 			return fmt.Errorf("sync schedules: %w", err)
 		}
+		if proven, err := provenOnDisk(ctx, pool, published); err != nil || !proven {
+			if err != nil {
+				return fmt.Errorf("sync schedules: %w", err)
+			}
+			continue
+		}
 		if err := schedules.Sync(ctx, agent, spec.CronSchedules(published), now); err != nil {
 			return fmt.Errorf("sync schedules for %s: %w", agent, err)
 		}
@@ -72,6 +78,12 @@ func syncWebhooks(ctx context.Context, pool *pgxpool.Pool, specDir *string) erro
 		if err != nil {
 			return fmt.Errorf("sync webhooks: %w", err)
 		}
+		if proven, err := provenOnDisk(ctx, pool, published); err != nil || !proven {
+			if err != nil {
+				return fmt.Errorf("sync webhooks: %w", err)
+			}
+			continue
+		}
 		scope := domain.Scope{Area: domain.AreaID(published.Area)}
 		if err := hooks.Sync(ctx, agent, scope, spec.Webhooks(published)); err != nil {
 			// A path two agents both declare is a configuration error, and one
@@ -87,6 +99,22 @@ func syncWebhooks(ctx context.Context, pool *pgxpool.Pool, specDir *string) erro
 		}
 	}
 	return nil
+}
+
+// provenOnDisk is whether a file's triggers may be reconciled: its bytes are
+// the ones its version id is claimed for (NT-018). A version the sync skipped
+// for its digest is not what the installation runs, so its agent's schedules
+// and paths stay as they were.
+func provenOnDisk(ctx context.Context, pool *pgxpool.Pool, s spec.Spec) (bool, error) {
+	proven, err := spec.Proven(ctx, pool, s)
+	if err != nil {
+		return false, fmt.Errorf("prove %s@%s: %w", s.ID, s.Version, err)
+	}
+	if !proven {
+		slog.Warn("agent triggers left as they were: its version on disk was not published",
+			"agent", s.ID, "version", s.Version)
+	}
+	return proven, nil
 }
 
 // webhookPathsOf picks the paths out of a specification's triggers.
