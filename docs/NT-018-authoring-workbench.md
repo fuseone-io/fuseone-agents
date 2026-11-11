@@ -505,6 +505,15 @@ an identity claims it first, in its own transaction, before judging anything:
 - sealing.
 
 A claim is `insert … on conflict do nothing`, followed by reading the row back.
+Before claiming, a writer of a version checks whether `agent_specs` already has
+the pair. **If it has, and there is no claim, the writer refuses with
+`fuseone:version-digest-unknown` and never adopts the digest it was given.**
+That row was written by a binary that kept no digest, so claiming the new bytes
+would record, permanently, that the old row holds them. The writer leaves the
+pair unclaimed, and C2's migration claims it `NULL`. The check is race-free:
+every writer of `agent_specs`, the previous binary's included
+(`Publisher.Publish`, `Registry.Publish`, `MakeCurrent`), runs under the event
+graph lock, and so does the check.
 
 - If the row holds the same digest, the claim stands and the writer continues.
 - If it holds a different one, the answer is 409 `fuseone:version-collision`,
@@ -568,35 +577,59 @@ knowing nothing of claims (`publisher.go:99`). Left unchecked, they could:
 So the claim is enforced **in the database**, by two triggers. They are
 installed only once every replica writes claims, which takes two releases.
 
-**Release C1, the claimers.** Its migration creates `agent_version_digests` and
-inserts `NULL` claims for every row of `agent_specs`. Its binary claims on every
-write, in all three writers. It installs no trigger. While C1 rolls out, a C0
-replica can still write an unclaimed row or make a `NULL` version current. That
-is exactly today's behaviour, it ends when C1 runs on every replica, and nothing
-in the workbench exists yet to collide with.
+**Release C1, the claimers.** Its migration does three things:
+
+- it creates `agent_version_digests`;
+- it adds the nullable `agent_specs.digest` column;
+- it inserts `NULL` claims for every row of `agent_specs`.
+
+Its binary claims on every write, in all three writers, fills the column, and
+refuses a row that exists without a claim, as above. It installs no trigger.
+While C1 rolls out, a C0 replica can still write an unclaimed row or make a
+`NULL` version current. That is exactly today's behaviour. C1 does not
+legitimize those rows: it refuses to claim them. The window ends when C1 runs on
+every replica, and nothing in the workbench exists yet to collide with.
 
 **Release C2, the enforcers**, ships only after C1 is deployed on every replica.
 Its migration does three things, in one transaction:
 
 1. **It claims the gap.** Every `agent_specs` row still without a claim gets a
-   `NULL` one. Those rows are C0 writes from C1's rollout. Their bytes were never
-   kept, so they are legacy by definition.
-2. **It refuses an unclaimed version.** A trigger `BEFORE INSERT` on
-   `agent_specs` requires a claim for `(agent_id, version_id)` whose digest is
-   not `NULL`.
+   `NULL` one. Those rows are C0 writes from C1's rollout, and their bytes were
+   never kept.
+2. **It refuses any insert that does not present a matching digest.** A trigger
+   `BEFORE INSERT` on `agent_specs` requires two things:
+   - `NEW.digest` is not `NULL`;
+   - there is a claim for `(agent_id, version_id)` whose digest equals
+     `NEW.digest`.
+
+   A C0 insert never sets the column, so it is refused **whether or not the id
+   is already claimed**. That closes C0 publishing a colliding B over a claimed
+   A. A `BEFORE INSERT` row trigger fires before `on conflict do nothing` checks
+   for the conflict. So the insert C0 believes is a harmless no-op is refused,
+   and the transaction that would have gone on to `makeCurrentOn` aborts with
+   it.
 3. **It refuses an unproven current version.** A trigger
    `BEFORE INSERT OR UPDATE OF current_version` on `agent_state` refuses a
-   `current_version` whose claim is missing or `NULL`. The trigger fires only
-   when the value changes, or on insert. The disk sync's `MakeCurrent` of the
-   version that is already current therefore still passes, and so does every
-   legacy version that is current today.
+   `current_version` whose claim is missing or `NULL`. It has two guards, and
+   it raises only when both pass:
+   - **`NEW.current_version IS NOT NULL`.** Six statements create or touch an
+     agent's state before it has a version, and all of them must keep working:
+     - `refuseStage`'s `ensure state` (`publisher.go:142`);
+     - `SetStage`, `SetPaused` and `EnsurePaused` (`state.go:95`, `:126`,
+       `:144`);
+     - retirement (`retire.go:30`).
+   - **On update, the value changes** (`NEW.current_version IS DISTINCT FROM
+     OLD.current_version`). The disk sync's `MakeCurrent` of the version that is
+     already current therefore still passes, and so does every legacy version
+     that is current today.
 
-Because C2's migration runs while C1 replicas serve, and C1 already claims, the
-triggers refuse nothing C1 does legitimately. They refuse exactly the C0 paths
-listed above.
+Because C2's migration runs while C1 replicas serve, and C1 presents its
+digests, the triggers refuse nothing C1 does legitimately. They refuse every
+`agent_specs` insert C0 can make, and every C0 move of the current version to a
+version without a proven digest.
 
 **Rollback floor.** Once C2's migration has run, rolling back below C1 is not
-supported. C0's publications would be refused by the trigger. That fails closed,
+supported. Every C0 publication would be refused by the trigger. That fails closed,
 with no wrong row written, but publishing stops until C1 is back. Rolling back
 from C2 to C1 is safe, because C1 claims. The release notes of C2 state the
 floor.
@@ -620,8 +653,11 @@ bytes, so the full digest has to be carried, not recomputed:
   does not begin with the hex in `Version`. A `Spec` built by hand or
   reconstructed from a row cannot publish. It fails closed instead of claiming a
   digest of bytes that never existed.
-- `agent_specs` keeps no digest of its own. The claim table is the record, so
-  two copies cannot disagree.
+- `agent_specs` gains a `digest` column, which the writer fills from
+  `Spec.Digest` on insert. It is not a second record: the claim is the record,
+  and C2's trigger requires the column to **equal** the claim. The column is how
+  an insert *presents* its digest to the database, which is what lets the
+  database tell a writer that knows the bytes from one that does not.
 
 ### Lock order
 
@@ -933,7 +969,7 @@ new route `/agents/:agentId/workbench`. The form editor stays where it is.
 
 | # | Phase | Ships |
 |---|---|---|
-| C1, C2 | Claims, then their triggers | C1: `agent_version_digests`, `NULL` backfill, `Spec.Digest`, every writer claims, the disk sync skips `NULL` claims. C2, after C1 is on every replica: claim the gap, the two triggers, and the rollback floor stated in the release notes. Phase 2 ships in C2 or later. |
+| C1, C2 | Claims, then their triggers | C1: `agent_version_digests`, `agent_specs.digest`, `NULL` backfill, `Spec.Digest`. Every writer claims and presents its digest, and refuses a row that exists unclaimed. The disk sync skips `NULL` claims. C2, after C1 is on every replica: claim the gap, then two triggers. One requires every insert to present a digest equal to its claim. The other refuses a non-`NULL` current version without a proven claim. The rollback floor goes in the release notes. Phase 2 ships in C2 or later. |
 | 0 | Close the doors | `DecideApproval` refuses simulated runs. `HasSimulation`, `Batteries` and `LastBatteryAt` exclude `rehearsal`, in Postgres and in memory. This must be released and deployed on every replica before phase 4 ships. |
 | 1 | Server draft and operations | Draft table, operations with validation, policy card, trail, ETag. Workbench with the draft panel and hand editing. |
 | 2 | Candidates | Insert-only `agent_seals` holding metadata, the sealed scope and provenance, with the full specification bytes in the content store. Every door authorizes against the sealed scope. The `Opener` fences candidates. Activation runs the eight steps in the publication's lock order, with one fence acquisition per request. A first version activates with `If-None-Match: *`. Unreadable candidates fail closed, at opening and at each turn. |
@@ -1093,13 +1129,32 @@ Each is written red first. Each sabotage uses the value the bug would accept.
   that test must fail and the first must still pass.
 - **The previous binary's SQL is refused after C2's migration.** The test runs
   that migration, then runs C0's exact statements against the database:
-  - `publishOn`'s `insert … on conflict do nothing` with no claim;
+  - `publishOn`'s `insert … on conflict do nothing`, with no claim;
+  - the same insert of a colliding B over an A **whose claim is not `NULL`**. It
+    is refused before the conflict is checked, and the `makeCurrentOn` that
+    follows in C0's transaction never runs;
   - `makeCurrentOn` onto a version whose claim is `NULL`;
   - `makeCurrentOn` onto a version with no claim.
 
-  All three are refused by the triggers. `makeCurrentOn` of the version that is
-  already current still passes, and so does C1's claim-then-insert. Sabotage:
-  drop either trigger; the test must name the statement that got through.
+  All of these are refused. Two things still pass: `makeCurrentOn` of the
+  version that is already current, and C1's claim, then insert with the digest.
+  Sabotage: drop either trigger, then drop the `NEW.digest` equality; the test
+  must name the statement that got through.
+- **C1 never adopts a C0 row.** C0 publishes A without a claim. C1 then
+  publishes B with the same `version_id`. C1 answers
+  `fuseone:version-digest-unknown`, no claim exists for the pair, and C2's
+  migration claims it `NULL`. Sabotage: claim before checking `agent_specs`; the
+  test must find B's digest claimed over A's row.
+- **State without a version is still allowed after C2.** Each of these succeeds
+  on an agent with no published version:
+  - pausing it;
+  - setting its stage;
+  - ensuring it is paused;
+  - retiring it;
+  - `refuseStage`'s state row.
+
+  Sabotage: drop the `IS NOT NULL` guard; the test must name the statement
+  refused.
 - C2's migration claims an `agent_specs` row written without a claim, with
   `NULL`, before it installs the triggers.
 
