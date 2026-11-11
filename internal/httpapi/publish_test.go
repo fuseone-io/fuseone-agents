@@ -42,6 +42,9 @@ type publisher struct {
 	queued atomic.Int32
 	// afterJudging, when set, runs between the judgement and the write.
 	afterJudging func(domain.AgentID)
+	// claim, when set, is what claiming the version answers: a collision, or an
+	// id published before digests were kept (NT-018).
+	claim error
 }
 
 // newPublisher is a fake publisher whose agents are currently at these
@@ -60,6 +63,13 @@ func (p *publisher) Publish(_ context.Context, pub spec.Publication) (spec.Publi
 	p.queued.Add(-1)
 	defer p.mu.Unlock()
 
+	// What the claim refuses, before anything is judged, as spec.Publisher does.
+	if want := "v" + safePrefix(pub.Spec.Digest); len(pub.Spec.Digest) != 64 || string(pub.Spec.Version) != want {
+		return spec.Published{}, fmt.Errorf("%w: %s@%s", spec.ErrDigestMissing, pub.Spec.ID, pub.Spec.Version)
+	}
+	if p.claim != nil {
+		return spec.Published{}, p.claim
+	}
 	p.refused = append(p.refused, pub.RefuseStages)
 	for _, refused := range pub.RefuseStages {
 		if refused == p.stage {
@@ -75,6 +85,13 @@ func (p *publisher) Publish(_ context.Context, pub spec.Publication) (spec.Publi
 	p.current = append(p.current, pub.Spec.Version)
 	p.latest[pub.Spec.ID] = pub.Spec
 	return judged, nil
+}
+
+func safePrefix(digest string) string {
+	if len(digest) < 12 {
+		return digest
+	}
+	return digest[:12]
 }
 
 // waiting is how many publications are queued for the graph's lock.

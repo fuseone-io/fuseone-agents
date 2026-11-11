@@ -7139,9 +7139,17 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             /**
-             * @description The agent stands at the stage `refuseIfStage` named, so nothing was
-             *     written: no version, and the current version unchanged. Problem
-             *     type `fuseone:stage-refused`.
+             * @description Nothing was written: no version, and the current version unchanged.
+             *     The problem type says why:
+             *
+             *     - `fuseone:stage-refused`: the agent stands at the stage
+             *       `refuseIfStage` named.
+             *     - `fuseone:version-collision`: the version id this definition gets
+             *       already names other bytes. The id is 48 bits of the digest;
+             *       changing the definition gives another one.
+             *     - `fuseone:version-digest-unknown`: the version id was published
+             *       before digests were kept, so nothing can show the bytes are the
+             *       same. Changing the definition gives another id.
              */
             409: {
                 headers: {
