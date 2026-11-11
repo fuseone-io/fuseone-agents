@@ -188,6 +188,17 @@ func TestResolveJudge_anythingThatDoesNotMatchItsOpening_isRefused(t *testing.T)
 	}
 }
 
+// finishing is a judge's proposal as an adapter hands it over: the finish call's arguments
+// exactly as the provider sent them.
+func finishing(t *testing.T, fields map[string]any) engine.Proposal {
+	t.Helper()
+	args, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return engine.Proposal{Done: true, Verbatim: engine.Verbatim{FinishArgs: args}}
+}
+
 // The closer is the closed parser and the sealed objects: a value of the declared shape
 // is a judgment, anything else a failed one, and nothing it stores has a length or a
 // digest that tells the values apart.
@@ -200,7 +211,7 @@ func TestResolveJudge_theCloser_sealsOnlyAClosedAnswer(t *testing.T) {
 	}
 	closer := resolved.Start.Closer
 
-	got := closer.Close(engine.Proposal{Done: true, Outcome: "B"})
+	got := closer.Close(finishing(t, map[string]any{"summary": "B"}))
 	code, passes, err := judge.OpenJudgment(got.Judgment)
 	if err != nil || code != 'B' || passes || got.Reason != domain.RunFinishedByFinishTool ||
 		len(got.Outcome) != judge.AnswerSize {
@@ -208,26 +219,108 @@ func TestResolveJudge_theCloser_sealsOnlyAClosedAnswer(t *testing.T) {
 			code, passes, err, got.Reason, len(got.Outcome))
 	}
 	for name, p := range map[string]engine.Proposal{
-		"a space":        {Done: true, Outcome: "B "},
-		"a reason":       {Done: true, Outcome: "B\nrisky"},
-		"the value":      {Done: true, Outcome: "high_risk"},
-		"a headline":     {Done: true, Outcome: "B", Headline: "risky"},
-		"an artifact":    {Done: true, Outcome: "B", Artifacts: map[string]string{"n": "x"}},
-		"a stop":         {Done: true, Outcome: "B", StoppedBy: "x"},
+		"a space":        finishing(t, map[string]any{"summary": "B "}),
+		"a reason":       finishing(t, map[string]any{"summary": "B\nrisky"}),
+		"the value":      finishing(t, map[string]any{"summary": "high_risk"}),
+		"a headline":     finishing(t, map[string]any{"summary": "B", "headline": "risky"}),
+		"an artifact":    finishing(t, map[string]any{"summary": "B", "artifacts": map[string]string{"n": "x"}}),
+		"a stop":         finishing(t, map[string]any{"summary": "B", "stopped_by": "x"}),
 		"no answer":      {Done: true},
-		"an undeclared":  {Done: true, Outcome: "C"},
-		"a lowercase":    {Done: true, Outcome: "b"},
-		"two codes":      {Done: true, Outcome: "AB"},
-		"a quoted code":  {Done: true, Outcome: `"B"`},
-		"a leading line": {Done: true, Outcome: "\nB"},
+		"no finish call": {Done: true, Outcome: "B", Verbatim: engine.Verbatim{Text: "B"}},
+		"an undeclared":  finishing(t, map[string]any{"summary": "C"}),
+		"a lowercase":    finishing(t, map[string]any{"summary": "b"}),
+		"two codes":      finishing(t, map[string]any{"summary": "AB"}),
+		"a quoted code":  finishing(t, map[string]any{"summary": `"B"`}),
+		"a leading line": finishing(t, map[string]any{"summary": "\nB"}),
+		// What an adapter normalised: the closer must not read Outcome at all.
+		"only the normalised field": {Done: true, Outcome: "B"},
 	} {
 		c := closer.Close(p)
 		if c.Judgment != nil || c.Reason != domain.RunFinishedJudgeUnparseable {
 			t.Errorf("%s: closing = judgment %v reason %s, want a failed judgment", name, c.Judgment != nil, c.Reason)
 		}
 	}
-	over := closer.Close(engine.Proposal{Done: true, Outcome: strings.Repeat("x", judge.AnswerSize)})
+	over := closer.Close(finishing(t, map[string]any{"summary": strings.Repeat("x", judge.AnswerSize)}))
 	if over.Outcome != nil || over.Judgment != nil || over.Reason != domain.RunFinishedJudgeOversized {
 		t.Errorf("oversized closing = %+v, want nothing stored and judge_oversized", over.Reason)
+	}
+}
+
+// answeringServer finishes every call with these finish arguments, and this text beside them.
+func answeringServer(t *testing.T, args, text string) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		message := map[string]any{"role": "assistant", "tool_calls": []map[string]any{{
+			"id": "call_finish", "type": "function",
+			"function": map[string]any{"name": "_fuseone__finish", "arguments": args},
+		}}}
+		if text != "" {
+			message["content"] = text
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"finish_reason": "tool_calls", "message": message}},
+			"usage":   map[string]any{"prompt_tokens": 10, "completion_tokens": 1},
+		})
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+/*
+The closed parser reads what the provider returned, not what the adapter made of it.
+
+The model adapter trims a finish call's summary and its stopping condition, and cleans
+its headline and artifacts, for every other run. A judge's answer is read before any of
+that: "B " is a space, and a headline of spaces is a headline. Driven through the real
+OpenAI-compatible adapter, from the provider's bytes to the closer.
+*/
+func TestResolveJudge_throughTheRealAdapter_theCloserReadsTheAnswerVerbatim(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name, args, text string
+		want             byte
+	}{
+		{"the code alone", `{"summary":"B"}`, "", 'B'},
+		{"a trailing space", `{"summary":"B "}`, "", 0},
+		{"a leading newline", `{"summary":"\nB"}`, "", 0},
+		{"a headline of spaces", `{"summary":"B","headline":"   "}`, "", 0},
+		{"an empty headline", `{"summary":"B","headline":""}`, "", 0},
+		{"a stop of spaces", `{"summary":"B","stopped_by":" "}`, "", 0},
+		{"empty artifacts", `{"summary":"B","artifacts":{}}`, "", 0},
+		{"an unknown field", `{"summary":"B","why":"x"}`, "", 0},
+		{"text beside the call", `{"summary":"B"}`, " ", 0},
+		{"a summary that is not text", `{"summary":["B"]}`, "", 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			f := newJudgeFixture(t)
+			registry := model.NewRegistry(nil)
+			if err := registry.Register(model.Provider{
+				Name: "judging", Kind: model.KindOpenAICompatible, BaseURL: answeringServer(t, c.args, c.text), APIKey: "k",
+			}); err != nil {
+				t.Fatalf("Register: %v", err)
+			}
+			_, resolver := resolveLocal(t, registry, experimentDefinition)
+			resolved, err := resolver.Judges(f.content).ResolveJudge(context.Background(), "run-judge", f.started)
+			if err != nil {
+				t.Fatalf("ResolveJudge: %v", err)
+			}
+			proposal, err := resolved.Planner.Plan(context.Background(), engine.PlanInput{Budget: domain.Budget{Micros: 25_000}})
+			if err != nil {
+				t.Fatalf("Plan: %v", err)
+			}
+			closing := resolved.Start.Closer.Close(proposal)
+			if c.want == 0 {
+				if closing.Judgment != nil || closing.Reason != domain.RunFinishedJudgeUnparseable {
+					t.Errorf("closing = judgment %v reason %s, want a failed judgment", closing.Judgment != nil, closing.Reason)
+				}
+				return
+			}
+			code, _, err := judge.OpenJudgment(closing.Judgment)
+			if err != nil || code != c.want {
+				t.Errorf("verdict = %c (%v), want %c", code, err, c.want)
+			}
+		})
 	}
 }

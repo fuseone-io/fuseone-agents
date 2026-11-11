@@ -120,7 +120,7 @@ func (o *OpenAICompatible) proposalFrom(
 		call := c.Message.ToolCalls[0]
 		tool := offered.idOf(call.Function.Name)
 		if isFinishTool(tool) {
-			return finishProposal([]byte(call.Function.Arguments), p)
+			return finishProposal([]byte(call.Function.Arguments), p, c.Message.Content)
 		}
 		p.Tool = tool
 		// Arguments arrive as a JSON *string* here, unlike Anthropic's object.

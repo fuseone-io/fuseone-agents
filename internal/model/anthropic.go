@@ -358,7 +358,7 @@ func (a *Anthropic) proposalFrom(
 		case anthropic.ToolUseBlock:
 			tool := offered.idOf(variant.Name)
 			if isFinishTool(tool) {
-				return finishProposal([]byte(variant.JSON.Input.Raw()), p)
+				return finishProposal([]byte(variant.JSON.Input.Raw()), p, allText(resp))
 			}
 			p.Tool = tool
 			// Input is raw JSON; never string-match it. Escaping of Unicode
