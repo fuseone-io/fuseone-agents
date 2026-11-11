@@ -48,9 +48,13 @@ field" is a commit message.
     run's salt. The pack is empty, the ceiling is the judgment's, and the pair is the judge's.
   - **What is checked first.** Every object the opening names is checked against its digest
     before any of it is sent. That covers the rubric, the salt and the copy of the output.
-  - **What counts as an answer.** The judge answers with a fixed-width option code. With the
-    reason off, anything beyond the code is a failed judgment (`judge_unparseable`), never
-    trimmed and never cut to a valid prefix. So is a headline, an artifact, or a tool asked for.
+  - **What counts as an answer.** The judge answers with a fixed-width option code. It is
+    read from the finish call as the provider returned it, before the model adapter trims a
+    summary or drops an empty headline. With the reason off, anything beyond the code is a
+    failed judgment (`judge_unparseable`), never trimmed and never cut to a valid prefix. So
+    is any other key in the call, empty or of spaces, text beside it, or a tool asked for.
+  - **What a rubric may declare.** A field's presence is what was declared, so a zero
+    counts as a value. Scores stay within ±1000, so no range can overflow or wrap.
   - **What is stored.** The judgment and the answer as written are stored salted, at one fixed
     size each, and nothing else of the judge's is stored. An answer over the size is
     `judge_oversized`, never truncated.
