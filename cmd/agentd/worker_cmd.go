@@ -124,11 +124,11 @@ func (p *workerParts) loadAndPublish(ctx context.Context, dir string) (*spec.Res
 		return specs, nil
 	}
 
-	published, err := publishSpecs(ctx, p.registry, dir)
+	published, skipped, err := publishSpecs(ctx, p.registry, dir)
 	if err != nil {
 		return nil, err
 	}
-	slog.Info("agent versions published", "count", published, "dir", dir)
+	slog.Info("agent versions published", "count", published, "skipped", skipped, "dir", dir)
 
 	// An agent nobody has decided about is recorded as paused. Loading a file
 	// never starts anything.

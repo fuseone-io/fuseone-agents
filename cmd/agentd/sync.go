@@ -123,35 +123,45 @@ func syncRulings(ctx context.Context, catalog *tools.Catalog, curator *admin.Cur
 // The worker is where definitions are read today; the Studio will write them
 // directly later (PRD DE-07). Either way the registry is what the rest of the
 // installation reads, so the two never disagree about what is published.
-func publishSpecs(ctx context.Context, registry *spec.Registry, dir string) (int, error) {
+func publishSpecs(ctx context.Context, registry *spec.Registry, dir string) (published, skipped int, err error) {
 	store := spec.NewStore()
 	if _, err := store.LoadDir(ctx, specsRoot(dir), specsPath(dir)); err != nil {
-		return 0, fmt.Errorf("load agent definitions from %s: %w", dir, err)
+		return 0, 0, fmt.Errorf("load agent definitions from %s: %w", dir, err)
 	}
 
-	published := 0
 	for _, agent := range store.Agents() {
 		for _, version := range store.Versions(agent) {
 			s, err := store.Get(agent, version)
 			if err != nil {
-				return published, err
+				return published, skipped, err
 			}
 			// The company is the installation's single one until phase 2
 			// (PRD §3.1); the area comes from the definition itself.
-			if err := registry.Publish(ctx, s, "worker", auth.BootstrapScope.Company); err != nil {
-				return published, err
+			err = registry.Publish(ctx, s, "worker", auth.BootstrapScope.Company)
+			if errors.Is(err, spec.ErrDigestUnknown) {
+				// Published before digests were kept, so these bytes cannot be
+				// shown to be the row's (NT-018). The row stays as it is, and
+				// current if it was; the file needs a change to get an id of its
+				// own. Not a reason to keep every other agent from starting.
+				slog.Warn("agent version skipped: published without a digest",
+					"agent", s.ID, "version", s.Version)
+				skipped++
+				continue
+			}
+			if err != nil {
+				return published, skipped, err
 			}
 			// What this worker holds is what the installation runs. Without
 			// saying so, a version published once and then withdrawn from
 			// disk stays the newest by timestamp for ever, and every new run
 			// pins to a specification nobody holds (PRD DE-08).
 			if err := registry.MakeCurrent(ctx, s.ID, s.Version); err != nil {
-				return published, err
+				return published, skipped, err
 			}
 			published++
 		}
 	}
-	return published, nil
+	return published, skipped, nil
 }
 
 // loadSpecs publishes the agent definitions on disk and wires the resolver to
