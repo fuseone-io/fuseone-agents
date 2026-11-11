@@ -23,6 +23,12 @@ export interface Me {
    * specific resource is known.
    */
   can: string[];
+  /**
+   * Permissions the caller holds at the platform's administration scope. A
+   * screen the server serves only there, such as the integrations or the
+   * administrative trail, needs its permission here and not just in can.
+   */
+  platform?: string[];
 }
 
 export const sessionKeys = { me: ["session", "me"] as const };

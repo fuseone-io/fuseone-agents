@@ -18,6 +18,16 @@ describe("administration tabs", () => {
     ).toEqual(["identity", "people", "serviceAccounts"]);
   });
 
+  it("hides the platform's trail from an area administrator, whose audit:read is the area's", () => {
+    // The administrative trail is read at the platform's scope only.
+    expect(
+      visibleAdminTabs(["audit:read", "scope:write"], []).map((tab) => tab.value),
+    ).toEqual(["areas"]);
+    expect(
+      visibleAdminTabs(["audit:read"], ["audit:read"]).map((tab) => tab.value),
+    ).toEqual(["events"]);
+  });
+
   it("keeps an unknown session different from an open installation", () => {
     expect(visibleAdminTabs(undefined).map((tab) => tab.value)).toEqual([]);
     expect(visibleAdminTabs(null).map((tab) => tab.value)).toEqual([

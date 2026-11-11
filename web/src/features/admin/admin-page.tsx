@@ -49,7 +49,7 @@ export function AdminPage() {
   const { data: me } = useMe();
   const tab = useTab("admin", "tools");
   const can = me === null ? null : me?.can;
-  const visibleGroups = visibleAdminTabGroups(can);
+  const visibleGroups = visibleAdminTabGroups(can, me?.platform);
   const visibleTabs = visibleGroups.flatMap((group) => group.tabs);
   const active =
     visibleTabs.find((item) => item.value === tab.value) ?? visibleTabs[0];

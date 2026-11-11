@@ -33,6 +33,13 @@ export interface NavItem {
    * permission teaches people that the console offers acts they cannot take.
    */
   anyPermission?: string[];
+  /**
+   * A permission the item needs at the platform's administration scope, not
+   * just somewhere. For a screen the server only serves there, such as the
+   * integrations: an administrator of one area holds tool:read in that area,
+   * and every request the screen makes would answer 403.
+   */
+  platformPermission?: string;
 }
 
 export interface NavGroup {
@@ -110,6 +117,7 @@ export const NAV: NavGroup[] = [
         label: "nav.integrations",
         icon: Plug,
         permission: "tool:read",
+        platformPermission: "tool:read",
       },
       { to: "/manual", label: "nav.manual", icon: BookOpen },
       {
@@ -136,10 +144,19 @@ export const NAV: NavGroup[] = [
 export function navItemVisible(
   item: NavItem,
   can: string[] | null | undefined,
+  // Absent from a server that predates it, which then answers for can alone.
+  platform?: string[],
 ): boolean {
   if (can === null) return true;
   if (can === undefined) return !item.permission && !item.anyPermission;
   if (item.permission && !can.includes(item.permission)) return false;
+  if (
+    item.platformPermission &&
+    platform &&
+    !platform.includes(item.platformPermission)
+  ) {
+    return false;
+  }
   if (item.anyPermission) {
     return item.anyPermission.some((permission) => can.includes(permission));
   }

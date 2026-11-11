@@ -8,6 +8,9 @@ export const ADMIN_TAB_ACCESS = [
     value: "events",
     label: "admin.trail",
     permission: "audit:read",
+    // Read at the platform's scope only. An area's audit:read reads that
+    // area's runs, on the audit screen, and never this trail.
+    platform: true,
   },
   {
     value: "branding",
@@ -100,16 +103,28 @@ const ADMIN_TABS_BY_VALUE = ADMIN_TAB_ACCESS.reduce(
   {} as Record<AdminTabValue, AdminTab>,
 );
 
-export function visibleAdminTabs(can: string[] | null | undefined): AdminTab[] {
+export function visibleAdminTabs(
+  can: string[] | null | undefined,
+  // What the caller holds at the platform's scope. Absent from a server that
+  // predates it, which then answers for can alone.
+  platform?: string[],
+): AdminTab[] {
   if (can === null) return [...ADMIN_TAB_ACCESS];
   if (can === undefined) return [];
-  return ADMIN_TAB_ACCESS.filter((item) => can.includes(item.permission));
+  return ADMIN_TAB_ACCESS.filter(
+    (item) =>
+      can.includes(item.permission) &&
+      (!("platform" in item) || !platform || platform.includes(item.permission)),
+  );
 }
 
 export function visibleAdminTabGroups(
   can: string[] | null | undefined,
+  platform?: string[],
 ): Array<{ label: string; tabs: AdminTab[] }> {
-  const visible = new Set(visibleAdminTabs(can).map((tab) => tab.value));
+  const visible = new Set(
+    visibleAdminTabs(can, platform).map((tab) => tab.value),
+  );
 
   return ADMIN_TAB_GROUPS.map((group) => ({
     label: group.label,
