@@ -453,19 +453,22 @@ lock was read before it.
 10. **The definition.** Still under the event graph lock, which no
     publication can pass, decide which row defines the version and load it in
     full. Every later step judges this definition and nothing else.
-    - **Already published.** `agent_specs` has the version, and its full
-      digest equals every seal's full digest for that `version_id` (see
-      [the full digest](#the-full-digest)). The definition is the published
-      row. No seal is read, and none has to be readable, so an expired or
+    Read the version's claim first (see [the full digest](#the-full-digest)).
+    A `NULL` claim answers 409 `fuseone:version-digest-unknown`.
+    - **Already published.** `agent_specs` has the version. The claim proves its
+      bytes are the bytes every seal of this `version_id` sealed. The
+      definition is the published row. No seal is read, and none has to be readable, so an expired or
       erased seal does not block activating a version that is already
       published.
     - **Still a candidate.** Only `agent_seals` has the version. Read a seal's
       bytes. If no seal is readable, the answer is 409
       `fuseone:candidate-unreadable`. Check that the full SHA-256 of the bytes
-      equals the seal's recorded digest, then parse them. The parsed
+      equals the claim, then parse them. The parsed
       definition is the candidate.
-    - **Different digests under one `version_id`.** The answer is 409
-      `fuseone:version-collision`, and nothing is written.
+    - **A seal whose bytes do not match the claim.** The answer is 409
+      `fuseone:version-collision`, and nothing is written. Claims make this
+      unreachable through any writer; the check is there for a row written
+      around them.
 11. **The named resources**, `FOR SHARE`, in ascending order of id, as the
     definition from step 10 names them. Each one must still exist: tools,
     provider, connector instances, area. This is the fence NT-017 specifies for
@@ -478,35 +481,93 @@ lock was read before it.
 13. **The checklist.** The definition's `never` block must be answered (see
     [the checklist](#3-the-seven-questions-become-a-checklist)).
 14. **The write.** On the published path, make the row current. On the
-    candidate path, insert the `agent_specs` row from the bytes, with their full
-    digest, and make it current. Record the activation's provenance either
+    candidate path, insert the `agent_specs` row from the bytes and make it
+    current. The claim already exists, because the seal wrote it. Record the activation's provenance either
     way.
 
 ### The full digest
 
 `version_id` is not proof that two definitions are the same. It holds 12 hex
-digits of the SHA-256 (`spec.go:283`), which is 48 bits. The choice in step 10
-decides which definition goes live, under which scope, and whether it is the
-one the experiment ran. So that choice compares the **full** SHA-256 of the
-bytes, never the id:
+digits of the SHA-256 (`spec.go:286`), which is 48 bits. Which definition goes
+live, under which scope, and whether it is the one an experiment ran, all hang
+on that identity. So every writer compares the **full** SHA-256 of the original
+bytes, and the comparison is atomic across writers.
 
-- `agent_seals` records the full digest of the bytes it seals;
-- `agent_specs` gains a nullable `digest` column, which every publication
-  writes from now on. Ordinary publication included;
-- **sealing** refuses a draft whose `version_id` is already taken. If the
-  published row's full digest differs from the draft's, the answer is
-  `fuseone:version-collision`. If it is equal, no seal is written and the
-  workbench uses the published version;
-- **a published row from before the column** has no digest. A seal can never
-  prove it matches such a row, so sealing a draft with that `version_id`, and
-  activating it, answer `fuseone:version-digest-unknown`. That version can
-  still go live by an ordinary publication of the same definition
-  (`PUT /agents/{agentId}/versions`). Publishing is insert-or-nothing, so the
-  existing row is kept and made current, through the ordinary publication's own
-  checks and with no seal.
+#### One claim per identity
 
-The precedence of `agent_specs` in step 10 applies only once the digests have
-been shown equal.
+A new insert-only table, `agent_version_digests`, maps
+`(agent_id, version_id)` to the full digest, keyed on that pair. It is the
+**only** record of which bytes a `version_id` names. Every writer that creates
+an identity claims it first, in its own transaction, before judging anything:
+
+- `Publisher.Publish`: console, API and Terraform;
+- `Registry.Publish`, which the disk sync calls directly (`cmd/agentd/sync.go`);
+- sealing.
+
+A claim is `insert … on conflict do nothing`, followed by reading the row back.
+
+- If the row holds the same digest, the claim stands and the writer continues.
+- If it holds a different one, the answer is 409 `fuseone:version-collision`,
+  before any judgment and before any other write.
+
+The primary key is what makes this atomic. Two transactions claiming the same
+pair with different digests cannot both succeed: the second waits on the first's
+uncommitted row, then either finds the committed digest, or finds no row if the
+first rolled back, and inserts its own. There is no window where a seal A and a
+publication B both see "no conflict". The claim is written in the same
+transaction as the version or the seal, so a rolled-back publication leaves no
+claim behind.
+
+The claim adds no lock cycle. Publication takes it after the event graph lock,
+and sealing takes no other lock. Activation reads the claim in step 10, which
+the seal already wrote.
+
+So the precedence in step 10 only ever chooses between rows that **share one
+digest**. A collision is refused where it would have been created, not
+discovered at activation after B is already live.
+
+#### Versions published before the table
+
+A migration inserts a claim for every existing row of `agent_specs` with
+digest `NULL`, because its original bytes were never kept and serializing the
+row would not recover them. A claim whose digest is `NULL` cannot be matched by
+anything.
+
+**Decided by Kleber on 2026-11-11:** a publication or a seal whose `version_id`
+lands on a `NULL` claim is refused with 409 `fuseone:version-digest-unknown`.
+The way forward is to change the definition. Any change gives another id.
+
+This is a change in behaviour. Today, republishing identical bytes of an old
+version makes it current again (`publishOn` is `on conflict do nothing`,
+`registry.go:130`, followed by `makeCurrentOn`). For versions published before
+the table, that stops working. It cannot stay: `p.judge` would judge the
+definition being published, the insert would keep the old row, and
+`MakeCurrent` would activate a definition nobody judged.
+
+**The disk sync** republishes every version on disk at each boot. A version
+whose claim is `NULL` is refused there too. The sync **reports it and skips it**
+(a log line naming agent and version, and a counter) instead of failing the boot.
+The version stays in `agent_specs` as it was, and stays current if it is.
+Rewriting the file, which gives a new id, is how it gets a digest.
+
+#### The digest travels from the bytes, never from a `Spec`
+
+`Parse` computes the SHA-256 and keeps only 48 bits of it in `Spec.Version`
+(`spec.go:165`). The HTTP route renders the definition to bytes and parses them
+(`httpapi/publish.go:339`). The disk store parses each file (`spec/store.go:143`).
+Both then hand on only the `Spec`. Re-serializing a `Spec` does not recover the
+bytes, so the full digest has to be carried, not recomputed:
+
+- `Spec` gains `Digest`, the full hex SHA-256 of the bytes `Parse` was given.
+  **Only `Parse` sets it.**
+- `Publication` carries the `Spec` and with it the `Digest`. So do
+  `Store.Get` and the seal path.
+- `Registry.Publish` and `publishOn` refuse a `Spec` whose `Digest` is empty, or
+  does not begin with the hex in `Version`. A `Spec` built by hand or
+  reconstructed from a row cannot publish. It fails closed instead of claiming a
+  digest of bytes that never existed.
+- `agent_specs` keeps no digest of its own. The claim table is the record, so
+  two copies cannot disagree.
 
 ### Lock order
 
@@ -945,7 +1006,7 @@ Each is written red first. Each sabotage uses the value the bug would accept.
 - An experiment's first attempt is interrupted after opening some runs on seal
   A. A sibling seal B is then written, and the experiment is retried. Every run
   of the experiment names seal A. If A is erased before the retry, the retry
-  answers 200 from the ledger, opens zero runs, and opens nothing on B. A first
+  answers 202 from the ledger, as `POST /experiments` always does, opens zero runs, and opens nothing on B. A first
   attempt with no runs and an unreadable seal is refused.
 - Activation loads the definition before it locks resources or judges. The test
   seals a candidate whose resources, `emits` and `never` block differ from the
@@ -953,10 +1014,25 @@ Each is written red first. Each sabotage uses the value the bug would accept.
   judge the current version; the test must name the step.
 - A `version_id` shared by two different full digests answers
   `fuseone:version-collision` at sealing and at activation, and nothing is
-  written. The test forges the collision by inserting rows directly.
-- A seal matching a published row that has no `digest` answers
-  `fuseone:version-digest-unknown`. An ordinary publication of the same
-  definition still makes that row current.
+  written. The test forges the collision by inserting a seal row around the
+  claim.
+- A seal, an ordinary publication and a disk sync landing on a `NULL` claim each
+  answer `fuseone:version-digest-unknown`. The sync reports it and boots. No
+  path makes the old row current through a new publication.
+- A seal A and an ordinary publication B with the same `version_id` and
+  different digests, run concurrently with `testdb.NewContention` in both
+  orders. Exactly one claim exists afterwards, and the other writer answered
+  `fuseone:version-collision` having written nothing. Sabotage: check for a
+  conflict with a `select` instead of claiming; the test must find two digests
+  live.
+- An ordinary publication whose `version_id` is taken by a different digest is
+  refused before `p.judge` runs. Sabotage: claim after the judgment; the test
+  must see the judgment of B reported.
+- The digest recorded for a publication is the SHA-256 of the original bytes,
+  on the HTTP path and on the disk path. Each test uses bytes that do not
+  survive re-serialization, such as CRLF line endings and key order. Sabotage:
+  recompute the digest from a re-serialized `Spec`; the test must name the path.
+- `Registry.Publish` refuses a `Spec` with no `Digest`.
 
 - `seal_id` and `authoring_thread` are written with `run_started` or not at all.
   The test makes the append fail after the step's insert and before the
