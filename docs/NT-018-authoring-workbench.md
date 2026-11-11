@@ -334,9 +334,9 @@ today resolve without any update:
 
 | Case | Result |
 |---|---|
-| The draft's digest is already published | No seal is written. The workbench rehearses, experiments on and activates that published version. Activation takes the already-published path of step 13. |
+| The draft's digest is already published | No seal is written. The workbench rehearses, experiments on and activates that published version. Activation takes the already-published path of step 10. |
 | Two authors seal the same digest | Two seals, one candidate. The trail records both. |
-| An ordinary publication of the same digest while a candidate exists | `agent_specs` gains the row, and from then on the version is published. Its seals stay as history. Activation takes the already-published path of step 13, even if every seal has since expired. |
+| An ordinary publication of the same digest while a candidate exists | `agent_specs` gains the row, and from then on the version is published. Its seals stay as history. Activation takes the already-published path of step 10, even if every seal has since expired. |
 | The candidate's text aged out or was erased | Re-sealing from the draft writes a **new** seal, with a new content reference. Nothing is restored over a tombstone. |
 
 That last row matters. `Content.RestoreFor` clears any tombstone, including
@@ -423,8 +423,9 @@ lock was read before it.
    version's company and area, or the seal's. Check `agent:publish` on that
    scope. If neither row exists, or the caller lacks the permission, the answer
    is 404. A caller who passes this step has been allowed to know the version
-   exists. The two lookups cannot disagree about scope: the same `version_id`
-   means the same bytes, and the bytes carry company and area.
+   exists. If the version is in both tables, the caller must hold
+   `agent:publish` on both rows' scopes, or the answer is 404. Which row
+   *defines* the version is decided only in step 10, by full digest.
 
 **Under the locks**, acquired in the one order every writer uses:
 
@@ -449,34 +450,68 @@ lock was read before it.
 8. **The scope move.** If the sealed scope differs from the current one, the
    answer is 409 `fuseone:candidate-scope-moved`.
 9. **The stage.** `refuseStage` with `autonomous`, on the row already locked.
-10. **The named resources**, `FOR SHARE`, in ascending order of id. Each one
-    the candidate names must still exist: tools, provider, connector instances,
-    area. This is the fence NT-017 specifies for publishing (in review, #321).
+10. **The definition.** Still under the event graph lock, which no
+    publication can pass, decide which row defines the version and load it in
+    full. Every later step judges this definition and nothing else.
+    - **Already published.** `agent_specs` has the version, and its full
+      digest equals every seal's full digest for that `version_id` (see
+      [the full digest](#the-full-digest)). The definition is the published
+      row. No seal is read, and none has to be readable, so an expired or
+      erased seal does not block activating a version that is already
+      published.
+    - **Still a candidate.** Only `agent_seals` has the version. Read a seal's
+      bytes. If no seal is readable, the answer is 409
+      `fuseone:candidate-unreadable`. Check that the full SHA-256 of the bytes
+      equals the seal's recorded digest, then parse them. The parsed
+      definition is the candidate.
+    - **Different digests under one `version_id`.** The answer is 409
+      `fuseone:version-collision`, and nothing is written.
+11. **The named resources**, `FOR SHARE`, in ascending order of id, as the
+    definition from step 10 names them. Each one must still exist: tools,
+    provider, connector instances, area. This is the fence NT-017 specifies for
+    publishing (in review, #321).
 
 **With nothing left to acquire:**
 
-11. **The graph.** `p.judge` again, against the graph as it is now.
-12. **The checklist.** The `never` block must be answered (see
+12. **The graph.** `p.judge` on the definition from step 10, against the graph
+    as it is now, its `emits` included.
+13. **The checklist.** The definition's `never` block must be answered (see
     [the checklist](#3-the-seven-questions-become-a-checklist)).
-13. **The version.** Under the event graph lock, check `agent_specs` again,
-    because a publication can only have happened before step 4. There are two
-    paths, and which one applies is decided here:
-    - **Already published.** The version has a row in `agent_specs`, either
-      because the draft matched a published digest or because an ordinary
-      publication sealed the same bytes. Make that row current. No seal is
-      read, and none has to be readable: an expired or erased seal does not
-      block activating a version that is already published.
-    - **Still a candidate.** Read the bytes of a seal of this version. If no
-      seal is readable, the answer is 409 `fuseone:candidate-unreadable`. Check
-      `versionOf(bytes) == version_id`, insert the `agent_specs` row from those
-      bytes, and make it current.
+14. **The write.** On the published path, make the row current. On the
+    candidate path, insert the `agent_specs` row from the bytes, with their full
+    digest, and make it current. Record the activation's provenance either
+    way.
 
-    Either way, record the activation's provenance.
+### The full digest
+
+`version_id` is not proof that two definitions are the same. It holds 12 hex
+digits of the SHA-256 (`spec.go:283`), which is 48 bits. The choice in step 10
+decides which definition goes live, under which scope, and whether it is the
+one the experiment ran. So that choice compares the **full** SHA-256 of the
+bytes, never the id:
+
+- `agent_seals` records the full digest of the bytes it seals;
+- `agent_specs` gains a nullable `digest` column, which every publication
+  writes from now on. Ordinary publication included;
+- **sealing** refuses a draft whose `version_id` is already taken. If the
+  published row's full digest differs from the draft's, the answer is
+  `fuseone:version-collision`. If it is equal, no seal is written and the
+  workbench uses the published version;
+- **a published row from before the column** has no digest. A seal can never
+  prove it matches such a row, so sealing a draft with that `version_id`, and
+  activating it, answer `fuseone:version-digest-unknown`. That version can
+  still go live by an ordinary publication of the same definition
+  (`PUT /agents/{agentId}/versions`). Publishing is insert-or-nothing, so the
+  existing row is kept and made current, through the ordinary publication's own
+  checks and with no seal.
+
+The precedence of `agent_specs` in step 10 applies only once the digests have
+been shown equal.
 
 ### Lock order
 
 **The lock order is the publication's, and it is the only one.** Steps 4, 5 and
-10 are the order `Publisher.Publish` uses today (event graph, then the agent row
+11 are the order `Publisher.Publish` uses today (event graph, then the agent row
 inside `refuseStage`). Ordinary publication adopts the resource tier when
 NT-017's fence lands, so activation and publication can never wait on each
 other in a cycle.
@@ -500,7 +535,7 @@ leaves two possible orders, and both are safe:
 
 - **activation first:** the erasure waits, then erases the seal's copy. The
   published row is the one copy erasure never reaches, and the screen said so;
-- **erasure first:** step 13 reads a tombstone and fails closed.
+- **erasure first:** step 10 reads a tombstone and fails closed.
 
 If any step fails, nothing changes, and the candidate stays a candidate.
 
@@ -585,9 +620,16 @@ thread join the recorded intention:
 - a retry that omits them inherits the recorded ones;
 - a retry that names a different seal is the existing conflict, "a retry
   stating another intention than its key's";
-- if the fixed seal is unreadable, the retry fails closed with
-  `fuseone:candidate-unreadable`, even if a sibling seal of the same version is
-  readable. Every run of one experiment read the same seal, so one erasure
+- **the seal follows the idempotency contract of #309**, as the provider and
+  the corpus already do (`openExperiment`, "refused only before anything was
+  opened"):
+  - a first attempt that has opened nothing, and finds its seal unreadable, is
+    refused with `fuseone:candidate-unreadable`;
+  - a retry of an experiment that already has runs is never refused for
+    something that changed underneath. If seal A is unreadable, the retry opens
+    zero new runs and answers from the ledger (`answerFromRecord`), as it does
+    when the corpus was erased. It never opens the missing runs on sibling seal
+    B, even though B's bytes are the same. Every run of one experiment read the same seal, so one erasure
   reaches all of them.
 
 A run is pinned to the seal it opened with. Every turn resolves **that** seal,
@@ -903,7 +945,19 @@ Each is written red first. Each sabotage uses the value the bug would accept.
 - An experiment's first attempt is interrupted after opening some runs on seal
   A. A sibling seal B is then written, and the experiment is retried. Every run
   of the experiment names seal A. If A is erased before the retry, the retry
-  opens nothing on B.
+  answers 200 from the ledger, opens zero runs, and opens nothing on B. A first
+  attempt with no runs and an unreadable seal is refused.
+- Activation loads the definition before it locks resources or judges. The test
+  seals a candidate whose resources, `emits` and `never` block differ from the
+  current version's. Each of steps 11–13 must judge the candidate. Sabotage:
+  judge the current version; the test must name the step.
+- A `version_id` shared by two different full digests answers
+  `fuseone:version-collision` at sealing and at activation, and nothing is
+  written. The test forges the collision by inserting rows directly.
+- A seal matching a published row that has no `digest` answers
+  `fuseone:version-digest-unknown`. An ordinary publication of the same
+  definition still makes that row current.
+
 - `seal_id` and `authoring_thread` are written with `run_started` or not at all.
   The test makes the append fail after the step's insert and before the
   projection. Neither the step nor the origin is left behind. Sabotage: write
