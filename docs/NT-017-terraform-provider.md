@@ -30,15 +30,18 @@ From #270, #212, #268 and the review of this note's scope:
   provider and the server cannot drift apart unnoticed.
 - **Bootstrap stays with a person.** No token can hold `identity:write`, so the provider
   creates no service accounts, tokens or identity providers.
-- **Starting things stays out.** No `apply` changes an agent's stage, pauses or resumes
-  it, or releases anything the Gate held.
+- **Starting things stays out.** No `apply` changes an agent's stage, resumes it, or
+  releases anything the Gate held. The one exception is explicit: destroying an agent
+  retires it, which pauses it, and the plan shows that as a retirement (see
+  [Agents](#agents)).
 - **Console edits are drift.** A person may still change these resources in the console.
   The next plan shows the change; it is not silently overwritten.
 - **Secrets never reach the state file.**
 - **Wider scope, three phases**, decided 2026-11-11: what the API already supports,
   then companies, areas and classification, then access to an area.
-- **A token may grant access under four rules** (see [Access](#phase-3-access-to-an-area)),
-  decided 2026-11-11. `identity:write` stays barred for tokens.
+- **Access may be delegated under four rules** (see [Access](#phase-3-access-to-an-area)),
+  decided 2026-11-11, the same rules for people and tokens. The only role delegation
+  grants is `author`. `identity:write` stays barred for tokens.
 - **Repository:** `fuseone-io/terraform-provider-fuseoneagents`, so resources are named
   `fuseoneagents_mcp_server`, `fuseoneagents_agent` and so on.
 
@@ -53,7 +56,7 @@ Checked against `main` at `b028e09a`.
 | Model provider | `PUT /admin/integrations/providers/{name}` | yes | yes | yes | `provider:write` |
 | Channel | `PUT /admin/channels/{name}` | yes | yes | yes | `provider:write` |
 | Policy | `PUT /policies/{code}` | yes | yes | yes | `policy:write` |
-| Agent | `PUT /agents/{id}/versions` | yes | no; the version is a content digest | yes | `agent:publish` |
+| Agent | `PUT /agents/{id}/versions` | yes | **no**: neither publish nor retire takes `If-Match` | yes | `agent:publish` |
 | Company | `POST /admin/companies`, `PATCH /{company}` | no | no | `POST` answers 409 | `company:write` |
 | Area | `POST /admin/scopes`, `DELETE /{company}/{area}` | no | no | `POST` upserts | `scope:write` |
 | Tool classification | `PUT /admin/tools/{id}/classification` | list only | no | **no**: each write records an event | `tool:classify` |
@@ -112,9 +115,19 @@ An agent is published with `PUT /agents/{id}/versions`. Publishing identical con
 a no-op, and the version is the digest of the rendered definition.
 
 - **Managed:** the definition fields `AgentDefinition` accepts. The state also records
-  the `versionId` the last apply produced.
-- **Drift:** the read compares the agent's current `versionId` with the recorded one. A
-  different version means somebody published since, and the plan shows it.
+  the agent's `ETag` from the last read.
+- **A precondition, which the API lacks today.** Neither `PUT /agents/{id}/versions` nor
+  `PUT /agents/{id}/retired` takes `If-Match`, so a version published in the console
+  between plan and apply would be replaced without anybody seeing it. Phase 1 gives the
+  agent an `ETag` and makes both calls honour `If-Match`:
+  - The `ETag` covers the current version and whether the agent is retired, the two
+    things these calls change. A publish moves it; an identical publish does not.
+  - `If-Match` is judged under the agent's row lock, in the transaction that writes the
+    version or the retirement, where `refuseIfStage` is already judged. A check made by
+    an earlier read would leave the same window it exists to close.
+  - A stale tag answers 412 with the current `ETag`, as the other resources do.
+- **Drift:** a read whose `ETag` differs from the recorded one means somebody published
+  or retired since, and the plan shows it.
 - **Read-back gap:** `GET /agents/{id}` does not return the rendered definition, and the
   provider needs every field it manages to come back. Phase 1 checks which
   `AgentDefinition` fields `AgentDetail` lacks and adds them to the read, rather than
@@ -125,9 +138,11 @@ a no-op, and the version is the digest of the rendered definition.
   Changing what an autonomous agent runs stays a person's decision in the console.
 - **A new agent is paused.** Authoring starts nothing, so a first apply puts nothing to
   work.
-- **`destroy` retires.** Versions are the only explanation of the runs that used them,
-  so the provider retires the agent (`PUT /agents/{id}/retired`), which pauses it and is
-  reversible. The OpenAPI text for retiring promises a line in the trail, and none is
+- **`destroy` retires, and that is the one exception to "nothing pauses".** Versions are
+  the only explanation of the runs that used them, so the provider retires the agent
+  (`PUT /agents/{id}/retired`, with `If-Match`), which pauses it and is reversible. The
+  plan says *retire*, not *delete*, so the reviewer of the pull request sees that the
+  agent stops. The OpenAPI text for retiring promises a line in the trail, and none is
   written today. Phase 1 writes it.
 
 ### Deleting what something depends on
@@ -136,12 +151,40 @@ No resource refuses a delete today. Deleting an MCP server removes its tools fro
 catalogue, and the agents that used them stay published, naming tools that no longer
 exist; only a new publish is checked against the catalogue.
 
-Phase 1 makes `DELETE` on an MCP server, connector instance, model provider or channel
-answer 409 `fuseone:in-use` while the current version of an agent that is not retired
-refers to it, and the problem lists those agents. The console gets the same answer. A
-person retires or edits the agents first; there is no force flag. Policies are not
-covered: a policy constrains agents rather than serving them, and deleting one already
-takes a new snapshot.
+Phase 1 makes `DELETE` on an MCP server, connector instance or model provider answer
+409 `fuseone:in-use` while the current version of an agent that is not retired refers
+to it, and the problem lists those agents. The console gets the same answer. Channels
+and policies are not covered: an agent definition names neither (a channel names agents,
+not the other way round), and deleting a policy already takes a new snapshot.
+
+**The check needs a lock both sides take.** Today the publish judges the catalogue before
+the transaction that writes the version (`internal/httpapi/publish.go`, `rulingsFor`),
+and the delete runs in a transaction of its own (`RemoveMCPServer` in
+`internal/admin/integrations.go`). A publish and a delete running together can both
+pass their checks and leave an agent naming something that is gone. Phase 1 closes it
+by locking the row of the resource itself, first, then judging:
+
+- The delete takes `FOR UPDATE` on the resource's row before anything else, then looks
+  for referring agents in the same transaction.
+- The publish takes `FOR SHARE` on the row of every resource the definition names (the
+  servers and connector instances behind its tools, its model provider, its area), in
+  the transaction that writes the version, and judges existence after the lock is
+  granted. Today the publish does not check the model provider at all; phase 1 adds
+  that check, or the fence would hold on one side only.
+- Whichever commits first wins, and the other sees it: a delete that waited finds the
+  new version and answers 409; a publish that waited finds the row gone and answers
+  400.
+- Servers and providers configured by flag or environment variable have no row to lock,
+  and the API cannot delete them either.
+
+**No force flag.** An emergency, such as a compromised MCP server, goes in this order:
+
+1. Disable the resource (`enabled: false`) and revoke or rotate its credential. Both are
+   updates, not deletes, and the 409 never applies to them.
+2. Edit or retire the agents that use it.
+3. Delete it.
+
+The manual documents the order, and a test proves the 409 does not block step 1.
 
 ## Phase 2: companies, areas and classification
 
@@ -158,7 +201,8 @@ models. Creating a company still grants the creator `curator` on it.
 - Registering and deleting an area write nothing to `admin_events` today. Both will.
 - Deleting an area leaves the agents, ceilings and policies that name it in place. The
   delete answers 409 `fuseone:in-use` while an agent that is not retired is published
-  there, as in phase 1.
+  there, behind the same fence as phase 1: the delete takes `FOR UPDATE` on the area's
+  row first, and the publish already holds `FOR SHARE` on it.
 
 The `PUT` takes the area id as given. Today's `POST` folds a name into an id (lowercase,
 no accents, hyphens); a provider resource keyed by a folded value would plan a
@@ -191,31 +235,40 @@ operators made.
 
 Phase 3 adds a grant as a resource of its own:
 
-`PUT` and `DELETE /admin/grants/{principal}/{company}/{area}/{role}`
+`GET`, `PUT` and `DELETE /admin/grants/{principal}/{company}/{area}/{role}`
 
-It adds or removes exactly one grant and touches nothing else. A person with
-`identity:write` on the installation may use it without limits, as today. Any other
-caller, a service account included, may use it only under these rules:
+- **`PUT` and `DELETE`** add or remove exactly one hand-set grant and touch nothing else.
+- **`GET`** answers 200 when that hand-set grant exists, with who made it and when, and
+  404 when it does not. A grant asserted by an identity provider with the same principal,
+  scope and role does not count: the provider manages only what a hand made, and import
+  reads with the same path.
 
-1. **Only what it holds, only where it holds it.** The caller holds one grant whose scope
-   contains the target scope, and whose role carries every permission of the role being
-   granted. A curator of an area may grant `author` there. It may not grant `auditor`,
-   because `curator` lacks `audit:export`.
-2. **Never `admin` or `approver`.** `approver` is the human check the Gate relies on, and
-   a leaked token must not be able to create approvers. `admin` carries `identity:write`.
-3. **Only to a person.** Never to itself and never to another service account, so tokens
+A person with `identity:write` on the installation may use all three without limits, as
+today. Every other caller, a person or a service account, goes through the same rules:
+
+1. **Delegation is a permission, held where it is used.** The caller holds
+   `access:delegate` in a grant whose scope contains the target scope. A curator of
+   area X can act in X and not in Y.
+2. **The only role it grants is `author`.** An allowlist, not a list of exceptions.
+   Allowing any role whose permissions the caller holds would let a curator create
+   another curator, who receives delegation, policy and provider writes and erasure in
+   turn. `admin`, `approver`, `curator` and `auditor` stay with `identity:write`.
+3. **Only to a person.** Never to itself and never to a service account, so tokens
    cannot widen each other's reach.
 4. **Recorded.** Each grant and revocation writes `grants.added` or `grants.removed` to
-   `admin_events` with the caller's id, the grant and, for a token, the token's id. The request context
-   does not carry the token's id today; phase 3 adds it, so a revoked token's grants can
-   be found.
+   `admin_events` with the caller's id, the grant and, for a token, the token's id. The
+   request context does not carry the token's id today; phase 3 adds it, so the grants a
+   revoked token made can be found.
 
-A caller may revoke only a grant it could have made under the same rules. Grants
-asserted by an identity provider are never touched.
+The same rules decide a read: a caller may read a grant it could make. A caller may
+revoke only a grant it could have made, so a delegating caller can remove an `author`
+grant in its scope and nothing else. Grants asserted by an identity provider are never
+touched.
 
-The rules need a permission to hang on, or any author could grant `author` to anyone in
-their area. Phase 3 adds `access:delegate` to the `admin` and `curator` roles. It is not
-barred for tokens; the four rules are what make that safe.
+`access:delegate` goes into the `admin` and `curator` roles. It is not barred for
+tokens; the rules are what make that safe. For people it is new: a curator of an area
+can now give `author` there without installation-wide `identity:write`, which is what
+"a team looks after its own agent" in the scopes manual needs.
 
 Four facts about grants today shape the resource:
 
@@ -224,8 +277,17 @@ Four facts about grants today shape the resource:
 - **Nobody but `identity:write` can find a person today.** `GET /admin/people` needs it,
   so a token cannot turn an email into a principal id. Phase 3 adds an exact lookup by
   email for a caller holding `access:delegate`, answering one id or 404 and never a
-  list, so it cannot be used to enumerate people. The provider's `person` data source
-  uses it, and a plan for somebody who has never signed in fails with that reason.
+  list. That stops listing everybody, but it is still an oracle: a caller with a list of
+  candidate addresses learns which ones have an account. Two mitigations bound it:
+  - **A rate limit per caller**, configurable, with a low default; past it the lookup
+    answers 429.
+  - **Every lookup is recorded** in `admin_events` with the caller and the outcome. The
+    row holds the principal id when one was found and a keyed digest of the address when
+    none was, never the address itself, so the record of a probe carries no personal
+    data.
+
+  The provider's `person` data source uses the lookup, and a plan for somebody who has
+  never signed in fails with that reason.
 - **A hand grant equal to an asserted one is dropped today.** The key is principal,
   company, area and role, without the source, and the insert ignores a conflict. The
   hand grant vanishes when the identity provider stops asserting it, and the provider
@@ -237,7 +299,7 @@ Four facts about grants today shape the resource:
 
 Group mappings, which grant access to everybody an identity provider puts in a group,
 remain `identity:write` and stay with a person. They grant access to people who have
-never signed in, which the four rules cannot judge.
+never signed in, which the rules cannot judge.
 
 ## The provider
 
@@ -263,13 +325,21 @@ Each phase is a FuseOne release followed by a provider release that requires it.
 - A new `If-Match` is honoured only by a replica that knows it. The provider's minimum
   version covers this for the provider, and the console sends `If-Match` on a new
   resource only after a release in which every replica supports it, as in #268.
+- The agent's `If-Match` is judged only by a replica that knows it. An old replica
+  ignores the header and publishes, so the provider's minimum server version is the
+  phase 1 release, and the console sends `If-Match` on publish and retire only after a
+  release in which every replica supports it.
+- The fence on delete holds only when both sides take the lock. A replica still on the
+  previous release publishes without `FOR SHARE`, so the 409 is a guarantee only once
+  every replica runs phase 1. Until then it is a check, and the release notes say so.
 - `access:delegate` is a new permission in a role. Rolling back below phase 3 removes it,
   and the grants it made stay valid: they are ordinary grants.
 
 ## What this is not
 
 - Not a way to create service accounts, tokens or identity providers.
-- Not a way to change an agent's stage, pause it or approve anything.
+- Not a way to change an agent's stage, resume it or approve anything. Destroying an
+  agent retires it, which pauses it; that is the one exception, and the plan names it.
 - Not custom roles. The five roles cover the cases asked for; an editable permission
   matrix is a separate feature.
 - Not a replacement for the console. Both write the same resources, and the plan says
@@ -280,24 +350,41 @@ Each phase is a FuseOne release followed by a provider release that requires it.
 Server side, each written before its change:
 
 - A `DELETE` of an MCP server used by an agent that is not retired answers 409 and lists
-  it; once the agent is retired, the delete succeeds.
+  it; once the agent is retired, the delete succeeds. The same for a connector instance,
+  a model provider and, in phase 2, an area.
+- `enabled: false` and a credential rotation on a resource in use succeed: the 409
+  never blocks the first step of the emergency order.
+- Publish and delete racing, in both orders, for an MCP server and for an area. Each
+  side is held at its lock with a test hook, the other runs, and the outcome is either a
+  409 on the delete or a 400 on the publish, never both succeeding.
+- A publish naming a model provider that does not exist answers 400.
+- A publish with a stale `If-Match` answers 412 and writes no version; the same for a
+  retirement. A publish landing between the read and the write with the old tag is the
+  case the test uses, not a made-up tag.
+- An identical publish keeps the agent's `ETag`.
 - Retiring an agent writes a trail line.
 - Every secret field in `api/openapi.yaml` is `writeOnly`, found by walking the schema,
   so a new secret field without the mark fails the test.
 - An identical classification `PUT` writes no event and keeps the `ETag`.
 - An area `PUT` with an id folding would change answers 400.
-- For grants by a non-identity caller, one test per rule, each using the input the
-  broken version would accept:
+- For grants by a caller without `identity:write`, one test per rule, each using the
+  input the broken version would accept:
+  - a curator person granting `curator`, and a curator token granting `curator`;
   - a curator granting `auditor`;
   - a curator of area X granting in area Y;
   - a token granting `approver`;
   - a token granting to itself;
   - a token granting to another service account;
   - a token revoking an `admin` grant.
+- The grant `GET` answers 404 for a principal holding only the asserted twin of a grant,
+  and 200 once the hand-set one exists.
 - A hand grant equal to an asserted one survives the identity provider withdrawing its
   assertion.
 - The email lookup answers one id or 404 for a caller with `access:delegate`, 403
   without it, and never a list.
+- The lookup answers 429 past the caller's limit.
+- A lookup that found nobody records a row that contains no address, checked by
+  searching the row for the address that was asked.
 - A grant made by a token records that token's id.
 
 Provider side, in its repository, against a real server and database:
@@ -310,18 +397,16 @@ Provider side, in its repository, against a real server and database:
 
 ## Decided
 
-- **Scope:** three phases, as above. *Kleber, 2026-11-11.*
-- **Grants by token:** allowed under the four rules, with `identity:write` still barred.
-  *Kleber, 2026-11-11.*
-- **Repository name:** `fuseone-io/terraform-provider-fuseoneagents`. *Kleber,
-  2026-11-11.*
+Decided by Kleber on 2026-11-11:
 
-## Open for review
+1. **Scope:** three phases, as above.
+2. **Access may be delegated**, with `identity:write` still barred for tokens.
+3. **Repository name:** `fuseone-io/terraform-provider-fuseoneagents`.
 
-- **Delegation by people.** `access:delegate` in the `curator` role lets a person who is
-  a curator of an area grant `author` there without installation-wide `identity:write`.
-  That is new for people, and it follows from one rule for every caller. The other
-  choice is to apply the rules to service accounts only.
-- **No force on delete.** Phase 1 refuses deleting what an agent uses, with no override.
-  An emergency removal of a compromised MCP server would then need its agents retired
-  first.
+Decided by the reviewer on 2026-11-11:
+
+4. **Delegation by people: yes.** One rule for people and service accounts, and the
+   only role it grants is `author`.
+5. **No force on delete.** An emergency disables the resource and revokes or rotates its
+   credential first, then edits or retires the agents, then deletes. The 409 never
+   blocks disabling.
