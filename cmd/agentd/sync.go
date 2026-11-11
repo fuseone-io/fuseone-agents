@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/fuseone/agents/internal/admin"
@@ -32,58 +34,33 @@ import (
 // are the source, the database is what the running platform reads, and
 // start-up makes the second agree with the first.
 
-// syncSchedules reconciles the trigger table with what the newest published
-// version of each agent declares.
-func syncSchedules(ctx context.Context, pool *pgxpool.Pool, specDir *string) error {
-	loaded := spec.NewStore()
-	if _, err := loaded.LoadDir(ctx, specsRoot(*specDir), specsPath(*specDir)); err != nil {
-		return fmt.Errorf("sync schedules: load %s: %w", *specDir, err)
-	}
-
+// syncSchedules reconciles the trigger table with what the version the boot
+// left current declares, for each agent the boot published.
+//
+// The version left current, not the newest file: the sync makes current each
+// version it can publish, and skips one whose digest it cannot prove (NT-018).
+// Reconciling from the newest file would leave an agent running one version
+// with another's schedule. An agent the boot published nothing for is not in
+// current, and its schedules stay as they were.
+func syncSchedules(ctx context.Context, pool *pgxpool.Pool, current map[domain.AgentID]spec.Spec) error {
 	schedules := trigger.NewPostgresSchedules(pool)
 	now := time.Now()
-	for _, agent := range loaded.Agents() {
-		versions := loaded.Versions(agent)
-		published, err := loaded.Get(agent, versions[len(versions)-1])
-		if err != nil {
-			return fmt.Errorf("sync schedules: %w", err)
-		}
-		if proven, err := provenOnDisk(ctx, pool, published); err != nil || !proven {
-			if err != nil {
-				return fmt.Errorf("sync schedules: %w", err)
-			}
-			continue
-		}
-		if err := schedules.Sync(ctx, agent, spec.CronSchedules(published), now); err != nil {
+	for _, agent := range slices.Sorted(maps.Keys(current)) {
+		if err := schedules.Sync(ctx, agent, spec.CronSchedules(current[agent]), now); err != nil {
 			return fmt.Errorf("sync schedules for %s: %w", agent, err)
 		}
 	}
 	return nil
 }
 
-// syncWebhooks reconciles the declared paths with what each agent's newest
-// version says. Secrets are untouched: publishing a new version must not break
-// every sender configured against a path, because editing a prompt is not a
-// security event.
-func syncWebhooks(ctx context.Context, pool *pgxpool.Pool, specDir *string) error {
-	loaded := spec.NewStore()
-	if _, err := loaded.LoadDir(ctx, specsRoot(*specDir), specsPath(*specDir)); err != nil {
-		return fmt.Errorf("sync webhooks: load %s: %w", *specDir, err)
-	}
-
+// syncWebhooks reconciles the declared paths with the version the boot left
+// current, as syncSchedules does. Secrets are untouched: publishing a new
+// version must not break every sender configured against a path, because
+// editing a prompt is not a security event.
+func syncWebhooks(ctx context.Context, pool *pgxpool.Pool, current map[domain.AgentID]spec.Spec) error {
 	hooks := trigger.NewPostgresWebhooks(pool)
-	for _, agent := range loaded.Agents() {
-		versions := loaded.Versions(agent)
-		published, err := loaded.Get(agent, versions[len(versions)-1])
-		if err != nil {
-			return fmt.Errorf("sync webhooks: %w", err)
-		}
-		if proven, err := provenOnDisk(ctx, pool, published); err != nil || !proven {
-			if err != nil {
-				return fmt.Errorf("sync webhooks: %w", err)
-			}
-			continue
-		}
+	for _, agent := range slices.Sorted(maps.Keys(current)) {
+		published := current[agent]
 		scope := domain.Scope{Area: domain.AreaID(published.Area)}
 		if err := hooks.Sync(ctx, agent, scope, spec.Webhooks(published)); err != nil {
 			// A path two agents both declare is a configuration error, and one
@@ -99,22 +76,6 @@ func syncWebhooks(ctx context.Context, pool *pgxpool.Pool, specDir *string) erro
 		}
 	}
 	return nil
-}
-
-// provenOnDisk is whether a file's triggers may be reconciled: its bytes are
-// the ones its version id is claimed for (NT-018). A version the sync skipped
-// for its digest is not what the installation runs, so its agent's schedules
-// and paths stay as they were.
-func provenOnDisk(ctx context.Context, pool *pgxpool.Pool, s spec.Spec) (bool, error) {
-	proven, err := spec.Proven(ctx, pool, s)
-	if err != nil {
-		return false, fmt.Errorf("prove %s@%s: %w", s.ID, s.Version, err)
-	}
-	if !proven {
-		slog.Warn("agent triggers left as they were: its version on disk was not published",
-			"agent", s.ID, "version", s.Version)
-	}
-	return proven, nil
 }
 
 // webhookPathsOf picks the paths out of a specification's triggers.
@@ -151,17 +112,25 @@ func syncRulings(ctx context.Context, catalog *tools.Catalog, curator *admin.Cur
 // The worker is where definitions are read today; the Studio will write them
 // directly later (PRD DE-07). Either way the registry is what the rest of the
 // installation reads, so the two never disagree about what is published.
-func publishSpecs(ctx context.Context, registry *spec.Registry, dir string) (published, skipped int, err error) {
+// bootPublication is what the boot's publication decided: how many versions it
+// published and skipped, and, per agent, the version it left current.
+type bootPublication struct {
+	published, skipped int
+	current            map[domain.AgentID]spec.Spec
+}
+
+func publishSpecs(ctx context.Context, registry *spec.Registry, dir string) (bootPublication, error) {
+	out := bootPublication{current: map[domain.AgentID]spec.Spec{}}
 	store := spec.NewStore()
 	if _, err := store.LoadDir(ctx, specsRoot(dir), specsPath(dir)); err != nil {
-		return 0, 0, fmt.Errorf("load agent definitions from %s: %w", dir, err)
+		return out, fmt.Errorf("load agent definitions from %s: %w", dir, err)
 	}
 
 	for _, agent := range store.Agents() {
 		for _, version := range store.Versions(agent) {
 			s, err := store.Get(agent, version)
 			if err != nil {
-				return published, skipped, err
+				return out, err
 			}
 			// The company is the installation's single one until phase 2
 			// (PRD §3.1); the area comes from the definition itself.
@@ -173,23 +142,24 @@ func publishSpecs(ctx context.Context, registry *spec.Registry, dir string) (pub
 				// own. Not a reason to keep every other agent from starting.
 				slog.Warn("agent version skipped: published without a digest",
 					"agent", s.ID, "version", s.Version)
-				skipped++
+				out.skipped++
 				continue
 			}
 			if err != nil {
-				return published, skipped, err
+				return out, err
 			}
 			// What this worker holds is what the installation runs. Without
 			// saying so, a version published once and then withdrawn from
 			// disk stays the newest by timestamp for ever, and every new run
 			// pins to a specification nobody holds (PRD DE-08).
 			if err := registry.MakeCurrent(ctx, s.ID, s.Version); err != nil {
-				return published, skipped, err
+				return out, err
 			}
-			published++
+			out.published++
+			out.current[s.ID] = s
 		}
 	}
-	return published, skipped, nil
+	return out, nil
 }
 
 // loadSpecs publishes the agent definitions on disk and wires the resolver to
