@@ -294,6 +294,10 @@ func TestResolveJudge_throughTheRealAdapter_theCloserReadsTheAnswerVerbatim(t *t
 		{"a summary twice, both clean", `{"summary":"B","summary":"B"}`, "", 0, ""},
 		{"a null summary", `{"summary":null}`, "", 0, ""},
 		{"a null headline", `{"summary":"B","headline":null}`, "", 0, ""},
+		// Only the end of the arguments may follow the object: anything else is not JSON.
+		{"garbage after the object", `{"summary":"B"} x`, "", 0, ""},
+		{"a second brace", `{"summary":"B"}}`, "", 0, ""},
+		{"a second object", `{"summary":"B"} {}`, "", 0, ""},
 		{"a trailing space", `{"summary":"B "}`, "", 0, ""},
 		{"a leading newline", `{"summary":"\nB"}`, "", 0, ""},
 		{"a headline of spaces", `{"summary":"B","headline":"   "}`, "", 0, ""},

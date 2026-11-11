@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -119,7 +120,8 @@ func onlySummary(args []byte) (string, bool, error) {
 	if _, err := dec.Token(); err != nil {
 		return "", false, err
 	}
-	if _, err := dec.Token(); err == nil {
+	// Only io.EOF is the end: a syntax error after the object is data after it.
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return "", false, errors.New("data after the arguments")
 	}
 	// Every key counts, so a summary written twice is two keys and never one.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 )
 
 /*
@@ -21,7 +22,13 @@ func strictJSON(raw []byte) error {
 	if err := strictValue(dec); err != nil {
 		return err
 	}
-	if _, err := dec.Token(); err == nil {
+	return atEnd(dec)
+}
+
+// atEnd is whether nothing but the end of the input follows. Only io.EOF is the end: a
+// syntax error after the value is data after it, never the end.
+func atEnd(dec *json.Decoder) error {
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return errors.New("data after the value")
 	}
 	return nil

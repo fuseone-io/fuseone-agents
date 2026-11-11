@@ -157,3 +157,17 @@ func TestOptions_areFixedWidthCodesInTheRubricsOrder(t *testing.T) {
 		}
 	}
 }
+
+// Only the end of the input may follow the value. The rubric's second decoder catches
+// trailing data today; the walk refuses it on its own, so nothing depends on that.
+func TestStrictJSON_onlyTheEndMayFollowTheValue(t *testing.T) {
+	t.Parallel()
+	for _, raw := range []string{`{} x`, `{}}`, `{} {}`, `[] ]`} {
+		if err := strictJSON([]byte(raw)); err == nil {
+			t.Errorf("strictJSON(%q) accepted, want refused", raw)
+		}
+	}
+	if err := strictJSON([]byte("{} \n\t")); err != nil {
+		t.Errorf("whitespace after the value refused: %v", err)
+	}
+}

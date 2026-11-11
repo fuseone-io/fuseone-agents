@@ -57,6 +57,7 @@ field" is a commit message.
     - `summary` written twice, or written as null;
     - text beside the call;
     - another tool call in the same response, before or after the finish.
+    - anything after the arguments' object but the end, such as `{"summary":"B"} x`.
   - **What a rubric may declare.** A field's presence is what was declared: a zero is a
     value, and a key written twice or as null is refused. A score is any range of integers
     with at most eleven values. Its width is computed without overflow, and its options are
