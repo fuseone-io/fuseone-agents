@@ -47,7 +47,7 @@ type finishArgs struct {
 }
 
 func finishProposal(
-	args []byte, base engine.Proposal,
+	args []byte, base engine.Proposal, text string, calls int,
 ) engine.Proposal {
 	var decoded finishArgs
 	_ = json.Unmarshal(args, &decoded)
@@ -61,6 +61,8 @@ func finishProposal(
 	base.Artifacts = cleanArtifacts(decoded.Artifacts)
 	base.StoppedBy = strings.TrimSpace(decoded.StoppedBy)
 	base.Headline = headlineLine(decoded.Headline)
+	// And the answer as it arrived, for a reader that must not see it normalised.
+	base.Verbatim = engine.Verbatim{FinishArgs: append([]byte(nil), args...), Text: text, Calls: calls}
 	return base
 }
 

@@ -127,6 +127,19 @@ type Proposal struct {
 	// the model declared one through the finish tool; the full answer hangs
 	// in its thread. Empty announces exactly as before (#165).
 	Headline string
+	// Verbatim is the closing answer exactly as the provider returned it, before the
+	// adapter trimmed or cleaned anything. Only a Closer reads it (NT-016): a judge's
+	// answer is refused for a space the normalised fields no longer show.
+	Verbatim Verbatim
+}
+
+// Verbatim is a finish call's arguments as the provider sent them, the text the model
+// wrote beside the call, and how many tool calls the response held, the finish included,
+// in any order. FinishArgs is nil when the model did not finish.
+type Verbatim struct {
+	FinishArgs []byte
+	Text       string
+	Calls      int
 }
 
 // Tools invokes a registered tool, normally an MCP server.
@@ -334,6 +347,8 @@ type Start struct {
 	// of an event chain records on its closing step that they will not be
 	// published (#203); one that declares none has nothing to withhold.
 	PublishesEvents bool
+	// Closer, when set, seals the closing answer itself (NT-016): a judge run's.
+	Closer Closer
 }
 
 // Status is the outcome of one Advance.

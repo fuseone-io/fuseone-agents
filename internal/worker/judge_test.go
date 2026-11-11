@@ -274,3 +274,71 @@ func TestTurn_aLedgerThatCannotReadAnOpening_parksRatherThanSkippingTheFence(t *
 		t.Errorf("reason = %q, want the run parked", got)
 	}
 }
+
+// recordingJudges is a simulation pool's judge resolver that records what it was asked.
+type recordingJudges struct {
+	asked   []domain.RunID
+	planner *flakyPlanner
+}
+
+func (j *recordingJudges) ResolveJudge(
+	_ context.Context, run domain.RunID, _ domain.RunStartedPayload,
+) (Resolution, error) {
+	j.asked = append(j.asked, run)
+	return Resolution{Start: engine.Start{Pack: gate.NewPack(), Budget: domain.Budget{Micros: 1000}}, Planner: j.planner}, nil
+}
+
+func judgedTurn(t *testing.T, store *ledger.Memory, specs *experimentSpecs, judges *recordingJudges) {
+	t.Helper()
+	clock := frozenClock{t: time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)}
+	deps := engine.Deps{
+		Ledger: store, Content: engine.NewMemoryContent(), Gate: gate.New(),
+		Tools: noTools{}, Catalog: emptyCatalog{}, Clock: clock,
+	}
+	w := New(Config{Owner: "w-sim"}, store.Simulations(), deps, specs, clock, slog.New(slog.DiscardHandler)).
+		WithStages(stageIs(domain.StageDraft)).WithExperiments(specs).WithJudges(judges)
+	if claimed, err := w.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil || !claimed {
+		t.Fatalf("turn: claimed=%v err=%v", claimed, err)
+	}
+}
+
+// With judges wired, a judge run of an experiment is resolved as a judge and nothing else.
+func TestTurn_aJudgeRun_withJudgesWired_resolvesAsAJudge(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	openSimulated(t, store, domain.RunStartedPayload{
+		Trigger: "simulation", Simulated: true, Simulation: "jdg-1", Case: "case-1",
+		Experiment: "exp-1", ExperimentConfig: &domain.ExperimentConfig{Model: "other"}, Judge: judgeOpening(),
+	})
+	specs := &experimentSpecs{planner: &flakyPlanner{}}
+	judges := &recordingJudges{planner: &flakyPlanner{}}
+
+	judgedTurn(t, store, specs, judges)
+
+	if len(judges.asked) != 1 || judges.asked[0] != "run-1" || specs.declared != 0 || len(specs.asked) != 0 {
+		t.Errorf("judges asked %v, version %d, experiment %+v; want the judge alone", judges.asked, specs.declared, specs.asked)
+	}
+	if judges.planner.calls != 1 {
+		t.Errorf("the judge planned %d times, want once", judges.planner.calls)
+	}
+}
+
+// Wiring judges does not widen the fence: a judge naming no experiment stays refused.
+func TestTurn_aJudgeOutsideAnExperiment_withJudgesWired_isStillRefused(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	openSimulated(t, store, domain.RunStartedPayload{
+		Trigger: "simulation", Simulated: true, Simulation: "jdg-1", Case: "case-1", Judge: judgeOpening(),
+	})
+	specs := &experimentSpecs{planner: &flakyPlanner{}}
+	judges := &recordingJudges{planner: &flakyPlanner{}}
+
+	judgedTurn(t, store, specs, judges)
+
+	if len(judges.asked) != 0 || specs.declared != 0 || judges.planner.calls != 0 {
+		t.Errorf("judges asked %v, version %d, planned %d; want nothing", judges.asked, specs.declared, judges.planner.calls)
+	}
+	if got := parkReason(t, store); got != "spec_unresolved" {
+		t.Errorf("reason = %q, want the run parked", got)
+	}
+}

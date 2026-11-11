@@ -133,6 +133,7 @@ type Worker struct {
 	specs Specs
 	// experiments is wired on the simulation pool only (experiment.go).
 	experiments ExperimentSpecs
+	judges      Judges
 	clock       engine.Clock
 	log         *slog.Logger
 

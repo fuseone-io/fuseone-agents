@@ -84,6 +84,8 @@ type experimentWorld struct {
 	catalog          *tools.Catalog
 	declared, tested *finishingModel
 	agent            domain.AgentID
+	// providers is the registry the resolver plans through, for a journey to add to.
+	providers *model.Registry
 }
 
 func newExperimentWorld(t *testing.T) *experimentWorld {
@@ -117,6 +119,7 @@ func newExperimentWorld(t *testing.T) *experimentWorld {
 		t.Fatalf("AddServer: %v", err)
 	}
 	w.resolver = spec.NewResolver(spec.NewRegistry(pool), providers, w.catalog)
+	w.providers = providers
 	return w
 }
 

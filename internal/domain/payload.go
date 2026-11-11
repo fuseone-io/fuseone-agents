@@ -490,6 +490,11 @@ const (
 	// tool proposal. Runs before explicit finish used that as the closing
 	// convention; new runs should not write it.
 	RunFinishedNoToolCall RunFinishedReason = "no_tool_call"
+	// RunFinishedJudgeUnparseable and RunFinishedJudgeOversized close a judge run
+	// whose answer was not a verdict (NT-016): a failed judgment, never a score.
+	// They say what went wrong with the judge, not what it thought.
+	RunFinishedJudgeUnparseable RunFinishedReason = "judge_unparseable"
+	RunFinishedJudgeOversized   RunFinishedReason = "judge_oversized"
 )
 
 type RunFinishedPayload struct {
@@ -507,6 +512,11 @@ type RunFinishedPayload struct {
 	// without the answer surviving to prove it.
 	OutcomeRef    string `json:"outcome_ref,omitempty"`
 	OutcomeDigest string `json:"outcome_digest,omitempty"`
+	// JudgmentRef and JudgmentDigest are a judge run's sealed verdict (NT-016): salted,
+	// of one fixed size, in the content store. Only the engine writes them, and only on
+	// a run whose opening names a judge.
+	JudgmentRef    string `json:"judgment_ref,omitempty"`
+	JudgmentDigest string `json:"judgment_digest,omitempty"`
 	// Artifacts are named claim-checks this run published for event listeners.
 	// They share context by reference; the bytes stay in the content store and
 	// carry their labels forward to any listener that reads them.

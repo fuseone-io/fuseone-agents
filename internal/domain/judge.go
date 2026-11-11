@@ -23,6 +23,10 @@ type JudgeOpening struct {
 	// with. The salt itself is never written into a step.
 	SaltRef    string `json:"salt_ref,omitempty"`
 	SaltDigest string `json:"salt_digest,omitempty"`
+	// OutputRef is this run's copy of the judged output, and OutputDigest the digest the
+	// judged run sealed for it.
+	OutputRef    string `json:"output_ref,omitempty"`
+	OutputDigest string `json:"output_digest,omitempty"`
 	// Provider, Model and Effort are the judge's, never the judged version's.
 	Provider string `json:"provider"`
 	Model    string `json:"model"`

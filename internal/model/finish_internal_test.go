@@ -26,7 +26,7 @@ func TestFinishProposal_keepsTheProviderAndModel(t *testing.T) {
 		Provider: "anthropic",
 		Model:    "claude-haiku-4-5",
 		Cost:     domain.Cost{Micros: 900},
-	})
+	}, "", 1)
 
 	if got.Provider != "anthropic" || got.Model != "claude-haiku-4-5" {
 		t.Fatalf("finish dropped the pair: %q/%q", got.Provider, got.Model)
@@ -52,12 +52,12 @@ func TestFinishProposal_headlineKeepsItsFirstLineOnly(t *testing.T) {
 	got := finishProposal([]byte(`{
 		"summary":"the full report",
 		"headline":"  2 achados · pior: CRÍTICO \nsegunda linha que não sobe  "
-	}`), engine.Proposal{})
+	}`), engine.Proposal{}, "", 1)
 
 	if got.Headline != "2 achados · pior: CRÍTICO" {
 		t.Errorf("Headline = %q, want the trimmed first line", got.Headline)
 	}
-	if without := finishProposal([]byte(`{"summary":"done"}`), engine.Proposal{}); without.Headline != "" {
+	if without := finishProposal([]byte(`{"summary":"done"}`), engine.Proposal{}, "", 1); without.Headline != "" {
 		t.Errorf("an absent headline invented %q", without.Headline)
 	}
 }
@@ -82,7 +82,7 @@ func TestFinishProposal_headlineSurvivesEverySeparatorAndTheCeiling(t *testing.T
 		{"blank segment first", "   \nheadline real", "headline real"},
 	}
 	for _, tc := range cases {
-		got := finishProposal([]byte(`{"headline":`+string(mustQuote(tc.in))+`}`), engine.Proposal{})
+		got := finishProposal([]byte(`{"headline":`+string(mustQuote(tc.in))+`}`), engine.Proposal{}, "", 1)
 		if got.Headline != tc.want {
 			t.Errorf("%s: Headline = %q, want %q", tc.name, got.Headline, tc.want)
 		}
@@ -92,7 +92,7 @@ func TestFinishProposal_headlineSurvivesEverySeparatorAndTheCeiling(t *testing.T
 	// ceiling, so a naive cut at the limit lands mid-rune: the validity
 	// assertion is only an anchor when the fixture makes naivety invalid.
 	long := "x" + strings.Repeat("ã", 400)
-	got := finishProposal([]byte(`{"headline":`+string(mustQuote(long))+`}`), engine.Proposal{})
+	got := finishProposal([]byte(`{"headline":`+string(mustQuote(long))+`}`), engine.Proposal{}, "", 1)
 	if len(got.Headline) > maxHeadlineBytes {
 		t.Fatalf("headline kept %d bytes, want at most %d", len(got.Headline), maxHeadlineBytes)
 	}
@@ -125,7 +125,7 @@ func TestFinishProposal_artifactNamedLikeTheClosingAnswer_isNotPublished(t *test
 	got := finishProposal([]byte(`{
 		"summary":"done",
 		"artifacts":{"final_answer":"something else","report":"kept"}
-	}`), engine.Proposal{})
+	}`), engine.Proposal{}, "", 1)
 
 	if _, taken := got.Artifacts[domain.ArtifactFinalAnswer]; taken {
 		t.Errorf("artifacts = %+v, want the reserved name dropped", got.Artifacts)
@@ -147,7 +147,7 @@ func TestFinishProposal_reservedNameIsMatchedWhateverTheSpelling(t *testing.T) {
 	got := finishProposal([]byte(`{
 		"summary":"done",
 		"artifacts":{" Final_Answer ":"something else"}
-	}`), engine.Proposal{})
+	}`), engine.Proposal{}, "", 1)
 
 	if len(got.Artifacts) != 0 {
 		t.Errorf("artifacts = %+v, want the reserved name dropped", got.Artifacts)

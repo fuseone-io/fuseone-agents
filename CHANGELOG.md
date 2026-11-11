@@ -41,6 +41,30 @@ field" is a commit message.
     one. It parks one, as an unresolved specification, until a worker that runs judges
     takes it. One outside an experiment stays refused whatever the worker can do. To
     check this, every turn now reads the run's first step: one row, however long the run.
+- **The simulation pool runs judge runs** (#298, NT-016), still with nothing in this release
+  that opens one.
+  - **What the judge is sent.** The rubric is the system prompt. The case and the judged
+    output are the only user turn, each in a block marked with a boundary derived from the
+    run's salt. The pack is empty, the ceiling is the judgment's, and the pair is the judge's.
+  - **What is checked first.** Every object the opening names is checked against its digest
+    before any of it is sent. That covers the rubric, the salt and the copy of the output.
+  - **What counts as an answer.** The judge answers with a fixed-width option code. It is
+    read from the finish call as the provider returned it, before the model adapter trims a
+    summary or drops an empty headline. With the reason off, anything beyond the code is a
+    failed judgment (`judge_unparseable`), never trimmed and never cut to a valid prefix. So
+    is any of these:
+    - any other key in the call, empty or of spaces;
+    - `summary` written twice, or written as null;
+    - text beside the call;
+    - another tool call in the same response, before or after the finish.
+    - anything after the arguments' object but the end, such as `{"summary":"B"} x`.
+  - **What a rubric may declare.** A field's presence is what was declared: a zero is a
+    value, and a key written twice or as null is refused. A score is any range of integers
+    with at most eleven values. Its width is computed without overflow, and its options are
+    walked by count, so a range ending at the largest integer ends there.
+  - **What is stored.** The judgment and the answer as written are stored salted, at one fixed
+    size each, and nothing else of the judge's is stored. An answer over the size is
+    `judge_oversized`, never truncated.
 
 ### Design decisions
 

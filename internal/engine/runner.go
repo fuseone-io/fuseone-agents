@@ -159,6 +159,9 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		return Status{}, err
 	}
 
+	if proposal.Done && start.Closer != nil {
+		return r.finishClosed(ctx, state, start, proposal)
+	}
 	if proposal.Done {
 		// The answer goes where an erasure can reach it. Same sequence
 		// arithmetic as a tool's arguments: the reference points at the step
