@@ -37,9 +37,10 @@ field" is a commit message.
   - An agent's experiment list leaves out runs that judge an experiment: they count as
     neither runs nor cases of it, and none is its first.
   - Reading a judgment's id as a simulation answers 404.
-  - The simulation pool never plans the judged agent on a judge run. It parks one, as an
-    unresolved specification, until a worker that runs judges takes it. One outside an
-    experiment stays refused whatever the worker can do.
+  - No worker plans the judged agent on a judge run, in the simulation pool or the real
+    one. It parks one, as an unresolved specification, until a worker that runs judges
+    takes it. One outside an experiment stays refused whatever the worker can do. Every
+    turn of the real pool now reads the run's opening to check this.
 
 ### Design decisions
 
