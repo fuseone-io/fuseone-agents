@@ -171,9 +171,18 @@ by locking the row of the resource itself, first, then judging:
   the transaction that writes the version, and judges existence after the lock is
   granted. Today the publish does not check the model provider at all; phase 1 adds
   that check, or the fence would hold on one side only.
+- **Restoring a retired agent takes the same lock.** The delete is allowed once the
+  agents using a resource are retired, and `PUT /agents/{id}/retired` with
+  `retired: false` brings one back without publishing, so restoring is a third way to
+  make an agent refer to something. Today it only clears `retired_at`
+  (`State.Restore` in `internal/spec/retire.go`). Phase 1 makes it take `FOR SHARE` on
+  every resource the current version names, in the transaction that judges `If-Match`
+  and changes `retired`, and judge existence after the lock. If any is missing, it does
+  not restore and answers 409 naming what is missing; the person publishes a version
+  that does not need it, which goes through the publish's own check.
 - Whichever commits first wins, and the other sees it: a delete that waited finds the
-  new version and answers 409; a publish that waited finds the row gone and answers
-  400.
+  new version or the restored agent and answers 409; a publish or a restore that waited
+  finds the row gone and is refused.
 - Servers and providers configured by flag or environment variable have no row to lock,
   and the API cannot delete them either.
 
@@ -281,10 +290,12 @@ Four facts about grants today shape the resource:
   candidate addresses learns which ones have an account. Two mitigations bound it:
   - **A rate limit per caller**, configurable, with a low default; past it the lookup
     answers 429.
-  - **Every lookup is recorded** in `admin_events` with the caller and the outcome. The
-    row holds the principal id when one was found and a keyed digest of the address when
-    none was, never the address itself, so the record of a probe carries no personal
-    data.
+  - **Every lookup is recorded** in `admin_events`: the caller, the time, and the
+    principal id when one was found or `found: false` when none was. Nothing derived
+    from the address is kept, not even a keyed digest: a stable digest next to the
+    caller's id would let probes be correlated, which makes it a pseudonym, not an
+    absence of personal data. The row is personal data either way, because it names
+    the caller, and falls under what DP-001 says about `admin_events`.
 
   The provider's `person` data source uses the lookup, and a plan for somebody who has
   never signed in fails with that reason.
@@ -357,6 +368,10 @@ Server side, each written before its change:
 - Publish and delete racing, in both orders, for an MCP server and for an area. Each
   side is held at its lock with a test hook, the other runs, and the outcome is either a
   409 on the delete or a 400 on the publish, never both succeeding.
+- Restore and delete racing, in both orders, the same way: either the delete answers 409
+  or the restore is refused, never both succeeding.
+- Restoring an agent after a resource its current version names was deleted is refused,
+  and the agent stays retired.
 - A publish naming a model provider that does not exist answers 400.
 - A publish with a stale `If-Match` answers 412 and writes no version; the same for a
   retirement. A publish landing between the read and the write with the old tag is the
@@ -383,8 +398,9 @@ Server side, each written before its change:
 - The email lookup answers one id or 404 for a caller with `access:delegate`, 403
   without it, and never a list.
 - The lookup answers 429 past the caller's limit.
-- A lookup that found nobody records a row that contains no address, checked by
-  searching the row for the address that was asked.
+- A lookup that found nobody records `found: false` and nothing derived from the
+  address: the row's detail holds exactly the expected keys, and the address does not
+  appear anywhere in the row.
 - A grant made by a token records that token's id.
 
 Provider side, in its repository, against a real server and database:
