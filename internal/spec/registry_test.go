@@ -44,7 +44,7 @@ func openSpecPool(t *testing.T) *pgxpool.Pool {
 	// version that no longer existed — the fixture outliving the rows it
 	// pointed at.
 	if _, err := pool.Exec(context.Background(),
-		`truncate agent_specs; truncate agent_state`); err != nil {
+		`truncate agent_specs; truncate agent_state; truncate agent_version_digests`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 	return pool
@@ -318,18 +318,13 @@ func TestPublish_emits_survivesTheRegistry(t *testing.T) {
 	// parse and render tests next door both pass while it does. Found by
 	// declaring an emitter in the development stack and reading "nobody
 	// publishes" on the screen.
-	source := spec.Spec{
-		ID: "triagem", Name: "Triagem", Area: "cx", Version: "v1",
-		Provider: "openai", Model: "gpt-4o-mini",
-		Tools:  []domain.ToolID{"crm.lookup"},
-		Emits:  spec.Emits{{Event: "ticket.triado"}},
-		Budget: domain.Budget{Micros: 100_000},
-	}
+	source := published(t, strings.Replace(definition, "triggers:",
+		"emits:\n  - event: ticket.triado\ntriggers:", 1))
 	if err := registry.Publish(ctx, source, "usr_ana", "acme"); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 
-	again, err := registry.Get(ctx, "triagem", "v1")
+	again, err := registry.Get(ctx, source.ID, source.Version)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -342,21 +337,14 @@ func TestPublish_emitContext_survivesTheRegistry(t *testing.T) {
 	registry := openRegistry(t)
 	ctx := context.Background()
 
-	source := spec.Spec{
-		ID: "triagem", Name: "Triagem", Area: "cx", Version: "v1",
-		Provider: "openai", Model: "gpt-4o-mini",
-		Tools: []domain.ToolID{"crm.lookup"},
-		Emits: spec.Emits{{
-			Event: "incident.triaged", Context: "incident",
-			Artifacts: []string{"triage_summary", "suspected_cause"},
-		}},
-		Budget: domain.Budget{Micros: 100_000},
-	}
+	source := published(t, strings.Replace(definition, "triggers:",
+		"emits:\n  - event: incident.triaged\n    context: incident\n"+
+			"    artifacts: [triage_summary, suspected_cause]\ntriggers:", 1))
 	if err := registry.Publish(ctx, source, "usr_ana", "acme"); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 
-	again, err := registry.Get(ctx, "triagem", "v1")
+	again, err := registry.Get(ctx, source.ID, source.Version)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -379,9 +367,7 @@ func TestList_currentVersion_isTheOneNamedRatherThanTheNewest(t *testing.T) {
 	if err := registry.Publish(ctx, first, "usr_ana", "acme"); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-	second := first
-	second.Version = "v-withdrawn"
-	second.Instructions = first.Instructions + "\n\nUm parágrafo que alguém removeu depois."
+	second := published(t, definition+"\nUm parágrafo que alguém removeu depois.\n")
 	if err := registry.Publish(ctx, second, "usr_ana", "acme"); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -435,9 +421,7 @@ func TestVersions_currentFirst_soARunPinsToWhatIsHeld(t *testing.T) {
 	if err := registry.Publish(ctx, first, "usr_ana", "acme"); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-	withdrawn := first
-	withdrawn.Version = "v-withdrawn"
-	withdrawn.Instructions = first.Instructions + "\n\nRemovido depois."
+	withdrawn := published(t, definition+"\nRemovido depois.\n")
 	if err := registry.Publish(ctx, withdrawn, "usr_ana", "acme"); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/fuseone/agents/internal/auth"
@@ -131,9 +130,8 @@ func (s *Server) PublishAgent(
 		Spec: published, By: callerOf(ctx), Company: scope.Company,
 		RefuseStages: refusedStages(req.Params.RefuseIfStage),
 	})
-	if errors.Is(err, spec.ErrStageRefused) {
-		return openapi.PublishAgent409ApplicationProblemPlusJSONResponse(
-			refusal(http.StatusConflict, CodeStageRefused, "Stage refused", err.Error())), nil
+	if refused, ok := publicationConflict(err); ok {
+		return refused, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("publish %s: %w", req.AgentId, err)

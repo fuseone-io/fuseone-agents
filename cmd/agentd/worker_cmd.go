@@ -124,21 +124,21 @@ func (p *workerParts) loadAndPublish(ctx context.Context, dir string) (*spec.Res
 		return specs, nil
 	}
 
-	published, err := publishSpecs(ctx, p.registry, dir)
+	booted, err := publishSpecs(ctx, p.registry, dir)
 	if err != nil {
 		return nil, err
 	}
-	slog.Info("agent versions published", "count", published, "dir", dir)
+	slog.Info("agent versions published", "count", booted.published, "skipped", booted.skipped, "dir", dir)
 
 	// An agent nobody has decided about is recorded as paused. Loading a file
 	// never starts anything.
 	if err := pauseNewAgents(ctx, p.configPool, &dir); err != nil {
 		return nil, err
 	}
-	if err := syncSchedules(ctx, p.configPool, &dir); err != nil {
+	if err := syncSchedules(ctx, p.configPool, booted.current); err != nil {
 		return nil, err
 	}
-	if err := syncWebhooks(ctx, p.configPool, &dir); err != nil {
+	if err := syncWebhooks(ctx, p.configPool, booted.current); err != nil {
 		return nil, err
 	}
 	return specs, nil

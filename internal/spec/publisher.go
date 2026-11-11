@@ -89,6 +89,11 @@ func (p *Publisher) Publish(ctx context.Context, pub Publication) (Published, er
 	if err := lockEventGraph(ctx, tx); err != nil {
 		return Published{}, fmt.Errorf("spec: publish %s: %w", pub.Spec.ID, err)
 	}
+	// Before anything is judged: a judgement of these bytes means nothing if
+	// the id they would be published under already names others.
+	if err := claimVersion(ctx, tx, pub.Spec); err != nil {
+		return Published{}, err
+	}
 	if err := refuseStage(ctx, tx, pub.Spec.ID, pub.RefuseStages); err != nil {
 		return Published{}, err
 	}

@@ -575,9 +575,21 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409':
           description: |
-            The agent stands at the stage `refuseIfStage` named, so nothing was
-            written: no version, and the current version unchanged. Problem
-            type `fuseone:stage-refused`.
+            Nothing was written: no version, and the current version unchanged.
+            The problem type says why:
+
+            - `fuseone:stage-refused`: the agent stands at the stage
+              `refuseIfStage` named.
+            - `fuseone:version-collision`: the version id this definition gets
+              already names other bytes.
+            - `fuseone:version-digest-unknown`: the version id was published
+              before digests were kept, so nothing can show the bytes are the
+              same.
+
+            For either, change the definition. The id is 48 bits of the
+            digest, so a change almost always gives another one; if the new id
+            lands on another claim, it is refused the same way, and the
+            definition is changed again.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }

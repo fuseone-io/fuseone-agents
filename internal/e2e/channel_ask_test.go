@@ -134,7 +134,7 @@ func aConversation(t *testing.T) *conversing {
 		delete from channel_inbox;
 		delete from settings where kind = 'channel_identity';
 		delete from settings where kind like 'channel%';
-		truncate agent_specs; truncate agent_state;
+		truncate agent_specs; truncate agent_state; truncate agent_version_digests;
 		truncate run_steps, runs, run_content`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}

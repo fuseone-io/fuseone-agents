@@ -65,6 +65,15 @@ const (
 	// agent stands at the stage the publisher said it must not publish to.
 	// Its own code so a publisher can tell it from a definition it got wrong.
 	CodeStageRefused Code = "fuseone:stage-refused"
+	// CodeVersionCollision is a publication whose version id already names other
+	// bytes (NT-018). The id is 48 bits of the digest, so changing the
+	// definition almost always gives another one, and a new collision is
+	// refused the same way.
+	CodeVersionCollision Code = "fuseone:version-collision"
+	// CodeVersionDigestUnknown is a publication whose version id was published
+	// before digests were kept, so nothing can show the bytes are the same
+	// (NT-018). Changing the definition almost always gives another id.
+	CodeVersionDigestUnknown Code = "fuseone:version-digest-unknown"
 	// CodeNoMasterKey is a GitHub webhook's secret refused because the
 	// installation has no master key to seal it with (#202). Its own code so
 	// the console can say what to configure rather than report a failure.
