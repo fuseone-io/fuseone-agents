@@ -28,6 +28,88 @@ field" is a commit message.
 
 ---
 
+## [0.103.0] — 2026-11-11
+
+Release C1 of version claims (NT-018): every version id is bound to the full digest of its
+bytes before anything is judged. Administrators of one area are now shown only what the
+server lets them do, and can pick tools for an agent. Adds migration `0106_version_claims`.
+
+### Upgrade notes
+
+- **Republishing a version published before 0.103.0 is refused.**
+  - The migration claims every existing version without a digest, because its bytes were
+    never kept.
+  - Publishing the identical bytes of such a version used to make it current again. It now
+    answers 409 `fuseone:version-digest-unknown`.
+  - To put the definition live again, change it: a change almost always gives another
+    version id. If the new id lands on another claim, it is refused the same way, and the
+    definition is changed again.
+  - Versions that are current today stay current, and runs are unaffected.
+- **The disk sync skips such a version instead of failing the boot.**
+  - It logs `agent version skipped: published without a digest`, with the agent and the
+    version, and the boot line reports a `skipped` count.
+  - The row stays as it was, and so does its current state.
+  - Cron schedules and webhook paths are reconciled from the version the boot left current,
+    not from the newest file. An agent whose every file was skipped keeps its triggers.
+- **Every `serve` and `worker` replica must run 0.103.0 before release C2.**
+  - C2 installs the database triggers that refuse an unclaimed version.
+  - Until then, a 0.102.0 replica still writes versions without a claim. 0.103.0 refuses to
+    claim those rows later, and C2 claims them without a digest.
+  - Merged or published is not enough: C2 waits until every replica reports 0.103.0.
+- **Rolling back to 0.102.0 is supported, with a consequence.** Versions it publishes while it
+  runs carry no claim. After coming back to 0.103.0, they cannot be republished identically.
+  The floor 0.101.0 set still holds: once the first experiment exists, never go below
+  0.100.0.
+
+### Added
+
+- **Version claims** (#323).
+  - A new insert-only table, `agent_version_digests`, binds `(agent_id, version_id)` to the
+    full SHA-256 of the definition's bytes.
+  - `agent_specs` gains the digest column an insert presents. It is not a second record:
+    release C2 will require the two to be equal.
+  - Every writer claims the version under the event graph lock before it judges anything:
+    the console and the API, and the disk sync.
+  - The digest is the one `Parse` computed from the bytes it read, and a definition that
+    does not carry its own digest does not publish.
+- **Two problem types on publication** (#323).
+  - `fuseone:version-collision`: the version id already names other bytes.
+  - `fuseone:version-digest-unknown`: the id was published before digests were kept.
+  - A row found without a claim is refused too. The digest offered is never adopted for it.
+
+### Fixed
+
+- **Authors and administrators of an area can pick tools for an agent** (#324). The tool
+  catalogue the agent editor reads required `tool:read` at the platform's administration
+  scope, so anyone in an area got 403. It now reads with `tool:read` in any scope.
+  - It names tools, their servers and effects, never an address or a credential.
+  - Who declares each tool is filtered by where the caller may read agents.
+- **Administrators of an area are no longer offered what the server refuses** (#324).
+  - Eight permissions are checked only at the platform's administration scope:
+    `provider:write`, `tool:classify`, `budget:write`, `policy:write`, `approval:grant`,
+    `audit:export`, `brand:write` and `data:erase`. `/me` now lists them in `can` only
+    when held there.
+  - A new `platform` list says what the caller holds at that scope.
+  - The console hides Integrations, and the administration menu for an area auditor, unless
+    `platform` allows them.
+  - A link into integrations says they are configured by the platform's administration,
+    instead of a page of 403s.
+  - Integrations configured per area are not in this release; they need their own design
+    note.
+
+### Design decisions
+
+- **NT-018: the authoring workbench** (#322). One screen to build an agent by conversation,
+  rehearse it live on one case, correct it into a draft change and a dataset case, and run
+  the experiment in the same thread.
+  - The conversation is free, and the schema is fixed: nothing reaches the draft unless a
+    person accepts a validated operation. This revises NT-003 §4 and PRD §6.1.
+  - In a rehearsal the author answers for the world, and nothing reaches a real system.
+  - Candidates are sealed versions held apart from `agent_specs`. Activating one repeats
+    every guarantee of a publication, in the publication's lock order.
+  - Version claims are rolled out in two releases, C1 and C2; this release is C1. Nothing of
+    the workbench itself ships yet.
+
 ## [0.102.0] — 2026-11-11
 
 Release 1 of judge evaluators (#298, NT-016): every replica learns to recognise a judge run
