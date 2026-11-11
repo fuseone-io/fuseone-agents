@@ -279,9 +279,12 @@ interviewer**.
 
 ### 6.1 Structured interview
 
-It is not a free-form prompt. It is a guided conversation that fills a fixed
-schema. Every question is answerable by whoever performs the process, and every
-answer populates part of the specification.
+It is a conversation that fills a fixed schema, which the platform checks. The
+assistant chooses what to ask, but the schema below is fixed, its coverage is
+computed from the draft, and nothing reaches the draft unless a person accepts
+it ([NT-018](NT-018-authoring-workbench.md)). Every question is answerable by
+whoever performs the process, and every answer populates part of the
+specification.
 
 | Req. | Question to the author | What it fills |
 |---|---|---|
