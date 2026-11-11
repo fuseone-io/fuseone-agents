@@ -28,69 +28,89 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.102.0] — 2026-11-11
+
+Release 1 of judge evaluators (#298, NT-016): every replica learns to recognise a judge run
+and to run one. Nothing in this release starts a judgment. It adds no migration.
+
+### Upgrade notes
+
+- **There is no judgment writer, and no judgment API, in this release.**
+  - Nothing opens a judge run, and no route, console screen or manual page starts, reads
+    or compares a judgment.
+  - What ships is what every replica must know before anything writes one: the readers,
+    the fences, and the simulation pool's ability to run a judge.
+- **Every `serve` and `worker` replica must run 0.102.0 before release 2, which adds the
+  writers.**
+  - A 0.101.0 worker that claims a judge run resolves it as an ordinary experiment run. It
+    would plan the judged agent itself on the case input and spend money on an answer
+    nobody asked for.
+  - A 0.101.0 server would count judge runs among an experiment's runs and cases.
+  - Merged or published is not enough: the release that writes judgments waits until
+    every replica reports 0.102.0.
+- **Rolling back stays as before.** Nothing writes a judge run yet, so going back to 0.101.0
+  is safe. The floor 0.101.0 set still holds: once the first experiment exists, never go
+  below 0.100.0.
+- **Every turn reads one more row.** Both pools now read a run's first step before
+  resolving it, by primary key, whatever the length of the run. This adds one query per
+  turn. The run's other steps are not read again.
+- **Reading a judgment's id as a simulation answers 404.** No such id exists yet.
 
 ### Changed
 
-- **Readers and workers know judge runs** (#298), one release before anything opens one
-  (NT-016 § Rollout). Nothing in this release starts a judgment.
+- **Readers and workers know judge runs** (#318).
   - An agent's experiment list leaves out runs that judge an experiment: they count as
     neither runs nor cases of it, and none is its first.
-  - Reading a judgment's id as a simulation answers 404.
   - No worker plans the judged agent on a judge run, in the simulation pool or the real
-    one. It parks one, as an unresolved specification, until a worker that runs judges
-    takes it. One outside an experiment stays refused whatever the worker can do. To
-    check this, every turn now reads the run's first step: one row, however long the run.
-- **The simulation pool runs judge runs** (#298, NT-016), still with nothing in this release
-  that opens one.
+    one. The real pool parks one as an unresolved specification. One outside an experiment
+    stays refused whatever the worker can do.
+  - The doors that guard the start gate, the battery and FU-10 already left judge runs out
+    on every replica since 0.100.0, and this is now asserted.
+- **The simulation pool runs judge runs** (#319).
   - **What the judge is sent.** The rubric is the system prompt. The case and the judged
     output are the only user turn, each in a block marked with a boundary derived from the
     run's salt. The pack is empty, the ceiling is the judgment's, and the pair is the judge's.
   - **What is checked first.** Every object the opening names is checked against its digest
-    before any of it is sent. That covers the rubric, the salt and the copy of the output.
-  - **What counts as an answer.** The judge answers with a fixed-width option code. It is
-    read from the finish call as the provider returned it, before the model adapter trims a
+    before any of it is sent: the rubric, the salt and the copy of the output.
+  - **What counts as an answer.** The judge answers with a fixed-width option code, read
+    from the finish call as the provider returned it, before the model adapter trims a
     summary or drops an empty headline. With the reason off, anything beyond the code is a
-    failed judgment (`judge_unparseable`), never trimmed and never cut to a valid prefix. So
-    is any of these:
+    failed judgment (`judge_unparseable`), never trimmed and never cut to a valid prefix.
+    These are failed judgments too:
     - any other key in the call, empty or of spaces;
     - `summary` written twice, or written as null;
     - text beside the call;
-    - another tool call in the same response, before or after the finish.
+    - another tool call in the same response, before or after the finish;
     - anything after the arguments' object but the end, such as `{"summary":"B"} x`.
   - **What a rubric may declare.** A field's presence is what was declared: a zero is a
     value, and a key written twice or as null is refused. A score is any range of integers
     with at most eleven values. Its width is computed without overflow, and its options are
     walked by count, so a range ending at the largest integer ends there.
-  - **What is stored.** The judgment and the answer as written are stored salted, at one fixed
-    size each, and nothing else of the judge's is stored. An answer over the size is
+  - **What is stored.** The judgment and the answer as written are stored salted, at one
+    fixed size each, and nothing else of the judge's is stored. An answer over the size is
     `judge_oversized`, never truncated.
 
 ### Design decisions
 
-These are decisions recorded in a note. Nothing below is implemented yet.
-
-- **NT-016: judge evaluators** (#298). A judge applies a rubric to the outputs of a
+- **NT-016: judge evaluators** (#316). A judge applies a rubric to the outputs of a
   settled experiment. Its result is an opinion with the rubric digest, judge model and
-  cost, shown beside held and broken and never counted in them.
-  - Each judgment is a set of simulated runs that name the experiment. The doors that
-    guard the start gate, the battery and FU-10 already leave them out on every replica
-    since 0.100.0.
+  cost, shown beside held and broken and never counted in them. This release implements
+  its first rollout step, and the rest waits for release 2.
+  - Each judgment is a set of simulated runs that name the experiment.
   - The value and the reason are content, under retention and erasure. A rubric can
-    classify a person, so the chain holds only references, digests and provenance, and
-    every object about a verdict is salted, fixed in size and answered as a fixed-width
-    code, so no digest, length or token count left after erasure gives the value back. An
-    answer of any other shape is a failed judgment, never a score.
-  - A judgment requires the whole experiment to be materialized, checked under the
-    corpus fence. One idempotency key names one judgment, as it does for an experiment.
-  - The platform guarantees structural isolation from the judged output and measures
-    the judge's resistance to persuasion; it does not promise it.
+    classify a person, so the chain holds only references, digests and provenance.
+  - Every object about a verdict is salted, fixed in size and answered as a fixed-width
+    code, so no digest, length or token count left after erasure gives the value back.
+  - A judgment requires the whole experiment to be materialized, checked under the corpus
+    fence. One idempotency key names one judgment, as it does for an experiment.
+  - The platform guarantees structural isolation from the judged output and measures the
+    judge's resistance to persuasion; it does not promise it.
   - A reason is off unless the rubric declares it. Declared or not, it is part of the
     rubric's digest, so judgments with and without one are not compared.
   - Broken runs are not judged. Two experiments compare on quality only under the same
     rubric and judge, and only over the cases held on both sides.
-  - It needs two releases: workers and readers first, because a 0.101.0 worker would run
-    the judged agent itself on a judge run.
+  - The issue NT-016 requires before the writers exists (#317). It is for showing
+    measurement spend apart from operating spend, and it does not change the phase 3 budget.
 
 ## [0.101.0] — 2026-11-10
 
