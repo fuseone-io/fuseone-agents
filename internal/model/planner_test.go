@@ -2336,3 +2336,27 @@ func TestFinish_keepsTheAnswerVerbatim_onBothAdapters(t *testing.T) {
 			got.Outcome, got.Verbatim.FinishArgs, got.Verbatim.Text)
 	}
 }
+
+// Every tool call of a response is counted, the finish included and in any order: a judge
+// that finished and asked for a tool has not answered (NT-016).
+func TestFinish_countsEveryCallOfTheResponse_onBothAdapters(t *testing.T) {
+	t.Parallel()
+	c := serve(t, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5",
+	  "content":[{"type":"tool_use","id":"toolu_finish","name":"_fuseone__finish","input":{"summary":"B"}},
+	    {"type":"tool_use","id":"toolu_2","name":"crm.lookup","input":{}}],
+	  "stop_reason":"tool_use","usage":{"input_tokens":10,"output_tokens":5}}`)
+	got, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{}).Plan(context.Background(), input())
+	if err != nil || got.Verbatim.Calls != 2 {
+		t.Errorf("anthropic: calls = %d (%v), want 2", got.Verbatim.Calls, err)
+	}
+	o := serve(t, `{
+	  "choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[
+	    {"id":"call_finish","type":"function","function":{"name":"_fuseone__finish","arguments":"{\"summary\":\"B\"}"}},
+	    {"id":"call_2","type":"function","function":{"name":"crm_lookup","arguments":"{}"}}]}}],
+	  "usage":{"prompt_tokens":10,"completion_tokens":5}
+	}`)
+	got, err = plannerFor(t, model.KindOpenAICompatible, o.server.URL, model.Config{Model: "gpt-x"}).Plan(context.Background(), input())
+	if err != nil || got.Verbatim.Calls != 2 {
+		t.Errorf("openai: calls = %d (%v), want 2", got.Verbatim.Calls, err)
+	}
+}

@@ -196,7 +196,7 @@ func finishing(t *testing.T, fields map[string]any) engine.Proposal {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	return engine.Proposal{Done: true, Verbatim: engine.Verbatim{FinishArgs: args}}
+	return engine.Proposal{Done: true, Verbatim: engine.Verbatim{FinishArgs: args, Calls: 1}}
 }
 
 // The closer is the closed parser and the sealed objects: a value of the declared shape
@@ -246,14 +246,17 @@ func TestResolveJudge_theCloser_sealsOnlyAClosedAnswer(t *testing.T) {
 	}
 }
 
-// answeringServer finishes every call with these finish arguments, and this text beside them.
-func answeringServer(t *testing.T, args, text string) string {
+// answeringServer finishes every call with these finish arguments, this text beside them,
+// and a lookup before or after the finish when asked.
+func answeringServer(t *testing.T, args, text, lookup string) string {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		message := map[string]any{"role": "assistant", "tool_calls": []map[string]any{{
-			"id": "call_finish", "type": "function",
-			"function": map[string]any{"name": "_fuseone__finish", "arguments": args},
-		}}}
+		finish := map[string]any{"id": "call_finish", "type": "function",
+			"function": map[string]any{"name": "_fuseone__finish", "arguments": args}}
+		other := map[string]any{"id": "call_lookup", "type": "function",
+			"function": map[string]any{"name": "crm_lookup", "arguments": `{}`}}
+		calls := map[string][]map[string]any{"": {finish}, "after": {finish, other}, "before": {other, finish}}[lookup]
+		message := map[string]any{"role": "assistant", "tool_calls": calls}
 		if text != "" {
 			message["content"] = text
 		}
@@ -280,24 +283,33 @@ func TestResolveJudge_throughTheRealAdapter_theCloserReadsTheAnswerVerbatim(t *t
 	for _, c := range []struct {
 		name, args, text string
 		want             byte
+		lookup           string
 	}{
-		{"the code alone", `{"summary":"B"}`, "", 'B'},
-		{"a trailing space", `{"summary":"B "}`, "", 0},
-		{"a leading newline", `{"summary":"\nB"}`, "", 0},
-		{"a headline of spaces", `{"summary":"B","headline":"   "}`, "", 0},
-		{"an empty headline", `{"summary":"B","headline":""}`, "", 0},
-		{"a stop of spaces", `{"summary":"B","stopped_by":" "}`, "", 0},
-		{"empty artifacts", `{"summary":"B","artifacts":{}}`, "", 0},
-		{"an unknown field", `{"summary":"B","why":"x"}`, "", 0},
-		{"text beside the call", `{"summary":"B"}`, " ", 0},
-		{"a summary that is not text", `{"summary":["B"]}`, "", 0},
+		{"the code alone", `{"summary":"B"}`, "", 'B', ""},
+		// A judge that asks for a tool has not answered, in either order.
+		{"a lookup after the finish", `{"summary":"B"}`, "", 0, "after"},
+		{"a lookup before the finish", `{"summary":"B"}`, "", 0, "before"},
+		// One summary, written once, as text.
+		{"a summary twice, the last clean", `{"summary":"B ","summary":"B"}`, "", 0, ""},
+		{"a summary twice, both clean", `{"summary":"B","summary":"B"}`, "", 0, ""},
+		{"a null summary", `{"summary":null}`, "", 0, ""},
+		{"a null headline", `{"summary":"B","headline":null}`, "", 0, ""},
+		{"a trailing space", `{"summary":"B "}`, "", 0, ""},
+		{"a leading newline", `{"summary":"\nB"}`, "", 0, ""},
+		{"a headline of spaces", `{"summary":"B","headline":"   "}`, "", 0, ""},
+		{"an empty headline", `{"summary":"B","headline":""}`, "", 0, ""},
+		{"a stop of spaces", `{"summary":"B","stopped_by":" "}`, "", 0, ""},
+		{"empty artifacts", `{"summary":"B","artifacts":{}}`, "", 0, ""},
+		{"an unknown field", `{"summary":"B","why":"x"}`, "", 0, ""},
+		{"text beside the call", `{"summary":"B"}`, " ", 0, ""},
+		{"a summary that is not text", `{"summary":["B"]}`, "", 0, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			f := newJudgeFixture(t)
 			registry := model.NewRegistry(nil)
 			if err := registry.Register(model.Provider{
-				Name: "judging", Kind: model.KindOpenAICompatible, BaseURL: answeringServer(t, c.args, c.text), APIKey: "k",
+				Name: "judging", Kind: model.KindOpenAICompatible, BaseURL: answeringServer(t, c.args, c.text, c.lookup), APIKey: "k",
 			}); err != nil {
 				t.Fatalf("Register: %v", err)
 			}

@@ -133,11 +133,13 @@ type Proposal struct {
 	Verbatim Verbatim
 }
 
-// Verbatim is a finish call's arguments as the provider sent them, and the text the
-// model wrote beside the call. FinishArgs is nil when the model did not finish.
+// Verbatim is a finish call's arguments as the provider sent them, the text the model
+// wrote beside the call, and how many tool calls the response held, the finish included,
+// in any order. FinishArgs is nil when the model did not finish.
 type Verbatim struct {
 	FinishArgs []byte
 	Text       string
+	Calls      int
 }
 
 // Tools invokes a registered tool, normally an MCP server.
