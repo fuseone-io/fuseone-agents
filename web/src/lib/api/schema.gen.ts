@@ -7145,11 +7145,15 @@ export interface operations {
              *     - `fuseone:stage-refused`: the agent stands at the stage
              *       `refuseIfStage` named.
              *     - `fuseone:version-collision`: the version id this definition gets
-             *       already names other bytes. The id is 48 bits of the digest;
-             *       changing the definition gives another one.
+             *       already names other bytes.
              *     - `fuseone:version-digest-unknown`: the version id was published
              *       before digests were kept, so nothing can show the bytes are the
-             *       same. Changing the definition gives another id.
+             *       same.
+             *
+             *     For either, change the definition. The id is 48 bits of the
+             *     digest, so a change almost always gives another one; if the new id
+             *     lands on another claim, it is refused the same way, and the
+             *     definition is changed again.
              */
             409: {
                 headers: {
