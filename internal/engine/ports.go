@@ -334,6 +334,8 @@ type Start struct {
 	// of an event chain records on its closing step that they will not be
 	// published (#203); one that declares none has nothing to withhold.
 	PublishesEvents bool
+	// Closer, when set, seals the closing answer itself (NT-016): a judge run's.
+	Closer Closer
 }
 
 // Status is the outcome of one Advance.
