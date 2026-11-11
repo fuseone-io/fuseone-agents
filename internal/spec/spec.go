@@ -35,6 +35,10 @@ type Spec struct {
 	// is no way to edit a published version in place, and "did this change"
 	// is a string comparison (PRD DE-08).
 	Version domain.VersionID
+	// Digest is the full SHA-256 of the bytes Parse was given, in hex. Only
+	// Parse sets it: a Spec rebuilt or re-serialised is other bytes, so the
+	// digest is carried from the file rather than recomputed (NT-018).
+	Digest string
 
 	Provider string
 	Model    string
@@ -168,6 +172,7 @@ func Parse(source string, data []byte) (Spec, error) {
 		Company:        domain.CompanyID(fm.Company),
 		Area:           domain.AreaID(fm.Area),
 		Version:        versionOf(data),
+		Digest:         digestOf(data),
 		Provider:       fm.Provider,
 		Model:          fm.Model,
 		Effort:         fm.Effort,
@@ -282,6 +287,11 @@ func split(data []byte) (front, body []byte, err error) {
 
 // versionOf derives the immutable version from the file's bytes.
 func versionOf(data []byte) domain.VersionID {
+	return domain.VersionID("v" + digestOf(data)[:12])
+}
+
+// digestOf is the full SHA-256 of the file's bytes, which a version is cut from.
+func digestOf(data []byte) string {
 	sum := sha256.Sum256(data)
-	return domain.VersionID("v" + hex.EncodeToString(sum[:])[:12])
+	return hex.EncodeToString(sum[:])
 }

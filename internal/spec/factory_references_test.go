@@ -75,10 +75,11 @@ func TestFactoryReferences_eachFile_parsesAndSurvivesARoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Parse rendered: %v", err)
 			}
-			// Version is the digest of the bytes, and the file is laid out
+			// Version and Digest are of the bytes, and the file is laid out
 			// for people (flow-style triggers) rather than as Render writes
 			// it; every field the definition declares must come back.
 			first.Version, again.Version = "", ""
+			first.Digest, again.Digest = "", ""
 			if !reflect.DeepEqual(again, first) {
 				t.Errorf("round trip changed the definition:\n got %+v\nwant %+v", again, first)
 			}

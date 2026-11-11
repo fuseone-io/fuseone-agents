@@ -68,13 +68,16 @@ type execer interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-func publishOn(ctx context.Context, q execer, s Spec, by domain.UserID, company domain.CompanyID) error {
+func publishOn(ctx context.Context, q claimer, s Spec, by domain.UserID, company domain.CompanyID) error {
 	if company == "" || company == domain.Installation {
 		return fmt.Errorf("spec: publish %s@%s: company %q is not a publishable company", s.ID, s.Version, company)
 	}
 	if s.Company != "" && s.Company != company {
 		return fmt.Errorf("spec: publish %s@%s: definition company %q does not match authorised company %q",
 			s.ID, s.Version, s.Company, company)
+	}
+	if err := claimVersion(ctx, q, s); err != nil {
+		return err
 	}
 
 	budget, err := json.Marshal(s.Budget)
@@ -125,13 +128,15 @@ func publishOn(ctx context.Context, q execer, s Spec, by domain.UserID, company 
 			agent_id, version_id, company_id, area_id, name,
 			provider, model, effort, cache_prefix_ttl, reply_locale, tools, budget,
 			triggers, instructions, source, published_by, emits, steps,
-			memory_learning, approvals, fallback_provider, fallback_model, standing_approvals
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+			memory_learning, approvals, fallback_provider, fallback_model, standing_approvals,
+			digest
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
 		on conflict (agent_id, version_id) do nothing`,
 		string(s.ID), string(s.Version), string(company), string(s.Area), s.Name,
 		s.Provider, s.Model, s.Effort, s.CachePrefixTTL, s.ReplyLocale, tools, budget,
 		triggers, s.Instructions, s.Source, string(by), encodedEmits, steps, learning,
-		approvals, s.Fallback.Provider, s.Fallback.Model, string(s.StandingApprovals))
+		approvals, s.Fallback.Provider, s.Fallback.Model, string(s.StandingApprovals),
+		s.Digest)
 	if err != nil {
 		return fmt.Errorf("spec: publish %s@%s: %w", s.ID, s.Version, err)
 	}

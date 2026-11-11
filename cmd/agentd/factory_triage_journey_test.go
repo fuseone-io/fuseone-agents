@@ -502,10 +502,12 @@ func assertPublishedIsTheReference(t *testing.T, j *factoryJourney, reference sp
 	}
 	// Only what publishing assigns differs, each for a reason that is not the
 	// file's: the company is chosen in the console (the file has none by
-	// design), the version is the digest of the text the route renders, not
-	// of the file's bytes, and the source names where each copy was read.
+	// design), the version and its digest are of the text the route renders,
+	// not of the file's bytes, and the source names where each copy was read.
+	// A version read back carries no digest: only Parse sets one.
 	want := reference
 	want.Company, want.Version, want.Source = got.Company, got.Version, got.Source
+	want.Digest = got.Digest
 	// No events declared reads back as an empty value where the parse left
 	// nil. Both say "emits nothing"; anything declared is still compared.
 	if len(got.Emits) == 0 && len(want.Emits) == 0 {
