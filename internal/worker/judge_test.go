@@ -171,3 +171,106 @@ func TestTurn_aJudgeOnARealRun_inThePoolWithoutExperiments_neverReachesATool(t *
 		})
 	}
 }
+
+// readCounting is a ledger that counts how the fence read the run.
+type readCounting struct {
+	*ledger.Memory
+	reads, openings int
+}
+
+func (r *readCounting) Read(ctx context.Context, run domain.RunID, from int64) ([]domain.Step, error) {
+	r.reads++
+	return r.Memory.Read(ctx, run, from)
+}
+
+func (r *readCounting) Opening(ctx context.Context, run domain.RunID) (domain.Step, error) {
+	r.openings++
+	return r.Memory.Opening(ctx, run)
+}
+
+/*
+The fence costs one step, not the run (NT-016 § Rollout).
+
+Every turn of the real pool reads the opening now. Read whole, a long run is a scan that
+grows with it on every turn, on top of the runner's own two. A judge run never reaches the
+runner, so every read made here is the fence's: it must be the opening alone, in both
+pools, however many steps the run already has.
+*/
+func TestTurn_theJudgeFence_readsTheOpeningAlone(t *testing.T) {
+	t.Parallel()
+	for _, simulated := range []bool{true, false} {
+		name := map[bool]string{true: "simulation pool", false: "real pool"}[simulated]
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			store := ledger.NewMemory()
+			openSimulated(t, store, domain.RunStartedPayload{
+				Trigger: "simulation", Simulated: simulated, Simulation: "jdg-1", Case: "case-1",
+				Experiment: "exp-1", Judge: judgeOpening(),
+			})
+			for i := 0; i < 40; i++ {
+				if _, err := store.Append(context.Background(), domain.Step{
+					RunID: "run-1", Kind: domain.StepPlanned, Scope: domain.Scope{Company: "acme", Area: "cx"},
+					AgentID: "triage", VersionID: "v3", At: time.Now(), Payload: []byte(`{"node":"n"}`),
+				}); err != nil {
+					t.Fatalf("seed: %v", err)
+				}
+			}
+			counted := &readCounting{Memory: store}
+			specs := &experimentSpecs{planner: &flakyPlanner{}}
+			clock := frozenClock{t: time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)}
+			deps := engine.Deps{
+				Ledger: counted, Content: engine.NewMemoryContent(), Gate: gate.New(),
+				Tools: &countingTools{}, Catalog: emptyCatalog{}, Clock: clock,
+			}
+			var queue Queue = store
+			if simulated {
+				queue = store.Simulations()
+			}
+			w := New(Config{Owner: "w"}, queue, deps, specs, clock, slog.New(slog.DiscardHandler)).
+				WithStages(stageIs(domain.StageAutonomous))
+			if simulated {
+				w = w.WithExperiments(specs)
+			}
+			if claimed, err := w.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil || !claimed {
+				t.Fatalf("turn: claimed=%v err=%v", claimed, err)
+			}
+
+			if counted.openings != 1 || counted.reads != 0 {
+				t.Errorf("read the opening %d times and the whole run %d times; want the opening once and nothing else",
+					counted.openings, counted.reads)
+			}
+			if got := parkReason(t, store); got != "spec_unresolved" {
+				t.Errorf("reason = %q, want the judge run parked", got)
+			}
+		})
+	}
+}
+
+// openingless is a ledger that offers no opening read: only the engine's port.
+type openingless struct{ engine.Ledger }
+
+// Without a cheap opening read, the fence fails loudly rather than reading the whole run
+// every turn or letting the run through unchecked.
+func TestTurn_aLedgerThatCannotReadAnOpening_parksRatherThanSkippingTheFence(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	openSimulated(t, store, domain.RunStartedPayload{Trigger: "manual", Judge: judgeOpening()})
+	planner := &flakyPlanner{}
+	specs := &experimentSpecs{planner: planner}
+	clock := frozenClock{t: time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)}
+	deps := engine.Deps{
+		Ledger: openingless{store}, Content: engine.NewMemoryContent(), Gate: gate.New(),
+		Tools: &countingTools{}, Catalog: emptyCatalog{}, Clock: clock,
+	}
+	w := New(Config{Owner: "w"}, store, deps, specs, clock, slog.New(slog.DiscardHandler)).
+		WithStages(stageIs(domain.StageAutonomous))
+	if claimed, err := w.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil || !claimed {
+		t.Fatalf("turn: claimed=%v err=%v", claimed, err)
+	}
+	if specs.declared != 0 || planner.calls != 0 {
+		t.Errorf("resolved %d and planned %d times; want neither", specs.declared, planner.calls)
+	}
+	if got := parkReason(t, store); got != "spec_unresolved" {
+		t.Errorf("reason = %q, want the run parked", got)
+	}
+}

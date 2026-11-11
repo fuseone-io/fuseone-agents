@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -55,22 +56,36 @@ func (w *Worker) resolve(ctx context.Context, claim domain.Claim) (Resolution, e
 	return w.experiments.ResolveExperiment(ctx, claim.AgentID, claim.VersionID, *config)
 }
 
+// Openings reads a run's first step alone, declared here by the consumer. Every turn of
+// every pool asks for it, so it must cost one step however long the run has grown.
+type Openings interface {
+	Opening(ctx context.Context, runID domain.RunID) (domain.Step, error)
+}
+
+// errNoOpenings is a ledger that cannot read an opening alone. Failing loudly beats
+// reading the whole run on every turn, or skipping the judge fence.
+var errNoOpenings = errors.New("the ledger cannot read a run's opening alone")
+
 // openingOf is what a run recorded when it opened.
 func (w *Worker) openingOf(ctx context.Context, run domain.RunID) (domain.RunStartedPayload, error) {
-	steps, err := w.deps.Ledger.Read(ctx, run, domain.FirstSeq)
+	openings, ok := w.deps.Ledger.(Openings)
+	if !ok {
+		return domain.RunStartedPayload{}, errNoOpenings
+	}
+	first, err := openings.Opening(ctx, run)
 	if err != nil {
 		return domain.RunStartedPayload{}, fmt.Errorf("read the opening of %s: %w", run, err)
 	}
-	if len(steps) == 0 || steps[0].Kind != domain.StepRunStarted {
+	if first.Kind != domain.StepRunStarted {
 		return domain.RunStartedPayload{}, fmt.Errorf("%s has no opening step", run)
 	}
 	// Read as the engine's fold reads it: no payload is an empty opening, so the fence
 	// never parks a run the engine would advance.
 	var started domain.RunStartedPayload
-	if len(steps[0].Payload) == 0 {
+	if len(first.Payload) == 0 {
 		return started, nil
 	}
-	if err := json.Unmarshal(steps[0].Payload, &started); err != nil {
+	if err := json.Unmarshal(first.Payload, &started); err != nil {
 		return domain.RunStartedPayload{}, fmt.Errorf("decode the opening of %s: %w", run, err)
 	}
 	return started, nil

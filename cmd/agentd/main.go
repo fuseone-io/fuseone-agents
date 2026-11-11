@@ -25,6 +25,7 @@ import (
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/model"
 	"github.com/fuseone/agents/internal/trigger"
+	"github.com/fuseone/agents/internal/worker"
 )
 
 var version = "0.1.0-dev"
@@ -117,6 +118,9 @@ type Store interface {
 	drift.Batteries
 	drift.LastBatteries
 	engine.Ledger
+	// Openings is required here, not only asserted by the worker: every turn reads a run's
+	// opening alone before resolving it (NT-016), and a store without it would park them all.
+	worker.Openings
 	trigger.Feed
 	trigger.BacklogReader
 	Verify(ctx context.Context, runID domain.RunID) error
