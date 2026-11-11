@@ -27,12 +27,14 @@ const (
 	OutputCategory OutputType = "category"
 )
 
-// Output is the declared verdict and its pass criterion.
+// Output is the declared verdict and its pass criterion. Each field is a pointer or a
+// slice so that its presence is what was declared: a zero is a value, and a field a type
+// does not take is refused even when it is zero or empty.
 type Output struct {
 	Type       OutputType `json:"type"`
-	Min        int        `json:"min,omitempty"`
-	Max        int        `json:"max,omitempty"`
-	Threshold  int        `json:"threshold,omitempty"`
+	Min        *int       `json:"min,omitempty"`
+	Max        *int       `json:"max,omitempty"`
+	Threshold  *int       `json:"threshold,omitempty"`
 	Categories []string   `json:"categories,omitempty"`
 	Passing    []string   `json:"passing,omitempty"`
 }
@@ -51,6 +53,8 @@ const (
 	minCategories   = 2
 	maxCategories   = 10
 	maxInstructions = 16 << 10
+	// scoreBound keeps every score small enough that no range arithmetic can overflow.
+	scoreBound = 1000
 )
 
 // A category is an identifier rather than prose, so it can be parsed without judgment.
@@ -82,7 +86,7 @@ func (r Rubric) validate() error {
 	}
 	switch o := r.Output; o.Type {
 	case OutputPassFail:
-		if o.Min != 0 || o.Max != 0 || o.Threshold != 0 || len(o.Categories) > 0 || len(o.Passing) > 0 {
+		if declaresRange(o) || o.Categories != nil || o.Passing != nil {
 			return errors.New("pass_fail declares nothing else")
 		}
 		return nil
@@ -95,21 +99,36 @@ func (r Rubric) validate() error {
 	}
 }
 
+// declaresRange is whether any of a score's fields is present, zero included.
+func declaresRange(o Output) bool {
+	return o.Min != nil || o.Max != nil || o.Threshold != nil
+}
+
 func validScore(o Output) error {
-	if len(o.Categories) > 0 || len(o.Passing) > 0 {
+	if o.Categories != nil || o.Passing != nil {
 		return errors.New("a score declares no categories")
 	}
-	if o.Min >= o.Max || o.Max-o.Min+1 > maxValues {
+	if o.Min == nil || o.Max == nil || o.Threshold == nil {
+		return errors.New("a score declares min, max and threshold")
+	}
+	low, high, threshold := *o.Min, *o.Max, *o.Threshold
+	// Bounded before any subtraction, so the count below cannot overflow.
+	for _, v := range []int{low, high, threshold} {
+		if v < -scoreBound || v > scoreBound {
+			return fmt.Errorf("a score's values are within ±%d", scoreBound)
+		}
+	}
+	if low >= high || high-low+1 > maxValues {
 		return fmt.Errorf("a score has 2 to %d values", maxValues)
 	}
-	if o.Threshold < o.Min || o.Threshold > o.Max {
+	if threshold < low || threshold > high {
 		return errors.New("the threshold is within the range")
 	}
 	return nil
 }
 
 func validCategories(o Output) error {
-	if o.Min != 0 || o.Max != 0 || o.Threshold != 0 {
+	if declaresRange(o) {
 		return errors.New("a category declares no range")
 	}
 	if len(o.Categories) < minCategories || len(o.Categories) > maxCategories {
@@ -157,16 +176,21 @@ type Option struct {
 	Passes bool
 }
 
-// Options are the declared values as codes A, B, C… in the rubric's order.
+// Options are the declared values as codes A, B, C… in the rubric's order, and none for a
+// rubric that is not valid: a range nobody checked could wrap and never end.
 func (r Rubric) Options() []Option {
+	if r.validate() != nil {
+		return nil
+	}
 	var values []string
 	var passes []bool
 	switch o := r.Output; o.Type {
 	case OutputPassFail:
 		values, passes = []string{"pass", "fail"}, []bool{true, false}
 	case OutputScore:
-		for v := o.Min; v <= o.Max; v++ {
-			values, passes = append(values, strconv.Itoa(v)), append(passes, v >= o.Threshold)
+		for i := 0; i <= *o.Max-*o.Min; i++ {
+			v := *o.Min + i
+			values, passes = append(values, strconv.Itoa(v)), append(passes, v >= *o.Threshold)
 		}
 	case OutputCategory:
 		passing := make(map[string]bool, len(o.Passing))

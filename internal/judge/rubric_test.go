@@ -44,6 +44,17 @@ func TestParseRubric_invalidDeclarations_areRefused(t *testing.T) {
 		"categories on a score": `{"instructions":"x","output":{"type":"score","min":1,"max":5,"threshold":3,"categories":["a","b"]}}`,
 		"range on pass_fail":    `{"instructions":"x","output":{"type":"pass_fail","max":5}}`,
 		"trailing data":         `{"instructions":"x","output":{"type":"pass_fail"}} {}`,
+		// Presence is what the contract declares: a zero is a value, absence is none.
+		"score without threshold":   `{"instructions":"x","output":{"type":"score","min":0,"max":5}}`,
+		"score without min":         `{"instructions":"x","output":{"type":"score","max":5,"threshold":3}}`,
+		"pass_fail with min zero":   `{"instructions":"x","output":{"type":"pass_fail","min":0}}`,
+		"category with min zero":    `{"instructions":"x","output":{"type":"category","categories":["ok","bad"],"passing":["ok"],"min":0}}`,
+		"pass_fail with categories": `{"instructions":"x","output":{"type":"pass_fail","categories":[]}}`,
+		"score with passing":        `{"instructions":"x","output":{"type":"score","min":0,"max":5,"threshold":3,"passing":[]}}`,
+		// A range that overflows, and one that ends where a loop would wrap.
+		"overflowing range": `{"instructions":"x","output":{"type":"score","min":-9223372036854775808,"max":9223372036854775807,"threshold":0}}`,
+		"range at the top":  `{"instructions":"x","output":{"type":"score","min":9223372036854775800,"max":9223372036854775807,"threshold":9223372036854775807}}`,
+		"range past bounds": `{"instructions":"x","output":{"type":"score","min":1000,"max":1005,"threshold":1001}}`,
 	} {
 		if _, err := ParseRubric([]byte(raw)); err == nil {
 			t.Errorf("%s: accepted, want refused", name)
@@ -79,6 +90,18 @@ func TestRubricDigest_namesTheDeclarationNotItsSpelling(t *testing.T) {
 	}
 	if !strings.HasPrefix(base.Digest(), "sha256:") || len(base.Digest()) != len("sha256:")+64 {
 		t.Errorf("digest = %q, want a full sha256", base.Digest())
+	}
+}
+
+// A rubric nobody validated has no options rather than a loop: Options is public, and a
+// range that wraps would never end.
+func TestOptions_ofAnUnvalidatedRubric_areNone(t *testing.T) {
+	t.Parallel()
+	top, low := int(^uint(0)>>1), 0
+	low = top - 3
+	r := Rubric{Instructions: "x", Output: Output{Type: OutputScore, Min: &low, Max: &top, Threshold: &top}}
+	if got := r.Options(); got != nil {
+		t.Errorf("options = %d, want none", len(got))
 	}
 }
 
