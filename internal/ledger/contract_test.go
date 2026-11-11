@@ -32,6 +32,8 @@ import (
 // and the API need.
 type Store interface {
 	engine.Ledger
+	// Opening is a run's first step alone, the one every turn reads before resolving.
+	Opening(ctx context.Context, runID domain.RunID) (domain.Step, error)
 	// AppendIfHead seals a step only onto the head it was decided against.
 	AppendIfHead(ctx context.Context, head domain.StepRef, s domain.Step) (domain.Step, error)
 	Runs(ctx context.Context) ([]domain.RunID, error)
