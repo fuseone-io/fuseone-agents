@@ -1,0 +1,1452 @@
+<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-vdxcvpsm"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>NT-018 — The authoring workbench | FuseOne Agents</title><link rel="canonical" href="https://fuseone-io.github.io/fuseone-agents/docs/design/nt-018-authoring-workbench/"/><link rel="sitemap" href="/fuseone-agents/docs/sitemap-index.xml"/><link rel="icon" type="image/svg+xml" href="/fuseone-agents/docs/favicon.svg"/><link rel="shortcut icon" href="/fuseone-agents/docs/favicon.svg" type="image/svg+xml"/><meta name="generator" content="Astro v7.4.2"/><meta name="generator" content="Starlight v0.41.11"/><meta property="og:title" content="NT-018 — The authoring workbench"/><meta property="og:type" content="article"/><meta property="og:url" content="https://fuseone-io.github.io/fuseone-agents/docs/design/nt-018-authoring-workbench/"/><meta property="og:locale" content="en"/><meta property="og:description" content="One screen to build an agent by conversation, rehearse it live, correct it and experiment."/><meta property="og:site_name" content="FuseOne Agents"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="One screen to build an agent by conversation, rehearse it live, correct it and experiment."/><script>
+	window.StarlightThemeProvider = (() => {
+		const storedTheme =
+			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+		const theme =
+			storedTheme ||
+			(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers(theme = storedTheme || 'auto') {
+				document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+					const select = picker.querySelector('select');
+					if (select) select.value = theme;
+					/** @type {HTMLTemplateElement | null} */
+					const tmpl = document.querySelector(`#theme-icons`);
+					const newIcon = tmpl && tmpl.content.querySelector('.' + theme);
+					if (newIcon) {
+						const oldIcon = picker.querySelector('svg.label-icon');
+						if (oldIcon) {
+							oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+						}
+					}
+				});
+			},
+		};
+	})();
+</script><template id="theme-icons"><svg aria-hidden="true" class="light astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M5 12a1 1 0 0 0-1-1H3a1 1 0 0 0 0 2h1a1 1 0 0 0 1-1Zm.64 5-.71.71a1 1 0 0 0 0 1.41 1 1 0 0 0 1.41 0l.71-.71A1 1 0 0 0 5.64 17ZM12 5a1 1 0 0 0 1-1V3a1 1 0 0 0-2 0v1a1 1 0 0 0 1 1Zm5.66 2.34a1 1 0 0 0 .7-.29l.71-.71a1 1 0 1 0-1.41-1.41l-.66.71a1 1 0 0 0 0 1.41 1 1 0 0 0 .66.29Zm-12-.29a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.71-.71a1.004 1.004 0 1 0-1.43 1.41l.73.71ZM21 11h-1a1 1 0 0 0 0 2h1a1 1 0 0 0 0-2Zm-2.64 6A1 1 0 0 0 17 18.36l.71.71a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.76-.66ZM12 6.5a5.5 5.5 0 1 0 5.5 5.5A5.51 5.51 0 0 0 12 6.5Zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm0 3.5a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1Z"/></svg><svg aria-hidden="true" class="dark astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.64 13a1 1 0 0 0-1.05-.14 8.049 8.049 0 0 1-3.37.73 8.15 8.15 0 0 1-8.14-8.1 8.59 8.59 0 0 1 .25-2A1 1 0 0 0 8 2.36a10.14 10.14 0 1 0 14 11.69 1 1 0 0 0-.36-1.05Zm-9.5 6.69A8.14 8.14 0 0 1 7.08 5.22v.27a10.15 10.15 0 0 0 10.14 10.14 9.784 9.784 0 0 0 2.1-.22 8.11 8.11 0 0 1-7.18 4.32v-.04Z"/></svg><svg aria-hidden="true" class="auto astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg></template><link rel="stylesheet" href="/fuseone-agents/docs/_astro/print.ehPL0gv-.css" media="print"><link rel="stylesheet" href="/fuseone-agents/docs/_astro/common.Cd80cwrF.css"><script type="module" src="/fuseone-agents/docs/_astro/page.cNngjUgL.js"></script></head><body class="astro-vdxcvpsm"><a class="sl-skip-link astro-vxeigawq" href="#_top">Skip to content</a><div class="page sl-flex astro-gqpr5s5a"><header class="header astro-gqpr5s5a"><div class="header astro-nczgtkxc"><div class="title-wrapper sl-flex astro-nczgtkxc"><a href="/fuseone-agents/docs/" class="site-title sl-flex astro-clw6ags5"><img class="light:sl-hidden print:hidden astro-clw6ags5" alt src="/fuseone-agents/docs/_astro/logo-docs-dark.RgwYBWE_.svg" width="302" height="34"><img class="dark:sl-hidden print:block astro-clw6ags5" alt src="/fuseone-agents/docs/_astro/logo-docs-light.DMrXalo7.svg" width="302" height="34"><span class="sr-only astro-clw6ags5" translate="no">FuseOne Agents</span></a></div><div class="sl-flex print:hidden astro-nczgtkxc"><site-search class="astro-nczgtkxc astro-r5ar4xm7" data-translations="{&quot;placeholder&quot;:&quot;Search&quot;}"><button data-open-modal disabled aria-label="Search" aria-keyshortcuts="Control+K" class="astro-r5ar4xm7"><svg aria-hidden="true" class="astro-r5ar4xm7 astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg><span class="sl-hidden md:sl-block astro-r5ar4xm7" aria-hidden="true">Search</span><kbd class="sl-hidden md:sl-flex astro-r5ar4xm7" style="display: none;"><kbd class="astro-r5ar4xm7">Ctrl</kbd><kbd class="astro-r5ar4xm7">K</kbd></kbd></button><dialog style="padding:0" aria-label="Search" class="astro-r5ar4xm7"><div class="dialog-frame sl-flex astro-r5ar4xm7"><button data-close-modal class="sl-flex md:sl-hidden astro-r5ar4xm7">Cancel</button><div class="search-container astro-r5ar4xm7"><div id="starlight__search" class="astro-r5ar4xm7"></div></div></div></dialog></site-search><script>
+	(() => {
+		const openBtn = document.querySelector('button[data-open-modal]');
+		const shortcut = openBtn?.querySelector('kbd');
+		if (!openBtn || !(shortcut instanceof HTMLElement)) return;
+		const platformKey = shortcut.querySelector('kbd');
+		if (platformKey && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)) {
+			platformKey.textContent = '⌘';
+			openBtn.setAttribute('aria-keyshortcuts', 'Meta+K');
+		}
+		shortcut.style.display = '';
+	})();
+</script><script type="module" src="/fuseone-agents/docs/_astro/Search.astro_astro_type_script_index_0_lang.C1XVqlf5.js"></script></div><div class="sl-hidden md:sl-flex print:hidden right-group astro-nczgtkxc"><div class="sl-flex social-icons astro-nczgtkxc"><a href="https://github.com/fuseone-io/fuseone-agents" rel="me" class="sl-flex astro-cg55etiy"><span class="sr-only astro-cg55etiy">GitHub</span><svg aria-hidden="true" class="astro-cg55etiy astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-r2p65idu"><span class="sr-only astro-r2p65idu">Select theme</span><svg aria-hidden="true" class="icon label-icon astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-r2p65idu"><option value="dark" class="astro-r2p65idu">Dark</option><option value="light" class="astro-r2p65idu">Light</option><option value="auto" selected class="astro-r2p65idu">Auto</option></select><svg aria-hidden="true" class="icon caret astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script><script type="module">var e=`starlight-theme`,t=e=>e===`auto`||e===`dark`||e===`light`?e:`auto`,n=()=>t(typeof localStorage<`u`&&localStorage.getItem(e));function r(t){typeof localStorage<`u`&&localStorage.setItem(e,t===`light`||t===`dark`?t:``)}var i=()=>matchMedia(`(prefers-color-scheme: light)`).matches?`light`:`dark`;function a(e){StarlightThemeProvider.updatePickers(e),document.documentElement.dataset.theme=e===`auto`?i():e,r(e)}matchMedia(`(prefers-color-scheme: light)`).addEventListener(`change`,()=>{n()===`auto`&&a(`auto`)});var o=class extends HTMLElement{constructor(){super(),a(n()),this.querySelector(`select`)?.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&a(t(e.currentTarget.value))})}};customElements.define(`starlight-theme-select`,o);</script><script type="module">var e=class extends HTMLElement{constructor(){super();let e=this.querySelector(`select`);e&&(e.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&(window.location.pathname=e.currentTarget.value)}),window.addEventListener(`pageshow`,t=>{if(!t.persisted)return;let n=e.querySelector(`option[selected]`)?.index;n!==e.selectedIndex&&(e.selectedIndex=n??0)}))}};customElements.define(`starlight-lang-select`,e);</script></div></div></header><nav class="sidebar print:hidden astro-gqpr5s5a" aria-label="Main"><starlight-menu-button class="print:hidden astro-vvx7mffu"><button aria-expanded="false" aria-label="Menu" aria-controls="starlight__sidebar" class="sl-flex md:sl-hidden astro-vvx7mffu"><svg aria-hidden="true" class="open-menu astro-vvx7mffu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M3 8h18a1 1 0 1 0 0-2H3a1 1 0 0 0 0 2Zm18 8H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Zm0-5H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Z"/></svg><svg aria-hidden="true" class="close-menu astro-vvx7mffu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="m13.41 12 6.3-6.29a1.004 1.004 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1.004 1.004 0 0 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 0 1.42.998.998 0 0 0 1.42 0l6.29-6.3 6.29 6.3a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.42L13.41 12Z"/></svg></button></starlight-menu-button><script type="module">var e=class extends HTMLElement{btn=this.querySelector(`button`);constructor(){super(),this.btn.addEventListener(`click`,()=>this.toggleExpanded());let e=this.closest(`nav`);e&&e.addEventListener(`keyup`,e=>this.closeOnEscape(e)),matchMedia(`(min-width: 50em)`).addEventListener(`change`,()=>this.setExpanded(!1))}setExpanded(e){this.setAttribute(`aria-expanded`,String(e)),document.body.toggleAttribute(`data-mobile-menu-expanded`,e),document.querySelectorAll(`.main-frame, .sl-skip-link`).forEach(t=>{t.toggleAttribute(`inert`,e)})}toggleExpanded(){this.setExpanded(this.getAttribute(`aria-expanded`)!==`true`)}closeOnEscape(e){e.code===`Escape`&&(this.setExpanded(!1),this.btn.focus())}};customElements.define(`starlight-menu-button`,e);</script><div id="starlight__sidebar" class="sidebar-pane astro-gqpr5s5a"><div class="sidebar-content sl-flex astro-gqpr5s5a"><sl-sidebar-state-persist data-hash="0telsj5" class="astro-f5yvicm7"><script aria-hidden="true">
+		(() => {
+			try {
+				if (!matchMedia('(min-width: 50em)').matches) return;
+				/** @type {HTMLElement | null} */
+				const target = document.querySelector('sl-sidebar-state-persist');
+				const state = JSON.parse(sessionStorage.getItem('sl-sidebar-state') || '0');
+				if (!target || !state || target.dataset.hash !== state.hash) return;
+				window._starlightScrollRestore = state.scroll;
+				customElements.define(
+					'sl-sidebar-restore',
+					class SidebarRestore extends HTMLElement {
+						connectedCallback() {
+							try {
+								const idx = parseInt(this.dataset.index || '');
+								const details = this.closest('details');
+								if (details && typeof state.open[idx] === 'boolean') details.open = state.open[idx];
+							} catch {}
+						}
+					}
+				);
+			} catch {}
+		})();
+	</script><ul class="top-level astro-ojxuodky"><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Start</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="0"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/" class="astro-ojxuodky"><span class="astro-ojxuodky">What is FuseOne?</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/start/install/" class="astro-ojxuodky"><span class="astro-ojxuodky">Install</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/reference/helm-chart/" class="astro-ojxuodky"><span class="astro-ojxuodky">Helm chart</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Core concepts</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="1"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/durable-execution/" class="astro-ojxuodky"><span class="astro-ojxuodky">Durable execution</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/gate/" class="astro-ojxuodky"><span class="astro-ojxuodky">Gate and labels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/integrations/" class="astro-ojxuodky"><span class="astro-ojxuodky">Integrations</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Duplicate effects</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed memory</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Operate</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="2"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/operate/runtime-finops/" class="astro-ojxuodky"><span class="astro-ojxuodky">Runtime and FinOps</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Manual</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="3"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/" class="astro-ojxuodky"><span class="astro-ojxuodky">Manual overview</span></a></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">English</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="4"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/" class="astro-ojxuodky"><span class="astro-ojxuodky">English overview</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/first-agent/" class="astro-ojxuodky"><span class="astro-ojxuodky">Your first agent, end to end</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/agents-and-runs/" class="astro-ojxuodky"><span class="astro-ojxuodky">Agents, versions and runs</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/what-the-gate-stops/" class="astro-ojxuodky"><span class="astro-ojxuodky">What the platform stops before it happens</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/writing-agent-blocks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Writing good blocks</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/slack-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">Slack and channels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/mcp-and-credentials/" class="astro-ojxuodky"><span class="astro-ojxuodky">MCPs and credentials</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/costs-and-limits/" class="astro-ojxuodky"><span class="astro-ojxuodky">Costs and limits</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/policies/" class="astro-ojxuodky"><span class="astro-ojxuodky">Policies</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/autonomy-stages/" class="astro-ojxuodky"><span class="astro-ojxuodky">Draft, copilot and autonomous</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/scopes-and-roles/" class="astro-ojxuodky"><span class="astro-ojxuodky">Companies, areas and roles</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/approving/" class="astro-ojxuodky"><span class="astro-ojxuodky">Approving an action</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/reading-a-run/" class="astro-ojxuodky"><span class="astro-ojxuodky">Reading a run</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/data-barriers/" class="astro-ojxuodky"><span class="astro-ojxuodky">Data labels and barriers</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/context-sharing/" class="astro-ojxuodky"><span class="astro-ojxuodky">Context sharing between agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/simulation-and-regressions/" class="astro-ojxuodky"><span class="astro-ojxuodky">Simulation and regressions</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/auditor-guide/" class="astro-ojxuodky"><span class="astro-ojxuodky">Auditor guide</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed memory</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Duplicate effect recognition</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/gravitee-tickets/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed Gravitee tickets</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/cloudflare-blocklist/" class="astro-ojxuodky"><span class="astro-ojxuodky">Cloudflare block list</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/standing-approvals/" class="astro-ojxuodky"><span class="astro-ojxuodky">Standing approvals</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/elasticsearch-window/" class="astro-ojxuodky"><span class="astro-ojxuodky">Elasticsearch window</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/software-factory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Software factory</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/github-webhooks/" class="astro-ojxuodky"><span class="astro-ojxuodky">GitHub webhooks</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/monitoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">Monitoring event dispatch</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/evidence-collection/" class="astro-ojxuodky"><span class="astro-ojxuodky">Evidence collection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/automating-configuration/" class="astro-ojxuodky"><span class="astro-ojxuodky">Automating configuration</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/experiments/" class="astro-ojxuodky"><span class="astro-ojxuodky">Experiments</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Portuguese</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="5"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/" class="astro-ojxuodky"><span class="astro-ojxuodky">Portuguese overview</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/first-agent/" class="astro-ojxuodky"><span class="astro-ojxuodky">Seu primeiro agente, do começo ao fim</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/agents-and-runs/" class="astro-ojxuodky"><span class="astro-ojxuodky">Agentes, versões e execuções</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/what-the-gate-stops/" class="astro-ojxuodky"><span class="astro-ojxuodky">O que a plataforma para antes de acontecer</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/writing-agent-blocks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Como escrever bons blocos</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/slack-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">Slack e canais</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/mcp-and-credentials/" class="astro-ojxuodky"><span class="astro-ojxuodky">MCPs e credenciais</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/costs-and-limits/" class="astro-ojxuodky"><span class="astro-ojxuodky">Custos e limites</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/policies/" class="astro-ojxuodky"><span class="astro-ojxuodky">Políticas</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/autonomy-stages/" class="astro-ojxuodky"><span class="astro-ojxuodky">Rascunho, copiloto e autônomo</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/scopes-and-roles/" class="astro-ojxuodky"><span class="astro-ojxuodky">Empresas, áreas e papéis</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/approving/" class="astro-ojxuodky"><span class="astro-ojxuodky">Aprovar uma ação</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/reading-a-run/" class="astro-ojxuodky"><span class="astro-ojxuodky">Ler uma execução</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/data-barriers/" class="astro-ojxuodky"><span class="astro-ojxuodky">Labels e barreiras de dados</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/context-sharing/" class="astro-ojxuodky"><span class="astro-ojxuodky">Compartilhamento de contexto entre agentes</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/simulation-and-regressions/" class="astro-ojxuodky"><span class="astro-ojxuodky">Simulação e regressões</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/auditor-guide/" class="astro-ojxuodky"><span class="astro-ojxuodky">Guia do auditor</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Memória governada</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Reconhecimento de efeito duplicado</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/gravitee-tickets/" class="astro-ojxuodky"><span class="astro-ojxuodky">Chamados governados no Gravitee</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/cloudflare-blocklist/" class="astro-ojxuodky"><span class="astro-ojxuodky">Lista de bloqueio Cloudflare</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/standing-approvals/" class="astro-ojxuodky"><span class="astro-ojxuodky">Aprovações permanentes</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/elasticsearch-window/" class="astro-ojxuodky"><span class="astro-ojxuodky">Janela Elasticsearch</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/software-factory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Fábrica de software</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/github-webhooks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Webhooks do GitHub</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/monitoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">Monitorando o despacho de eventos</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/evidence-collection/" class="astro-ojxuodky"><span class="astro-ojxuodky">Coleta de evidências</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/automating-configuration/" class="astro-ojxuodky"><span class="astro-ojxuodky">Automatizando a configuração</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/experiments/" class="astro-ojxuodky"><span class="astro-ojxuodky">Experimentos</span></a></li></ul></details></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Design record</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="6"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/reference/manual-and-design-notes/" class="astro-ojxuodky"><span class="astro-ojxuodky">Manual and design notes</span></a></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Rendered source docs</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="7"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/prd-001-fuseone-agents/" class="astro-ojxuodky"><span class="astro-ojxuodky">PRD-001 · FuseOne Agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/dp-001-data-protection/" class="astro-ojxuodky"><span class="astro-ojxuodky">DP-001 — Data protection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/op-001-running-an-installation/" class="astro-ojxuodky"><span class="astro-ojxuodky">OP-001 — Running an installation</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-001-integration-boundary-and-execution-model/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-001 · Integration boundary and execution model</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-003-conversational-authoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-003 · Conversational authoring</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-004-ledger-volume-and-paging/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-004 · Ledger volume and paging</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-005-interaction-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-005 · Interaction channels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-006-evaluating-agents/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-006 · Evaluating agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-007-drawing-a-process/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-007 · Drawing a process</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-007-standing-approvals/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-007 — Standing approvals, and the taint waiver we rejected</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-008-a-catalogue-by-shape/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-008 · A catalogue by shape</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-009-governed-connectors/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-009 — Governed connectors</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-010-the-shape-of-the-platform/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-010 — The shape of the platform</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-011-durable-agent-execution-and-workflow-engines/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-011 — Durable agent execution and workflow engines</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-012-governed-slack-tickets/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-012 - Governed Slack tickets for Gravitee subscription approval</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-013-software-factory-pilot/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-013 — A software factory, piloted on this repository</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-014-governed-evidence-collection/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-014 — Governed evidence collection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-015-evaluation-datasets-and-experiments/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-015 — Evaluation datasets and experiments</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-016-judge-evaluators/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-016 — Judge evaluators</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-018-authoring-workbench/" aria-current="page" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-018 — The authoring workbench</span></a></li></ul></details></li></ul></details></li></ul><script aria-hidden="true">
+		(() => {
+			const scroller = document.getElementById('starlight__sidebar');
+			if (!window._starlightScrollRestore || !scroller) return;
+			scroller.scrollTop = window._starlightScrollRestore;
+			delete window._starlightScrollRestore;
+		})();
+	</script></sl-sidebar-state-persist><div class="md:sl-hidden"><div class="mobile-preferences sl-flex astro-b5gddk54"><div class="social-icons astro-b5gddk54"><a href="https://github.com/fuseone-io/fuseone-agents" rel="me" class="sl-flex astro-cg55etiy"><span class="sr-only astro-cg55etiy">GitHub</span><svg aria-hidden="true" class="astro-cg55etiy astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-r2p65idu"><span class="sr-only astro-r2p65idu">Select theme</span><svg aria-hidden="true" class="icon label-icon astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-r2p65idu"><option value="dark" class="astro-r2p65idu">Dark</option><option value="light" class="astro-r2p65idu">Light</option><option value="auto" selected class="astro-r2p65idu">Auto</option></select><svg aria-hidden="true" class="icon caret astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script></div></div></div></div></nav><div class="main-frame astro-gqpr5s5a"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-abfeecmu"><aside class="right-sidebar-container print:hidden astro-abfeecmu"><div class="right-sidebar astro-abfeecmu"><div class="lg:sl-hidden astro-q5mffni3"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-5ulgm6bh"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-5ulgm6bh"><details id="starlight__mobile-toc" class="astro-5ulgm6bh"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-5ulgm6bh"><span class="toggle sl-flex astro-5ulgm6bh">On this page<svg aria-hidden="true" class="caret astro-5ulgm6bh astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-5ulgm6bh"></span></summary><div class="dropdown astro-5ulgm6bh"><ul class="isMobile astro-cxyftcne" style="--depth: 0;"><li style="--depth: 0;" class="astro-cxyftcne"><a href="#_top" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Overview</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#decided" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Decided</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-exists-today" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What exists today</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#a-free-conversation-and-what-is-reviewed-instead" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">A free conversation, and what is reviewed instead</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#1-the-draft-is-the-record-not-the-transcript" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">1. The draft is the record, not the transcript</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#2-the-model-proposes-operations-and-never-grants" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">2. The model proposes operations and never grants</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#3-the-seven-questions-become-a-checklist" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">3. The seven questions become a checklist</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#4-acceptance-leaves-a-trail-the-transcript-is-content" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">4. Acceptance leaves a trail; the transcript is content</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#5-what-the-author-pastes-is-untrusted" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">5. What the author pastes is untrusted</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#cost" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Cost</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#the-draft-lives-on-the-server" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">The draft lives on the server</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#candidate-versions" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Candidate versions</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#how-a-candidate-is-stored" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">How a candidate is stored</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#who-can-see-and-use-a-candidate" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Who can see and use a candidate</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#sealing" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Sealing</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#a-candidate-never-opens-a-real-run" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">A candidate never opens a real run</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#activating" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Activating</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-full-digest" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The full digest</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#lock-order" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Lock order</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-first-version-of-an-agent" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The first version of an agent</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#reading-a-candidate-during-a-run" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Reading a candidate during a run</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#every-run-records-where-its-text-came-from" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Every run records where its text came from</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#retention" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Retention</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#live-rehearsal" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Live rehearsal</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#a-rehearsal-is-not-a-battery" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">A rehearsal is not a battery</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-author-answers-for-the-world" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The author answers for the world</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-author-decides-as-the-approver" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The author decides as the approver</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#watching-it-happen" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Watching it happen</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#correction-becomes-a-case" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Correction becomes a case</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#experiments-in-the-thread" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Experiments in the thread</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#phases" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Phases</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is-not" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is not</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#tests-that-must-exist" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Tests that must exist</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/fuseone-agents/docs/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.BcSo_yiZ.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-q5mffni3"><div class="sl-container astro-q5mffni3"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">On this page</h2><ul class="astro-cxyftcne" style="--depth: 0;"><li style="--depth: 0;" class="astro-cxyftcne"><a href="#_top" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Overview</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#decided" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Decided</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-exists-today" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What exists today</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#a-free-conversation-and-what-is-reviewed-instead" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">A free conversation, and what is reviewed instead</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#1-the-draft-is-the-record-not-the-transcript" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">1. The draft is the record, not the transcript</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#2-the-model-proposes-operations-and-never-grants" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">2. The model proposes operations and never grants</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#3-the-seven-questions-become-a-checklist" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">3. The seven questions become a checklist</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#4-acceptance-leaves-a-trail-the-transcript-is-content" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">4. Acceptance leaves a trail; the transcript is content</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#5-what-the-author-pastes-is-untrusted" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">5. What the author pastes is untrusted</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#cost" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Cost</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#the-draft-lives-on-the-server" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">The draft lives on the server</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#candidate-versions" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Candidate versions</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#how-a-candidate-is-stored" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">How a candidate is stored</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#who-can-see-and-use-a-candidate" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Who can see and use a candidate</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#sealing" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Sealing</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#a-candidate-never-opens-a-real-run" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">A candidate never opens a real run</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#activating" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Activating</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-full-digest" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The full digest</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#lock-order" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Lock order</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-first-version-of-an-agent" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The first version of an agent</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#reading-a-candidate-during-a-run" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Reading a candidate during a run</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#every-run-records-where-its-text-came-from" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Every run records where its text came from</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#retention" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Retention</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#live-rehearsal" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Live rehearsal</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#a-rehearsal-is-not-a-battery" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">A rehearsal is not a battery</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-author-answers-for-the-world" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The author answers for the world</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-author-decides-as-the-approver" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The author decides as the approver</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#watching-it-happen" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Watching it happen</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#correction-becomes-a-case" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Correction becomes a case</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#experiments-in-the-thread" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Experiments in the thread</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#phases" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Phases</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is-not" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is not</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#tests-that-must-exist" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Tests that must exist</span></a></li></ul></nav></starlight-toc><script type="module" src="/fuseone-agents/docs/_astro/TableOfContents.astro_astro_type_script_index_0_lang.Csloo1VZ.js"></script></div></div></div></aside><div class="main-pane astro-abfeecmu"><main data-pagefind-body class="astro-vdxcvpsm" lang="en" dir="ltr"><div class="content-panel astro-oil7k7jf"><div class="sl-container astro-oil7k7jf"><h1 id="_top" class="astro-2sm4b3ln">NT-018 — The authoring workbench</h1></div></div><div class="content-panel astro-oil7k7jf"><div class="sl-container astro-oil7k7jf"><div class="sl-markdown-content"><p>Status: proposed · 2026-11-11 · revises <a href="../nt-003-conversational-authoring/">NT-003</a> §4 ·
+builds on <a href="../nt-006-evaluating-agents/">NT-006</a>, <a href="../nt-015-evaluation-datasets-and-experiments/">NT-015</a>
+and <a href="../nt-016-judge-evaluators/">NT-016</a></p>
+<div class="sl-heading-wrapper level-h2"><h2 id="what-this-is">What this is</h2><a class="sl-anchor-link" href="#what-this-is"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “What this is”</span></a></div>
+<p>Today an agent is authored in four separate places that do not talk to each
+other: an interview, a form editor, a batch simulation and an experiments page.
+Each works, and none of them feels like working on the agent. The author fills
+in a form, uploads a file of cases, waits for a report, opens a dialog to record
+a correction, and goes to another screen to compare versions.</p>
+<p>This note specifies a single screen, the <strong>workbench</strong>, where the author:</p>
+<ol>
+<li><strong>builds</strong> the agent by talking to an assistant, which proposes changes the
+author accepts one by one;</li>
+<li><strong>rehearses</strong> it live on one case, answering for the world when the agent
+reads something and deciding as the approver when the Gate holds an action;</li>
+<li><strong>corrects</strong> it in the same conversation, and the correction becomes both a
+draft change and a dataset case;</li>
+<li><strong>experiments</strong>, running the draft against the dataset and comparing it with
+the version in production, without leaving the thread.</li>
+</ol>
+<p>The interactive mockup the direction was chosen from is
+<a href="https://claude.ai/artifact/XZvoqboWikHSPTnsviX6t1">Bancada de agentes v2</a>. It
+has a conversation on the left and a workspace on the right whose tab follows
+the mode: Rascunho, Ensaio, Experimento, Casos.</p>
+<p><strong>Who does what.</strong> An author holding <code dir="auto">agent:publish</code> on the agent’s scope does
+everything on this screen, in the console. Nothing on it reaches a customer
+system, and nothing on it is done by an agent. Publishing remains a separate act
+by the same person.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="decided">Decided</h2><a class="sl-anchor-link" href="#decided"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Decided”</span></a></div>
+<p>Decided by Kleber on 2026-11-11:</p>
+<ol>
+<li><strong>The conversation is free.</strong> The assistant chooses what to ask next. This
+revokes NT-003 §4 (“the interview is a wizard, not a chat”) and the comment
+at the top of <code dir="auto">internal/authoring/interview.go</code> that rests on it. How the
+result stays reviewable is the subject of
+<a href="#a-free-conversation-and-what-is-reviewed-instead">A free conversation, and what is reviewed instead</a>.</li>
+<li><strong>The author plays the world.</strong> In a rehearsal, nothing reaches a real
+system. When the agent calls a tool, the author types what the tool would
+have answered. The rule in <code dir="auto">internal/simulate/dry.go</code>, that a simulated run
+has no way to reach a real system, stands unchanged.</li>
+</ol>
+<p>Decided in review of <code dir="auto">e27dfcf7</code>:</p>
+<ol start="3">
+<li><strong>Activation refuses a draft with no answer to “what must never happen”.</strong>
+An explicit “no restriction beyond the installation’s policies” counts. An
+empty block does not.</li>
+<li><strong>One conversation per author</strong> over a shared draft. The draft, diff and
+trail are common, and <code dir="auto">ETag</code> settles concurrency.</li>
+<li><strong>SSE is deferred.</strong> Polling is the first version’s contract.</li>
+</ol>
+<p>Decided in review of <code dir="auto">39c96e0a</code>:</p>
+<ol start="6">
+<li><strong>Policies are created only on the policies screen.</strong> For someone holding
+<code dir="auto">policy:write</code>, the policy card opens that screen with the rule pre-filled.
+Review, simulation and saving stay behind its administrative boundary.</li>
+</ol>
+<div class="sl-heading-wrapper level-h2"><h2 id="what-exists-today">What exists today</h2><a class="sl-anchor-link" href="#what-exists-today"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “What exists today”</span></a></div>
+<p>Verified against <code dir="auto">origin/main</code> at <code dir="auto">b028e09a</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Piece</th><th>State</th><th>Where</th></tr></thead><tbody><tr><td>Interview</td><td>Seven fixed questions; the model only translates answers into fields</td><td><code dir="auto">internal/authoring/interview.go</code>, <code dir="auto">POST /agents/interview</code></td></tr><tr><td>Free description → fields</td><td>One text in, seven fields out, no history</td><td><code dir="auto">POST /agents/interview/suggestions</code>, <code dir="auto">translate.go</code></td></tr><tr><td>Catalogue boundary</td><td>A tool the model names that is not connected does not exist</td><td><code dir="auto">internal/authoring/read.go</code></td></tr><tr><td>Authoring provider and daily ceiling</td><td>Exists, enforced per call</td><td><code dir="auto">GET/PUT /admin/authoring</code>, <code dir="auto">ErrOverCeiling</code></td></tr><tr><td>Draft</td><td><strong>Browser only</strong>: <code dir="auto">sessionStorage</code> and React state</td><td><code dir="auto">web/src/features/agents/agent-draft.ts</code></td></tr><tr><td>Editing</td><td>Whole spec sent on publish; no structured operations</td><td><code dir="auto">PUT /agents/{id}/versions</code></td></tr><tr><td>Publishing</td><td>Always makes the new version current</td><td><code dir="auto">internal/spec/publisher.go:102</code></td></tr><tr><td>Simulation</td><td>Batch, from JSONL or the corpus; every tool answers empty</td><td><code dir="auto">internal/simulate/dry.go</code>, <code dir="auto">POST /agents/{id}/simulations</code></td></tr><tr><td>Approvals in a simulation</td><td>The run stops at <code dir="auto">awaiting_approval</code>; nobody decides it</td><td><code dir="auto">simulate/report.go</code></td></tr><tr><td>Correction → case</td><td>Exists, from any run, simulated included</td><td><code dir="auto">POST /agents/{id}/regressions</code></td></tr><tr><td>Case contents</td><td>Input, expectations, origin run, note; <strong>no tool answers</strong></td><td><code dir="auto">domain.RegressionCase</code></td></tr><tr><td>Experiments and comparison</td><td>Exist; per case <code dir="auto">held</code>, <code dir="auto">broke</code>, <code dir="auto">absent</code>, <code dir="auto">not_comparable</code></td><td><code dir="auto">simulate/experiment*.go</code></td></tr><tr><td>Judges</td><td>Model and worker exist; nothing opens a judge run yet</td><td><code dir="auto">internal/judge</code>, NT-016 release 2</td></tr><tr><td>Streaming</td><td><strong>None.</strong> No SSE, no <code dir="auto">http.Flusher</code>, no <code dir="auto">EventSource</code>; the console polls every 2 s</td><td><code dir="auto">simulation-api.ts</code>, <code dir="auto">experiments-api.ts</code></td></tr></tbody></table>
+<p><code dir="auto">CLAUDE.md</code> describes <code dir="auto">httpapi</code> as “HTTP + SSE”. The second half is not true
+today.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="a-free-conversation-and-what-is-reviewed-instead">A free conversation, and what is reviewed instead</h2><a class="sl-anchor-link" href="#a-free-conversation-and-what-is-reviewed-instead"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “A free conversation, and what is reviewed instead”</span></a></div>
+<p>NT-003 kept the questions fixed because a creation path whose questions change
+every time cannot be reviewed, reproduced or audited. That argument is correct
+about the conversation. The answer here is that <strong>the conversation stops being
+the thing anyone reviews</strong>. Five rules replace the fixed questions.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="1-the-draft-is-the-record-not-the-transcript">1. The draft is the record, not the transcript</h3><a class="sl-anchor-link" href="#1-the-draft-is-the-record-not-the-transcript"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “1. The draft is the record, not the transcript”</span></a></div>
+<p>The draft is a specification. It changes only by <strong>operations</strong>, and an
+operation lands only when a person accepts it. What is reviewed at publication
+is what is reviewed today: the specification, its narrative read-back, and now
+its diff against the version in production. Two conversations that reach the
+same draft produce the same agent, so reproducing the conversation does not
+matter.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="2-the-model-proposes-operations-and-never-grants">2. The model proposes operations and never grants</h3><a class="sl-anchor-link" href="#2-the-model-proposes-operations-and-never-grants"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “2. The model proposes operations and never grants”</span></a></div>
+<p>Each assistant turn returns text plus zero or more proposals. A proposal is one
+typed operation:</p>
+<p>Every operation edits a field <code dir="auto">AgentDefinition</code> already has, and claims no
+more than that field does:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Operation</th><th>Edits</th><th>Validated against</th></tr></thead><tbody><tr><td><code dir="auto">add_tool</code>, <code dir="auto">remove_tool</code></td><td><code dir="auto">tools</code></td><td>The catalogue, as <code dir="auto">read.go</code> does today</td></tr><tr><td><code dir="auto">set_block</code> (add, replace or remove one block)</td><td><code dir="auto">instructions</code>: <code dir="auto">objective</code>, <code dir="auto">howToAct</code>, <code dir="auto">whenToStop</code>, <code dir="auto">never</code></td><td>Length limit</td></tr><tr><td><code dir="auto">add_step</code>, <code dir="auto">edit_step</code>, <code dir="auto">remove_step</code></td><td><code dir="auto">steps</code></td><td><code dir="auto">reaches</code> must be in the catalogue and in the draft’s tools</td></tr><tr><td><code dir="auto">set_approval_delivery</code></td><td><code dir="auto">approvals</code> (<code dir="auto">direct</code>, <code dir="auto">notify</code>)</td><td><code dir="auto">notify</code> names people who may decide in the scope</td></tr><tr><td><code dir="auto">set_trigger</code></td><td><code dir="auto">triggers</code></td><td>The same validation the form uses</td></tr><tr><td><code dir="auto">set_model</code>, <code dir="auto">set_budget</code></td><td>provider, model, effort, budget</td><td>Provider registered; ceiling within the installation’s maximum</td></tr></tbody></table>
+<p>Scope, name and stage are <strong>not</strong> operations. The author sets them by hand.
+Scope decides who may act and stage decides how far the agent is trusted, so
+both stay human acts. A proposal that fails validation is shown crossed out with
+the reason, as the mockup does for <code dir="auto">pagamentos.estornar_cartao</code>, and cannot be
+accepted. <code dir="auto">read.go</code> grows from a filter on one reply into the validator of every
+operation.</p>
+<p><strong>No operation creates a Gate rule.</strong> <code dir="auto">approvals</code> decides only where an
+approval is delivered (<code dir="auto">domain.ApprovalPolicy</code>); whether a person must answer
+is decided by the installation’s policies, which need <code dir="auto">policy:write</code>. The
+<code dir="auto">never</code> block is an instruction the model reads, not a policy the Gate
+enforces. So when the author says “above R$ 500 the finance team approves”, the
+assistant does two things:</p>
+<ul>
+<li>it proposes the <code dir="auto">never</code> or <code dir="auto">howToAct</code> text that tells the agent;</li>
+<li>it shows a <strong>policy card</strong>, marked as not part of the draft. The card states
+the rule the author described, in the policy editor’s terms.</li>
+</ul>
+<p><strong>The card never says a current policy covers the request.</strong> The platform
+cannot prove that. <code dir="auto">POST /policies/simulate</code> replays a <em>new</em> rule against past
+decisions; it does not test whether the installed rules imply the one asked
+for. It also needs <code dir="auto">policy:read</code>, which an author holding only <code dir="auto">agent:publish</code>
+may lack. A card reading “already covered” on that basis could lead someone to
+leave a needed approval with no rule. What the author can observe is the
+rehearsal. It runs under the installation’s policies as they are, so on that
+case the author sees whether the Gate held the action or let it through. The
+card says exactly that much: “the rehearsal will show what the current policies
+do on this case”.</p>
+<p>What the card offers depends on who is looking:</p>
+<ul>
+<li><strong>Someone holding <code dir="auto">policy:write</code></strong> gets a link that opens the policies screen
+with the rule pre-filled. Review, simulation and saving stay on that screen,
+behind its own administrative boundary.</li>
+<li><strong>Anyone else</strong> is told to ask a policy administrator. The card never names
+who holds <code dir="auto">policy:write</code>. Finding that out means reading the directory and the
+grants, which is administrative and reveals identities, and no API grants it
+to an author.</li>
+</ul>
+<p>An author’s acceptance never becomes <code dir="auto">policy:write</code>.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="3-the-seven-questions-become-a-checklist">3. The seven questions become a checklist</h3><a class="sl-anchor-link" href="#3-the-seven-questions-become-a-checklist"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “3. The seven questions become a checklist”</span></a></div>
+<p>The PRD §6.1 schema is still the schema. The checklist shows which of its seven
+parts the draft covers:</p>
+<ul>
+<li>trigger;</li>
+<li>read tools;</li>
+<li>steps;</li>
+<li>exceptions per step;</li>
+<li>approval points;</li>
+<li>closing criterion;</li>
+<li>what must never happen.</li>
+</ul>
+<p>The checklist is computed from the draft, not from the conversation, so it is
+deterministic. The assistant is told which parts are missing and asks about
+them in whatever order the conversation allows. This keeps the PRD’s best idea,
+“what must never happen?”, without making it question seven of a form. <strong>PRD
+§6.1 is amended</strong> in the same change: from “not a free-form prompt” to “a
+conversation that fills a fixed schema, which the platform checks”.</p>
+<p><strong>Activating a candidate refuses a draft without an answer to “what must never
+happen”.</strong> An explicit answer of “no restriction beyond the installation’s
+policies” counts, recorded as such in the <code dir="auto">never</code> block. An empty block does
+not count: an empty block is not a decision. The other six parts are shown, and
+do not block.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="4-acceptance-leaves-a-trail-the-transcript-is-content">4. Acceptance leaves a trail; the transcript is content</h3><a class="sl-anchor-link" href="#4-acceptance-leaves-a-trail-the-transcript-is-content"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “4. Acceptance leaves a trail; the transcript is content”</span></a></div>
+<p>Every accepted operation is a row in the authoring trail:</p>
+<ul>
+<li>draft;</li>
+<li>operation kind;</li>
+<li>digest of the operation;</li>
+<li>the turn it came from;</li>
+<li>who accepted it;</li>
+<li>when.</li>
+</ul>
+<p>Following the rule that immutable rows hold no free text, the row carries ids
+and digests only. The operation’s body and the transcript live in the content
+store under owner kind <code dir="auto">authoring</code>, under the installation’s retention.</p>
+<p><strong>Each author has their own conversation</strong> over the shared draft. The draft, its
+diff and the trail of accepted operations are common; the threads are not. That
+keeps one author’s pasted tickets out of another’s context.</p>
+<div class="sl-heading-wrapper level-h4"><h4 id="where-text-ends-up-and-how-erasure-follows-it">Where text ends up, and how erasure follows it</h4><a class="sl-anchor-link" href="#where-text-ends-up-and-how-erasure-follows-it"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Where text ends up, and how erasure follows it”</span></a></div>
+<p>A sentence typed in a turn can be copied to four places:</p>
+<ul>
+<li>the transcript;</li>
+<li>the body of the operation proposed from it;</li>
+<li>the draft value that operation wrote;</li>
+<li>the content of every candidate sealed while that value stood.</li>
+</ul>
+<p>Erasure has to reach all four, so provenance is kept on the <strong>values</strong>, not just
+on the conversation.</p>
+<ul>
+<li>Each draft value carries its provenance: the ids of the operations that wrote
+its current text, and through them the turns and any run those turns
+referenced. A value the author typed by hand carries the author’s id instead.</li>
+<li>Each seal records the provenance of every value it sealed.</li>
+</ul>
+<p>Erasing a thread, or erasing a run a turn referenced, clears four things in one
+transaction:</p>
+<ol>
+<li>the transcript turns involved;</li>
+<li>their operation bodies;</li>
+<li>every draft value whose current provenance includes one of those
+operations. The value is replaced by an erasure marker, the draft’s ETag
+moves, and the checklist shows the part as missing;</li>
+<li>the content of every unpublished seal that sealed such a value. That
+candidate becomes impossible to activate (see <a href="#retention">Retention</a>).</li>
+</ol>
+<p>A value later overwritten by hand no longer carries the erased operation, so it
+stays.</p>
+<p>Subject erasure is promised only where the platform can know the subject:</p>
+<ul>
+<li><strong>Content brought in by reference.</strong> When the author starts a rehearsal from
+a run, or imports a case, the turn records that run’s id. Subject erasure of
+that run follows the reference along the chain above, as NT-015 makes it
+follow the corpus copy.</li>
+<li><strong>Anything typed or pasted.</strong> A partial paste has no digest in common with any
+run, so subject erasure cannot find it. It is covered by retention, and by
+erasing the thread. The thread’s author, or anyone with <code dir="auto">data:erase</code> on the
+scope, can erase it, and that follows the same chain. The screen says this at
+the composer, so the author is not left assuming a promise the platform cannot
+keep.</li>
+</ul>
+<p><strong>Only the published row is out of reach.</strong> Activation writes the sealed bytes
+into <code dir="auto">agent_specs</code>, and that row is never erased, because runs are pinned to it
+(<code dir="auto">spec/retire.go</code>). Everything else stays erasable after activation, along the
+same chain:</p>
+<ul>
+<li>the transcript;</li>
+<li>the operation bodies;</li>
+<li>the draft’s values;</li>
+<li>the seal’s own copy in the content store.</li>
+</ul>
+<p>The activation screen shows the full text going live and says that this text is
+kept. That is the last point where the author can remove what should not stay.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="5-what-the-author-pastes-is-untrusted">5. What the author pastes is untrusted</h3><a class="sl-anchor-link" href="#5-what-the-author-pastes-is-untrusted"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “5. What the author pastes is untrusted”</span></a></div>
+<p>A pasted ticket can carry instructions. The model reads it as data, but the real
+protection is rule 2: nothing reaches the draft without a person accepting a
+typed, validated operation. Proposals made in a turn whose context includes
+pasted content are marked as such on their card, so the author knows where a
+suggestion came from.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="cost">Cost</h3><a class="sl-anchor-link" href="#cost"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Cost”</span></a></div>
+<p>Each turn is an authoring call and counts against the existing daily ceiling.
+<code dir="auto">ErrOverCeiling</code> ends the conversation for the day and leaves the draft intact.
+The form editor still works. NT-003 §5’s requirement that an installation with
+no authoring provider can still publish agents is kept: without a provider the
+workbench opens with the conversation disabled, and the draft is edited by hand.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="the-draft-lives-on-the-server">The draft lives on the server</h2><a class="sl-anchor-link" href="#the-draft-lives-on-the-server"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “The draft lives on the server”</span></a></div>
+<p>A conversation that proposes operations needs something to apply them to that
+survives a reload and that a second tab can see. Today the draft is in
+<code dir="auto">sessionStorage</code>.</p>
+<ul>
+<li>A draft is <strong>mutable working state</strong>, not the ledger and not a version. It
+lives in a table of its own, holding the specification, the version it
+started from, and an ETag.</li>
+<li><strong>One draft per agent</strong>, shared by its authors. Applying an operation takes
+<code dir="auto">If-Match</code> and answers 412 when the draft moved. The same pattern is used for
+the API in NT-017.</li>
+<li>The draft’s values carry provenance, and erasure clears them along the chain
+in <a href="#where-text-ends-up-and-how-erasure-follows-it">where text ends up</a>.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="candidate-versions">Candidate versions</h2><a class="sl-anchor-link" href="#candidate-versions"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Candidate versions”</span></a></div>
+<p>A rehearsal and an experiment have to run a specification that cannot change
+under them. A draft can change. Publishing makes a version current
+(<code dir="auto">publisher.go:102</code>), which would put an untested draft into production.</p>
+<p>So the workbench <strong>seals a candidate</strong>: a version digest that is not current and
+has never been published. The digest is computed exactly as publication
+computes <code dir="auto">version_id</code>, so a candidate that goes live keeps its id. Sealing and
+activating are two acts, with different checks.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="how-a-candidate-is-stored">How a candidate is stored</h3><a class="sl-anchor-link" href="#how-a-candidate-is-stored"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “How a candidate is stored”</span></a></div>
+<p><strong><code dir="auto">agent_specs</code> is not touched.</strong> It stays insert-only (<code dir="auto">0006_agent_specs.sql</code>),
+and a row there still means “published”. Candidates live in a table of their
+own, <code dir="auto">agent_seals</code>, which is also insert-only.</p>
+<p><strong>A seal keeps the whole definition, as bytes.</strong> <code dir="auto">version_id</code> is the digest of
+the specification file’s bytes (<code dir="auto">versionOf</code>, <code dir="auto">spec.go:286</code>). The only copy that
+cannot drift from the digest is therefore those exact bytes. They carry every
+field the definition has: name, company and area, provider, model, effort,
+fallback, cache TTL, reply locale, tools, budget, triggers, steps, emits, memory
+learning, approvals and instructions. The bytes go to the content store under
+owner kind <code dir="auto">authoring</code> and owner <code dir="auto">seal_id</code>. <code dir="auto">p.judge</code>, the rehearsal, the
+experiment and activation all parse those bytes, never a reconstruction.</p>
+<p>Each row of <code dir="auto">agent_seals</code> is one act of sealing, and holds only indexable
+metadata and the reference:</p>
+<ul>
+<li><code dir="auto">(agent_id, version_id, seal_id)</code>;</li>
+<li>the <strong>sealed scope</strong>, company and area as they stood in the bytes;</li>
+<li>who sealed it, and when;</li>
+<li>the reference to the bytes;</li>
+<li>the provenance of the draft values it sealed.</li>
+</ul>
+<p>A <em>candidate</em> is a <code dir="auto">version_id</code> with at least one seal and no row in
+<code dir="auto">agent_specs</code>. Because one version can have many seals, the cases that collide
+today resolve without any update:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Case</th><th>Result</th></tr></thead><tbody><tr><td>The draft’s digest is already published</td><td>No seal is written. The workbench rehearses, experiments on and activates that published version. Activation takes the already-published path of step 10.</td></tr><tr><td>Two authors seal the same digest</td><td>Two seals, one candidate. The trail records both.</td></tr><tr><td>An ordinary publication of the same digest while a candidate exists</td><td><code dir="auto">agent_specs</code> gains the row, and from then on the version is published. Its seals stay as history. Activation takes the already-published path of step 10, even if every seal has since expired.</td></tr><tr><td>The candidate’s text aged out or was erased</td><td>Re-sealing from the draft writes a <strong>new</strong> seal, with a new content reference. Nothing is restored over a tombstone.</td></tr></tbody></table>
+<p>That last row matters. <code dir="auto">Content.RestoreFor</code> clears any tombstone, including
+one left by subject erasure. A candidate that restored its text by digest could
+bring back what an erasure removed. A seal never restores. Text erased from the
+draft also gives a different digest when re-sealed, so it cannot come back that
+way either.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="who-can-see-and-use-a-candidate">Who can see and use a candidate</h3><a class="sl-anchor-link" href="#who-can-see-and-use-a-candidate"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Who can see and use a candidate”</span></a></div>
+<p><strong>Every door authorizes against the sealed scope, never the agent’s current
+scope.</strong> This covers listing, reading, rehearsing, experimenting and
+activating. Each of them needs <code dir="auto">agent:publish</code> on the sealed scope. A candidate
+is unpublished work, so <code dir="auto">agent:read</code> is not enough to see it. Outside that
+scope the answer is 404, as for a version that does not exist.</p>
+<p>So when an agent moves from <code dir="auto">finance</code> to <code dir="auto">cx</code>, an author in <code dir="auto">cx</code> gains nothing
+sealed in <code dir="auto">finance</code>. Activation also needs the agent’s <strong>current</strong> scope, and
+the order of the checks is what keeps the move from leaking. These are steps 2,
+6, 7 and 8 of <a href="#activating">activation</a>. The current scope is read under the
+agent’s lock, and no precondition is judged before it:</p>
+<ol>
+<li><code dir="auto">agent:publish</code> on the <strong>sealed</strong> scope, or 404;</li>
+<li>read the agent’s current scope;</li>
+<li><code dir="auto">agent:publish</code> on the <strong>current</strong> scope, or 404. A <code dir="auto">finance</code> author must not
+learn that the agent now lives in <code dir="auto">cx</code>, so an author who cannot act there
+gets the same answer as for a candidate that does not exist. This includes
+the 412 a stale <code dir="auto">If-Match</code> would give, which is judged only after this check;</li>
+<li>only a caller who can act in both scopes, and finds them different, gets 409
+<code dir="auto">fuseone:candidate-scope-moved</code>. Publishing those bytes would move the agent
+back without anyone deciding to. The way forward is to re-seal from the draft
+in the new scope.</li>
+</ol>
+<p>A first version has no current scope, so check 3 uses the sealed scope again
+(see <a href="#the-first-version-of-an-agent">the first version</a>).</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="sealing">Sealing</h3><a class="sl-anchor-link" href="#sealing"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Sealing”</span></a></div>
+<p>Sealing checks that the author holds <code dir="auto">agent:publish</code> on the scope, and runs
+<code dir="auto">p.judge</code> so the rehearsal shows the same graph findings a publication would.
+It takes <strong>no lock</strong>: its judgment is informational, and activation judges
+again under the lock. It does <strong>not</strong> run <code dir="auto">refuseStage</code>. Rehearsing an
+improvement to an autonomous agent is safe; putting it live is what must be
+refused.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="a-candidate-never-opens-a-real-run">A candidate never opens a real run</h3><a class="sl-anchor-link" href="#a-candidate-never-opens-a-real-run"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “A candidate never opens a real run”</span></a></div>
+<p>A candidate has no row in <code dir="auto">agent_specs</code>, so it is invisible by construction to
+three places:</p>
+<ul>
+<li>the current-version fallback (<code dir="auto">catalogue.go:41</code>, <code dir="auto">event_graph.go:79</code>,
+<code dir="auto">standing/create.go:39</code>);</li>
+<li><code dir="auto">Registry.Versions</code>;</li>
+<li><code dir="auto">trigger.Pin</code> (<code dir="auto">trigger/version.go:15</code>).</li>
+</ul>
+<p>A real run, a rerun included, can only pin a version <code dir="auto">Pin</code> finds. A rehearsal or
+experiment request resolves a candidate through a separate lookup on
+<code dir="auto">agent_seals</code>. The <code dir="auto">Opener</code> (<code dir="auto">trigger/open.go:187</code>) accepts that lookup only for
+a simulated run marked as a rehearsal or an experiment. Any other request naming
+a candidate gets the same error as a version the agent never published, so a
+candidate’s id reveals nothing. The tests below hold this fence even though the
+table split already enforces it, so that a later change merging the lists breaks
+a test, not production.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="activating">Activating</h3><a class="sl-anchor-link" href="#activating"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Activating”</span></a></div>
+<p><strong>Publishing from the workbench activates the candidate that was experimented
+on.</strong> It does not seal a fresh one, so the digest that went through the
+experiment is the digest that goes live. Activation repeats every guarantee of a
+publication, in one transaction.</p>
+<p>Activation checks the same things a publication does, plus the candidate’s
+own conditions. <strong>The order below is the order the code runs</strong>, so no answer
+can reveal more than the caller is entitled to see, and nothing judged under a
+lock was read before it.</p>
+<p><strong>Before any lock.</strong> Nothing here reads the agent.</p>
+<ol>
+<li><strong>Headers, by syntax only.</strong> Exactly one of <code dir="auto">If-Match</code> and <code dir="auto">If-None-Match: *</code>
+must be present, or the answer is 428. A value that does not parse is 400.
+Neither header is judged yet.</li>
+<li><strong>The version’s scope.</strong> Look the version up in <code dir="auto">agent_specs</code> first, then in
+<code dir="auto">agent_seals</code>. Take the scope from whichever row is found: the published
+version’s company and area, or the seal’s. Check <code dir="auto">agent:publish</code> on that
+scope. If neither row exists, or the caller lacks the permission, the answer
+is 404. A caller who passes this step has been allowed to know the version
+exists. If the version is in both tables, the caller must hold
+<code dir="auto">agent:publish</code> on both rows’ scopes, or the answer is 404. Which row
+<em>defines</em> the version is decided only in step 10, by full digest.</li>
+</ol>
+<p><strong>Under the locks</strong>, acquired in the one order every writer uses:</p>
+<ol start="3">
+<li><strong>The agent’s content fence</strong>, shared (<code dir="auto">Hold</code>), once for the whole request.
+See <a href="#lock-order">the fence below</a>.</li>
+<li><strong>The event graph lock</strong> (<code dir="auto">lockEventGraph</code>, <code dir="auto">publisher.go:71</code>).</li>
+<li><strong>The agent’s <code dir="auto">agent_state</code> row</strong>, <code dir="auto">FOR UPDATE</code>. A first version may have no
+row; the event graph lock already serializes it (see
+<a href="#the-first-version-of-an-agent">the first version</a>).</li>
+<li><strong>The current scope.</strong> Read it now, under the lock, and check
+<code dir="auto">agent:publish</code> on it. If the caller lacks the permission, the answer is 404.
+For a first version, the scope is the sealed one. Because this read happens
+under the lock, the scope cannot move between this check and the decision.</li>
+<li><strong>The precondition.</strong> Judge <code dir="auto">If-Match</code> against <strong>the agent’s <code dir="auto">ETag</code> as
+NT-017 defines it</strong> (in review, #321): one tag covering the current version and whether the
+agent is retired. It is the same tag publication and retirement honour, not a
+weaker one derived here. Retiring or restoring the agent during the
+experiment therefore stales the tag, as publishing does. <code dir="auto">If-None-Match: *</code>
+is judged against whether any version exists. A mismatch answers 412 with
+the current <code dir="auto">ETag</code>. Only a caller who passed step 6 can receive this, so a 412
+never tells an outsider that the agent exists or changed.</li>
+<li><strong>The scope move.</strong> If the sealed scope differs from the current one, the
+answer is 409 <code dir="auto">fuseone:candidate-scope-moved</code>.</li>
+<li><strong>The stage.</strong> <code dir="auto">refuseStage</code> with <code dir="auto">autonomous</code>, on the row already locked.</li>
+<li><strong>The definition.</strong> Still under the event graph lock, which no
+publication can pass, decide which row defines the version and load it in
+full. Every later step judges this definition and nothing else.
+Read the version’s claim first (see <a href="#the-full-digest">the full digest</a>).
+A <code dir="auto">NULL</code> claim answers 409 <code dir="auto">fuseone:version-digest-unknown</code>.
+<ul>
+<li><strong>Already published.</strong> <code dir="auto">agent_specs</code> has the version. The claim proves its
+bytes are the bytes every seal of this <code dir="auto">version_id</code> sealed. The
+definition is the published row. No seal is read, and none has to be readable, so an expired or
+erased seal does not block activating a version that is already
+published.</li>
+<li><strong>Still a candidate.</strong> Only <code dir="auto">agent_seals</code> has the version. Read a seal’s
+bytes. If no seal is readable, the answer is 409
+<code dir="auto">fuseone:candidate-unreadable</code>. Check that the full SHA-256 of the bytes
+equals the claim, then parse them. The parsed
+definition is the candidate.</li>
+<li><strong>A seal whose bytes do not match the claim.</strong> The answer is 409
+<code dir="auto">fuseone:version-collision</code>, and nothing is written. Claims make this
+unreachable through any writer; the check is there for a row written
+around them.</li>
+</ul>
+</li>
+<li><strong>The named resources</strong>, <code dir="auto">FOR SHARE</code>, in ascending order of id, as the
+definition from step 10 names them. Each one must still exist: tools,
+provider, connector instances, area. This is the fence NT-017 specifies for
+publishing (in review, #321).</li>
+</ol>
+<p><strong>With nothing left to acquire:</strong></p>
+<ol start="12">
+<li><strong>The graph.</strong> <code dir="auto">p.judge</code> on the definition from step 10, against the graph
+as it is now, its <code dir="auto">emits</code> included.</li>
+<li><strong>The checklist.</strong> The definition’s <code dir="auto">never</code> block must be answered (see
+<a href="#3-the-seven-questions-become-a-checklist">the checklist</a>).</li>
+<li><strong>The write.</strong> On the published path, make the row current. On the
+candidate path, insert the <code dir="auto">agent_specs</code> row from the bytes and make it
+current. The claim already exists, because the seal wrote it. Record the activation’s provenance either
+way.</li>
+</ol>
+<div class="sl-heading-wrapper level-h3"><h3 id="the-full-digest">The full digest</h3><a class="sl-anchor-link" href="#the-full-digest"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “The full digest”</span></a></div>
+<p><code dir="auto">version_id</code> is not proof that two definitions are the same. It holds 12 hex
+digits of the SHA-256 (<code dir="auto">spec.go:286</code>), which is 48 bits. Which definition goes
+live, under which scope, and whether it is the one an experiment ran, all hang
+on that identity. So every writer compares the <strong>full</strong> SHA-256 of the original
+bytes, and the comparison is atomic across writers.</p>
+<div class="sl-heading-wrapper level-h4"><h4 id="one-claim-per-identity">One claim per identity</h4><a class="sl-anchor-link" href="#one-claim-per-identity"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “One claim per identity”</span></a></div>
+<p>A new insert-only table, <code dir="auto">agent_version_digests</code>, maps
+<code dir="auto">(agent_id, version_id)</code> to the full digest, keyed on that pair. It is the
+<strong>only</strong> record of which bytes a <code dir="auto">version_id</code> names. Every writer that creates
+an identity claims it first, in its own transaction, before judging anything:</p>
+<ul>
+<li><code dir="auto">Publisher.Publish</code>: console, API and Terraform;</li>
+<li><code dir="auto">Registry.Publish</code>, which the disk sync calls directly (<code dir="auto">cmd/agentd/sync.go</code>);</li>
+<li>sealing.</li>
+</ul>
+<p>A claim is <code dir="auto">insert … on conflict do nothing</code>, followed by reading the row back.
+Before claiming, a writer of a version checks whether <code dir="auto">agent_specs</code> already has
+the pair. <strong>If it has, and there is no claim, the writer refuses with
+<code dir="auto">fuseone:version-digest-unknown</code> and never adopts the digest it was given.</strong>
+That row was written by a binary that kept no digest, so claiming the new bytes
+would record, permanently, that the old row holds them. The writer leaves the
+pair unclaimed, and C2’s migration claims it <code dir="auto">NULL</code>. The check is race-free:
+every writer of <code dir="auto">agent_specs</code>, the previous binary’s included
+(<code dir="auto">Publisher.Publish</code>, <code dir="auto">Registry.Publish</code>, <code dir="auto">MakeCurrent</code>), runs under the event
+graph lock, and so does the check.</p>
+<ul>
+<li>If the row holds the same digest, the claim stands and the writer continues.</li>
+<li>If it holds a different one, the answer is 409 <code dir="auto">fuseone:version-collision</code>,
+before any judgment and before any other write.</li>
+</ul>
+<p>The primary key is what makes this atomic. Two transactions claiming the same
+pair with different digests cannot both succeed: the second waits on the first’s
+uncommitted row, then either finds the committed digest, or finds no row if the
+first rolled back, and inserts its own. There is no window where a seal A and a
+publication B both see “no conflict”. The claim is written in the same
+transaction as the version or the seal, so a rolled-back publication leaves no
+claim behind.</p>
+<p>The claim adds no lock cycle. Publication takes it after the event graph lock,
+and sealing takes no other lock. Activation reads the claim in step 10, which
+the seal already wrote.</p>
+<p>So the precedence in step 10 only ever chooses between rows that <strong>share one
+digest</strong>. A collision is refused where it would have been created, not
+discovered at activation after B is already live.</p>
+<div class="sl-heading-wrapper level-h4"><h4 id="versions-published-before-the-table">Versions published before the table</h4><a class="sl-anchor-link" href="#versions-published-before-the-table"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Versions published before the table”</span></a></div>
+<p>A migration inserts a claim for every existing row of <code dir="auto">agent_specs</code> with
+digest <code dir="auto">NULL</code>, because its original bytes were never kept and serializing the
+row would not recover them. A claim whose digest is <code dir="auto">NULL</code> cannot be matched by
+anything.</p>
+<p><strong>Decided by Kleber on 2026-11-11:</strong> a publication or a seal whose <code dir="auto">version_id</code>
+lands on a <code dir="auto">NULL</code> claim is refused with 409 <code dir="auto">fuseone:version-digest-unknown</code>.
+The way forward is to change the definition. A change almost always gives
+another id. Because the id is 48 bits, it may instead land on another claim, and
+that too is refused, never resolved silently. The author then changes the
+definition again.</p>
+<p>This is a change in behaviour. Today, republishing identical bytes of an old
+version makes it current again (<code dir="auto">publishOn</code> is <code dir="auto">on conflict do nothing</code>,
+<code dir="auto">registry.go:130</code>, followed by <code dir="auto">makeCurrentOn</code>). For versions published before
+the table, that stops working. It cannot stay: <code dir="auto">p.judge</code> would judge the
+definition being published, the insert would keep the old row, and
+<code dir="auto">MakeCurrent</code> would activate a definition nobody judged.</p>
+<p><strong>The disk sync</strong> republishes every version on disk at each boot. A version
+whose claim is <code dir="auto">NULL</code> is refused there too. The sync <strong>reports it and skips it</strong>
+(a log line naming agent and version, and a counter) instead of failing the boot.
+The version stays in <code dir="auto">agent_specs</code> as it was, and stays current if it is.
+Rewriting the file, which gives a new id, is how it gets a digest.</p>
+<div class="sl-heading-wrapper level-h4"><h4 id="the-database-enforces-it-against-the-previous-binary-too">The database enforces it, against the previous binary too</h4><a class="sl-anchor-link" href="#the-database-enforces-it-against-the-previous-binary-too"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “The database enforces it, against the previous binary too”</span></a></div>
+<p>A rule kept only in the new binary is not yet a guarantee. Migrations run as a
+<code dir="auto">pre-upgrade</code> hook (<code dir="auto">deploy/helm/fuseone-agents/templates/migrate-job.yaml</code>),
+and the previous release’s <code dir="auto">serve</code> replicas keep answering through the rolling
+update. Those binaries insert into <code dir="auto">agent_specs</code> and call <code dir="auto">makeCurrentOn</code>
+knowing nothing of claims (<code dir="auto">publisher.go:99</code>). Left unchecked, they could:</p>
+<ul>
+<li>publish a new version with no claim;</li>
+<li>make a legacy version with a <code dir="auto">NULL</code> claim current again;</li>
+<li>do either again after a rollback to that release.</li>
+</ul>
+<p>So the claim is enforced <strong>in the database</strong>, by two triggers. They are
+installed only once every replica writes claims, which takes two releases.</p>
+<p><strong>Release C1, the claimers.</strong> Its migration does three things:</p>
+<ul>
+<li>it creates <code dir="auto">agent_version_digests</code>;</li>
+<li>it adds the nullable <code dir="auto">agent_specs.digest</code> column;</li>
+<li>it inserts <code dir="auto">NULL</code> claims for every row of <code dir="auto">agent_specs</code>.</li>
+</ul>
+<p>Its binary claims on every write, in all three writers, fills the column, and
+refuses a row that exists without a claim, as above. It installs no trigger.
+While C1 rolls out, a C0 replica can still write an unclaimed row or make a
+<code dir="auto">NULL</code> version current. That is exactly today’s behaviour. C1 does not
+legitimize those rows: it refuses to claim them. The window ends when C1 runs on
+every replica, and nothing in the workbench exists yet to collide with.</p>
+<p><strong>Release C2, the enforcers</strong>, ships only after C1 is deployed on every replica.
+Its migration does three things, in one transaction:</p>
+<ol>
+<li>
+<p><strong>It claims the gap.</strong> Every <code dir="auto">agent_specs</code> row still without a claim gets a
+<code dir="auto">NULL</code> one. Those rows are C0 writes from C1’s rollout, and their bytes were
+never kept.</p>
+</li>
+<li>
+<p><strong>It refuses any insert that does not present a matching digest.</strong> A trigger
+<code dir="auto">BEFORE INSERT</code> on <code dir="auto">agent_specs</code> requires two things:</p>
+<ul>
+<li><code dir="auto">NEW.digest</code> is not <code dir="auto">NULL</code>;</li>
+<li>there is a claim for <code dir="auto">(agent_id, version_id)</code> whose digest equals
+<code dir="auto">NEW.digest</code>.</li>
+</ul>
+<p>A C0 insert never sets the column, so it is refused <strong>whether or not the id
+is already claimed</strong>. That closes C0 publishing a colliding B over a claimed
+A. A <code dir="auto">BEFORE INSERT</code> row trigger fires before <code dir="auto">on conflict do nothing</code> checks
+for the conflict. So the insert C0 believes is a harmless no-op is refused,
+and the transaction that would have gone on to <code dir="auto">makeCurrentOn</code> aborts with
+it.</p>
+</li>
+<li>
+<p><strong>It refuses an unproven current version.</strong> A trigger
+<code dir="auto">BEFORE INSERT OR UPDATE OF current_version</code> on <code dir="auto">agent_state</code> refuses a
+<code dir="auto">current_version</code> whose claim is missing or <code dir="auto">NULL</code>. It has two guards, and
+it raises only when both pass:</p>
+<ul>
+<li><strong><code dir="auto">NEW.current_version IS NOT NULL</code>.</strong> Six statements create or touch an
+agent’s state before it has a version, and all of them must keep working:
+<ul>
+<li><code dir="auto">refuseStage</code>’s <code dir="auto">ensure state</code> (<code dir="auto">publisher.go:142</code>);</li>
+<li><code dir="auto">SetStage</code>, <code dir="auto">SetPaused</code> and <code dir="auto">EnsurePaused</code> (<code dir="auto">state.go:95</code>, <code dir="auto">:126</code>,
+<code dir="auto">:144</code>);</li>
+<li>retirement (<code dir="auto">retire.go:30</code>).</li>
+</ul>
+</li>
+<li><strong>On update, the value changes</strong> (<code dir="auto">NEW.current_version IS DISTINCT FROM OLD.current_version</code>). The disk sync’s <code dir="auto">MakeCurrent</code> of the version that is
+already current therefore still passes, and so does every legacy version
+that is current today.</li>
+</ul>
+</li>
+</ol>
+<p>Because C2’s migration runs while C1 replicas serve, and C1 presents its
+digests, the triggers refuse nothing C1 does legitimately. They refuse every
+<code dir="auto">agent_specs</code> insert C0 can make, and every C0 move of the current version to a
+version without a proven digest.</p>
+<p><strong>Rollback floor.</strong> Once C2’s migration has run, rolling back below C1 is not
+supported. Every C0 publication would be refused by the trigger. That fails closed,
+with no wrong row written, but publishing stops until C1 is back. Rolling back
+from C2 to C1 is safe, because C1 claims. The release notes of C2 state the
+floor.</p>
+<p><strong>The workbench writes seals only after C2.</strong> The collision guarantee rests on
+the triggers, so phase 2 ships in C2 or later.</p>
+<div class="sl-heading-wrapper level-h4"><h4 id="the-digest-travels-from-the-bytes-never-from-a-spec">The digest travels from the bytes, never from a <code dir="auto">Spec</code></h4><a class="sl-anchor-link" href="#the-digest-travels-from-the-bytes-never-from-a-spec"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “The digest travels from the bytes, never from a Spec”</span></a></div>
+<p><code dir="auto">Parse</code> computes the SHA-256 and keeps only 48 bits of it in <code dir="auto">Spec.Version</code>
+(<code dir="auto">spec.go:165</code>). The HTTP route renders the definition to bytes and parses them
+(<code dir="auto">httpapi/publish.go:339</code>). The disk store parses each file (<code dir="auto">spec/store.go:143</code>).
+Both then hand on only the <code dir="auto">Spec</code>. Re-serializing a <code dir="auto">Spec</code> does not recover the
+bytes, so the full digest has to be carried, not recomputed:</p>
+<ul>
+<li><code dir="auto">Spec</code> gains <code dir="auto">Digest</code>, the full hex SHA-256 of the bytes <code dir="auto">Parse</code> was given.
+<strong>Only <code dir="auto">Parse</code> sets it.</strong></li>
+<li><code dir="auto">Publication</code> carries the <code dir="auto">Spec</code> and with it the <code dir="auto">Digest</code>. So do
+<code dir="auto">Store.Get</code> and the seal path.</li>
+<li><code dir="auto">Registry.Publish</code> and <code dir="auto">publishOn</code> refuse a <code dir="auto">Spec</code> whose <code dir="auto">Digest</code> is empty, or
+does not begin with the hex in <code dir="auto">Version</code>. A <code dir="auto">Spec</code> built by hand or
+reconstructed from a row cannot publish. It fails closed instead of claiming a
+digest of bytes that never existed.</li>
+<li><code dir="auto">agent_specs</code> gains a <code dir="auto">digest</code> column, which the writer fills from
+<code dir="auto">Spec.Digest</code> on insert. It is not a second record: the claim is the record,
+and C2’s trigger requires the column to <strong>equal</strong> the claim. The column is how
+an insert <em>presents</em> its digest to the database, which is what lets the
+database tell a writer that knows the bytes from one that does not.</li>
+</ul>
+<div class="sl-heading-wrapper level-h3"><h3 id="lock-order">Lock order</h3><a class="sl-anchor-link" href="#lock-order"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Lock order”</span></a></div>
+<p><strong>The lock order is the publication’s, and it is the only one.</strong> Steps 4, 5 and
+11 are the order <code dir="auto">Publisher.Publish</code> uses today (event graph, then the agent row
+inside <code dir="auto">refuseStage</code>). Ordinary publication adopts the resource tier when
+NT-017’s fence lands, so activation and publication can never wait on each
+other in a cycle.</p>
+<p>The content fence (step 3) comes before every database lock. It is the fence an
+erasure and anything copying an agent’s content already share
+(<code dir="auto">regression/fence.go</code>, <code dir="auto">domain.CorpusFence</code>). Each acquisition opens its own
+connection (<code dir="auto">fence.go:53</code>), so a request that entered it twice would wait on
+itself. <strong>A request enters the fence exactly once, from the outside:</strong></p>
+<ul>
+<li><strong>Experiment opening</strong> already runs inside <code dir="auto">regressions.Exclusive</code>
+(<code dir="auto">openExperiment</code>, <code dir="auto">httpapi/experiments.go:79</code>). It resolves the candidate
+inside that acquisition and takes no second fence.</li>
+<li><strong>Rehearsal opening</strong> and <strong>activation</strong> take it shared, with <code dir="auto">Hold</code>, around
+their whole transaction.</li>
+</ul>
+<p>Every erasure that can reach a seal holds the fence exclusively: by thread, by
+referenced run, by subject, and by retention. An erasure takes only the fence
+and content rows, so it never waits on the event graph or an agent row. That
+leaves two possible orders, and both are safe:</p>
+<ul>
+<li><strong>activation first:</strong> the erasure waits, then erases the seal’s copy. The
+published row is the one copy erasure never reaches, and the screen said so;</li>
+<li><strong>erasure first:</strong> step 10 reads a tombstone and fails closed.</li>
+</ul>
+<p>If any step fails, nothing changes, and the candidate stays a candidate.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="the-first-version-of-an-agent">The first version of an agent</h3><a class="sl-anchor-link" href="#the-first-version-of-an-agent"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “The first version of an agent”</span></a></div>
+<p>An agent the workbench creates has no published version, so there is no
+current version to match and no current scope. <code dir="auto">If-Match</code> refuses any value on a
+resource that does not exist (<code dir="auto">openapi.yaml</code>, <code dir="auto">IfMatch</code>), so a first activation
+cannot use it. It uses the opposite precondition instead:</p>
+<ul>
+<li><strong><code dir="auto">If-None-Match: *</code></strong> means “this agent has no published version”. It is
+judged under the event graph lock as a read of <code dir="auto">agent_specs</code> for the agent. If
+any version exists, the answer is 412 and nothing is written.</li>
+<li><strong>The scope comes from the seal.</strong> It is authorized as the sealed scope, twice:
+step 6 of activation has no other scope to read.</li>
+<li><strong>The agent is born paused</strong>, in stage <code dir="auto">draft</code>. <code dir="auto">makeCurrentOn</code> already
+creates the <code dir="auto">agent_state</code> row paused when the agent has none, and a missing
+stage reads as <code dir="auto">draft</code>. So a first activation, like a first publication, starts
+nothing.</li>
+</ul>
+<p><strong>Serialization does not depend on an <code dir="auto">agent_state</code> row existing.</strong> <code dir="auto">FOR UPDATE</code> on a row that is not there locks nothing. But the event graph lock is a
+single installation-wide advisory lock (<code dir="auto">event_graph_lock.go:30</code>), taken first
+by <code dir="auto">Publish</code> and by activation alike. A first activation and an ordinary first
+publication of the same agent therefore run one after the other:</p>
+<ul>
+<li><strong>publication first:</strong> the activation’s <code dir="auto">If-None-Match: *</code> finds a version and
+answers 412;</li>
+<li><strong>activation first:</strong> the publication sees a published agent, and proceeds as
+any publication over an existing version does.</li>
+</ul>
+<div class="sl-heading-wrapper level-h3"><h3 id="reading-a-candidate-during-a-run">Reading a candidate during a run</h3><a class="sl-anchor-link" href="#reading-a-candidate-during-a-run"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Reading a candidate during a run”</span></a></div>
+<p>The fence guards opening a run. The worker reads the specification again on
+every turn (<code dir="auto">worker/turn.go:51</code> calls <code dir="auto">resolve</code>), in another process and long
+after the opening request returned. Holding the fence across a turn would hold
+it across a model call. Erasure would then wait on the model, and a fence slot
+(<code dir="auto">FenceSlots</code> is 4) would be held for as long as the model takes.</p>
+<p>A turn does not need the fence, because it <strong>reads and does not copy</strong>. The
+bytes go into the prompt, and nothing durable is written from them except what
+the run records as its own content. A single read sees either the bytes or the
+tombstone, so the linearization point is that read. The promise is stated
+exactly:</p>
+<ul>
+<li><strong>a turn whose read happens after the erasure commits</strong> finds the tombstone,
+ends with a failed step carrying <code dir="auto">fuseone:candidate-unreadable</code>, and plans
+nothing;</li>
+<li><strong>a turn whose read came first</strong> may finish its one model call with the old
+text. No later turn of that run, or of any other run, reads it.</li>
+</ul>
+<p>So erasure of a candidate takes effect at the <strong>next turn</strong> of a run already
+open, never mid-turn.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="every-run-records-where-its-text-came-from">Every run records where its text came from</h3><a class="sl-anchor-link" href="#every-run-records-where-its-text-came-from"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Every run records where its text came from”</span></a></div>
+<p>What the model writes back can repeat the candidate’s text, and that output is
+the run’s own content. Rehearsals are not the only runs that read a candidate:
+an experiment started in the thread runs the same seal over thirty cases. So
+<strong>every run that reads a candidate records its origin when it opens</strong>, in
+rehearsals and experiments alike:</p>
+<ul>
+<li>the <code dir="auto">seal_id</code> it read;</li>
+<li>the thread it was started from, if any.</li>
+</ul>
+<p>The origin goes in <code dir="auto">run_started</code>, and nowhere else first. <strong>The index an erasure
+reads is a projection of that step, written in the same transaction.</strong>
+<code dir="auto">upsertRun</code> (<code dir="auto">ledger/append.go:207</code>) already projects <code dir="auto">runs</code> from each step
+inside the append transaction, and reads <code dir="auto">simulated</code> and <code dir="auto">simulation</code> from the
+<code dir="auto">run_started</code> payload. It gains <code dir="auto">seal_id</code> and <code dir="auto">authoring_thread</code> the same way, as
+two id columns on <code dir="auto">runs</code> with an index each. A run that exists therefore always
+carries its origin: there is no second write that can fail on its own. The
+contract suite that checks the projection against a Go fold covers the two new
+columns.</p>
+<p><strong>An experiment fixes its seal in the intention, not per run.</strong> An experiment
+opens its runs under an idempotency key, and a retry reads what the first
+attempt recorded (<code dir="auto">openExperiment</code>, <code dir="auto">simulate.Recorded</code>). The seal and the
+thread join the recorded intention:</p>
+<ul>
+<li>the first run the experiment opens fixes <code dir="auto">seal_id</code> and <code dir="auto">thread</code>;</li>
+<li>a retry that omits them inherits the recorded ones;</li>
+<li>a retry that names a different seal is the existing conflict, “a retry
+stating another intention than its key’s”;</li>
+<li><strong>the seal follows the idempotency contract of #309</strong>, as the provider and
+the corpus already do (<code dir="auto">openExperiment</code>, “refused only before anything was
+opened”):
+<ul>
+<li>a first attempt that has opened nothing, and finds its seal unreadable, is
+refused with <code dir="auto">fuseone:candidate-unreadable</code>;</li>
+<li>a retry of an experiment that already has runs is never refused for
+something that changed underneath. If seal A is unreadable, the retry opens
+zero new runs and answers from the ledger (<code dir="auto">answerFromRecord</code>), as it does
+when the corpus was erased. It never opens the missing runs on sibling seal
+B, even though B’s bytes are the same. Every run of one experiment read the same seal, so one erasure
+reaches all of them.</li>
+</ul>
+</li>
+</ul>
+<p>A run is pinned to the seal it opened with. Every turn resolves <strong>that</strong> seal,
+never another seal of the same version. If that seal is unreadable, the turn
+fails closed even when a sibling seal is readable. That keeps the origin exact:
+the run read one seal’s bytes, and erasing them reaches it.</p>
+<p>Erasure then follows the origin. <strong>Erasing a thread, or erasing any seal along
+the chain in
+<a href="#where-text-ends-up-and-how-erasure-follows-it">where text ends up</a>, also
+erases the content of every run whose origin names that thread or that seal.</strong>
+That covers rehearsals and experiments, including an experiment started from the
+experiments page on a candidate sealed from the thread. The erasure is by owner
+(<code dir="auto">EraseOwnersTx</code> with <code dir="auto">run</code>), in the same transaction and under the same
+exclusive fence. Text the model echoed back goes with the run.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="retention">Retention</h3><a class="sl-anchor-link" href="#retention"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Retention”</span></a></div>
+<p>A seal’s text lives in the content store under the installation’s retention,
+counted from the seal. When it is gone, through age or erasure, <strong>the platform
+fails closed</strong>:</p>
+<ul>
+<li><strong>Activation</strong> with no readable seal for the version answers 409
+<code dir="auto">fuseone:candidate-unreadable</code>. It never publishes partial text, and never
+publishes text that does not match <code dir="auto">version_id</code>.</li>
+<li><strong>Opening a rehearsal or experiment run</strong> on such a candidate is refused with
+the same code, before any run exists.</li>
+<li><strong>A run already open</strong> that cannot read its candidate’s text at its next turn
+ends with a failed step carrying that code, as
+<a href="#reading-a-candidate-during-a-run">reading a candidate during a run</a> states.
+It never continues on a partial specification. An experiment counts that case
+as <code dir="auto">not_comparable</code>.</li>
+</ul>
+<p>The way back is to re-seal from the draft. If the text is unchanged, the new
+seal has the same <code dir="auto">version_id</code>, so the experiment evidence still applies to the
+same digest. If erasure changed the text, the new seal has a different digest
+and needs its own experiment.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="live-rehearsal">Live rehearsal</h2><a class="sl-anchor-link" href="#live-rehearsal"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Live rehearsal”</span></a></div>
+<p>A rehearsal is a simulated run of a candidate on <strong>one</strong> case the author typed
+or pasted. It uses the same Gate, ledger and budget as today’s simulations.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="a-rehearsal-is-not-a-battery">A rehearsal is not a battery</h3><a class="sl-anchor-link" href="#a-rehearsal-is-not-a-battery"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “A rehearsal is not a battery”</span></a></div>
+<p>Today a run that is <code dir="auto">simulated</code>, names a <code dir="auto">simulation</code> and a <code dir="auto">case</code>, and names no
+<code dir="auto">experiment</code> counts as evidence about the agent. A rehearsal would match that
+description:</p>
+<ul>
+<li><code dir="auto">HasSimulation</code> (<code dir="auto">ledger/simulations_postgres.go:45</code>) would let one rehearsal
+take the agent out of Draft;</li>
+<li><code dir="auto">Batteries</code> and <code dir="auto">LastBatteryAt</code> would let it reset the clock the drift sweep
+reads.</li>
+</ul>
+<p>So <code dir="auto">run_started</code> gains <code dir="auto">rehearsal</code>, and the three readers exclude it, in Postgres
+and in <code dir="auto">ledger.Memory</code>. An older replica would still count a rehearsal, so this
+ships the way experiments and judges did: <strong>the readers in one release,
+deployed on every replica, before the release that first writes a rehearsal.</strong></p>
+<p>The endpoints that answer for the world and decide in a rehearsal accept only a
+run marked <code dir="auto">rehearsal</code>, stopped at exactly the request being answered (<code dir="auto">atSeq</code>,
+as <code dir="auto">DecideApproval</code> requires today). A real run, a battery or an experiment is
+refused.</p>
+<p>Two things are new in the run itself.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="the-author-answers-for-the-world">The author answers for the world</h3><a class="sl-anchor-link" href="#the-author-answers-for-the-world"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “The author answers for the world”</span></a></div>
+<p>In rehearsal, <code dir="auto">simulate.Deps</code> swaps in a tool layer whose <code dir="auto">Invoke</code> <strong>parks</strong> the
+run, instead of <code dir="auto">DryTools</code>, which returns empty at once. The run waits for an
+answer the way it waits for an approval:</p>
+<ul>
+<li>the call is recorded as today;</li>
+<li>a <code dir="auto">world_awaited</code> step marks the wait;</li>
+<li>the author’s answer is stored in the content store, and a <code dir="auto">world_supplied</code>
+step records its reference and digest.</li>
+</ul>
+<p>The answer carries <code dir="auto">LabelUntrusted</code>, because it is external content as far as
+the agent’s next decision is concerned. Calling it trusted would let a rehearsal
+take a path production would refuse.</p>
+<p><code dir="auto">Deps</code> remains the only constructor. The parking layer, like <code dir="auto">DryTools</code>, has no
+argument or flag by which it can reach a real system. The test that guards
+<code dir="auto">dry.go</code> today is extended to cover it.</p>
+<p>Writes are answered by the author too, for example a refund id. Nothing
+executes, and the Gate has already decided whether the call was allowed before
+the author is asked.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="the-author-decides-as-the-approver">The author decides as the approver</h3><a class="sl-anchor-link" href="#the-author-decides-as-the-approver"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “The author decides as the approver”</span></a></div>
+<p>When the Gate holds an action, the rehearsal shows the decision in the trace. The
+author’s decision is recorded as a <strong><code dir="auto">rehearsal_decided</code></strong> step. It is never
+<code dir="auto">approval_decided</code>, so no count, report or audit of real approvals can mistake
+it for one. It needs <code dir="auto">agent:publish</code> on the scope, not <code dir="auto">approval:act</code>, because it
+authorises nothing.</p>
+<p>Before this ships, one existing door must close. <code dir="auto">DecideApproval</code>
+(<code dir="auto">internal/httpapi/approvals.go:80</code>) does not check whether the run is
+simulated. Simulated runs are hidden from the inbox, but a direct call by
+someone holding <code dir="auto">approval:act</code> would record a real <code dir="auto">approval_decided</code> on a
+simulated run. We have not verified whether the simulation pool resumes the run
+afterwards. Either way the record is wrong, so <code dir="auto">DecideApproval</code> refuses
+simulated runs, tested with a simulated run held at <code dir="auto">awaiting_approval</code>.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="watching-it-happen">Watching it happen</h3><a class="sl-anchor-link" href="#watching-it-happen"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Watching it happen”</span></a></div>
+<p>There is no streaming today. <strong>Polling is the contract of the first version</strong>:
+every second while a rehearsal is active and the run is not waiting on the
+author. A rehearsal spends most of its time waiting for the author, so polling at
+that rate is cheap. SSE is deferred. It is reopened only after phase 4 has been
+measured in use and under load.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="correction-becomes-a-case">Correction becomes a case</h2><a class="sl-anchor-link" href="#correction-becomes-a-case"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Correction becomes a case”</span></a></div>
+<p><code dir="auto">POST /agents/{id}/regressions</code> already accepts a simulated run. The workbench
+calls it with the rehearsal’s run when the author accepts a correction. One
+accepted correction produces two things: an operation on the draft and a case.</p>
+<p>The new part is that <strong>a case keeps the world</strong>. The answers the author typed
+in the rehearsal are copied into the case, by reference and digest, beside the
+input. Without them, replaying the case in an experiment would go back to empty
+tool results, and the case would test a different situation from the one the
+author corrected.</p>
+<p>The recording is a <strong>sequence</strong>. Each entry holds:</p>
+<ul>
+<li>its position;</li>
+<li>the tool;</li>
+<li>a digest of the arguments;</li>
+<li>the reference to the answer.</li>
+</ul>
+<p>The same call made twice with different answers is two entries, not one
+ambiguous key.</p>
+<p>In an experiment, a case with a recording runs on a replay layer that answers
+calls strictly in order. Each entry is consumed once. The case is marked
+<code dir="auto">not_comparable</code>, with the first divergence named, when a call is:</p>
+<ul>
+<li><strong>missing:</strong> the run settles before the recording is consumed;</li>
+<li><strong>extra:</strong> a call made after the recording is exhausted;</li>
+<li><strong>repeated:</strong> an entry asked for a second time;</li>
+<li><strong>out of order:</strong> a call matching a later entry rather than the next one.</li>
+</ul>
+<p>From that point the run gets empty results. This uses the comparison’s existing
+state, so a case that behaves differently from the recording is never reported
+as held. Matching strictly in order is deliberate. It will mark as
+<code dir="auto">not_comparable</code> some runs that reorder two independent reads, which NT-003 §8
+allows inside a step. That costs a re-recorded case. The alternative is a
+replay that picks an answer for the agent, and that would be the platform
+inventing evidence.</p>
+<p>NT-015’s erasure rules apply to the recorded answers as they do to the input,
+since both came from the same rehearsal:</p>
+<ul>
+<li>erasure follows the input;</li>
+<li>erasure and copying exclude each other;</li>
+<li>deleting a case erases its copies.</li>
+</ul>
+<p>Each new case creates a new dataset version, as NT-015 specifies.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="experiments-in-the-thread">Experiments in the thread</h2><a class="sl-anchor-link" href="#experiments-in-the-thread"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Experiments in the thread”</span></a></div>
+<p>No new mechanism. “Rodar contra os casos” starts an NT-015 experiment that pins
+three things:</p>
+<ul>
+<li>the candidate;</li>
+<li>the latest dataset version;</li>
+<li>the candidate’s configuration.</li>
+</ul>
+<p>The thread then shows the comparison against the current version. Each case’s
+<code dir="auto">was</code>/<code dir="auto">now</code> maps onto the mockup’s three colours:</p>
+<ul>
+<li>held to held: kept;</li>
+<li>broke to held: fixed in this version;</li>
+<li>held to broke: a regression.</li>
+</ul>
+<p>The regressions are listed with a link that opens their trace in the Ensaio tab.
+Judge opinions appear beside the verdict once NT-016 release 2 opens judge runs.
+Until then, the column is absent rather than empty.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="phases">Phases</h2><a class="sl-anchor-link" href="#phases"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Phases”</span></a></div>
+<p>One pull request per phase. The console screen grows with each phase, under a
+new route <code dir="auto">/agents/:agentId/workbench</code>. The form editor stays where it is.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>Phase</th><th>Ships</th></tr></thead><tbody><tr><td>C1, C2</td><td>Claims, then their triggers</td><td>C1: <code dir="auto">agent_version_digests</code>, <code dir="auto">agent_specs.digest</code>, <code dir="auto">NULL</code> backfill, <code dir="auto">Spec.Digest</code>. Every writer claims and presents its digest, and refuses a row that exists unclaimed. The disk sync skips <code dir="auto">NULL</code> claims. C2, after C1 is on every replica: claim the gap, then two triggers. One requires every insert to present a digest equal to its claim. The other refuses a non-<code dir="auto">NULL</code> current version without a proven claim. The rollback floor goes in the release notes. Phase 2 ships in C2 or later.</td></tr><tr><td>0</td><td>Close the doors</td><td><code dir="auto">DecideApproval</code> refuses simulated runs. <code dir="auto">HasSimulation</code>, <code dir="auto">Batteries</code> and <code dir="auto">LastBatteryAt</code> exclude <code dir="auto">rehearsal</code>, in Postgres and in memory. This must be released and deployed on every replica before phase 4 ships.</td></tr><tr><td>1</td><td>Server draft and operations</td><td>Draft table, operations with validation, policy card, trail, ETag. Workbench with the draft panel and hand editing.</td></tr><tr><td>2</td><td>Candidates</td><td>Insert-only <code dir="auto">agent_seals</code> holding metadata, the sealed scope and provenance, with the full specification bytes in the content store. Every door authorizes against the sealed scope. The <code dir="auto">Opener</code> fences candidates. Activation runs the eight steps in the publication’s lock order, with one fence acquisition per request. A first version activates with <code dir="auto">If-None-Match: *</code>. Unreadable candidates fail closed, at opening and at each turn.</td></tr><tr><td>3</td><td>The conversation</td><td>One thread per author: turns, proposals, checklist, transcript in the content store, references to runs, thread erasure, ceiling per turn.</td></tr><tr><td>4</td><td>Live rehearsal</td><td>Parking tool layer, <code dir="auto">rehearsal</code> marker, <code dir="auto">world_*</code> and <code dir="auto">rehearsal_decided</code> steps and their endpoints, one-second polling, Ensaio tab.</td></tr><tr><td>5</td><td>Cases with the world, experiments in the thread</td><td>Ordered recording in the case, replay layer that consumes it once, <code dir="auto">not_comparable</code> on divergence, Experimento and Casos tabs.</td></tr></tbody></table>
+<p>Phases 1 and 2 are useful without the rest. A server-side draft fixes losing an
+interview to a closed tab, and candidates let an experiment test something
+before it is in production.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="what-this-is-not">What this is not</h2><a class="sl-anchor-link" href="#what-this-is-not"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “What this is not”</span></a></div>
+<ul>
+<li><strong>Not a way to reach production data.</strong> Reads in a rehearsal are answered by
+the author. NT-003 §10’s rule that authoring does not touch customer data
+stands.</li>
+<li><strong>Not a model that publishes, grants or promotes.</strong> It proposes typed
+operations. A person accepts each one, publishes, and promotes the stage.</li>
+<li><strong>Not a replacement for the form editor or the API.</strong> Both stay, and NT-017’s
+Terraform provider publishes versions without passing through here.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="tests-that-must-exist">Tests that must exist</h2><a class="sl-anchor-link" href="#tests-that-must-exist"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Tests that must exist”</span></a></div>
+<p>Each is written red first. Each sabotage uses the value the bug would accept.</p>
+<ul>
+<li>
+<p>An operation naming a tool outside the catalogue is refused. Sabotage: drop
+the catalogue check in the validator; the test must name the tool.</p>
+</li>
+<li>
+<p>No operation changes scope, name or stage. Sabotage: accept a <code dir="auto">set_scope</code> op.</p>
+</li>
+<li>
+<p>Applying an operation with a stale ETag answers 412, and the draft is
+unchanged.</p>
+</li>
+<li>
+<p>A trail row holds no free text. A <code dir="auto">CHECK</code> or a test reads every column
+against a pasted string.</p>
+</li>
+<li>
+<p>Subject erasure clears the transcript and the operation bodies of a draft
+whose conversation included the named run’s input.</p>
+</li>
+<li>
+<p>For each of the three current-version queries, an agent with no
+<code dir="auto">agent_state</code> row and only a candidate has no current version.</p>
+</li>
+<li>
+<p>Publishing from the workbench makes current the exact digest the experiment
+ran.</p>
+</li>
+<li>
+<p>A rehearsal run cannot reach a real tool. Extend <code dir="auto">dry.go</code>’s guard to the
+parking layer.</p>
+</li>
+<li>
+<p>An author-supplied answer carries <code dir="auto">LabelUntrusted</code>. After one, <code dir="auto">checkTaint</code>
+sends a reversible write to a person and stops an irreversible one, exactly as
+in production.</p>
+</li>
+<li>
+<p><code dir="auto">rehearsal_decided</code> never counts as an approval. Use the approvals listing and
+the stats against a run that has one.</p>
+</li>
+<li>
+<p><code dir="auto">DecideApproval</code> on a simulated run held at <code dir="auto">awaiting_approval</code> is refused.</p>
+</li>
+<li>
+<p>A replayed case is <code dir="auto">not_comparable</code>, never <code dir="auto">held</code>, for each of four
+divergences: a missing call, an extra call, a repeated entry, and an
+out-of-order call. Add a case where the same call is made twice with
+different answers, and check that each answer is consumed once and in order.</p>
+</li>
+<li>
+<p>No operation writes a policy. The sabotage is an operation that takes an
+author holding only <code dir="auto">agent:publish</code> to a stored policy; the test must name
+the operation.</p>
+</li>
+<li>
+<p>A real rerun naming a candidate is refused.</p>
+</li>
+<li>
+<p>An agent whose only version is a candidate opens no real run.</p>
+</li>
+<li>
+<p>A rehearsal naming a candidate is accepted, and so is an experiment.</p>
+</li>
+<li>
+<p>Activation is refused, and changes nothing, in each of these cases (412 for a moved version, otherwise the answer publishing gives today for the same cause):</p>
+<ul>
+<li>the current version moved since the experiment;</li>
+<li>the agent became autonomous;</li>
+<li>a tool, the provider or the area the candidate names no longer exists;</li>
+<li>the author lost <code dir="auto">agent:publish</code>;</li>
+<li>the <code dir="auto">never</code> block is empty;</li>
+<li>the agent’s scope differs from the sealed scope.</li>
+</ul>
+</li>
+<li>
+<p>The definition that is activated is byte-for-byte the definition that was
+sealed. A test seals an agent that uses every field: emits, memory learning,
+approvals, fallback, cache TTL, locale and effort. It activates the agent, and
+checks that the published row’s <code dir="auto">version_id</code> equals the sealed one and that
+<code dir="auto">p.judge</code> at the seal saw its <code dir="auto">emits</code>. Sabotage: rebuild the definition from
+metadata columns; the test must name the field that was lost.</p>
+</li>
+<li>
+<p>Each door, run in both directions, answers 404 outside the sealed scope:
+listing, reading, rehearsing, experimenting and activating. A <code dir="auto">cx</code> author
+cannot see a candidate sealed in <code dir="auto">finance</code>, and a <code dir="auto">finance</code> author cannot see
+one sealed in <code dir="auto">cx</code>. After the agent moves from <code dir="auto">finance</code> to <code dir="auto">cx</code>, the
+<code dir="auto">finance</code> candidate is still invisible to <code dir="auto">cx</code> and cannot be activated.</p>
+</li>
+<li>
+<p>Activation and erasure, run concurrently with <code dir="auto">testdb.NewContention</code>, in both
+orders, with one stalled at the point where it holds what the other needs:</p>
+<ul>
+<li>with activation first, the erasure waits, the published row holds the
+bytes, and the seal’s own copy is erased;</li>
+<li>with erasure first, activation answers <code dir="auto">fuseone:candidate-unreadable</code> and
+no <code dir="auto">agent_specs</code> row exists.</li>
+</ul>
+<p>Sabotage: drop the shared fence from activation. Erasure first must then
+publish erased bytes, and the test must name that.</p>
+</li>
+<li>
+<p>After activation, erasing the thread still clears the transcript, the
+operation bodies, the draft values and the seal’s copy, and leaves only the
+published row.</p>
+</li>
+<li>
+<p>The policy card never names a person, for any author.</p>
+</li>
+<li>
+<p>An experiment on a candidate, through the real route (<code dir="auto">openExperiment</code>), opens
+its runs and does not wait on itself. Sabotage: take <code dir="auto">Hold</code> inside
+<code dir="auto">Exclusive</code>; the test must time out and say so.</p>
+</li>
+<li>
+<p>Activation without <code dir="auto">If-Match</code> or <code dir="auto">If-None-Match</code> answers 428.</p>
+</li>
+<li>
+<p>A first activation with <code dir="auto">If-None-Match: *</code> creates the agent paused and in
+<code dir="auto">draft</code>.</p>
+</li>
+<li>
+<p>A first activation and an ordinary first publication of the same agent, run
+concurrently in both orders, give the two results listed in
+<a href="#the-first-version-of-an-agent">the first version</a>. Neither leaves two
+current versions.</p>
+</li>
+<li>
+<p>The scope checks run in their stated order. After a move from <code dir="auto">finance</code> to
+<code dir="auto">cx</code>:</p>
+<ul>
+<li>a <code dir="auto">finance</code>-only author activating the <code dir="auto">finance</code> candidate gets 404, not
+409;</li>
+<li>an author who can publish in both scopes gets 409
+<code dir="auto">fuseone:candidate-scope-moved</code>.</li>
+</ul>
+<p>Sabotage: check the scope move before step 3; the test must name the leaked
+409.</p>
+</li>
+<li>
+<p>A turn that reads a candidate after an erasure commits fails closed. The test
+stalls a run between two turns, commits the erasure, then resumes the run.
+The next turn must answer <code dir="auto">fuseone:candidate-unreadable</code> and plan nothing.</p>
+</li>
+<li>
+<p>Erasure reaches every run derived from the thread. The model in a rehearsal,
+and in each case of an experiment on the same candidate, is made to echo a
+string from the seal. One experiment is started from the thread and one from
+the experiments page. After the thread is erased, the string is found in
+neither kind of run. Sabotage: erase only rehearsal runs; the test must name
+the experiment run where the string survived.</p>
+</li>
+<li>
+<p>A run opened on one seal does not switch to a sibling seal of the same
+version when its own seal is erased; its next turn fails closed.</p>
+</li>
+<li>
+<p>Activation of a version already in <code dir="auto">agent_specs</code> succeeds with every seal of
+it expired. One test covers a draft that matched a published digest, and one
+covers an ordinary publication made while a candidate existed.</p>
+</li>
+<li>
+<p>Activation with a tag taken before the agent was retired answers 412, and so
+does a tag taken before it was restored. The current version is the same in
+both cases; only <code dir="auto">retired</code> changed. Sabotage: compare only the version; both
+tests must fail.</p>
+</li>
+<li>
+<p>An experiment’s first attempt is interrupted after opening some runs on seal
+A. A sibling seal B is then written, and the experiment is retried. Every run
+of the experiment names seal A. If A is erased before the retry, the retry
+answers 202 from the ledger, as <code dir="auto">POST /experiments</code> always does, opens zero runs, and opens nothing on B. A first
+attempt with no runs and an unreadable seal is refused.</p>
+</li>
+<li>
+<p>Activation loads the definition before it locks resources or judges. The test
+seals a candidate whose resources, <code dir="auto">emits</code> and <code dir="auto">never</code> block differ from the
+current version’s. Each of steps 11–13 must judge the candidate. Sabotage:
+judge the current version; the test must name the step.</p>
+</li>
+<li>
+<p>A <code dir="auto">version_id</code> shared by two different full digests answers
+<code dir="auto">fuseone:version-collision</code> at sealing and at activation, and nothing is
+written. The test forges the collision by inserting a seal row around the
+claim.</p>
+</li>
+<li>
+<p>A seal, an ordinary publication and a disk sync landing on a <code dir="auto">NULL</code> claim each
+answer <code dir="auto">fuseone:version-digest-unknown</code>. The sync reports it and boots. No
+path makes the old row current through a new publication.</p>
+</li>
+<li>
+<p>A seal A and an ordinary publication B with the same <code dir="auto">version_id</code> and
+different digests, run concurrently with <code dir="auto">testdb.NewContention</code> in both
+orders. Exactly one claim exists afterwards, and the other writer answered
+<code dir="auto">fuseone:version-collision</code> having written nothing. Sabotage: check for a
+conflict with a <code dir="auto">select</code> instead of claiming; the test must find two digests
+live.</p>
+</li>
+<li>
+<p>An ordinary publication whose <code dir="auto">version_id</code> is taken by a different digest is
+refused before <code dir="auto">p.judge</code> runs. Sabotage: claim after the judgment; the test
+must see the judgment of B reported.</p>
+</li>
+<li>
+<p>The digest recorded for a publication is the SHA-256 of the original bytes,
+on the HTTP path and on the disk path. Each test uses bytes that do not
+survive re-serialization, such as CRLF line endings and key order. Sabotage:
+recompute the digest from a re-serialized <code dir="auto">Spec</code>; the test must name the path.</p>
+</li>
+<li>
+<p><code dir="auto">Registry.Publish</code> refuses a <code dir="auto">Spec</code> with no <code dir="auto">Digest</code>, and separately a <code dir="auto">Spec</code>
+whose <code dir="auto">Digest</code> does not begin with the hex in <code dir="auto">Version</code>. The second test uses
+a well-formed digest of other bytes. Sabotage: remove the prefix check alone;
+that test must fail and the first must still pass.</p>
+</li>
+<li>
+<p><strong>The previous binary’s SQL is refused after C2’s migration.</strong> The test runs
+that migration, then runs C0’s exact statements against the database:</p>
+<ul>
+<li><code dir="auto">publishOn</code>’s <code dir="auto">insert … on conflict do nothing</code>, with no claim;</li>
+<li>the same insert of a colliding B over an A <strong>whose claim is not <code dir="auto">NULL</code></strong>. It
+is refused before the conflict is checked, and the <code dir="auto">makeCurrentOn</code> that
+follows in C0’s transaction never runs;</li>
+<li><code dir="auto">makeCurrentOn</code> onto a version whose claim is <code dir="auto">NULL</code>;</li>
+<li><code dir="auto">makeCurrentOn</code> onto a version with no claim.</li>
+</ul>
+<p>All of these are refused. Two things still pass: <code dir="auto">makeCurrentOn</code> of the
+version that is already current, and C1’s claim, then insert with the digest.
+Sabotage: drop either trigger, then drop the <code dir="auto">NEW.digest</code> equality; the test
+must name the statement that got through.</p>
+</li>
+<li>
+<p><strong>C1 never adopts a C0 row.</strong> C0 publishes A without a claim. C1 then
+publishes B with the same <code dir="auto">version_id</code>. C1 answers
+<code dir="auto">fuseone:version-digest-unknown</code>, no claim exists for the pair, and C2’s
+migration claims it <code dir="auto">NULL</code>. Sabotage: claim before checking <code dir="auto">agent_specs</code>; the
+test must find B’s digest claimed over A’s row.</p>
+</li>
+<li>
+<p><strong>State without a version is still allowed after C2.</strong> Each of these succeeds
+on an agent with no published version:</p>
+<ul>
+<li>pausing it;</li>
+<li>setting its stage;</li>
+<li>ensuring it is paused;</li>
+<li>retiring it;</li>
+<li><code dir="auto">refuseStage</code>’s state row.</li>
+</ul>
+<p>Sabotage: drop the <code dir="auto">IS NOT NULL</code> guard; the test must name the statement
+refused.</p>
+</li>
+<li>
+<p>C2’s migration claims an <code dir="auto">agent_specs</code> row written without a claim, with
+<code dir="auto">NULL</code>, before it installs the triggers.</p>
+</li>
+<li>
+<p><code dir="auto">seal_id</code> and <code dir="auto">authoring_thread</code> are written with <code dir="auto">run_started</code> or not at all.
+The test makes the append fail after the step’s insert and before the
+projection. Neither the step nor the origin is left behind. Sabotage: write
+the origin in a second transaction; the test must find a run without its
+origin.</p>
+</li>
+<li>
+<p>No 412, 409 or 428 that depends on the agent is returned before both scopes
+are authorized. The test calls activation as a <code dir="auto">finance</code>-only author, with a
+stale <code dir="auto">If-Match</code>, on an agent moved to <code dir="auto">cx</code>, and expects 404. Sabotage: judge
+<code dir="auto">If-Match</code> first; the test must name the leaked 412.</p>
+</li>
+<li>
+<p>Sealing a candidate for an autonomous agent is accepted.</p>
+</li>
+<li>
+<p>A rehearsal does not satisfy <code dir="auto">HasSimulation</code> and does not move
+<code dir="auto">LastBatteryAt</code>, in Postgres and in <code dir="auto">ledger.Memory</code>.</p>
+</li>
+<li>
+<p>The world and rehearsal-decision endpoints refuse each of these: a real run,
+a battery run, an experiment run, and a rehearsal stopped at a different
+<code dir="auto">atSeq</code>.</p>
+</li>
+<li>
+<p>Erasing a run that a turn referenced, and separately erasing a thread, must
+leave the text in none of these places:</p>
+<ul>
+<li>the transcript;</li>
+<li>the operation bodies;</li>
+<li>the shared draft’s values;</li>
+<li>the content of every unpublished seal that sealed them.</li>
+</ul>
+<p>The test searches for the pasted string in all four. Sabotage: skip the draft
+values, then skip the seals; each sabotage must fail the test by naming where
+the string survived. A value overwritten by hand after the operation keeps
+its text.</p>
+</li>
+<li>
+<p>Re-sealing after a seal’s text was erased by subject erasure writes a new
+seal and leaves the old tombstone erased. Sabotage: seal through
+<code dir="auto">RestoreFor</code>, which must fail the test.</p>
+</li>
+<li>
+<p>Activation, and opening a rehearsal or an experiment, on a candidate with no
+readable seal answer <code dir="auto">fuseone:candidate-unreadable</code>. No <code dir="auto">agent_specs</code> row and
+no run appear.</p>
+</li>
+<li>
+<p>Activation reads text that does not match <code dir="auto">version_id</code> and is refused, with
+no row written.</p>
+</li>
+<li>
+<p>Each of the three idempotent cases in
+<a href="#how-a-candidate-is-stored">How a candidate is stored</a> holds. The ordinary
+publication case runs with a candidate of the same digest already sealed.</p>
+</li>
+<li>
+<p>An activation and an ordinary publication of the same agent, run
+concurrently with <code dir="auto">testdb.NewContention</code>, both finish: one succeeds and the
+other is refused or waits. Neither deadlocks. Sabotage: take the agent row
+before the event graph lock in activation; the test must time out and name
+the order.</p>
+</li>
+<li>
+<p>The policy card’s text never claims coverage. A test renders a card for an
+author without <code dir="auto">policy:read</code>, and one for an author with it, and checks that
+neither reads as covered.</p>
+</li>
+</ul></div><footer class="sl-flex astro-xhxjzfa7"><div class="meta sl-flex astro-xhxjzfa7"></div><div class="pagination-links print:hidden astro-jgq3vlii" dir="ltr"><a href="/fuseone-agents/docs/design/nt-016-judge-evaluators/" rel="prev" class="astro-jgq3vlii"><svg aria-hidden="true" class="astro-jgq3vlii astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z"/></svg><span class="astro-jgq3vlii">Previous<br class="astro-jgq3vlii"><span class="link-title astro-jgq3vlii">NT-016 — Judge evaluators</span></span></a></div></footer></div></div></main></div></div></div></div></body></html>
