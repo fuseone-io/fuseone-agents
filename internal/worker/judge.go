@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -11,9 +12,34 @@ var (
 	// errJudgeOutsideExperiment is a judge on a run that is not simulated or names no
 	// experiment. The opener refuses one; this is the second door.
 	errJudgeOutsideExperiment = errors.New("a judge is honoured only on a simulated run of an experiment")
-	// errJudgeNotRunHere is a judge run reaching a worker that cannot run judges yet.
-	errJudgeNotRunHere = errors.New("this worker does not run judges")
+	// errJudgeNotRunHere is a judge run reaching a pool with no judges wired: the real
+	// pool, or one a test built without them.
+	errJudgeNotRunHere = errors.New("this pool does not run judges")
 )
+
+// Judges resolves a judge run, declared here by the consumer (NT-016).
+type Judges interface {
+	ResolveJudge(ctx context.Context, run domain.RunID, started domain.RunStartedPayload) (Resolution, error)
+}
+
+// WithJudges wires how the simulation pool resolves a judge run. The real pool never gets
+// it: a judge runs only on a simulated run.
+func (w *Worker) WithJudges(j Judges) *Worker {
+	w.judges = j
+	return w
+}
+
+// resolveJudge is what a judge run plans with: refused outside an experiment, parked
+// where no judges are wired, and otherwise the judge's own resolution.
+func (w *Worker) resolveJudge(ctx context.Context, run domain.RunID, started domain.RunStartedPayload) (Resolution, error) {
+	if err := judgeRefusal(run, started); err != nil && !errors.Is(err, errJudgeNotRunHere) {
+		return Resolution{}, err
+	}
+	if w.judges == nil {
+		return Resolution{}, fmt.Errorf("%s: %w", run, errJudgeNotRunHere)
+	}
+	return w.judges.ResolveJudge(ctx, run, started)
+}
 
 /*
 judgeRefusal is why a judge run does not plan here (NT-016 § Rollout).

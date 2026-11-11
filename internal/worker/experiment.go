@@ -44,7 +44,7 @@ func (w *Worker) resolve(ctx context.Context, claim domain.Claim) (Resolution, e
 		return Resolution{}, err
 	}
 	if started.Judge != nil {
-		return Resolution{}, judgeRefusal(claim.RunID, started)
+		return w.resolveJudge(ctx, claim.RunID, started)
 	}
 	if w.experiments == nil {
 		return w.specs.Resolve(ctx, claim.AgentID, claim.VersionID)
