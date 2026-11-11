@@ -1357,6 +1357,8 @@
     "noServerHint": "Um servidor MCP é o que dá ferramentas aos agentes. Enquanto não houver um, os agentes só conseguem raciocinar.",
     "notAnswering": "não responde",
     "openAiCompatible": "Compatível com OpenAI",
+    "platformOnly": "As integrações são configuradas pela administração da plataforma",
+    "platformOnlyHint": "Servidores MCP, connectors, provedores e canais valem hoje para a instalação inteira, então só quem administra a plataforma os conecta. Para conectar algo para os agentes da sua área, fale com um administrador da plataforma.",
     "prefixExplains": "Prefixa as ferramentas: <code>crm</code> dá <code>crm.lookup</code>.",
     "protocol": "Protocolo",
     "providers": "Provedores de modelo",

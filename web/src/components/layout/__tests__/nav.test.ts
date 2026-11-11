@@ -33,8 +33,22 @@ describe("the navigation", () => {
     expect(navItemVisible(item("/admin"), can)).toBe(false);
   });
 
+  it("hides integrations from an area administrator, whose tool:read is not the platform's", () => {
+    // Integrations are configured, and listed, at the platform's scope only.
+    const can = ["tool:read", "scope:write"];
+
+    expect(navItemVisible(item("/integrations"), can, [])).toBe(false);
+    expect(navItemVisible(item("/integrations"), can, ["tool:read"])).toBe(true);
+  });
+
   it("shows administration for permissions used by administration screens", () => {
-    expect(navItemVisible(item("/admin"), ["identity:write"])).toBe(true);
+    expect(navItemVisible(item("/admin"), ["identity:write"], [])).toBe(true);
+    expect(navItemVisible(item("/admin"), ["audit:read"], ["audit:read"])).toBe(true);
+  });
+
+  it("hides administration from an area auditor, whose only tab is the platform's trail", () => {
+    expect(navItemVisible(item("/admin"), ["audit:read"], [])).toBe(false);
+    // A server that predates platform answers for can alone, as before.
     expect(navItemVisible(item("/admin"), ["audit:read"])).toBe(true);
   });
 

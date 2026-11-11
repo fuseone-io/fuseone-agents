@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/layout/app-shell";
 import { NotFoundPage } from "@/components/shared/not-found";
+import { IntegrationsGate } from "@/features/integrations/integrations-gate";
 import { PageFallback } from "@/routes/page-fallback";
 import * as P from "@/routes/pages";
 
@@ -40,26 +41,30 @@ export default function ConsoleRoutes() {
           <Route path="/policies" element={<P.PoliciesPage />} />
           <Route path="/policies/:code" element={<P.PolicyEditorPage />} />
           <Route path="/audit" element={<P.AuditPage />} />
-          <Route path="/integrations" element={<P.IntegrationsPage />} />
-          <Route
-            path="/integrations/providers"
-            element={<P.IntegrationsPage section="providers" />}
-          />
-          <Route
-            path="/integrations/credentials"
-            element={<P.IntegrationsPage section="credentials" />}
-          />
-          <Route
-            path="/integrations/connectors"
-            element={<P.IntegrationsPage section="connectors" />}
-          />
-          <Route
-            path="/integrations/channels"
-            element={<P.IntegrationsPage section="channels" />}
-          />
-          <Route path="/integrations/mcp" element={<P.CataloguePage />} />
-          <Route path="/integrations/mcp/new" element={<P.NewServerPage />} />
-          <Route path="/integrations/mcp/:name" element={<P.MCPServerPage />} />
+          {/* Served at the platform's scope only: the gate says so to anyone
+              whose tool:read is an area's. */}
+          <Route element={<IntegrationsGate />}>
+            <Route path="/integrations" element={<P.IntegrationsPage />} />
+            <Route
+              path="/integrations/providers"
+              element={<P.IntegrationsPage section="providers" />}
+            />
+            <Route
+              path="/integrations/credentials"
+              element={<P.IntegrationsPage section="credentials" />}
+            />
+            <Route
+              path="/integrations/connectors"
+              element={<P.IntegrationsPage section="connectors" />}
+            />
+            <Route
+              path="/integrations/channels"
+              element={<P.IntegrationsPage section="channels" />}
+            />
+            <Route path="/integrations/mcp" element={<P.CataloguePage />} />
+            <Route path="/integrations/mcp/new" element={<P.NewServerPage />} />
+            <Route path="/integrations/mcp/:name" element={<P.MCPServerPage />} />
+          </Route>
           <Route path="/manual" element={<P.ManualIndexPage />} />
           <Route path="/manual/:slug" element={<P.ManualReadPage />} />
           <Route path="/admin" element={<P.AdminPage />} />

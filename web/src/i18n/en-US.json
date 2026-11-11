@@ -1357,6 +1357,8 @@
     "noServerHint": "An MCP server is what gives agents their tools. Until there is one, agents can only reason.",
     "notAnswering": "not answering",
     "openAiCompatible": "OpenAI compatible",
+    "platformOnly": "Integrations are configured by the platform's administration",
+    "platformOnlyHint": "MCP servers, connectors, providers and channels apply to the whole installation today, so only those who administer the platform connect them. To connect something for your area's agents, ask a platform administrator.",
     "prefixExplains": "Prefixes the tools: <code>crm</code> gives <code>crm.lookup</code>.",
     "protocol": "Protocol",
     "providers": "Model providers",

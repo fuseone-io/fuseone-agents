@@ -24,6 +24,11 @@ type Me struct {
 	Kind    string    `json:"kind"`
 	Grants  []MeGrant `json:"grants"`
 	Can     []string  `json:"can"`
+	// Platform is what the caller holds at the platform's administration
+	// scope. A permission checked in two places, such as tool:read for the
+	// catalogue and for the integrations themselves, is in Can for the first
+	// and only here for the second.
+	Platform []string `json:"platform"`
 }
 
 type MeGrant struct {
@@ -41,7 +46,7 @@ type MeGrant struct {
 func meFrom(p domain.Principal) Me {
 	out := Me{
 		ID: string(p.ID), Display: p.Display, Kind: string(p.Kind),
-		Grants: []MeGrant{}, Can: []string{},
+		Grants: []MeGrant{}, Can: []string{}, Platform: []string{},
 	}
 	seen := map[domain.Permission]struct{}{}
 
@@ -60,15 +65,37 @@ func meFrom(p domain.Principal) Me {
 			out.Can = append(out.Can, string(perm))
 		}
 	}
+	for _, perm := range out.Can {
+		if p.Can(domain.Permission(perm), adminScope) {
+			out.Platform = append(out.Platform, perm)
+		}
+	}
 	return out
 }
 
+/*
+platformOnly are the permissions the server checks only at the platform's
+administration scope (adminScope), whatever the caller holds elsewhere.
+
+Advertised from any area, they put on an area administrator's screen menus and
+buttons that answer 403 on every click. A permission that moves to a resource's
+own scope leaves this list in the same change.
+*/
+var platformOnly = map[domain.Permission]bool{
+	domain.PermProviderWrite: true, domain.PermToolClassify: true,
+	domain.PermBudgetWrite: true, domain.PermPolicyWrite: true,
+	domain.PermApprovalGrant: true, domain.PermAuditExport: true,
+	domain.PermBrandWrite: true, domain.PermDataErase: true,
+}
+
 func canShowInConsole(p domain.Principal, perm domain.Permission) bool {
-	switch perm {
-	case domain.PermCompanyWrite:
+	switch {
+	case perm == domain.PermCompanyWrite:
 		return p.Can(perm, domain.Scope{Company: domain.Installation})
-	case domain.PermIdentityWrite:
+	case perm == domain.PermIdentityWrite:
 		return p.Can(perm, identityScope)
+	case platformOnly[perm]:
+		return p.Can(perm, adminScope)
 	default:
 		return p.CanAnywhere(perm)
 	}

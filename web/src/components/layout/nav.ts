@@ -33,6 +33,19 @@ export interface NavItem {
    * permission teaches people that the console offers acts they cannot take.
    */
   anyPermission?: string[];
+  /**
+   * A permission the item needs at the platform's administration scope, not
+   * just somewhere. For a screen the server only serves there, such as the
+   * integrations: an administrator of one area holds tool:read in that area,
+   * and every request the screen makes would answer 403.
+   */
+  platformPermission?: string;
+  /**
+   * Like anyPermission, held at the platform's administration scope. For a
+   * permission whose only surface in a hub is served there: an area's
+   * audit:read reads that area's runs, and opens no administration tab.
+   */
+  platformAnyPermission?: string[];
 }
 
 export interface NavGroup {
@@ -110,14 +123,17 @@ export const NAV: NavGroup[] = [
         label: "nav.integrations",
         icon: Plug,
         permission: "tool:read",
+        platformPermission: "tool:read",
       },
       { to: "/manual", label: "nav.manual", icon: BookOpen },
       {
         to: "/admin",
         label: "nav.admin",
         icon: Settings2,
+        // audit:read opens only the administrative trail, which is the
+        // platform's, so it counts when held there.
+        platformAnyPermission: ["audit:read"],
         anyPermission: [
-          "audit:read",
           "identity:write",
           "brand:write",
           "provider:write",
@@ -136,12 +152,28 @@ export const NAV: NavGroup[] = [
 export function navItemVisible(
   item: NavItem,
   can: string[] | null | undefined,
+  // Absent from a server that predates it, which then answers for can alone.
+  platform?: string[],
 ): boolean {
   if (can === null) return true;
-  if (can === undefined) return !item.permission && !item.anyPermission;
+  if (can === undefined) {
+    return !item.permission && !item.anyPermission && !item.platformAnyPermission;
+  }
   if (item.permission && !can.includes(item.permission)) return false;
-  if (item.anyPermission) {
-    return item.anyPermission.some((permission) => can.includes(permission));
+  if (
+    item.platformPermission &&
+    platform &&
+    !platform.includes(item.platformPermission)
+  ) {
+    return false;
+  }
+  if (item.anyPermission || item.platformAnyPermission) {
+    // Absent from a server that predates it, platform falls back to can.
+    const atPlatform = platform ?? can;
+    return (
+      (item.anyPermission ?? []).some((p) => can.includes(p)) ||
+      (item.platformAnyPermission ?? []).some((p) => atPlatform.includes(p))
+    );
   }
   return true;
 }
