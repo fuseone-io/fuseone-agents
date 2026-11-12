@@ -28,6 +28,38 @@ field" is a commit message.
 
 ---
 
+## [0.104.0] — 2026-11-11
+
+Release C2 of version claims (NT-018): the database itself refuses a version whose digest
+it cannot prove, whatever binary sends it. Adds migration `0107_version_claims_enforced`.
+No behaviour changes for a 0.103.0 installation.
+
+### Upgrade notes
+
+- **Every `serve` and `worker` replica must run 0.103.0 before upgrading.** This release
+  assumes every writer already claims its versions. Coming straight from 0.102.0 or
+  earlier, the old replicas have every publication refused until the rollout ends. Go to
+  0.103.0 first, and wait until every replica reports it.
+- **Rollback floor: never below 0.103.0 once `0107` has run.**
+  - A 0.102.0 replica has every publication refused by the database. That fails closed,
+    and no wrong row is written, but publishing stops until 0.103.0 or later is back.
+  - Rolling back to 0.103.0 is safe, because it claims every version it writes.
+  - The floor 0.101.0 set still holds: once the first experiment exists, never go below
+    0.100.0.
+- **What the migration does to existing data.** A version a 0.102.0 replica wrote during
+  the 0.103.0 rollout, without a claim, is claimed without a digest, like every version
+  0.103.0's migration found. It stays where it is, and stays current if it is current.
+  Republishing it identically is refused, as for every version published before 0.103.0.
+
+### Changed
+
+- **The database enforces version claims** (#326).
+  - An insert into `agent_specs` must present the digest its claim holds. A writer that
+    presents none, or another one, is refused before `on conflict` is considered, so the
+    transaction that would have made that row current aborts with it.
+  - An agent's current version can only move to a version claimed with a digest.
+  - Pausing, stages, retirement and naming the version already current are unaffected.
+
 ## [0.103.0] — 2026-11-11
 
 Release C1 of version claims (NT-018): every version id is bound to the full digest of its
