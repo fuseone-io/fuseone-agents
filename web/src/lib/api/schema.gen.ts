@@ -2249,6 +2249,7 @@ export interface paths {
         /**
          * Configured governed connector instances
          * @description Connector instances are the executable endpoints behind governed connector shapes. The response reports whether a token exists; the token itself never leaves the settings vault.
+         *     Needs provider:write in some scope (NT-019). It lists the instances the caller governs, and those its scopes inherit from their company or the installation, each with `editable`; never a sibling area's. The detail (`GET .../instances/{name}`) and every write need provider:write at the instance's own scope, or at the platform's administration.
          */
         get: operations["listConnectorInstances"];
         put?: never;
@@ -4319,7 +4320,7 @@ export interface components {
             credentialSource: components["schemas"]["ConnectorCredentialSource"];
             templates: components["schemas"]["ConnectorSQLTemplateSummary"][];
         };
-        /** @description A registered template as the listing reports it: what it is called, what it takes and what it is bounded by. Neither the query nor a digest of it is here. Listing connector instances needs only `tool:read`, and a digest of an authored query does not hide it — queries are low-entropy and guessable offline, so publishing one would disclose tables and filters to anyone who can read the tool catalogue. Reading the text back belongs to the detailed instance read restricted to configurers. */
+        /** @description A registered template as the listing reports it: what it is called, what it takes and what it is bounded by. Neither the query nor a digest of it is here. The listing reaches whoever configures connectors in some scope, including instances they only inherit, from their company or the platform, and may not edit. A digest of an authored query would not hide it — queries are low-entropy and guessable offline — so publishing one would disclose tables and filters to an area that merely inherits the instance. Reading the text back belongs to the detailed instance read, which needs the right to change that instance's scope. */
         ConnectorSQLTemplateSummary: {
             id: string;
             parameters: components["schemas"]["ConnectorSQLParameter"][];
