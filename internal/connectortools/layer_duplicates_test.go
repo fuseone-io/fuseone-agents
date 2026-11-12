@@ -33,3 +33,19 @@ func TestSetInstances_oneNameInTwoScopes_isRefusedAndThePreviousSetStays(t *test
 		t.Errorf("served %+v (found %v), want the previous set's %s", served.Scope, found, cx.Scope)
 	}
 }
+
+// The name alone is the identity, as migration 0108 has it: another connector
+// does not make a second instance of the same name acceptable. The value a
+// (connector, name) check would let through.
+func TestSetInstances_oneNameUnderTwoConnectors_isRefused(t *testing.T) {
+	t.Parallel()
+	vault := Instance{Name: "prod", Connector: "vault", Enabled: true,
+		Scope: domain.Scope{Company: "acme", Area: "cx"}}
+	layer := newVaultLayer(t, vault)
+
+	sql := Instance{Name: "prod", Connector: "sql", Enabled: true,
+		Scope: domain.Scope{Company: "acme", Area: "finance"}}
+	if err := layer.SetInstances([]Instance{vault, sql}); !errors.Is(err, ErrDuplicateInstance) {
+		t.Fatalf("err = %v, want ErrDuplicateInstance", err)
+	}
+}
