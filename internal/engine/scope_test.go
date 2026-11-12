@@ -56,6 +56,10 @@ func TestAdvance_aToolOfASiblingArea_isBlockedByScopeAndNeverCalled(t *testing.T
 	if len(h.tools.invocations) != 0 {
 		t.Errorf("the tool was called %d times", len(h.tools.invocations))
 	}
+	// A block is a decision like any other, and names the checks that made it.
+	if decided.Builtin != gate.BuiltinVersion() {
+		t.Errorf("recorded builtin on the block = %q, want %q", decided.Builtin, gate.BuiltinVersion())
+	}
 }
 
 // A tool of the run's own scope, or above it, runs as it always did.

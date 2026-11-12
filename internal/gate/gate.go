@@ -120,11 +120,18 @@ func (g *Gate) WithPolicies(p Policies) *Gate {
 // rulings are remembered and evaluation continues, so a later block still
 // wins over an earlier approval requirement.
 func (g *Gate) Evaluate(_ context.Context, r Request) (domain.Decision, error) {
+	d := g.evaluate(r)
+	// Stamped here, once, on whatever path produced the decision: a block, an
+	// approval to ask for, a granted one or a plain allow each build their own.
+	d.Builtin = builtinPolicyHash()
+	return d, nil
+}
+
+func (g *Gate) evaluate(r Request) domain.Decision {
 	worst := domain.Decision{
 		Verdict:    domain.VerdictAllow,
 		Rule:       RulePassed,
 		PolicyHash: g.policyHash,
-		Builtin:    builtinPolicyHash(),
 	}
 
 	// Run once, before the loop, because two checks need the answer: the
@@ -158,7 +165,7 @@ func (g *Gate) Evaluate(_ context.Context, r Request) (domain.Decision, error) {
 			d.PolicyCode = authored.code
 		}
 		if got.verdict.Terminal() {
-			return d, nil
+			return d
 		}
 		if got.verdict > worst.Verdict {
 			worst = d
@@ -175,9 +182,9 @@ func (g *Gate) Evaluate(_ context.Context, r Request) (domain.Decision, error) {
 			Reason:     "approved by a human for this run",
 			PolicyHash: g.policyHash,
 			Monitored:  worst.Monitored,
-		}, nil
+		}
 	}
-	return worst, nil
+	return worst
 }
 
 // mergePolicy decides what the policy check says once the authored set has

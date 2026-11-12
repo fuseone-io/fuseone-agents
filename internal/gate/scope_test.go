@@ -52,15 +52,38 @@ that hash on the decision in place of the built-in one. So a change to the
 built-in checks, such as checkScope, was invisible on the trail: two workers
 ruling differently under one policy hash. The identity travels on its own.
 */
-func TestEvaluate_namesTheBuiltinChecks_whateverThePolicySet(t *testing.T) {
+func TestEvaluate_namesTheBuiltinChecks_onEveryVerdictAndWhateverThePolicySet(t *testing.T) {
 	t.Parallel()
+	// Every path out of Evaluate builds its own Decision: the plain allow, a
+	// check that objects, and the release of a granted approval.
+	paths := map[string]func(*Request){
+		"allowed":           func(*Request) {},
+		"blocked":           func(r *Request) { r.Tool = "crm.erase" },
+		"requires approval": func(r *Request) { r.Tool, r.Effect, r.Stage = "crm.note", domain.EffectWrite, domain.StageCopilot },
+		"approval granted": func(r *Request) {
+			r.Tool, r.Effect, r.Stage, r.ApprovalGranted = "crm.note", domain.EffectWrite, domain.StageCopilot, true
+		},
+		"blocked by scope": func(r *Request) { r.ToolScope = domain.Scope{Company: "acme", Area: "finance"} },
+	}
+	want := map[string]domain.Verdict{
+		"allowed": domain.VerdictAllow, "blocked": domain.VerdictBlock,
+		"requires approval": domain.VerdictRequireApproval, "approval granted": domain.VerdictAllow,
+		"blocked by scope": domain.VerdictBlock,
+	}
 	for name, g := range map[string]*Gate{
 		"built-in only":    New(),
 		"with an authored": New().WithPolicies(Policies{Hash: "pol_authored"}),
 	} {
-		d := evaluate(t, g, request())
-		if d.Builtin != BuiltinVersion() || d.Builtin == "" {
-			t.Errorf("%s: builtin = %q, want %q", name, d.Builtin, BuiltinVersion())
+		for path, shape := range paths {
+			r := request()
+			shape(&r)
+			d := evaluate(t, g, r)
+			if d.Verdict != want[path] {
+				t.Fatalf("%s/%s: verdict = %v (%s), want %v: the path is not the one named", name, path, d.Verdict, d.Rule, want[path])
+			}
+			if d.Builtin != BuiltinVersion() || d.Builtin == "" {
+				t.Errorf("%s/%s: builtin = %q, want %q", name, path, d.Builtin, BuiltinVersion())
+			}
 		}
 	}
 	if d := evaluate(t, New().WithPolicies(Policies{Hash: "pol_authored"}), request()); d.PolicyHash != "pol_authored" {
