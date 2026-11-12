@@ -25,6 +25,10 @@ import (
 var (
 	ErrNotFound = errors.New("settings: no such setting")
 	ErrNoVault  = errors.New("settings: a secret was supplied but no vault is configured")
+	// ErrNameTaken is a write of an integration whose name another scope
+	// already holds (NT-019). It never says which scope: another area's names
+	// are not the writer's to read.
+	ErrNameTaken = errors.New("settings: the name is taken")
 )
 
 // Kind groups settings by what they configure. Each kind has its own value
@@ -190,6 +194,9 @@ func (s *Store) PutTx(ctx context.Context, conn DB, set Setting) error {
 		string(set.ScopeKind), string(set.Scope.Company), string(set.Scope.Area),
 		string(set.Kind), set.Name, value, ciphertext, nonce, set.Enabled, set.UpdatedBy,
 		set.ClearSecret)
+	if nameTaken(err) {
+		return fmt.Errorf("%w: %s %q", ErrNameTaken, set.Kind, set.Name)
+	}
 	if err != nil {
 		return fmt.Errorf("settings: write %s/%s: %w", set.Kind, set.Name, err)
 	}
