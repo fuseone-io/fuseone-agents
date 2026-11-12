@@ -28,7 +28,7 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.106.0] — 2026-11-12
 
 NT-019 phase 1: the administrator of an area configures that area's own connector
 instances. MCP servers, model providers and channels are still configured by the
@@ -44,10 +44,14 @@ platform's administration. No migration.
   names the scopes. MCP servers, providers, channels and the assistant's provider stay
   behind `platform`, so a client that hid them on `can` alone should read `platform`
   for them.
+- **Rolling back to 0.105.0 is safe.** Instances an area wrote stay where they are, and
+  0.105.0's Gate and connector layer already keep each to its own scope. Only the doors
+  close again: an area's administrator can no longer change them. The floor 0.104.0 set
+  still holds: never go below 0.103.0.
 
 ### Added
 
-- **An area's own connector instances.**
+- **An area's own connector instances** (#331).
   - Writing, reading and removing an instance needs `provider:write` at the instance's
     own scope, or at the platform's administration, which governs every area. The
     installation's instances keep today's check.
