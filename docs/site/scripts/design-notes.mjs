@@ -22,6 +22,7 @@ export const designDocs = [
   ["NT-015-evaluation-datasets-and-experiments.md", "Versioned evaluation datasets and experiments, and what the corpus does today."],
   ["NT-016-judge-evaluators.md", "Judging an experiment's outputs with a rubric, as an opinion beside the structural verdict."],
   ["NT-018-authoring-workbench.md", "One screen to build an agent by conversation, rehearse it live, correct it and experiment."],
+  ["NT-019-integrations-per-area.md", "Each area connects its own tool servers, model providers, connectors and channels."],
 ];
 
 // Design notes left off the site on purpose. Leaving one out is a decision,
