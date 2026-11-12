@@ -138,10 +138,27 @@ One rule, for every kind:
      `tool:read` at `adminScope` (`internal/httpapi/connections.go:65-66`), so an area
      author cannot load providers at all. The editor moves to the reduced answer.
 
-   Each reduced answer lists only what the caller's scopes may use, by rule 3: the
-   inherited relation, with `V` the scopes where the caller holds `tool:read`. Governed
-   rows are not listed here: an author picks what their agents can run, not what their
-   areas contain.
+   **Each reduced answer is asked for one target scope**: the scope of the agent being
+   edited, or chosen for a new one. A union of the caller's scopes would be wrong in
+   both directions. An author of `cx` and `finance` editing a `cx` agent would be offered
+   `finance`'s tools, which `checkScope` then stops. And a company author editing an
+   agent of `acme/cx` would see only the rows that contain `acme`, and miss `acme/cx`'s
+   own.
+
+   - `ListTools` and `GET /providers` take a `scope` parameter, `company` or
+     `company/area`.
+   - **Authorization:** the caller holds `tool:read` at a scope that contains the target.
+     An `acme` grant asks for `acme/cx`, and an `acme/cx` grant cannot ask for
+     `acme/finance`. Otherwise the answer is 404. A 403 would confirm that an area the
+     caller cannot see exists.
+   - **The answer:** every row whose runtime scope contains the target, by rule 3, and
+     only those. That is exactly what an agent stored at the target can run, so what the
+     editor offers and what `checkScope` admits are the same set.
+   - **Without `scope`**, an answer holds only the installation's rows, which every
+     scope inherits. Today's callers keep working, and nothing of any area is answered
+     without naming it.
+   - The agent editor, the fallback fields and the experiment form pass the agent's
+     scope. The experiment form passes the experimented agent's scope.
 
 ### Names are unique across the installation, in the database
 
@@ -227,7 +244,7 @@ The instance already has the scope. Only the doors change:
 - **The catalogue knows each tool's scope.** A tool entry carries the scope of the
   server that declares it.
   - `ListTools` already returns tools to `tool:read` in any scope (#324). It now keeps
-    only the tools a caller's scopes may use, by rule 5.
+    only the tools usable from the target scope it is asked for, by rule 5.
   - Today it filters only who declares each tool (`internal/httpapi/admin.go:79-84`).
 - **Personal credentials** (`mcp_user_credential`) stay keyed by server and person
   (`internal/admin/integrations.go:752`). A person stores one only for a server they
@@ -351,19 +368,35 @@ the effect lookup (`internal/engine/workitem.go:56`, `act.go:118,178-184`):
 
 | Layer | Tools | `ToolScope` |
 |---|---|---|
-| `workitem`, `memory`, `contextshare` | The platform's own tools: claims, memory, shared context | The installation's runtime scope `{Company: Installation}`, declared **explicitly** by each layer for each id it claims |
+| `workitem`, `memory`, `contextshare` | The platform's own tools they serve: claims and links, memory, shared context | The installation's runtime scope `{Company: Installation}` |
+| Native connector layer | The platform's own `$fuseone.ticket.answer` (`internal/connectortools/layer.go:123-125`) | The installation's runtime scope, as for the three above |
 | Native connector layer | `connector.instance.operation` | The instance's runtime scope |
 | MCP catalogue | `server.tool` | The server's runtime scope |
 | None claims the id | — | Zero, which contains nothing (`internal/domain/ids.go:80-90`), so the call is stopped |
 
-- **The platform's tools are given their scope, never left to a default.** A
-  zero-value fallback would stop them all on the day `checkScope` ships, and a "no
-  scope means everywhere" default would let an unclaimed id through. Each layer
-  declares what it claims, and an id nobody claims is stopped.
-- **An anchor test in phase 0** runs one tool of each of the three platform layers from
-  an `acme/cx` run, and asserts each executes. Sabotage: drop one layer's declaration;
-  the test must name that layer's tool, stopped by `checkScope`. A second test asserts an
-  unclaimed id is stopped, so the anchor cannot pass by `checkScope` being absent.
+**The platform's tools are the explicit set that already exists**, not a list per layer.
+`ToolID.PlatformOwned()` names them (`internal/domain/ids.go:22-31`):
+`ToolContextRead`, `ToolTicketAnswer`, `ToolMemoryFind`, `ToolMemorySuggest`,
+`ToolWorkItemClaim` and `ToolWorkItemLink`. The set is spread across layers: the ticket
+answer is served by the connector layer, not by a platform layer of its own.
+
+- **The set becomes a list.** `domain.PlatformTools()` returns it, and `PlatformOwned`
+  reads from it, so the test below and the method cannot disagree.
+- **Each id in the set is answered by the layer that serves it**, with the
+  installation's runtime scope, explicitly. No layer derives it, and no default supplies
+  it. A zero-value fallback would stop every one of them the day `checkScope` ships. A
+  "no scope means everywhere" default would let an unclaimed id through.
+- **An id outside the set** gets the scope of the server or instance that declares it,
+  or zero.
+- **The anchor test in phase 0 iterates `PlatformTools()`.** It does not use a
+  hand-picked sample. It builds the worker's real chain (`workerParts.deps`), and for
+  every id in the set asserts that `ScopeOf` is the installation's and that the Gate
+  admits it from an `acme/cx` run. A tool added to the set later is covered without
+  editing the test.
+  - Sabotage: drop the ticket answer's declaration from the connector layer. The test
+    must name `$fuseone.ticket.answer`, stopped by `checkScope`.
+  - A second test asserts an unclaimed id is stopped, so the anchor cannot pass by
+    `checkScope` being absent.
 
 The Gate's check is the one the ledger shows. The check at invocation is a second wall
 beneath it. Neither replaces the other: a test of one does not prove the other.
@@ -468,7 +501,7 @@ their own Jira, Elasticsearch or SQL from their own area.
     another: the decided incompatibility.
   - Sabotage: drop the index and keep the binary's 409 mapping; the old statement must
     get through, and the test must name it.
-- **Listing, for three callers.**
+- **Configuration listings, for four callers.**
   - An area administrator sees its own rows and the inherited ones, marked, and none of
     a sibling area.
   - A company administrator sees the company's rows, every area's under it, and the
@@ -481,6 +514,17 @@ their own Jira, Elasticsearch or SQL from their own area.
   - Sabotage: keep only the inherited relation; the test must name the descendant row the
     company administrator lost. Then return every row; the test must name the sibling's
     row the area saw.
+- **Reduced answers, per target.**
+  - An author granted on `acme/cx` and `acme/finance` asks `ListTools` and
+    `GET /providers` for `acme/cx`. The answer holds the area's, the company's and the
+    installation's rows, and none of `acme/finance`.
+  - An author granted on `acme` asks for `acme/cx`, and the answer includes `acme/cx`'s
+    own rows.
+  - An `acme/cx` author asking for `acme/finance` gets 404.
+  - Without `scope`, only installation rows.
+  - Sabotage: answer the union of the caller's scopes; the multi-area test must name
+    `finance`'s tool. Then filter by the caller's grants instead of the target; the
+    company test must name the area's row it lost.
 - **Classification precedence.**
   - An area curator classifies its own server's tool with `level: owner`, and is refused
     on a platform tool and on a sibling's.
