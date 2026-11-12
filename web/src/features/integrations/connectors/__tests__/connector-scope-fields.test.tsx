@@ -9,9 +9,9 @@ import { setLocale } from "@/i18n";
 // NT-019: an area's administrator places an instance in a scope where it
 // configures, never in one typed freely that the server would refuse.
 
-function Fields() {
+function Fields({ company = "", area = "" }: { company?: string; area?: string }) {
   const form = useForm<ConnectorIdentityValues>({
-    defaultValues: { name: "", enabled: true, scopeKind: "area", company: "", area: "" },
+    defaultValues: { name: "", enabled: true, scopeKind: "area", company, area },
   });
   return (
     <Form {...form}>
@@ -36,6 +36,19 @@ describe("ConnectorIdentityFields scope", () => {
     expect(screen.getByText("Onde o connector vale")).toBeInTheDocument();
     expect(screen.getByLabelText("placed")).toHaveTextContent("area acme/cx");
     expect(screen.queryByText("Escopo da instância")).not.toBeInTheDocument();
+  });
+
+  // The scope a new form opens on can come from somewhere else, such as the
+  // area the caller is working in under another grant. Kept, it would be saved
+  // into a scope the server refuses.
+  it("moves a new instance off a scope the caller does not configure", () => {
+    render(
+      <ConnectorScopeContext.Provider value={{ anyScope: false, configure: [{ company: "acme", area: "cx" }] }}>
+        <Fields company="acme" area="finance" />
+      </ConnectorScopeContext.Provider>,
+    );
+
+    expect(screen.getByLabelText("placed")).toHaveTextContent("area acme/cx");
   });
 
   it("leaves the scope free without a provider, as before", () => {

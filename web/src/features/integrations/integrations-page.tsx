@@ -121,13 +121,17 @@ export function IntegrationsPage({
             question, and answering it needs a page rather than a form.
             Editing one that exists stays a dialog — there is nothing to read
             there, only a field to correct. */}
-        <ConnectMenu
-          onConnect={(kind) =>
-            kind === "server"
-              ? void navigate("/integrations/mcp")
-              : setEditing({ kind, value: null })
-          }
-        />
+        {/* Tool servers and providers are the platform's: an area's
+            administrator is offered neither (NT-019). */}
+        {access.platformConfigure && (
+          <ConnectMenu
+            onConnect={(kind) =>
+              kind === "server"
+                ? void navigate("/integrations/mcp")
+                : setEditing({ kind, value: null })
+            }
+          />
+        )}
       </PageHeader>
 
       <IntegrationsShell active={section} counts={counts}>

@@ -27,7 +27,10 @@ export function ConnectorHeldScopeField({ editing, scopes }: { editing: boolean;
   const area = form.watch("area");
   useEffect(() => {
     const first = scopes[0];
-    if (!editing && !company && first) choose(first);
+    // A new form may open on a scope from elsewhere, such as the area the
+    // caller works in under another grant: kept, it would be refused on save.
+    const held = scopes.some((s) => keyOf(s) === keyOf({ company, area }));
+    if (!editing && !held && first) choose(first);
     // Once, for a new instance: a choice the person made is not undone.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -58,4 +61,3 @@ export function ConnectorHeldScopeField({ editing, scopes }: { editing: boolean;
     </FormItem>
   );
 }
-

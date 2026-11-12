@@ -93,6 +93,16 @@ describe("integrations for an administrator who configures an area's connectors"
     },
   );
 
+  it("offer them no way to connect what is the platform's", async () => {
+    signedInAs([], areaAdmin);
+    openAt("/integrations/connectors");
+
+    expect(
+      await screen.findByRole("button", { name: "Nova instância" }, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Conectar sistema" })).not.toBeInTheDocument();
+  });
+
   it("show them the connectors and none of the platform's sections", async () => {
     signedInAs([], areaAdmin);
     openAt("/integrations/connectors");

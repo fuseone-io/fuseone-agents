@@ -19,4 +19,3 @@ export function ConnectorScopeFields({ editing }: { editing: boolean }) {
     <ConnectorHeldScopeField editing={editing} scopes={access.configure} />
   );
 }
-
