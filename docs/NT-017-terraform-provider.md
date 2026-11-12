@@ -176,9 +176,11 @@ exception**:
   empty, so nothing is published.
 - **Rolling a configuration back** to the exact text of a version published before
   0.103.0 is refused with `version-digest-unknown`. Planning again does not help. The
-  provider's diagnostic says that the version predates recorded digests and that any
-  change to the definition gives it a new id. It names the agent and the version, and it
-  does not retry.
+  provider's diagnostic says that the version predates recorded digests, and that a
+  change to the definition almost always gives it another id. The id is 48 bits of the
+  digest, so the change may instead land on another claim. That is refused the same way,
+  never resolved silently, and the definition is changed again, as NT-018 decided. The
+  diagnostic names the agent and the version, and the provider does not retry.
 - **A collision** gets the same treatment: the diagnostic says the definition must
   change, and the provider never retries.
 
