@@ -97,6 +97,29 @@ update and delete. A 412 is a person having changed the resource since the plan;
 provider reports it and tells the operator to plan again. It never retries without the
 header.
 
+**Every create sends `If-None-Match: *`.** Without a precondition a create is a blind
+write. `If-Match: *` means "it exists", and without either header the last write wins
+(`api/openapi.yaml:5026-5031`). So a resource somebody created in the console between
+plan and apply would be overwritten by the apply, with nobody seeing it. No write in the
+API takes `If-None-Match` today: the only use is the read of brand assets
+(`internal/httpapi/brand_asset.go:113`). Phase 1 adds it to every `PUT` that can create:
+the integrations, policies, and the agent's first version. Phase 2 adds it for
+companies, areas and classifications, and phase 3 for grants.
+
+- **Exactly one of `If-Match` and `If-None-Match: *`.** Both, or `If-None-Match` with any
+  value other than `*`, is a 400, as for the workbench's activation (NT-018).
+- **Judged under the same guard as `If-Match`**, inside the transaction that writes. For
+  settings-backed resources that is the guard `admin/write.go` runs first in the
+  transaction (`internal/admin/write.go:51-54`). For the agent it is the event graph lock
+  publication takes (`internal/spec/event_graph_lock.go:30`). A check made by an earlier
+  read would leave the window it exists to close.
+- **A resource that exists answers 412 with its `ETag`.** The provider says the resource
+  already exists and that the way to manage it is `terraform import`. It never retries as
+  an update.
+- **The agent's first version.** `If-None-Match: *` on `PUT /agents/{id}/versions`
+  means no version of that agent id exists. It is judged under the event graph lock in
+  the publish's transaction, so two first applies of the same id cannot both create it.
+
 ### Secrets
 
 Secrets are write-only attributes, available in Terraform 1.11 and OpenTofu 1.11: they
@@ -109,10 +132,55 @@ The API already never returns a secret. Only one schema field says so
 marks every secret field `writeOnly` in `api/openapi.yaml`, so a client generated from
 it, the provider included, knows which fields they are.
 
+### Integrations by scope (NT-019)
+
+After NT-019 an MCP server, connector instance, model provider, channel connection or
+conversation belongs to the scope it is stored at: the installation, a company or an
+area.
+
+- **Every integration resource takes `scope`**: `installation`, `<company>` or
+  `<company>/<area>`. It is required, recorded in the state, and read back. Changing it
+  forces a replacement, because the stored key includes the scope. The delete half of
+  that replacement meets the `in-use` check below like any other delete.
+- **Import takes the scope and the name**: `<scope>:<name>`, such as `acme/cx:jira`.
+  Names are unique per kind across the installation (NT-019's index), but the reads are
+  not all keyed by name alone. A connector instance's `GET` takes its scope as query
+  parameters (`scopeKind`, `company`, `area`). One form for every kind keeps import from
+  depending on a lookup across scopes. A row not found at that scope fails the import,
+  and names nothing of other scopes.
+- **A taken name** answers 409 `fuseone:integration-name-taken`. The provider says the
+  name is in use and never by whom, as the server does.
+- **Reading needs what NT-019 says.** Configuration reads need `provider:write` at a
+  scope that contains or governs the row (NT-019, rule 4). A service account managing
+  an area gets the role on that area.
+- **Each kind accepts a scope other than `installation` only once its writers' release
+  is deployed**, which NT-019 ships after its readers' release has reached every
+  replica. The provider learns the server's version from `GET /api/v1/readyz` at
+  configure time. A plan that puts a kind at company or area scope on a server older
+  than that kind's writers' release fails at plan time, naming the kind and the release
+  it needs. It is never sent and refused halfway through an apply.
+
 ### Agents
 
-An agent is published with `PUT /agents/{id}/versions`. Publishing identical content is
-a no-op, and the version is the digest of the rendered definition.
+An agent is published with `PUT /agents/{id}/versions`. The version is the digest of the
+rendered definition, and publishing identical content is a no-op, **with one
+exception**:
+
+- **A version published before 0.103.0 has no recorded digest.** Its claim is `NULL`
+  (NT-018, releases C1 and C2). Publishing its identical bytes again answers 409
+  `fuseone:version-digest-unknown` (`api/openapi.yaml:585`), and so does landing on any
+  id claimed without a digest. It is refused, not a no-op. A definition whose 48-bit id
+  lands on another definition's claim answers 409 `fuseone:version-collision`
+  (`api/openapi.yaml:583`).
+- **Import** is unaffected. It reads the agent, and an unchanged configuration plans
+  empty, so nothing is published.
+- **Rolling a configuration back** to the exact text of a version published before
+  0.103.0 is refused with `version-digest-unknown`. Planning again does not help. The
+  provider's diagnostic says that the version predates recorded digests and that any
+  change to the definition gives it a new id. It names the agent and the version, and it
+  does not retry.
+- **A collision** gets the same treatment: the diagnostic says the definition must
+  change, and the provider never retries.
 
 - **Managed:** the definition fields `AgentDefinition` accepts. The state also records
   the agent's `ETag` from the last read.
@@ -126,6 +194,28 @@ a no-op, and the version is the digest of the rendered definition.
     version or the retirement, where `refuseIfStage` is already judged. A check made by
     an earlier read would leave the same window it exists to close.
   - A stale tag answers 412 with the current `ETag`, as the other resources do.
+- **Authorized under the lock, before any precondition is judged.** Today the publish
+  authorizes only the destination the body names, before the transaction, and never
+  reads the agent's current scope (`internal/httpapi/publish.go:66-76`). Retiring and
+  restoring read and authorize the current scope before the transaction too, and answer
+  403 (`internal/httpapi/retire.go:38-53`). An agent moved between that check and the
+  write would be changed under an authority judged on another scope. A 412 judged first
+  would also tell a caller outside the agent's scope that it exists. Phase 1 orders every
+  publish, retirement and restore the same way, inside the transaction:
+  1. **Headers, by syntax only.** A malformed `If-Match` or a forbidden combination is a
+     400 that depends on nothing stored.
+  2. **The event graph lock**, then the agent's row, in publication's order.
+  3. **The current scope, read under the lock.** If the agent exists and the caller does
+     not hold `agent:publish` there, the answer is 404, as for an agent that does not
+     exist.
+  4. **The destination**, for a publish: `agent:publish` on the company and area the
+     body names (`publishScope`, `internal/httpapi/publish.go:237-253`). The caller chose
+     it, so a refusal is the 403 it is today.
+  5. **Only then the precondition:** `If-Match`, or `If-None-Match: *` for a first
+     version. A 412 is therefore never answered before both scopes are authorized.
+
+  Moving an agent to another area is a publish with a new destination. It needs
+  `agent:publish` on both.
 - **Drift:** a read whose `ETag` differs from the recorded one means somebody published
   or retired since, and the plan shows it.
 - **Read-back gap:** `GET /agents/{id}` does not return the rendered definition, and the
@@ -153,7 +243,19 @@ exist; only a new publish is checked against the catalogue.
 
 Phase 1 makes `DELETE` on an MCP server, connector instance or model provider answer
 409 `fuseone:in-use` while the current version of an agent that is not retired refers
-to it, and the problem lists those agents. The console gets the same answer. Channels
+to it. The console gets the same answer.
+
+**The problem names only the agents the caller may read.** Whoever deletes an
+integration governs it, and governing an integration grants no `agent:read` on the
+areas whose agents use it. An administrator at `default/platform` does not read
+`acme/cx`'s agents. So the problem carries two fields:
+
+- `agents`: the blocking agents in a scope where the caller holds `agent:read`;
+- `hidden`: how many others there are, as a count, never as ids or scopes.
+
+The delete is refused on the whole set, readable or not. Filtering the set before
+judging would let the delete pass whenever the blocking agent is one the caller cannot
+see. Channels
 and policies are not covered: an agent definition names neither (a channel names agents,
 not the other way round), and deleting a policy already takes a new snapshot.
 
@@ -208,18 +310,52 @@ models. Creating a company still grants the creator `curator` on it.
 `If-Match`. Two gaps close at the same time:
 
 - Registering and deleting an area write nothing to `admin_events` today. Both will.
-- Deleting an area leaves the agents, ceilings and policies that name it in place. The
-  delete answers 409 `fuseone:in-use` while an agent that is not retired is published
-  there, behind the same fence as phase 1: the delete takes `FOR UPDATE` on the area's
-  row first, and the publish already holds `FOR SHARE` on it.
+- Deleting an area leaves the agents, ceilings and policies that name it in place. Today
+  it is a bare `delete from scopes` (`internal/scope/store.go:163-174`). The delete
+  answers 409 `fuseone:in-use` while an agent that is not retired is published there,
+  behind the same fence as phase 1: the delete takes `FOR UPDATE` on the area's row
+  first, and the publish already holds `FOR SHARE` on it.
+- **After NT-019 an area also holds configuration**: connector instances, MCP servers,
+  model providers, channel connections, conversations, and owner classifications stored
+  at that area. Leaving them behind would orphan sealed credentials and tools under an
+  area nobody can see or administer. So the delete refuses with 409 `fuseone:in-use`
+  while any `settings` row is stored at that area, whatever its kind.
+  - **The same fence.** Every write of a `settings` row at area scope takes `FOR SHARE`
+    on the area's row in its transaction, and refuses a write into an area that is not
+    registered. The delete holds `FOR UPDATE` first. Whichever commits first wins, and
+    the other sees it.
+  - **It holds against the previous binary.** Rows at area scope are written only from
+    each kind's writers' release of NT-019 on (NT-019, *Rollout*). So the area's
+    `FOR SHARE` ships in phase 0 of NT-019, before any writer, and no binary that
+    writes an area row lacks it.
+  - **The problem** lists, per kind, the names the caller may read under NT-019's
+    listing rule, and a count of the others, as for agents above.
+  - **No cascade.** An area's configuration is removed resource by resource, through
+    each resource's own delete and its own `in-use` check. Removing them all at once
+    would bypass those checks.
 
 The `PUT` takes the area id as given. Today's `POST` folds a name into an id (lowercase,
 no accents, hyphens); a provider resource keyed by a folded value would plan a
 replacement every time. The `PUT` refuses an id that folding would change, and the
 `POST` stays as the console's convenience.
 
-**Tool classification.** `GET /admin/tools/{id}/classification`, `ETag` and `If-Match`
-on the `PUT`, and an identical `PUT` becomes a no-op. Today every write records a
+**Tool classification.** `GET /admin/tools/{id}/classification?level=…`, `ETag` and
+`If-Match` on the `PUT`, and an identical `PUT` becomes a no-op. **Its identity is the
+pair `(tool, level)`, `level` being `owner` or `platform`** (NT-019, *Classification
+under the platform's ceiling*):
+
+- `fuseoneagents_tool_classification` takes `level`, which forces a replacement when it
+  changes. Two resources may classify one tool, one per level, and they are two rows.
+- **Precedence is the server's.** The platform's row wins, the owner's applies only
+  without it, and a stale ruling never falls back to the other row. The provider does
+  not resolve it. A data source exposes the effective ruling and its level, so a plan
+  can show that an owner's ruling is overridden.
+- **Destroying the platform level** is NT-019's withdrawal of the ceiling (`DELETE` with
+  `level: platform`). Destroying the owner level needs a `DELETE` with `level: owner`,
+  which NT-019 does not define. This note adds it, under `tool:classify` at the server's
+  authorization scope, and it removes the owner's row only.
+- For a server of the installation, the two levels are one row, and only
+  `level: platform` is accepted. Today every write records a
 `tool.classified` event, so an unchanged `apply` would add a line to the trail each time.
 
 The classification carries the digest of the tool definition it was judged against, and
@@ -343,6 +479,12 @@ Each phase is a FuseOne release followed by a provider release that requires it.
 - The fence on delete holds only when both sides take the lock. A replica still on the
   previous release publishes without `FOR SHARE`, so the 409 is a guarantee only once
   every replica runs phase 1. Until then it is a check, and the release notes say so.
+- Integration resources follow NT-019's rollout per kind: readers, then writers. The
+  provider's support for a scope below the installation is gated per kind on that
+  kind's writers' release, as above.
+- `If-None-Match: *` is honoured only by a replica that knows it. An old replica ignores
+  the header and writes, so the provider's minimum server version is the release that
+  adds it, and the guarantee holds once every replica runs that release.
 - `access:delegate` is a new permission in a role. Rolling back below phase 3 removes it,
   and the grants it made stay valid: they are ordinary grants.
 
@@ -376,7 +518,27 @@ Server side, each written before its change:
 - A publish with a stale `If-Match` answers 412 and writes no version; the same for a
   retirement. A publish landing between the read and the write with the old tag is the
   case the test uses, not a made-up tag.
-- An identical publish keeps the agent's `ETag`.
+- An identical publish keeps the agent's `ETag`. An identical publish of a version
+  published before 0.103.0 answers 409 `version-digest-unknown`, and writes nothing.
+- A create with `If-None-Match: *` of a resource that already exists answers 412 and
+  writes nothing, for every resource that takes it, and for the agent's first version.
+  Two creates racing for one name or agent id, through the contention fixture: exactly
+  one succeeds, and the other gets 412. Sending both headers is a 400.
+- **Authorization before precondition, for publish, retire and restore.** A caller
+  without `agent:publish` on the agent's current scope gets 404, both with a stale
+  `If-Match` and with a current one, and nothing is written. A caller who holds the
+  destination but not the current scope cannot move the agent. Sabotage: judge
+  `If-Match` before the scope; the test must name the 412 it leaked. Then authorize
+  outside the lock, with the agent moved between the check and the write by a test hook;
+  the test must find the write made under the old scope's authority.
+- A delete refused by an agent the caller cannot read answers 409 with `hidden: 1` and
+  no id. Sabotage: judge only the readable agents; the test must find the delete made.
+- Deleting an area that holds one row of each integration kind answers 409, once per
+  kind, each with the kind named. A write into the area racing the delete, in both
+  orders: either the delete answers 409 or the write is refused because the area is
+  gone, never both succeeding.
+- A classification at `level: owner` and one at `level: platform` for the same tool are
+  two resources. Destroying the platform one makes the owner's apply.
 - Retiring an agent writes a trail line.
 - Every secret field in `api/openapi.yaml` is `writeOnly`, found by walking the schema,
   so a new secret field without the mark fails the test.
@@ -410,6 +572,9 @@ Provider side, in its repository, against a real server and database:
 - A change made through the API outside Terraform appears as drift on the next plan.
 - A test reads the state file after apply and finds no secret.
 - An apply against an autonomous agent is refused and changes nothing.
+- A plan putting an integration at area scope against a server older than its kind's
+  writers' release fails at plan time and sends nothing.
+- Importing an integration by name fills `scope`, and the next plan is empty.
 
 ## Decided
 
