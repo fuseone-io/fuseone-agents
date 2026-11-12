@@ -107,18 +107,41 @@ One rule, for every kind:
 3. **A run uses only resources whose runtime scope contains the run's scope.**
    Connectors and conversations already do this. MCP servers, providers and channel
    connections gain the same check, at every door (see [Enforcement](#enforcement)).
-4. **A listing shows what the caller uses and what the caller governs.** Let `V` be the
-   scopes where the caller holds `tool:read` (`auth.VisibleScopes`). A row is listed when
-   either holds:
-   - **Inherited:** its runtime scope contains a scope in `V`. An area sees its company's
-     rows and the platform's, marked inherited, and read-only unless rule 2 lets the
-     caller write them.
+4. **A configuration listing shows what the caller configures, and nothing to anyone
+   else.** The configuration listings (`ListIntegrations`, `ListConnectorInstances`,
+   `ListChannels`, and the `Get` of each kind) carry addresses: an MCP server's URL or
+   command, a connector's hosts and databases, a provider's base URL, a channel's
+   settings. They are not for authors.
+
+   `author` holds `tool:read` (`internal/domain/access.go`, `RoleAuthor`). #324 opened
+   only the tool catalogue to `tool:read`, because it names no address. So `V` is the
+   scopes where the caller holds `provider:write` (`auth.VisibleScopes(ctx,
+   PermProviderWrite)`), which `admin` and `curator` hold and `author` does not. A row is
+   listed when either holds:
+   - **Inherited:** its runtime scope contains a scope in `V`. An area administrator sees
+     the company's rows and the platform's, marked inherited, and read-only unless rule 2
+     lets the caller write them.
    - **Governed:** a scope in `V` contains its runtime scope, or the caller holds
-     `tool:read` at `adminScope`. A company administrator sees every area of the
+     `provider:write` at `adminScope`. A company administrator sees every area of the
      company, and the platform's administration sees every row.
 
    Nothing else is listed. An area never sees a sibling area's rows. Tests cover an area,
-   a company and a platform caller.
+   a company and a platform caller, and an author, who is refused 403.
+5. **What an author picks from is a reduced answer, on `tool:read`.** Building an agent
+   needs names, not addresses:
+   - **Tools:** `ListTools`, as #324 left it.
+   - **Providers and their models:** a new `GET /providers`, which answers name, kind,
+     models and whether each is usable. It never answers a base URL or anything sealed.
+     The agent editor reads providers from `ListIntegrations` today
+     (`web/src/features/agents/agent-serving-fields.tsx`, `agent-fallback-fields.tsx`,
+     `web/src/features/experiments/experiment-config-fields.tsx`). That listing needs
+     `tool:read` at `adminScope` (`internal/httpapi/connections.go:65-66`), so an area
+     author cannot load providers at all. The editor moves to the reduced answer.
+
+   Each reduced answer lists only what the caller's scopes may use, by rule 3: the
+   inherited relation, with `V` the scopes where the caller holds `tool:read`. Governed
+   rows are not listed here: an author picks what their agents can run, not what their
+   areas contain.
 
 ### Names are unique across the installation, in the database
 
@@ -128,11 +151,23 @@ neither does the name an inbound message is matched by (`settings.Store.Named`,
 pack, policy, ruling and ledger step ever recorded. So the name stays the identity, and
 it is unique per kind across the installation.
 
-- **The settings primary key already makes a name unique within one scope.** That
-  includes connector instances, which are stored by instance name alone, with the
-  connector type in the value (`internal/admin/connector_write.go:112`). So
-  `(connector, name)` collides only across scopes, and uniqueness on `(kind, name)` is
-  exact.
+- **The settings primary key already makes a name unique within one scope**, whatever
+  the connector. A connector instance is stored by its name alone, with its connector
+  type in the value (`internal/admin/connector_write.go:112`). So `jira.prod` and
+  `sql.prod` cannot both exist in one scope today.
+- **For connector instances, the name alone becomes unique across the installation,
+  not `(connector, name)`.** This is a decision, and it is stricter than the tool id
+  needs: `jira.prod` in one area and `sql.prod` in another do not collide as tool ids.
+  The name is chosen because the name alone is already the identity elsewhere:
+  - within one scope, by the primary key;
+  - in bindings, where `boundVault` finds the bound Vault by name alone across every
+    scope that contains the consumer, and only then checks it is a Vault
+    (`internal/connectortools/sql_config.go:169-190`). A same-named instance of another
+    connector in a containing scope makes the binding ambiguous today.
+
+  **Incompatibility, stated:** two instances of different connectors may no longer share
+  a name in different scopes. Phase 0's migration check names any that exist, and the
+  release notes say so.
 - **The database enforces it.** Phase 0's migration creates a partial unique index:
 
   ```sql
@@ -172,7 +207,7 @@ The instance already has the scope. Only the doors change:
 
 - `PutConnectorInstance`, `DeleteConnectorInstance` and `GetConnectorInstance` check
   `provider:write` at the instance's scope, not at the platform's.
-- `ListConnectorInstances` is filtered by rule 4.
+- `ListConnectorInstances` is filtered by rule 4, on `provider:write`.
 - The connector catalogue (`ListConnectorCatalog`) needs `tool:classify` at the
   platform's scope today (`internal/httpapi/connectors.go:30`). It names connector types,
   not instances or credentials, so it opens to `tool:read` in any scope, as #324 did for
@@ -192,7 +227,7 @@ The instance already has the scope. Only the doors change:
 - **The catalogue knows each tool's scope.** A tool entry carries the scope of the
   server that declares it.
   - `ListTools` already returns tools to `tool:read` in any scope (#324). It now keeps
-    only the tools a caller's scopes may use, by rule 4.
+    only the tools a caller's scopes may use, by rule 5.
   - Today it filters only who declares each tool (`internal/httpapi/admin.go:79-84`).
 - **Personal credentials** (`mcp_user_credential`) stay keyed by server and person
   (`internal/admin/integrations.go:752`). A person stores one only for a server they
@@ -301,10 +336,34 @@ imported. No effect bypasses the Gate.
 |---|---|
 | Publication (console, API, Terraform, disk sync) | Every tool in the pack and every provider the agent names is usable from the agent's scope. Otherwise the answer is 422, naming the tool or provider |
 | `tools` invocation | A call to a tool whose server's scope does not contain the run's is refused `ErrOutOfScope` before the server is contacted. This mirrors `Layer.Reserve` (`internal/connectortools/layer.go:311`) |
-| Gate | A new check, `checkScope`, beside `checkContract` (`internal/gate/gate.go:73`). The Gate cannot judge scope today: its `Request` carries the run's scope and the tool's effect, but not where the tool belongs (`internal/gate/pack.go:57-70`). `Request` gains `ToolScope`, the runtime scope of the server or instance that declares the tool. The engine fills it from the catalogue next to the effect (`internal/engine/act.go:118,178-184`). The check stops the call unless `ToolScope` contains `Scope`, and that stop is recorded in the ledger as a `blocked` verdict with its reason. A zero `ToolScope` contains nothing (`internal/domain/ids.go:80-90`), so a tool whose origin is unknown is stopped too |
+| Gate | A new check, `checkScope`, beside `checkContract` (`internal/gate/gate.go:73`). The Gate cannot judge scope today: its `Request` carries the run's scope and the tool's effect, but not where the tool belongs (`internal/gate/pack.go:57-70`). `Request` gains `ToolScope`, and the check stops the call unless `ToolScope` contains `Scope`. That stop is recorded in the ledger as a `blocked` verdict with its reason. Where `ToolScope` comes from is the next section |
 | Model resolution | `Planner` with the run's scope, so a provider out of scope is not found |
 | Channel delivery | `Configured.For` as today, plus the connection's scope |
 | Classification sync | The precedence in [Classification](#classification-under-the-platforms-ceiling): the platform's row, else the owner's, never a fall-back on stale |
+
+### Where a tool's scope comes from
+
+The engine reads a tool's effect through the layer chain the worker builds
+(`cmd/agentd/worker_parts.go:231-247`): `workitem` → `memory` → `contextshare` → the
+native connector layer → the MCP catalogue. Each layer answers for the ids it claims and
+passes the rest down. `ToolScope` travels the same way, through a `ScopeOf(tool)` beside
+the effect lookup (`internal/engine/workitem.go:56`, `act.go:118,178-184`):
+
+| Layer | Tools | `ToolScope` |
+|---|---|---|
+| `workitem`, `memory`, `contextshare` | The platform's own tools: claims, memory, shared context | The installation's runtime scope `{Company: Installation}`, declared **explicitly** by each layer for each id it claims |
+| Native connector layer | `connector.instance.operation` | The instance's runtime scope |
+| MCP catalogue | `server.tool` | The server's runtime scope |
+| None claims the id | — | Zero, which contains nothing (`internal/domain/ids.go:80-90`), so the call is stopped |
+
+- **The platform's tools are given their scope, never left to a default.** A
+  zero-value fallback would stop them all on the day `checkScope` ships, and a "no
+  scope means everywhere" default would let an unclaimed id through. Each layer
+  declares what it claims, and an id nobody claims is stopped.
+- **An anchor test in phase 0** runs one tool of each of the three platform layers from
+  an `acme/cx` run, and asserts each executes. Sabotage: drop one layer's declaration;
+  the test must name that layer's tool, stopped by `checkScope`. A second test asserts an
+  unclaimed id is stopped, so the anchor cannot pass by `checkScope` being absent.
 
 The Gate's check is the one the ledger shows. The check at invocation is a second wall
 beneath it. Neither replaces the other: a test of one does not prove the other.
@@ -359,7 +418,7 @@ platform's trail shows every scope.
 
 | # | What | Released as |
 |---|---|---|
-| 0 | The unique index on names, with its duplicate check and the 409. The connector layer keyed by scope. The Gate's `checkScope`, for every tool, MCP and connector | One release. It changes nothing for an installation, because every row is the platform's and contains every run. Its notes state that a binary below it answers 500 on a taken name |
+| 0 | The unique index on names, with its duplicate check and the 409. The connector layer keyed by scope. The Gate's `checkScope`, for every tool, with `ToolScope` declared by every layer and the platform's own tools anchored | One release. It changes nothing for an installation, because every row is the platform's and contains every run. Its notes state that a binary below it answers 500 on a taken name |
 | 1 | Connector instances: doors at the instance's scope, filtered listing, catalogue on `tool:read` | Writers only. The readers already check scope |
 | 2 | MCP servers and classification | Readers, then writers |
 | 3 | Model providers | Readers, then writers |
@@ -405,7 +464,8 @@ their own Jira, Elasticsearch or SQL from their own area.
   - The previous release's exact `settings` upsert, run after phase 0's migration with a
     taken name, is refused by the index.
   - The migration over a database holding a duplicate stops, names the duplicate, and
-    leaves no index.
+    leaves no index. One of its cases is `jira.prod` in one area and `sql.prod` in
+    another: the decided incompatibility.
   - Sabotage: drop the index and keep the binary's 409 mapping; the old statement must
     get through, and the test must name it.
 - **Listing, for three callers.**
@@ -414,6 +474,10 @@ their own Jira, Elasticsearch or SQL from their own area.
   - A company administrator sees the company's rows, every area's under it, and the
     platform's.
   - The platform's administration sees every row.
+  - An author, who holds `tool:read` and not `provider:write`, is refused 403 on every
+    configuration listing and `Get`. The same author reads `GET /providers` and
+    `ListTools`, and neither holds an address. Sabotage: list on `tool:read`; the test
+    must name the address the author read.
   - Sabotage: keep only the inherited relation; the test must name the descendant row the
     company administrator lost. Then return every row; the test must name the sibling's
     row the area saw.
