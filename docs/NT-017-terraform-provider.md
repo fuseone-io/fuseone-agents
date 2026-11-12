@@ -324,10 +324,26 @@ models. Creating a company still grants the creator `curator` on it.
     on the area's row in its transaction, and refuses a write into an area that is not
     registered. The delete holds `FOR UPDATE` first. Whichever commits first wins, and
     the other sees it.
-  - **It holds against the previous binary.** Rows at area scope are written only from
-    each kind's writers' release of NT-019 on (NT-019, *Rollout*). So the area's
-    `FOR SHARE` ships in phase 0 of NT-019, before any writer, and no binary that
-    writes an area row lacks it.
+  - **Such writes exist today.** Connector instances are written at area scope
+    (`connectorScopes`, `internal/admin/connectors.go:41-59`), and so are conversations
+    (`internal/admin/channels.go:577-579`) and budgets (`internal/admin/budgets.go`).
+    None of them reads `scopes`, so today a row can be written into an area that is not
+    registered, or is being deleted.
+  - **Fence first, door a release later**, so the guarantee holds against the previous
+    binary:
+    1. **The fence release.** Every area-scoped `settings` write takes the area's
+       `FOR SHARE` and refuses an unregistered area. The area delete stays as it is
+       today. Nothing a person does changes, except that a write into an unregistered
+       area is now refused with 400.
+    2. **The delete release**, shipped only after the fence release runs on **every**
+       `serve` and `worker` replica. It adds the `FOR UPDATE`, the `in-use` check over
+       agents and `settings` rows, and the 409.
+
+    A replica older than the fence release writes area rows without the lock. If it ran
+    beside the delete, it could write into an area the delete just removed. So the
+    delete release states a **rollback floor**: once it is deployed, never below the
+    fence release. Rolling back from the delete release to the fence release is safe,
+    because the fence release takes the lock and only lacks the door.
   - **The problem** lists, per kind, the names the caller may read under NT-019's
     listing rule, and a count of the others, as for agents above.
   - **No cascade.** An area's configuration is removed resource by resource, through
@@ -479,6 +495,9 @@ Each phase is a FuseOne release followed by a provider release that requires it.
 - The fence on delete holds only when both sides take the lock. A replica still on the
   previous release publishes without `FOR SHARE`, so the 409 is a guarantee only once
   every replica runs phase 1. Until then it is a check, and the release notes say so.
+- The area delete ships in two releases: the fence, then the door, with the door
+  enabled only once the fence runs on every replica, and a rollback floor at the fence
+  release (see [Phase 2](#phase-2-companies-areas-and-classification)).
 - Integration resources follow NT-019's rollout per kind: readers, then writers. The
   provider's support for a scope below the installation is gated per kind on that
   kind's writers' release, as above.
@@ -537,6 +556,14 @@ Server side, each written before its change:
   kind, each with the kind named. A write into the area racing the delete, in both
   orders: either the delete answers 409 or the write is refused because the area is
   gone, never both succeeding.
+- **The previous binary, against the delete.** From the delete release's side, the
+  previous binary is the fence release. The test runs the fence release's exact
+  area-scoped `settings` upsert, lock included, for a connector instance and for a
+  conversation, against a concurrent area delete held at its `FOR UPDATE` by a test hook.
+  The upsert waits. Once the delete commits, it is refused because the area is gone, and
+  no row exists at that area afterwards. Sabotage: drop the `FOR SHARE` from that
+  upsert; the test must find a row written into the deleted area.
+- A write into an unregistered area is refused with 400 from the fence release on.
 - A classification at `level: owner` and one at `level: platform` for the same tool are
   two resources. Destroying the platform one makes the owner's apply.
 - Retiring an agent writes a trail line.
