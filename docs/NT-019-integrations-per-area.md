@@ -210,11 +210,15 @@ it is unique per kind across the installation.
   stopped upgrade is never the first anyone hears of it. The platform's administration
   renames one of the two.
 - **Rollback.** The index outlives any rollback, because migrations do not go back.
-  Below phase 0, a binary that writes a taken name gets a 500 rather than the 409. That
-  is fail-closed, and is stated in phase 0's release notes.
+  Below phase 0, a binary that writes a connector instance under a taken name gets
+  400 `fuseone:not-stored`, which is how that handler answers a failed write, rather
+  than the 409. Nothing is written, so it fails closed. Phase 0's release notes say so.
 
-The collision above therefore cannot happen. The connector layer is still re-keyed by
-scope as a guard. A duplicate found while loading rows is refused, never overwritten.
+The collision above therefore cannot happen. As a guard, the connector layer refuses
+a set that holds one name twice, judged by the name alone, as the index does, and keeps
+serving the set it had; it never overwrites. Its key stays `(connector, name)`, only to
+find an instance from a tool id, which carries no scope: keying by scope would give no
+lookup anything to match.
 
 ## Kind by kind
 
@@ -451,7 +455,7 @@ platform's trail shows every scope.
 
 | # | What | Released as |
 |---|---|---|
-| 0 | The unique index on names, with its duplicate check and the 409. The connector layer keyed by scope. The Gate's `checkScope`, for every tool, with `ToolScope` declared by every layer and the platform's own tools anchored | One release. It changes nothing for an installation, because every row is the platform's and contains every run. Its notes state that a binary below it answers 500 on a taken name |
+| 0 | The unique index on names, with its duplicate check and the 409. The connector layer refusing one name configured twice. The Gate's `checkScope`, for every tool, with `ToolScope` declared by every layer and the platform's own tools anchored, and the built-in checks named on every decision | One release. MCP servers, providers and channel connections are the installation's, which contains every run. Connector instances may already be stored at a company or area: a run reaching one outside its scope was already refused by the connector layer, and is now stopped earlier, by the Gate, as a recorded block. Its notes state that a binary below it answers 400 `fuseone:not-stored` on a taken connector name |
 | 1 | Connector instances: doors at the instance's scope, filtered listing, catalogue on `tool:read` | Writers only. The readers already check scope |
 | 2 | MCP servers and classification | Readers, then writers |
 | 3 | Model providers | Readers, then writers |

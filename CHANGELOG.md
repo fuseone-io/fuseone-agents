@@ -32,8 +32,9 @@ field" is a commit message.
 
 NT-019 phase 0: the names of integrations become unique across the installation, in the
 database, and the Gate stops a tool its run's scope does not contain. Adds migration
-`0108_integration_names_unique`. Nothing changes for an installation whose integrations
-are all the platform's, which is every installation today.
+`0108_integration_names_unique`. MCP servers, providers and channel connections are
+written at the installation only, so for them nothing changes. Connector instances and
+conversations may already be stored at a company or an area; see below.
 
 ### Upgrade notes
 
@@ -69,8 +70,12 @@ are all the platform's, which is every installation today.
 - **A connector instance name another scope holds answers 409**
   `fuseone:integration-name-taken`. The answer never says which scope holds it.
 - **The Gate stops a tool its run's scope does not contain**, with the rule `scope`,
-  recorded in the run's trail. Every tool today belongs to the installation, which
-  contains every run, so no run is stopped by it yet.
+  recorded in the run's trail as a block.
+  - MCP tools and the platform's own tools belong to the installation, which contains
+    every run, so none of them is stopped.
+  - A connector instance stored at a company or an area was already refused to a run
+    outside that scope, by the connector layer (`ErrOutOfScope`). That run is now
+    stopped earlier, by the Gate, and the trail says why.
 
 ## [0.104.0] — 2026-11-11
 
