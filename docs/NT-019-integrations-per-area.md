@@ -70,47 +70,99 @@ platform writes, so nobody has done it. Once areas write, somebody will.
 
 ## The rule
 
+### Three scopes for one row
+
+A row has three scopes, and the code converts between them in one place:
+
+| Stored as (`scope_kind`, company, area) | Runtime scope (what a run's scope must be inside) | Authorization scope (what a writer must hold) |
+|---|---|---|
+| `installation`, `''`, `''` | `{Company: Installation}`, which contains every scope | `adminScope` (`default/platform`), unchanged |
+| `company`, `acme`, `''` | `acme` | `acme`, or `adminScope` |
+| `area`, `acme`, `cx` | `acme/cx` | `acme/cx`, or `adminScope` |
+
+- The stored and runtime columns are what `connectorScopes` does today for connector
+  instances (`internal/admin/connectors.go:41-59`). It becomes the one conversion every
+  kind uses.
+- **A row of the installation keeps today's check.** Writing it still needs the
+  permission at `adminScope`, so nobody who configures integrations today loses that
+  right. Applying `Require(target)` literally would ask for the permission at the
+  installation, which only root administrators hold.
+- **The platform's administration governs every area.** A grant at `adminScope` writes
+  any company's or area's row, as it writes every row today. `adminScope` does not
+  contain `acme/cx` by `Scope.Contains`, so this is an explicit second condition, not a
+  consequence of the hierarchy.
+
+### The rule itself
+
 One rule, for every kind:
 
 1. **A resource belongs to the scope it is stored at.** An area's resource is stored at
    `area` with its company and area, and a company's at `company`. The platform's stays
    at `installation`.
-2. **Writing it needs the permission at that scope.** `configurer()` takes the target
-   scope, and `auth.Require(provider:write, target)` replaces the check at
-   `adminScope`. A grant on `acme` writes `acme` and every area under it, and a grant on
-   `acme/cx` writes only `acme/cx`. That is `Scope.Contains`, as for agents
-   (`internal/domain/ids.go:80-90`).
-3. **A run uses only resources whose scope contains the run's scope.** Connectors and
-   conversations already do this. MCP servers, providers and channel connections gain the
-   same check, at every door (see [Enforcement](#enforcement)).
-4. **Reading shows a caller what they can use, and nothing beside it.** A listing
-   returns the resources whose scope contains a scope the caller may read, as
-   `auth.VisibleScopes` does for agents. An area sees its own resources, its company's
-   and the platform's. The resources above it are marked inherited and are read-only for
-   the area. It never sees another area's.
+2. **Writing it needs the permission at its authorization scope**, from the table above.
+   `configurer()` takes the target and checks `Require(provider:write, target)`, or the
+   permission at `adminScope`. A grant on `acme` writes `acme` and every area under it,
+   and a grant on `acme/cx` writes only `acme/cx`. That is `Scope.Contains`, as for
+   agents (`internal/domain/ids.go:80-90`).
+3. **A run uses only resources whose runtime scope contains the run's scope.**
+   Connectors and conversations already do this. MCP servers, providers and channel
+   connections gain the same check, at every door (see [Enforcement](#enforcement)).
+4. **A listing shows what the caller uses and what the caller governs.** Let `V` be the
+   scopes where the caller holds `tool:read` (`auth.VisibleScopes`). A row is listed when
+   either holds:
+   - **Inherited:** its runtime scope contains a scope in `V`. An area sees its company's
+     rows and the platform's, marked inherited, and read-only unless rule 2 lets the
+     caller write them.
+   - **Governed:** a scope in `V` contains its runtime scope, or the caller holds
+     `tool:read` at `adminScope`. A company administrator sees every area of the
+     company, and the platform's administration sees every row.
 
-### Names are unique across the installation
+   Nothing else is listed. An area never sees a sibling area's rows. Tests cover an area,
+   a company and a platform caller.
+
+### Names are unique across the installation, in the database
 
 A tool id (`server.tool`, `connector.instance.operation`) has no scope in it, and
 neither does the name an inbound message is matched by (`settings.Store.Named`,
 `internal/settings/secrets.go:111-116`). Putting a scope into every id would touch every
-pack, policy, ruling and ledger step ever recorded. Instead:
+pack, policy, ruling and ledger step ever recorded. So the name stays the identity, and
+it is unique per kind across the installation.
 
-- **The name of an MCP server, a provider, a channel connection and a conversation is
-  unique per kind across the installation.** So is a connector instance's
-  `(connector, name)`. A write that would take a name another scope already holds is
-  refused with 409 `fuseone:integration-name-taken`. The refusal says the name is taken.
-  It never says by whom: another area's names are not the caller's to read.
-- The check runs under a lock on the kind, in the write's own transaction. The
-  `settings` primary key cannot enforce it, because it includes the scope.
-- **Existing rows.** Before phase 1 ships, a read-only query counts names held in more
-  than one scope today. It runs against every installation that will take the release.
-  A duplicate is reported to the platform's administration, who renames one of the two.
-  The release does not ship over a duplicate.
+- **The settings primary key already makes a name unique within one scope.** That
+  includes connector instances, which are stored by instance name alone, with the
+  connector type in the value (`internal/admin/connector_write.go:112`). So
+  `(connector, name)` collides only across scopes, and uniqueness on `(kind, name)` is
+  exact.
+- **The database enforces it.** Phase 0's migration creates a partial unique index:
 
-The name stays the identity, so the collision above cannot happen. The layer is still
-re-keyed by scope as a guard, and a duplicate found while loading the rows is refused
-rather than overwritten.
+  ```sql
+  create unique index settings_integration_names on settings (kind, name)
+  where kind in ('mcp_server', 'model_provider', 'connector_instance',
+                 'channel', 'channel_conversation');
+  ```
+
+  - It binds every binary, the previous one included. An older replica that writes a
+    taken name, during the rollout or after a rollback, gets a unique violation.
+    It never writes a duplicate.
+  - Two writers racing for one name cannot both commit: the index serialises them.
+  - Kinds that legitimately repeat a name across scopes stay out of it: classifications
+    (see [Classification](#classification-under-the-platforms-ceiling)), personal MCP
+    credentials, channel identities and budgets.
+- **A refused write** answers 409 `fuseone:integration-name-taken`. The new binary
+  maps the unique violation of that index to the 409. The refusal says the name is
+  taken, and never by whom: another area's names are not the caller's to read.
+- **Existing rows.** The migration first counts names held in more than one scope. If
+  there are any, it raises an error naming each duplicate's kind and name, and creates
+  no index, so the upgrade stops before anything changes. A read-only query does the
+  same count ahead of the release against every installation that will take it, so a
+  stopped upgrade is never the first anyone hears of it. The platform's administration
+  renames one of the two.
+- **Rollback.** The index outlives any rollback, because migrations do not go back.
+  Below phase 0, a binary that writes a taken name gets a 500 rather than the 409. That
+  is fail-closed, and is stated in phase 0's release notes.
+
+The collision above therefore cannot happen. The connector layer is still re-keyed by
+scope as a guard. A duplicate found while loading rows is refused, never overwritten.
 
 ## Kind by kind
 
@@ -146,43 +198,80 @@ The instance already has the scope. Only the doors change:
   (`internal/admin/integrations.go:752`). A person stores one only for a server they
   can see.
 
-**Classification, under the platform's ceiling.**
+#### Classification under the platform's ceiling
 
-- A ruling is stored at the scope of the server whose tool it classifies. The
-  `settings` key already allows it. `Curator.Classify` writes the literal installation
-  today, and it writes the server's scope instead.
-- **Classifying needs `tool:classify` at the server's scope.** An area curator therefore
-  classifies the area's servers and nothing else. Classifying a tool of a server the area
-  does not own is refused, and so is a tool of the platform's.
-- **A platform ruling on a tool wins over the area's.** `Catalog.Sync` resolves the
-  ruling for each tool from the installation down. The platform's administration can
-  therefore set any area tool to a stricter effect, and the area cannot undo it.
-  The platform's screen lists the area rulings, with who made them, so they can be
-  reviewed.
+A tool has at most **two rulings**, both of kind `tool_classification` and named by
+the tool id. They are told apart by the scope they are stored at, which the `settings`
+key already allows.
+
+| Ruling | Stored at | Written by | Door |
+|---|---|---|---|
+| **Owner's** | The server's own scope (`company` or `area`) | `tool:classify` at the server's authorization scope | `ClassifyTool` with `level: owner` |
+| **Platform's**, the ceiling | `installation`, `''`, `''`, as every ruling is today (`internal/admin/curator.go:83`) | `tool:classify` at `adminScope` | `ClassifyTool` with `level: platform`, today's behaviour, the default |
+
+- For a server of the installation, the two are the same row. There is one ruling, as
+  today.
+- **The owner's door** refuses a tool whose server is not stored at a scope the caller
+  may classify. That covers the platform's own servers and a sibling area's servers.
+  `level: owner` on a server of the installation is the platform's door, and needs
+  `adminScope`.
+- **Withdrawing the ceiling.** A new door, `DELETE /admin/tools/{tool}/classification`
+  with `level: platform`, needs `tool:classify` at `adminScope` and removes the
+  platform's row. Nothing lets an owner write or remove the platform's row.
+
+**Precedence, exactly.** `Catalog.Sync` resolves each tool on its own:
+
+1. If a platform row exists for the tool, it is the ruling. The owner's row is ignored
+   for that tool, and listed as "overridden by the platform".
+2. Otherwise, the owner's row is the ruling.
+3. Otherwise, there is none, and the tool never executes, as today
+   (`internal/gate/checks.go:58-60`).
+
+The ruling chosen in step 1 or 2 is then checked against the current definition digest
+(`internal/tools/classify.go:36-77`). If it is stale, the tool is stale. It does **not**
+fall back to the other row: a ceiling the platform set against an older definition
+stops the tool until somebody re-rules. It never quietly hands the decision back to the
+owner.
+
+- `Curator.List` returns each row's stored scope, which it drops today
+  (`internal/admin/curator.go:114-118`). The resolution needs it.
+- **Against the previous binary.** An older reader sees two rows with one name, and
+  applies whichever its query returns last. So no owner row is written before every
+  replica resolves precedence: phase 2's readers' release ships first (see
+  [Rollout](#rollout-readers-a-release-before-writers)).
 - **Policies do not move.** `policy:write` stays at the platform's scope. Every policy,
   approval rule and standing approval applies to an area's tool exactly as to the
   platform's: the Gate does not ask who classified the tool.
-- **What stays the same.** An unclassified tool still never executes
-  (`internal/gate/checks.go:58-60`). A ruling still carries the definition digest it was
-  made against, and goes stale when the server changes the tool (`internal/tools/classify.go:36-77`).
 
 The risk the decision accepts: an area can call `read` a tool that writes. The ceiling
 limits who is exposed. The tool can only be reached by the area's own agents, so the
-mistake stays inside the area that made it. It also stays visible: the ruling names
-its author, and the platform can overrule it.
+mistake stays inside the area that made it. It also stays visible: the ruling names its
+author, the platform's screen lists every owner ruling, and the platform can overrule
+any of them.
 
 ### Model providers
 
 - A provider is stored at the caller's scope, its key sealed in the row.
 - **The registry knows each provider's scope**, and `Planner` takes the run's scope. A
   provider whose scope does not contain the run's is not found. The error names the
-  provider, never its key or its owner.
-- **Publication refuses an agent naming a provider its scope cannot use.** That covers
-  the main pair, the fallback (`Spec.Fallback`) and a judge's model
-  (`internal/spec/resolver_judge.go:51`).
+  provider, never its key or its owner. `Usable` (`internal/model/registry.go:157`)
+  takes the scope too.
+- **Every door that names a provider checks it against the scope it will run in.**
+  Publication is not enough, because an experiment can replace the provider and a judge
+  names its own:
+
+  | Door | Where | What it checks |
+  |---|---|---|
+  | Publication | `Publisher.Publish`, the HTTP route, the disk sync | The main pair and the fallback (`Spec.Fallback`), against the agent's scope |
+  | Starting an experiment | `StartExperiment` → `unservedPair` (`internal/httpapi/experiments_intention.go:115-133`) | The provider the intention runs on, which may be `intent.Config.Provider` instead of the version's, against the agent's scope |
+  | Planning an experiment run | `ResolveExperiment` (`internal/spec/resolver_experiment.go:24`, where `config.Provider` replaces the pair's) | The same, against the run's scope, through `Planner` |
+  | Opening a judgment | The writer of #298's release 2, not built yet | The judge's provider, against the experiment's scope. That release cannot ship without this check |
+  | Planning a judge run | `ResolveJudge` (`internal/spec/resolver_judge.go:39-51`) | `opening.Provider`, against the run's scope, through `Planner` |
+
+  The doors at start and opening answer early and with a reason. The checks in the
+  resolvers hold against a row that reached the ledger any other way.
 - **Cost.** Runs are already charged to their own scope, so an area provider's spend is
-  the area's. Prices (`/admin/prices`) stay the platform's. An area provider whose model
-  has no price is recorded at the unknown price, exactly as a platform provider would be.
+  the area's. Prices (`/admin/prices`) stay the platform's.
 
 ### Channels
 
@@ -212,10 +301,13 @@ imported. No effect bypasses the Gate.
 |---|---|
 | Publication (console, API, Terraform, disk sync) | Every tool in the pack and every provider the agent names is usable from the agent's scope. Otherwise the answer is 422, naming the tool or provider |
 | `tools` invocation | A call to a tool whose server's scope does not contain the run's is refused `ErrOutOfScope` before the server is contacted. This mirrors `Layer.Reserve` (`internal/connectortools/layer.go:311`) |
-| Gate | An out-of-scope refusal is a `blocked` verdict with its reason in the ledger, never a silent skip |
+| Gate | A new check, `checkScope`, beside `checkContract` (`internal/gate/gate.go:73`). The Gate cannot judge scope today: its `Request` carries the run's scope and the tool's effect, but not where the tool belongs (`internal/gate/pack.go:57-70`). `Request` gains `ToolScope`, the runtime scope of the server or instance that declares the tool. The engine fills it from the catalogue next to the effect (`internal/engine/act.go:118,178-184`). The check stops the call unless `ToolScope` contains `Scope`, and that stop is recorded in the ledger as a `blocked` verdict with its reason. A zero `ToolScope` contains nothing (`internal/domain/ids.go:80-90`), so a tool whose origin is unknown is stopped too |
 | Model resolution | `Planner` with the run's scope, so a provider out of scope is not found |
 | Channel delivery | `Configured.For` as today, plus the connection's scope |
-| Classification sync | Rulings resolved from the installation down, scoped to the server |
+| Classification sync | The precedence in [Classification](#classification-under-the-platforms-ceiling): the platform's row, else the owner's, never a fall-back on stale |
+
+The Gate's check is the one the ledger shows. The check at invocation is a second wall
+beneath it. Neither replaces the other: a test of one does not prove the other.
 
 The check at invocation is what holds against a stale definition. If an agent was
 published while a tool was in scope, and its server moved or was removed, the next call
@@ -267,7 +359,7 @@ platform's trail shows every scope.
 
 | # | What | Released as |
 |---|---|---|
-| 0 | Names unique across the installation, the duplicate count, the connector layer keyed by scope | One release |
+| 0 | The unique index on names, with its duplicate check and the 409. The connector layer keyed by scope. The Gate's `checkScope`, for every tool, MCP and connector | One release. It changes nothing for an installation, because every row is the platform's and contains every run. Its notes state that a binary below it answers 500 on a taken name |
 | 1 | Connector instances: doors at the instance's scope, filtered listing, catalogue on `tool:read` | Writers only. The readers already check scope |
 | 2 | MCP servers and classification | Readers, then writers |
 | 3 | Model providers | Readers, then writers |
@@ -279,23 +371,61 @@ their own Jira, Elasticsearch or SQL from their own area.
 
 ## Tests that must exist
 
-- **The write check is at the target's scope.** An `acme/cx` administrator writes an
-  `acme/cx` instance, and is refused 403 for `acme/finance` and for the installation.
-  Sabotage: check at `adminScope`, or at the caller's first visible scope; the test must
-  name the refused or the leaked write.
-- **A run never reaches another area's resource.** For each kind, an agent of
-  `acme/finance` whose pack names `acme/cx`'s tool, or whose definition names its provider,
-  is refused at invocation even when the row was planted directly, bypassing publication.
-  Sabotage: drop the check at invocation and keep the one at publication; the test must
-  find the call made.
-- **Names.** A second scope taking a name is refused 409. The body names neither the
-  holder nor its scope. Two writers racing for one name: exactly one succeeds.
-- **Listing.** An area administrator's listing has its own rows and the inherited ones,
-  marked, and none of a sibling area. The sabotage returns every row; the test must
-  name the sibling's row.
-- **Classification.** An area curator classifies its own server's tool, and is refused
-  on a platform tool and on a sibling's. A platform ruling on an area tool wins, and the
-  area's later ruling does not undo it.
+- **The write check is at the authorization scope.**
+  - An `acme/cx` administrator writes an `acme/cx` instance. The same administrator is
+    refused 403 for `acme/finance` and for the installation.
+  - A platform administrator, whose grant is at `adminScope`, writes the installation's
+    instance and `acme/cx`'s.
+  - Sabotage, three runs: check `Require(target)` literally, which loses the platform
+    administrator on the installation row; drop the `adminScope` condition; check at the
+    caller's first visible scope. Each time, the test must name the write it refused or
+    the one it leaked.
+- **The Gate stops an out-of-scope tool and the ledger says so.**
+  - An agent of `acme/finance` whose pack names `acme/cx`'s MCP tool runs. The row was
+    planted directly, bypassing publication.
+  - The run's ledger holds a `blocked` decision from `checkScope`, with the reason, and
+    the server is never contacted.
+  - Sabotage: drop `checkScope` and keep the check at invocation; the test must find no
+    `blocked` verdict. Then drop the check at invocation and keep `checkScope`; a
+    separate test calling the tools layer directly must find the call made.
+- **A run never reaches another area's provider.** Each provider door in the table
+  above answers for its own test:
+  - publication of the main pair, and of the fallback;
+  - `StartExperiment` with `intent.Config.Provider` naming `acme/cx`'s provider for an
+    `acme/finance` agent;
+  - `ResolveExperiment` for an experiment run whose started payload names it;
+  - `ResolveJudge` for a judge run whose opening names it.
+
+  For the two resolvers, the payload is written to the ledger directly. Sabotage: check
+  at publication only; the test must name each door that let it through.
+- **Names, in the database.**
+  - A second scope taking a name is refused 409. The body names neither the holder nor
+    its scope.
+  - Two writers racing for one name, through the contention fixture: exactly one commits.
+  - The previous release's exact `settings` upsert, run after phase 0's migration with a
+    taken name, is refused by the index.
+  - The migration over a database holding a duplicate stops, names the duplicate, and
+    leaves no index.
+  - Sabotage: drop the index and keep the binary's 409 mapping; the old statement must
+    get through, and the test must name it.
+- **Listing, for three callers.**
+  - An area administrator sees its own rows and the inherited ones, marked, and none of
+    a sibling area.
+  - A company administrator sees the company's rows, every area's under it, and the
+    platform's.
+  - The platform's administration sees every row.
+  - Sabotage: keep only the inherited relation; the test must name the descendant row the
+    company administrator lost. Then return every row; the test must name the sibling's
+    row the area saw.
+- **Classification precedence.**
+  - An area curator classifies its own server's tool with `level: owner`, and is refused
+    on a platform tool and on a sibling's.
+  - With both rows present, the platform's applies. A later owner ruling changes nothing
+    in effect, and is listed as overridden.
+  - Withdrawing the platform's row makes the owner's apply.
+  - A stale platform row stops the tool, and does not fall back to the owner's.
+  - Sabotage: resolve the owner's row first; then fall back on stale. Each time, the test
+    must name the tool whose effect changed.
 - **Reveals read at the row's scope.** A reveal at the installation of an area server
   finds nothing, and opening an area row's sealed value under another scope's AAD fails.
 - **Against the previous binary.** After the readers' release, an area row is refused,
