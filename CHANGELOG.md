@@ -28,7 +28,7 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.105.0] — 2026-11-12
 
 NT-019 phase 0: the names of integrations become unique across the installation, in the
 database, and the Gate stops a tool its run's scope does not contain. Adds migration
@@ -60,6 +60,9 @@ conversations may already be stored at a company or an area; see below.
 - **Rolling back.** The index stays after a rollback, because migrations do not go back.
   Below this release, writing a connector instance under a taken name answers 400
   `fuseone:not-stored` instead of 409. Nothing is written, so it fails closed.
+  - The floor 0.104.0 set still holds: once `0107` has run, never go below 0.103.0. The
+    floor 0.101.0 set holds too: once the first experiment exists, never go below
+    0.100.0.
 - **Replays of earlier decisions.** A decision is recorded with the built-in checks that
   made it, now `builtin/v7`. Replaying a decision recorded under other built-in checks
   reports it as not comparable, with the reason. Decisions recorded before this release
@@ -68,14 +71,30 @@ conversations may already be stored at a company or an area; see below.
 ### Changed
 
 - **A connector instance name another scope holds answers 409**
-  `fuseone:integration-name-taken`. The answer never says which scope holds it.
-- **The Gate stops a tool its run's scope does not contain**, with the rule `scope`,
-  recorded in the run's trail as a block.
+  `fuseone:integration-name-taken` (#329). The answer never says which scope holds it.
+- **The Gate stops a tool its run's scope does not contain** (#329), with the rule
+  `scope`, recorded in the run's trail as a block.
   - MCP tools and the platform's own tools belong to the installation, which contains
     every run, so none of them is stopped.
   - A connector instance stored at a company or an area was already refused to a run
     outside that scope, by the connector layer (`ErrOutOfScope`). That run is now
     stopped earlier, by the Gate, and the trail says why.
+
+### Design decisions
+
+These are decisions recorded in a note. Beyond phase 0 above, nothing below is
+implemented yet.
+
+- **NT-019: integrations per area** (#328). The administrator of an area connects the
+  area's own MCP servers, model providers, connector instances and channels, and its
+  curator classifies its own servers' tools under the platform's ceiling. An area's
+  provider is paid for by the area. Names stay unique across the installation, and
+  every reader learns scopes a release before any door writes an area's row.
+- **NT-017: a Terraform provider** (#321). Agents, areas, access and integrations are
+  managed as code through the same API. Every create sends `If-None-Match: *`, an
+  agent's scopes are authorized under the publication lock before any precondition is
+  judged, and integrations carry their scope. Deleting an area is refused while it
+  still holds configuration, behind a fence that ships a release before the delete.
 
 ## [0.104.0] — 2026-11-11
 
