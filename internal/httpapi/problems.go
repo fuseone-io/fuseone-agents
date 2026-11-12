@@ -74,6 +74,10 @@ const (
 	// before digests were kept, so nothing can show the bytes are the same
 	// (NT-018). Changing the definition almost always gives another id.
 	CodeVersionDigestUnknown Code = "fuseone:version-digest-unknown"
+	// CodeIntegrationNameTaken is an integration whose name another scope
+	// already holds (NT-019). Its own code, so the console can ask for another
+	// name rather than report a failure. It never says which scope holds it.
+	CodeIntegrationNameTaken Code = "fuseone:integration-name-taken"
 	// CodeNoMasterKey is a GitHub webhook's secret refused because the
 	// installation has no master key to seal it with (#202). Its own code so
 	// the console can say what to configure rather than report a failure.
@@ -136,6 +140,14 @@ func notStored(detail string) openapi.Problem {
 // conflicted is a request that contradicts the state it arrived at.
 func conflicted(detail string) openapi.Problem {
 	return refusal(http.StatusConflict, CodeConflict, "Conflict", detail)
+}
+
+// nameTaken is a write whose name another scope holds. The detail is fixed:
+// the store's own message would be safe today, and a fixed one stays safe when
+// that message changes.
+func nameTaken() openapi.Problem {
+	return refusal(http.StatusConflict, CodeIntegrationNameTaken, "Name taken",
+		"another scope already holds this name; choose another")
 }
 
 // upstreamRefused is something outside this installation saying no.
