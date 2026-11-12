@@ -1,0 +1,847 @@
+<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-vdxcvpsm"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>NT-019 — Integrations per area | FuseOne Agents</title><link rel="canonical" href="https://fuseone-io.github.io/fuseone-agents/docs/design/nt-019-integrations-per-area/"/><link rel="sitemap" href="/fuseone-agents/docs/sitemap-index.xml"/><link rel="icon" type="image/svg+xml" href="/fuseone-agents/docs/favicon.svg"/><link rel="shortcut icon" href="/fuseone-agents/docs/favicon.svg" type="image/svg+xml"/><meta name="generator" content="Astro v7.4.2"/><meta name="generator" content="Starlight v0.41.11"/><meta property="og:title" content="NT-019 — Integrations per area"/><meta property="og:type" content="article"/><meta property="og:url" content="https://fuseone-io.github.io/fuseone-agents/docs/design/nt-019-integrations-per-area/"/><meta property="og:locale" content="en"/><meta property="og:description" content="Each area connects its own tool servers, model providers, connectors and channels."/><meta property="og:site_name" content="FuseOne Agents"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="Each area connects its own tool servers, model providers, connectors and channels."/><script>
+	window.StarlightThemeProvider = (() => {
+		const storedTheme =
+			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+		const theme =
+			storedTheme ||
+			(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers(theme = storedTheme || 'auto') {
+				document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+					const select = picker.querySelector('select');
+					if (select) select.value = theme;
+					/** @type {HTMLTemplateElement | null} */
+					const tmpl = document.querySelector(`#theme-icons`);
+					const newIcon = tmpl && tmpl.content.querySelector('.' + theme);
+					if (newIcon) {
+						const oldIcon = picker.querySelector('svg.label-icon');
+						if (oldIcon) {
+							oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+						}
+					}
+				});
+			},
+		};
+	})();
+</script><template id="theme-icons"><svg aria-hidden="true" class="light astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M5 12a1 1 0 0 0-1-1H3a1 1 0 0 0 0 2h1a1 1 0 0 0 1-1Zm.64 5-.71.71a1 1 0 0 0 0 1.41 1 1 0 0 0 1.41 0l.71-.71A1 1 0 0 0 5.64 17ZM12 5a1 1 0 0 0 1-1V3a1 1 0 0 0-2 0v1a1 1 0 0 0 1 1Zm5.66 2.34a1 1 0 0 0 .7-.29l.71-.71a1 1 0 1 0-1.41-1.41l-.66.71a1 1 0 0 0 0 1.41 1 1 0 0 0 .66.29Zm-12-.29a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.71-.71a1.004 1.004 0 1 0-1.43 1.41l.73.71ZM21 11h-1a1 1 0 0 0 0 2h1a1 1 0 0 0 0-2Zm-2.64 6A1 1 0 0 0 17 18.36l.71.71a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.76-.66ZM12 6.5a5.5 5.5 0 1 0 5.5 5.5A5.51 5.51 0 0 0 12 6.5Zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm0 3.5a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1Z"/></svg><svg aria-hidden="true" class="dark astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.64 13a1 1 0 0 0-1.05-.14 8.049 8.049 0 0 1-3.37.73 8.15 8.15 0 0 1-8.14-8.1 8.59 8.59 0 0 1 .25-2A1 1 0 0 0 8 2.36a10.14 10.14 0 1 0 14 11.69 1 1 0 0 0-.36-1.05Zm-9.5 6.69A8.14 8.14 0 0 1 7.08 5.22v.27a10.15 10.15 0 0 0 10.14 10.14 9.784 9.784 0 0 0 2.1-.22 8.11 8.11 0 0 1-7.18 4.32v-.04Z"/></svg><svg aria-hidden="true" class="auto astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg></template><link rel="stylesheet" href="/fuseone-agents/docs/_astro/print.ehPL0gv-.css" media="print"><link rel="stylesheet" href="/fuseone-agents/docs/_astro/common.Cd80cwrF.css"><script type="module" src="/fuseone-agents/docs/_astro/page.cNngjUgL.js"></script></head><body class="astro-vdxcvpsm"><a class="sl-skip-link astro-vxeigawq" href="#_top">Skip to content</a><div class="page sl-flex astro-gqpr5s5a"><header class="header astro-gqpr5s5a"><div class="header astro-nczgtkxc"><div class="title-wrapper sl-flex astro-nczgtkxc"><a href="/fuseone-agents/docs/" class="site-title sl-flex astro-clw6ags5"><img class="light:sl-hidden print:hidden astro-clw6ags5" alt src="/fuseone-agents/docs/_astro/logo-docs-dark.RgwYBWE_.svg" width="302" height="34"><img class="dark:sl-hidden print:block astro-clw6ags5" alt src="/fuseone-agents/docs/_astro/logo-docs-light.DMrXalo7.svg" width="302" height="34"><span class="sr-only astro-clw6ags5" translate="no">FuseOne Agents</span></a></div><div class="sl-flex print:hidden astro-nczgtkxc"><site-search class="astro-nczgtkxc astro-r5ar4xm7" data-translations="{&quot;placeholder&quot;:&quot;Search&quot;}"><button data-open-modal disabled aria-label="Search" aria-keyshortcuts="Control+K" class="astro-r5ar4xm7"><svg aria-hidden="true" class="astro-r5ar4xm7 astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg><span class="sl-hidden md:sl-block astro-r5ar4xm7" aria-hidden="true">Search</span><kbd class="sl-hidden md:sl-flex astro-r5ar4xm7" style="display: none;"><kbd class="astro-r5ar4xm7">Ctrl</kbd><kbd class="astro-r5ar4xm7">K</kbd></kbd></button><dialog style="padding:0" aria-label="Search" class="astro-r5ar4xm7"><div class="dialog-frame sl-flex astro-r5ar4xm7"><button data-close-modal class="sl-flex md:sl-hidden astro-r5ar4xm7">Cancel</button><div class="search-container astro-r5ar4xm7"><div id="starlight__search" class="astro-r5ar4xm7"></div></div></div></dialog></site-search><script>
+	(() => {
+		const openBtn = document.querySelector('button[data-open-modal]');
+		const shortcut = openBtn?.querySelector('kbd');
+		if (!openBtn || !(shortcut instanceof HTMLElement)) return;
+		const platformKey = shortcut.querySelector('kbd');
+		if (platformKey && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)) {
+			platformKey.textContent = '⌘';
+			openBtn.setAttribute('aria-keyshortcuts', 'Meta+K');
+		}
+		shortcut.style.display = '';
+	})();
+</script><script type="module" src="/fuseone-agents/docs/_astro/Search.astro_astro_type_script_index_0_lang.C1XVqlf5.js"></script></div><div class="sl-hidden md:sl-flex print:hidden right-group astro-nczgtkxc"><div class="sl-flex social-icons astro-nczgtkxc"><a href="https://github.com/fuseone-io/fuseone-agents" rel="me" class="sl-flex astro-cg55etiy"><span class="sr-only astro-cg55etiy">GitHub</span><svg aria-hidden="true" class="astro-cg55etiy astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-r2p65idu"><span class="sr-only astro-r2p65idu">Select theme</span><svg aria-hidden="true" class="icon label-icon astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-r2p65idu"><option value="dark" class="astro-r2p65idu">Dark</option><option value="light" class="astro-r2p65idu">Light</option><option value="auto" selected class="astro-r2p65idu">Auto</option></select><svg aria-hidden="true" class="icon caret astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script><script type="module">var e=`starlight-theme`,t=e=>e===`auto`||e===`dark`||e===`light`?e:`auto`,n=()=>t(typeof localStorage<`u`&&localStorage.getItem(e));function r(t){typeof localStorage<`u`&&localStorage.setItem(e,t===`light`||t===`dark`?t:``)}var i=()=>matchMedia(`(prefers-color-scheme: light)`).matches?`light`:`dark`;function a(e){StarlightThemeProvider.updatePickers(e),document.documentElement.dataset.theme=e===`auto`?i():e,r(e)}matchMedia(`(prefers-color-scheme: light)`).addEventListener(`change`,()=>{n()===`auto`&&a(`auto`)});var o=class extends HTMLElement{constructor(){super(),a(n()),this.querySelector(`select`)?.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&a(t(e.currentTarget.value))})}};customElements.define(`starlight-theme-select`,o);</script><script type="module">var e=class extends HTMLElement{constructor(){super();let e=this.querySelector(`select`);e&&(e.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&(window.location.pathname=e.currentTarget.value)}),window.addEventListener(`pageshow`,t=>{if(!t.persisted)return;let n=e.querySelector(`option[selected]`)?.index;n!==e.selectedIndex&&(e.selectedIndex=n??0)}))}};customElements.define(`starlight-lang-select`,e);</script></div></div></header><nav class="sidebar print:hidden astro-gqpr5s5a" aria-label="Main"><starlight-menu-button class="print:hidden astro-vvx7mffu"><button aria-expanded="false" aria-label="Menu" aria-controls="starlight__sidebar" class="sl-flex md:sl-hidden astro-vvx7mffu"><svg aria-hidden="true" class="open-menu astro-vvx7mffu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M3 8h18a1 1 0 1 0 0-2H3a1 1 0 0 0 0 2Zm18 8H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Zm0-5H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Z"/></svg><svg aria-hidden="true" class="close-menu astro-vvx7mffu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="m13.41 12 6.3-6.29a1.004 1.004 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1.004 1.004 0 0 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 0 1.42.998.998 0 0 0 1.42 0l6.29-6.3 6.29 6.3a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.42L13.41 12Z"/></svg></button></starlight-menu-button><script type="module">var e=class extends HTMLElement{btn=this.querySelector(`button`);constructor(){super(),this.btn.addEventListener(`click`,()=>this.toggleExpanded());let e=this.closest(`nav`);e&&e.addEventListener(`keyup`,e=>this.closeOnEscape(e)),matchMedia(`(min-width: 50em)`).addEventListener(`change`,()=>this.setExpanded(!1))}setExpanded(e){this.setAttribute(`aria-expanded`,String(e)),document.body.toggleAttribute(`data-mobile-menu-expanded`,e),document.querySelectorAll(`.main-frame, .sl-skip-link`).forEach(t=>{t.toggleAttribute(`inert`,e)})}toggleExpanded(){this.setExpanded(this.getAttribute(`aria-expanded`)!==`true`)}closeOnEscape(e){e.code===`Escape`&&(this.setExpanded(!1),this.btn.focus())}};customElements.define(`starlight-menu-button`,e);</script><div id="starlight__sidebar" class="sidebar-pane astro-gqpr5s5a"><div class="sidebar-content sl-flex astro-gqpr5s5a"><sl-sidebar-state-persist data-hash="0bxw6ky" class="astro-f5yvicm7"><script aria-hidden="true">
+		(() => {
+			try {
+				if (!matchMedia('(min-width: 50em)').matches) return;
+				/** @type {HTMLElement | null} */
+				const target = document.querySelector('sl-sidebar-state-persist');
+				const state = JSON.parse(sessionStorage.getItem('sl-sidebar-state') || '0');
+				if (!target || !state || target.dataset.hash !== state.hash) return;
+				window._starlightScrollRestore = state.scroll;
+				customElements.define(
+					'sl-sidebar-restore',
+					class SidebarRestore extends HTMLElement {
+						connectedCallback() {
+							try {
+								const idx = parseInt(this.dataset.index || '');
+								const details = this.closest('details');
+								if (details && typeof state.open[idx] === 'boolean') details.open = state.open[idx];
+							} catch {}
+						}
+					}
+				);
+			} catch {}
+		})();
+	</script><ul class="top-level astro-ojxuodky"><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Start</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="0"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/" class="astro-ojxuodky"><span class="astro-ojxuodky">What is FuseOne?</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/start/install/" class="astro-ojxuodky"><span class="astro-ojxuodky">Install</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/reference/helm-chart/" class="astro-ojxuodky"><span class="astro-ojxuodky">Helm chart</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Core concepts</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="1"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/durable-execution/" class="astro-ojxuodky"><span class="astro-ojxuodky">Durable execution</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/gate/" class="astro-ojxuodky"><span class="astro-ojxuodky">Gate and labels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/integrations/" class="astro-ojxuodky"><span class="astro-ojxuodky">Integrations</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Duplicate effects</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed memory</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Operate</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="2"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/operate/runtime-finops/" class="astro-ojxuodky"><span class="astro-ojxuodky">Runtime and FinOps</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Manual</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="3"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/" class="astro-ojxuodky"><span class="astro-ojxuodky">Manual overview</span></a></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">English</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="4"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/" class="astro-ojxuodky"><span class="astro-ojxuodky">English overview</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/first-agent/" class="astro-ojxuodky"><span class="astro-ojxuodky">Your first agent, end to end</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/agents-and-runs/" class="astro-ojxuodky"><span class="astro-ojxuodky">Agents, versions and runs</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/what-the-gate-stops/" class="astro-ojxuodky"><span class="astro-ojxuodky">What the platform stops before it happens</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/writing-agent-blocks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Writing good blocks</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/slack-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">Slack and channels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/mcp-and-credentials/" class="astro-ojxuodky"><span class="astro-ojxuodky">MCPs and credentials</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/costs-and-limits/" class="astro-ojxuodky"><span class="astro-ojxuodky">Costs and limits</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/policies/" class="astro-ojxuodky"><span class="astro-ojxuodky">Policies</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/autonomy-stages/" class="astro-ojxuodky"><span class="astro-ojxuodky">Draft, copilot and autonomous</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/scopes-and-roles/" class="astro-ojxuodky"><span class="astro-ojxuodky">Companies, areas and roles</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/approving/" class="astro-ojxuodky"><span class="astro-ojxuodky">Approving an action</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/reading-a-run/" class="astro-ojxuodky"><span class="astro-ojxuodky">Reading a run</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/data-barriers/" class="astro-ojxuodky"><span class="astro-ojxuodky">Data labels and barriers</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/context-sharing/" class="astro-ojxuodky"><span class="astro-ojxuodky">Context sharing between agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/simulation-and-regressions/" class="astro-ojxuodky"><span class="astro-ojxuodky">Simulation and regressions</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/auditor-guide/" class="astro-ojxuodky"><span class="astro-ojxuodky">Auditor guide</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed memory</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Duplicate effect recognition</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/gravitee-tickets/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed Gravitee tickets</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/cloudflare-blocklist/" class="astro-ojxuodky"><span class="astro-ojxuodky">Cloudflare block list</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/standing-approvals/" class="astro-ojxuodky"><span class="astro-ojxuodky">Standing approvals</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/elasticsearch-window/" class="astro-ojxuodky"><span class="astro-ojxuodky">Elasticsearch window</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/software-factory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Software factory</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/github-webhooks/" class="astro-ojxuodky"><span class="astro-ojxuodky">GitHub webhooks</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/monitoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">Monitoring event dispatch</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/evidence-collection/" class="astro-ojxuodky"><span class="astro-ojxuodky">Evidence collection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/automating-configuration/" class="astro-ojxuodky"><span class="astro-ojxuodky">Automating configuration</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/experiments/" class="astro-ojxuodky"><span class="astro-ojxuodky">Experiments</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Portuguese</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="5"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/" class="astro-ojxuodky"><span class="astro-ojxuodky">Portuguese overview</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/first-agent/" class="astro-ojxuodky"><span class="astro-ojxuodky">Seu primeiro agente, do começo ao fim</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/agents-and-runs/" class="astro-ojxuodky"><span class="astro-ojxuodky">Agentes, versões e execuções</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/what-the-gate-stops/" class="astro-ojxuodky"><span class="astro-ojxuodky">O que a plataforma para antes de acontecer</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/writing-agent-blocks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Como escrever bons blocos</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/slack-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">Slack e canais</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/mcp-and-credentials/" class="astro-ojxuodky"><span class="astro-ojxuodky">MCPs e credenciais</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/costs-and-limits/" class="astro-ojxuodky"><span class="astro-ojxuodky">Custos e limites</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/policies/" class="astro-ojxuodky"><span class="astro-ojxuodky">Políticas</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/autonomy-stages/" class="astro-ojxuodky"><span class="astro-ojxuodky">Rascunho, copiloto e autônomo</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/scopes-and-roles/" class="astro-ojxuodky"><span class="astro-ojxuodky">Empresas, áreas e papéis</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/approving/" class="astro-ojxuodky"><span class="astro-ojxuodky">Aprovar uma ação</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/reading-a-run/" class="astro-ojxuodky"><span class="astro-ojxuodky">Ler uma execução</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/data-barriers/" class="astro-ojxuodky"><span class="astro-ojxuodky">Labels e barreiras de dados</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/context-sharing/" class="astro-ojxuodky"><span class="astro-ojxuodky">Compartilhamento de contexto entre agentes</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/simulation-and-regressions/" class="astro-ojxuodky"><span class="astro-ojxuodky">Simulação e regressões</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/auditor-guide/" class="astro-ojxuodky"><span class="astro-ojxuodky">Guia do auditor</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Memória governada</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Reconhecimento de efeito duplicado</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/gravitee-tickets/" class="astro-ojxuodky"><span class="astro-ojxuodky">Chamados governados no Gravitee</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/cloudflare-blocklist/" class="astro-ojxuodky"><span class="astro-ojxuodky">Lista de bloqueio Cloudflare</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/standing-approvals/" class="astro-ojxuodky"><span class="astro-ojxuodky">Aprovações permanentes</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/elasticsearch-window/" class="astro-ojxuodky"><span class="astro-ojxuodky">Janela Elasticsearch</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/software-factory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Fábrica de software</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/github-webhooks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Webhooks do GitHub</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/monitoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">Monitorando o despacho de eventos</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/evidence-collection/" class="astro-ojxuodky"><span class="astro-ojxuodky">Coleta de evidências</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/automating-configuration/" class="astro-ojxuodky"><span class="astro-ojxuodky">Automatizando a configuração</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/experiments/" class="astro-ojxuodky"><span class="astro-ojxuodky">Experimentos</span></a></li></ul></details></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Design record</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="6"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/reference/manual-and-design-notes/" class="astro-ojxuodky"><span class="astro-ojxuodky">Manual and design notes</span></a></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Rendered source docs</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="7"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/prd-001-fuseone-agents/" class="astro-ojxuodky"><span class="astro-ojxuodky">PRD-001 · FuseOne Agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/dp-001-data-protection/" class="astro-ojxuodky"><span class="astro-ojxuodky">DP-001 — Data protection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/op-001-running-an-installation/" class="astro-ojxuodky"><span class="astro-ojxuodky">OP-001 — Running an installation</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-001-integration-boundary-and-execution-model/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-001 · Integration boundary and execution model</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-003-conversational-authoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-003 · Conversational authoring</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-004-ledger-volume-and-paging/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-004 · Ledger volume and paging</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-005-interaction-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-005 · Interaction channels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-006-evaluating-agents/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-006 · Evaluating agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-007-drawing-a-process/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-007 · Drawing a process</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-007-standing-approvals/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-007 — Standing approvals, and the taint waiver we rejected</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-008-a-catalogue-by-shape/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-008 · A catalogue by shape</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-009-governed-connectors/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-009 — Governed connectors</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-010-the-shape-of-the-platform/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-010 — The shape of the platform</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-011-durable-agent-execution-and-workflow-engines/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-011 — Durable agent execution and workflow engines</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-012-governed-slack-tickets/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-012 - Governed Slack tickets for Gravitee subscription approval</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-013-software-factory-pilot/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-013 — A software factory, piloted on this repository</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-014-governed-evidence-collection/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-014 — Governed evidence collection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-015-evaluation-datasets-and-experiments/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-015 — Evaluation datasets and experiments</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-016-judge-evaluators/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-016 — Judge evaluators</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-018-authoring-workbench/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-018 — The authoring workbench</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-019-integrations-per-area/" aria-current="page" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-019 — Integrations per area</span></a></li></ul></details></li></ul></details></li></ul><script aria-hidden="true">
+		(() => {
+			const scroller = document.getElementById('starlight__sidebar');
+			if (!window._starlightScrollRestore || !scroller) return;
+			scroller.scrollTop = window._starlightScrollRestore;
+			delete window._starlightScrollRestore;
+		})();
+	</script></sl-sidebar-state-persist><div class="md:sl-hidden"><div class="mobile-preferences sl-flex astro-b5gddk54"><div class="social-icons astro-b5gddk54"><a href="https://github.com/fuseone-io/fuseone-agents" rel="me" class="sl-flex astro-cg55etiy"><span class="sr-only astro-cg55etiy">GitHub</span><svg aria-hidden="true" class="astro-cg55etiy astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-r2p65idu"><span class="sr-only astro-r2p65idu">Select theme</span><svg aria-hidden="true" class="icon label-icon astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-r2p65idu"><option value="dark" class="astro-r2p65idu">Dark</option><option value="light" class="astro-r2p65idu">Light</option><option value="auto" selected class="astro-r2p65idu">Auto</option></select><svg aria-hidden="true" class="icon caret astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script></div></div></div></div></nav><div class="main-frame astro-gqpr5s5a"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-abfeecmu"><aside class="right-sidebar-container print:hidden astro-abfeecmu"><div class="right-sidebar astro-abfeecmu"><div class="lg:sl-hidden astro-q5mffni3"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-5ulgm6bh"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-5ulgm6bh"><details id="starlight__mobile-toc" class="astro-5ulgm6bh"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-5ulgm6bh"><span class="toggle sl-flex astro-5ulgm6bh">On this page<svg aria-hidden="true" class="caret astro-5ulgm6bh astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-5ulgm6bh"></span></summary><div class="dropdown astro-5ulgm6bh"><ul class="isMobile astro-cxyftcne" style="--depth: 0;"><li style="--depth: 0;" class="astro-cxyftcne"><a href="#_top" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Overview</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#decided-by-kleber-on-2026-11-12" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Decided by Kleber on 2026-11-12</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#where-things-stand" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Where things stand</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#the-rule" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">The rule</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#three-scopes-for-one-row" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Three scopes for one row</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-rule-itself" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The rule itself</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#names-are-unique-across-the-installation-in-the-database" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Names are unique across the installation, in the database</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#kind-by-kind" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Kind by kind</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#connector-instances" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Connector instances</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#mcp-servers-and-their-tools" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">MCP servers and their tools</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#model-providers" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Model providers</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#channels" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Channels</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#enforcement" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Enforcement</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#where-a-tools-scope-comes-from" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Where a tool’s scope comes from</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#rollout-readers-a-release-before-writers" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Rollout: readers a release before writers</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#console" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Console</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#audit" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Audit</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#phases" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Phases</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#tests-that-must-exist" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Tests that must exist</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-does-not-change" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this does not change</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/fuseone-agents/docs/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.BcSo_yiZ.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-q5mffni3"><div class="sl-container astro-q5mffni3"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">On this page</h2><ul class="astro-cxyftcne" style="--depth: 0;"><li style="--depth: 0;" class="astro-cxyftcne"><a href="#_top" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Overview</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#decided-by-kleber-on-2026-11-12" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Decided by Kleber on 2026-11-12</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#where-things-stand" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Where things stand</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#the-rule" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">The rule</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#three-scopes-for-one-row" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Three scopes for one row</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-rule-itself" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The rule itself</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#names-are-unique-across-the-installation-in-the-database" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Names are unique across the installation, in the database</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#kind-by-kind" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Kind by kind</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#connector-instances" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Connector instances</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#mcp-servers-and-their-tools" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">MCP servers and their tools</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#model-providers" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Model providers</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#channels" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Channels</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#enforcement" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Enforcement</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#where-a-tools-scope-comes-from" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Where a tool’s scope comes from</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#rollout-readers-a-release-before-writers" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Rollout: readers a release before writers</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#console" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Console</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#audit" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Audit</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#phases" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Phases</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#tests-that-must-exist" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Tests that must exist</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-does-not-change" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this does not change</span></a></li></ul></nav></starlight-toc><script type="module" src="/fuseone-agents/docs/_astro/TableOfContents.astro_astro_type_script_index_0_lang.Csloo1VZ.js"></script></div></div></div></aside><div class="main-pane astro-abfeecmu"><main data-pagefind-body class="astro-vdxcvpsm" lang="en" dir="ltr"><div class="content-panel astro-oil7k7jf"><div class="sl-container astro-oil7k7jf"><h1 id="_top" class="astro-2sm4b3ln">NT-019 — Integrations per area</h1></div></div><div class="content-panel astro-oil7k7jf"><div class="sl-container astro-oil7k7jf"><div class="sl-markdown-content"><p>Status: proposed · 2026-11-12 · extends <a href="../nt-009-governed-connectors/">NT-009</a> and
+<a href="../nt-005-interaction-channels/">NT-005</a> · follows #324</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="what-this-is">What this is</h2><a class="sl-anchor-link" href="#what-this-is"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “What this is”</span></a></div>
+<p>An area is meant to be isolated and autonomous: the people who look after it build its
+agents, and nothing of theirs leaks into another area. Integrations break that today.
+The administrator of <code dir="auto">acme/cx</code> can author and publish agents in <code dir="auto">acme/cx</code>. That
+administrator cannot connect a single tool server, model provider, connector instance or
+channel for them. Every one of those writes is reserved to the platform’s administration.</p>
+<p>#324 stopped the console from offering those writes to people the server refuses. This
+note gives an area its own integrations.</p>
+<p><strong>Who does what.</strong> A person holding <code dir="auto">provider:write</code> on an area (the <code dir="auto">admin</code> and
+<code dir="auto">curator</code> roles, granted on that area) creates, changes and removes the area’s MCP
+servers, model providers, connector instances, channel connections and conversations,
+in the console or through the API. A person holding <code dir="auto">tool:classify</code> on the area
+classifies the tools of the area’s own servers. Agents of the area use the area’s
+integrations and the ones above it. Nothing here is done by an agent.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="decided-by-kleber-on-2026-11-12">Decided by Kleber on 2026-11-12</h2><a class="sl-anchor-link" href="#decided-by-kleber-on-2026-11-12"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Decided by Kleber on 2026-11-12”</span></a></div>
+<ul>
+<li><strong>Each area has its own integrations.</strong> Areas need isolation and autonomy, so integrations
+are per area and are not mixed between areas.</li>
+<li><strong>Classification belongs to the area, under a ceiling set by the platform.</strong> The
+curator of an area classifies the tools of the area’s own servers. A platform
+ruling on the same tool wins, the platform’s policies keep applying to every run, and
+an area never classifies a tool of a server that is not its own.</li>
+<li><strong>An area may register its own model provider, with its own key.</strong> The cost is the
+area’s. Nothing new is needed for that: a run’s spend is already measured against the
+run’s scope (<code dir="auto">budget.Watcher.check</code> reads <code dir="auto">SpentSince(ctx, ceiling.Scope, …)</code>,
+<code dir="auto">internal/budget/alerts.go:121</code>).</li>
+<li><strong>An area may create conversations and its own channel connections.</strong> It can use the
+platform’s Slack connection, or register another app or workspace of its own.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="where-things-stand">Where things stand</h2><a class="sl-anchor-link" href="#where-things-stand"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Where things stand”</span></a></div>
+<p>All of these live in the one <code dir="auto">settings</code> table. Its primary key already carries a
+scope: <code dir="auto">(scope_kind, company_id, area_id, kind, name)</code>, with <code dir="auto">scope_kind</code> one of
+<code dir="auto">installation</code>, <code dir="auto">company</code>, <code dir="auto">area</code> (<code dir="auto">internal/ledger/sql/0004_identity.sql:123-136</code>).
+Each secret is sealed with that scope as associated data (<code dir="auto">internal/settings/settings.go:166,268-271</code>).
+So a row of an area is already possible, and its secret is already bound to it. What is
+missing is everything around the row.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Kind</th><th>Stored at</th><th>Written by</th><th>Runtime respects scope</th></tr></thead><tbody><tr><td>Connector instance</td><td>Caller’s choice: installation, company or area (<code dir="auto">internal/admin/connectors.go:41-59</code>)</td><td><code dir="auto">provider:write</code> at <code dir="auto">default/platform</code></td><td>Yes. <code dir="auto">Layer.Reserve</code> refuses <code dir="auto">ErrOutOfScope</code> (<code dir="auto">internal/connectortools/layer.go:311</code>)</td></tr><tr><td>Channel conversation</td><td>Company or area (<code dir="auto">internal/admin/channel_installation.go:324-329</code>)</td><td>Same</td><td>Yes. <code dir="auto">Configured.For</code> keeps the conversations whose scope contains the run’s (<code dir="auto">internal/channel/configured.go:417</code>)</td></tr><tr><td>Channel connection</td><td>Installation, hard-coded (<code dir="auto">internal/admin/channels.go:327</code>)</td><td>Same</td><td>No scope</td></tr><tr><td>MCP server</td><td>Installation, hard-coded (<code dir="auto">internal/admin/integrations.go:305</code>)</td><td>Same</td><td>No. One catalogue per process. The Gate checks only the agent’s pack (<code dir="auto">internal/gate/checks.go:45-55</code>)</td></tr><tr><td>Model provider</td><td>Installation, hard-coded (<code dir="auto">internal/admin/providers.go:172</code>)</td><td>Same</td><td>No. <code dir="auto">Registry.Planner(providerName, …)</code> takes no scope (<code dir="auto">internal/model/registry.go:227</code>)</td></tr><tr><td>Tool classification</td><td>Installation, literal <code dir="auto">'installation','',''</code> (<code dir="auto">internal/admin/curator.go:83</code>)</td><td><code dir="auto">tool:classify</code> at <code dir="auto">default/platform</code></td><td>Global. <code dir="auto">Curator.List</code> ignores its scope argument (<code dir="auto">curator.go:114-118</code>)</td></tr></tbody></table>
+<p>The write check is the same everywhere. <code dir="auto">configurer()</code> is <code dir="auto">auth.Require(provider:write, adminScope)</code> (<code dir="auto">internal/httpapi/integrations.go:18,236-242</code>, <code dir="auto">admin.go:214-220</code>). It
+asks for the permission at <code dir="auto">default/platform</code> whatever scope the body names. So an
+<code dir="auto">acme/cx</code> administrator cannot write even the <code dir="auto">acme/cx</code> connector instance that the API
+already accepts. Every listing (<code dir="auto">ListIntegrations</code>, <code dir="auto">ListConnectorInstances</code>,
+<code dir="auto">ListChannels</code>) returns every row of every scope (<code dir="auto">internal/httpapi/connections.go:86</code>,
+<code dir="auto">connectors.go:66</code>, <code dir="auto">channels.go:72</code>).</p>
+<p><strong>A latent collision.</strong> <code dir="auto">Layer.SetInstances</code> keys connector instances by
+<code dir="auto">(connector, name)</code> alone (<code dir="auto">internal/connectortools/layer.go:51-54,114</code>), and a tool id
+is <code dir="auto">connector.name.operation</code> with no scope (<code dir="auto">internal/connectortools/types.go:78-97</code>).
+Two areas each holding <code dir="auto">jira.support</code> would overwrite each other in memory. Today only the
+platform writes, so nobody has done it. Once areas write, somebody will.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="the-rule">The rule</h2><a class="sl-anchor-link" href="#the-rule"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “The rule”</span></a></div>
+<div class="sl-heading-wrapper level-h3"><h3 id="three-scopes-for-one-row">Three scopes for one row</h3><a class="sl-anchor-link" href="#three-scopes-for-one-row"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Three scopes for one row”</span></a></div>
+<p>A row has three scopes, and the code converts between them in one place:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Stored as (<code dir="auto">scope_kind</code>, company, area)</th><th>Runtime scope (what a run’s scope must be inside)</th><th>Authorization scope (what a writer must hold)</th></tr></thead><tbody><tr><td><code dir="auto">installation</code>, <code dir="auto">''</code>, <code dir="auto">''</code></td><td><code dir="auto">{Company: Installation}</code>, which contains every scope</td><td><code dir="auto">adminScope</code> (<code dir="auto">default/platform</code>), unchanged</td></tr><tr><td><code dir="auto">company</code>, <code dir="auto">acme</code>, <code dir="auto">''</code></td><td><code dir="auto">acme</code></td><td><code dir="auto">acme</code>, or <code dir="auto">adminScope</code></td></tr><tr><td><code dir="auto">area</code>, <code dir="auto">acme</code>, <code dir="auto">cx</code></td><td><code dir="auto">acme/cx</code></td><td><code dir="auto">acme/cx</code>, or <code dir="auto">adminScope</code></td></tr></tbody></table>
+<ul>
+<li>The stored and runtime columns are what <code dir="auto">connectorScopes</code> does today for connector
+instances (<code dir="auto">internal/admin/connectors.go:41-59</code>). It becomes the one conversion every
+kind uses.</li>
+<li><strong>A row of the installation keeps today’s check.</strong> Writing it still needs the
+permission at <code dir="auto">adminScope</code>, so nobody who configures integrations today loses that
+right. Applying <code dir="auto">Require(target)</code> literally would ask for the permission at the
+installation, which only root administrators hold.</li>
+<li><strong>The platform’s administration governs every area.</strong> A grant at <code dir="auto">adminScope</code> writes
+any company’s or area’s row, as it writes every row today. <code dir="auto">adminScope</code> does not
+contain <code dir="auto">acme/cx</code> by <code dir="auto">Scope.Contains</code>, so this is an explicit second condition, not a
+consequence of the hierarchy.</li>
+</ul>
+<div class="sl-heading-wrapper level-h3"><h3 id="the-rule-itself">The rule itself</h3><a class="sl-anchor-link" href="#the-rule-itself"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “The rule itself”</span></a></div>
+<p>One rule, for every kind:</p>
+<ol>
+<li>
+<p><strong>A resource belongs to the scope it is stored at.</strong> An area’s resource is stored at
+<code dir="auto">area</code> with its company and area, and a company’s at <code dir="auto">company</code>. The platform’s stays
+at <code dir="auto">installation</code>.</p>
+</li>
+<li>
+<p><strong>Writing it needs the permission at its authorization scope</strong>, from the table above.
+<code dir="auto">configurer()</code> takes the target and checks <code dir="auto">Require(provider:write, target)</code>, or the
+permission at <code dir="auto">adminScope</code>. A grant on <code dir="auto">acme</code> writes <code dir="auto">acme</code> and every area under it,
+and a grant on <code dir="auto">acme/cx</code> writes only <code dir="auto">acme/cx</code>. That is <code dir="auto">Scope.Contains</code>, as for
+agents (<code dir="auto">internal/domain/ids.go:80-90</code>).</p>
+</li>
+<li>
+<p><strong>A run uses only resources whose runtime scope contains the run’s scope.</strong>
+Connectors and conversations already do this. MCP servers, providers and channel
+connections gain the same check, at every door (see <a href="#enforcement">Enforcement</a>).</p>
+</li>
+<li>
+<p><strong>A configuration listing shows what the caller configures, and nothing to anyone
+else.</strong> The configuration listings (<code dir="auto">ListIntegrations</code>, <code dir="auto">ListConnectorInstances</code>,
+<code dir="auto">ListChannels</code>, and the <code dir="auto">Get</code> of each kind) carry addresses: an MCP server’s URL or
+command, a connector’s hosts and databases, a provider’s base URL, a channel’s
+settings. They are not for authors.</p>
+<p><code dir="auto">author</code> holds <code dir="auto">tool:read</code> (<code dir="auto">internal/domain/access.go</code>, <code dir="auto">RoleAuthor</code>). #324 opened
+only the tool catalogue to <code dir="auto">tool:read</code>, because it names no address. So <code dir="auto">V</code> is the
+scopes where the caller holds <code dir="auto">provider:write</code> (<code dir="auto">auth.VisibleScopes(ctx, PermProviderWrite)</code>), which <code dir="auto">admin</code> and <code dir="auto">curator</code> hold and <code dir="auto">author</code> does not. A row is
+listed when either holds:</p>
+<ul>
+<li><strong>Inherited:</strong> its runtime scope contains a scope in <code dir="auto">V</code>. An area administrator sees
+the company’s rows and the platform’s, marked inherited, and read-only unless rule 2
+lets the caller write them.</li>
+<li><strong>Governed:</strong> a scope in <code dir="auto">V</code> contains its runtime scope, or the caller holds
+<code dir="auto">provider:write</code> at <code dir="auto">adminScope</code>. A company administrator sees every area of the
+company, and the platform’s administration sees every row.</li>
+</ul>
+<p>Nothing else is listed. An area never sees a sibling area’s rows. Tests cover an area,
+a company and a platform caller, and an author, who is refused 403.</p>
+</li>
+<li>
+<p><strong>What an author picks from is a reduced answer, on <code dir="auto">tool:read</code>.</strong> Building an agent
+needs names, not addresses:</p>
+<ul>
+<li><strong>Tools:</strong> <code dir="auto">ListTools</code>, as #324 left it.</li>
+<li><strong>Providers and their models:</strong> a new <code dir="auto">GET /providers</code>, which answers name, kind,
+models and whether each is usable. It never answers a base URL or anything sealed.
+The agent editor reads providers from <code dir="auto">ListIntegrations</code> today
+(<code dir="auto">web/src/features/agents/agent-serving-fields.tsx</code>, <code dir="auto">agent-fallback-fields.tsx</code>,
+<code dir="auto">web/src/features/experiments/experiment-config-fields.tsx</code>). That listing needs
+<code dir="auto">tool:read</code> at <code dir="auto">adminScope</code> (<code dir="auto">internal/httpapi/connections.go:65-66</code>), so an area
+author cannot load providers at all. The editor moves to the reduced answer.</li>
+</ul>
+<p><strong>Each reduced answer is asked for one target scope</strong>: the scope of the agent being
+edited, or chosen for a new one. A union of the caller’s scopes would be wrong in
+both directions. An author of <code dir="auto">cx</code> and <code dir="auto">finance</code> editing a <code dir="auto">cx</code> agent would be offered
+<code dir="auto">finance</code>’s tools, which <code dir="auto">checkScope</code> then stops. And a company author editing an
+agent of <code dir="auto">acme/cx</code> would see only the rows that contain <code dir="auto">acme</code>, and miss <code dir="auto">acme/cx</code>’s
+own.</p>
+<ul>
+<li><code dir="auto">ListTools</code> and <code dir="auto">GET /providers</code> take a <code dir="auto">scope</code> parameter, <code dir="auto">company</code> or
+<code dir="auto">company/area</code>.</li>
+<li><strong>Authorization:</strong> the caller holds <code dir="auto">tool:read</code> at a scope that contains the target.
+An <code dir="auto">acme</code> grant asks for <code dir="auto">acme/cx</code>, and an <code dir="auto">acme/cx</code> grant cannot ask for
+<code dir="auto">acme/finance</code>. Otherwise the answer is 404. A 403 would confirm that an area the
+caller cannot see exists.</li>
+<li><strong>The answer:</strong> every row whose runtime scope contains the target, by rule 3, and
+only those. That is exactly what an agent stored at the target can run, so what the
+editor offers and what <code dir="auto">checkScope</code> admits are the same set.</li>
+<li><strong>Without <code dir="auto">scope</code></strong>, an answer holds only the installation’s rows, which every
+scope inherits. Today’s callers keep working, and nothing of any area is answered
+without naming it.</li>
+<li>The agent editor, the fallback fields and the experiment form pass the agent’s
+scope. The experiment form passes the experimented agent’s scope.</li>
+</ul>
+</li>
+</ol>
+<div class="sl-heading-wrapper level-h3"><h3 id="names-are-unique-across-the-installation-in-the-database">Names are unique across the installation, in the database</h3><a class="sl-anchor-link" href="#names-are-unique-across-the-installation-in-the-database"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Names are unique across the installation, in the database”</span></a></div>
+<p>A tool id (<code dir="auto">server.tool</code>, <code dir="auto">connector.instance.operation</code>) has no scope in it, and
+neither does the name an inbound message is matched by (<code dir="auto">settings.Store.Named</code>,
+<code dir="auto">internal/settings/secrets.go:111-116</code>). Putting a scope into every id would touch every
+pack, policy, ruling and ledger step ever recorded. So the name stays the identity, and
+it is unique per kind across the installation.</p>
+<ul>
+<li>
+<p><strong>The settings primary key already makes a name unique within one scope</strong>, whatever
+the connector. A connector instance is stored by its name alone, with its connector
+type in the value (<code dir="auto">internal/admin/connector_write.go:112</code>). So <code dir="auto">jira.prod</code> and
+<code dir="auto">sql.prod</code> cannot both exist in one scope today.</p>
+</li>
+<li>
+<p><strong>For connector instances, the name alone becomes unique across the installation,
+not <code dir="auto">(connector, name)</code>.</strong> This is a decision, and it is stricter than the tool id
+needs: <code dir="auto">jira.prod</code> in one area and <code dir="auto">sql.prod</code> in another do not collide as tool ids.
+The name is chosen because the name alone is already the identity elsewhere:</p>
+<ul>
+<li>within one scope, by the primary key;</li>
+<li>in bindings, where <code dir="auto">boundVault</code> finds the bound Vault by name alone across every
+scope that contains the consumer, and only then checks it is a Vault
+(<code dir="auto">internal/connectortools/sql_config.go:169-190</code>). A same-named instance of another
+connector in a containing scope makes the binding ambiguous today.</li>
+</ul>
+<p><strong>Incompatibility, stated:</strong> two instances of different connectors may no longer share
+a name in different scopes. Phase 0’s migration check names any that exist, and the
+release notes say so.</p>
+</li>
+<li>
+<p><strong>The database enforces it.</strong> Phase 0’s migration creates a partial unique index:</p>
+<div class="expressive-code"><link rel="stylesheet" href="/fuseone-agents/docs/_astro/ec.w36nc.css"><script type="module" src="/fuseone-agents/docs/_astro/ec.0vx5m.js"></script><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="sql"><code><div class="ec-line"><div class="code"><span style="--0:#C792EA;--1:#8844AE">create</span><span style="--0:#D6DEEB;--1:#403F53"> </span><span style="--0:#C792EA;--1:#8844AE">unique index</span><span style="--0:#D6DEEB;--1:#403F53"> </span><span style="--0:#82AAFF;--1:#3B61B0">settings_integration_names</span><span style="--0:#D6DEEB;--1:#403F53"> </span><span style="--0:#C792EA;--1:#8844AE">on</span><span style="--0:#D6DEEB;--1:#403F53"> settings (kind, </span><span style="--0:#C792EA;--1:#8844AE">name</span><span style="--0:#D6DEEB;--1:#403F53">)</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C792EA;--1:#8844AE">where</span><span style="--0:#D6DEEB;--1:#403F53"> kind </span><span style="--0:#C792EA;--1:#8844AE">in</span><span style="--0:#D6DEEB;--1:#403F53"> (</span><span style="--0:#D9F5DD;--1:#111111">'</span><span style="--0:#ECC48D;--1:#984E4D">mcp_server</span><span style="--0:#D9F5DD;--1:#111111">'</span><span style="--0:#D6DEEB;--1:#403F53">, </span><span style="--0:#D9F5DD;--1:#111111">'</span><span style="--0:#ECC48D;--1:#984E4D">model_provider</span><span style="--0:#D9F5DD;--1:#111111">'</span><span style="--0:#D6DEEB;--1:#403F53">, </span><span style="--0:#D9F5DD;--1:#111111">'</span><span style="--0:#ECC48D;--1:#984E4D">connector_instance</span><span style="--0:#D9F5DD;--1:#111111">'</span><span style="--0:#D6DEEB;--1:#403F53">,</span></div></div><div class="ec-line"><div class="code"><span class="indent">               </span><span style="--0:#D9F5DD;--1:#111111">'</span><span style="--0:#ECC48D;--1:#984E4D">channel</span><span style="--0:#D9F5DD;--1:#111111">'</span><span style="--0:#D6DEEB;--1:#403F53">, </span><span style="--0:#D9F5DD;--1:#111111">'</span><span style="--0:#ECC48D;--1:#984E4D">channel_conversation</span><span style="--0:#D9F5DD;--1:#111111">'</span><span style="--0:#D6DEEB;--1:#403F53">);</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="create unique index settings_integration_names on settings (kind, name)where kind in (&#x27;mcp_server&#x27;, &#x27;model_provider&#x27;, &#x27;connector_instance&#x27;,               &#x27;channel&#x27;, &#x27;channel_conversation&#x27;);"><div></div></button></div></figure></div>
+<ul>
+<li>It binds every binary, the previous one included. An older replica that writes a
+taken name, during the rollout or after a rollback, gets a unique violation.
+It never writes a duplicate.</li>
+<li>Two writers racing for one name cannot both commit: the index serialises them.</li>
+<li>Kinds that legitimately repeat a name across scopes stay out of it: classifications
+(see <a href="#classification-under-the-platforms-ceiling">Classification</a>), personal MCP
+credentials, channel identities and budgets.</li>
+</ul>
+</li>
+<li>
+<p><strong>A refused write</strong> answers 409 <code dir="auto">fuseone:integration-name-taken</code>. The new binary
+maps the unique violation of that index to the 409. The refusal says the name is
+taken, and never by whom: another area’s names are not the caller’s to read.</p>
+</li>
+<li>
+<p><strong>Existing rows.</strong> The migration first counts names held in more than one scope. If
+there are any, it raises an error naming each duplicate’s kind and name, and creates
+no index, so the upgrade stops before anything changes. A read-only query does the
+same count ahead of the release against every installation that will take it, so a
+stopped upgrade is never the first anyone hears of it. The platform’s administration
+renames one of the two.</p>
+</li>
+<li>
+<p><strong>Rollback.</strong> The index outlives any rollback, because migrations do not go back.
+Below phase 0, a binary that writes a taken name gets a 500 rather than the 409. That
+is fail-closed, and is stated in phase 0’s release notes.</p>
+</li>
+</ul>
+<p>The collision above therefore cannot happen. The connector layer is still re-keyed by
+scope as a guard. A duplicate found while loading rows is refused, never overwritten.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="kind-by-kind">Kind by kind</h2><a class="sl-anchor-link" href="#kind-by-kind"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Kind by kind”</span></a></div>
+<div class="sl-heading-wrapper level-h3"><h3 id="connector-instances">Connector instances</h3><a class="sl-anchor-link" href="#connector-instances"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Connector instances”</span></a></div>
+<p>The instance already has the scope. Only the doors change:</p>
+<ul>
+<li><code dir="auto">PutConnectorInstance</code>, <code dir="auto">DeleteConnectorInstance</code> and <code dir="auto">GetConnectorInstance</code> check
+<code dir="auto">provider:write</code> at the instance’s scope, not at the platform’s.</li>
+<li><code dir="auto">ListConnectorInstances</code> is filtered by rule 4, on <code dir="auto">provider:write</code>.</li>
+<li>The connector catalogue (<code dir="auto">ListConnectorCatalog</code>) needs <code dir="auto">tool:classify</code> at the
+platform’s scope today (<code dir="auto">internal/httpapi/connectors.go:30</code>). It names connector types,
+not instances or credentials, so it opens to <code dir="auto">tool:read</code> in any scope, as #324 did for
+tools.</li>
+<li><strong>Bindings stay inside the scope.</strong> A SQL or Gravitee instance of an area may bind
+only a Vault instance whose scope contains its own. <code dir="auto">boundVault</code> already checks this
+(<code dir="auto">internal/connectortools/sql_config.go:169-173</code>). A test pins it from the area’s door.</li>
+</ul>
+<div class="sl-heading-wrapper level-h3"><h3 id="mcp-servers-and-their-tools">MCP servers and their tools</h3><a class="sl-anchor-link" href="#mcp-servers-and-their-tools"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “MCP servers and their tools”</span></a></div>
+<ul>
+<li>A server is stored at the caller’s scope. Its credentials, headers, OAuth and GitHub
+App key are sealed in that row, as today, and so bound to that scope.</li>
+<li><strong>Every reveal, probe, rediscovery and removal reads at the row’s own scope.</strong> Each one
+hard-codes the installation today (<code dir="auto">internal/admin/integrations.go:536,803,1024,1036</code>,
+<code dir="auto">internal/admin/mcp_rediscovery.go:33,116</code>). A reveal at a scope that does not hold the
+row finds nothing, and the AAD makes that a cryptographic fact, not only a query.</li>
+<li><strong>The catalogue knows each tool’s scope.</strong> A tool entry carries the scope of the
+server that declares it.
+<ul>
+<li><code dir="auto">ListTools</code> already returns tools to <code dir="auto">tool:read</code> in any scope (#324). It now keeps
+only the tools usable from the target scope it is asked for, by rule 5.</li>
+<li>Today it filters only who declares each tool (<code dir="auto">internal/httpapi/admin.go:79-84</code>).</li>
+</ul>
+</li>
+<li><strong>Personal credentials</strong> (<code dir="auto">mcp_user_credential</code>) stay keyed by server and person
+(<code dir="auto">internal/admin/integrations.go:752</code>). A person stores one only for a server they
+can see.</li>
+</ul>
+<div class="sl-heading-wrapper level-h4"><h4 id="classification-under-the-platforms-ceiling">Classification under the platform’s ceiling</h4><a class="sl-anchor-link" href="#classification-under-the-platforms-ceiling"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Classification under the platform’s ceiling”</span></a></div>
+<p>A tool has at most <strong>two rulings</strong>, both of kind <code dir="auto">tool_classification</code> and named by
+the tool id. They are told apart by the scope they are stored at, which the <code dir="auto">settings</code>
+key already allows.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Ruling</th><th>Stored at</th><th>Written by</th><th>Door</th></tr></thead><tbody><tr><td><strong>Owner’s</strong></td><td>The server’s own scope (<code dir="auto">company</code> or <code dir="auto">area</code>)</td><td><code dir="auto">tool:classify</code> at the server’s authorization scope</td><td><code dir="auto">ClassifyTool</code> with <code dir="auto">level: owner</code></td></tr><tr><td><strong>Platform’s</strong>, the ceiling</td><td><code dir="auto">installation</code>, <code dir="auto">''</code>, <code dir="auto">''</code>, as every ruling is today (<code dir="auto">internal/admin/curator.go:83</code>)</td><td><code dir="auto">tool:classify</code> at <code dir="auto">adminScope</code></td><td><code dir="auto">ClassifyTool</code> with <code dir="auto">level: platform</code>, today’s behaviour, the default</td></tr></tbody></table>
+<ul>
+<li>For a server of the installation, the two are the same row. There is one ruling, as
+today.</li>
+<li><strong>The owner’s door</strong> refuses a tool whose server is not stored at a scope the caller
+may classify. That covers the platform’s own servers and a sibling area’s servers.
+<code dir="auto">level: owner</code> on a server of the installation is the platform’s door, and needs
+<code dir="auto">adminScope</code>.</li>
+<li><strong>Withdrawing the ceiling.</strong> A new door, <code dir="auto">DELETE /admin/tools/{tool}/classification</code>
+with <code dir="auto">level: platform</code>, needs <code dir="auto">tool:classify</code> at <code dir="auto">adminScope</code> and removes the
+platform’s row. Nothing lets an owner write or remove the platform’s row.</li>
+</ul>
+<p><strong>Precedence, exactly.</strong> <code dir="auto">Catalog.Sync</code> resolves each tool on its own:</p>
+<ol>
+<li>If a platform row exists for the tool, it is the ruling. The owner’s row is ignored
+for that tool, and listed as “overridden by the platform”.</li>
+<li>Otherwise, the owner’s row is the ruling.</li>
+<li>Otherwise, there is none, and the tool never executes, as today
+(<code dir="auto">internal/gate/checks.go:58-60</code>).</li>
+</ol>
+<p>The ruling chosen in step 1 or 2 is then checked against the current definition digest
+(<code dir="auto">internal/tools/classify.go:36-77</code>). If it is stale, the tool is stale. It does <strong>not</strong>
+fall back to the other row: a ceiling the platform set against an older definition
+stops the tool until somebody re-rules. It never quietly hands the decision back to the
+owner.</p>
+<ul>
+<li><code dir="auto">Curator.List</code> returns each row’s stored scope, which it drops today
+(<code dir="auto">internal/admin/curator.go:114-118</code>). The resolution needs it.</li>
+<li><strong>Against the previous binary.</strong> An older reader sees two rows with one name, and
+applies whichever its query returns last. So no owner row is written before every
+replica resolves precedence: phase 2’s readers’ release ships first (see
+<a href="#rollout-readers-a-release-before-writers">Rollout</a>).</li>
+<li><strong>Policies do not move.</strong> <code dir="auto">policy:write</code> stays at the platform’s scope. Every policy,
+approval rule and standing approval applies to an area’s tool exactly as to the
+platform’s: the Gate does not ask who classified the tool.</li>
+</ul>
+<p>The risk the decision accepts: an area can call <code dir="auto">read</code> a tool that writes. The ceiling
+limits who is exposed. The tool can only be reached by the area’s own agents, so the
+mistake stays inside the area that made it. It also stays visible: the ruling names its
+author, the platform’s screen lists every owner ruling, and the platform can overrule
+any of them.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="model-providers">Model providers</h3><a class="sl-anchor-link" href="#model-providers"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Model providers”</span></a></div>
+<ul>
+<li>
+<p>A provider is stored at the caller’s scope, its key sealed in the row.</p>
+</li>
+<li>
+<p><strong>The registry knows each provider’s scope</strong>, and <code dir="auto">Planner</code> takes the run’s scope. A
+provider whose scope does not contain the run’s is not found. The error names the
+provider, never its key or its owner. <code dir="auto">Usable</code> (<code dir="auto">internal/model/registry.go:157</code>)
+takes the scope too.</p>
+</li>
+<li>
+<p><strong>Every door that names a provider checks it against the scope it will run in.</strong>
+Publication is not enough, because an experiment can replace the provider and a judge
+names its own:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Door</th><th>Where</th><th>What it checks</th></tr></thead><tbody><tr><td>Publication</td><td><code dir="auto">Publisher.Publish</code>, the HTTP route, the disk sync</td><td>The main pair and the fallback (<code dir="auto">Spec.Fallback</code>), against the agent’s scope</td></tr><tr><td>Starting an experiment</td><td><code dir="auto">StartExperiment</code> → <code dir="auto">unservedPair</code> (<code dir="auto">internal/httpapi/experiments_intention.go:115-133</code>)</td><td>The provider the intention runs on, which may be <code dir="auto">intent.Config.Provider</code> instead of the version’s, against the agent’s scope</td></tr><tr><td>Planning an experiment run</td><td><code dir="auto">ResolveExperiment</code> (<code dir="auto">internal/spec/resolver_experiment.go:24</code>, where <code dir="auto">config.Provider</code> replaces the pair’s)</td><td>The same, against the run’s scope, through <code dir="auto">Planner</code></td></tr><tr><td>Opening a judgment</td><td>The writer of #298’s release 2, not built yet</td><td>The judge’s provider, against the experiment’s scope. That release cannot ship without this check</td></tr><tr><td>Planning a judge run</td><td><code dir="auto">ResolveJudge</code> (<code dir="auto">internal/spec/resolver_judge.go:39-51</code>)</td><td><code dir="auto">opening.Provider</code>, against the run’s scope, through <code dir="auto">Planner</code></td></tr></tbody></table>
+<p>The doors at start and opening answer early and with a reason. The checks in the
+resolvers hold against a row that reached the ledger any other way.</p>
+</li>
+<li>
+<p><strong>Cost.</strong> Runs are already charged to their own scope, so an area provider’s spend is
+the area’s. Prices (<code dir="auto">/admin/prices</code>) stay the platform’s.</p>
+</li>
+</ul>
+<div class="sl-heading-wrapper level-h3"><h3 id="channels">Channels</h3><a class="sl-anchor-link" href="#channels"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Channels”</span></a></div>
+<ul>
+<li>A channel connection is stored at the caller’s scope. Its secret is sealed in the row,
+and <code dir="auto">ChannelDoor.Secrets</code> reads it at that scope (<code dir="auto">internal/admin/channel_identity.go:444-448</code>).</li>
+<li><strong>A conversation names a connection whose scope contains its own.</strong> A conversation of
+<code dir="auto">acme/cx</code> may use the platform’s Slack connection or <code dir="auto">acme/cx</code>’s own, and never one of
+<code dir="auto">acme/finance</code>.</li>
+<li><strong>Inbound traffic</strong> finds the conversation by its unique name, as today. It is then
+dropped unless the connection it arrived on is the one the conversation names. An
+event cannot reach an area’s conversation through another area’s app.</li>
+<li><strong>What stays at the platform:</strong>
+<ul>
+<li><strong>Channel identities.</strong> These are the bindings of a person to their Slack user
+(<code dir="auto">internal/admin/channel_identity.go:161</code>), and they belong to the person, not to an
+area.</li>
+<li><strong>Installation-wide conversations</strong>, which need <code dir="auto">company:write</code> at the installation
+(<code dir="auto">internal/httpapi/channels.go:228-233</code>).</li>
+<li><strong>Choosing a <code dir="auto">runAs</code> user</strong>, which needs <code dir="auto">identity:write</code> (<code dir="auto">channels.go:361</code>).</li>
+</ul>
+</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="enforcement">Enforcement</h2><a class="sl-anchor-link" href="#enforcement"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Enforcement”</span></a></div>
+<p>A scope check only at the doors that write would be a check in the console. A run must
+not reach another area’s integration however the agent was published, restored or
+imported. No effect bypasses the Gate.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Door</th><th>Check</th></tr></thead><tbody><tr><td>Publication (console, API, Terraform, disk sync)</td><td>Every tool in the pack and every provider the agent names is usable from the agent’s scope. Otherwise the answer is 422, naming the tool or provider</td></tr><tr><td><code dir="auto">tools</code> invocation</td><td>A call to a tool whose server’s scope does not contain the run’s is refused <code dir="auto">ErrOutOfScope</code> before the server is contacted. This mirrors <code dir="auto">Layer.Reserve</code> (<code dir="auto">internal/connectortools/layer.go:311</code>)</td></tr><tr><td>Gate</td><td>A new check, <code dir="auto">checkScope</code>, beside <code dir="auto">checkContract</code> (<code dir="auto">internal/gate/gate.go:73</code>). The Gate cannot judge scope today: its <code dir="auto">Request</code> carries the run’s scope and the tool’s effect, but not where the tool belongs (<code dir="auto">internal/gate/pack.go:57-70</code>). <code dir="auto">Request</code> gains <code dir="auto">ToolScope</code>, and the check stops the call unless <code dir="auto">ToolScope</code> contains <code dir="auto">Scope</code>. That stop is recorded in the ledger as a <code dir="auto">blocked</code> verdict with its reason. Where <code dir="auto">ToolScope</code> comes from is the next section</td></tr><tr><td>Model resolution</td><td><code dir="auto">Planner</code> with the run’s scope, so a provider out of scope is not found</td></tr><tr><td>Channel delivery</td><td><code dir="auto">Configured.For</code> as today, plus the connection’s scope</td></tr><tr><td>Classification sync</td><td>The precedence in <a href="#classification-under-the-platforms-ceiling">Classification</a>: the platform’s row, else the owner’s, never a fall-back on stale</td></tr></tbody></table>
+<div class="sl-heading-wrapper level-h3"><h3 id="where-a-tools-scope-comes-from">Where a tool’s scope comes from</h3><a class="sl-anchor-link" href="#where-a-tools-scope-comes-from"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Where a tool’s scope comes from”</span></a></div>
+<p>The engine reads a tool’s effect through the layer chain the worker builds
+(<code dir="auto">cmd/agentd/worker_parts.go:231-247</code>): <code dir="auto">workitem</code> → <code dir="auto">memory</code> → <code dir="auto">contextshare</code> → the
+native connector layer → the MCP catalogue. Each layer answers for the ids it claims and
+passes the rest down. <code dir="auto">ToolScope</code> travels the same way, through a <code dir="auto">ScopeOf(tool)</code> beside
+the effect lookup (<code dir="auto">internal/engine/workitem.go:56</code>, <code dir="auto">act.go:118,178-184</code>):</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Layer</th><th>Tools</th><th><code dir="auto">ToolScope</code></th></tr></thead><tbody><tr><td><code dir="auto">workitem</code>, <code dir="auto">memory</code>, <code dir="auto">contextshare</code></td><td>The platform’s own tools they serve: claims and links, memory, shared context</td><td>The installation’s runtime scope <code dir="auto">{Company: Installation}</code></td></tr><tr><td>Native connector layer</td><td>The platform’s own <code dir="auto">$fuseone.ticket.answer</code> (<code dir="auto">internal/connectortools/layer.go:123-125</code>)</td><td>The installation’s runtime scope, as for the three above</td></tr><tr><td>Native connector layer</td><td><code dir="auto">connector.instance.operation</code></td><td>The instance’s runtime scope</td></tr><tr><td>MCP catalogue</td><td><code dir="auto">server.tool</code></td><td>The server’s runtime scope</td></tr><tr><td>None claims the id</td><td>—</td><td>Zero, which contains nothing (<code dir="auto">internal/domain/ids.go:80-90</code>), so the call is stopped</td></tr></tbody></table>
+<p><strong>The platform’s tools are the explicit set that already exists</strong>, not a list per layer.
+<code dir="auto">ToolID.PlatformOwned()</code> names them (<code dir="auto">internal/domain/ids.go:22-31</code>):
+<code dir="auto">ToolContextRead</code>, <code dir="auto">ToolTicketAnswer</code>, <code dir="auto">ToolMemoryFind</code>, <code dir="auto">ToolMemorySuggest</code>,
+<code dir="auto">ToolWorkItemClaim</code> and <code dir="auto">ToolWorkItemLink</code>. The set is spread across layers: the ticket
+answer is served by the connector layer, not by a platform layer of its own.</p>
+<ul>
+<li><strong>The set becomes a list.</strong> <code dir="auto">domain.PlatformTools()</code> returns it, and <code dir="auto">PlatformOwned</code>
+reads from it, so the test below and the method cannot disagree.</li>
+<li><strong>Each id in the set is answered by the layer that serves it</strong>, with the
+installation’s runtime scope, explicitly. No layer derives it, and no default supplies
+it. A zero-value fallback would stop every one of them the day <code dir="auto">checkScope</code> ships. A
+“no scope means everywhere” default would let an unclaimed id through.</li>
+<li><strong>An id outside the set</strong> gets the scope of the server or instance that declares it,
+or zero.</li>
+<li><strong>The anchor test in phase 0 iterates <code dir="auto">PlatformTools()</code>.</strong> It does not use a
+hand-picked sample. It builds the worker’s real chain (<code dir="auto">workerParts.deps</code>), and for
+every id in the set asserts that <code dir="auto">ScopeOf</code> is the installation’s and that the Gate
+admits it from an <code dir="auto">acme/cx</code> run. A tool added to the set later is covered without
+editing the test.
+<ul>
+<li>Sabotage: drop the ticket answer’s declaration from the connector layer. The test
+must name <code dir="auto">$fuseone.ticket.answer</code>, stopped by <code dir="auto">checkScope</code>.</li>
+<li>A second test asserts an unclaimed id is stopped, so the anchor cannot pass by
+<code dir="auto">checkScope</code> being absent.</li>
+</ul>
+</li>
+</ul>
+<p>The Gate’s check is the one the ledger shows. The check at invocation is a second wall
+beneath it. Neither replaces the other: a test of one does not prove the other.</p>
+<p>The check at invocation is what holds against a stale definition. If an agent was
+published while a tool was in scope, and its server moved or was removed, the next call
+is refused there.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="rollout-readers-a-release-before-writers">Rollout: readers a release before writers</h2><a class="sl-anchor-link" href="#rollout-readers-a-release-before-writers"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Rollout: readers a release before writers”</span></a></div>
+<p>A rule only in the new binary is not yet a guarantee. Area rows written while an older
+replica serves would be loaded by it without a scope check. Its single catalogue would
+offer an area’s MCP tools to any run whose pack names them, and its registry would hand
+an area’s key to any agent naming the provider.</p>
+<p>So it ships in two steps per kind:</p>
+<ul>
+<li><strong>Readers first.</strong> Every reader of the kind learns scopes and enforces rule 3. A row
+stored at a scope it does not know how to check is refused, never treated as the
+platform’s. No door writes an area row yet. Nothing changes for any installation,
+because every row is still the platform’s.</li>
+<li><strong>Writers next</strong>, only after the readers’ release runs on every replica: the doors
+accept area scopes, the listings filter, and the console opens the pages.</li>
+</ul>
+<p>Rolling back from a writers’ release to its readers’ release is safe. Below the readers’
+release it is not: an older binary would treat area rows as global. The release notes of
+each readers’ release state that floor.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="console">Console</h2><a class="sl-anchor-link" href="#console"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Console”</span></a></div>
+<ul>
+<li>Integrations stops being a page only the platform opens. <code dir="auto">IntegrationsGate</code>
+(<code dir="auto">web/src/features/integrations/integrations-gate.tsx</code>) and the <code dir="auto">platformPermission</code>
+on the nav item (<code dir="auto">web/src/components/layout/nav.ts:121-127</code>) give way to
+<code dir="auto">provider:write</code> in any scope, from <code dir="auto">/me.can</code>.</li>
+<li><code dir="auto">provider:write</code> and <code dir="auto">tool:classify</code> leave <code dir="auto">platformOnly</code>
+(<code dir="auto">internal/httpapi/httpwrite.go:84-89</code>), each in the change that moves its check to
+the resource’s scope, as that list’s comment requires.</li>
+<li>Every form gains a scope field. It defaults to the caller’s own area, and offers only
+the scopes where the caller holds the permission.</li>
+<li>Inherited resources are shown with their origin (“da plataforma”, “da empresa”) and
+without edit actions.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="audit">Audit</h2><a class="sl-anchor-link" href="#audit"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Audit”</span></a></div>
+<p><code dir="auto">admin/write.go</code> records each write in <code dir="auto">admin_events</code> at the scope its caller hands it
+(<code dir="auto">internal/admin/write.go:50-58,83-101</code>). Today every integrations handler hands it
+<code dir="auto">adminScope</code> (<code dir="auto">internal/httpapi/integrations.go:104,177,222</code>). They hand it the
+resource’s own scope instead. An area’s trail then shows its own integrations, and the
+platform’s trail shows every scope.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="phases">Phases</h2><a class="sl-anchor-link" href="#phases"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Phases”</span></a></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>What</th><th>Released as</th></tr></thead><tbody><tr><td>0</td><td>The unique index on names, with its duplicate check and the 409. The connector layer keyed by scope. The Gate’s <code dir="auto">checkScope</code>, for every tool, with <code dir="auto">ToolScope</code> declared by every layer and the platform’s own tools anchored</td><td>One release. It changes nothing for an installation, because every row is the platform’s and contains every run. Its notes state that a binary below it answers 500 on a taken name</td></tr><tr><td>1</td><td>Connector instances: doors at the instance’s scope, filtered listing, catalogue on <code dir="auto">tool:read</code></td><td>Writers only. The readers already check scope</td></tr><tr><td>2</td><td>MCP servers and classification</td><td>Readers, then writers</td></tr><tr><td>3</td><td>Model providers</td><td>Readers, then writers</td></tr><tr><td>4</td><td>Channel connections</td><td>Readers, then writers. Conversations change only their doors, like phase 1</td></tr><tr><td>5</td><td>Console: gate, scope field, inherited marks</td><td>With each writers’ release, per kind</td></tr></tbody></table>
+<p>Phase 1 is the smallest step to something an area administrator can use: connecting
+their own Jira, Elasticsearch or SQL from their own area.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="tests-that-must-exist">Tests that must exist</h2><a class="sl-anchor-link" href="#tests-that-must-exist"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Tests that must exist”</span></a></div>
+<ul>
+<li>
+<p><strong>The write check is at the authorization scope.</strong></p>
+<ul>
+<li>An <code dir="auto">acme/cx</code> administrator writes an <code dir="auto">acme/cx</code> instance. The same administrator is
+refused 403 for <code dir="auto">acme/finance</code> and for the installation.</li>
+<li>A platform administrator, whose grant is at <code dir="auto">adminScope</code>, writes the installation’s
+instance and <code dir="auto">acme/cx</code>’s.</li>
+<li>Sabotage, three runs: check <code dir="auto">Require(target)</code> literally, which loses the platform
+administrator on the installation row; drop the <code dir="auto">adminScope</code> condition; check at the
+caller’s first visible scope. Each time, the test must name the write it refused or
+the one it leaked.</li>
+</ul>
+</li>
+<li>
+<p><strong>The Gate stops an out-of-scope tool and the ledger says so.</strong></p>
+<ul>
+<li>An agent of <code dir="auto">acme/finance</code> whose pack names <code dir="auto">acme/cx</code>’s MCP tool runs. The row was
+planted directly, bypassing publication.</li>
+<li>The run’s ledger holds a <code dir="auto">blocked</code> decision from <code dir="auto">checkScope</code>, with the reason, and
+the server is never contacted.</li>
+<li>Sabotage: drop <code dir="auto">checkScope</code> and keep the check at invocation; the test must find no
+<code dir="auto">blocked</code> verdict. Then drop the check at invocation and keep <code dir="auto">checkScope</code>; a
+separate test calling the tools layer directly must find the call made.</li>
+</ul>
+</li>
+<li>
+<p><strong>A run never reaches another area’s provider.</strong> Each provider door in the table
+above answers for its own test:</p>
+<ul>
+<li>publication of the main pair, and of the fallback;</li>
+<li><code dir="auto">StartExperiment</code> with <code dir="auto">intent.Config.Provider</code> naming <code dir="auto">acme/cx</code>’s provider for an
+<code dir="auto">acme/finance</code> agent;</li>
+<li><code dir="auto">ResolveExperiment</code> for an experiment run whose started payload names it;</li>
+<li><code dir="auto">ResolveJudge</code> for a judge run whose opening names it.</li>
+</ul>
+<p>For the two resolvers, the payload is written to the ledger directly. Sabotage: check
+at publication only; the test must name each door that let it through.</p>
+</li>
+<li>
+<p><strong>Names, in the database.</strong></p>
+<ul>
+<li>A second scope taking a name is refused 409. The body names neither the holder nor
+its scope.</li>
+<li>Two writers racing for one name, through the contention fixture: exactly one commits.</li>
+<li>The previous release’s exact <code dir="auto">settings</code> upsert, run after phase 0’s migration with a
+taken name, is refused by the index.</li>
+<li>The migration over a database holding a duplicate stops, names the duplicate, and
+leaves no index. One of its cases is <code dir="auto">jira.prod</code> in one area and <code dir="auto">sql.prod</code> in
+another: the decided incompatibility.</li>
+<li>Sabotage: drop the index and keep the binary’s 409 mapping; the old statement must
+get through, and the test must name it.</li>
+</ul>
+</li>
+<li>
+<p><strong>Configuration listings, for four callers.</strong></p>
+<ul>
+<li>An area administrator sees its own rows and the inherited ones, marked, and none of
+a sibling area.</li>
+<li>A company administrator sees the company’s rows, every area’s under it, and the
+platform’s.</li>
+<li>The platform’s administration sees every row.</li>
+<li>An author, who holds <code dir="auto">tool:read</code> and not <code dir="auto">provider:write</code>, is refused 403 on every
+configuration listing and <code dir="auto">Get</code>. The same author reads <code dir="auto">GET /providers</code> and
+<code dir="auto">ListTools</code>, and neither holds an address. Sabotage: list on <code dir="auto">tool:read</code>; the test
+must name the address the author read.</li>
+<li>Sabotage: keep only the inherited relation; the test must name the descendant row the
+company administrator lost. Then return every row; the test must name the sibling’s
+row the area saw.</li>
+</ul>
+</li>
+<li>
+<p><strong>Reduced answers, per target.</strong></p>
+<ul>
+<li>An author granted on <code dir="auto">acme/cx</code> and <code dir="auto">acme/finance</code> asks <code dir="auto">ListTools</code> and
+<code dir="auto">GET /providers</code> for <code dir="auto">acme/cx</code>. The answer holds the area’s, the company’s and the
+installation’s rows, and none of <code dir="auto">acme/finance</code>.</li>
+<li>An author granted on <code dir="auto">acme</code> asks for <code dir="auto">acme/cx</code>, and the answer includes <code dir="auto">acme/cx</code>’s
+own rows.</li>
+<li>An <code dir="auto">acme/cx</code> author asking for <code dir="auto">acme/finance</code> gets 404.</li>
+<li>Without <code dir="auto">scope</code>, only installation rows.</li>
+<li>Sabotage: answer the union of the caller’s scopes; the multi-area test must name
+<code dir="auto">finance</code>’s tool. Then filter by the caller’s grants instead of the target; the
+company test must name the area’s row it lost.</li>
+</ul>
+</li>
+<li>
+<p><strong>Classification precedence.</strong></p>
+<ul>
+<li>An area curator classifies its own server’s tool with <code dir="auto">level: owner</code>, and is refused
+on a platform tool and on a sibling’s.</li>
+<li>With both rows present, the platform’s applies. A later owner ruling changes nothing
+in effect, and is listed as overridden.</li>
+<li>Withdrawing the platform’s row makes the owner’s apply.</li>
+<li>A stale platform row stops the tool, and does not fall back to the owner’s.</li>
+<li>Sabotage: resolve the owner’s row first; then fall back on stale. Each time, the test
+must name the tool whose effect changed.</li>
+</ul>
+</li>
+<li>
+<p><strong>Reveals read at the row’s scope.</strong> A reveal at the installation of an area server
+finds nothing, and opening an area row’s sealed value under another scope’s AAD fails.</p>
+</li>
+<li>
+<p><strong>Against the previous binary.</strong> After the readers’ release, an area row is refused,
+not loaded as global. Sabotage: the reader skips the scope check for rows it does not
+recognise; the test must find the area’s tool in the catalogue of another area’s run.</p>
+</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="what-this-does-not-change">What this does not change</h2><a class="sl-anchor-link" href="#what-this-does-not-change"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “What this does not change”</span></a></div>
+<ul>
+<li>Budgets, prices, policies, approvals, branding, audit export and erasure stay with the
+platform’s administration.</li>
+<li>Per-user MCP credentials stay per user.</li>
+<li><strong>NT-017 (Terraform).</strong> The provider in #321 manages integrations through the same API,
+so each resource gains the scope attribute the API gains. That note is revised when
+this one is approved, not before.</li>
+</ul></div><footer class="sl-flex astro-xhxjzfa7"><div class="meta sl-flex astro-xhxjzfa7"></div><div class="pagination-links print:hidden astro-jgq3vlii" dir="ltr"><a href="/fuseone-agents/docs/design/nt-018-authoring-workbench/" rel="prev" class="astro-jgq3vlii"><svg aria-hidden="true" class="astro-jgq3vlii astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z"/></svg><span class="astro-jgq3vlii">Previous<br class="astro-jgq3vlii"><span class="link-title astro-jgq3vlii">NT-018 — The authoring workbench</span></span></a></div></footer></div></div></main></div></div></div></div></body></html>
