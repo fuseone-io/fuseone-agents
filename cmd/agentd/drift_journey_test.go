@@ -56,6 +56,13 @@ func newDriftWorld(t *testing.T) *driftWorld {
 	}); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
+	// A published version, as far as the state can tell: claimed with a
+	// digest, which the database requires of a current version.
+	if _, err := pool.Exec(ctx, `
+		insert into agent_version_digests (agent_id, version_id, digest)
+		values ('triage', 'v2', repeat('2', 64))`); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
 	if _, err := pool.Exec(ctx, `
 		insert into agent_state (agent_id, current_version) values ('triage', 'v2')`); err != nil {
 		t.Fatalf("publish: %v", err)

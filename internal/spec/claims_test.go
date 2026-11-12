@@ -149,7 +149,9 @@ func TestPublish_otherBytesUnderAClaimedVersion_isACollision(t *testing.T) {
 func TestPublish_aRowNobodyClaimed_isRefusedAndNeverAdopted(t *testing.T) {
 	for _, w := range writers {
 		t.Run(w.name, func(t *testing.T) {
-			pool := openSpecPool(t)
+			// Only during C1's rollout can such a row be written: from release
+			// C2 on, the database refuses it.
+			pool := testdb.IsolatedThrough(t, beforeEnforcement)
 			ctx := context.Background()
 			s := published(t, definition)
 			// What the previous binary writes: the row, and no claim.
@@ -168,15 +170,9 @@ func TestPublish_aRowNobodyClaimed_isRefusedAndNeverAdopted(t *testing.T) {
 func TestPublish_aVersionClaimedWithoutDigest_isRefused(t *testing.T) {
 	for _, w := range writers {
 		t.Run(w.name, func(t *testing.T) {
-			pool := openSpecPool(t)
 			ctx := context.Background()
 			s := published(t, definition)
-			plantUnclaimed(t, pool, s)
-			if _, err := pool.Exec(ctx, `
-				insert into agent_version_digests (agent_id, version_id, digest)
-				values ($1, $2, null)`, string(s.ID), string(s.Version)); err != nil {
-				t.Fatalf("plant the null claim: %v", err)
-			}
+			pool := withLegacyVersion(t, s)
 
 			if err := w.publish(ctx, pool, s); !errors.Is(err, spec.ErrDigestUnknown) {
 				t.Fatalf("err = %v, want ErrDigestUnknown", err)
@@ -201,6 +197,19 @@ func TestVersionClaims_cannotBeChanged(t *testing.T) {
 			t.Errorf("%q succeeded, want a claim to be permanent", change)
 		}
 	}
+}
+
+// withLegacyVersion is a database holding s as a version the binary never
+// knew the bytes of: written without a claim before release C2, then claimed
+// without a digest by C2's migration.
+func withLegacyVersion(t *testing.T, s spec.Spec) *pgxpool.Pool {
+	t.Helper()
+	pool := testdb.IsolatedThrough(t, beforeEnforcement)
+	plantUnclaimed(t, pool, s)
+	if err := ledger.Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	return pool
 }
 
 // plantUnclaimed inserts the row exactly as a binary without claims does.
