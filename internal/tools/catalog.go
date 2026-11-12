@@ -133,6 +133,9 @@ type Catalog struct {
 	// provenance is what each server's registration established, kept so a
 	// rediscovery on the open session describes new tools as AddServer would.
 	provenance map[string]domain.ToolProvenance
+	// scopes is where each server belongs (NT-019). Absent is the
+	// installation's: a server a --mcp flag connected names no row.
+	scopes map[string]domain.Scope
 
 	content engine.ContentStore
 	timeout time.Duration
@@ -220,6 +223,7 @@ func NewCatalog(content engine.ContentStore) *Catalog {
 		timeouts:   make(map[string]time.Duration),
 		caches:     make(map[string]*resultCache),
 		provenance: make(map[string]domain.ToolProvenance),
+		scopes:     make(map[string]domain.Scope),
 		content:    content,
 		timeout:    60 * time.Second,
 		clock:      time.Now,

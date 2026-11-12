@@ -43,7 +43,7 @@ func (c *Catalog) Sync(ctx context.Context, from Classifier, scope domain.Scope)
 	defer c.mu.Unlock()
 
 	applied := 0
-	for _, r := range rulings {
+	for _, r := range c.rulingsInForce(rulings) {
 		entry, ok := c.entries[r.Tool]
 		if !ok || !r.Effect.Valid() || r.Dedupe.Validate() != nil {
 			continue

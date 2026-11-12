@@ -89,6 +89,7 @@ func (c *Catalog) AddServer(
 		delete(c.caches, name)
 	}
 	c.provenance[name] = opts.provenance
+	c.scopes[name] = serverScope(opts.scope)
 	for id, entry := range c.entries {
 		if entry.Server == name {
 			delete(c.entries, id)
@@ -128,6 +129,7 @@ func (c *Catalog) RemoveServer(name string) error {
 	delete(c.timeouts, name)
 	delete(c.caches, name)
 	delete(c.provenance, name)
+	delete(c.scopes, name)
 	for id, entry := range c.entries {
 		if entry.Server == name {
 			delete(c.entries, id)
