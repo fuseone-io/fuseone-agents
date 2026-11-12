@@ -76,6 +76,15 @@ func TestSimulatedRun_workItemClaim_succeedsWithoutHoldingTheCard(t *testing.T) 
 
 type simulateCatalog struct{}
 
+// Scope declares the coordination tools the way the workitem layer does in
+// the worker's chain: the platform's own, so the installation's (NT-019).
+func (simulateCatalog) Scope(id domain.ToolID) (domain.Scope, bool) {
+	if id.Coordination() {
+		return domain.Scope{Company: domain.Installation}, true
+	}
+	return domain.Scope{}, false
+}
+
 func (simulateCatalog) Effect(domain.ToolID) (domain.Effect, bool) {
 	return domain.EffectUnknown, false
 }

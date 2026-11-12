@@ -25,7 +25,8 @@ func TestEvaluate_copilot_escalatesEvenWhatAWrittenExceptionAllows(t *testing.T)
 	t.Parallel()
 
 	got, err := allowing().Evaluate(t.Context(), gate.Request{
-		Tool: "crm.reply", Effect: domain.EffectWrite, Stage: domain.StageCopilot,
+		ToolScope: domain.Scope{Company: domain.Installation},
+		Tool:      "crm.reply", Effect: domain.EffectWrite, Stage: domain.StageCopilot,
 		Pack: gate.NewPack("crm.reply"), Args: []byte(`{}`),
 	})
 	if err != nil {
@@ -49,7 +50,8 @@ func TestEvaluate_copilot_letsAReadThrough(t *testing.T) {
 	// clicking through the whole run, and a person clicking through is a
 	// person not reading.
 	got := ruleOn(t, gate.Request{
-		Tool: "crm.lookup", Effect: domain.EffectRead, Stage: domain.StageCopilot,
+		ToolScope: domain.Scope{Company: domain.Installation},
+		Tool:      "crm.lookup", Effect: domain.EffectRead, Stage: domain.StageCopilot,
 		Pack: gate.NewPack("crm.lookup"), Args: []byte(`{}`),
 	})
 
@@ -64,7 +66,8 @@ func TestEvaluate_autonomous_isJudgedByTheWrittenExceptionAlone(t *testing.T) {
 	// The same call, the same exception, one stage further: this is the whole
 	// difference promotion makes, and the only place it is visible.
 	got, err := allowing().Evaluate(t.Context(), gate.Request{
-		Tool: "crm.reply", Effect: domain.EffectWrite, Stage: domain.StageAutonomous,
+		ToolScope: domain.Scope{Company: domain.Installation},
+		Tool:      "crm.reply", Effect: domain.EffectWrite, Stage: domain.StageAutonomous,
 		Pack: gate.NewPack("crm.reply"), Args: []byte(`{}`),
 	})
 	if err != nil {
@@ -82,7 +85,8 @@ func TestEvaluate_anUnsetStage_actsAsDraftAndAsksAnyway(t *testing.T) {
 	// A request with no stage is a wiring mistake, and the safe reading of a
 	// wiring mistake is the least trusted one.
 	got := ruleOn(t, gate.Request{
-		Tool: "crm.reply", Effect: domain.EffectWrite,
+		ToolScope: domain.Scope{Company: domain.Installation},
+		Tool:      "crm.reply", Effect: domain.EffectWrite,
 		Pack: gate.NewPack("crm.reply"), Args: []byte(`{}`),
 	})
 
@@ -107,7 +111,8 @@ func TestEvaluate_aCompensation_undoesWhatWasAllowed(t *testing.T) {
 	// Curator decided what undoes what. The permission it borrows is exactly
 	// the one that let the original call happen.
 	got := ruleOn(t, gate.Request{
-		Tool: "crm.charge.refund", Effect: domain.EffectFinancial,
+		ToolScope: domain.Scope{Company: domain.Installation},
+		Tool:      "crm.charge.refund", Effect: domain.EffectFinancial,
 		Compensating: "crm.charge", Stage: domain.StageAutonomous,
 		Pack: gate.NewPack("crm.charge"), Args: []byte(`{}`),
 	})
@@ -123,7 +128,8 @@ func TestEvaluate_aCompensationForSomethingOutsideThePack_isStillRefused(t *test
 	// Otherwise "compensating" would be a word that opens the pack: anything
 	// could be called by claiming to undo something the agent never had.
 	got := ruleOn(t, gate.Request{
-		Tool: "crm.anything", Effect: domain.EffectWrite,
+		ToolScope: domain.Scope{Company: domain.Installation},
+		Tool:      "crm.anything", Effect: domain.EffectWrite,
 		Compensating: "crm.never", Stage: domain.StageAutonomous,
 		Pack: gate.NewPack("crm.charge"), Args: []byte(`{}`),
 	})
@@ -142,7 +148,8 @@ func TestEvaluate_aFinancialCompensation_isNotHeldByTheBuiltInFloor(t *testing.T
 	// it here would mean the acts most worth undoing are the ones that never
 	// can be.
 	got := ruleOn(t, gate.Request{
-		Tool: "crm.charge.refund", Effect: domain.EffectFinancial,
+		ToolScope: domain.Scope{Company: domain.Installation},
+		Tool:      "crm.charge.refund", Effect: domain.EffectFinancial,
 		Compensating: "crm.charge", Stage: domain.StageAutonomous,
 		Pack: gate.NewPack("crm.charge"), Args: []byte(`{}`),
 		ApprovalGranted: true,
@@ -166,8 +173,9 @@ func TestEvaluate_anAuthoredDenyStillStopsACompensation(t *testing.T) {
 	}}})
 
 	got, err := g.Evaluate(t.Context(), gate.Request{
-		Scope: domain.Scope{Company: "acme", Area: "billing"},
-		RunID: "run-1", AgentID: "billing", Seq: 1,
+		ToolScope: domain.Scope{Company: domain.Installation},
+		Scope:     domain.Scope{Company: "acme", Area: "billing"},
+		RunID:     "run-1", AgentID: "billing", Seq: 1,
 		Tool: "crm.charge.refund", Effect: domain.EffectFinancial,
 		Compensating: "crm.charge", Stage: domain.StageAutonomous,
 		Pack: gate.NewPack("crm.charge"), Args: []byte(`{}`),

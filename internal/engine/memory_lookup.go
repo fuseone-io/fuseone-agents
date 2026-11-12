@@ -38,7 +38,7 @@ func (r *Runner) initialMemoryLookup(
 	if err != nil {
 		return State{}, Status{}, false, err
 	}
-	p := Proposal{Tool: domain.ToolMemoryFind, Args: args}
+	p := r.placed(Proposal{Tool: domain.ToolMemoryFind, Args: args})
 	effect, _ := r.deps.Catalog.Effect(p.Tool)
 	idemKey := idempotencyKey(start.RunID, p.Tool, p.Args)
 	semantic, err := r.semanticDedupe(ctx, start, p)

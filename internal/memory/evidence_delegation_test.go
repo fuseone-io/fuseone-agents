@@ -49,6 +49,10 @@ func (s *sealingTools) Invoke(context.Context, engine.Call) (engine.ToolResult, 
 	return engine.ToolResult{}, nil
 }
 
+func (s *sealingTools) Scope(domain.ToolID) (domain.Scope, bool) {
+	return domain.Scope{Company: domain.Installation}, true
+}
+
 func (s *sealingTools) Effect(domain.ToolID) (domain.Effect, bool) {
 	return domain.EffectWrite, true
 }

@@ -112,6 +112,10 @@ type fakeGitHub struct {
 	asked   []domain.ToolID
 }
 
+func (g *fakeGitHub) Scope(id domain.ToolID) (domain.Scope, bool) {
+	return domain.Scope{Company: domain.Installation}, id == createPullRequest
+}
+
 func (g *fakeGitHub) Effect(id domain.ToolID) (domain.Effect, bool) {
 	if id.Coordination() {
 		g.t.Errorf("the GitHub server was asked to classify %s", id)

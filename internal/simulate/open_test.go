@@ -26,6 +26,11 @@ func (registry) Versions(context.Context, domain.AgentID) ([]domain.AgentSummary
 
 type catalog map[domain.ToolID]domain.Effect
 
+func (c catalog) Scope(id domain.ToolID) (domain.Scope, bool) {
+	_, ok := c[id]
+	return domain.Scope{Company: domain.Installation}, ok
+}
+
 func (c catalog) Effect(id domain.ToolID) (domain.Effect, bool) {
 	e, ok := c[id]
 	return e, ok

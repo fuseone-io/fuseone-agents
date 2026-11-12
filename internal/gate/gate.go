@@ -24,6 +24,7 @@ const (
 	RulePassed      = "passed"
 	RuleCapability  = "capability"
 	RuleContract    = "contract"
+	RuleScope       = "scope"
 	RuleDataBarrier = "data_barrier"
 	RuleTaint       = "taint"
 	RulePolicy      = "policy"
@@ -70,6 +71,7 @@ type check struct {
 // the failure the operator actually has to fix.
 var checkOrder = []check{
 	{RuleCapability, checkCapability},
+	{RuleScope, checkScope},
 	{RuleContract, checkContract},
 	{RuleDataBarrier, checkDataBarrier},
 	{RuleTaint, checkTaint},

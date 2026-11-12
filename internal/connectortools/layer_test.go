@@ -295,6 +295,10 @@ func TestLayer_aNativeCallIsNotDelegatedToTheCachingMCPLayer(t *testing.T) {
 // lives. Every answer is a cached one, so a delegated call is unmistakable.
 type cachingBase struct{ invoked int }
 
+func (c *cachingBase) Scope(domain.ToolID) (domain.Scope, bool) {
+	return domain.Scope{Company: domain.Installation}, true
+}
+
 func (c *cachingBase) Effect(domain.ToolID) (domain.Effect, bool) {
 	return domain.EffectRead, true
 }

@@ -62,7 +62,13 @@ type Request struct {
 
 	Tool   domain.ToolID
 	Effect domain.Effect
-	Args   []byte
+	// ToolScope is where the tool belongs: the runtime scope of the server or
+	// connector instance that declares it, or the installation's for the
+	// platform's own tools (NT-019). A run reaches a tool only when this
+	// contains Scope. The zero value contains nothing, so a tool whose origin
+	// nobody declared is stopped.
+	ToolScope domain.Scope
+	Args      []byte
 	// ArgLabels is the taint of the arguments: the union of the labels of
 	// every value they were derived from (PRD SE-05).
 	ArgLabels domain.Labels

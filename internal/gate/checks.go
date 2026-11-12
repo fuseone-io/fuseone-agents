@@ -55,6 +55,17 @@ func checkCapability(r Request) result {
 	return stop(fmt.Sprintf("tool %q is outside the run's capability pack", r.Tool))
 }
 
+// checkScope stops a tool that belongs to a scope the run is not inside: a
+// sibling area's server, another company's connector, or a tool whose origin
+// nobody declared (NT-019). The pack says the agent may ask for the tool; this
+// says the tool is one its scope can reach.
+func checkScope(r Request) result {
+	if !r.ToolScope.Contains(r.Scope) {
+		return stop(fmt.Sprintf("tool %q is not available to %s", r.Tool, r.Scope))
+	}
+	return pass()
+}
+
 func checkContract(r Request) result {
 	if !r.Effect.Valid() {
 		return stop(fmt.Sprintf("tool %q has no effect classification", r.Tool))

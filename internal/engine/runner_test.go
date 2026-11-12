@@ -123,6 +123,13 @@ func (c *countingTools) Invoke(ctx context.Context, call Call) (ToolResult, erro
 
 type staticCatalog map[domain.ToolID]domain.Effect
 
+// Scope places every tool the harness knows at the installation, as every
+// MCP server is until servers gain scopes (NT-019).
+func (s staticCatalog) Scope(id domain.ToolID) (domain.Scope, bool) {
+	_, ok := s[id]
+	return domain.Scope{Company: domain.Installation}, ok
+}
+
 func (s staticCatalog) Effect(id domain.ToolID) (domain.Effect, bool) {
 	e, ok := s[id]
 	return e, ok

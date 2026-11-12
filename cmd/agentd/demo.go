@@ -130,6 +130,15 @@ func (s staticCatalog) Dedupe(domain.ToolID) (domain.ToolDedupe, bool) {
 	return domain.ToolDedupe{}, false
 }
 
+// Scope places every demo tool at the installation, as every MCP server is
+// until servers gain scopes (NT-019).
+func (s staticCatalog) Scope(id domain.ToolID) (domain.Scope, bool) {
+	if _, ok := s[id]; !ok {
+		return domain.Scope{}, false
+	}
+	return domain.Scope{Company: domain.Installation}, true
+}
+
 type stubPlanner struct {
 	proposals []engine.Proposal
 	turn      int

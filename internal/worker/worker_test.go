@@ -82,6 +82,9 @@ type Call = engine.Call
 
 type emptyCatalog struct{}
 
+func (emptyCatalog) Scope(domain.ToolID) (domain.Scope, bool) {
+	return domain.Scope{Company: domain.Installation}, true
+}
 func (emptyCatalog) Effect(domain.ToolID) (domain.Effect, bool) { return domain.EffectRead, true }
 func (emptyCatalog) Dedupe(domain.ToolID) (domain.ToolDedupe, bool) {
 	return domain.ToolDedupe{}, false

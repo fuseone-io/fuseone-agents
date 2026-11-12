@@ -19,6 +19,11 @@ import (
 
 type effects map[domain.ToolID]domain.Effect
 
+func (e effects) Scope(t domain.ToolID) (domain.Scope, bool) {
+	_, ok := e[t]
+	return domain.Scope{Company: domain.Installation}, ok
+}
+
 func (e effects) Effect(t domain.ToolID) (domain.Effect, bool) {
 	effect, ok := e[t]
 	return effect, ok

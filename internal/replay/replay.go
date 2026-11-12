@@ -167,6 +167,7 @@ func replayOne(
 	decision, err := g.Evaluate(ctx, gate.Request{
 		Scope: step.Scope, RunID: step.RunID, AgentID: step.AgentID,
 		Seq: step.Seq, Tool: recorded.Tool, Effect: recorded.Effect,
+		ToolScope: recordedToolScope(step, recorded),
 		ArgLabels: recorded.Labels,
 		Pack:      pack, Stage: recorded.Stage,
 		// Reproducing the outcome, not the ceiling: budget is a fact about
@@ -211,4 +212,17 @@ func decode(step domain.Step, into any) error {
 		return fmt.Errorf("replay: step %d carries no payload", step.Seq)
 	}
 	return json.Unmarshal(step.Payload, into)
+}
+
+// recordedToolScope is where the tool belonged when the run asked.
+//
+// A step decided before the Gate judged scope (NT-019) recorded none, and its
+// question had no scope in it. Answering with the run's own scope asks that
+// same question again: the check passes, as it would have, and the decision
+// reproduces instead of reading as diverged.
+func recordedToolScope(step domain.Step, recorded domain.GateDecidedPayload) domain.Scope {
+	if recorded.ToolScope == nil {
+		return step.Scope
+	}
+	return recorded.ToolScope.Scope()
 }

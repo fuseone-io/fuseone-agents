@@ -31,7 +31,8 @@ func quiet() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)
 
 func write() gate.Request {
 	return gate.Request{
-		Scope: domain.Scope{Company: "acme", Area: "cx"}, RunID: "run-1", AgentID: "triage",
+		ToolScope: domain.Scope{Company: domain.Installation},
+		Scope:     domain.Scope{Company: "acme", Area: "cx"}, RunID: "run-1", AgentID: "triage",
 		Seq: 2, Tool: "crm.reply", Effect: domain.EffectWrite,
 		Pack:   gate.NewPack("crm.reply"),
 		Budget: domain.Budget{Micros: 1_000_000, ToolCalls: 20, Steps: 50},
