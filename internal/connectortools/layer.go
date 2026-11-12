@@ -112,6 +112,9 @@ func (l *Layer) SetInstances(instances []Instance) error {
 			return err
 		}
 		key := instanceKey{connector: instance.Connector, name: instance.Name}
+		if _, taken := next[key]; taken {
+			return fmt.Errorf("%w: %s.%s", ErrDuplicateInstance, instance.Connector, instance.Name)
+		}
 		next[key] = cloneInstance(instance)
 	}
 	l.mu.Lock()

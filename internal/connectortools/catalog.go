@@ -12,6 +12,9 @@ import (
 var (
 	ErrUnavailable = errors.New("connector unavailable")
 	ErrOutOfScope  = errors.New("connector out of scope")
+	// ErrDuplicateInstance is a set holding one connector and name twice. The
+	// tool id has no scope to tell them apart (NT-019).
+	ErrDuplicateInstance = errors.New("connector: one instance name configured twice")
 )
 
 func operationEffect(op connectors.Operation) domain.Effect {
