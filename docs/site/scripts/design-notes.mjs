@@ -21,6 +21,7 @@ export const designDocs = [
   ["NT-014-governed-evidence-collection.md", "Collecting events from a declared source, with the coverage of every number stated."],
   ["NT-015-evaluation-datasets-and-experiments.md", "Versioned evaluation datasets and experiments, and what the corpus does today."],
   ["NT-016-judge-evaluators.md", "Judging an experiment's outputs with a rubric, as an opinion beside the structural verdict."],
+  ["NT-017-terraform-provider.md", "Managing an installation's configuration from Terraform, and what the API needs first."],
   ["NT-018-authoring-workbench.md", "One screen to build an agent by conversation, rehearse it live, correct it and experiment."],
   ["NT-019-integrations-per-area.md", "Each area connects its own tool servers, model providers, connectors and channels."],
 ];
