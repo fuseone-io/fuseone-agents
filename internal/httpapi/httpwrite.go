@@ -29,6 +29,15 @@ type Me struct {
 	// catalogue and for the integrations themselves, is in Can for the first
 	// and only here for the second.
 	Platform []string `json:"platform"`
+	// Configure is where the caller holds provider:write: the scopes a form
+	// for a connector instance may offer (NT-019). Held at the platform's
+	// administration, it governs every scope, which platform already says.
+	Configure []MeScope `json:"configure"`
+}
+
+type MeScope struct {
+	Company string `json:"company"`
+	Area    string `json:"area"`
 }
 
 type MeGrant struct {
@@ -46,7 +55,10 @@ type MeGrant struct {
 func meFrom(p domain.Principal) Me {
 	out := Me{
 		ID: string(p.ID), Display: p.Display, Kind: string(p.Kind),
-		Grants: []MeGrant{}, Can: []string{}, Platform: []string{},
+		Grants: []MeGrant{}, Can: []string{}, Platform: []string{}, Configure: []MeScope{},
+	}
+	for _, scope := range p.ScopesFor(permConfigure) {
+		out.Configure = append(out.Configure, MeScope{Company: string(scope.Company), Area: string(scope.Area)})
 	}
 	seen := map[domain.Permission]struct{}{}
 
@@ -82,8 +94,11 @@ buttons that answer 403 on every click. A permission that moves to a resource's
 own scope leaves this list in the same change.
 */
 var platformOnly = map[domain.Permission]bool{
-	domain.PermProviderWrite: true, domain.PermToolClassify: true,
-	domain.PermBudgetWrite: true, domain.PermPolicyWrite: true,
+	// provider:write left with NT-019 phase 1: connector instances are
+	// configured at their own scope. The console reads MCP servers, providers
+	// and channels, still the platform's, from Me.Platform.
+	domain.PermToolClassify: true,
+	domain.PermBudgetWrite:  true, domain.PermPolicyWrite: true,
 	domain.PermApprovalGrant: true, domain.PermAuditExport: true,
 	domain.PermBrandWrite: true, domain.PermDataErase: true,
 }
