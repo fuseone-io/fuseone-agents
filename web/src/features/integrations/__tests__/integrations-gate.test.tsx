@@ -8,10 +8,11 @@ import ConsoleRoutes from "@/routes/console-routes";
 // administrator of one area who follows a link there must read why, not a page
 // of requests answering 403.
 
-function signedInAs(platform: string[]) {
+function signedInAs(platform: string[], can = ["tool:read", "scope:write"]) {
   const me = {
     id: "usr_ana", display: "Ana", kind: "human",
-    can: ["tool:read", "scope:write"], platform, grants: [],
+    can, platform, grants: [],
+    configure: can.includes("provider:write") ? [{ company: "acme", area: "cx" }] : [],
   };
   vi.stubGlobal(
     "fetch",
@@ -67,6 +68,79 @@ describe("integrations for an administrator of one area", () => {
         { timeout: LAZY_SCREEN },
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText("As integrações são configuradas pela administração da plataforma"),
+    ).not.toBeInTheDocument();
+  });
+});
+
+// NT-019: an area's administrator configures its own connector instances.
+describe("integrations for an administrator who configures an area's connectors", () => {
+  const areaAdmin = ["tool:read", "scope:write", "provider:write"];
+
+  it.each(["/integrations", "/integrations/providers"])(
+    "take them from %s to the connectors, where they can add one",
+    async (path) => {
+      signedInAs([], areaAdmin);
+      openAt(path);
+
+      expect(
+        await screen.findByRole("button", { name: "Nova instância" }, { timeout: LAZY_SCREEN }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("As integrações são configuradas pela administração da plataforma"),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it("offer them no way to connect what is the platform's", async () => {
+    signedInAs([], areaAdmin);
+    openAt("/integrations/connectors");
+
+    expect(
+      await screen.findByRole("button", { name: "Nova instância" }, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Conectar sistema" })).not.toBeInTheDocument();
+  });
+
+  it("show them the connectors and none of the platform's sections", async () => {
+    signedInAs([], areaAdmin);
+    openAt("/integrations/connectors");
+
+    expect(
+      await screen.findByRole("link", { name: "Connectors" }, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Provedores de modelo" })).not.toBeInTheDocument();
+  });
+
+  // Each of these is the platform's, and would answer 403.
+  it("ask for none of the platform's lists", async () => {
+    signedInAs([], areaAdmin);
+    openAt("/integrations/connectors");
+    await screen.findByRole("button", { name: "Nova instância" }, { timeout: LAZY_SCREEN });
+
+    const asked = vi.mocked(fetch).mock.calls.map(([input]) =>
+      new URL(input instanceof Request ? input.url : String(input), "http://console").pathname,
+    );
+    expect(asked.some((path) => path.endsWith("/admin/integrations/connectors/instances"))).toBe(true);
+    const platformLists = [
+      "/admin/integrations", "/admin/channels", "/admin/integrations/recipes", "/integrations/mcp-credentials",
+    ];
+    for (const list of platformLists) {
+      expect(asked.filter((path) => path.endsWith(list)), list).toEqual([]);
+    }
+  });
+});
+
+// Before the session answers, the gate says neither yes nor no: a guess shows
+// an area's administrator that integrations are the platform's, a moment
+// before it opens their connectors.
+describe("integrations before the session answers", () => {
+  it("wait, and say nothing about who may open them", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    openAt("/integrations/connectors");
+
+    expect(await screen.findByText("Carregando", {}, { timeout: LAZY_SCREEN })).toBeInTheDocument();
     expect(
       screen.queryByText("As integrações são configuradas pela administração da plataforma"),
     ).not.toBeInTheDocument();

@@ -29,6 +29,16 @@ export interface Me {
    * administrative trail, needs its permission here and not just in can.
    */
   platform?: string[];
+  /**
+   * Where the caller holds provider:write: the scopes a connector form may
+   * offer (NT-019). Absent from a server that predates it.
+   */
+  configure?: MeScope[];
+}
+
+export interface MeScope {
+  company: string;
+  area: string;
 }
 
 export const sessionKeys = { me: ["session", "me"] as const };

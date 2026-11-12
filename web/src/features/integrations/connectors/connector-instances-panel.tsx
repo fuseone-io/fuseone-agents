@@ -90,14 +90,14 @@ export function ConnectorInstancesPanel({
               key={`${instance.scopeKind}:${instance.company ?? ""}:${instance.area ?? ""}:${instance.name}`}
               instance={instance}
               onEdit={
-                view.canConfigure && connectorEditorFor(instance.connector)
+                instance.editable && connectorEditorFor(instance.connector)
                   ? () => actions.edit(instance)
                   : undefined
               }
               onDelete={
-                view.canConfigure
-                    ? (etag) => actions.remove(instance, etag)
-                    : undefined
+                instance.editable
+                  ? (etag) => actions.remove(instance, etag)
+                  : undefined
               }
             />
           ))}

@@ -18,6 +18,7 @@ const evidence: ConnectorInstance = {
   company: "acme",
   area: "cyber",
   hasToken: true,
+  editable: true,
   evidence: { baseUrl: "https://source.example.com", queries: 2 },
 };
 
@@ -43,5 +44,25 @@ describe("ConnectorInstancesPanel", () => {
     );
 
     expect(screen.getByRole("button", { name: "Editar" })).toBeInTheDocument();
+  });
+
+  // NT-019: an area's administrator sees the platform's instance its area
+  // inherits, says where it comes from, and is offered nothing to change.
+  it("marks an inherited instance and offers no change to it", () => {
+    const inherited: ConnectorInstance = {
+      ...evidence, name: "platform-gateway", scopeKind: "installation",
+      company: undefined, area: undefined, editable: false,
+    };
+    render(
+      <ConnectorInstancesPanel
+        view={{ instances: [inherited, evidence], isLoading: false, error: null, canConfigure: true }}
+        actions={{ retry: vi.fn(), create: vi.fn(), edit: vi.fn(), remove: vi.fn() }}
+      />,
+    );
+
+    expect(screen.getByText("Da plataforma")).toBeInTheDocument();
+    // The area's own instance stays editable: one Editar, for it alone.
+    expect(screen.getAllByRole("button", { name: "Editar" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Remover instância" })).toHaveLength(1);
   });
 });

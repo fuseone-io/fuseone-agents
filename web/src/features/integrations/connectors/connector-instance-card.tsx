@@ -37,6 +37,9 @@ export function ConnectorInstanceCard({
                 ? t("connectors.enabled")
                 : t("common.disabled")}
             </Badge>
+            {!instance.editable && (
+              <Badge variant="outline">{t(inheritedFrom(instance))}</Badge>
+            )}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {t("connectors.instanceSummary", {
@@ -245,6 +248,14 @@ function scopeLabel(instance: ConnectorInstance, t: TFunction) {
   }
   if (instance.scopeKind === "company") return instance.company ?? "-";
   return `${instance.company ?? "-"}/${instance.area ?? "-"}`;
+}
+
+// Listed and not editable is inherited: every listing is for someone who
+// configures somewhere, so the instance belongs to a scope above theirs.
+function inheritedFrom(instance: ConnectorInstance) {
+  return instance.scopeKind === "installation"
+    ? "connectors.inheritedFromPlatform"
+    : "connectors.inheritedFromCompany";
 }
 
 function tokenState(instance: ConnectorInstance, t: TFunction) {

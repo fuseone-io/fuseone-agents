@@ -1358,7 +1358,7 @@
     "notAnswering": "not answering",
     "openAiCompatible": "OpenAI compatible",
     "platformOnly": "Integrations are configured by the platform's administration",
-    "platformOnlyHint": "MCP servers, connectors, providers and channels apply to the whole installation today, so only those who administer the platform connect them. To connect something for your area's agents, ask a platform administrator.",
+    "platformOnlyHint": "MCP servers, providers and channels apply to the whole installation, so only those who administer the platform connect them. An area's own connectors are configured by its administrators. To connect anything else for your area's agents, ask a platform administrator.",
     "prefixExplains": "Prefixes the tools: <code>crm</code> gives <code>crm.lookup</code>.",
     "protocol": "Protocol",
     "providers": "Model providers",
@@ -1438,6 +1438,9 @@
     "removeInstance": "Remove instance",
     "removeInstanceHint": "This instance's tools disappear from new runs: {{name}}.",
     "scopeKind": "Instance scope",
+    "scopeHeld": "Where the connector applies",
+    "inheritedFromPlatform": "From the platform",
+    "inheritedFromCompany": "From the company",
     "scope": {
       "area": "Area",
       "company": "Company",

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/connectors"
 	"github.com/fuseone/agents/internal/connectortools"
 	"github.com/fuseone/agents/internal/domain"
@@ -27,9 +28,12 @@ type ConnectorInstances interface {
 // ListConnectorCatalog exposes governed connector shapes. It does not configure
 // an instance by itself; executable tools exist only for configured instances.
 func (s *Server) ListConnectorCatalog(ctx context.Context, _ openapi.ListConnectorCatalogRequestObject) (openapi.ListConnectorCatalogResponseObject, error) {
-	if resp := s.refuse(ctx, domain.PermToolClassify); resp != nil {
+	// Connector types, never an instance or a credential: what an author in
+	// any area may read, as the tool catalogue is (NT-019).
+	if len(auth.VisibleScopes(ctx, domain.PermToolRead)) == 0 {
+		resp := forbidden(domain.PermToolRead, adminScope)
 		return openapi.ListConnectorCatalog403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *resp,
+			ForbiddenApplicationProblemPlusJSONResponse: resp,
 		}, nil
 	}
 
@@ -55,9 +59,12 @@ func (s *Server) ListConnectorCatalog(ctx context.Context, _ openapi.ListConnect
 }
 
 func (s *Server) ListConnectorInstances(ctx context.Context, _ openapi.ListConnectorInstancesRequestObject) (openapi.ListConnectorInstancesResponseObject, error) {
-	if resp := s.refuse(ctx, domain.PermToolRead); resp != nil {
+	// A configuration listing carries hosts and databases, so it is for those
+	// who configure, in some scope, and never for an author (NT-019 rule 4).
+	caller, _ := auth.PrincipalFrom(ctx)
+	if len(caller.ScopesFor(permConfigure)) == 0 {
 		return openapi.ListConnectorInstances403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *resp,
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(permConfigure, adminScope),
 		}, nil
 	}
 	if s.connectors == nil {
@@ -69,7 +76,13 @@ func (s *Server) ListConnectorInstances(ctx context.Context, _ openapi.ListConne
 	}
 	items := make([]openapi.ConnectorInstance, 0, len(configured))
 	for _, instance := range configured {
-		items = append(items, connectorInstanceResponse(instance))
+		listed, editable := connectorListing(caller, instance)
+		if !listed {
+			continue
+		}
+		item := connectorInstanceResponse(instance)
+		item.Editable = editable
+		items = append(items, item)
 	}
 	slices.SortFunc(items, func(a, b openapi.ConnectorInstance) int {
 		if a.Connector != b.Connector {
@@ -85,11 +98,6 @@ func (s *Server) ListConnectorInstances(ctx context.Context, _ openapi.ListConne
 // need to know table names and filters; editing does, or changing a host would
 // silently replace every registered query with an incomplete summary.
 func (s *Server) GetConnectorInstance(ctx context.Context, req openapi.GetConnectorInstanceRequestObject) (openapi.GetConnectorInstanceResponseObject, error) {
-	if _, forbidden := s.configurer(ctx); forbidden != nil {
-		return openapi.GetConnectorInstance403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
-		}, nil
-	}
 	if s.connectors == nil {
 		return nil, errNoAdministration
 	}
@@ -98,6 +106,11 @@ func (s *Server) GetConnectorInstance(ctx context.Context, req openapi.GetConnec
 		return openapi.GetConnectorInstance400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				invalid(err.Error())),
+		}, nil
+	}
+	if _, forbidden := s.configurerAt(ctx, settings.ScopeKind(req.Params.ScopeKind), scope); forbidden != nil {
+		return openapi.GetConnectorInstance403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
 		}, nil
 	}
 	instance, revision, err := s.connectors.ConnectorInstanceNamed(ctx, settings.ScopeKind(req.Params.ScopeKind), scope, req.Name)
@@ -116,8 +129,7 @@ func (s *Server) GetConnectorInstance(ctx context.Context, req openapi.GetConnec
 }
 
 func (s *Server) PutConnectorInstance(ctx context.Context, req openapi.PutConnectorInstanceRequestObject) (openapi.PutConnectorInstanceResponseObject, error) {
-	caller, forbidden := s.configurer(ctx)
-	if forbidden != nil {
+	if forbidden := configuresSomewhere(ctx); forbidden != nil {
 		return openapi.PutConnectorInstance403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
 		}, nil
@@ -136,6 +148,12 @@ func (s *Server) PutConnectorInstance(ctx context.Context, req openapi.PutConnec
 		return openapi.PutConnectorInstance400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				invalid(err.Error())),
+		}, nil
+	}
+	caller, forbidden := s.configurerAt(ctx, scopeKind, scope)
+	if forbidden != nil {
+		return openapi.PutConnectorInstance403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
 		}, nil
 	}
 	expect, err := domain.ParseIfMatch(req.Params.IfMatch)
@@ -168,12 +186,6 @@ func (s *Server) PutConnectorInstance(ctx context.Context, req openapi.PutConnec
 }
 
 func (s *Server) DeleteConnectorInstance(ctx context.Context, req openapi.DeleteConnectorInstanceRequestObject) (openapi.DeleteConnectorInstanceResponseObject, error) {
-	caller, forbidden := s.configurer(ctx)
-	if forbidden != nil {
-		return openapi.DeleteConnectorInstance403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
-		}, nil
-	}
 	if s.connectors == nil {
 		return nil, errNoAdministration
 	}
@@ -185,6 +197,12 @@ func (s *Server) DeleteConnectorInstance(ctx context.Context, req openapi.Delete
 		}, nil
 	}
 	scopeKind := settings.ScopeKind(req.Params.ScopeKind)
+	caller, forbidden := s.configurerAt(ctx, scopeKind, scope)
+	if forbidden != nil {
+		return openapi.DeleteConnectorInstance403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
+		}, nil
+	}
 	expect, err := domain.ParseIfMatch(req.Params.IfMatch)
 	if err != nil {
 		return openapi.DeleteConnectorInstance400ApplicationProblemPlusJSONResponse{

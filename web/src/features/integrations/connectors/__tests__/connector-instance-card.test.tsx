@@ -11,6 +11,7 @@ const evidence: ConnectorInstance = {
   company: "acme",
   area: "cyber",
   hasToken: true,
+  editable: true,
   evidence: { baseUrl: "https://source.example.com", queries: 2 },
 };
 

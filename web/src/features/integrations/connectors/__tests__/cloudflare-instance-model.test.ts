@@ -14,6 +14,7 @@ const stored: ConnectorInstance = {
   company: "acme",
   area: "platform",
   hasToken: true,
+  editable: true,
   cloudflare: {
     accountId: "acct1234",
     listId: "list5678",

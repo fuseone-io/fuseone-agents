@@ -73,6 +73,9 @@ export function listedShape(stored: ConnectorInstanceDetail): ConnectorInstance 
     company: stored.company,
     area: stored.area,
     hasToken: stored.hasToken,
+    // Read through the detail, which answers only to whoever may configure
+    // the instance at its scope.
+    editable: true,
     updatedBy: stored.updatedBy,
     updatedAt: stored.updatedAt,
     vault: stored.vault,

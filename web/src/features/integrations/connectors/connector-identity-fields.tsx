@@ -9,14 +9,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { ConnectorScopeFields } from "@/features/integrations/connectors/connector-scope-fields";
 
 export type ConnectorIdentityValues = {
   name: string;
@@ -35,7 +29,6 @@ export function ConnectorIdentityFields({
 }) {
   const { t } = useTranslation();
   const form = useFormContext<ConnectorIdentityValues>();
-  const scopeKind = form.watch("scopeKind");
   return (
     <div className="grid gap-4">
       <FormField
@@ -54,54 +47,7 @@ export function ConnectorIdentityFields({
           </FormItem>
         )}
       />
-      <FormField
-        control={form.control}
-        name="scopeKind"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{t("connectors.scopeKind")}</FormLabel>
-            <Select
-              value={field.value}
-              onValueChange={field.onChange}
-              disabled={editing}
-            >
-              <FormControl>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                <SelectItem value="area">
-                  {t("connectors.scope.area")}
-                </SelectItem>
-                <SelectItem value="company">
-                  {t("connectors.scope.company")}
-                </SelectItem>
-                <SelectItem value="installation">
-                  {t("connectors.scope.installation")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      {scopeKind !== "installation" && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <IdentityTextField
-            name="company"
-            label={t("admin.company")}
-            disabled={editing}
-          />
-          {scopeKind === "area" && (
-            <IdentityTextField
-              name="area"
-              label={t("admin.area")}
-              disabled={editing}
-            />
-          )}
-        </div>
-      )}
+      <ConnectorScopeFields editing={editing} />
       <FormField
         control={form.control}
         name="enabled"
@@ -115,37 +61,5 @@ export function ConnectorIdentityFields({
         )}
       />
     </div>
-  );
-}
-
-function IdentityTextField({
-  name,
-  label,
-  disabled,
-}: {
-  name: "company" | "area";
-  label: string;
-  disabled: boolean;
-}) {
-  const form = useFormContext<ConnectorIdentityValues>();
-  return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Input
-              {...field}
-              disabled={disabled}
-              autoComplete="off"
-              className="font-mono"
-            />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
   );
 }

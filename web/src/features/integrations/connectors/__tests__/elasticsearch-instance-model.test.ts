@@ -14,6 +14,7 @@ const stored: ConnectorInstance = {
   company: "acme",
   area: "platform",
   hasToken: true,
+  editable: true,
   elasticsearch: {
     baseUrl: "http://search.internal:9200",
     username: "reader",

@@ -46,6 +46,13 @@ export interface NavItem {
    * audit:read reads that area's runs, and opens no administration tab.
    */
   platformAnyPermission?: string[];
+  /**
+   * Shows the item whatever the rest says, when held anywhere. For a screen
+   * with one part an area may use: an area's administrator configures its own
+   * connector instances, under integrations that are otherwise the platform's
+   * (NT-019).
+   */
+  orPermission?: string;
 }
 
 export interface NavGroup {
@@ -124,6 +131,7 @@ export const NAV: NavGroup[] = [
         icon: Plug,
         permission: "tool:read",
         platformPermission: "tool:read",
+        orPermission: "provider:write",
       },
       { to: "/manual", label: "nav.manual", icon: BookOpen },
       {
@@ -132,11 +140,12 @@ export const NAV: NavGroup[] = [
         icon: Settings2,
         // audit:read opens only the administrative trail, which is the
         // platform's, so it counts when held there.
-        platformAnyPermission: ["audit:read"],
+        // provider:write too: in an area it configures connector
+        // instances, and opens no administration tab (NT-019).
+        platformAnyPermission: ["audit:read", "provider:write"],
         anyPermission: [
           "identity:write",
           "brand:write",
-          "provider:write",
           "budget:write",
           "policy:write",
           "scope:write",
@@ -159,6 +168,7 @@ export function navItemVisible(
   if (can === undefined) {
     return !item.permission && !item.anyPermission && !item.platformAnyPermission;
   }
+  if (item.orPermission && can.includes(item.orPermission)) return true;
   if (item.permission && !can.includes(item.permission)) return false;
   if (
     item.platformPermission &&

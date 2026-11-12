@@ -73,6 +73,7 @@ const instance: ConnectorInstance = {
   company: "acme",
   area: "platform",
   hasToken: true,
+  editable: true,
   updatedAt: "2026-08-25T12:00:00Z",
   vault: {
     address: "https://vault.example.com",
@@ -89,6 +90,7 @@ const sqlInstance: ConnectorInstance = {
   company: "acme",
   area: "platform",
   hasToken: false,
+  editable: true,
   sql: {
     driver: "postgres",
     host: "db.internal",
@@ -120,6 +122,7 @@ const graviteeInstance: ConnectorInstance = {
   company: "acme",
   area: "platform",
   hasToken: false,
+  editable: true,
   gravitee: {
     address: "https://apim.internal/management/v2",
     organization: "org-prod",
@@ -325,6 +328,7 @@ describe("governed connector catalogue", () => {
               enabled: true,
               scopeKind: "installation",
               hasToken: false,
+              editable: true,
             },
           ],
           catalogLoading: false,
@@ -369,7 +373,9 @@ describe("governed connector catalogue", () => {
     expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
-  it("keeps connector details readable without offering configuration", () => {
+  // Instances carry hosts and databases, so a reader who configures nowhere
+  // reads the catalogue of connector types and no instance (NT-019).
+  it("shows a reader the catalogue and no instance, and offers no configuration", () => {
     render(
       <ConnectorCatalogPanel
         data={{
@@ -385,8 +391,10 @@ describe("governed connector catalogue", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "app-x" })).toBeInTheDocument();
-    expect(screen.getByText("db.internal:5432/appx")).toBeInTheDocument();
+    // The anchor: the catalogue rendered, so the absences below mean something.
+    expect(screen.getByText("Vault secret storage")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "app-x" })).not.toBeInTheDocument();
+    expect(screen.queryByText("db.internal:5432/appx")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Nova instância" }),
     ).not.toBeInTheDocument();

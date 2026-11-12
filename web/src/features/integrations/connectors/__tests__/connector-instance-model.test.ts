@@ -14,6 +14,7 @@ const stored: ConnectorInstance = {
   company: "acme",
   area: "platform",
   hasToken: true,
+  editable: true,
   vault: {
     address: "https://vault.example.com",
     mount: "secret",

@@ -45,6 +45,7 @@ describe("connector instance editor", () => {
         company: "acme",
         area: "platform",
         hasToken: false,
+        editable: true,
       };
 
       render(
@@ -79,6 +80,7 @@ describe("connector instance editor", () => {
       company: "acme",
       area: "cyber",
       hasToken: true,
+      editable: true,
       evidence: { baseUrl: declaration.baseUrl, queries: 3 },
     };
     vi.stubGlobal(
@@ -118,6 +120,7 @@ describe("connector instance editor", () => {
       company: "acme",
       area: "cyber",
       hasToken: true,
+      editable: true,
       evidence: { baseUrl: declaration.baseUrl, queries: 3 },
     };
     vi.stubGlobal(

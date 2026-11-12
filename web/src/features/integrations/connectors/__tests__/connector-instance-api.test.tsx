@@ -23,6 +23,7 @@ describe("connector instance detail", () => {
           company: "acme",
           area: "platform",
           hasToken: false,
+          editable: true,
           sql: {
             driver: "postgres",
             host: "db.internal",
@@ -51,6 +52,7 @@ describe("connector instance detail", () => {
       company: "acme",
       area: "platform",
       hasToken: false,
+      editable: true,
     };
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
