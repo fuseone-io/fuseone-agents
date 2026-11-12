@@ -4222,6 +4222,8 @@ export interface components {
         ConnectorInstance: {
             /** @description Instance name used in tool ids. */
             name: string;
+            /** @description Whether the caller may change or remove this instance: it holds provider:write at the instance's scope, or at the platform's administration. An instance listed because the caller's area inherits it, from its company or the installation, is not (NT-019). */
+            editable: boolean;
             /** @description Connector shape, such as vault. */
             connector: string;
             enabled: boolean;

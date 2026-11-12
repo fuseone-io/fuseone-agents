@@ -360,11 +360,13 @@ func TestListConnectorCatalog_namesGovernedShapesWithoutPlaintext(t *testing.T) 
 	}
 }
 
-func TestListConnectorCatalog_withoutThePermission_isRefused(t *testing.T) {
+// Without tool:read in any scope. An approver decides escalations and reads no
+// catalogue; anyone with tool:read somewhere reads it (NT-019).
+func TestListConnectorCatalog_withoutToolReadAnywhere_isRefused(t *testing.T) {
 	t.Parallel()
 
 	resp, err := NewServer(ledger.NewMemory(), "test").
-		ListConnectorCatalog(as(domain.RoleAuditor), openapi.ListConnectorCatalogRequestObject{})
+		ListConnectorCatalog(grantedAt(domain.RoleApprover, cx), openapi.ListConnectorCatalogRequestObject{})
 	if err != nil {
 		t.Fatalf("ListConnectorCatalog: %v", err)
 	}

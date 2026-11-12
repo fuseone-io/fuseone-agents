@@ -6969,11 +6969,18 @@ components:
 
     ConnectorInstance:
       type: object
-      required: [name, connector, enabled, scopeKind, hasToken]
+      required: [name, connector, enabled, scopeKind, hasToken, editable]
       properties:
         name:
           type: string
           description: Instance name used in tool ids.
+        editable:
+          type: boolean
+          description: >
+            Whether the caller may change or remove this instance: it holds
+            provider:write at the instance's scope, or at the platform's
+            administration. An instance listed because the caller's area
+            inherits it, from its company or the installation, is not (NT-019).
         connector:
           type: string
           description: Connector shape, such as vault.
