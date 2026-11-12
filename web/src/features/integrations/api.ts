@@ -50,10 +50,11 @@ export const integrationKeys = {
     ] as const,
 };
 
-export function useIntegrations() {
+export function useIntegrations(enabled = true) {
   return useQuery({
     queryKey: integrationKeys.list(),
     queryFn: async () => unwrap(await api.GET("/admin/integrations")),
+    enabled,
   });
 }
 

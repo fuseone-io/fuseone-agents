@@ -17,12 +17,14 @@ import { revisedCollection, stubNetwork } from "@/test/revised-routes";
 
 const vault: ConnectorInstance = {
   name: "prod", connector: "vault", enabled: true, scopeKind: "installation", hasToken: true,
+  editable: true,
   vault: { address: "https://vault.example.com/a", mount: "kv", allowedPathPrefixes: ["apps/"] },
 };
 
 const apim: ConnectorInstance = {
   name: "apim", connector: "gravitee", enabled: true, scopeKind: "area", company: "acme", area: "platform",
   hasToken: false,
+  editable: true,
   gravitee: {
     address: "https://apim.example.com/management/v2", organization: "org", environment: "env",
     allowedReferences: [{ type: "API", id: "checkout-api" }], minTTLSeconds: 86_400, maxTTLSeconds: 7_776_000,

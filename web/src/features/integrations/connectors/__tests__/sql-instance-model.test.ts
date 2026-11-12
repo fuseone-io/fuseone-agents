@@ -23,6 +23,7 @@ const vault = (
   company,
   area,
   hasToken: true,
+  editable: true,
   vault: {
     address: "https://vault.example.com",
     mount: "secret",

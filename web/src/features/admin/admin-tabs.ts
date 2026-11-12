@@ -21,6 +21,9 @@ export const ADMIN_TAB_ACCESS = [
     value: "authoring",
     label: "admin.authoring",
     permission: "provider:write",
+    // The assistant's provider is the platform's. An area's provider:write
+    // configures its connector instances, not this (NT-019).
+    platform: true,
   },
   {
     value: "identity",

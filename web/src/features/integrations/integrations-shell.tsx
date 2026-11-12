@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { integrationAccess } from "@/features/integrations/integration-access";
+import { useMe } from "@/features/session/api";
 import { cn } from "@/lib/utils";
 
 export type IntegrationSection =
@@ -84,6 +86,11 @@ export function IntegrationsShell({
   children: ReactNode;
 }) {
   const { t } = useTranslation();
+  const { data: me } = useMe();
+  // An area's administrator has the connectors and nothing else here (NT-019).
+  const shown = integrationAccess(me).platform
+    ? sections
+    : sections.filter((section) => section.id === "connectors");
 
   return (
     <div className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
@@ -91,7 +98,7 @@ export function IntegrationsShell({
         aria-label={t("integrations.sections")}
         className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0"
       >
-        {sections.map((section) => {
+        {shown.map((section) => {
           const Icon = section.icon;
           const activeHere = section.id === active;
           const count = counts[section.id];

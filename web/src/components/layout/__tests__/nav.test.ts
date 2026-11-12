@@ -41,6 +41,18 @@ describe("the navigation", () => {
     expect(navItemVisible(item("/integrations"), can, ["tool:read"])).toBe(true);
   });
 
+  it("shows integrations to an area administrator, who configures its connectors", () => {
+    // NT-019: provider:write held in an area opens its connector instances.
+    const can = ["tool:read", "scope:write", "provider:write"];
+
+    expect(navItemVisible(item("/integrations"), can, [])).toBe(true);
+  });
+
+  it("opens no administration for an area's provider:write, whose surface is integrations", () => {
+    expect(navItemVisible(item("/admin"), ["provider:write"], [])).toBe(false);
+    expect(navItemVisible(item("/admin"), ["provider:write"], ["provider:write"])).toBe(true);
+  });
+
   it("shows administration for permissions used by administration screens", () => {
     expect(navItemVisible(item("/admin"), ["identity:write"], [])).toBe(true);
     expect(navItemVisible(item("/admin"), ["audit:read"], ["audit:read"])).toBe(true);

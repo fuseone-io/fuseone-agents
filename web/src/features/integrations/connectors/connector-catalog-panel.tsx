@@ -22,6 +22,10 @@ import { ConnectorInstancesPanel } from "@/features/integrations/connectors/conn
 import type { ConnectorInstanceSaver } from "@/features/integrations/connectors/connector-instance-model";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 import { cn } from "@/lib/utils";
+import {
+  ConnectorScopeContext,
+  type ConnectorScopeChoice,
+} from "@/features/integrations/connectors/connector-scope-context";
 
 export function ConnectorCatalogPanel({
   data,
@@ -41,25 +45,27 @@ export function ConnectorCatalogPanel({
   return (
     <section className="flex flex-col gap-3">
       <ConnectorIntro />
-      <ConnectorInstancesPanel
-        view={{
-          instances: data.instances,
-          isLoading: data.instancesLoading,
-          error: data.instancesError,
-          canConfigure: data.canConfigure,
-        }}
-        actions={{
-          retry: actions.retryInstances,
-          create: (connector) => setEditing({ connector, instance: null }),
-          edit: (instance) => {
-            const editor = connectorEditorFor(instance.connector);
-            if (editor) {
-              setEditing({ connector: editor.connector, instance });
-            }
-          },
-          remove: actions.deleteInstance,
-        }}
-      />
+      {data.canConfigure && (
+        <ConnectorInstancesPanel
+          view={{
+            instances: data.instances,
+            isLoading: data.instancesLoading,
+            error: data.instancesError,
+            canConfigure: data.canConfigure,
+          }}
+          actions={{
+            retry: actions.retryInstances,
+            create: (connector) => setEditing({ connector, instance: null }),
+            edit: (instance) => {
+              const editor = connectorEditorFor(instance.connector);
+              if (editor) {
+                setEditing({ connector: editor.connector, instance });
+              }
+            },
+            remove: actions.deleteInstance,
+          }}
+        />
+      )}
       {data.catalogLoading ? (
         <LoadingRows rows={4} />
       ) : data.catalogError ? (
@@ -84,13 +90,15 @@ export function ConnectorCatalogPanel({
         />
       )}
       {editing && (
-        <ConnectorEditor
-          connector={editing.connector}
-          instance={editing.instance}
-          instances={data.instances}
-          onClose={close}
-          onSave={actions.saveInstance}
-        />
+        <ConnectorScopeContext.Provider value={data.scope ?? freeScope}>
+          <ConnectorEditor
+            connector={editing.connector}
+            instance={editing.instance}
+            instances={data.instances}
+            onClose={close}
+            onSave={actions.saveInstance}
+          />
+        </ConnectorScopeContext.Provider>
       )}
     </section>
   );
@@ -104,6 +112,8 @@ export type ConnectorPanelData = {
   catalogError: unknown;
   instancesError: unknown;
   canConfigure: boolean;
+  /** Where a new instance may go; free when absent. */
+  scope?: ConnectorScopeChoice;
 };
 
 export type ConnectorPanelActions = {
@@ -308,3 +318,5 @@ function effectClass(
       "border-primary/50 text-primary",
   );
 }
+
+const freeScope: ConnectorScopeChoice = { anyScope: true, configure: [] };

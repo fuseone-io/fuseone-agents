@@ -39,6 +39,7 @@ import { useRecipes } from "@/features/integrations/mcp/api";
 import { AvailableServersPanel } from "@/features/integrations/mcp/available-servers-panel";
 import { UserCredentialsPanel } from "@/features/integrations/mcp/user-credentials-panel";
 import { LoadMore } from "@/components/shared/load-more";
+import { integrationAccess } from "@/features/integrations/integration-access";
 import { useMe } from "@/features/session/api";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 import {
@@ -69,13 +70,20 @@ export function IntegrationsPage({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { data: me } = useMe();
-  const canConfigure = me === null || Boolean(me?.can.includes("provider:write"));
-  const integrations = useIntegrations();
-  const recipes = useRecipes();
-  const channels = useChannels();
-  const credentials = useMCPUserCredentials();
+  const access = integrationAccess(me);
+  // MCP servers, providers and channels are the platform's; connector
+  // instances are their own scope's (NT-019). An area's administrator asks
+  // for none of the platform's lists, each of which would answer 403.
+  const integrations = useIntegrations(access.platform);
+  const recipes = useRecipes(access.platform);
+  const channels = useChannels(access.platform);
+  const credentials = useMCPUserCredentials(access.platform);
   const connectorCatalog = useConnectorCatalog(section === "connectors");
-  const connectorInstances = useConnectorInstances(section === "connectors");
+  // The instances carry hosts and databases, so they are listed to whoever
+  // configures somewhere, and not to a reader of the platform (NT-019).
+  const connectorInstances = useConnectorInstances(
+    section === "connectors" && access.createConnector,
+  );
   const putConnectorInstance = usePutConnectorInstance();
   const deleteConnectorInstance = useDeleteConnectorInstance();
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -216,7 +224,8 @@ export function IntegrationsPage({
               instancesLoading: connectorInstances.isLoading,
               catalogError: connectorCatalog.error,
               instancesError: connectorInstances.error,
-              canConfigure,
+              canConfigure: access.createConnector,
+              scope: { anyScope: access.anyScope, configure: access.configure },
             }}
             actions={{
               retryCatalog: () => void connectorCatalog.refetch(),

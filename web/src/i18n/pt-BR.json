@@ -1358,7 +1358,7 @@
     "notAnswering": "não responde",
     "openAiCompatible": "Compatível com OpenAI",
     "platformOnly": "As integrações são configuradas pela administração da plataforma",
-    "platformOnlyHint": "Servidores MCP, connectors, provedores e canais valem hoje para a instalação inteira, então só quem administra a plataforma os conecta. Para conectar algo para os agentes da sua área, fale com um administrador da plataforma.",
+    "platformOnlyHint": "Servidores MCP, provedores e canais valem para a instalação inteira, então só quem administra a plataforma os conecta. Os connectors de uma área são configurados pelos administradores dela. Para conectar outra coisa para os agentes da sua área, fale com um administrador da plataforma.",
     "prefixExplains": "Prefixa as ferramentas: <code>crm</code> dá <code>crm.lookup</code>.",
     "protocol": "Protocolo",
     "providers": "Provedores de modelo",
@@ -1438,6 +1438,9 @@
     "removeInstance": "Remover instância",
     "removeInstanceHint": "As ferramentas desta instância deixam de existir para novas execuções: {{name}}.",
     "scopeKind": "Escopo da instância",
+    "scopeHeld": "Onde o connector vale",
+    "inheritedFromPlatform": "Da plataforma",
+    "inheritedFromCompany": "Da empresa",
     "scope": {
       "area": "Área",
       "company": "Empresa",

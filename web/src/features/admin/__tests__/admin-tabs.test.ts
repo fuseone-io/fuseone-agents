@@ -28,6 +28,14 @@ describe("administration tabs", () => {
     ).toEqual(["events"]);
   });
 
+  it("hides the assistant's provider from an area's provider:write, which configures connectors", () => {
+    // NT-019: the authoring provider is the platform's.
+    expect(visibleAdminTabs(["provider:write"], []).map((tab) => tab.value)).toEqual([]);
+    expect(
+      visibleAdminTabs(["provider:write"], ["provider:write"]).map((tab) => tab.value),
+    ).toEqual(["authoring"]);
+  });
+
   it("keeps an unknown session different from an open installation", () => {
     expect(visibleAdminTabs(undefined).map((tab) => tab.value)).toEqual([]);
     expect(visibleAdminTabs(null).map((tab) => tab.value)).toEqual([

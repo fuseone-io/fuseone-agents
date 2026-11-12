@@ -16,6 +16,7 @@ const vault: ConnectorInstance = {
   scopeKind: "company",
   company: "acme",
   hasToken: true,
+  editable: true,
   vault: {
     address: "https://vault.internal",
     mount: "secret",
