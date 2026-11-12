@@ -28,6 +28,39 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+NT-019 phase 1: the administrator of an area configures that area's own connector
+instances. MCP servers, model providers and channels are still configured by the
+platform's administration. No migration.
+
+### Upgrade notes
+
+- **The connector instance listing now needs `provider:write`.** It carries hosts and
+  databases, so it is listed to whoever configures connectors in some scope, and no
+  longer to a reader of the platform. A platform auditor sees the catalogue of
+  connector types, and no instance.
+- **`/me` lists `provider:write` in `can` wherever it is held.** A new `configure` list
+  names the scopes. MCP servers, providers, channels and the assistant's provider stay
+  behind `platform`, so a client that hid them on `can` alone should read `platform`
+  for them.
+
+### Added
+
+- **An area's own connector instances.**
+  - Writing, reading and removing an instance needs `provider:write` at the instance's
+    own scope, or at the platform's administration, which governs every area. The
+    installation's instances keep today's check.
+  - The listing shows an area's administrator its own instances and the ones it
+    inherits, from its company and the platform. Each item says whether the caller
+    may change it (`editable`). Nothing of a sibling area is listed.
+  - An area's SQL or Gravitee instance binds only a Vault instance its scope can reach.
+  - The connector catalogue is read with `tool:read` in any scope. It names connector
+    types, never an instance or a credential.
+- **Console.** An area's administrator opens Integrations on the connectors and on
+  nothing else. A new instance starts in their own area, and an inherited one is marked
+  "Da plataforma" or "Da empresa" and offers no change.
+
 ## [0.105.0] — 2026-11-12
 
 NT-019 phase 0: the names of integrations become unique across the installation, in the
