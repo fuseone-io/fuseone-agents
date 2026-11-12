@@ -247,6 +247,7 @@ func (r *Runner) appendGateDecision(
 			ContractDigest: p.contractDigest,
 			Stage:          start.Stage,
 			ToolScope:      domain.RecordScope(p.toolScope),
+			Builtin:        decision.Builtin,
 		}),
 	})
 }

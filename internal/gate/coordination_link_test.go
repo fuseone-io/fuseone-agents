@@ -144,11 +144,12 @@ func TestEvaluate_provenLinkByADraft_stillNeedsApproval(t *testing.T) {
 }
 
 // The meaning of the built-in checks changed, so the version that names them
-// did: a decision taken under v5 must not read as one taken under v6.
-func TestPolicyVersion_isV6(t *testing.T) {
+// did: v6 for links, v7 for the scope check (NT-019). A decision taken under
+// one must not read as one taken under the other.
+func TestPolicyVersion_isV7(t *testing.T) {
 	t.Parallel()
 
-	if policyVersion != "builtin/v6" {
-		t.Fatalf("policyVersion = %q, want builtin/v6", policyVersion)
+	if policyVersion != "builtin/v7" {
+		t.Fatalf("policyVersion = %q, want builtin/v7", policyVersion)
 	}
 }

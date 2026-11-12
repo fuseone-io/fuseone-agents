@@ -79,4 +79,7 @@ func TestAdvance_aToolOfTheInstallation_recordsItsScopeAndRuns(t *testing.T) {
 	if len(h.tools.invocations) != 1 {
 		t.Errorf("the tool was called %d times, want once", len(h.tools.invocations))
 	}
+	if decided.Builtin != gate.BuiltinVersion() {
+		t.Errorf("recorded builtin = %q, want %q", decided.Builtin, gate.BuiltinVersion())
+	}
 }

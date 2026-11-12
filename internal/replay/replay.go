@@ -132,6 +132,20 @@ func Run(ctx context.Context, steps []domain.Step, snapshots Snapshots, specs Sp
 			continue
 		}
 
+		// The checks in force then. A decision that names other built-in
+		// checks cannot be asked again: today's are not the ones that ruled.
+		// One recorded before the identity was is asked under today's, as
+		// every replay did until then.
+		if recorded.Builtin != "" && recorded.Builtin != gate.BuiltinVersion() {
+			report.Divergences = append(report.Divergences, Divergence{
+				Seq: step.Seq, Tool: recorded.Tool, Was: recorded.Verdict,
+				WasRule: recorded.Rule,
+				Why: fmt.Sprintf("the decision was made under built-in checks %s, and this replay runs %s",
+					recorded.Builtin, gate.BuiltinVersion()),
+			})
+			continue
+		}
+
 		again, err := replayOne(ctx, pack, step, recorded, policies)
 		if err != nil {
 			return report, err

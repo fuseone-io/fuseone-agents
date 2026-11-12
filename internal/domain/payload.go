@@ -217,6 +217,10 @@ type GateDecidedPayload struct {
 	// replay must ask the question the run asked. Absent on a step decided
 	// before the Gate judged scope.
 	ToolScope *RecordedScope `json:"tool_scope,omitempty"`
+	// Builtin names the built-in checks that ruled, apart from the authored
+	// set PolicyHash names: a replay under other checks is not a replay.
+	// Absent on a step decided before it was recorded.
+	Builtin string `json:"builtin,omitempty"`
 
 	// Labels is the taint the arguments carried, and ArgsDigest identifies
 	// them without holding them.

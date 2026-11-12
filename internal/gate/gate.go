@@ -39,7 +39,11 @@ const (
 
 // policyVersion must be bumped whenever the semantics of a built-in check
 // change, even when the rule names stay the same.
-const policyVersion = "builtin/v6"
+//
+// v7 adds checkScope (NT-019). The version reaches every decision as
+// Decision.Builtin, on its own: the policy hash names the authored set and
+// WithPolicies replaces the built-in one with it.
+const policyVersion = "builtin/v7"
 
 // result is a check's answer: a verdict plus why.
 type result struct {
@@ -120,6 +124,7 @@ func (g *Gate) Evaluate(_ context.Context, r Request) (domain.Decision, error) {
 		Verdict:    domain.VerdictAllow,
 		Rule:       RulePassed,
 		PolicyHash: g.policyHash,
+		Builtin:    builtinPolicyHash(),
 	}
 
 	// Run once, before the loop, because two checks need the answer: the
@@ -208,6 +213,11 @@ func monitoredFrom(authored policyResult) []domain.MonitoredPolicy {
 // builtinPolicyHash pins the rule set that produced a decision. Changing any
 // rule changes the hash, which is what lets a replay tell "the policy said
 // yes" apart from "a different policy said yes" (PRD AU-08).
+// BuiltinVersion names the built-in checks: their order and their version.
+// Recorded on every decision, so a replay can tell a decision made under other
+// checks from one that diverged.
+func BuiltinVersion() string { return builtinPolicyHash() }
+
 func builtinPolicyHash() string {
 	h := sha256.New()
 	for _, c := range checkOrder {
