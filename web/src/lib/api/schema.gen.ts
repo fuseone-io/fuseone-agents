@@ -6510,6 +6510,21 @@ export interface components {
     };
     responses: {
         /**
+         * @description Another scope already holds this name, so nothing was written. Problem
+         *     type `fuseone:integration-name-taken`. An integration's name is unique
+         *     per kind across the installation, because tool ids and inbound
+         *     messages carry the name and no scope (NT-019). The answer never says
+         *     which scope holds it. Choose another name.
+         */
+        NameTaken: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /**
          * @description The resource is no longer at a revision If-Match named, so nothing was
          *     written. Problem type `fuseone:precondition-failed`. Read it again, and
          *     decide with what is there now.
@@ -9840,6 +9855,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["NameTaken"];
             412: components["responses"]["PreconditionFailed"];
         };
     };

@@ -595,16 +595,32 @@ func TestResolve_theSameIdAtTheInstallationAndAtACompany_isAmbiguous(t *testing.
 	store, _, settingsStore := configuredChannelsWithStore(t)
 
 	// Both written directly. The administration refuses to create the pair —
-	// that is its own lock — so a state holding both is restored, migrated or
-	// hand-edited, which is the state this read has to survive.
+	// that is its own lock — and since NT-019 the database refuses it too: a
+	// conversation's name is unique across scopes, and migration 0108 stops
+	// over a pair already stored. So the pair can no longer be restored,
+	// migrated or hand-edited into place. The read keeps its ambiguity answer;
+	// what this pins is that the state never reaches it.
 	conversationRow(t, settingsStore, "SHARED-EVERYWHERE",
 		settings.ScopeArea, domain.Scope{Company: "acme", Area: "ops"},
 		channel.ConversationMentions)
-	installationConversation(t, settingsStore, "SHARED-EVERYWHERE", channel.ConversationMentions)
+	refusedConversationRow(t, settingsStore, "SHARED-EVERYWHERE")
 
-	_, err := store.Resolve(t.Context(), "acme-slack", "SHARED-EVERYWHERE")
-	if !errors.Is(err, channel.ErrAmbiguousConversation) {
-		t.Fatalf("err = %v, want the ambiguity reported", err)
+	if _, err := store.Resolve(t.Context(), "acme-slack", "SHARED-EVERYWHERE"); err != nil {
+		t.Fatalf("Resolve of the one row stored = %v", err)
+	}
+}
+
+// refusedConversationRow is the installation row of a conversation an area
+// already holds, refused by the database (NT-019).
+func refusedConversationRow(t *testing.T, store *settings.Store, id string) {
+	t.Helper()
+	err := store.Put(t.Context(), settings.Setting{
+		ScopeKind: settings.ScopeInstallation, Scope: domain.Scope{Company: domain.Installation},
+		Kind: channel.KindConversation, Name: id, Value: []byte(`{"channel":"acme-slack"}`),
+		Enabled: true, UpdatedBy: "restore",
+	})
+	if !errors.Is(err, settings.ErrNameTaken) {
+		t.Fatalf("the installation row of %s = %v, want ErrNameTaken", id, err)
 	}
 }
 
@@ -885,18 +901,16 @@ order may answer.
 func TestWatchFor_theSameIdAtTwoScopes_answersNoRule(t *testing.T) {
 	store, _, settingsStore := configuredChannelsWithStore(t)
 
+	// The pair this was written for is refused by the database since NT-019,
+	// so a watch rule can only come from the one row that is stored.
 	conversationRow(t, settingsStore, "SHARED-WATCHING",
 		settings.ScopeArea, domain.Scope{Company: "acme", Area: "ops"},
 		channel.ConversationWatch)
-	installationConversation(t, settingsStore, "SHARED-WATCHING", channel.ConversationWatch)
+	refusedConversationRow(t, settingsStore, "SHARED-WATCHING")
 
-	_, ok, err := store.WatchFor(t.Context(), "acme-slack", "SHARED-WATCHING",
-		channel.Source{Bot: "B-alerts"})
-	if err != nil {
+	if _, _, err := store.WatchFor(t.Context(), "acme-slack", "SHARED-WATCHING",
+		channel.Source{Bot: "B-alerts"}); err != nil {
 		t.Fatalf("WatchFor: %v", err)
-	}
-	if ok {
-		t.Error("an ambiguous conversation answered with a watch rule")
 	}
 }
 

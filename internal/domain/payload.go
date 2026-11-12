@@ -212,6 +212,16 @@ type GateDecidedPayload struct {
 	// not the decision that was made (PRD AU-07).
 	Stage Stage `json:"stage,omitempty"`
 
+	// ToolScope is where the tool belonged when this was decided (NT-019).
+	// Recorded for the same reason as Stage: a server can move or go, and a
+	// replay must ask the question the run asked. Absent on a step decided
+	// before the Gate judged scope.
+	ToolScope *RecordedScope `json:"tool_scope,omitempty"`
+	// Builtin names the built-in checks that ruled, apart from the authored
+	// set PolicyHash names: a replay under other checks is not a replay.
+	// Absent on a step decided before it was recorded.
+	Builtin string `json:"builtin,omitempty"`
+
 	// Labels is the taint the arguments carried, and ArgsDigest identifies
 	// them without holding them.
 	//

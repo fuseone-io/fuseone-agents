@@ -25,12 +25,22 @@ const SystemWorker UserID = "system:worker"
 // squatting the sigil, from every availability check — and exemption is how
 // a tool disappears silently.
 func (t ToolID) PlatformOwned() bool {
-	switch t {
-	case ToolContextRead, ToolTicketAnswer, ToolMemoryFind, ToolMemorySuggest,
-		ToolWorkItemClaim, ToolWorkItemLink:
-		return true
+	for _, own := range PlatformTools() {
+		if t == own {
+			return true
+		}
 	}
 	return false
+}
+
+// PlatformTools is that set, as a list: what PlatformOwned answers for, and
+// what a test can walk without restating it. Each of these runs from every
+// scope, because the platform serves it (NT-019).
+func PlatformTools() []ToolID {
+	return []ToolID{
+		ToolContextRead, ToolTicketAnswer, ToolMemoryFind, ToolMemorySuggest,
+		ToolWorkItemClaim, ToolWorkItemLink,
+	}
 }
 
 // Server names the MCP server a tool is registered under — the namespace

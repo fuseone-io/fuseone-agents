@@ -24,6 +24,7 @@ const (
 	RulePassed      = "passed"
 	RuleCapability  = "capability"
 	RuleContract    = "contract"
+	RuleScope       = "scope"
 	RuleDataBarrier = "data_barrier"
 	RuleTaint       = "taint"
 	RulePolicy      = "policy"
@@ -38,7 +39,11 @@ const (
 
 // policyVersion must be bumped whenever the semantics of a built-in check
 // change, even when the rule names stay the same.
-const policyVersion = "builtin/v6"
+//
+// v7 adds checkScope (NT-019). The version reaches every decision as
+// Decision.Builtin, on its own: the policy hash names the authored set and
+// WithPolicies replaces the built-in one with it.
+const policyVersion = "builtin/v7"
 
 // result is a check's answer: a verdict plus why.
 type result struct {
@@ -70,6 +75,7 @@ type check struct {
 // the failure the operator actually has to fix.
 var checkOrder = []check{
 	{RuleCapability, checkCapability},
+	{RuleScope, checkScope},
 	{RuleContract, checkContract},
 	{RuleDataBarrier, checkDataBarrier},
 	{RuleTaint, checkTaint},
@@ -114,6 +120,14 @@ func (g *Gate) WithPolicies(p Policies) *Gate {
 // rulings are remembered and evaluation continues, so a later block still
 // wins over an earlier approval requirement.
 func (g *Gate) Evaluate(_ context.Context, r Request) (domain.Decision, error) {
+	d := g.evaluate(r)
+	// Stamped here, once, on whatever path produced the decision: a block, an
+	// approval to ask for, a granted one or a plain allow each build their own.
+	d.Builtin = builtinPolicyHash()
+	return d, nil
+}
+
+func (g *Gate) evaluate(r Request) domain.Decision {
 	worst := domain.Decision{
 		Verdict:    domain.VerdictAllow,
 		Rule:       RulePassed,
@@ -151,7 +165,7 @@ func (g *Gate) Evaluate(_ context.Context, r Request) (domain.Decision, error) {
 			d.PolicyCode = authored.code
 		}
 		if got.verdict.Terminal() {
-			return d, nil
+			return d
 		}
 		if got.verdict > worst.Verdict {
 			worst = d
@@ -168,9 +182,9 @@ func (g *Gate) Evaluate(_ context.Context, r Request) (domain.Decision, error) {
 			Reason:     "approved by a human for this run",
 			PolicyHash: g.policyHash,
 			Monitored:  worst.Monitored,
-		}, nil
+		}
 	}
-	return worst, nil
+	return worst
 }
 
 // mergePolicy decides what the policy check says once the authored set has
@@ -206,6 +220,11 @@ func monitoredFrom(authored policyResult) []domain.MonitoredPolicy {
 // builtinPolicyHash pins the rule set that produced a decision. Changing any
 // rule changes the hash, which is what lets a replay tell "the policy said
 // yes" apart from "a different policy said yes" (PRD AU-08).
+// BuiltinVersion names the built-in checks: their order and their version.
+// Recorded on every decision, so a replay can tell a decision made under other
+// checks from one that diverged.
+func BuiltinVersion() string { return builtinPolicyHash() }
+
 func builtinPolicyHash() string {
 	h := sha256.New()
 	for _, c := range checkOrder {

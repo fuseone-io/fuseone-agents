@@ -13,14 +13,15 @@ import (
 
 func request(over func(*gate.Request)) gate.Request {
 	r := gate.Request{
-		Scope:   domain.Scope{Company: "acme", Area: "cx"},
-		RunID:   "run-1",
-		AgentID: "triage",
-		Seq:     2,
-		Tool:    "crm.reply",
-		Effect:  domain.EffectWrite,
-		Pack:    gate.NewPack("crm.reply", "crm.lookup", "crm.refund"),
-		Budget:  domain.Budget{Micros: 1_000_000, ToolCalls: 20, Steps: 50},
+		ToolScope: domain.Scope{Company: domain.Installation},
+		Scope:     domain.Scope{Company: "acme", Area: "cx"},
+		RunID:     "run-1",
+		AgentID:   "triage",
+		Seq:       2,
+		Tool:      "crm.reply",
+		Effect:    domain.EffectWrite,
+		Pack:      gate.NewPack("crm.reply", "crm.lookup", "crm.refund"),
+		Budget:    domain.Budget{Micros: 1_000_000, ToolCalls: 20, Steps: 50},
 		// Trusted to act alone, so these read as tests about the policy set
 		// rather than about the agent's stage. A request with no stage
 		// escalates every effect, which is the safe default and a different

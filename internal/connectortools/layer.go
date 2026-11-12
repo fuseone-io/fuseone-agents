@@ -104,6 +104,9 @@ func (l *Layer) WithTicketAnswers(answers *TicketAnswers) *Layer {
 
 func (l *Layer) SetInstances(instances []Instance) error {
 	next := make(map[instanceKey]Instance, len(instances))
+	// The name alone is an instance's identity (NT-019, migration 0108); the
+	// key below is only how a tool id finds it.
+	named := make(map[string]bool, len(instances))
 	for _, instance := range instances {
 		if !instance.Enabled {
 			continue
@@ -112,6 +115,10 @@ func (l *Layer) SetInstances(instances []Instance) error {
 			return err
 		}
 		key := instanceKey{connector: instance.Connector, name: instance.Name}
+		if named[instance.Name] {
+			return fmt.Errorf("%w: %s", ErrDuplicateInstance, instance.Name)
+		}
+		named[instance.Name] = true
 		next[key] = cloneInstance(instance)
 	}
 	l.mu.Lock()

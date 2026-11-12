@@ -14,7 +14,6 @@ import (
 	"github.com/fuseone/agents/internal/connectortools"
 	"github.com/fuseone/agents/internal/contextshare"
 	effectdedupe "github.com/fuseone/agents/internal/dedupe"
-	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/egress"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/known"
@@ -278,21 +277,4 @@ func (p *workerParts) toolSchemas() toolSchemas {
 		schemas = p.native
 	}
 	return workitem.NewLayer(nil, memory.NewLayer(nil, schemaCatalog{schemas: schemas}, p.content, p.memory))
-}
-
-type schemaCatalog struct{ schemas toolSchemas }
-
-func (s schemaCatalog) Effect(domain.ToolID) (domain.Effect, bool) {
-	return domain.EffectUnknown, false
-}
-
-func (s schemaCatalog) Dedupe(domain.ToolID) (domain.ToolDedupe, bool) {
-	return domain.ToolDedupe{}, false
-}
-
-func (s schemaCatalog) Schema(id domain.ToolID) (string, string, map[string]any, bool) {
-	if s.schemas == nil {
-		return "", "", nil, false
-	}
-	return s.schemas.Schema(id)
 }

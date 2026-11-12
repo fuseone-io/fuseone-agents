@@ -68,6 +68,9 @@ type Decision struct {
 	Rule string
 	// PolicyHash identifies the policy version that was evaluated.
 	PolicyHash string
+	// Builtin identifies the built-in checks that evaluated it, apart from
+	// the authored set PolicyHash names (NT-019).
+	Builtin string
 	// Args carries the modified arguments when Verdict == VerdictConstrain.
 	Args []byte
 	// Reason is the business-language explanation shown in the trail. It is

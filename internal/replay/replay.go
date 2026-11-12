@@ -132,6 +132,20 @@ func Run(ctx context.Context, steps []domain.Step, snapshots Snapshots, specs Sp
 			continue
 		}
 
+		// The checks in force then. A decision that names other built-in
+		// checks cannot be asked again: today's are not the ones that ruled.
+		// One recorded before the identity was is asked under today's, as
+		// every replay did until then.
+		if recorded.Builtin != "" && recorded.Builtin != gate.BuiltinVersion() {
+			report.Divergences = append(report.Divergences, Divergence{
+				Seq: step.Seq, Tool: recorded.Tool, Was: recorded.Verdict,
+				WasRule: recorded.Rule,
+				Why: fmt.Sprintf("the decision was made under built-in checks %s, and this replay runs %s",
+					recorded.Builtin, gate.BuiltinVersion()),
+			})
+			continue
+		}
+
 		again, err := replayOne(ctx, pack, step, recorded, policies)
 		if err != nil {
 			return report, err
@@ -167,6 +181,7 @@ func replayOne(
 	decision, err := g.Evaluate(ctx, gate.Request{
 		Scope: step.Scope, RunID: step.RunID, AgentID: step.AgentID,
 		Seq: step.Seq, Tool: recorded.Tool, Effect: recorded.Effect,
+		ToolScope: recordedToolScope(step, recorded),
 		ArgLabels: recorded.Labels,
 		Pack:      pack, Stage: recorded.Stage,
 		// Reproducing the outcome, not the ceiling: budget is a fact about
@@ -211,4 +226,17 @@ func decode(step domain.Step, into any) error {
 		return fmt.Errorf("replay: step %d carries no payload", step.Seq)
 	}
 	return json.Unmarshal(step.Payload, into)
+}
+
+// recordedToolScope is where the tool belonged when the run asked.
+//
+// A step decided before the Gate judged scope (NT-019) recorded none, and its
+// question had no scope in it. Answering with the run's own scope asks that
+// same question again: the check passes, as it would have, and the decision
+// reproduces instead of reading as diverged.
+func recordedToolScope(step domain.Step, recorded domain.GateDecidedPayload) domain.Scope {
+	if recorded.ToolScope == nil {
+		return step.Scope
+	}
+	return recorded.ToolScope.Scope()
 }

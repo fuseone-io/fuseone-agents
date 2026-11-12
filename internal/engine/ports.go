@@ -82,6 +82,9 @@ type Proposal struct {
 	// contractDigest is derived by the runner from the tool layer. A planner
 	// cannot author it, and every pass through act recomputes it.
 	contractDigest string
+	// toolScope is where the tool belongs, read once from the catalogue so
+	// the Gate rules on the scope the ledger then records (NT-019).
+	toolScope domain.Scope
 	// approvalEvidence is read from a trusted tool boundary or a sealed
 	// approval step. A planner cannot author it.
 	approvalEvidence domain.ApprovalEvidence
@@ -243,6 +246,11 @@ type ToolResult struct {
 type Catalog interface {
 	Effect(domain.ToolID) (domain.Effect, bool)
 	Dedupe(domain.ToolID) (domain.ToolDedupe, bool)
+	// Scope is where a tool belongs: the runtime scope of the server or
+	// connector instance that declares it, or the installation's for the
+	// platform's own tools. Each layer answers for the ids it serves, and false
+	// for one it does not know, which the runner reads as the zero scope.
+	Scope(domain.ToolID) (domain.Scope, bool)
 }
 
 // Schemas resolves what a tool looks like to the model — the same resolution

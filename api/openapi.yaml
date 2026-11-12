@@ -3375,6 +3375,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/NameTaken' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
     delete:
       tags: [admin]
@@ -5079,6 +5080,16 @@ components:
       schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
 
   responses:
+    NameTaken:
+      description: |
+        Another scope already holds this name, so nothing was written. Problem
+        type `fuseone:integration-name-taken`. An integration's name is unique
+        per kind across the installation, because tool ids and inbound
+        messages carry the name and no scope (NT-019). The answer never says
+        which scope holds it. Choose another name.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
     PreconditionFailed:
       description: |
         The resource is no longer at a revision If-Match named, so nothing was

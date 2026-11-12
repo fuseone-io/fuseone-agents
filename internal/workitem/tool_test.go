@@ -16,6 +16,11 @@ import (
 // delegated would hand the platform's id to a server.
 type base struct{ invoked []domain.ToolID }
 
+func (b *base) Scope(id domain.ToolID) (domain.Scope, bool) {
+	_, ok := b.Effect(id)
+	return domain.Scope{Company: domain.Installation}, ok
+}
+
 func (b *base) Effect(id domain.ToolID) (domain.Effect, bool) {
 	switch id {
 	case "github.add_comment":

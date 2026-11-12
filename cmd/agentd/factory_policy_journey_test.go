@@ -81,8 +81,11 @@ func mergerCall(agent domain.AgentID, tool domain.ToolID, granted bool) gate.Req
 	return gate.Request{
 		Scope: domain.Scope{Company: "acme", Area: "factory"}, RunID: "run-merge", AgentID: agent, Seq: 3,
 		Tool: tool, Effect: domain.EffectDestructive, Args: []byte(`{}`),
-		Pack:   gate.NewPack("factory-merger.merge_if_ready", "factory-merger.delete_branch", "factory-developer.merge_if_ready"),
-		Budget: domain.Budget{Micros: 200_000, ToolCalls: 12, Steps: 24}, Estimate: domain.Consumption{ToolCalls: 1},
+		// The factory's servers are the installation's, as every MCP server is
+		// until servers gain scopes (NT-019).
+		ToolScope: domain.Scope{Company: domain.Installation},
+		Pack:      gate.NewPack("factory-merger.merge_if_ready", "factory-merger.delete_branch", "factory-developer.merge_if_ready"),
+		Budget:    domain.Budget{Micros: 200_000, ToolCalls: 12, Steps: 24}, Estimate: domain.Consumption{ToolCalls: 1},
 		IdemKey: "run-merge:3:" + string(tool), Stage: domain.StageCopilot, ApprovalGranted: granted,
 	}
 }

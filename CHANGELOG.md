@@ -28,6 +28,55 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+NT-019 phase 0: the names of integrations become unique across the installation, in the
+database, and the Gate stops a tool its run's scope does not contain. Adds migration
+`0108_integration_names_unique`. MCP servers, providers and channel connections are
+written at the installation only, so for them nothing changes. Connector instances and
+conversations may already be stored at a company or an area; see below.
+
+### Upgrade notes
+
+- **The upgrade stops if two scopes already hold one integration name.**
+  - The kinds are MCP servers, model providers, connector instances, channel connections
+    and conversations.
+  - The migration names each duplicate's kind and name, changes nothing, and the
+    upgrade does not proceed.
+  - Run this read-only query against the installation's database before upgrading. It
+    must return no rows:
+
+    ```sql
+    select kind, name, count(*) from settings
+    where kind in ('mcp_server', 'model_provider', 'connector_instance',
+                   'channel', 'channel_conversation')
+    group by kind, name having count(*) > 1;
+    ```
+
+  - Rename one of each pair, then upgrade.
+- **Connector instances: the name alone is unique.** Two instances of different
+  connectors can no longer share a name in two scopes (for example `prod` for Jira in
+  one area and for SQL in another). The query above lists any that exist.
+- **Rolling back.** The index stays after a rollback, because migrations do not go back.
+  Below this release, writing a connector instance under a taken name answers 400
+  `fuseone:not-stored` instead of 409. Nothing is written, so it fails closed.
+- **Replays of earlier decisions.** A decision is recorded with the built-in checks that
+  made it, now `builtin/v7`. Replaying a decision recorded under other built-in checks
+  reports it as not comparable, with the reason. Decisions recorded before this release
+  carry no such identity, and are replayed under today's checks as before.
+
+### Changed
+
+- **A connector instance name another scope holds answers 409**
+  `fuseone:integration-name-taken`. The answer never says which scope holds it.
+- **The Gate stops a tool its run's scope does not contain**, with the rule `scope`,
+  recorded in the run's trail as a block.
+  - MCP tools and the platform's own tools belong to the installation, which contains
+    every run, so none of them is stopped.
+  - A connector instance stored at a company or an area was already refused to a run
+    outside that scope, by the connector layer (`ErrOutOfScope`). That run is now
+    stopped earlier, by the Gate, and the trail says why.
+
 ## [0.104.0] — 2026-11-11
 
 Release C2 of version claims (NT-018): the database itself refuses a version whose digest

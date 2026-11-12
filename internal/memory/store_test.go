@@ -509,7 +509,8 @@ func TestMemorySuggest_taintedSuggestionGoesThroughTheGateAsAWrite(t *testing.T)
 	t.Parallel()
 	entry := memory.MemorySuggestToolEntry()
 	decision, err := gate.New().Evaluate(context.Background(), gate.Request{
-		Scope: platformScope, RunID: "run-suggest-gate", AgentID: "triage", Seq: 1,
+		ToolScope: domain.Scope{Company: domain.Installation},
+		Scope:     platformScope, RunID: "run-suggest-gate", AgentID: "triage", Seq: 1,
 		Tool: entry.ID, Effect: entry.Effect, Args: suggestionArgs("grafana.datasource.down"),
 		ArgLabels: domain.NewLabels(domain.LabelUntrusted).Union(domain.ScopeLabels(platformScope)),
 		Pack:      gate.NewPack(entry.ID), Stage: domain.StageAutonomous,

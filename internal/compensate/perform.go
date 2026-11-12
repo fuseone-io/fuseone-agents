@@ -95,6 +95,7 @@ func performOne(
 	ctx context.Context, deps Deps, start engine.Start, act Act,
 ) (Outcome, error) {
 	effect, _ := deps.Catalog.Effect(act.Undo)
+	toolScope, _ := deps.Catalog.Scope(act.Undo)
 
 	head, err := deps.Ledger.Head(ctx, start.RunID)
 	if err != nil {
@@ -104,7 +105,7 @@ func performOne(
 
 	decision, err := deps.Gate.Evaluate(ctx, gate.Request{
 		Scope: start.Scope, RunID: start.RunID, AgentID: start.AgentID, Seq: seq,
-		Tool: act.Undo, Effect: effect,
+		Tool: act.Undo, Effect: effect, ToolScope: toolScope,
 		// The permission it borrows, and the only reason it may cross.
 		Compensating: act.Tool,
 		Pack:         start.Pack, Stage: start.Stage,

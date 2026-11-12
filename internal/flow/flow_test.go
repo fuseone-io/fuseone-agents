@@ -18,6 +18,11 @@ type catalogue map[domain.ToolID]struct {
 	untrusted bool
 }
 
+func (c catalogue) Scope(t domain.ToolID) (domain.Scope, bool) {
+	_, ok := c[t]
+	return domain.Scope{Company: domain.Installation}, ok
+}
+
 func (c catalogue) Effect(t domain.ToolID) (domain.Effect, bool) {
 	entry, ok := c[t]
 	return entry.effect, ok

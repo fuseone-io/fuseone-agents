@@ -153,6 +153,11 @@ func (s *Server) PutConnectorInstance(ctx context.Context, req openapi.PutConnec
 			PreconditionFailedApplicationProblemPlusJSONResponse: stale,
 		}, nil
 	}
+	if errors.Is(err, settings.ErrNameTaken) {
+		return openapi.PutConnectorInstance409ApplicationProblemPlusJSONResponse{
+			NameTakenApplicationProblemPlusJSONResponse: openapi.NameTakenApplicationProblemPlusJSONResponse(nameTaken()),
+		}, nil
+	}
 	if err != nil {
 		return openapi.PutConnectorInstance400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(

@@ -210,26 +210,21 @@ func TestDeleteConnectorInstance_removesOnlyTheNamedScope(t *testing.T) {
 	instances, _, _ := newConnectorInstances(t)
 	ctx := context.Background()
 	token := "vault-token"
-	for _, scope := range []domain.Scope{
-		{Company: "acme", Area: "platform"},
-		{Company: "acme", Area: "cx"},
-	} {
-		if err := instances.PutConnectorInstance(ctx, "usr_ana", platform,
-			settings.ScopeArea, scope, vaultInstance("prod", true), &token, false); err != nil {
-			t.Fatalf("PutConnectorInstance %s: %v", scope, err)
-		}
+	if err := instances.PutConnectorInstance(ctx, "usr_ana", platform,
+		settings.ScopeArea, domain.Scope{Company: "acme", Area: "platform"},
+		vaultInstance("prod", true), &token, false); err != nil {
+		t.Fatalf("PutConnectorInstance: %v", err)
 	}
 
-	if err := instances.DeleteConnectorInstance(ctx, "usr_ana", platform,
-		settings.ScopeArea, domain.Scope{Company: "acme", Area: "cx"}, "prod"); err != nil {
-		t.Fatalf("DeleteConnectorInstance: %v", err)
-	}
+	// The name, at a scope that does not hold it: nothing of another scope goes.
+	_ = instances.DeleteConnectorInstance(ctx, "usr_ana", platform,
+		settings.ScopeArea, domain.Scope{Company: "acme", Area: "cx"}, "prod")
 	listed, err := instances.ConnectorInstances(ctx)
 	if err != nil {
 		t.Fatalf("ConnectorInstances: %v", err)
 	}
 	if len(listed) != 1 || listed[0].Scope.Area != "platform" {
-		t.Fatalf("listed = %+v, want only the platform scoped instance", listed)
+		t.Fatalf("listed = %+v, want the platform scoped instance untouched", listed)
 	}
 }
 

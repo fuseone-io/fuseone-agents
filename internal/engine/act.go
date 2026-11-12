@@ -116,6 +116,7 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 		Ticket: state.Ticket,
 	})
 	effect := r.effectOf(p.Tool)
+	p = r.placed(p)
 	baseIdemKey := idempotencyKey(start.RunID, p.Tool, p.Args)
 	idemKey := executionIdempotencyKey(state, effect, p.Tool, baseIdemKey)
 	perRunDuplicate := duplicateWithinRun(state, effect, p.Tool, idemKey)
@@ -182,6 +183,7 @@ func (r *Runner) decide(
 		Seq:       state.Seq + 1,
 		Tool:      p.Tool,
 		Effect:    effect,
+		ToolScope: p.toolScope,
 		Args:      p.Args,
 		ArgLabels: state.Labels,
 		Pack:      envelopeForState(start, state),
@@ -244,6 +246,8 @@ func (r *Runner) appendGateDecision(
 			Labels: state.Labels, ArgsDigest: digest(p.Args),
 			ContractDigest: p.contractDigest,
 			Stage:          start.Stage,
+			ToolScope:      domain.RecordScope(p.toolScope),
+			Builtin:        decision.Builtin,
 		}),
 	})
 }
