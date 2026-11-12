@@ -628,16 +628,22 @@ func TestApprovalPolicy_aShapeAuthoringWouldRefuse_isRefusedOnTheWayOut(t *testi
 			// changed, which is the point of the table. This is the row a
 			// restore or a newer version leaves behind.
 			version := domain.VersionID("v-" + strings.ReplaceAll(one.name, " ", "-"))
+			// Claimed, and presented, as every row since release C2 must be.
+			if _, err := pool.Exec(ctx, `
+				insert into agent_version_digests (agent_id, version_id, digest)
+				values ('triage', $1::text, encode(sha256(convert_to($1::text, 'UTF8')), 'hex'))`, string(version)); err != nil {
+				t.Fatalf("claim the row: %v", err)
+			}
 			if _, err := pool.Exec(ctx, `
 				insert into agent_specs (
 					agent_id, version_id, company_id, area_id, name,
 					provider, model, effort, tools, budget, triggers,
 					instructions, source, published_by, emits, steps,
-					memory_learning, approvals
+					memory_learning, approvals, digest
 				) values ('triage', $1, 'acme', 'cx', 'Ticket triage',
 					'openai', 'test-model', '', '{}', '{}'::jsonb, '[]'::jsonb,
 					'read it', 'test.agent.md', 'usr_ana', '[]'::jsonb,
-					'[]'::jsonb, '{"mode":"off"}'::jsonb, $2::jsonb)`,
+					'[]'::jsonb, '{"mode":"off"}'::jsonb, $2::jsonb, encode(sha256(convert_to($1::text, 'UTF8')), 'hex'))`,
 				string(version), one.stored); err != nil {
 				t.Fatalf("plant the row: %v", err)
 			}

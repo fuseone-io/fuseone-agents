@@ -78,6 +78,13 @@ func watchable(t *testing.T) (*regression.Store, *pgxpool.Pool) {
 
 func published(t *testing.T, pool *pgxpool.Pool, agent, version string) {
 	t.Helper()
+	// The database makes current only a version claimed with a digest.
+	if _, err := pool.Exec(t.Context(), `
+		insert into agent_version_digests (agent_id, version_id, digest)
+		values ($1::text, $2::text, encode(sha256(convert_to($1::text || $2::text, 'UTF8')), 'hex'))
+		on conflict (agent_id, version_id) do nothing`, agent, version); err != nil {
+		t.Fatalf("claim %s: %v", agent, err)
+	}
 	if _, err := pool.Exec(t.Context(), `
 		insert into agent_state (agent_id, paused, current_version)
 		values ($1, true, $2)

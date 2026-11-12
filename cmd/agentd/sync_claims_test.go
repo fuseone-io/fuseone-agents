@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/testdb"
@@ -96,15 +97,14 @@ file would leave an agent running A with B's triggers, or with triggers nobody
 declared, whenever the newest was skipped.
 */
 func TestBoot_theNewestFileSkippedForItsDigest_triggersFollowTheVersionLeftCurrent(t *testing.T) {
-	pool := testdb.Isolated(t)
 	ctx := context.Background()
 	dir := t.TempDir()
 
 	a := withTriggers(t, dir, "a-legacy.agent.md", "0 1 * * *", "/hooks/a")
 	b := withTriggers(t, dir, "b-legacy.agent.md", "0 3 * * *", "/hooks/b")
-	// B as the migration leaves a version published before claims: its row,
+	// B as the migrations leave a version published before claims: its row,
 	// and a claim without a digest.
-	plantLegacy(t, pool, b)
+	pool := withLegacy(t, b)
 
 	boot(t, pool, dir)
 
@@ -127,12 +127,11 @@ func TestBoot_theNewestFileSkippedForItsDigest_triggersFollowTheVersionLeftCurre
 // When no version of an agent on disk can be published, the boot decided
 // nothing for it, and its triggers stay as they were.
 func TestBoot_everyFileSkippedForItsDigest_changesNoTrigger(t *testing.T) {
-	pool := testdb.Isolated(t)
 	ctx := context.Background()
 	dir := t.TempDir()
 
 	b := withTriggers(t, dir, "legacy.agent.md", "0 3 * * *", "/hooks/b")
-	plantLegacy(t, pool, b)
+	pool := withLegacy(t, b)
 	if err := trigger.NewPostgresSchedules(pool).Sync(ctx, b.ID, []string{"*/15 * * * *"}, time.Now()); err != nil {
 		t.Fatalf("seed the running schedule: %v", err)
 	}
@@ -163,10 +162,12 @@ func withTriggers(t *testing.T, dir, name, cron, path string) spec.Spec {
 	return s
 }
 
-// plantLegacy is a version as release C1's migration finds it: the row, then a
-// NULL claim.
-func plantLegacy(t *testing.T, pool *pgxpool.Pool, s spec.Spec) {
+// withLegacy is a database holding s as the migrations leave a version
+// published before claims: written by a binary without them, while the
+// database still allowed it, then claimed without a digest.
+func withLegacy(t *testing.T, s spec.Spec) *pgxpool.Pool {
 	t.Helper()
+	pool := testdb.IsolatedThrough(t, "0106_version_claims")
 	if _, err := pool.Exec(context.Background(), `
 		insert into agent_specs (
 			agent_id, version_id, company_id, area_id, name,
@@ -180,11 +181,10 @@ func plantLegacy(t *testing.T, pool *pgxpool.Pool, s spec.Spec) {
 		string(s.ID), string(s.Version)); err != nil {
 		t.Fatalf("plant the legacy row: %v", err)
 	}
-	if _, err := pool.Exec(context.Background(), `
-		insert into agent_version_digests (agent_id, version_id, digest) values ($1, $2, null)`,
-		string(s.ID), string(s.Version)); err != nil {
-		t.Fatalf("plant the null claim: %v", err)
+	if err := ledger.Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("migrate: %v", err)
 	}
+	return pool
 }
 
 // boot runs the worker's start-up publication, as worker_cmd does.
