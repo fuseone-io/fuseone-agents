@@ -112,10 +112,12 @@ func (c *Curator) Classify(ctx context.Context, scope domain.Scope, ruling domai
 // catalogue can consult the Curator without either package importing the
 // other.
 func (c *Curator) List(ctx context.Context, scope domain.Scope) ([]domain.ToolClassification, error) {
+	// With where each is stored: the platform's ceiling and the owner's word
+	// are two rows of one name, and only their scope tells them apart (NT-019).
 	rows, err := c.pool.Query(ctx, `
-		select name, value, updated_by from settings
+		select name, value, updated_by, scope_kind, company_id, area_id from settings
 		where kind = $1 and enabled
-		order by name`, classificationKind)
+		order by name, scope_kind, company_id, area_id`, classificationKind)
 	if err != nil {
 		return nil, fmt.Errorf("admin: list rulings: %w", err)
 	}
@@ -124,9 +126,10 @@ func (c *Curator) List(ctx context.Context, scope domain.Scope) ([]domain.ToolCl
 	var out []domain.ToolClassification
 	for rows.Next() {
 		var (
-			name, by string
-			raw      []byte
-			stored   struct {
+			name, by                 string
+			scopeKind, company, area string
+			raw                      []byte
+			stored                   struct {
 				Effect        string `json:"effect"`
 				Untrusted     bool   `json:"untrusted"`
 				Reason        string `json:"reason"`
@@ -138,7 +141,7 @@ func (c *Curator) List(ctx context.Context, scope domain.Scope) ([]domain.ToolCl
 				Digest string `json:"digest"`
 			}
 		)
-		if err := rows.Scan(&name, &raw, &by); err != nil {
+		if err := rows.Scan(&name, &raw, &by, &scopeKind, &company, &area); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(raw, &stored); err != nil {
@@ -164,7 +167,8 @@ func (c *Curator) List(ctx context.Context, scope domain.Scope) ([]domain.ToolCl
 		}
 
 		out = append(out, domain.ToolClassification{
-			Tool: domain.ToolID(name), Effect: effect,
+			Scope: storedRuntimeScope(scopeKind, company, area),
+			Tool:  domain.ToolID(name), Effect: effect,
 			Untrusted: stored.Untrusted, By: domain.UserID(by), Reason: stored.Reason,
 			CompensatedBy: domain.ToolID(stored.CompensatedBy),
 			Dedupe:        dedupe,
@@ -289,9 +293,9 @@ func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	byTool := make(map[domain.ToolID]domain.ToolClassification, len(rulings))
-	for _, r := range rulings {
-		byTool[r.Tool] = r
+	byTool, err := c.rulingsInForce(ctx, entries, rulings)
+	if err != nil {
+		return nil, err
 	}
 	for i, e := range entries {
 		r, ok := byTool[e.ID]

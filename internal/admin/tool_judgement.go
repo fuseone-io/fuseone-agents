@@ -61,11 +61,14 @@ func judge(pub domain.ToolPublication, configured map[string]time.Time) judged {
 
 // configuredServers is every server the configuration wants now — present and
 // switched on — with when its configuration last changed.
+//
+// At any scope: an area's server is configured like the platform's, and its
+// name is unique across the installation (NT-019, migration 0108), so the name
+// alone keys it.
 func configuredServers(ctx context.Context, tx pgx.Tx) (map[string]time.Time, error) {
 	rows, err := tx.Query(ctx, `
 		select name, updated_at from settings
-		where scope_kind = 'installation' and company_id = '' and area_id = ''
-		  and kind = $1 and enabled`, string(settings.KindMCPServer))
+		where kind = $1 and enabled`, string(settings.KindMCPServer))
 	if err != nil {
 		return nil, fmt.Errorf("admin: read the configured servers: %w", err)
 	}
