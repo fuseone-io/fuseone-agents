@@ -1,0 +1,788 @@
+<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-vdxcvpsm"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>NT-017 — A Terraform provider for FuseOne Agents | FuseOne Agents</title><link rel="canonical" href="https://fuseone-io.github.io/fuseone-agents/docs/design/nt-017-terraform-provider/"/><link rel="sitemap" href="/fuseone-agents/docs/sitemap-index.xml"/><link rel="icon" type="image/svg+xml" href="/fuseone-agents/docs/favicon.svg"/><link rel="shortcut icon" href="/fuseone-agents/docs/favicon.svg" type="image/svg+xml"/><meta name="generator" content="Astro v7.4.2"/><meta name="generator" content="Starlight v0.41.11"/><meta property="og:title" content="NT-017 — A Terraform provider for FuseOne Agents"/><meta property="og:type" content="article"/><meta property="og:url" content="https://fuseone-io.github.io/fuseone-agents/docs/design/nt-017-terraform-provider/"/><meta property="og:locale" content="en"/><meta property="og:description" content="Managing an installation's configuration from Terraform, and what the API needs first."/><meta property="og:site_name" content="FuseOne Agents"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="Managing an installation's configuration from Terraform, and what the API needs first."/><script>
+	window.StarlightThemeProvider = (() => {
+		const storedTheme =
+			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+		const theme =
+			storedTheme ||
+			(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers(theme = storedTheme || 'auto') {
+				document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+					const select = picker.querySelector('select');
+					if (select) select.value = theme;
+					/** @type {HTMLTemplateElement | null} */
+					const tmpl = document.querySelector(`#theme-icons`);
+					const newIcon = tmpl && tmpl.content.querySelector('.' + theme);
+					if (newIcon) {
+						const oldIcon = picker.querySelector('svg.label-icon');
+						if (oldIcon) {
+							oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+						}
+					}
+				});
+			},
+		};
+	})();
+</script><template id="theme-icons"><svg aria-hidden="true" class="light astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M5 12a1 1 0 0 0-1-1H3a1 1 0 0 0 0 2h1a1 1 0 0 0 1-1Zm.64 5-.71.71a1 1 0 0 0 0 1.41 1 1 0 0 0 1.41 0l.71-.71A1 1 0 0 0 5.64 17ZM12 5a1 1 0 0 0 1-1V3a1 1 0 0 0-2 0v1a1 1 0 0 0 1 1Zm5.66 2.34a1 1 0 0 0 .7-.29l.71-.71a1 1 0 1 0-1.41-1.41l-.66.71a1 1 0 0 0 0 1.41 1 1 0 0 0 .66.29Zm-12-.29a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.71-.71a1.004 1.004 0 1 0-1.43 1.41l.73.71ZM21 11h-1a1 1 0 0 0 0 2h1a1 1 0 0 0 0-2Zm-2.64 6A1 1 0 0 0 17 18.36l.71.71a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.76-.66ZM12 6.5a5.5 5.5 0 1 0 5.5 5.5A5.51 5.51 0 0 0 12 6.5Zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm0 3.5a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1Z"/></svg><svg aria-hidden="true" class="dark astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.64 13a1 1 0 0 0-1.05-.14 8.049 8.049 0 0 1-3.37.73 8.15 8.15 0 0 1-8.14-8.1 8.59 8.59 0 0 1 .25-2A1 1 0 0 0 8 2.36a10.14 10.14 0 1 0 14 11.69 1 1 0 0 0-.36-1.05Zm-9.5 6.69A8.14 8.14 0 0 1 7.08 5.22v.27a10.15 10.15 0 0 0 10.14 10.14 9.784 9.784 0 0 0 2.1-.22 8.11 8.11 0 0 1-7.18 4.32v-.04Z"/></svg><svg aria-hidden="true" class="auto astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg></template><link rel="stylesheet" href="/fuseone-agents/docs/_astro/print.ehPL0gv-.css" media="print"><link rel="stylesheet" href="/fuseone-agents/docs/_astro/common.Cd80cwrF.css"><script type="module" src="/fuseone-agents/docs/_astro/page.cNngjUgL.js"></script></head><body class="astro-vdxcvpsm"><a class="sl-skip-link astro-vxeigawq" href="#_top">Skip to content</a><div class="page sl-flex astro-gqpr5s5a"><header class="header astro-gqpr5s5a"><div class="header astro-nczgtkxc"><div class="title-wrapper sl-flex astro-nczgtkxc"><a href="/fuseone-agents/docs/" class="site-title sl-flex astro-clw6ags5"><img class="light:sl-hidden print:hidden astro-clw6ags5" alt src="/fuseone-agents/docs/_astro/logo-docs-dark.RgwYBWE_.svg" width="302" height="34"><img class="dark:sl-hidden print:block astro-clw6ags5" alt src="/fuseone-agents/docs/_astro/logo-docs-light.DMrXalo7.svg" width="302" height="34"><span class="sr-only astro-clw6ags5" translate="no">FuseOne Agents</span></a></div><div class="sl-flex print:hidden astro-nczgtkxc"><site-search class="astro-nczgtkxc astro-r5ar4xm7" data-translations="{&quot;placeholder&quot;:&quot;Search&quot;}"><button data-open-modal disabled aria-label="Search" aria-keyshortcuts="Control+K" class="astro-r5ar4xm7"><svg aria-hidden="true" class="astro-r5ar4xm7 astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg><span class="sl-hidden md:sl-block astro-r5ar4xm7" aria-hidden="true">Search</span><kbd class="sl-hidden md:sl-flex astro-r5ar4xm7" style="display: none;"><kbd class="astro-r5ar4xm7">Ctrl</kbd><kbd class="astro-r5ar4xm7">K</kbd></kbd></button><dialog style="padding:0" aria-label="Search" class="astro-r5ar4xm7"><div class="dialog-frame sl-flex astro-r5ar4xm7"><button data-close-modal class="sl-flex md:sl-hidden astro-r5ar4xm7">Cancel</button><div class="search-container astro-r5ar4xm7"><div id="starlight__search" class="astro-r5ar4xm7"></div></div></div></dialog></site-search><script>
+	(() => {
+		const openBtn = document.querySelector('button[data-open-modal]');
+		const shortcut = openBtn?.querySelector('kbd');
+		if (!openBtn || !(shortcut instanceof HTMLElement)) return;
+		const platformKey = shortcut.querySelector('kbd');
+		if (platformKey && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)) {
+			platformKey.textContent = '⌘';
+			openBtn.setAttribute('aria-keyshortcuts', 'Meta+K');
+		}
+		shortcut.style.display = '';
+	})();
+</script><script type="module" src="/fuseone-agents/docs/_astro/Search.astro_astro_type_script_index_0_lang.C1XVqlf5.js"></script></div><div class="sl-hidden md:sl-flex print:hidden right-group astro-nczgtkxc"><div class="sl-flex social-icons astro-nczgtkxc"><a href="https://github.com/fuseone-io/fuseone-agents" rel="me" class="sl-flex astro-cg55etiy"><span class="sr-only astro-cg55etiy">GitHub</span><svg aria-hidden="true" class="astro-cg55etiy astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-r2p65idu"><span class="sr-only astro-r2p65idu">Select theme</span><svg aria-hidden="true" class="icon label-icon astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-r2p65idu"><option value="dark" class="astro-r2p65idu">Dark</option><option value="light" class="astro-r2p65idu">Light</option><option value="auto" selected class="astro-r2p65idu">Auto</option></select><svg aria-hidden="true" class="icon caret astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script><script type="module">var e=`starlight-theme`,t=e=>e===`auto`||e===`dark`||e===`light`?e:`auto`,n=()=>t(typeof localStorage<`u`&&localStorage.getItem(e));function r(t){typeof localStorage<`u`&&localStorage.setItem(e,t===`light`||t===`dark`?t:``)}var i=()=>matchMedia(`(prefers-color-scheme: light)`).matches?`light`:`dark`;function a(e){StarlightThemeProvider.updatePickers(e),document.documentElement.dataset.theme=e===`auto`?i():e,r(e)}matchMedia(`(prefers-color-scheme: light)`).addEventListener(`change`,()=>{n()===`auto`&&a(`auto`)});var o=class extends HTMLElement{constructor(){super(),a(n()),this.querySelector(`select`)?.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&a(t(e.currentTarget.value))})}};customElements.define(`starlight-theme-select`,o);</script><script type="module">var e=class extends HTMLElement{constructor(){super();let e=this.querySelector(`select`);e&&(e.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&(window.location.pathname=e.currentTarget.value)}),window.addEventListener(`pageshow`,t=>{if(!t.persisted)return;let n=e.querySelector(`option[selected]`)?.index;n!==e.selectedIndex&&(e.selectedIndex=n??0)}))}};customElements.define(`starlight-lang-select`,e);</script></div></div></header><nav class="sidebar print:hidden astro-gqpr5s5a" aria-label="Main"><starlight-menu-button class="print:hidden astro-vvx7mffu"><button aria-expanded="false" aria-label="Menu" aria-controls="starlight__sidebar" class="sl-flex md:sl-hidden astro-vvx7mffu"><svg aria-hidden="true" class="open-menu astro-vvx7mffu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M3 8h18a1 1 0 1 0 0-2H3a1 1 0 0 0 0 2Zm18 8H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Zm0-5H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Z"/></svg><svg aria-hidden="true" class="close-menu astro-vvx7mffu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="m13.41 12 6.3-6.29a1.004 1.004 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1.004 1.004 0 0 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 0 1.42.998.998 0 0 0 1.42 0l6.29-6.3 6.29 6.3a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.42L13.41 12Z"/></svg></button></starlight-menu-button><script type="module">var e=class extends HTMLElement{btn=this.querySelector(`button`);constructor(){super(),this.btn.addEventListener(`click`,()=>this.toggleExpanded());let e=this.closest(`nav`);e&&e.addEventListener(`keyup`,e=>this.closeOnEscape(e)),matchMedia(`(min-width: 50em)`).addEventListener(`change`,()=>this.setExpanded(!1))}setExpanded(e){this.setAttribute(`aria-expanded`,String(e)),document.body.toggleAttribute(`data-mobile-menu-expanded`,e),document.querySelectorAll(`.main-frame, .sl-skip-link`).forEach(t=>{t.toggleAttribute(`inert`,e)})}toggleExpanded(){this.setExpanded(this.getAttribute(`aria-expanded`)!==`true`)}closeOnEscape(e){e.code===`Escape`&&(this.setExpanded(!1),this.btn.focus())}};customElements.define(`starlight-menu-button`,e);</script><div id="starlight__sidebar" class="sidebar-pane astro-gqpr5s5a"><div class="sidebar-content sl-flex astro-gqpr5s5a"><sl-sidebar-state-persist data-hash="0cmbs4n" class="astro-f5yvicm7"><script aria-hidden="true">
+		(() => {
+			try {
+				if (!matchMedia('(min-width: 50em)').matches) return;
+				/** @type {HTMLElement | null} */
+				const target = document.querySelector('sl-sidebar-state-persist');
+				const state = JSON.parse(sessionStorage.getItem('sl-sidebar-state') || '0');
+				if (!target || !state || target.dataset.hash !== state.hash) return;
+				window._starlightScrollRestore = state.scroll;
+				customElements.define(
+					'sl-sidebar-restore',
+					class SidebarRestore extends HTMLElement {
+						connectedCallback() {
+							try {
+								const idx = parseInt(this.dataset.index || '');
+								const details = this.closest('details');
+								if (details && typeof state.open[idx] === 'boolean') details.open = state.open[idx];
+							} catch {}
+						}
+					}
+				);
+			} catch {}
+		})();
+	</script><ul class="top-level astro-ojxuodky"><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Start</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="0"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/" class="astro-ojxuodky"><span class="astro-ojxuodky">What is FuseOne?</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/start/install/" class="astro-ojxuodky"><span class="astro-ojxuodky">Install</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/reference/helm-chart/" class="astro-ojxuodky"><span class="astro-ojxuodky">Helm chart</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Core concepts</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="1"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/durable-execution/" class="astro-ojxuodky"><span class="astro-ojxuodky">Durable execution</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/gate/" class="astro-ojxuodky"><span class="astro-ojxuodky">Gate and labels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/integrations/" class="astro-ojxuodky"><span class="astro-ojxuodky">Integrations</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Duplicate effects</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed memory</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Operate</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="2"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/operate/runtime-finops/" class="astro-ojxuodky"><span class="astro-ojxuodky">Runtime and FinOps</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Manual</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="3"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/" class="astro-ojxuodky"><span class="astro-ojxuodky">Manual overview</span></a></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">English</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="4"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/" class="astro-ojxuodky"><span class="astro-ojxuodky">English overview</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/first-agent/" class="astro-ojxuodky"><span class="astro-ojxuodky">Your first agent, end to end</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/agents-and-runs/" class="astro-ojxuodky"><span class="astro-ojxuodky">Agents, versions and runs</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/what-the-gate-stops/" class="astro-ojxuodky"><span class="astro-ojxuodky">What the platform stops before it happens</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/writing-agent-blocks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Writing good blocks</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/slack-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">Slack and channels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/mcp-and-credentials/" class="astro-ojxuodky"><span class="astro-ojxuodky">MCPs and credentials</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/costs-and-limits/" class="astro-ojxuodky"><span class="astro-ojxuodky">Costs and limits</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/policies/" class="astro-ojxuodky"><span class="astro-ojxuodky">Policies</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/autonomy-stages/" class="astro-ojxuodky"><span class="astro-ojxuodky">Draft, copilot and autonomous</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/scopes-and-roles/" class="astro-ojxuodky"><span class="astro-ojxuodky">Companies, areas and roles</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/approving/" class="astro-ojxuodky"><span class="astro-ojxuodky">Approving an action</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/reading-a-run/" class="astro-ojxuodky"><span class="astro-ojxuodky">Reading a run</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/data-barriers/" class="astro-ojxuodky"><span class="astro-ojxuodky">Data labels and barriers</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/context-sharing/" class="astro-ojxuodky"><span class="astro-ojxuodky">Context sharing between agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/simulation-and-regressions/" class="astro-ojxuodky"><span class="astro-ojxuodky">Simulation and regressions</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/auditor-guide/" class="astro-ojxuodky"><span class="astro-ojxuodky">Auditor guide</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed memory</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Duplicate effect recognition</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/gravitee-tickets/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed Gravitee tickets</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/cloudflare-blocklist/" class="astro-ojxuodky"><span class="astro-ojxuodky">Cloudflare block list</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/standing-approvals/" class="astro-ojxuodky"><span class="astro-ojxuodky">Standing approvals</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/elasticsearch-window/" class="astro-ojxuodky"><span class="astro-ojxuodky">Elasticsearch window</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/software-factory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Software factory</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/github-webhooks/" class="astro-ojxuodky"><span class="astro-ojxuodky">GitHub webhooks</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/monitoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">Monitoring event dispatch</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/evidence-collection/" class="astro-ojxuodky"><span class="astro-ojxuodky">Evidence collection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/automating-configuration/" class="astro-ojxuodky"><span class="astro-ojxuodky">Automating configuration</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/experiments/" class="astro-ojxuodky"><span class="astro-ojxuodky">Experiments</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Portuguese</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="5"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/" class="astro-ojxuodky"><span class="astro-ojxuodky">Portuguese overview</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/first-agent/" class="astro-ojxuodky"><span class="astro-ojxuodky">Seu primeiro agente, do começo ao fim</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/agents-and-runs/" class="astro-ojxuodky"><span class="astro-ojxuodky">Agentes, versões e execuções</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/what-the-gate-stops/" class="astro-ojxuodky"><span class="astro-ojxuodky">O que a plataforma para antes de acontecer</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/writing-agent-blocks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Como escrever bons blocos</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/slack-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">Slack e canais</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/mcp-and-credentials/" class="astro-ojxuodky"><span class="astro-ojxuodky">MCPs e credenciais</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/costs-and-limits/" class="astro-ojxuodky"><span class="astro-ojxuodky">Custos e limites</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/policies/" class="astro-ojxuodky"><span class="astro-ojxuodky">Políticas</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/autonomy-stages/" class="astro-ojxuodky"><span class="astro-ojxuodky">Rascunho, copiloto e autônomo</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/scopes-and-roles/" class="astro-ojxuodky"><span class="astro-ojxuodky">Empresas, áreas e papéis</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/approving/" class="astro-ojxuodky"><span class="astro-ojxuodky">Aprovar uma ação</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/reading-a-run/" class="astro-ojxuodky"><span class="astro-ojxuodky">Ler uma execução</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/data-barriers/" class="astro-ojxuodky"><span class="astro-ojxuodky">Labels e barreiras de dados</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/context-sharing/" class="astro-ojxuodky"><span class="astro-ojxuodky">Compartilhamento de contexto entre agentes</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/simulation-and-regressions/" class="astro-ojxuodky"><span class="astro-ojxuodky">Simulação e regressões</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/auditor-guide/" class="astro-ojxuodky"><span class="astro-ojxuodky">Guia do auditor</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Memória governada</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Reconhecimento de efeito duplicado</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/gravitee-tickets/" class="astro-ojxuodky"><span class="astro-ojxuodky">Chamados governados no Gravitee</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/cloudflare-blocklist/" class="astro-ojxuodky"><span class="astro-ojxuodky">Lista de bloqueio Cloudflare</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/standing-approvals/" class="astro-ojxuodky"><span class="astro-ojxuodky">Aprovações permanentes</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/elasticsearch-window/" class="astro-ojxuodky"><span class="astro-ojxuodky">Janela Elasticsearch</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/software-factory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Fábrica de software</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/github-webhooks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Webhooks do GitHub</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/monitoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">Monitorando o despacho de eventos</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/evidence-collection/" class="astro-ojxuodky"><span class="astro-ojxuodky">Coleta de evidências</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/automating-configuration/" class="astro-ojxuodky"><span class="astro-ojxuodky">Automatizando a configuração</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/experiments/" class="astro-ojxuodky"><span class="astro-ojxuodky">Experimentos</span></a></li></ul></details></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Design record</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="6"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/reference/manual-and-design-notes/" class="astro-ojxuodky"><span class="astro-ojxuodky">Manual and design notes</span></a></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Rendered source docs</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="7"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/prd-001-fuseone-agents/" class="astro-ojxuodky"><span class="astro-ojxuodky">PRD-001 · FuseOne Agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/dp-001-data-protection/" class="astro-ojxuodky"><span class="astro-ojxuodky">DP-001 — Data protection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/op-001-running-an-installation/" class="astro-ojxuodky"><span class="astro-ojxuodky">OP-001 — Running an installation</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-001-integration-boundary-and-execution-model/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-001 · Integration boundary and execution model</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-003-conversational-authoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-003 · Conversational authoring</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-004-ledger-volume-and-paging/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-004 · Ledger volume and paging</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-005-interaction-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-005 · Interaction channels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-006-evaluating-agents/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-006 · Evaluating agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-007-drawing-a-process/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-007 · Drawing a process</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-007-standing-approvals/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-007 — Standing approvals, and the taint waiver we rejected</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-008-a-catalogue-by-shape/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-008 · A catalogue by shape</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-009-governed-connectors/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-009 — Governed connectors</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-010-the-shape-of-the-platform/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-010 — The shape of the platform</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-011-durable-agent-execution-and-workflow-engines/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-011 — Durable agent execution and workflow engines</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-012-governed-slack-tickets/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-012 - Governed Slack tickets for Gravitee subscription approval</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-013-software-factory-pilot/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-013 — A software factory, piloted on this repository</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-014-governed-evidence-collection/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-014 — Governed evidence collection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-015-evaluation-datasets-and-experiments/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-015 — Evaluation datasets and experiments</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-016-judge-evaluators/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-016 — Judge evaluators</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-017-terraform-provider/" aria-current="page" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-017 — A Terraform provider for FuseOne Agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-018-authoring-workbench/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-018 — The authoring workbench</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-019-integrations-per-area/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-019 — Integrations per area</span></a></li></ul></details></li></ul></details></li></ul><script aria-hidden="true">
+		(() => {
+			const scroller = document.getElementById('starlight__sidebar');
+			if (!window._starlightScrollRestore || !scroller) return;
+			scroller.scrollTop = window._starlightScrollRestore;
+			delete window._starlightScrollRestore;
+		})();
+	</script></sl-sidebar-state-persist><div class="md:sl-hidden"><div class="mobile-preferences sl-flex astro-b5gddk54"><div class="social-icons astro-b5gddk54"><a href="https://github.com/fuseone-io/fuseone-agents" rel="me" class="sl-flex astro-cg55etiy"><span class="sr-only astro-cg55etiy">GitHub</span><svg aria-hidden="true" class="astro-cg55etiy astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-r2p65idu"><span class="sr-only astro-r2p65idu">Select theme</span><svg aria-hidden="true" class="icon label-icon astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-r2p65idu"><option value="dark" class="astro-r2p65idu">Dark</option><option value="light" class="astro-r2p65idu">Light</option><option value="auto" selected class="astro-r2p65idu">Auto</option></select><svg aria-hidden="true" class="icon caret astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script></div></div></div></div></nav><div class="main-frame astro-gqpr5s5a"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-abfeecmu"><aside class="right-sidebar-container print:hidden astro-abfeecmu"><div class="right-sidebar astro-abfeecmu"><div class="lg:sl-hidden astro-q5mffni3"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-5ulgm6bh"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-5ulgm6bh"><details id="starlight__mobile-toc" class="astro-5ulgm6bh"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-5ulgm6bh"><span class="toggle sl-flex astro-5ulgm6bh">On this page<svg aria-hidden="true" class="caret astro-5ulgm6bh astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-5ulgm6bh"></span></summary><div class="dropdown astro-5ulgm6bh"><ul class="isMobile astro-cxyftcne" style="--depth: 0;"><li style="--depth: 0;" class="astro-cxyftcne"><a href="#_top" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Overview</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-is-already-decided" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What is already decided</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-the-api-offers-today" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What the API offers today</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#phase-1-what-the-api-already-supports" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Phase 1: what the API already supports</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#concurrency" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Concurrency</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#secrets" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Secrets</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#integrations-by-scope-nt-019" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Integrations by scope (NT-019)</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#agents" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Agents</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#deleting-what-something-depends-on" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Deleting what something depends on</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#phase-2-companies-areas-and-classification" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Phase 2: companies, areas and classification</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#phase-3-access-to-an-area" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Phase 3: access to an area</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#the-provider" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">The provider</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#rollout" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Rollout</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is-not" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is not</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#tests-that-must-exist" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Tests that must exist</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#decided" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Decided</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/fuseone-agents/docs/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.BcSo_yiZ.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-q5mffni3"><div class="sl-container astro-q5mffni3"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">On this page</h2><ul class="astro-cxyftcne" style="--depth: 0;"><li style="--depth: 0;" class="astro-cxyftcne"><a href="#_top" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Overview</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-is-already-decided" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What is already decided</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-the-api-offers-today" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What the API offers today</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#phase-1-what-the-api-already-supports" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Phase 1: what the API already supports</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#concurrency" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Concurrency</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#secrets" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Secrets</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#integrations-by-scope-nt-019" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Integrations by scope (NT-019)</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#agents" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Agents</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#deleting-what-something-depends-on" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Deleting what something depends on</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#phase-2-companies-areas-and-classification" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Phase 2: companies, areas and classification</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#phase-3-access-to-an-area" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Phase 3: access to an area</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#the-provider" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">The provider</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#rollout" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Rollout</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#what-this-is-not" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">What this is not</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#tests-that-must-exist" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Tests that must exist</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#decided" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Decided</span></a></li></ul></nav></starlight-toc><script type="module" src="/fuseone-agents/docs/_astro/TableOfContents.astro_astro_type_script_index_0_lang.Csloo1VZ.js"></script></div></div></div></aside><div class="main-pane astro-abfeecmu"><main data-pagefind-body class="astro-vdxcvpsm" lang="en" dir="ltr"><div class="content-panel astro-oil7k7jf"><div class="sl-container astro-oil7k7jf"><h1 id="_top" class="astro-2sm4b3ln">NT-017 — A Terraform provider for FuseOne Agents</h1></div></div><div class="content-panel astro-oil7k7jf"><div class="sl-container astro-oil7k7jf"><div class="sl-markdown-content"><p>Status: proposed · 2026-11-11 · builds on #212 (service accounts) and #268 (read-back
+and <code dir="auto">If-Match</code>) · issue <a href="https://github.com/fuseone-io/fuseone-agents/issues/270">#270</a></p>
+<div class="sl-heading-wrapper level-h2"><h2 id="what-this-is">What this is</h2><a class="sl-anchor-link" href="#what-this-is"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “What this is”</span></a></div>
+<p>Installations that manage their platform with Terraform want to manage FuseOne Agents
+the same way: an area, who works in it, the tool servers it reaches, how each tool is
+classified and the agents that run there, all reviewed in a pull request beside the
+rest of their infrastructure.</p>
+<p>This note specifies a Terraform provider for that, and the changes the API needs first.
+It widens #270, whose first cut was five integration resources. The request in practice
+is “everything an administrator configures”, so the note covers that, in three phases,
+and says for each resource what the API lacks today.</p>
+<p><strong>Who does what.</strong> An administrator writes the configuration and runs <code dir="auto">terraform plan</code>
+and <code dir="auto">apply</code> with a service-account token. A person creates that service account, gives
+it roles and issues its token; the provider never does. Nothing the provider does puts
+an agent to work, changes its autonomy stage or releases an approval. The provider is a
+client of the public API and nothing else: if it needs something the API lacks, the API
+gets it, for every client.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="what-is-already-decided">What is already decided</h2><a class="sl-anchor-link" href="#what-is-already-decided"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “What is already decided”</span></a></div>
+<p>From #270, #212, #268 and the review of this note’s scope:</p>
+<ul>
+<li><strong>Public API only.</strong> Types come from <code dir="auto">api/openapi.yaml</code> at a released tag, so the
+provider and the server cannot drift apart unnoticed.</li>
+<li><strong>Bootstrap stays with a person.</strong> No token can hold <code dir="auto">identity:write</code>, so the provider
+creates no service accounts, tokens or identity providers.</li>
+<li><strong>Starting things stays out.</strong> No <code dir="auto">apply</code> changes an agent’s stage, resumes it, or
+releases anything the Gate held. The one exception is explicit: destroying an agent
+retires it, which pauses it, and the plan shows that as a retirement (see
+<a href="#agents">Agents</a>).</li>
+<li><strong>Console edits are drift.</strong> A person may still change these resources in the console.
+The next plan shows the change; it is not silently overwritten.</li>
+<li><strong>Secrets never reach the state file.</strong></li>
+<li><strong>Wider scope, three phases</strong>, decided 2026-11-11: what the API already supports,
+then companies, areas and classification, then access to an area.</li>
+<li><strong>Access may be delegated under four rules</strong> (see <a href="#phase-3-access-to-an-area">Access</a>),
+decided 2026-11-11, the same rules for people and tokens. The only role delegation
+grants is <code dir="auto">author</code>. <code dir="auto">identity:write</code> stays barred for tokens.</li>
+<li><strong>Repository:</strong> <code dir="auto">fuseone-io/terraform-provider-fuseoneagents</code>, so resources are named
+<code dir="auto">fuseoneagents_mcp_server</code>, <code dir="auto">fuseoneagents_agent</code> and so on.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="what-the-api-offers-today">What the API offers today</h2><a class="sl-anchor-link" href="#what-the-api-offers-today"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “What the API offers today”</span></a></div>
+<p>Checked against <code dir="auto">main</code> at <code dir="auto">b028e09a</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Resource</th><th>Write</th><th>Read one</th><th><code dir="auto">ETag</code> / <code dir="auto">If-Match</code></th><th>Identical write is a no-op</th><th>Token may write</th></tr></thead><tbody><tr><td>MCP server</td><td><code dir="auto">PUT /admin/integrations/mcp-servers/{name}</code></td><td>yes</td><td>yes</td><td>yes</td><td><code dir="auto">provider:write</code></td></tr><tr><td>Connector instance</td><td><code dir="auto">PUT /admin/integrations/connectors/instances/{name}</code></td><td>yes</td><td>yes</td><td>yes</td><td><code dir="auto">provider:write</code></td></tr><tr><td>Model provider</td><td><code dir="auto">PUT /admin/integrations/providers/{name}</code></td><td>yes</td><td>yes</td><td>yes</td><td><code dir="auto">provider:write</code></td></tr><tr><td>Channel</td><td><code dir="auto">PUT /admin/channels/{name}</code></td><td>yes</td><td>yes</td><td>yes</td><td><code dir="auto">provider:write</code></td></tr><tr><td>Policy</td><td><code dir="auto">PUT /policies/{code}</code></td><td>yes</td><td>yes</td><td>yes</td><td><code dir="auto">policy:write</code></td></tr><tr><td>Agent</td><td><code dir="auto">PUT /agents/{id}/versions</code></td><td>yes</td><td><strong>no</strong>: neither publish nor retire takes <code dir="auto">If-Match</code></td><td>yes</td><td><code dir="auto">agent:publish</code></td></tr><tr><td>Company</td><td><code dir="auto">POST /admin/companies</code>, <code dir="auto">PATCH /{company}</code></td><td>no</td><td>no</td><td><code dir="auto">POST</code> answers 409</td><td><code dir="auto">company:write</code></td></tr><tr><td>Area</td><td><code dir="auto">POST /admin/scopes</code>, <code dir="auto">DELETE /{company}/{area}</code></td><td>no</td><td>no</td><td><code dir="auto">POST</code> upserts</td><td><code dir="auto">scope:write</code></td></tr><tr><td>Tool classification</td><td><code dir="auto">PUT /admin/tools/{id}/classification</code></td><td>list only</td><td>no</td><td><strong>no</strong>: each write records an event</td><td><code dir="auto">tool:classify</code></td></tr><tr><td>Grants</td><td><code dir="auto">PUT /admin/people/{id}/grants</code></td><td>list only</td><td>no</td><td>no</td><td><strong>never</strong> (<code dir="auto">identity:write</code>)</td></tr></tbody></table>
+<p>Every row except grants is writable by a service account with the right role today
+(<code dir="auto">internal/domain/access.go</code>, <code dir="auto">Principal.barredFrom</code> in <code dir="auto">internal/domain/principal.go</code>).</p>
+<p>Four things hold for every resource and shape the provider:</p>
+<ol>
+<li><strong>Omitting an optional field keeps the stored value.</strong> Removing an attribute from the
+configuration clears nothing on the server, so the provider sends each resource’s
+explicit clear (<code dir="auto">clearToken</code>, an empty object, an empty list) when an attribute leaves
+the configuration.</li>
+<li><strong>Some values come back normalised.</strong> An omitted MCP <code dir="auto">transport</code> reads back <code dir="auto">stdio</code>,
+a cache <code dir="auto">maxEntries</code> of 0 reads back 256, a policy <code dir="auto">resource</code> of <code dir="auto">""</code> reads back <code dir="auto">*</code>,
+lists are trimmed and deduplicated. Each one is a default or a plan modifier in the
+provider’s schema, or the plan never settles. The provider’s acceptance tests find
+them: an unchanged configuration must plan empty right after apply.</li>
+<li><strong>Deleting something missing answers 204.</strong> The provider detects removal by the read,
+which answers 404.</li>
+<li><strong>Four of the five integration writes answer 204 with only an <code dir="auto">ETag</code>.</strong> The provider
+reads after each write to fill its state.</li>
+</ol>
+<div class="sl-heading-wrapper level-h2"><h2 id="phase-1-what-the-api-already-supports">Phase 1: what the API already supports</h2><a class="sl-anchor-link" href="#phase-1-what-the-api-already-supports"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Phase 1: what the API already supports”</span></a></div>
+<p>Resources: <code dir="auto">mcp_server</code>, <code dir="auto">connector_instance</code>, <code dir="auto">model_provider</code>, <code dir="auto">channel</code>, <code dir="auto">policy</code>,
+<code dir="auto">agent</code>. Data sources: <code dir="auto">agents</code>, <code dir="auto">connector_catalog</code>, <code dir="auto">mcp_recipes</code>.</p>
+<p>Servers and providers configured by flag or environment variable come back with
+<code dir="auto">managed: false</code>. The provider refuses to import or manage them: their source of truth
+is the deployment, not the API.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="concurrency">Concurrency</h3><a class="sl-anchor-link" href="#concurrency"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Concurrency”</span></a></div>
+<p>The provider stores the <code dir="auto">ETag</code> from its last read and sends it as <code dir="auto">If-Match</code> on every
+update and delete. A 412 is a person having changed the resource since the plan; the
+provider reports it and tells the operator to plan again. It never retries without the
+header.</p>
+<p><strong>Every create sends <code dir="auto">If-None-Match: *</code>.</strong> Without a precondition a create is a blind
+write. <code dir="auto">If-Match: *</code> means “it exists”, and without either header the last write wins
+(<code dir="auto">api/openapi.yaml:5026-5031</code>). So a resource somebody created in the console between
+plan and apply would be overwritten by the apply, with nobody seeing it. No write in the
+API takes <code dir="auto">If-None-Match</code> today: the only use is the read of brand assets
+(<code dir="auto">internal/httpapi/brand_asset.go:113</code>). Phase 1 adds it to every <code dir="auto">PUT</code> that can create:
+the integrations, policies, and the agent’s first version. Phase 2 adds it for
+companies, areas and classifications, and phase 3 for grants.</p>
+<ul>
+<li><strong>Exactly one of <code dir="auto">If-Match</code> and <code dir="auto">If-None-Match: *</code>.</strong> Both, or <code dir="auto">If-None-Match</code> with any
+value other than <code dir="auto">*</code>, is a 400, as for the workbench’s activation (NT-018).</li>
+<li><strong>Judged under the same guard as <code dir="auto">If-Match</code></strong>, inside the transaction that writes. For
+settings-backed resources that is the guard <code dir="auto">admin/write.go</code> runs first in the
+transaction (<code dir="auto">internal/admin/write.go:51-54</code>). For the agent it is the event graph lock
+publication takes (<code dir="auto">internal/spec/event_graph_lock.go:30</code>). A check made by an earlier
+read would leave the window it exists to close.</li>
+<li><strong>A resource that exists answers 412 with its <code dir="auto">ETag</code>.</strong> The provider says the resource
+already exists and that the way to manage it is <code dir="auto">terraform import</code>. It never retries as
+an update.</li>
+<li><strong>The agent’s first version.</strong> <code dir="auto">If-None-Match: *</code> on <code dir="auto">PUT /agents/{id}/versions</code>
+means no version of that agent id exists. It is judged under the event graph lock in
+the publish’s transaction, so two first applies of the same id cannot both create it.</li>
+</ul>
+<div class="sl-heading-wrapper level-h3"><h3 id="secrets">Secrets</h3><a class="sl-anchor-link" href="#secrets"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Secrets”</span></a></div>
+<p>Secrets are write-only attributes, available in Terraform 1.11 and OpenTofu 1.11: they
+are sent and never stored in the plan or the state. Each one pairs with a
+<code dir="auto">&#x3C;name>_wo_version</code> attribute that is stored, because a write-only value cannot be
+compared; changing the version is how the configuration says “send the secret again”.</p>
+<p>The API already never returns a secret. Only one schema field says so
+(<code dir="auto">MCPGitHubApp.privateKey</code> is <code dir="auto">writeOnly: true</code>); the others say it in prose. Phase 1
+marks every secret field <code dir="auto">writeOnly</code> in <code dir="auto">api/openapi.yaml</code>, so a client generated from
+it, the provider included, knows which fields they are.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="integrations-by-scope-nt-019">Integrations by scope (NT-019)</h3><a class="sl-anchor-link" href="#integrations-by-scope-nt-019"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Integrations by scope (NT-019)”</span></a></div>
+<p>After NT-019 an MCP server, connector instance, model provider, channel connection or
+conversation belongs to the scope it is stored at: the installation, a company or an
+area.</p>
+<ul>
+<li><strong>Every integration resource takes <code dir="auto">scope</code></strong>: <code dir="auto">installation</code>, <code dir="auto">&#x3C;company></code> or
+<code dir="auto">&#x3C;company>/&#x3C;area></code>. It is required, recorded in the state, and read back. Changing it
+forces a replacement, because the stored key includes the scope. The delete half of
+that replacement meets the <code dir="auto">in-use</code> check below like any other delete.</li>
+<li><strong>Import takes the scope and the name</strong>: <code dir="auto">&#x3C;scope>:&#x3C;name></code>, such as <code dir="auto">acme/cx:jira</code>.
+Names are unique per kind across the installation (NT-019’s index), but the reads are
+not all keyed by name alone. A connector instance’s <code dir="auto">GET</code> takes its scope as query
+parameters (<code dir="auto">scopeKind</code>, <code dir="auto">company</code>, <code dir="auto">area</code>). One form for every kind keeps import from
+depending on a lookup across scopes. A row not found at that scope fails the import,
+and names nothing of other scopes.</li>
+<li><strong>A taken name</strong> answers 409 <code dir="auto">fuseone:integration-name-taken</code>. The provider says the
+name is in use and never by whom, as the server does.</li>
+<li><strong>Reading needs what NT-019 says.</strong> Configuration reads need <code dir="auto">provider:write</code> at a
+scope that contains or governs the row (NT-019, rule 4). A service account managing
+an area gets the role on that area.</li>
+<li><strong>Each kind accepts a scope other than <code dir="auto">installation</code> only once its writers’ release
+is deployed</strong>, which NT-019 ships after its readers’ release has reached every
+replica. The provider learns the server’s version from <code dir="auto">GET /api/v1/readyz</code> at
+configure time. A plan that puts a kind at company or area scope on a server older
+than that kind’s writers’ release fails at plan time, naming the kind and the release
+it needs. It is never sent and refused halfway through an apply.</li>
+</ul>
+<div class="sl-heading-wrapper level-h3"><h3 id="agents">Agents</h3><a class="sl-anchor-link" href="#agents"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Agents”</span></a></div>
+<p>An agent is published with <code dir="auto">PUT /agents/{id}/versions</code>. The version is the digest of the
+rendered definition, and publishing identical content is a no-op, <strong>with one
+exception</strong>:</p>
+<ul>
+<li>
+<p><strong>A version published before 0.103.0 has no recorded digest.</strong> Its claim is <code dir="auto">NULL</code>
+(NT-018, releases C1 and C2). Publishing its identical bytes again answers 409
+<code dir="auto">fuseone:version-digest-unknown</code> (<code dir="auto">api/openapi.yaml:585</code>), and so does landing on any
+id claimed without a digest. It is refused, not a no-op. A definition whose 48-bit id
+lands on another definition’s claim answers 409 <code dir="auto">fuseone:version-collision</code>
+(<code dir="auto">api/openapi.yaml:583</code>).</p>
+</li>
+<li>
+<p><strong>Import</strong> is unaffected. It reads the agent, and an unchanged configuration plans
+empty, so nothing is published.</p>
+</li>
+<li>
+<p><strong>Rolling a configuration back</strong> to the exact text of a version published before
+0.103.0 is refused with <code dir="auto">version-digest-unknown</code>. Planning again does not help. The
+provider’s diagnostic says that the version predates recorded digests, and that a
+change to the definition almost always gives it another id. The id is 48 bits of the
+digest, so the change may instead land on another claim. That is refused the same way,
+never resolved silently, and the definition is changed again, as NT-018 decided. The
+diagnostic names the agent and the version, and the provider does not retry.</p>
+</li>
+<li>
+<p><strong>A collision</strong> gets the same treatment: the diagnostic says the definition must
+change, and the provider never retries.</p>
+</li>
+<li>
+<p><strong>Managed:</strong> the definition fields <code dir="auto">AgentDefinition</code> accepts. The state also records
+the agent’s <code dir="auto">ETag</code> from the last read.</p>
+</li>
+<li>
+<p><strong>A precondition, which the API lacks today.</strong> Neither <code dir="auto">PUT /agents/{id}/versions</code> nor
+<code dir="auto">PUT /agents/{id}/retired</code> takes <code dir="auto">If-Match</code>, so a version published in the console
+between plan and apply would be replaced without anybody seeing it. Phase 1 gives the
+agent an <code dir="auto">ETag</code> and makes both calls honour <code dir="auto">If-Match</code>:</p>
+<ul>
+<li>The <code dir="auto">ETag</code> covers the current version and whether the agent is retired, the two
+things these calls change. A publish moves it; an identical publish does not.</li>
+<li><code dir="auto">If-Match</code> is judged under the agent’s row lock, in the transaction that writes the
+version or the retirement, where <code dir="auto">refuseIfStage</code> is already judged. A check made by
+an earlier read would leave the same window it exists to close.</li>
+<li>A stale tag answers 412 with the current <code dir="auto">ETag</code>, as the other resources do.</li>
+</ul>
+</li>
+<li>
+<p><strong>Authorized under the lock, before any precondition is judged.</strong> Today the publish
+authorizes only the destination the body names, before the transaction, and never
+reads the agent’s current scope (<code dir="auto">internal/httpapi/publish.go:66-76</code>). Retiring and
+restoring read and authorize the current scope before the transaction too, and answer
+403 (<code dir="auto">internal/httpapi/retire.go:38-53</code>). An agent moved between that check and the
+write would be changed under an authority judged on another scope. A 412 judged first
+would also tell a caller outside the agent’s scope that it exists. Phase 1 orders every
+publish, retirement and restore the same way, inside the transaction:</p>
+<ol>
+<li><strong>Headers, by syntax only.</strong> A malformed <code dir="auto">If-Match</code> or a forbidden combination is a
+400 that depends on nothing stored.</li>
+<li><strong>The event graph lock</strong>, then the agent’s row, in publication’s order.</li>
+<li><strong>The current scope, read under the lock.</strong> If the agent exists and the caller does
+not hold <code dir="auto">agent:publish</code> there, the answer is 404, as for an agent that does not
+exist.</li>
+<li><strong>The destination</strong>, for a publish: <code dir="auto">agent:publish</code> on the company and area the
+body names (<code dir="auto">publishScope</code>, <code dir="auto">internal/httpapi/publish.go:237-253</code>). The caller chose
+it, so a refusal is the 403 it is today.</li>
+<li><strong>Only then the precondition:</strong> <code dir="auto">If-Match</code>, or <code dir="auto">If-None-Match: *</code> for a first
+version. A 412 is therefore never answered before both scopes are authorized.</li>
+</ol>
+<p>Moving an agent to another area is a publish with a new destination. It needs
+<code dir="auto">agent:publish</code> on both.</p>
+</li>
+<li>
+<p><strong>Drift:</strong> a read whose <code dir="auto">ETag</code> differs from the recorded one means somebody published
+or retired since, and the plan shows it.</p>
+</li>
+<li>
+<p><strong>Read-back gap:</strong> <code dir="auto">GET /agents/{id}</code> does not return the rendered definition, and the
+provider needs every field it manages to come back. Phase 1 checks which
+<code dir="auto">AgentDefinition</code> fields <code dir="auto">AgentDetail</code> lacks and adds them to the read, rather than
+the provider keeping its own copy.</p>
+</li>
+<li>
+<p><strong>Never on an unsupervised agent.</strong> Every publish sends <code dir="auto">refuseIfStage=autonomous</code>.
+The stage is judged under the agent’s row lock, so a promotion that lands while the
+apply runs is seen and the publish is refused with 409 <code dir="auto">fuseone:stage-refused</code>.
+Changing what an autonomous agent runs stays a person’s decision in the console.</p>
+</li>
+<li>
+<p><strong>A new agent is paused.</strong> Authoring starts nothing, so a first apply puts nothing to
+work.</p>
+</li>
+<li>
+<p><strong><code dir="auto">destroy</code> retires, and that is the one exception to “nothing pauses”.</strong> Versions are
+the only explanation of the runs that used them, so the provider retires the agent
+(<code dir="auto">PUT /agents/{id}/retired</code>, with <code dir="auto">If-Match</code>), which pauses it and is reversible. The
+plan says <em>retire</em>, not <em>delete</em>, so the reviewer of the pull request sees that the
+agent stops. The OpenAPI text for retiring promises a line in the trail, and none is
+written today. Phase 1 writes it.</p>
+</li>
+</ul>
+<div class="sl-heading-wrapper level-h3"><h3 id="deleting-what-something-depends-on">Deleting what something depends on</h3><a class="sl-anchor-link" href="#deleting-what-something-depends-on"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Deleting what something depends on”</span></a></div>
+<p>No resource refuses a delete today. Deleting an MCP server removes its tools from the
+catalogue, and the agents that used them stay published, naming tools that no longer
+exist; only a new publish is checked against the catalogue.</p>
+<p>Phase 1 makes <code dir="auto">DELETE</code> on an MCP server, connector instance or model provider answer
+409 <code dir="auto">fuseone:in-use</code> while the current version of an agent that is not retired refers
+to it. The console gets the same answer.</p>
+<p><strong>The problem names only the agents the caller may read.</strong> Whoever deletes an
+integration governs it, and governing an integration grants no <code dir="auto">agent:read</code> on the
+areas whose agents use it. An administrator at <code dir="auto">default/platform</code> does not read
+<code dir="auto">acme/cx</code>’s agents. So the problem carries two fields:</p>
+<ul>
+<li><code dir="auto">agents</code>: the blocking agents in a scope where the caller holds <code dir="auto">agent:read</code>;</li>
+<li><code dir="auto">hidden</code>: how many others there are, as a count, never as ids or scopes.</li>
+</ul>
+<p>The delete is refused on the whole set, readable or not. Filtering the set before
+judging would let the delete pass whenever the blocking agent is one the caller cannot
+see. Channels
+and policies are not covered: an agent definition names neither (a channel names agents,
+not the other way round), and deleting a policy already takes a new snapshot.</p>
+<p><strong>The check needs a lock both sides take.</strong> Today the publish judges the catalogue before
+the transaction that writes the version (<code dir="auto">internal/httpapi/publish.go</code>, <code dir="auto">rulingsFor</code>),
+and the delete runs in a transaction of its own (<code dir="auto">RemoveMCPServer</code> in
+<code dir="auto">internal/admin/integrations.go</code>). A publish and a delete running together can both
+pass their checks and leave an agent naming something that is gone. Phase 1 closes it
+by locking the row of the resource itself, first, then judging:</p>
+<ul>
+<li>The delete takes <code dir="auto">FOR UPDATE</code> on the resource’s row before anything else, then looks
+for referring agents in the same transaction.</li>
+<li>The publish takes <code dir="auto">FOR SHARE</code> on the row of every resource the definition names (the
+servers and connector instances behind its tools, its model provider, its area), in
+the transaction that writes the version, and judges existence after the lock is
+granted. Today the publish does not check the model provider at all; phase 1 adds
+that check, or the fence would hold on one side only.</li>
+<li><strong>Restoring a retired agent takes the same lock.</strong> The delete is allowed once the
+agents using a resource are retired, and <code dir="auto">PUT /agents/{id}/retired</code> with
+<code dir="auto">retired: false</code> brings one back without publishing, so restoring is a third way to
+make an agent refer to something. Today it only clears <code dir="auto">retired_at</code>
+(<code dir="auto">State.Restore</code> in <code dir="auto">internal/spec/retire.go</code>). Phase 1 makes it take <code dir="auto">FOR SHARE</code> on
+every resource the current version names, in the transaction that judges <code dir="auto">If-Match</code>
+and changes <code dir="auto">retired</code>, and judge existence after the lock. If any is missing, it does
+not restore and answers 409 naming what is missing; the person publishes a version
+that does not need it, which goes through the publish’s own check.</li>
+<li>Whichever commits first wins, and the other sees it: a delete that waited finds the
+new version or the restored agent and answers 409; a publish or a restore that waited
+finds the row gone and is refused.</li>
+<li>Servers and providers configured by flag or environment variable have no row to lock,
+and the API cannot delete them either.</li>
+</ul>
+<p><strong>No force flag.</strong> An emergency, such as a compromised MCP server, goes in this order:</p>
+<ol>
+<li>Disable the resource (<code dir="auto">enabled: false</code>) and revoke or rotate its credential. Both are
+updates, not deletes, and the 409 never applies to them.</li>
+<li>Edit or retire the agents that use it.</li>
+<li>Delete it.</li>
+</ol>
+<p>The manual documents the order, and a test proves the 409 does not block step 1.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="phase-2-companies-areas-and-classification">Phase 2: companies, areas and classification</h2><a class="sl-anchor-link" href="#phase-2-companies-areas-and-classification"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Phase 2: companies, areas and classification”</span></a></div>
+<p>The API gains what the provider needs, for every client.</p>
+<p><strong>Companies.</strong> <code dir="auto">GET /admin/companies/{company}</code> and <code dir="auto">PUT /admin/companies/{company}</code>,
+idempotent, with <code dir="auto">ETag</code> and <code dir="auto">If-Match</code>. A company is never deleted: <code dir="auto">destroy</code> archives
+it, and applying it again restores it, which the existing <code dir="auto">archived</code> flag already
+models. Creating a company still grants the creator <code dir="auto">curator</code> on it.</p>
+<p><strong>Areas.</strong> <code dir="auto">GET</code> and <code dir="auto">PUT /admin/scopes/{company}/{area}</code>, idempotent, with <code dir="auto">ETag</code> and
+<code dir="auto">If-Match</code>. Two gaps close at the same time:</p>
+<ul>
+<li>Registering and deleting an area write nothing to <code dir="auto">admin_events</code> today. Both will.</li>
+<li>Deleting an area leaves the agents, ceilings and policies that name it in place. Today
+it is a bare <code dir="auto">delete from scopes</code> (<code dir="auto">internal/scope/store.go:163-174</code>). The delete
+answers 409 <code dir="auto">fuseone:in-use</code> while an agent that is not retired is published there,
+behind the same fence as phase 1: the delete takes <code dir="auto">FOR UPDATE</code> on the area’s row
+first, and the publish already holds <code dir="auto">FOR SHARE</code> on it.</li>
+<li><strong>After NT-019 an area also holds configuration</strong>: connector instances, MCP servers,
+model providers, channel connections, conversations, and owner classifications stored
+at that area. Leaving them behind would orphan sealed credentials and tools under an
+area nobody can see or administer. So the delete refuses with 409 <code dir="auto">fuseone:in-use</code>
+while any <code dir="auto">settings</code> row is stored at that area, whatever its kind.
+<ul>
+<li>
+<p><strong>The same fence.</strong> Every write of a <code dir="auto">settings</code> row at area scope takes <code dir="auto">FOR SHARE</code>
+on the area’s row in its transaction, and refuses a write into an area that is not
+registered. The delete holds <code dir="auto">FOR UPDATE</code> first. Whichever commits first wins, and
+the other sees it.</p>
+</li>
+<li>
+<p><strong>Such writes exist today.</strong> Connector instances are written at area scope
+(<code dir="auto">connectorScopes</code>, <code dir="auto">internal/admin/connectors.go:41-59</code>), and so are conversations
+(<code dir="auto">internal/admin/channels.go:577-579</code>) and budgets (<code dir="auto">internal/admin/budgets.go</code>).
+None of them reads <code dir="auto">scopes</code>, so today a row can be written into an area that is not
+registered, or is being deleted.</p>
+</li>
+<li>
+<p><strong>Fence first, door a release later</strong>, so the guarantee holds against the previous
+binary:</p>
+<ol>
+<li><strong>The fence release.</strong> Every area-scoped <code dir="auto">settings</code> write takes the area’s
+<code dir="auto">FOR SHARE</code> and refuses an unregistered area. The area delete stays as it is
+today. Nothing a person does changes, except that a write into an unregistered
+area is now refused with 400.</li>
+<li><strong>The delete release</strong>, shipped only after the fence release runs on <strong>every</strong>
+<code dir="auto">serve</code> and <code dir="auto">worker</code> replica. It adds the <code dir="auto">FOR UPDATE</code>, the <code dir="auto">in-use</code> check over
+agents and <code dir="auto">settings</code> rows, and the 409.</li>
+</ol>
+<p>A replica older than the fence release writes area rows without the lock. If it ran
+beside the delete, it could write into an area the delete just removed. So the
+delete release states a <strong>rollback floor</strong>: once it is deployed, never below the
+fence release. Rolling back from the delete release to the fence release is safe,
+because the fence release takes the lock and only lacks the door.</p>
+</li>
+<li>
+<p><strong>The problem</strong> lists, per kind, the names the caller may read under NT-019’s
+listing rule, and a count of the others, as for agents above.</p>
+</li>
+<li>
+<p><strong>No cascade.</strong> An area’s configuration is removed resource by resource, through
+each resource’s own delete and its own <code dir="auto">in-use</code> check. Removing them all at once
+would bypass those checks.</p>
+</li>
+</ul>
+</li>
+</ul>
+<p>The <code dir="auto">PUT</code> takes the area id as given. Today’s <code dir="auto">POST</code> folds a name into an id (lowercase,
+no accents, hyphens); a provider resource keyed by a folded value would plan a
+replacement every time. The <code dir="auto">PUT</code> refuses an id that folding would change, and the
+<code dir="auto">POST</code> stays as the console’s convenience.</p>
+<p><strong>Tool classification.</strong> <code dir="auto">GET /admin/tools/{id}/classification?level=…</code>, <code dir="auto">ETag</code> and
+<code dir="auto">If-Match</code> on the <code dir="auto">PUT</code>, and an identical <code dir="auto">PUT</code> becomes a no-op. <strong>Its identity is the
+pair <code dir="auto">(tool, level)</code>, <code dir="auto">level</code> being <code dir="auto">owner</code> or <code dir="auto">platform</code></strong> (NT-019, <em>Classification
+under the platform’s ceiling</em>):</p>
+<ul>
+<li><code dir="auto">fuseoneagents_tool_classification</code> takes <code dir="auto">level</code>, which forces a replacement when it
+changes. Two resources may classify one tool, one per level, and they are two rows.</li>
+<li><strong>Precedence is the server’s.</strong> The platform’s row wins, the owner’s applies only
+without it, and a stale ruling never falls back to the other row. The provider does
+not resolve it. A data source exposes the effective ruling and its level, so a plan
+can show that an owner’s ruling is overridden.</li>
+<li><strong>Destroying the platform level</strong> is NT-019’s withdrawal of the ceiling (<code dir="auto">DELETE</code> with
+<code dir="auto">level: platform</code>). Destroying the owner level needs a <code dir="auto">DELETE</code> with <code dir="auto">level: owner</code>,
+which NT-019 does not define. This note adds it, under <code dir="auto">tool:classify</code> at the server’s
+authorization scope, and it removes the owner’s row only.</li>
+<li>For a server of the installation, the two levels are one row, and only
+<code dir="auto">level: platform</code> is accepted. Today every write records a
+<code dir="auto">tool.classified</code> event, so an unchanged <code dir="auto">apply</code> would add a line to the trail each time.</li>
+</ul>
+<p>The classification carries the digest of the tool definition it was judged against, and
+the provider makes <code dir="auto">digest</code> a required attribute. A curator approving a tool approves
+one definition; if the provider filled in whatever digest is current, a server that
+changed its tool would be approved by the next apply with nobody reading it. When the
+definition changes, the plan shows the mismatch and a person updates the digest in a
+pull request. A data source exposes the current digest to read from.</p>
+<p>Two consequences, documented rather than hidden:</p>
+<ul>
+<li>A tool exists only after its server is discovered, which workers do asynchronously.
+Adding a server and classifying its tools is two applies.</li>
+<li>Classifying ahead of discovery without a digest stays possible in the API and the
+console. The provider does not offer it.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="phase-3-access-to-an-area">Phase 3: access to an area</h2><a class="sl-anchor-link" href="#phase-3-access-to-an-area"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Phase 3: access to an area”</span></a></div>
+<p>Today only a person with <code dir="auto">identity:write</code> on the installation can grant access, and the
+grant call replaces every hand-set grant a principal holds, including grants other
+operators made.</p>
+<p>Phase 3 adds a grant as a resource of its own:</p>
+<p><code dir="auto">GET</code>, <code dir="auto">PUT</code> and <code dir="auto">DELETE /admin/grants/{principal}/{company}/{area}/{role}</code></p>
+<ul>
+<li><strong><code dir="auto">PUT</code> and <code dir="auto">DELETE</code></strong> add or remove exactly one hand-set grant and touch nothing else.</li>
+<li><strong><code dir="auto">GET</code></strong> answers 200 when that hand-set grant exists, with who made it and when, and
+404 when it does not. A grant asserted by an identity provider with the same principal,
+scope and role does not count: the provider manages only what a hand made, and import
+reads with the same path.</li>
+</ul>
+<p>A person with <code dir="auto">identity:write</code> on the installation may use all three without limits, as
+today. Every other caller, a person or a service account, goes through the same rules:</p>
+<ol>
+<li><strong>Delegation is a permission, held where it is used.</strong> The caller holds
+<code dir="auto">access:delegate</code> in a grant whose scope contains the target scope. A curator of
+area X can act in X and not in Y.</li>
+<li><strong>The only role it grants is <code dir="auto">author</code>.</strong> An allowlist, not a list of exceptions.
+Allowing any role whose permissions the caller holds would let a curator create
+another curator, who receives delegation, policy and provider writes and erasure in
+turn. <code dir="auto">admin</code>, <code dir="auto">approver</code>, <code dir="auto">curator</code> and <code dir="auto">auditor</code> stay with <code dir="auto">identity:write</code>.</li>
+<li><strong>Only to a person.</strong> Never to itself and never to a service account, so tokens
+cannot widen each other’s reach.</li>
+<li><strong>Recorded.</strong> Each grant and revocation writes <code dir="auto">grants.added</code> or <code dir="auto">grants.removed</code> to
+<code dir="auto">admin_events</code> with the caller’s id, the grant and, for a token, the token’s id. The
+request context does not carry the token’s id today; phase 3 adds it, so the grants a
+revoked token made can be found.</li>
+</ol>
+<p>The same rules decide a read: a caller may read a grant it could make. A caller may
+revoke only a grant it could have made, so a delegating caller can remove an <code dir="auto">author</code>
+grant in its scope and nothing else. Grants asserted by an identity provider are never
+touched.</p>
+<p><code dir="auto">access:delegate</code> goes into the <code dir="auto">admin</code> and <code dir="auto">curator</code> roles. It is not barred for
+tokens; the rules are what make that safe. For people it is new: a curator of an area
+can now give <code dir="auto">author</code> there without installation-wide <code dir="auto">identity:write</code>, which is what
+“a team looks after its own agent” in the scopes manual needs.</p>
+<p>Four facts about grants today shape the resource:</p>
+<ul>
+<li>
+<p><strong>A person must have signed in once.</strong> A principal row is created at first sign-in,
+and a grant for a principal that does not exist answers 404.</p>
+</li>
+<li>
+<p><strong>Nobody but <code dir="auto">identity:write</code> can find a person today.</strong> <code dir="auto">GET /admin/people</code> needs it,
+so a token cannot turn an email into a principal id. Phase 3 adds an exact lookup by
+email for a caller holding <code dir="auto">access:delegate</code>, answering one id or 404 and never a
+list. That stops listing everybody, but it is still an oracle: a caller with a list of
+candidate addresses learns which ones have an account. Two mitigations bound it:</p>
+<ul>
+<li><strong>A rate limit per caller</strong>, configurable, with a low default; past it the lookup
+answers 429.</li>
+<li><strong>Every lookup is recorded</strong> in <code dir="auto">admin_events</code>: the caller, the time, and the
+principal id when one was found or <code dir="auto">found: false</code> when none was. Nothing derived
+from the address is kept, not even a keyed digest: a stable digest next to the
+caller’s id would let probes be correlated, which makes it a pseudonym, not an
+absence of personal data. The row is personal data either way, because it names
+the caller, and falls under what DP-001 says about <code dir="auto">admin_events</code>.</li>
+</ul>
+<p>The provider’s <code dir="auto">person</code> data source uses the lookup, and a plan for somebody who has
+never signed in fails with that reason.</p>
+</li>
+<li>
+<p><strong>A hand grant equal to an asserted one is dropped today.</strong> The key is principal,
+company, area and role, without the source, and the insert ignores a conflict. The
+hand grant vanishes when the identity provider stops asserting it, and the provider
+would report drift it cannot fix. Phase 3 makes the source part of the key, so the two
+are separate rows.</p>
+</li>
+<li>
+<p><strong>The role and the scope are not checked today.</strong> A bad role reaches the database
+constraint and surfaces as a 500, and a grant for a company or area that does not
+exist is accepted. The new call refuses both with 400.</p>
+</li>
+</ul>
+<p>Group mappings, which grant access to everybody an identity provider puts in a group,
+remain <code dir="auto">identity:write</code> and stay with a person. They grant access to people who have
+never signed in, which the rules cannot judge.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="the-provider">The provider</h2><a class="sl-anchor-link" href="#the-provider"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “The provider”</span></a></div>
+<ul>
+<li><strong>Framework:</strong> HashiCorp’s <code dir="auto">terraform-plugin-framework</code>, in Go.</li>
+<li><strong>Client:</strong> generated from <code dir="auto">api/openapi.yaml</code> at a pinned server release with
+<code dir="auto">oapi-codegen</code> in client mode. Bumping the pin regenerates the client, and CI fails if
+the generated code differs from what is committed.</li>
+<li><strong>Compatibility:</strong> the provider reads the server version from <code dir="auto">GET /api/v1/readyz</code> at
+configure time and refuses a server older than the minimum its release names. Breaking
+changes follow the API’s compatibility statement in
+<a href="manual/en-US/automating-configuration.md#what-the-api-promises-not-to-break">automating-configuration.md</a>.</li>
+<li><strong>Distribution:</strong> signed releases on the Terraform registry and the OpenTofu registry.
+Air-gapped installations get a documented filesystem mirror.</li>
+<li><strong>Documentation:</strong> pt-BR and en-US, with a worked example that builds an area, its MCP
+server, the server’s classifications and an agent.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="rollout">Rollout</h2><a class="sl-anchor-link" href="#rollout"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Rollout”</span></a></div>
+<p>Each phase is a FuseOne release followed by a provider release that requires it.</p>
+<ul>
+<li>Phase 1’s 409 on delete changes console behaviour too. It ships with the console
+showing the agents that block the delete.</li>
+<li>A new <code dir="auto">If-Match</code> is honoured only by a replica that knows it. The provider’s minimum
+version covers this for the provider, and the console sends <code dir="auto">If-Match</code> on a new
+resource only after a release in which every replica supports it, as in #268.</li>
+<li>The agent’s <code dir="auto">If-Match</code> is judged only by a replica that knows it. An old replica
+ignores the header and publishes, so the provider’s minimum server version is the
+phase 1 release, and the console sends <code dir="auto">If-Match</code> on publish and retire only after a
+release in which every replica supports it.</li>
+<li>The fence on delete holds only when both sides take the lock. A replica still on the
+previous release publishes without <code dir="auto">FOR SHARE</code>, so the 409 is a guarantee only once
+every replica runs phase 1. Until then it is a check, and the release notes say so.</li>
+<li>The area delete ships in two releases: the fence, then the door, with the door
+enabled only once the fence runs on every replica, and a rollback floor at the fence
+release (see <a href="#phase-2-companies-areas-and-classification">Phase 2</a>).</li>
+<li>Integration resources follow NT-019’s rollout per kind: readers, then writers. The
+provider’s support for a scope below the installation is gated per kind on that
+kind’s writers’ release, as above.</li>
+<li><code dir="auto">If-None-Match: *</code> is honoured only by a replica that knows it. An old replica ignores
+the header and writes, so the provider’s minimum server version is the release that
+adds it, and the guarantee holds once every replica runs that release.</li>
+<li><code dir="auto">access:delegate</code> is a new permission in a role. Rolling back below phase 3 removes it,
+and the grants it made stay valid: they are ordinary grants.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="what-this-is-not">What this is not</h2><a class="sl-anchor-link" href="#what-this-is-not"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “What this is not”</span></a></div>
+<ul>
+<li>Not a way to create service accounts, tokens or identity providers.</li>
+<li>Not a way to change an agent’s stage, resume it or approve anything. Destroying an
+agent retires it, which pauses it; that is the one exception, and the plan names it.</li>
+<li>Not custom roles. The five roles cover the cases asked for; an editable permission
+matrix is a separate feature.</li>
+<li>Not a replacement for the console. Both write the same resources, and the plan says
+when they disagree.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="tests-that-must-exist">Tests that must exist</h2><a class="sl-anchor-link" href="#tests-that-must-exist"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Tests that must exist”</span></a></div>
+<p>Server side, each written before its change:</p>
+<ul>
+<li>A <code dir="auto">DELETE</code> of an MCP server used by an agent that is not retired answers 409 and lists
+it; once the agent is retired, the delete succeeds. The same for a connector instance,
+a model provider and, in phase 2, an area.</li>
+<li><code dir="auto">enabled: false</code> and a credential rotation on a resource in use succeed: the 409
+never blocks the first step of the emergency order.</li>
+<li>Publish and delete racing, in both orders, for an MCP server and for an area. Each
+side is held at its lock with a test hook, the other runs, and the outcome is either a
+409 on the delete or a 400 on the publish, never both succeeding.</li>
+<li>Restore and delete racing, in both orders, the same way: either the delete answers 409
+or the restore is refused, never both succeeding.</li>
+<li>Restoring an agent after a resource its current version names was deleted is refused,
+and the agent stays retired.</li>
+<li>A publish naming a model provider that does not exist answers 400.</li>
+<li>A publish with a stale <code dir="auto">If-Match</code> answers 412 and writes no version; the same for a
+retirement. A publish landing between the read and the write with the old tag is the
+case the test uses, not a made-up tag.</li>
+<li>An identical publish keeps the agent’s <code dir="auto">ETag</code>. An identical publish of a version
+published before 0.103.0 answers 409 <code dir="auto">version-digest-unknown</code>, and writes nothing.</li>
+<li>A create with <code dir="auto">If-None-Match: *</code> of a resource that already exists answers 412 and
+writes nothing, for every resource that takes it, and for the agent’s first version.
+Two creates racing for one name or agent id, through the contention fixture: exactly
+one succeeds, and the other gets 412. Sending both headers is a 400.</li>
+<li><strong>Authorization before precondition, for publish, retire and restore.</strong> A caller
+without <code dir="auto">agent:publish</code> on the agent’s current scope gets 404, both with a stale
+<code dir="auto">If-Match</code> and with a current one, and nothing is written. A caller who holds the
+destination but not the current scope cannot move the agent. Sabotage: judge
+<code dir="auto">If-Match</code> before the scope; the test must name the 412 it leaked. Then authorize
+outside the lock, with the agent moved between the check and the write by a test hook;
+the test must find the write made under the old scope’s authority.</li>
+<li>A delete refused by an agent the caller cannot read answers 409 with <code dir="auto">hidden: 1</code> and
+no id. Sabotage: judge only the readable agents; the test must find the delete made.</li>
+<li>Deleting an area that holds one row of each integration kind answers 409, once per
+kind, each with the kind named. A write into the area racing the delete, in both
+orders: either the delete answers 409 or the write is refused because the area is
+gone, never both succeeding.</li>
+<li><strong>The previous binary, against the delete.</strong> From the delete release’s side, the
+previous binary is the fence release. The test runs the fence release’s exact
+area-scoped <code dir="auto">settings</code> upsert, lock included, for a connector instance and for a
+conversation, against a concurrent area delete held at its <code dir="auto">FOR UPDATE</code> by a test hook.
+The upsert waits. Once the delete commits, it is refused because the area is gone, and
+no row exists at that area afterwards. Sabotage: drop the <code dir="auto">FOR SHARE</code> from that
+upsert; the test must find a row written into the deleted area.</li>
+<li>A write into an unregistered area is refused with 400 from the fence release on.</li>
+<li>A classification at <code dir="auto">level: owner</code> and one at <code dir="auto">level: platform</code> for the same tool are
+two resources. Destroying the platform one makes the owner’s apply.</li>
+<li>Retiring an agent writes a trail line.</li>
+<li>Every secret field in <code dir="auto">api/openapi.yaml</code> is <code dir="auto">writeOnly</code>, found by walking the schema,
+so a new secret field without the mark fails the test.</li>
+<li>An identical classification <code dir="auto">PUT</code> writes no event and keeps the <code dir="auto">ETag</code>.</li>
+<li>An area <code dir="auto">PUT</code> with an id folding would change answers 400.</li>
+<li>For grants by a caller without <code dir="auto">identity:write</code>, one test per rule, each using the
+input the broken version would accept:
+<ul>
+<li>a curator person granting <code dir="auto">curator</code>, and a curator token granting <code dir="auto">curator</code>;</li>
+<li>a curator granting <code dir="auto">auditor</code>;</li>
+<li>a curator of area X granting in area Y;</li>
+<li>a token granting <code dir="auto">approver</code>;</li>
+<li>a token granting to itself;</li>
+<li>a token granting to another service account;</li>
+<li>a token revoking an <code dir="auto">admin</code> grant.</li>
+</ul>
+</li>
+<li>The grant <code dir="auto">GET</code> answers 404 for a principal holding only the asserted twin of a grant,
+and 200 once the hand-set one exists.</li>
+<li>A hand grant equal to an asserted one survives the identity provider withdrawing its
+assertion.</li>
+<li>The email lookup answers one id or 404 for a caller with <code dir="auto">access:delegate</code>, 403
+without it, and never a list.</li>
+<li>The lookup answers 429 past the caller’s limit.</li>
+<li>A lookup that found nobody records <code dir="auto">found: false</code> and nothing derived from the
+address: the row’s detail holds exactly the expected keys, and the address does not
+appear anywhere in the row.</li>
+<li>A grant made by a token records that token’s id.</li>
+</ul>
+<p>Provider side, in its repository, against a real server and database:</p>
+<ul>
+<li>For every resource: create, read, update, import and delete.</li>
+<li>An unchanged configuration plans empty right after apply and again later.</li>
+<li>A change made through the API outside Terraform appears as drift on the next plan.</li>
+<li>A test reads the state file after apply and finds no secret.</li>
+<li>An apply against an autonomous agent is refused and changes nothing.</li>
+<li>A plan putting an integration at area scope against a server older than its kind’s
+writers’ release fails at plan time and sends nothing.</li>
+<li>Importing an integration by name fills <code dir="auto">scope</code>, and the next plan is empty.</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="decided">Decided</h2><a class="sl-anchor-link" href="#decided"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Decided”</span></a></div>
+<p>Decided by Kleber on 2026-11-11:</p>
+<ol>
+<li><strong>Scope:</strong> three phases, as above.</li>
+<li><strong>Access may be delegated</strong>, with <code dir="auto">identity:write</code> still barred for tokens.</li>
+<li><strong>Repository name:</strong> <code dir="auto">fuseone-io/terraform-provider-fuseoneagents</code>.</li>
+</ol>
+<p>Decided by the reviewer on 2026-11-11:</p>
+<ol start="4">
+<li><strong>Delegation by people: yes.</strong> One rule for people and service accounts, and the
+only role it grants is <code dir="auto">author</code>.</li>
+<li><strong>No force on delete.</strong> An emergency disables the resource and revokes or rotates its
+credential first, then edits or retires the agents, then deletes. The 409 never
+blocks disabling.</li>
+</ol></div><footer class="sl-flex astro-xhxjzfa7"><div class="meta sl-flex astro-xhxjzfa7"></div><div class="pagination-links print:hidden astro-jgq3vlii" dir="ltr"><a href="/fuseone-agents/docs/design/nt-016-judge-evaluators/" rel="prev" class="astro-jgq3vlii"><svg aria-hidden="true" class="astro-jgq3vlii astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z"/></svg><span class="astro-jgq3vlii">Previous<br class="astro-jgq3vlii"><span class="link-title astro-jgq3vlii">NT-016 — Judge evaluators</span></span></a><a href="/fuseone-agents/docs/design/nt-018-authoring-workbench/" rel="next" class="astro-jgq3vlii"><svg aria-hidden="true" class="astro-jgq3vlii astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17.92 11.62a1.001 1.001 0 0 0-.21-.33l-5-5a1.003 1.003 0 1 0-1.42 1.42l3.3 3.29H7a1 1 0 0 0 0 2h7.59l-3.3 3.29a1.002 1.002 0 0 0 .325 1.639 1 1 0 0 0 1.095-.219l5-5a1 1 0 0 0 .21-.33 1 1 0 0 0 0-.76Z"/></svg><span class="astro-jgq3vlii">Next<br class="astro-jgq3vlii"><span class="link-title astro-jgq3vlii">NT-018 — The authoring workbench</span></span></a></div></footer></div></div></main></div></div></div></div></body></html>
