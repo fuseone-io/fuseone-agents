@@ -2526,10 +2526,19 @@ paths:
     get:
       tags: [admin]
       operationId: listIntegrations
-      summary: Everything the platform is configured to talk to
+      summary: The tool servers and model providers the caller uses or governs
       description: >
         Tool servers and model providers. Credentials are never returned; a
         provider only reports whether one is stored.
+
+        Read by a holder of tool:read at the platform's administration, who is
+        listed every server, or by whoever holds provider:write in some scope
+        (NT-019). The latter is listed the servers of the scopes they govern,
+        and the ones their scopes inherit from their company or the
+        installation; never a sibling area's. Each server says where it is
+        stored (scopeKind, company, area) and whether the caller may change
+        it (editable): an inherited server is listed read-only. Model
+        providers are the platform's and are listed as they are.
       responses:
         '200':
           description: The configured integrations.
