@@ -1392,7 +1392,6 @@
     "scopeKind": "Escopo do servidor",
     "scopeHeld": "Onde o servidor vale",
     "remoteOutsideInstallation": "Fora da instalação, o servidor é sempre remoto (HTTP): um processo local roda no worker da plataforma e é da plataforma.",
-    "outsideEgress": "Este servidor chama uma origem fora da política de egresso da plataforma para este escopo. A URL, o endpoint de token OAuth e a API do GitHub App (por padrão https://api.github.com) precisam ser origens permitidas; peça à administração da plataforma para liberar a origem.",
     "outsideEgressAt": "Este servidor chama uma origem fora da política de egresso da plataforma para este escopo: {{origin}}. A URL, o endpoint de token OAuth e a API do GitHub App (por padrão https://api.github.com) precisam ser origens permitidas; peça à administração da plataforma para liberar a origem.",
     "transportStdio": "Processo local (stdio)",
     "url": "Endereço",

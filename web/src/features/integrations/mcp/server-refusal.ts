@@ -5,11 +5,12 @@ import { problemMessage } from "@/lib/api/problem-message";
 /*
  * A company's or an area's server outside the platform's egress policy for
  * its scope (NT-019). The problem's type names the refusal and its detail is
- * the canonical origin alone, interpolated rather than translated.
+ * the canonical origin alone, interpolated rather than translated. One that
+ * names no origin is not said as this refusal: it reads as any other.
  */
 function egressOrigin(error: unknown): string | null {
   if (!(error instanceof ApiError) || error.problem?.type !== "fuseone:egress-not-allowed") return null;
-  return error.detail ?? "";
+  return error.detail ? error.detail : null;
 }
 
 /** A refusal said beside the field it is about, or null for any other. */
@@ -32,7 +33,5 @@ export function serverProblemMessage(error: unknown, t: TFunction) {
 }
 
 function egressMessage(origin: string, t: TFunction) {
-  return origin
-    ? t("integrations.outsideEgressAt", { origin, interpolation: { escapeValue: false } })
-    : t("integrations.outsideEgress");
+  return t("integrations.outsideEgressAt", { origin, interpolation: { escapeValue: false } });
 }

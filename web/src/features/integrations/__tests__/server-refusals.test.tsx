@@ -91,11 +91,26 @@ describe("a new server the server refuses", () => {
   });
 });
 
+// An egress refusal that names no origin is not one the console can say
+// beside the address: it reads as any other refusal.
+describe("an egress refusal without an origin", () => {
+  it("is not said as the egress sentence", async () => {
+    refusedWith(400, { ...egress, detail: "" });
+    await save();
+
+    expect(await screen.findByText(/Fora da política de egresso/)).toBeInTheDocument();
+    expect(screen.queryByText(/chama uma origem fora da política/)).not.toBeInTheDocument();
+  });
+});
+
 // A policy narrowed after the server was created refuses its next write, the
 // surface's included, and that write says so in the same words.
 describe("an existing server's surface the server refuses", () => {
   it("says the server is outside the platform's egress policy, naming the origin", async () => {
-    const crm = { name: "crm", transport: "http", url: "https://crm.example.com/mcp", enabled: true };
+    const crm = {
+      name: "crm", transport: "http", url: "https://crm.example.com/mcp", enabled: true,
+      scopeKind: "area", company: "acme", area: "cx", editable: true,
+    };
     stubNetwork([], (method, path) => {
       if (method === "PUT") return json({ status: 400, ...egress }, 400);
       if (path === "/admin/integrations/mcp-servers/crm") return json(crm, 200, { ETag: '"v1"' });

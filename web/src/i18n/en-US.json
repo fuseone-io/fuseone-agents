@@ -1392,7 +1392,6 @@
     "scopeKind": "Server scope",
     "scopeHeld": "Where the server applies",
     "remoteOutsideInstallation": "Outside the installation a server is always remote (HTTP): a local process runs on the platform's worker and is the platform's.",
-    "outsideEgress": "This server calls an origin outside the platform's egress policy for this scope. Its URL, OAuth token endpoint and GitHub App API (https://api.github.com by default) must be allowed origins; ask the platform's administration to allow it.",
     "outsideEgressAt": "This server calls an origin outside the platform's egress policy for this scope: {{origin}}. Its URL, OAuth token endpoint and GitHub App API (https://api.github.com by default) must be allowed origins; ask the platform's administration to allow it.",
     "transportStdio": "Local process (stdio)",
     "url": "Address",
