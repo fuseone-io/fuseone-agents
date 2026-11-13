@@ -69,8 +69,10 @@ func originOf(u *url.URL) (string, bool) {
 	if port == "" {
 		port = map[string]string{"http": "80", "https": "443"}[scheme]
 	}
-	if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
 		return "", false
 	}
-	return scheme + "://" + net.JoinHostPort(host, port), true
+	// Written from the number: ":0443" and ":443" are one port.
+	return scheme + "://" + net.JoinHostPort(host, strconv.Itoa(n)), true
 }

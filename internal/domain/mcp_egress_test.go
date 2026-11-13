@@ -13,6 +13,7 @@ func TestCanonicalOrigin_namesSchemeHostAndPortExactly(t *testing.T) {
 		"http://10.24.0.17:8080":        "http://10.24.0.17:8080",
 		"http://tools.example.com":      "http://tools.example.com:80",
 		"https://[2001:db8::1]:8443":    "https://[2001:db8::1]:8443",
+		"https://jira.example.com:0443": "https://jira.example.com:443",
 	} {
 		got, err := CanonicalOrigin(raw)
 		if err != nil || got != want {
@@ -47,6 +48,7 @@ func TestMCPEgress_allowsExactlyTheListedOrigins(t *testing.T) {
 	for raw, want := range map[string]bool{
 		"https://jira.example.com/mcp":         true,
 		"https://JIRA.example.com:443/x?y=1":   true,
+		"https://jira.example.com:0443/mcp":    true,
 		"http://jira.example.com/mcp":          false,
 		"https://jira.example.com:8443/mcp":    false,
 		"https://evil.jira.example.com/mcp":    false,
