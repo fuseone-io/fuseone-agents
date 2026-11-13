@@ -3467,6 +3467,14 @@ paths:
         other administrative change. The tools it offers arrive unclassified
         and do nothing until somebody says what they do; that stays a separate
         act.
+
+        A company's or an area's server is held to the platform's egress
+        policy for its scope (`/admin/integrations/mcp-egress-policies`): its
+        URL, its OAuth token endpoint and its GitHub App API base
+        (`https://api.github.com` when none is named) must each be an origin
+        the policy lists, or the write answers 400. A scope with no policy, or
+        a deny-all, allows none. A name another scope holds answers 409 first.
+        The installation's servers are not held to any policy.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
         - name: name

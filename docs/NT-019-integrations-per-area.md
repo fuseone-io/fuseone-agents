@@ -44,13 +44,9 @@ integrations and the ones above it. Nothing here is done by an agent.
   - **by the worker**, which starts no local process for a server outside the
     installation.
 
-  A remote server is reached through the worker's `netguard`, as connectors are.
-  It refuses cloud metadata and link-local addresses only. Private addresses are
-  allowed on purpose, because on-premise MCP servers are a normal case. So an area's
-  administrator can point a server at any HTTP endpoint the worker can reach on the
-  customer's network, and the worker sends that area's credential there. Delegating
-  remote servers to areas delegates that reach. It does not delegate running code on
-  the platform's host, which is what keeping stdio the platform's prevents.
+  Keeping stdio the platform's prevents running an area's code on the platform's
+  host. Where a remote server may send requests is a separate rule, below: only the
+  origins the platform allows the server's scope.
 - **An area may create conversations and its own channel connections.** It can use the
   platform's Slack connection, or register another app or workspace of its own.
 - **A server outside the installation reaches only the origins the platform allows its
@@ -69,7 +65,12 @@ integrations and the ones above it. Nothing here is done by an agent.
   - The worker refuses a server whose URL is not listed before sending anything, and
     checks every request as it leaves: redirects, and the endpoints that refresh an
     OAuth grant or mint a GitHub App token. A changed policy reconnects the server.
-  - The writers' door checks the server's origins at the PUT too, once it opens.
+  - The writers' door checks the server's origins at the PUT too: its URL, its OAuth
+    token endpoint and its GitHub App API base (`api.github.com` when none is named).
+    It reads the policy inside the write's transaction, holding the policies' lock
+    shared until it commits; a policy write holds that lock exclusively. So a policy
+    narrowed meanwhile is either waited for or the one the server is judged by. A name
+    another scope holds answers 409 before the policy is judged.
   - The installation's servers are not held to any list. `netguard` keeps refusing
     metadata and link-local for every server, and NetworkPolicy remains a defence in
     depth, not a substitute.

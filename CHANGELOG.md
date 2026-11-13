@@ -60,9 +60,11 @@ migration `0110_area_mcp_servers_are_remote`.
     database, and by the worker, which starts no such process. It would run that area's
     commands on the platform's host.
   - A remote server reaches only the origins the platform's egress policy allows its
-    scope (0.109.0). The door checks the server's URL and its OAuth token endpoint
-    against that policy and answers 400 for an origin outside it, and for a scope the
-    platform allows nothing.
+    scope (0.109.0). The door checks the server's URL, its OAuth token endpoint and its
+    GitHub App API base (`api.github.com` when none is named) against that policy, and
+    answers 400 for an origin outside it and for a scope the platform allows nothing. A
+    policy changed while the write is in flight is either waited for or the one it is
+    judged by. A name another scope holds still answers 409 first.
   - The scope a write names must be a real company or area: the installation's `*`,
     an identifier in another form (upper case, spaces), or a company or area without
     `scopeKind` answers 400.
