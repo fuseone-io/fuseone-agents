@@ -10,14 +10,12 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { ConnectorScopeFields } from "@/features/integrations/connectors/connector-scope-fields";
+import { ScopeFields } from "@/features/integrations/scope/scope-fields";
+import type { ScopeValues } from "@/features/integrations/scope/scope-choice";
 
-export type ConnectorIdentityValues = {
+export type ConnectorIdentityValues = ScopeValues & {
   name: string;
   enabled: boolean;
-  scopeKind: "installation" | "company" | "area";
-  company: string;
-  area: string;
 };
 
 export function ConnectorIdentityFields({
@@ -47,7 +45,10 @@ export function ConnectorIdentityFields({
           </FormItem>
         )}
       />
-      <ConnectorScopeFields editing={editing} />
+      <ScopeFields
+        editing={editing}
+        labels={{ kind: "connectors.scopeKind", held: "connectors.scopeHeld" }}
+      />
       <FormField
         control={form.control}
         name="enabled"

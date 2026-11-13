@@ -19,10 +19,13 @@ export function CatalogueCard({
   entry,
   onOpen,
   selected,
+  readOnly = false,
 }: {
   entry: Listing;
   onOpen: () => void;
   selected?: boolean;
+  /** For a caller who may not connect a server: a recipe opens to be read. */
+  readOnly?: boolean;
 }) {
   const { t } = useTranslation();
   const state = entry.configured
@@ -37,7 +40,7 @@ export function CatalogueCard({
         "flex min-h-[166px] flex-col gap-2 rounded-lg border bg-card p-3 text-left shadow-sm transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         selected && "border-primary ring-1 ring-primary/30",
       )}
-      aria-label={t(entry.configured ? "mcp.configureNamed" : "mcp.connectNamed", {
+      aria-label={t(readOnly ? "mcp.viewNamed" : entry.configured ? "mcp.configureNamed" : "mcp.connectNamed", {
         name: entry.title,
       })}
       aria-pressed={selected}
@@ -95,7 +98,11 @@ export function CatalogueCard({
           </span>
         </span>
         <span className="ml-auto rounded-md border px-2 py-1 text-2xs font-medium">
-          {entry.configured ? t("mcp.configure") : t("mcp.connectIt")}
+          {readOnly
+            ? t("mcp.viewIt")
+            : entry.configured
+              ? t("mcp.configure")
+              : t("mcp.connectIt")}
         </span>
       </div>
     </button>

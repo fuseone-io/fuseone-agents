@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
 import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
-import { problemMessage } from "@/lib/api/problem-message";
+import { serverProblemMessage } from "@/features/integrations/mcp/server-refusal";
 import { isStale } from "@/lib/api/revision";
 import { ApiError } from "@/lib/api/client";
 import { StaleNotice } from "@/components/shared/stale-notice";
@@ -77,6 +77,7 @@ export function MCPServerPage() {
       await inOrder(({ body, etag }) =>
         save.mutateAsync({
           name: body.name,
+          scope: body,
           surface: [...chosen],
           transport: body.transport ?? "stdio",
           protocolMode: body.protocolMode ?? "auto",
@@ -94,7 +95,7 @@ export function MCPServerPage() {
       });
     } catch (problem) {
       if (isStale(problem)) setStale(true);
-      else toast.error(problemMessage(problem, t));
+      else toast.error(serverProblemMessage(problem, t));
     }
   }
 

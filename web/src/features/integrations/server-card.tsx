@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { ServerScopeBadges } from "@/features/integrations/server-scope-badges";
 import { IntegrationCard } from "@/features/integrations/integration-card";
 import { RevisedRemoveButton } from "@/components/shared/revised-remove-button";
 import {
@@ -36,11 +37,13 @@ export function ServerCard({
       }
       enabled={server.enabled}
       health={server.health}
+      tags={<ServerScopeBadges server={server} />}
       action={
         // A server nobody configured here cannot be edited or removed here
-        // either. Offering the buttons would promise something the console
+        // either, nor one the caller inherits from a scope above its own
+        // (NT-019). Offering the buttons would promise something the console
         // cannot do.
-        server.managed === false ? undefined : (
+        server.managed === false || server.editable === false ? undefined : (
           <div className="flex items-center gap-1">
             {/* The tools, the surface and the rulings live on their own
                 page: three decisions with different consequences, and a

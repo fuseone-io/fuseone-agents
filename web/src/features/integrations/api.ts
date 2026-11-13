@@ -80,11 +80,35 @@ export function useMCPServerRevision(name: string | undefined) {
   });
 }
 
+/**
+ * A row's scope, as a write names it; nothing for a row that predates scopes.
+ * Only the outer spaces of a typed identifier go, as the connectors' do: the
+ * case stays, since the server refuses one it would store differently.
+ */
+export function storedScope(row: {
+  scopeKind?: ConnectorScopeKind;
+  company?: string;
+  area?: string;
+}) {
+  if (!row.scopeKind) return {};
+  return {
+    scopeKind: row.scopeKind,
+    company: row.scopeKind === "installation" ? undefined : row.company?.trim(),
+    area: row.scopeKind === "area" ? row.area?.trim() : undefined,
+  };
+}
+
 export function usePutMCPServer() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
       name: string;
+      /**
+       * Where the server is stored (NT-019). Absent is the installation. An
+       * existing server's is sent back as read: written elsewhere, its name
+       * is another scope's and the write is refused.
+       */
+      scope?: Pick<MCPServer, "scopeKind" | "company" | "area">;
       transport: "stdio" | "http";
       protocolMode: "auto" | "legacy";
       command: string;
@@ -145,6 +169,7 @@ export function usePutMCPServer() {
         await api.PUT("/admin/integrations/mcp-servers/{name}", {
           params: { path: { name: input.name }, header: ifMatch(input.etag) },
           body: {
+            ...storedScope(input.scope ?? {}),
             transport: input.transport,
             protocolMode: input.protocolMode,
             command: input.command,

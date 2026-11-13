@@ -20,6 +20,10 @@ export const serverSchema = z
       .min(1, "integrations.nameServer")
       .regex(/^[a-z0-9][a-z0-9_-]*$/, "integrations.nameCharset"),
     transport: z.enum(["stdio", "http"]),
+    // Where the server is stored (NT-019); it does not move once written.
+    scopeKind: z.enum(["installation", "company", "area"]),
+    company: z.string(),
+    area: z.string(),
     protocolMode: z.enum(["auto", "legacy"]),
     command: z.string(),
     args: z.string(),
@@ -68,6 +72,23 @@ export const serverSchema = z
     stdioEgressDestinations: z.string(),
     acceptsLocalExecution: z.boolean(),
     enabled: z.boolean(),
+  })
+  .refine((v) => v.scopeKind === "installation" || v.company.trim() !== "", {
+    path: ["company"],
+    message: "connectors.companyRequired",
+  })
+  .refine((v) => v.scopeKind !== "area" || v.area.trim() !== "", {
+    path: ["area"],
+    message: "connectors.areaRequired",
+  })
+  /*
+   * A company's or an area's server is remote: a local one runs on the
+   * platform's worker, and is the platform's. The server refuses the pair;
+   * the form offers only HTTP there, and this holds if it ever did not.
+   */
+  .refine((v) => v.scopeKind === "installation" || v.transport === "http", {
+    path: ["transport"],
+    message: "integrations.remoteOutsideInstallation",
   })
   .refine((v) => v.transport !== "stdio" || v.command.trim() !== "", {
     path: ["command"],

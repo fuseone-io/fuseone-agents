@@ -38,6 +38,7 @@ import {
   remoteTokenHint,
   remoteTokenLabel,
 } from "@/features/integrations/mcp/credential-labels";
+import { serverProblemMessage } from "@/features/integrations/mcp/server-refusal";
 import {
   usePutMCPServer,
   useProbeMCPServer,
@@ -107,6 +108,8 @@ export function ConnectionPanel({
     const send = (record: MCPServer, etag?: string) =>
       put.mutateAsync({
         name: record.name,
+        // Where it is stored, as read: a server's scope does not move.
+        scope: record,
         transport: record.transport ?? "stdio",
         protocolMode: record.protocolMode ?? "auto",
         command: record.command ?? "",
@@ -134,7 +137,7 @@ export function ConnectionPanel({
       return true;
     } catch (problem) {
       if (revision && isStale(problem)) revision.onStale();
-      else toast.error(problemMessage(problem, t));
+      else toast.error(serverProblemMessage(problem, t));
       return false;
     }
   }

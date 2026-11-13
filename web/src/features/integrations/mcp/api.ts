@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
 import { ifMatch, written } from "@/lib/api/revision";
 import type { components } from "@/lib/api/schema.gen";
-import { integrationKeys } from "@/features/integrations/api";
+import {
+  integrationKeys,
+  storedScope,
+  type MCPServer,
+} from "@/features/integrations/api";
 
 export type ServerRecipe = components["schemas"]["ServerRecipe"];
 
@@ -37,6 +41,8 @@ export function useSetSurface() {
   return useMutation({
     mutationFn: async (input: {
       name: string;
+      /** Where it is stored, as read: a server's scope does not move (NT-019). */
+      scope: Pick<MCPServer, "scopeKind" | "company" | "area">;
       surface: string[];
       transport: "stdio" | "http";
       protocolMode: "auto" | "legacy";
@@ -52,6 +58,7 @@ export function useSetSurface() {
         await api.PUT("/admin/integrations/mcp-servers/{name}", {
           params: { path: { name: input.name }, header: ifMatch(input.etag) },
           body: {
+            ...storedScope(input.scope),
             transport: input.transport,
             protocolMode: input.protocolMode,
             command: input.command,

@@ -9,6 +9,7 @@ import {
   readConnectorInstance,
   type ConnectorInstance,
 } from "@/features/integrations/api";
+import { inheritedFrom, scopeLabel } from "@/features/integrations/scope/scope-label";
 import { GraviteeInstanceFacts } from "@/features/integrations/connectors/gravitee-instance-facts";
 import { formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -240,22 +241,6 @@ function Fact({
       <p className={cn("truncate", mono && "font-mono")}>{value}</p>
     </div>
   );
-}
-
-function scopeLabel(instance: ConnectorInstance, t: TFunction) {
-  if (instance.scopeKind === "installation") {
-    return t("connectors.scope.installation");
-  }
-  if (instance.scopeKind === "company") return instance.company ?? "-";
-  return `${instance.company ?? "-"}/${instance.area ?? "-"}`;
-}
-
-// Listed and not editable is inherited: every listing is for someone who
-// configures somewhere, so the instance belongs to a scope above theirs.
-function inheritedFrom(instance: ConnectorInstance) {
-  return instance.scopeKind === "installation"
-    ? "connectors.inheritedFromPlatform"
-    : "connectors.inheritedFromCompany";
 }
 
 function tokenState(instance: ConnectorInstance, t: TFunction) {

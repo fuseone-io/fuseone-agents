@@ -3,10 +3,11 @@ import type { Me, MeScope } from "@/features/session/api";
 /**
  * What the caller may open and change under integrations (NT-019).
  *
- * Connector instances are configured at their own scope, so an area's
- * administrator works on them. MCP servers, providers and channels are still
- * the platform's: they open and change only for what is held there. A server
- * that predates `platform` answers for `can` alone, as before.
+ * Connector instances and MCP servers are configured at their own scope, so
+ * an area's administrator works on them. Providers, channels and the MCP
+ * catalogue are still the platform's: they open and change only for what is
+ * held there. A server that predates `platform` answers for `can` alone, as
+ * before.
  */
 export interface IntegrationAccess {
   /** The session has answered. Until it does, nothing of the platform is asked for. */
@@ -21,8 +22,12 @@ export interface IntegrationAccess {
   createConnector: boolean;
   /** Governs every scope: the connector form leaves the scope free. */
   anyScope: boolean;
-  /** Where a connector instance may be created when anyScope is false. */
+  /** Where a connector instance or a server may be created when anyScope is false. */
   configure: MeScope[];
+  /** Opens the connected MCP servers: its own, and those it inherits. */
+  servers: boolean;
+  /** May create an MCP server somewhere. */
+  createServer: boolean;
 }
 
 export function integrationAccess(me: Me | null | undefined): IntegrationAccess {
@@ -42,6 +47,8 @@ export function integrationAccess(me: Me | null | undefined): IntegrationAccess 
     // Before /me answers, the form leaves the scope free; the server decides.
     anyScope: !me || atPlatform("provider:write"),
     configure: me?.configure ?? [],
+    servers: opensAll || writes,
+    createServer: writes,
   };
 }
 
@@ -53,4 +60,6 @@ const open: IntegrationAccess = {
   createConnector: true,
   anyScope: true,
   configure: [],
+  servers: true,
+  createServer: true,
 };

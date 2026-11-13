@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
-import { Plug, Server } from "lucide-react";
+import { Plug } from "lucide-react";
 import { ChannelsTab } from "@/features/channels/channels-tab";
 import { useChannels } from "@/features/channels/api";
 import { ConnectMenu } from "@/features/integrations/connect-menu";
@@ -22,7 +22,8 @@ import {
 } from "@/components/shared/states";
 import { ServerEditor } from "@/features/integrations/server-editor";
 import { ProviderEditor } from "@/features/integrations/provider-editor";
-import { ServerCard } from "@/features/integrations/server-card";
+import { ConnectedServersSection } from "@/features/integrations/connected-servers-section";
+import { ScopeChoiceContext } from "@/features/integrations/scope/scope-choice";
 import { ProviderCard } from "@/features/integrations/provider-card";
 import {
   useIntegrations,
@@ -71,10 +72,12 @@ export function IntegrationsPage({
   const navigate = useNavigate();
   const { data: me } = useMe();
   const access = integrationAccess(me);
-  // MCP servers, providers and channels are the platform's; connector
-  // instances are their own scope's (NT-019). An area's administrator asks
-  // for none of the platform's lists, each of which would answer 403.
-  const integrations = useIntegrations(access.platform);
+  // Providers, channels and recipes are the platform's; MCP servers and
+  // connector instances are their own scope's (NT-019). An area's
+  // administrator asks for none of the platform's lists, each of which would
+  // answer 403. The servers' listing answers them with their own and what
+  // they inherit.
+  const integrations = useIntegrations(access.servers);
   const recipes = useRecipes(access.platform);
   const channels = useChannels(access.platform);
   const credentials = useMCPUserCredentials(access.platform);
@@ -90,7 +93,6 @@ export function IntegrationsPage({
 
   const servers = integrations.data?.mcpServers ?? [];
   const providers = integrations.data?.providers ?? [];
-  const serverPage = useVisibleItems(servers, 50);
   const providerPage = useVisibleItems(providers, 50);
   const available = availableEntries(listing(servers, recipes.data?.items ?? []));
   const counts = {
@@ -109,8 +111,11 @@ export function IntegrationsPage({
     section === "providers" ||
     section === "credentials";
 
+  // Where a server may be placed, for the sheet and the catalogue's form alike.
   return (
-    <>
+    <ScopeChoiceContext.Provider
+      value={{ anyScope: access.anyScope, configure: access.configure }}
+    >
       <PageHeader
         icon={PAGE_ICONS.integrations}
         title={t("nav.integrations")}
@@ -143,38 +148,20 @@ export function IntegrationsPage({
             onRetry={() => void integrations.refetch()}
           />
         ) : section === "connected" ? (
-          <>
-            <IntegrationsSection
-              title={t("integrations.connected")}
-              onAdd={() => void navigate("/integrations/mcp")}
-              empty={
-                servers.length === 0 && (
-                  <EmptyState
-                    icon={<Server className="size-6" />}
-                    title={t("integrations.noServer")}
-                    hint={t("integrations.noServerHint")}
-                  />
-                )
-              }
-              footer={
-                <LoadMore
-                  loaded={serverPage.loaded}
-                  total={serverPage.total}
-                  hasMore={serverPage.hasMore}
-                  isLoading={false}
-                  onLoad={serverPage.loadMore}
-                />
-              }
-            >
-              {serverPage.visible.map((server) => (
-                <ServerCard
-                  key={server.name}
-                  server={server}
-                  onEdit={() => setEditing({ kind: "server", value: server })}
-                />
-              ))}
-            </IntegrationsSection>
-          </>
+          <ConnectedServersSection
+            servers={servers}
+            // The catalogue is the platform's; an area's configurer connects
+            // a server by its address, in the sheet (NT-019).
+            // Offered only to whoever may create one somewhere (NT-019).
+            onAdd={
+              !access.createServer
+                ? undefined
+                : access.platform
+                  ? () => void navigate("/integrations/mcp")
+                  : () => setEditing({ kind: "server", value: null })
+            }
+            onEdit={(server) => setEditing({ kind: "server", value: server })}
+          />
         ) : section === "providers" ? (
           <>
             <IntegrationsSection
@@ -210,6 +197,7 @@ export function IntegrationsPage({
           </>
         ) : section === "available" ? (
           <AvailableServersPanel
+            canCreate={access.createServer}
             servers={servers}
             recipes={recipes.data?.items ?? []}
             isLoading={integrations.isLoading || recipes.isLoading}
@@ -280,6 +268,6 @@ export function IntegrationsPage({
           onClose={() => setEditing(null)}
         />
       )}
-    </>
+    </ScopeChoiceContext.Provider>
   );
 }

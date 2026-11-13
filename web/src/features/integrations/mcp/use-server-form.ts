@@ -28,6 +28,11 @@ import {
   githubAppHeaders,
 } from "@/features/integrations/mcp/github-app-credential";
 import { problemMessage } from "@/lib/api/problem-message";
+import { serverRefusal } from "@/features/integrations/mcp/server-refusal";
+import { useActiveScope, type Scope } from "@/features/scope/active-scope";
+
+/** The company the active scope names for the installation itself. */
+const INSTALLATION_COMPANY = "*";
 import { isStale } from "@/lib/api/revision";
 
 /**
@@ -48,28 +53,25 @@ export function useServerForm(
   const { t } = useTranslation();
   const put = usePutMCPServer();
 
+  const company = useActiveScope((state) => state.company);
+  const area = useActiveScope((state) => state.area);
   const form = useForm<ServerFormValues>({
     resolver: zodResolver(serverSchema),
-    defaultValues: defaultServerValues(server, recipe),
+    defaultValues: defaultServerValues(server, recipe, { company, area }),
   });
 
   async function submit(values: ServerFormValues) {
     const remotePlan = remoteAuthPlan(recipe?.authModes, recipe !== undefined && recipe !== null);
     const remoteHeaders = headerNames(remotePlan.multiHeaders);
     const dsnMode = values.transport === "stdio" ? dsnEnvMode(recipe?.authModes) : null;
-    const hasSomeHeaders = remoteHeaders.some(
-      (header) => values.headers[header]?.trim() !== "",
-    );
-    const hasAllHeaders =
-      remoteHeaders.length > 0 &&
-      remoteHeaders.every((header) => values.headers[header]?.trim() !== "");
-    if (hasSomeHeaders && !hasAllHeaders) {
+    if (headersIncomplete(values, remoteHeaders)) {
       form.setError("headers", { message: "mcp.remoteHeadersIncomplete" });
       return;
     }
     try {
       await put.mutateAsync({
         name: values.name,
+        scope: values,
         transport: values.transport,
         protocolMode: values.protocolMode,
         command: values.command,
@@ -110,7 +112,9 @@ export function useServerForm(
       });
       onDone(values.name);
     } catch (error) {
+      const refusal = serverRefusal(error, t);
       if (revision && isStale(error)) revision.onStale();
+      else if (refusal) form.setError(refusal.field, { message: refusal.message });
       else toast.error(problemMessage(error, t));
     }
   }
@@ -120,11 +124,20 @@ export function useServerForm(
 
 function defaultServerValues(
   server: MCPServer | null,
-  recipe?: ServerRecipe | null,
+  recipe: ServerRecipe | null | undefined,
+  /** The scope the console is reading, where a new server is offered first. */
+  active: Scope,
 ): ServerFormValues {
+  const reading = active.company === INSTALLATION_COMPANY ? { company: "", area: "" } : active;
   return {
     name: server?.name ?? "",
     transport: server?.transport ?? "stdio",
+    // As stored, sent back unchanged: a server's scope does not move.
+    // A new one is the installation's until a scope is chosen; the active
+    // scope fills the company and area that choice starts from.
+    scopeKind: server?.scopeKind ?? "installation",
+    company: server ? (server.company ?? "") : reading.company,
+    area: server ? (server.area ?? "") : reading.area,
     protocolMode: server?.protocolMode ?? recipe?.protocolMode ?? "auto",
     command: server?.command ?? "",
     args: (server?.args ?? []).join(" "),
@@ -159,6 +172,12 @@ function defaultServerValues(
     acceptsLocalExecution: server?.acceptsLocalExecution ?? false,
     enabled: server?.enabled ?? true,
   };
+}
+
+/** Some of the headers a credential needs are filled, and not all of them. */
+function headersIncomplete(values: ServerFormValues, headers: string[]) {
+  const filled = (header: string) => values.headers[header]?.trim() !== "";
+  return headers.some(filled) && !(headers.length > 0 && headers.every(filled));
 }
 
 function remoteCredential(

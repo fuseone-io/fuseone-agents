@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AvailableServersPanel } from "@/features/integrations/mcp/available-servers-panel";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
+import type { MCPServer } from "@/features/integrations/api";
 
 const api = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
@@ -113,7 +114,7 @@ const outline: ServerRecipe = {
   note: "Workspace wiki.",
 };
 
-function open(recipes: ServerRecipe[] = [stripe]) {
+function open(recipes: ServerRecipe[] = [stripe], canCreate?: boolean, servers: MCPServer[] = []) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -121,11 +122,12 @@ function open(recipes: ServerRecipe[] = [stripe]) {
     <QueryClientProvider client={client}>
       <MemoryRouter>
         <AvailableServersPanel
-          servers={[]}
+          servers={servers}
           recipes={recipes}
           isLoading={false}
           error={null}
           onRetry={vi.fn()}
+          canCreate={canCreate}
         />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -273,4 +275,48 @@ describe("available MCP servers", () => {
     ).toBeInTheDocument();
     expect(api.mutateAsync).not.toHaveBeenCalled();
   });
+});
+
+// A reader of the platform's who configures nowhere reads the catalogue and
+// is offered no way to connect: the write would answer 403 (NT-019).
+describe("the catalogue for someone who may not create a server", () => {
+  it("opens a recipe to read, with no form and no connect", async () => {
+    open([stripe], false);
+    expect(screen.queryByRole("button", { name: "Conectar por endereço" })).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Ver Stripe" }));
+
+    expect(screen.getAllByText("Payments and billing.")).toHaveLength(2);
+    expect(screen.getByText(/Conectar um servidor pede provider:write/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Conectar" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Nome")).not.toBeInTheDocument();
+  });
+
+  // A connected server is read too: "Configurar" would open a page that
+  // answers 403 to whoever may not change it.
+  it("opens a connected server to read, with no configure", async () => {
+    const connected = { name: "stripe", transport: "http", url: "https://mcp.stripe.com", enabled: true } as MCPServer;
+    open([stripe], false, [connected]);
+    expect(screen.queryByText("Configurar")).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Ver Stripe" }));
+
+    expect(screen.queryByRole("button", { name: "Configurar" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Conectar um servidor pede provider:write/)).toBeInTheDocument();
+  });
+});
+
+// Whoever may create somewhere still reads a server they may not change: one
+// of another scope (editable false) or one passed to the process (managed
+// false), whose page has no row to change (NT-019).
+describe("the catalogue for someone who may create, on a server they may not change", () => {
+  for (const [why, flags] of [["of another scope", { editable: false }], ["not managed here", { managed: false }]] as const) {
+    it(`reads a server ${why}, with no configure`, async () => {
+      const server = { name: "stripe", transport: "http", url: "https://mcp.stripe.com", enabled: true, ...flags } as MCPServer;
+      open([stripe], true, [server]);
+      expect(screen.queryByText("Configurar")).not.toBeInTheDocument();
+      await userEvent.setup().click(screen.getByRole("button", { name: "Ver Stripe" }));
+
+      expect(screen.queryByRole("button", { name: "Configurar" })).not.toBeInTheDocument();
+      expect(screen.getByText(/não pode alterá-lo aqui/)).toBeInTheDocument();
+    });
+  }
 });

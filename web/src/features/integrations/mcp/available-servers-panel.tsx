@@ -49,6 +49,7 @@ import {
 import { CallAuthNote } from "@/features/integrations/mcp/call-auth-note";
 import { EgressNote } from "@/features/integrations/mcp/egress-note";
 import { cn } from "@/lib/utils";
+import { configurable } from "@/features/integrations/mcp/server-configurable";
 
 const ORIGINS = ["all", "published", "reference", "archived"] as const;
 type OriginFilter = (typeof ORIGINS)[number];
@@ -75,6 +76,7 @@ export function AvailableServersPanel({
   isLoading,
   error,
   onRetry,
+  canCreate = true,
 }: {
   servers: MCPServer[];
   recipes: ServerRecipe[];
@@ -82,6 +84,8 @@ export function AvailableServersPanel({
   isLoading: boolean;
   error: unknown;
   onRetry: () => void;
+  /** Whether the caller may connect a server; otherwise the catalogue is only read (NT-019). */
+  canCreate?: boolean;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -172,6 +176,7 @@ export function AvailableServersPanel({
                       key={entry.name}
                       entry={entry}
                       selected={panel === entry.name}
+                      readOnly={!configurable(canCreate, serversByName.get(entry.name))}
                       onOpen={() => setPanel(entry.name)}
                     />
                   ))}
@@ -194,9 +199,14 @@ export function AvailableServersPanel({
             server={chosenServer}
             tools={toolsByServer.get(chosenEntry.name) ?? []}
             onClose={() => setPanel(undefined)}
-            onConfigure={() =>
-              void navigate(`/integrations/mcp/${chosenEntry.name}`)
+            // Read-only for whoever may not change it: the server's page
+            // would answer 403 (NT-019).
+            onConfigure={
+              configurable(canCreate, chosenServer)
+                ? () => void navigate(`/integrations/mcp/${chosenEntry.name}`)
+                : undefined
             }
+            readOnlyNote={canCreate ? "mcp.serverReadOnlyHere" : "mcp.connectNeedsConfigure"}
           />
         ) : (
           <ConnectServerPanel
@@ -206,7 +216,7 @@ export function AvailableServersPanel({
             entry={chosenEntry}
             onClose={() => setPanel(undefined)}
             onConnected={(name) => void navigate(`/integrations/mcp/${name}`)}
-            onCustom={() => setPanel(null)}
+            onCustom={canCreate ? () => setPanel(null) : undefined}
           />
         )}
       </div>
@@ -306,12 +316,14 @@ function ConnectedServerPanel({
   tools,
   onClose,
   onConfigure,
+  readOnlyNote,
 }: {
   entry: Listing;
   server: MCPServer;
   tools: Tool[];
   onClose: () => void;
-  onConfigure: () => void;
+  onConfigure?: () => void;
+  readOnlyNote: string;
 }) {
   const { t } = useTranslation();
   const state = stateOf(server.enabled, server.health);
@@ -433,9 +445,9 @@ function ConnectedServerPanel({
       </div>
       <div className="flex items-center gap-2 border-t p-4">
         <span className="flex-1 text-xs text-muted-foreground">
-          {t("mcp.connectedFooter")}
+          {t(onConfigure ? "mcp.connectedFooter" : readOnlyNote)}
         </span>
-        <Button onClick={onConfigure}>{t("mcp.configure")}</Button>
+        {onConfigure && <Button onClick={onConfigure}>{t("mcp.configure")}</Button>}
       </div>
     </aside>
   );
@@ -454,7 +466,8 @@ function ConnectServerPanel({
   entry: Listing | null;
   onClose: () => void;
   onConnected: (name: string) => void;
-  onCustom: () => void;
+  /** Absent for a caller who may not connect one: the recipe is only read. */
+  onCustom?: () => void;
 }) {
   const { t } = useTranslation();
   const initial = recipe
@@ -479,10 +492,12 @@ function ConnectServerPanel({
           title={t("mcp.chooseServer")}
           hint={t("mcp.chooseServerHint")}
         />
-        <Button variant="outline" className="mt-4" onClick={onCustom}>
-          <Plus className="size-4" aria-hidden />
-          {t("mcp.connectByAddress")}
-        </Button>
+        {onCustom && (
+          <Button variant="outline" className="mt-4" onClick={onCustom}>
+            <Plus className="size-4" aria-hidden />
+            {t("mcp.connectByAddress")}
+          </Button>
+        )}
       </aside>
     );
   }
@@ -558,31 +573,39 @@ function ConnectServerPanel({
           )}
         </div>
 
-        <Form {...form}>
-          <form
-            id="mcp-connect-form"
-            onSubmit={form.handleSubmit(submit)}
-            className="flex flex-col gap-4"
-          >
-            <ServerFormBody
-              form={form}
-              editing={false}
-              hasSecret={false}
-              hasConfigFile={false}
-              recipe={recipe}
-            />
-          </form>
-        </Form>
+        {onCustom ? (
+          <Form {...form}>
+            <form
+              id="mcp-connect-form"
+              onSubmit={form.handleSubmit(submit)}
+              className="flex flex-col gap-4"
+            >
+              <ServerFormBody
+                form={form}
+                editing={false}
+                hasSecret={false}
+                hasConfigFile={false}
+                recipe={recipe}
+              />
+            </form>
+          </Form>
+        ) : (
+          <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
+            {t("mcp.connectNeedsConfigure")}
+          </p>
+        )}
       </div>
 
-      <div className="flex items-center gap-2 border-t p-4">
-        <span className="flex-1 text-xs text-muted-foreground">
-          {t("mcp.connectFooter")}
-        </span>
-        <Button type="submit" form="mcp-connect-form" disabled={saving}>
-          {t("integrations.connect")}
-        </Button>
-      </div>
+      {onCustom && (
+        <div className="flex items-center gap-2 border-t p-4">
+          <span className="flex-1 text-xs text-muted-foreground">
+            {t("mcp.connectFooter")}
+          </span>
+          <Button type="submit" form="mcp-connect-form" disabled={saving}>
+            {t("integrations.connect")}
+          </Button>
+        </div>
+      )}
     </aside>
   );
 }
