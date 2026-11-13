@@ -43,11 +43,13 @@ func (c *Catalog) Sync(ctx context.Context, from Classifier, scope domain.Scope)
 	defer c.mu.Unlock()
 
 	applied := 0
+	decided := map[domain.ToolID]bool{}
 	for _, r := range c.rulingsInForce(rulings) {
 		entry, ok := c.entries[r.Tool]
 		if !ok || !r.Effect.Valid() || r.Dedupe.Validate() != nil {
 			continue
 		}
+		decided[r.Tool] = true
 		/*
 			The ruling has to be about this definition.
 
@@ -82,7 +84,32 @@ func (c *Catalog) Sync(ctx context.Context, from Classifier, scope domain.Scope)
 		c.entries[r.Tool] = entry
 		applied++
 	}
+	c.forgetUndecidedLocked(decided)
 	return applied, nil
+}
+
+/*
+forgetUndecidedLocked puts every tool no ruling decides back to how discovery
+leaves it (NT-019).
+
+Rulings used to be only ever replaced. The platform's ceiling can now be
+withdrawn, and a tool with no owner's ruling under it then has none: kept as
+it was, the withdrawn ceiling would go on deciding it in every running worker
+until the worker restarted. The same holds for an owner's ruling whose server
+moved to another scope, which is nobody's word any more.
+*/
+func (c *Catalog) forgetUndecidedLocked(decided map[domain.ToolID]bool) {
+	for id, entry := range c.entries {
+		if decided[id] {
+			continue
+		}
+		entry.Stale = false
+		entry.Effect = domain.EffectUnknown
+		entry.Untrusted = true
+		entry.CompensatedBy = ""
+		entry.Dedupe = domain.ToolDedupe{}
+		c.entries[id] = entry
+	}
 }
 
 // Classify records what a tool does to the world.
