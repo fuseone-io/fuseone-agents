@@ -88,23 +88,49 @@ classifies the tools of the area’s own servers. Agents of the area use the are
 integrations and the ones above it. Nothing here is done by an agent.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="decided-by-kleber-on-2026-11-12">Decided by Kleber on 2026-11-12</h2><a class="sl-anchor-link" href="#decided-by-kleber-on-2026-11-12"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Decided by Kleber on 2026-11-12”</span></a></div>
 <ul>
-<li><strong>Each area has its own integrations.</strong> Areas need isolation and autonomy, so integrations
-are per area and are not mixed between areas.</li>
-<li><strong>Classification belongs to the area, under a ceiling set by the platform.</strong> The
+<li>
+<p><strong>Each area has its own integrations.</strong> Areas need isolation and autonomy, so integrations
+are per area and are not mixed between areas.</p>
+</li>
+<li>
+<p><strong>Classification belongs to the area, under a ceiling set by the platform.</strong> The
 curator of an area classifies the tools of the area’s own servers. A platform
 ruling on the same tool wins, the platform’s policies keep applying to every run, and
-an area never classifies a tool of a server that is not its own.</li>
-<li><strong>An area may register its own model provider, with its own key.</strong> The cost is the
+an area never classifies a tool of a server that is not its own.</p>
+</li>
+<li>
+<p><strong>An area may register its own model provider, with its own key.</strong> The cost is the
 area’s. Nothing new is needed for that: a run’s spend is already measured against the
 run’s scope (<code dir="auto">budget.Watcher.check</code> reads <code dir="auto">SpentSince(ctx, ceiling.Scope, …)</code>,
-<code dir="auto">internal/budget/alerts.go:121</code>).</li>
-<li><strong>An area may create conversations and its own channel connections.</strong> It can use the
-platform’s Slack connection, or register another app or workspace of its own.</li>
-<li><strong>A server outside the installation reaches only the origins the platform allows its
+<code dir="auto">internal/budget/alerts.go:121</code>).</p>
+</li>
+<li>
+<p><strong>An area’s MCP server is remote</strong> (decided by Kleber on 2026-11-13, while building
+phase 2’s writers). A stdio server is a process the platform’s worker starts on its
+own host, with its command, arguments, environment and configuration file. Registered
+by an area, it would run that area’s commands on infrastructure every area shares.
+So a company’s or an area’s server is HTTP, and stdio servers stay the platform’s.
+The rule is held three times:</p>
+<ul>
+<li><strong>by the database</strong>, migration <code dir="auto">0110</code>, so every binary is bound;</li>
+<li><strong>by the door</strong>, which answers 400 to an area’s write naming a local server;</li>
+<li><strong>by the worker</strong>, which starts no local process for a server outside the
+installation.</li>
+</ul>
+<p>Keeping stdio the platform’s prevents running an area’s code on the platform’s
+host. Where a remote server may send requests is a separate rule, below: only the
+origins the platform allows the server’s scope.</p>
+</li>
+<li>
+<p><strong>An area may create conversations and its own channel connections.</strong> It can use the
+platform’s Slack connection, or register another app or workspace of its own.</p>
+</li>
+<li>
+<p><strong>A server outside the installation reaches only the origins the platform allows its
 scope</strong> (decided 2026-11-13, after review of the writers). <code dir="auto">netguard</code> refuses cloud
 metadata and link-local addresses only; private addresses stay reachable on purpose,
 because on-premise MCP servers are normal. Delegating servers to areas would delegate
-reaching any endpoint the worker can, with the area’s credential. So:
+reaching any endpoint the worker can, with the area’s credential. So:</p>
 <ul>
 <li>The platform keeps one policy per company or area: a list of exact origins (scheme,
 host and port, no wildcards), stored at the installation and written only by the
@@ -117,7 +143,12 @@ a field lost on the way, reaches nothing too: the worker fails closed.</li>
 <li>The worker refuses a server whose URL is not listed before sending anything, and
 checks every request as it leaves: redirects, and the endpoints that refresh an
 OAuth grant or mint a GitHub App token. A changed policy reconnects the server.</li>
-<li>The writers’ door checks the server’s origins at the PUT too, once it opens.</li>
+<li>The writers’ door checks the server’s origins at the PUT too: its URL, its OAuth
+token endpoint and its GitHub App API base (<code dir="auto">api.github.com</code> when none is named).
+It reads the policy inside the write’s transaction, holding the policies’ lock
+shared until it commits; a policy write holds that lock exclusively. So a policy
+narrowed meanwhile is either waited for or the one the server is judged by. A name
+another scope holds answers 409 before the policy is judged.</li>
 <li>The installation’s servers are not held to any list. <code dir="auto">netguard</code> keeps refusing
 metadata and link-local for every server, and NetworkPolicy remains a defence in
 depth, not a substitute.</li>
