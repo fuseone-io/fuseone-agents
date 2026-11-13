@@ -22,6 +22,7 @@ export function IntegrationCard({
   health,
   observes = true,
   action,
+  tags,
 }: {
   name: string;
   kind: string;
@@ -36,6 +37,8 @@ export function IntegrationCard({
    */
   observes?: boolean;
   action?: ReactNode;
+  /** Badges under the kind, such as where the record is stored. */
+  tags?: ReactNode;
 }) {
   const { t } = useTranslation();
   const state = stateOf(enabled, health, observes);
@@ -56,6 +59,7 @@ export function IntegrationCard({
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-medium">{name}</h3>
           <p className="truncate text-xs text-muted-foreground">{kind}</p>
+          {tags && <div className="mt-1 flex flex-wrap gap-1">{tags}</div>}
         </div>
 
         <span
