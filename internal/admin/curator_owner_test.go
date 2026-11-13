@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -170,6 +171,79 @@ func TestClassifyAsOwner_aServerMovedSinceTheLookup_getsNoRuling(t *testing.T) {
 	if got := rulingRows(t, pool, "cx-jira.search"); len(got) != 0 {
 		t.Errorf("rulings at %v, want none", got)
 	}
+}
+
+/*
+The row is held, not only looked up, inside the write's transaction.
+
+A removal of cx's server is in flight when the ruling arrives, and commits with
+finance's server of the same name in its place. Read without a lock, the
+removal's uncommitted delete is invisible and the ruling lands at acme/cx for a
+server that is gone; held, the write waits and finds the row gone.
+*/
+func TestClassifyAsOwner_aRemovalInFlight_isWaitedFor(t *testing.T) {
+	pool, c := ownedWorld(t)
+	ctx := context.Background()
+	owner := ownerOf(t, c, "cx-jira.search")
+	holder, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = holder.Rollback(ctx) }()
+	if _, err := holder.Exec(ctx, `delete from settings where kind = 'mcp_server' and name = 'cx-jira'`); err != nil {
+		t.Fatalf("remove the server: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- c.ClassifyAsOwner(ctx, owner, domain.ToolClassification{
+			Tool: "cx-jira.search", Effect: domain.EffectRead, By: "usr_cx",
+		})
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("the ruling was written (%v) while the server's removal was in flight", err)
+	case <-waitForRowLock(t, pool):
+	case <-time.After(10 * time.Second):
+		t.Fatal("the ruling neither finished nor came to wait on the server's row")
+	}
+	if _, err := holder.Exec(ctx, `
+		insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by)
+		values ('area', 'acme', 'finance', 'mcp_server', 'cx-jira', '{"transport":"http"}', true, 'usr_fin')`); err != nil {
+		t.Fatalf("store finance's server: %v", err)
+	}
+	if err := holder.Commit(ctx); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if err := <-done; !errors.Is(err, admin.ErrMCPServerUnknown) {
+		t.Errorf("ClassifyAsOwner = %v, want ErrMCPServerUnknown", err)
+	}
+	if got := rulingRows(t, pool, "cx-jira.search"); len(got) != 0 {
+		t.Errorf("rulings at %v, want none", got)
+	}
+}
+
+// waitForRowLock closes once a backend waits on a row's lock, and never
+// closes otherwise: the caller's other case decides.
+func waitForRowLock(t *testing.T, pool *pgxpool.Pool) <-chan struct{} {
+	t.Helper()
+	waiting := make(chan struct{})
+	go func() {
+		for range 500 {
+			var n int
+			if err := pool.QueryRow(context.Background(), `
+				select count(*) from pg_stat_activity
+				where datname = current_database() and wait_event_type = 'Lock'`).Scan(&n); err != nil {
+				return
+			}
+			if n > 0 {
+				close(waiting)
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+	return waiting
 }
 
 // An owner's ruling names a tool of the server it was authorized for, and no
