@@ -30,8 +30,20 @@ func mcpWorld(t *testing.T) *Server {
 	if err != nil {
 		t.Fatalf("vault: %v", err)
 	}
-	return NewServer(ledger.NewMemory(), "test").
-		WithAdministration(nil, nil, admin.NewIntegrations(pool, settings.NewStore(pool, v)))
+	integrations := admin.NewIntegrations(pool, settings.NewStore(pool, v))
+	allowAcmeEgress(t, integrations)
+	return NewServer(ledger.NewMemory(), "test").WithAdministration(nil, nil, integrations)
+}
+
+// allowAcmeEgress lets acme's areas reach the servers these tests write
+// (NT-019): the egress policy is not what they are about.
+func allowAcmeEgress(t *testing.T, integrations *admin.Integrations) {
+	t.Helper()
+	if err := integrations.PutMCPEgressPolicy(context.Background(), "usr_ana", adminScope, admin.MCPEgressPolicy{
+		Scope: domain.Scope{Company: "acme"}, Origins: []string{"https://mcp.example.com"},
+	}); err != nil {
+		t.Fatalf("PutMCPEgressPolicy: %v", err)
+	}
 }
 
 func putMCP(t *testing.T, s *Server, caller context.Context, name string, at target, local bool) openapi.PutMCPServerResponseObject {
@@ -208,6 +220,7 @@ func TestMCPServerDoors_actOnlyOnTheRowTheyAuthorized(t *testing.T) {
 				t.Fatalf("vault: %v", err)
 			}
 			integrations := admin.NewIntegrations(pool, settings.NewStore(pool, v))
+			allowAcmeEgress(t, integrations)
 			if _, err := integrations.WriteMCPServer(context.Background(), admin.MCPServerWrite{
 				By: "usr_cx", Scope: cx, At: settings.ScopeArea, Stored: cx,
 				Server: domain.MCPServer{Name: "jira", Transport: domain.TransportHTTP, URL: "https://mcp.example.com/cx", Enabled: true},
@@ -276,6 +289,7 @@ func TestGetMCPServer_aSiblingsUnreadableSecret_isTheSameRefusal(t *testing.T) {
 		t.Fatalf("vault: %v", err)
 	}
 	integrations := admin.NewIntegrations(pool, settings.NewStore(pool, v))
+	allowAcmeEgress(t, integrations)
 	if _, err := integrations.WriteMCPServer(context.Background(), admin.MCPServerWrite{
 		By: "usr_fin", Scope: finance, At: settings.ScopeArea, Stored: finance,
 		Server: domain.MCPServer{Name: "fin-jira", Transport: domain.TransportHTTP, URL: "https://mcp.example.com/fin", Enabled: true},
@@ -366,5 +380,21 @@ func TestPutMCPServer_aScopeWithNoKind_isRefusedRatherThanStoredAtTheInstallatio
 		if _, ok := resp.(openapi.PutMCPServer400ApplicationProblemPlusJSONResponse); !ok {
 			t.Errorf("%s = %T, want 400", name, resp)
 		}
+	}
+}
+
+// The door answers 400 for an area's server outside its scope's egress policy.
+func TestPutMCPServer_anAreasServerOutsideItsEgressPolicy_isABadRequest(t *testing.T) {
+	s := mcpWorld(t)
+	body := openapi.PutMCPServerJSONRequestBody{
+		ScopeKind: ptr(atCX.kind), Company: atCX.company, Area: atCX.area,
+		Transport: ptr(openapi.TransportHttp), Url: ptr("https://elsewhere.example.org/mcp"),
+	}
+	resp, err := s.PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{Name: "cx-elsewhere", Body: &body})
+	if err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	if _, ok := resp.(openapi.PutMCPServer400ApplicationProblemPlusJSONResponse); !ok {
+		t.Errorf("PutMCPServer = %T, want 400", resp)
 	}
 }

@@ -480,6 +480,13 @@ func TestReadBack_modelProvider_putWhatGetAnsweredChangesNothing(t *testing.T) {
 
 func TestReadBack_mcpServer_putWhatGetAnsweredChangesNothing(t *testing.T) {
 	world := newReadBackWorld(t)
+	// An area's server is written only inside its scope's egress policy.
+	world.put(t, "/admin/integrations/mcp-egress-policies", map[string]any{
+		"company": "acme", "area": "cx", "origins": []string{"https://mcp.example.test"},
+	})
+	t.Cleanup(func() {
+		world.send(t, http.MethodDelete, "/admin/integrations/mcp-egress-policies?company=acme&area=cx", nil)
+	})
 	const base = "/admin/integrations/mcp-servers/"
 	cases := []readBack{{
 		name: "remote with a bearer token and every tuning field",

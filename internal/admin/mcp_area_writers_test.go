@@ -28,6 +28,7 @@ func remoteServer(name string) domain.MCPServer {
 
 func TestWriteMCPServer_anAreasRemoteServer_isStoredAtTheArea(t *testing.T) {
 	i := newIntegrations(t)
+	allowEgress(t, i, domain.Scope{Company: "acme"}, "https://mcp.example.com")
 	ctx := context.Background()
 	if _, err := i.WriteMCPServer(ctx, admin.MCPServerWrite{
 		By: "usr_cx", Scope: cxScope, At: settings.ScopeArea, Stored: cxScope,
@@ -63,6 +64,7 @@ func TestWriteMCPServer_anAreasLocalServer_isRefused(t *testing.T) {
 // One name, one server: an area cannot take a name the platform holds.
 func TestWriteMCPServer_aNameThePlatformHolds_isTaken(t *testing.T) {
 	i := newIntegrations(t)
+	allowEgress(t, i, domain.Scope{Company: "acme"}, "https://mcp.example.com")
 	ctx := context.Background()
 	if err := i.PutMCPServer(ctx, "usr_ana", platform, remoteServer("jira"), domain.MCPCredentialPatch{}); err != nil {
 		t.Fatalf("the platform's server: %v", err)
@@ -85,6 +87,7 @@ name for their whole transaction, so the creation waits for the removal.
 */
 func TestMCPServerWrites_ofOneName_waitForTheLockOnTheName(t *testing.T) {
 	i := newIntegrations(t)
+	allowEgress(t, i, domain.Scope{Company: "acme"}, "https://mcp.example.com")
 	pool := openPool(t)
 	ctx := context.Background()
 

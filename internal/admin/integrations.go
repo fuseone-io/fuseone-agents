@@ -311,6 +311,12 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 		"nobody chose" reopens every tool, and a credential restored is one
 		somebody believes they revoked.
 	*/
+	// Where a server outside the installation may send requests (NT-019):
+	// judged in the fold, on the credential that will be stored.
+	egress, err := i.egressAt(ctx, at, storedScope)
+	if err != nil {
+		return "", err
+	}
 	var toolsRemoved int64
 	return writeRevised(ctx, i.pool, i.settings, folded{
 		by: by, scope: scope, action: "mcp_server.configured", target: server.Name,
@@ -387,6 +393,9 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 			merged := given.Apply(held).ForTransport(transport)
 			merged.OAuth = domain.Regranted(held.OAuth, merged.OAuth)
 			if err := domain.CheckHeaderNames(merged.Headers); err != nil {
+				return settings.Setting{}, nil, err
+			}
+			if err := withinEgress(egress, server.URL, merged); err != nil {
 				return settings.Setting{}, nil, err
 			}
 			// Judged on what will be stored, not on what was sent: an edit

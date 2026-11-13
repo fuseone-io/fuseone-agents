@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -176,4 +177,52 @@ func egressOrigins(given []string) ([]string, error) {
 	}
 	slices.Sort(out)
 	return slices.Compact(out), nil
+}
+
+// ErrEgressNotAllowed is an area's server that would send a request outside
+// the platform's egress policy for its scope, or whose scope it allows nothing.
+var ErrEgressNotAllowed = errors.New("admin: outside the platform's egress policy for this server's scope")
+
+// egressAt is the policy a server stored at kind/stored is held to: nil for
+// the installation's.
+func (i *Integrations) egressAt(ctx context.Context, kind settings.ScopeKind, stored domain.Scope) (*domain.MCPEgress, error) {
+	if kind == settings.ScopeInstallation {
+		return nil, nil
+	}
+	policies, err := i.MCPEgressPolicies(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return egressFor(policies, mcpServerRuntimeScope(kind, stored)), nil
+}
+
+// withinEgress refuses a server whose URL, OAuth token endpoint or GitHub App
+// API base its policy does not list: the worker would refuse each of them on
+// every connection (0.109.0).
+func withinEgress(egress *domain.MCPEgress, serverURL string, creds domain.MCPCredentials) error {
+	if egress == nil {
+		return nil
+	}
+	targets := []string{serverURL}
+	if creds.OAuth != nil && creds.OAuth.TokenURL != "" {
+		targets = append(targets, creds.OAuth.TokenURL)
+	}
+	if creds.GitHubApp != nil && !creds.GitHubApp.Empty() {
+		base := creds.GitHubApp.APIBaseURL
+		if base == "" {
+			base = domain.DefaultGitHubAPIBase
+		}
+		targets = append(targets, base)
+	}
+	for _, raw := range targets {
+		u, err := url.Parse(raw)
+		if err != nil {
+			return fmt.Errorf("%w: an address that does not parse", ErrEgressNotAllowed)
+		}
+		if !egress.Allows(u) {
+			// The origin only: a token endpoint's query may carry a secret.
+			return fmt.Errorf("%w: %s://%s", ErrEgressNotAllowed, u.Scheme, u.Host)
+		}
+	}
+	return nil
 }

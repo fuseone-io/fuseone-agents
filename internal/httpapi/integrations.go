@@ -126,7 +126,7 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 			NameTakenApplicationProblemPlusJSONResponse: openapi.NameTakenApplicationProblemPlusJSONResponse(nameTaken()),
 		}, nil
 	}
-	if errors.Is(err, admin.ErrAreaServerIsRemote) {
+	if errors.Is(err, admin.ErrAreaServerIsRemote) || errors.Is(err, admin.ErrEgressNotAllowed) {
 		return openapi.PutMCPServer400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
 		}, nil
