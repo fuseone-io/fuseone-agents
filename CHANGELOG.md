@@ -62,7 +62,8 @@ migration `0110_area_mcp_servers_are_remote`.
   - A remote server reaches only the origins the platform's egress policy allows its
     scope (0.109.0). The door checks the server's URL, its OAuth token endpoint and its
     GitHub App API base (`api.github.com` when none is named) against that policy, and
-    answers 400 for an origin outside it and for a scope the platform allows nothing. A
+    answers 400 `fuseone:egress-not-allowed` for an origin outside it and for a scope
+    the platform allows nothing; the problem's `detail` is the canonical origin alone. A
     policy changed while the write is in flight is either waited for or the one it is
     judged by. A name another scope holds still answers 409 first.
   - The scope a write names must be a real company or area: the installation's `*`,

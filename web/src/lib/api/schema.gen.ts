@@ -2326,8 +2326,10 @@ export interface paths {
          *     policy for its scope (`/admin/integrations/mcp-egress-policies`): its
          *     URL, its OAuth token endpoint and its GitHub App API base
          *     (`https://api.github.com` when none is named) must each be an origin
-         *     the policy lists, or the write answers 400. A scope with no policy, or
-         *     a deny-all, allows none. A name another scope holds answers 409 first.
+         *     the policy lists, or the write answers 400 with problem type
+         *     `fuseone:egress-not-allowed`, whose `detail` is the canonical origin
+         *     refused (scheme, host and port) and nothing else. A scope with no
+         *     policy, or a deny-all, allows none. A name another scope holds answers 409 first.
          *     The installation's servers are not held to any policy.
          */
         put: operations["putMCPServer"];

@@ -198,6 +198,22 @@ func egressOrigins(given []string) ([]string, error) {
 // the platform's egress policy for its scope, or whose scope it allows nothing.
 var ErrEgressNotAllowed = errors.New("admin: outside the platform's egress policy for this server's scope")
 
+// EgressRefusal is ErrEgressNotAllowed naming the origin refused: canonical,
+// with no path or query, since a token endpoint's query may carry a secret.
+// Empty is an address that does not parse.
+type EgressRefusal struct {
+	Origin string
+}
+
+func (e *EgressRefusal) Error() string {
+	if e.Origin == "" {
+		return ErrEgressNotAllowed.Error() + ": an address that does not parse"
+	}
+	return ErrEgressNotAllowed.Error() + ": " + e.Origin
+}
+
+func (e *EgressRefusal) Is(target error) bool { return target == ErrEgressNotAllowed }
+
 // egressAtTx is the policy a server stored at kind/stored is held to, nil for
 // the installation's, read inside the server write's transaction under the
 // policies' lock held shared: no policy can change between this read and the
@@ -265,11 +281,11 @@ func withinEgress(egress *domain.MCPEgress, serverURL string, creds domain.MCPCr
 	for _, raw := range targets {
 		u, err := url.Parse(raw)
 		if err != nil {
-			return fmt.Errorf("%w: an address that does not parse", ErrEgressNotAllowed)
+			return &EgressRefusal{}
 		}
 		if !egress.Allows(u) {
-			// The origin only: a token endpoint's query may carry a secret.
-			return fmt.Errorf("%w: %s://%s", ErrEgressNotAllowed, u.Scheme, u.Host)
+			origin, _ := domain.OriginOf(u)
+			return &EgressRefusal{Origin: origin}
 		}
 	}
 	return nil

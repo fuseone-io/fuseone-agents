@@ -48,6 +48,12 @@ func CanonicalOrigin(raw string) (string, error) {
 	return origin, nil
 }
 
+// OriginOf is the canonical origin a request to u goes to, whatever path or
+// query it carries, or false for a URL no HTTP client could send to.
+func OriginOf(u *url.URL) (string, bool) {
+	return originOf(u)
+}
+
 // Allows says whether a request to u may be sent under this policy.
 func (e *MCPEgress) Allows(u *url.URL) bool {
 	if e == nil {

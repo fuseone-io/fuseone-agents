@@ -388,13 +388,19 @@ func TestPutMCPServer_anAreasServerOutsideItsEgressPolicy_isABadRequest(t *testi
 	s := mcpWorld(t)
 	body := openapi.PutMCPServerJSONRequestBody{
 		ScopeKind: ptr(atCX.kind), Company: atCX.company, Area: atCX.area,
-		Transport: ptr(openapi.TransportHttp), Url: ptr("https://elsewhere.example.org/mcp"),
+		Transport: ptr(openapi.TransportHttp), Url: ptr("https://elsewhere.example.org/mcp?tenant=secret"),
 	}
 	resp, err := s.PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{Name: "cx-elsewhere", Body: &body})
 	if err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
 	}
-	if _, ok := resp.(openapi.PutMCPServer400ApplicationProblemPlusJSONResponse); !ok {
-		t.Errorf("PutMCPServer = %T, want 400", resp)
+	bad, ok := resp.(openapi.PutMCPServer400ApplicationProblemPlusJSONResponse)
+	if !ok {
+		t.Fatalf("PutMCPServer = %T, want 400", resp)
+	}
+	// Its own type, for the console to decide by, and the canonical origin as
+	// the whole detail: no path, no query, no internal sentence.
+	if valueOr(bad.Type) != "fuseone:egress-not-allowed" || valueOr(bad.Detail) != "https://elsewhere.example.org:443" {
+		t.Errorf("problem = %s %q, want fuseone:egress-not-allowed with the origin alone", valueOr(bad.Type), valueOr(bad.Detail))
 	}
 }
