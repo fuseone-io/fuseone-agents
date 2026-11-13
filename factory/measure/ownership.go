@@ -67,9 +67,6 @@ func ownerAt(s Snapshot, card *Item, lane string, t time.Time) Owner {
 //     a person: a pull request closed without a merge leaves the next attempt
 //     to a person, and a merged one close_merged finished leaves the card to
 //     a person too.
-//
-// A pull request card exists from the start of its stay; while it is open its
-// own label decides, and once it is closed or merged the time is a person's.
 func doingOwner(s Snapshot, card *Item, t time.Time) Owner {
 	prs := []*Item{card}
 	if !card.IsPR {
