@@ -15,12 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ConnectorIdentityValues } from "@/features/integrations/connectors/connector-identity-fields";
+import type { ScopeValues } from "@/features/integrations/scope/scope-choice";
 
 /** Any scope, named freely: for the platform's administration. */
-export function ConnectorFreeScopeFields({ editing }: { editing: boolean }) {
+export function FreeScopeFields({ editing, label }: { editing: boolean; label: string }) {
   const { t } = useTranslation();
-  const form = useFormContext<ConnectorIdentityValues>();
+  const form = useFormContext<ScopeValues>();
   const scopeKind = form.watch("scopeKind");
   return (
     <>
@@ -29,7 +29,7 @@ export function ConnectorFreeScopeFields({ editing }: { editing: boolean }) {
         name="scopeKind"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>{t("connectors.scopeKind")}</FormLabel>
+            <FormLabel>{t(label)}</FormLabel>
             <Select
               value={field.value}
               onValueChange={field.onChange}
@@ -85,7 +85,7 @@ function IdentityTextField({
   label: string;
   disabled: boolean;
 }) {
-  const form = useFormContext<ConnectorIdentityValues>();
+  const form = useFormContext<ScopeValues>();
   return (
     <FormField
       control={form.control}

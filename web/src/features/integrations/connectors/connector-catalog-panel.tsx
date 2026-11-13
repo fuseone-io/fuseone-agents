@@ -23,9 +23,9 @@ import type { ConnectorInstanceSaver } from "@/features/integrations/connectors/
 import { useVisibleItems } from "@/hooks/use-visible-items";
 import { cn } from "@/lib/utils";
 import {
-  ConnectorScopeContext,
-  type ConnectorScopeChoice,
-} from "@/features/integrations/connectors/connector-scope-context";
+  ScopeChoiceContext,
+  type ScopeChoice,
+} from "@/features/integrations/scope/scope-choice";
 
 export function ConnectorCatalogPanel({
   data,
@@ -90,7 +90,7 @@ export function ConnectorCatalogPanel({
         />
       )}
       {editing && (
-        <ConnectorScopeContext.Provider value={data.scope ?? freeScope}>
+        <ScopeChoiceContext.Provider value={data.scope ?? freeScope}>
           <ConnectorEditor
             connector={editing.connector}
             instance={editing.instance}
@@ -98,7 +98,7 @@ export function ConnectorCatalogPanel({
             onClose={close}
             onSave={actions.saveInstance}
           />
-        </ConnectorScopeContext.Provider>
+        </ScopeChoiceContext.Provider>
       )}
     </section>
   );
@@ -113,7 +113,7 @@ export type ConnectorPanelData = {
   instancesError: unknown;
   canConfigure: boolean;
   /** Where a new instance may go; free when absent. */
-  scope?: ConnectorScopeChoice;
+  scope?: ScopeChoice;
 };
 
 export type ConnectorPanelActions = {
@@ -319,4 +319,4 @@ function effectClass(
   );
 }
 
-const freeScope: ConnectorScopeChoice = { anyScope: true, configure: [] };
+const freeScope: ScopeChoice = { anyScope: true, configure: [] };
