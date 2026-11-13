@@ -75,4 +75,19 @@ describe("a new server's scope", () => {
     expect(screen.getByRole("combobox", { name: "Escopo do servidor" })).toHaveTextContent("Instalação");
     expect(puts()[0]?.body).toMatchObject({ scopeKind: "installation" });
   });
+
+  // As the connectors do: the outer spaces go, the case stays as typed, since
+  // the server refuses an identifier it would store differently.
+  it("sends a freely typed company and area without their outer spaces", async () => {
+    const user = userEvent.setup();
+    const puts = connect();
+    await user.click(screen.getByRole("combobox", { name: "Escopo do servidor" }));
+    await user.click(await screen.findByRole("option", { name: "Área" }));
+    await user.type(screen.getByLabelText("Empresa"), " Acme ");
+    await user.type(screen.getByLabelText("Área"), " cx ");
+    await fill("crm", "https://crm.example.com/mcp");
+
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    expect(puts()[0]?.body).toMatchObject({ scopeKind: "area", company: "Acme", area: "cx" });
+  });
 });

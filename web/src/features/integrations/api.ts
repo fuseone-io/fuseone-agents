@@ -80,7 +80,11 @@ export function useMCPServerRevision(name: string | undefined) {
   });
 }
 
-/** A row's stored scope, as a write names it; nothing for a row that predates scopes. */
+/**
+ * A row's scope, as a write names it; nothing for a row that predates scopes.
+ * Only the outer spaces of a typed identifier go, as the connectors' do: the
+ * case stays, since the server refuses one it would store differently.
+ */
 export function storedScope(row: {
   scopeKind?: ConnectorScopeKind;
   company?: string;
@@ -89,8 +93,8 @@ export function storedScope(row: {
   if (!row.scopeKind) return {};
   return {
     scopeKind: row.scopeKind,
-    company: row.scopeKind === "installation" ? undefined : row.company,
-    area: row.scopeKind === "area" ? row.area : undefined,
+    company: row.scopeKind === "installation" ? undefined : row.company?.trim(),
+    area: row.scopeKind === "area" ? row.area?.trim() : undefined,
   };
 }
 
