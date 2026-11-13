@@ -32,8 +32,10 @@ type ToolEntry struct {
 	// the connector contract; they are not curator rulings over a remote
 	// schema.
 	Native bool
-	// Scope is meaningful only for Native tools. It is the connector instance
-	// boundary, checked again at runtime by the tool layer.
+	// Scope is the runtime scope of whatever declares the tool: a connector
+	// instance's for a native tool, the installation's for the platform's own,
+	// and the server's for an MCP tool (NT-019). A run reaches the tool only
+	// inside it, as the Gate's checkScope reads it.
 	Scope Scope
 	// CompensatedBy is the tool that takes this one back, when the Curator has
 	// said which does. Empty means an act by this tool cannot be undone by

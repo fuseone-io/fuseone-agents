@@ -202,14 +202,14 @@ func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 		return nil, err
 	}
 
+	if err := c.placeTools(ctx, entries); err != nil {
+		return nil, err
+	}
 	rulings, err := c.List(ctx, domain.Scope{})
 	if err != nil {
 		return nil, err
 	}
-	byTool, listed, err := c.rulingsInForce(ctx, entries, rulings)
-	if err != nil {
-		return nil, err
-	}
+	byTool, listed := rulingsInForce(entries, rulings)
 	for i, e := range entries {
 		entries[i].Rulings = listed[e.ID]
 		r, ok := byTool[e.ID]
