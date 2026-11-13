@@ -337,6 +337,7 @@ func TestConnectorScope_refusesIdentitiesNoCompanyOrAreaHas(t *testing.T) {
 		{"the installation as an area's company", area, ptr("*"), ptr("cx")},
 		{"a company in upper case", company, ptr("Acme"), nil},
 		{"a company with a space", company, ptr("ac me"), nil},
+		{"a company with spaces around it", company, ptr(" acme "), nil},
 		{"an area in upper case", area, ptr("acme"), ptr("CX")},
 		{"an area with a space", area, ptr("acme"), ptr("c x")},
 		{"an area with a slash", area, ptr("acme"), ptr("cx/finance")},
