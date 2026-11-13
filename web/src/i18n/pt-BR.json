@@ -127,6 +127,25 @@
     "readMarksRun": "Ler marca a execução. Uma escrita depois disso para para uma pessoa decidir.",
     "reasonPlaceholder": "registra nota interna no CRM",
     "recordClassification": "Registrar classificação",
+    "rulings": "Decisões sobre a ferramenta",
+    "rulingLevel": {
+      "platform": "Teto da plataforma",
+      "owner": "Decisão do dono"
+    },
+    "rulingLevelHint": {
+      "platform": "Guardada na instalação; vale em todo escopo e prevalece sobre a do dono.",
+      "owner": "Guardada no escopo do servidor, abaixo do teto da plataforma."
+    },
+    "rulingLevelLabel": "De quem é a decisão",
+    "rulingInstallation": "instalação",
+    "rulingInForce": "Em vigor",
+    "rulingOverridden": "Sobreposta pela plataforma",
+    "recordedAsOwner": "Registrada como decisão do dono, no escopo deste servidor. Se a plataforma tiver uma decisão sobre a ferramenta, a dela prevalece.",
+    "withdrawCeiling": "Retirar o teto da plataforma",
+    "withdrawCeilingTitle": "Retirar o teto da plataforma sobre {{tool}}?",
+    "withdrawCeilingBody": "A decisão do dono, se houver, passa a valer. Sem ela, a ferramenta deixa de executar. A retirada fica registrada na trilha.",
+    "withdraw": "Retirar",
+    "ceilingWithdrawn": "Teto da plataforma retirado de {{tool}}",
     "recordFailed": "Não foi possível registrar",
     "recordedInTrail": "Fica registrado com seu nome na trilha administrativa. Corrigir depois cria um novo registro; nenhum registro é apagado.",
     "removeArea": "Retirar a área {{area}}?",

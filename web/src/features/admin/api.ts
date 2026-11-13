@@ -12,6 +12,9 @@ export type ToolDedupe = components["schemas"]["ToolDedupe"];
  * nobody has ruled on is a state to show, never one to claim.
  */
 export type ToolEffect = components["schemas"]["ToolEffect"];
+/** Whose word a ruling is: the platform's ceiling, or the server's owner. */
+export type RulingLevel = components["schemas"]["RulingLevel"];
+export type ToolRuling = components["schemas"]["ToolRuling"];
 export type AdminEvent = components["schemas"]["AdminEvent"];
 export type ScopeBudget = components["schemas"]["ScopeBudget"];
 
@@ -78,6 +81,8 @@ export function useClassifyTool() {
        * it no longer matches.
        */
       digest?: string;
+      /** Absent is the platform's, which is what the server takes it as. */
+      level?: RulingLevel;
     }) =>
       unwrap(
         await api.PUT("/admin/tools/{toolId}/classification", {
@@ -89,7 +94,27 @@ export function useClassifyTool() {
             compensatedBy: input.compensatedBy,
             dedupe: input.dedupe,
             digest: input.digest,
+            level: input.level,
           },
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.all });
+    },
+  });
+}
+
+/**
+ * Withdraws the platform's ruling on a tool, the ceiling (NT-019). The owner's
+ * ruling, if any, is then in force; with none the tool never executes.
+ */
+export function useWithdrawPlatformRuling() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (toolId: string) =>
+      unwrap(
+        await api.DELETE("/admin/tools/{toolId}/classification", {
+          params: { path: { toolId }, query: { level: "platform" } },
         }),
       ),
     onSuccess: () => {

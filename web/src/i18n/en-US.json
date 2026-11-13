@@ -127,6 +127,25 @@
     "readMarksRun": "A read marks the run. A write after that stops for a person to decide.",
     "reasonPlaceholder": "records an internal note on the CRM",
     "recordClassification": "Record the classification",
+    "rulings": "Rulings on the tool",
+    "rulingLevel": {
+      "platform": "Platform's ceiling",
+      "owner": "Owner's ruling"
+    },
+    "rulingLevelHint": {
+      "platform": "Stored at the installation; applies in every scope and wins over the owner's.",
+      "owner": "Stored at the server's scope, under the platform's ceiling."
+    },
+    "rulingLevelLabel": "Whose ruling this is",
+    "rulingInstallation": "installation",
+    "rulingInForce": "In force",
+    "rulingOverridden": "Overridden by the platform",
+    "recordedAsOwner": "Recorded as the owner's ruling, at this server's scope. If the platform has a ruling on the tool, the platform's wins.",
+    "withdrawCeiling": "Withdraw the platform's ceiling",
+    "withdrawCeilingTitle": "Withdraw the platform's ceiling on {{tool}}?",
+    "withdrawCeilingBody": "The owner's ruling, if there is one, takes effect. Without one, the tool stops executing. The withdrawal is recorded in the trail.",
+    "withdraw": "Withdraw",
+    "ceilingWithdrawn": "Platform's ceiling withdrawn from {{tool}}",
     "recordFailed": "Could not record",
     "recordedInTrail": "Recorded in your name in the administrative trail. Correcting it later creates a new record; no record is erased.",
     "removeArea": "Withdraw the area {{area}}?",

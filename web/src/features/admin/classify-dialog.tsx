@@ -14,9 +14,17 @@ import { ClassifyFields, type Ruling } from "@/features/admin/classify-fields";
 import {
   blankRuling,
   classificationInput,
+  rulingFromSuggestion,
   startRulingFromTool,
 } from "@/features/admin/classify-dialog-model";
-import { useClassifyTool, type Tool } from "@/features/admin/api";
+import type { RulingOffer } from "@/features/admin/classify-offer";
+import { RulingLevelField } from "@/features/admin/ruling-level-field";
+import { ToolRulings } from "@/features/admin/tool-rulings";
+import {
+  useClassifyTool,
+  type RulingLevel,
+  type Tool,
+} from "@/features/admin/api";
 import { SuggestedRuling } from "@/features/admin/suggested-ruling";
 import { problemMessage } from "@/lib/api/problem-message";
 
@@ -32,11 +40,14 @@ export function ClassifyDialog({
   tool,
   tools,
   onClose,
+  offer = "platform",
 }: {
   tool: Tool | null;
   /** The catalogue, so the ruling can name the tool that undoes this one. */
   tools: Tool[];
   onClose: () => void;
+  /** Which ruling the caller may record on this tool (NT-019). */
+  offer?: RulingOffer;
 }) {
   const { t } = useTranslation();
   const classify = useClassifyTool();
@@ -56,11 +67,13 @@ export function ClassifyDialog({
   */
   const [ruling, setRuling] = useState<Ruling>(BLANK);
   const [judging, setJudging] = useState<string | null>(null);
+  const [level, setLevel] = useState<RulingLevel>("platform");
   const identity = tool ? `${tool.toolId}@${tool.digest ?? ""}` : null;
 
   if (identity !== judging) {
     setJudging(identity);
     setRuling(tool ? startRulingFromTool(tool) : BLANK);
+    setLevel(offer === "owner" ? "owner" : "platform");
   }
 
   if (!tool) return null;
@@ -68,7 +81,7 @@ export function ClassifyDialog({
   async function submit() {
     if (!tool) return;
     try {
-      const input = classificationInput(tool, ruling);
+      const input = classificationInput(tool, ruling, level);
       if (!input) return;
       await classify.mutateAsync(input);
       toast.success(
@@ -93,29 +106,16 @@ export function ClassifyDialog({
           <DialogDescription>{t("admin.recordedInTrail")}</DialogDescription>
         </DialogHeader>
 
+        <ToolRulings tool={tool} canWithdraw={offer !== "owner"} />
+
         {tool.suggested && (
           <SuggestedRuling
             suggested={tool.suggested}
-            onAccept={() =>
-              setRuling({
-                // No fallback. The contract makes this required, so the
-                // only way `??` fires is a suggestion that arrived without
-                // one — and it would fire into `read`, which is the value
-                // this dialog has just stopped defaulting to everywhere else.
-                // An empty effect leaves the form unanswered, which is the
-                // honest reading of a suggestion that suggests nothing.
-                effect: tool.suggested?.effect ?? "",
-                untrusted: tool.suggested?.untrusted ?? true,
-                compensatedBy: tool.suggested?.compensatedBy ?? "",
-                dedupe: ruling.dedupe,
-                // The reason stays theirs. Accepting a suggestion is still a
-                // decision somebody signs, and signing somebody else's
-                // sentence is not the same as writing one.
-                reason: "",
-              })
-            }
+            onAccept={() => setRuling(rulingFromSuggestion(tool, ruling))}
           />
         )}
+
+        <RulingLevelField offer={offer} level={level} onChange={setLevel} />
 
         <ClassifyFields
           ruling={ruling}
@@ -134,7 +134,8 @@ export function ClassifyDialog({
           <Button
             onClick={() => void submit()}
             disabled={
-              classify.isPending || classificationInput(tool, ruling) === null
+              classify.isPending ||
+              classificationInput(tool, ruling, level) === null
             }
           >
             {t("admin.recordClassification")}
