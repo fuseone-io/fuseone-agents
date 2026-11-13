@@ -4251,6 +4251,73 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/integrations/mcp-egress-policies:
+    get:
+      tags: [admin]
+      operationId: listMCPEgressPolicies
+      summary: Where MCP servers outside the installation may send requests
+      description: >
+        One policy per company or area: a list of exact origins (scheme, host
+        and port). A server of an area is held to its area's policy, or else
+        to its company's, never to both; with neither it reaches nothing. The
+        installation's servers are not held to any. Only the platform's
+        administration reads and writes these (NT-019).
+      responses:
+        '200':
+          description: Every stored policy.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [policies]
+                properties:
+                  policies:
+                    type: array
+                    items: { $ref: '#/components/schemas/MCPEgressPolicy' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      tags: [admin]
+      operationId: putMCPEgressPolicy
+      summary: Set the origins a company's or an area's MCP servers may reach
+      description: >
+        Replaces the policy for that company or area. Origins are stored in one
+        canonical form; a path, a query, a user or a wildcard is refused, as is
+        an origin netguard never lets a request reach (cloud metadata,
+        link-local). A policy lists at least one origin: remove it to allow
+        nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MCPEgressPolicyInput' }
+      responses:
+        '204': { description: Stored. Workers hold the scope's servers to it on their next pass. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [admin]
+      operationId: deleteMCPEgressPolicy
+      summary: Remove a company's or an area's egress policy
+      description: >
+        An area's servers fall back to their company's policy, or reach
+        nothing.
+      parameters:
+        - name: company
+          in: query
+          required: true
+          schema: { type: string }
+        - name: area
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '204': { description: Removed. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/integrations/providers/{name}:
     get:
       tags: [admin]
@@ -5128,6 +5195,31 @@ components:
           schema: { $ref: '#/components/schemas/Problem' }
 
   schemas:
+    MCPEgressPolicyInput:
+      type: object
+      required: [company, origins]
+      properties:
+        company: { type: string }
+        area:
+          type: string
+          description: Absent for a company's policy.
+        origins:
+          type: array
+          minItems: 1
+          items: { type: string }
+          example: ["https://jira.example.com"]
+    MCPEgressPolicy:
+      type: object
+      required: [company, origins, updatedBy, updatedAt]
+      properties:
+        company: { type: string }
+        area: { type: string }
+        origins:
+          type: array
+          description: Canonical origins, each with its port written.
+          items: { type: string }
+        updatedBy: { type: string }
+        updatedAt: { type: string, format: date-time }
     ManualIndex:
       type: object
       description: What the manual offers, in the locale that was asked for.

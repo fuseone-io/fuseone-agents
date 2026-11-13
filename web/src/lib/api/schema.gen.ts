@@ -2613,6 +2613,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/integrations/mcp-egress-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where MCP servers outside the installation may send requests
+         * @description One policy per company or area: a list of exact origins (scheme, host and port). A server of an area is held to its area's policy, or else to its company's, never to both; with neither it reaches nothing. The installation's servers are not held to any. Only the platform's administration reads and writes these (NT-019).
+         */
+        get: operations["listMCPEgressPolicies"];
+        /**
+         * Set the origins a company's or an area's MCP servers may reach
+         * @description Replaces the policy for that company or area. Origins are stored in one canonical form; a path, a query, a user or a wildcard is refused, as is an origin netguard never lets a request reach (cloud metadata, link-local). A policy lists at least one origin: remove it to allow nothing.
+         */
+        put: operations["putMCPEgressPolicy"];
+        post?: never;
+        /**
+         * Remove a company's or an area's egress policy
+         * @description An area's servers fall back to their company's policy, or reach nothing.
+         */
+        delete: operations["deleteMCPEgressPolicy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/integrations/providers/{name}": {
         parameters: {
             query?: never;
@@ -3078,6 +3106,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        MCPEgressPolicyInput: {
+            company: string;
+            /** @description Absent for a company's policy. */
+            area?: string;
+            /**
+             * @example [
+             *       "https://jira.example.com"
+             *     ]
+             */
+            origins: string[];
+        };
+        MCPEgressPolicy: {
+            company: string;
+            area?: string;
+            /** @description Canonical origins, each with its port written. */
+            origins: string[];
+            updatedBy: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         /** @description What the manual offers, in the locale that was asked for. */
         ManualIndex: {
             /** @description The locale actually served, which may not be the one asked for. */
@@ -10619,6 +10667,79 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listMCPEgressPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every stored policy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        policies: components["schemas"]["MCPEgressPolicy"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putMCPEgressPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MCPEgressPolicyInput"];
+            };
+        };
+        responses: {
+            /** @description Stored. Workers hold the scope's servers to it on their next pass. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteMCPEgressPolicy: {
+        parameters: {
+            query: {
+                company: string;
+                area?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

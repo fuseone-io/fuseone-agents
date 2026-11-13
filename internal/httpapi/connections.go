@@ -39,6 +39,11 @@ type Integrations interface {
 	RemoveMCPServer(ctx context.Context, r admin.Removal) error
 	WriteProvider(ctx context.Context, w admin.ProviderWrite) (domain.Revision, error)
 	RemoveProvider(ctx context.Context, r admin.Removal) error
+	// The platform's egress policies for servers outside the installation
+	// (NT-019).
+	PutMCPEgressPolicy(ctx context.Context, by domain.UserID, audit domain.Scope, p admin.MCPEgressPolicy) error
+	DeleteMCPEgressPolicy(ctx context.Context, by domain.UserID, audit domain.Scope, at domain.Scope) error
+	MCPEgressPolicies(ctx context.Context) ([]admin.MCPEgressPolicy, error)
 }
 
 func healthFrom(seen domain.IntegrationHealth) openapi.IntegrationHealth {
