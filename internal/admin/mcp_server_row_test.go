@@ -135,7 +135,9 @@ not rewrite it.
 func TestMCPPersonalCredential_isForTheServerRowItWasStoredFor(t *testing.T) {
 	w := withAreaServer(t)
 	ctx := context.Background()
-	if err := w.integrations.PutMCPPersonalCredential(ctx, "usr_ana", platform, "github",
+	// As an author of acme/cx: a person's credential is for a server their
+	// scopes reach (NT-019).
+	if err := w.integrations.PutMCPPersonalCredential(ctx, "usr_ana", cxScope, "github",
 		domain.MCPCredentialPatch{OAuth: &oldGrant}); err != nil {
 		t.Fatalf("PutMCPPersonalCredential: %v", err)
 	}
@@ -158,7 +160,9 @@ func TestMCPPersonalCredential_isForTheServerRowItWasStoredFor(t *testing.T) {
 func TestRefreshMCPServerOAuth_aPersonalGrant_keepsItsServerRow(t *testing.T) {
 	w := withAreaServer(t)
 	ctx := context.Background()
-	if err := w.integrations.PutMCPPersonalCredential(ctx, "usr_ana", platform, "github",
+	// As an author of acme/cx: a person's credential is for a server their
+	// scopes reach (NT-019).
+	if err := w.integrations.PutMCPPersonalCredential(ctx, "usr_ana", cxScope, "github",
 		domain.MCPCredentialPatch{OAuth: &oldGrant}); err != nil {
 		t.Fatalf("PutMCPPersonalCredential: %v", err)
 	}
@@ -203,13 +207,15 @@ func TestMCPPersonalCredential_storedBeforeItNamedARow_isTheInstallationServers(
 func TestPutMCPPersonalCredential_forAnotherServerRow_keepsNothingOfTheOld(t *testing.T) {
 	w := withAreaServer(t)
 	ctx := context.Background()
-	if err := w.integrations.PutMCPPersonalCredential(ctx, "usr_ana", platform, "github",
+	// As an author of acme/cx: a person's credential is for a server their
+	// scopes reach (NT-019).
+	if err := w.integrations.PutMCPPersonalCredential(ctx, "usr_ana", cxScope, "github",
 		domain.MCPCredentialPatch{OAuth: &oldGrant}); err != nil {
 		t.Fatalf("PutMCPPersonalCredential at cx: %v", err)
 	}
 	moveServer(t, w, cxScope, financeScope)
 
-	err := w.integrations.PutMCPPersonalCredential(ctx, "usr_ana", platform, "github", domain.MCPCredentialPatch{})
+	err := w.integrations.PutMCPPersonalCredential(ctx, "usr_ana", financeScope, "github", domain.MCPCredentialPatch{})
 	if !errors.Is(err, admin.ErrNoMCPCredential) {
 		t.Errorf("err = %v, want ErrNoMCPCredential: nothing was given for the server at %s", err, financeScope)
 	}
