@@ -80,8 +80,8 @@ func serverScopes(ctx context.Context, q settings.DB) (map[string]domain.Scope, 
 // declares it (NT-019): what a run must be inside to reach it, as the worker's
 // catalogue reads it (tools.Catalog.Scope). A server no row holds, one a --mcp
 // flag connected, is the installation's.
-func (c *Curator) placeTools(ctx context.Context, entries []domain.ToolEntry) error {
-	scopes, err := serverScopes(ctx, c.pool)
+func placeTools(ctx context.Context, q settings.DB, entries []domain.ToolEntry) error {
+	scopes, err := serverScopes(ctx, q)
 	if err != nil {
 		return err
 	}

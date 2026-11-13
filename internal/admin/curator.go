@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/settings"
 )
 
 // classificationKind is the settings row a ruling is stored as. Reusing the
@@ -29,6 +31,9 @@ type Curator struct {
 	pool *pgxpool.Pool
 	// clock is what leases on unmanaged servers are written and judged by.
 	clock func() time.Time
+	// betweenToolReads is a test's seam inside Tools' snapshot; nil outside
+	// tests.
+	betweenToolReads func()
 }
 
 func NewCurator(pool *pgxpool.Pool) *Curator {
@@ -41,9 +46,14 @@ func NewCurator(pool *pgxpool.Pool) *Curator {
 // catalogue can consult the Curator without either package importing the
 // other.
 func (c *Curator) List(ctx context.Context, scope domain.Scope) ([]domain.ToolClassification, error) {
+	return listRulings(ctx, c.pool)
+}
+
+// listRulings reads every ruling on q, a pool or one snapshot's transaction.
+func listRulings(ctx context.Context, q settings.DB) ([]domain.ToolClassification, error) {
 	// With where each is stored: the platform's ceiling and the owner's word
 	// are two rows of one name, and only their scope tells them apart (NT-019).
-	rows, err := c.pool.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		select name, value, updated_by, scope_kind, company_id, area_id from settings
 		where kind = $1 and enabled
 		order by name, scope_kind, company_id, area_id`, classificationKind)
@@ -166,7 +176,18 @@ func (c *Curator) Events(ctx context.Context, target, cursor string, limit int) 
 // stop. An author designs against the screen, which makes a permissive screen
 // worse than no screen.
 func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
-	rows, err := c.pool.Query(ctx, `
+	/*
+		One snapshot for the tools, where their servers are stored and the
+		rulings (NT-019). Read apart, a server removed between them made its
+		tool the installation's, and one stored again under the name in a
+		sibling area handed the tool to that area.
+	*/
+	tx, err := c.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil, fmt.Errorf("admin: begin the tools' snapshot: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	rows, err := tx.Query(ctx, `
 		select name, value from settings
 		where kind = $1 and enabled order by name`, toolKind)
 	if err != nil {
@@ -202,10 +223,13 @@ func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 		return nil, err
 	}
 
-	if err := c.placeTools(ctx, entries); err != nil {
+	if c.betweenToolReads != nil {
+		c.betweenToolReads()
+	}
+	if err := placeTools(ctx, tx, entries); err != nil {
 		return nil, err
 	}
-	rulings, err := c.List(ctx, domain.Scope{})
+	rulings, err := listRulings(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
