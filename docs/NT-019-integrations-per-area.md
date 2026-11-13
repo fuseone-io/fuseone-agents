@@ -44,7 +44,10 @@ integrations and the ones above it. Nothing here is done by an agent.
     host and port, no wildcards), stored at the installation and written only by the
     platform's administration. An area can neither create nor widen it.
   - A server of an area is held to its area's policy, or else to its company's, never to
-    both together. With neither, it reaches nothing.
+    both together. With neither, it reaches nothing. An empty list is a deny-all that
+    overrides the company's; removing an area's policy inherits the company's again.
+  - A server outside the installation that reaches the worker with no policy at all,
+    a field lost on the way, reaches nothing too: the worker fails closed.
   - The worker refuses a server whose URL is not listed before sending anything, and
     checks every request as it leaves: redirects, and the endpoints that refresh an
     OAuth grant or mint a GitHub App token. A changed policy reconnects the server.

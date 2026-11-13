@@ -50,7 +50,11 @@ nothing changes for an installation today. No migration.
   `GET`, `PUT` and `DELETE /admin/integrations/mcp-egress-policies`. An area's
   administrator can neither read nor change it.
   - A server of an area is held to its area's policy, or else to its company's, never
-    both. With neither, it reaches nothing.
+    both. With neither, it reaches nothing. An empty list is a deny-all that overrides
+    the company's; removing an area's policy inherits the company's again.
+  - A server outside the installation whose policy is missing for any reason reaches
+    nothing: only the installation's servers, and those no row describes, carry
+    none.
   - The worker refuses a server whose URL is not listed before sending anything, and
     every request as it leaves: redirects, and the endpoints that refresh an OAuth grant
     or mint a GitHub App token. A changed policy connects the server again.

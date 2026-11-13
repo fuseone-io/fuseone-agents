@@ -2627,13 +2627,13 @@ export interface paths {
         get: operations["listMCPEgressPolicies"];
         /**
          * Set the origins a company's or an area's MCP servers may reach
-         * @description Replaces the policy for that company or area. Origins are stored in one canonical form; a path, a query, a user or a wildcard is refused, as is an origin netguard never lets a request reach (cloud metadata, link-local). A policy lists at least one origin: remove it to allow nothing.
+         * @description Replaces the policy for that company or area. Origins are stored in one canonical form; a path, a query, a user or a wildcard is refused, as is an origin netguard never lets a request reach (cloud metadata, link-local). An empty list is a policy too: it allows nothing, and for an area it overrides the company's.
          */
         put: operations["putMCPEgressPolicy"];
         post?: never;
         /**
          * Remove a company's or an area's egress policy
-         * @description An area's servers fall back to their company's policy, or reach nothing.
+         * @description An area's servers inherit their company's policy again, or reach nothing. To deny an area what its company allows, store an empty list instead.
          */
         delete: operations["deleteMCPEgressPolicy"];
         options?: never;
@@ -3111,6 +3111,7 @@ export interface components {
             /** @description Absent for a company's policy. */
             area?: string;
             /**
+             * @description Empty is a deny-all: the scope's servers reach nothing, and for an area it overrides its company's list.
              * @example [
              *       "https://jira.example.com"
              *     ]

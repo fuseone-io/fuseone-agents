@@ -4284,8 +4284,8 @@ paths:
         Replaces the policy for that company or area. Origins are stored in one
         canonical form; a path, a query, a user or a wildcard is refused, as is
         an origin netguard never lets a request reach (cloud metadata,
-        link-local). A policy lists at least one origin: remove it to allow
-        nothing.
+        link-local). An empty list is a policy too: it allows nothing, and for
+        an area it overrides the company's.
       requestBody:
         required: true
         content:
@@ -4301,8 +4301,9 @@ paths:
       operationId: deleteMCPEgressPolicy
       summary: Remove a company's or an area's egress policy
       description: >
-        An area's servers fall back to their company's policy, or reach
-        nothing.
+        An area's servers inherit their company's policy again, or reach
+        nothing. To deny an area what its company allows, store an empty list
+        instead.
       parameters:
         - name: company
           in: query
@@ -5205,7 +5206,9 @@ components:
           description: Absent for a company's policy.
         origins:
           type: array
-          minItems: 1
+          description: >
+            Empty is a deny-all: the scope's servers reach nothing, and for an
+            area it overrides its company's list.
           items: { type: string }
           example: ["https://jira.example.com"]
     MCPEgressPolicy:

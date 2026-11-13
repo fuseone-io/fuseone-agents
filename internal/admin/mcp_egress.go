@@ -68,8 +68,9 @@ func (i *Integrations) PutMCPEgressPolicy(ctx context.Context, by domain.UserID,
 	})
 }
 
-// DeleteMCPEgressPolicy removes a company's or an area's policy. Its servers
-// fall back to the company's policy, or reach nothing.
+// DeleteMCPEgressPolicy removes a company's or an area's policy. An area's
+// servers inherit the company's again, or reach nothing; to deny an area what
+// its company allows, store an empty list instead.
 func (i *Integrations) DeleteMCPEgressPolicy(ctx context.Context, by domain.UserID, audit domain.Scope, at domain.Scope) error {
 	if err := egressPolicyScope(at); err != nil {
 		return err
@@ -152,10 +153,11 @@ func egressPolicyScope(s domain.Scope) error {
 	return nil
 }
 
-// egressOrigins is the canonical, sorted, deduplicated list, refusing an
-// empty one and any origin netguard would never let a request reach.
+// egressOrigins is the canonical, sorted, deduplicated list, refusing any
+// origin netguard would never let a request reach. An empty list is a policy
+// too: it allows nothing, and overrides the company's for an area.
 func egressOrigins(given []string) ([]string, error) {
-	var out []string
+	out := []string{}
 	for _, raw := range given {
 		origin, err := domain.CanonicalOrigin(raw)
 		if err != nil {
@@ -165,9 +167,6 @@ func egressOrigins(given []string) ([]string, error) {
 			return nil, fmt.Errorf("%w: %s: %v", ErrEgressPolicyInvalid, origin, err)
 		}
 		out = append(out, origin)
-	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("%w: a policy lists at least one origin; remove it to allow nothing", ErrEgressPolicyInvalid)
 	}
 	slices.Sort(out)
 	return slices.Compact(out), nil

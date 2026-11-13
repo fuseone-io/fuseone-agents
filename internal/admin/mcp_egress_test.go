@@ -65,7 +65,6 @@ func TestPutMCPEgressPolicy_refusesWhatCannotBeAPolicy(t *testing.T) {
 		"no scope":             {Origins: []string{"https://jira.example.com"}},
 		"an invalid company":   {Scope: domain.Scope{Company: "Acme"}, Origins: []string{"https://jira.example.com"}},
 		"an area not folded":   {Scope: domain.Scope{Company: "acme", Area: "CX"}, Origins: []string{"https://jira.example.com"}},
-		"no origin":            {Scope: cxScope},
 		"a path":               {Scope: cxScope, Origins: []string{"https://jira.example.com/mcp"}},
 		"a wildcard":           {Scope: cxScope, Origins: []string{"https://*.example.com"}},
 		"cloud metadata":       {Scope: cxScope, Origins: []string{"http://169.254.169.254"}},
@@ -142,5 +141,33 @@ func moveToInstallation(t *testing.T, w areaServerWorld) {
 		Value: row.Value, Secret: row.Secret, Enabled: true, UpdatedBy: "usr_ana",
 	}); err != nil {
 		t.Fatalf("store: %v", err)
+	}
+}
+
+/*
+An empty list is a policy: it allows nothing, and it overrides the company's.
+Removing a policy means inheriting the company's again, so a deny-all for one
+area must be storable, not spelled as a removal.
+*/
+func TestPutMCPEgressPolicy_anEmptyListAtAnArea_deniesWhatItsCompanyAllows(t *testing.T) {
+	w := withAreaServer(t)
+	cleanEgress(t, w)
+	ctx := context.Background()
+	putEgress(t, w.integrations, acmeScope, "https://company.example.com")
+	putEgress(t, w.integrations, cxScope)
+
+	servers, err := w.integrations.MCPServers(ctx)
+	if err != nil || len(servers) != 1 {
+		t.Fatalf("MCPServers = %v, %v", servers, err)
+	}
+	if got := servers[0].Egress; got == nil || len(got.Origins) != 0 {
+		t.Errorf("egress = %+v, want cx's deny-all over acme's list", got)
+	}
+	policies, err := w.integrations.MCPEgressPolicies(ctx)
+	if err != nil {
+		t.Fatalf("MCPEgressPolicies: %v", err)
+	}
+	if i := slices.IndexFunc(policies, func(p admin.MCPEgressPolicy) bool { return p.Scope == cxScope }); i < 0 || policies[i].Origins == nil {
+		t.Errorf("policies = %+v, want cx's stored with an empty list", policies)
 	}
 }
