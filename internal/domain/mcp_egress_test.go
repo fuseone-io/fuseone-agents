@@ -39,7 +39,11 @@ func TestCanonicalOrigin_refusesWhatIsNotAnOrigin(t *testing.T) {
 
 func TestMCPEgress_allowsExactlyTheListedOrigins(t *testing.T) {
 	t.Parallel()
-	egress := &MCPEgress{Origins: []string{"https://jira.example.com:443"}}
+	listed, err := CanonicalOrigin("https://jira.example.com")
+	if err != nil {
+		t.Fatalf("CanonicalOrigin: %v", err)
+	}
+	egress := &MCPEgress{Origins: []string{listed}}
 	for raw, want := range map[string]bool{
 		"https://jira.example.com/mcp":         true,
 		"https://JIRA.example.com:443/x?y=1":   true,
