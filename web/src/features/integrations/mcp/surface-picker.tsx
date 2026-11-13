@@ -24,12 +24,14 @@ export function SurfacePicker({
   chosen,
   onToggle,
   onClassify,
+  classifiable = () => true,
 }: {
   tools: Tool[];
   chosen: Set<string>;
   onToggle: (remoteName: string, next: boolean) => void;
-  /** Absent when the caller may not rule on this server's tools (NT-019). */
-  onClassify?: (tool: Tool) => void;
+  onClassify: (tool: Tool) => void;
+  /** Whether the caller may rule on this tool at all (NT-019). */
+  classifiable?: (tool: Tool) => boolean;
 }) {
   const { t } = useTranslation();
 
@@ -45,7 +47,7 @@ export function SurfacePicker({
           tool={tool}
           chosen={chosen.has(remoteNameOf(tool))}
           onToggle={onToggle}
-          onClassify={onClassify}
+          onClassify={classifiable(tool) ? onClassify : undefined}
         />
       ))}
     </ul>

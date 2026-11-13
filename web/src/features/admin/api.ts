@@ -14,6 +14,7 @@ export type ToolDedupe = components["schemas"]["ToolDedupe"];
 export type ToolEffect = components["schemas"]["ToolEffect"];
 /** Whose word a ruling is: the platform's ceiling, or the server's owner. */
 export type RulingLevel = components["schemas"]["RulingLevel"];
+export type Scope = components["schemas"]["Scope"];
 export type ToolRuling = components["schemas"]["ToolRuling"];
 export type AdminEvent = components["schemas"]["AdminEvent"];
 export type ScopeBudget = components["schemas"]["ScopeBudget"];

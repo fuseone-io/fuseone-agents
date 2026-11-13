@@ -18,7 +18,10 @@ platform's curator keeps ruling as the platform by default, and is the only
 one offered withdrawing the ceiling.
 */
 
-const AREA_CURATOR = { can: ["tool:read", "provider:write"], platform: [] };
+const AREA_CURATOR = {
+  can: ["tool:read", "provider:write", "tool:classify"], platform: [],
+  classify: [{ company: "acme", area: "cx" }],
+};
 const PLATFORM_CURATOR = {
   can: ["tool:read", "tool:classify", "provider:write"],
   platform: ["tool:read", "tool:classify", "provider:write"],
@@ -31,7 +34,8 @@ const crm: MCPServer = {
 const shared: MCPServer = { ...crm, name: "shared", scopeKind: "installation", company: "*", area: "", editable: false };
 
 const ruled = (over: Partial<Tool> = {}): Tool => ({
-  toolId: "crm.search", server: "crm", effect: "read", untrusted: false, digest: "sha-1", ...over,
+  toolId: "crm.search", server: "crm", effect: "read", untrusted: false, digest: "sha-1",
+  scope: { company: "acme", area: "cx" }, ...over,
 });
 
 function world(me: object, tools: Tool[]) {
@@ -106,7 +110,7 @@ describe("an area's curator on their own server", () => {
   });
 
   it("is not offered a ruling on the installation's server", async () => {
-    world(AREA_CURATOR, [ruled({ toolId: "shared.search", server: "shared" })]);
+    world(AREA_CURATOR, [ruled({ toolId: "shared.search", server: "shared", scope: { company: "*", area: "" } })]);
     show("shared");
 
     expect(await screen.findByLabelText("shared.search")).toBeInTheDocument();

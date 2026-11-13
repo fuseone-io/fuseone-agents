@@ -48,8 +48,8 @@ export function MCPServerPage() {
     isLoading, error, refetch,
   } = useMCPServer(name, read.data?.body);
   const server = listed && read.data ? { ...listed, ...read.data.body } : undefined;
-  // Who may rule on this server's tools, and as whom (NT-019).
-  const offer = classifyOffer(useMe().data, server);
+  // Who may rule on each tool, and as whom, by where its server is (NT-019).
+  const me = useMe().data;
   const save = useSetSurface();
   // The revision the page opened on, kept until a reload: a re-read brought
   // by anything else must not become what an edit begun before it answers.
@@ -150,7 +150,8 @@ export function MCPServerPage() {
             tools={tools}
             chosen={chosen}
             onToggle={toggle}
-            onClassify={offer ? setRuling : undefined}
+            onClassify={setRuling}
+            classifiable={(tool) => classifyOffer(me, tool) !== null}
           />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={reset} disabled={!dirty}>
@@ -170,7 +171,7 @@ export function MCPServerPage() {
         tool={ruling}
         tools={catalogue}
         onClose={() => setRuling(null)}
-        offer={offer ?? "platform"}
+        offer={classifyOffer(me, ruling ?? undefined) ?? "platform"}
       />
     </div>
   );

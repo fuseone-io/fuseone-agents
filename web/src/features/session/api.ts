@@ -34,6 +34,12 @@ export interface Me {
    * offer (NT-019). Absent from a server that predates it.
    */
   configure?: MeScope[];
+  /**
+   * Where the caller holds tool:classify: an owner's ruling is for a tool
+   * whose server is stored at a scope one of these contains (NT-019). Absent
+   * from a server that predates it.
+   */
+  classify?: MeScope[];
 }
 
 export interface MeScope {
