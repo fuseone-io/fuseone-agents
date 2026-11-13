@@ -314,7 +314,9 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 	var toolsRemoved int64
 	return writeRevised(ctx, i.pool, i.settings, folded{
 		by: by, scope: scope, action: "mcp_server.configured", target: server.Name,
-		revised: &revised{expect: w.Expect, of: i.mcpRevision},
+		// The guard takes the row's lock, after the name's: a removal takes
+		// the name then the row, and the two orders must agree (NT-019).
+		revised: &revised{expect: w.Expect, of: i.mcpRevision, lockedByGuard: true},
 		// Switched off, its tools go in the same transaction, as on removal:
 		// the worker that published them may be gone, and one that never
 		// reached the server has nothing to withdraw.
@@ -324,6 +326,16 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 		// the catalogue's lock and never a server row's, so no two of the
 		// three can each hold what the other waits for.
 		guard: func(ctx context.Context, tx settings.DB) error {
+			// First, before any row: a removal of this name in flight finishes
+			// before this write decides anything (NT-019).
+			if err := LockMCPServerName(ctx, tx, server.Name); err != nil {
+				return err
+			}
+			if err := settings.GuardTx(ctx, tx, settings.Setting{
+				ScopeKind: at, Scope: storedScope, Kind: settings.KindMCPServer, Name: server.Name,
+			}); err != nil {
+				return err
+			}
 			if server.Enabled {
 				return nil
 			}
@@ -1141,6 +1153,12 @@ func (i *Integrations) RemoveMCPServer(ctx context.Context, r Removal) error {
 		return fmt.Errorf("admin: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	// The name before anything else, for the whole transaction: a creation of
+	// it in another scope waits until this removal has decided and cleared.
+	if err := LockMCPServerName(ctx, tx, name); err != nil {
+		return err
+	}
 
 	// First of all, before the catalogue's lock below and before anything is dropped.
 	if err := removalGuard(ctx, tx, i.settings, settings.Setting{

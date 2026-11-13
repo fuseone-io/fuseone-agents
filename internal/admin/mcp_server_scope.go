@@ -149,3 +149,20 @@ func (i *Integrations) at(ctx context.Context, name string, audit domain.Scope) 
 	kind, stored, err := i.mcpServerAt(ctx, name)
 	return MCPServerAt{Kind: kind, Stored: stored, Audit: audit}, err
 }
+
+/*
+LockMCPServerName holds one lock per server name until the transaction ends.
+
+A row lock cannot guard a name nobody holds: a removal that finds the name
+nowhere clears what is left under it (personal credentials, observations), and
+a creation of the name in another scope landing between that decision and the
+clearing would lose what it just stored. Every write of a server and every
+removal take this lock first, so the two take turns (NT-019).
+*/
+func LockMCPServerName(ctx context.Context, tx settings.DB, name string) error {
+	if _, err := tx.Exec(ctx,
+		`select pg_advisory_xact_lock(hashtextextended('mcp_server:' || $1, 0))`, name); err != nil {
+		return fmt.Errorf("admin: lock the MCP server name %s: %w", name, err)
+	}
+	return nil
+}

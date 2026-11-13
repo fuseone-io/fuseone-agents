@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
@@ -70,4 +73,78 @@ func TestWriteMCPServer_aNameThePlatformHolds_isTaken(t *testing.T) {
 	if !errors.Is(err, settings.ErrNameTaken) {
 		t.Fatalf("err = %v, want ErrNameTaken", err)
 	}
+}
+
+/*
+A removal and a creation of one name take turns (NT-019).
+
+A removal that finds the name nowhere clears what is left under it: personal
+credentials, observations. A creation in another scope landing between that
+decision and the clearing would lose its new credential. Both hold one lock per
+name for their whole transaction, so the creation waits for the removal.
+*/
+func TestMCPServerWrites_ofOneName_waitForTheLockOnTheName(t *testing.T) {
+	i := newIntegrations(t)
+	pool := openPool(t)
+	ctx := context.Background()
+
+	for _, door := range []struct {
+		name string
+		act  func() error
+	}{
+		{"write", func() error {
+			_, err := i.WriteMCPServer(ctx, admin.MCPServerWrite{
+				By: "usr_fin", Scope: cxScope, At: settings.ScopeArea, Stored: cxScope, Server: remoteServer("jira"),
+			})
+			return err
+		}},
+		{"remove", func() error {
+			return i.RemoveMCPServer(ctx, admin.Removal{By: "usr_ana", Scope: platform, Name: "jira"})
+		}},
+	} {
+		holder, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatalf("begin: %v", err)
+		}
+		if err := admin.LockMCPServerName(ctx, holder, "jira"); err != nil {
+			t.Fatalf("hold the name: %v", err)
+		}
+		done := make(chan error, 1)
+		go func() { done <- door.act() }()
+		waited := waitForAdvisoryWait(t, pool)
+		select {
+		case err := <-done:
+			_ = holder.Rollback(ctx)
+			t.Fatalf("%s finished (%v) while the name was held", door.name, err)
+		default:
+		}
+		_ = holder.Rollback(ctx)
+		if err := <-done; err != nil {
+			t.Fatalf("%s after the name was released: %v", door.name, err)
+		}
+		if !waited {
+			t.Errorf("%s never waited on the name's lock", door.name)
+		}
+	}
+}
+
+// waitForAdvisoryWait reports whether a backend came to wait on an advisory
+// lock within a few seconds.
+func waitForAdvisoryWait(t *testing.T, pool *pgxpool.Pool) bool {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		var waiting int
+		if err := pool.QueryRow(context.Background(), `
+			select count(*) from pg_stat_activity
+			where datname = current_database() and wait_event_type = 'Lock' and wait_event = 'advisory'`,
+		).Scan(&waiting); err != nil {
+			t.Fatalf("read pg_stat_activity: %v", err)
+		}
+		if waiting > 0 {
+			return true
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return false
 }
