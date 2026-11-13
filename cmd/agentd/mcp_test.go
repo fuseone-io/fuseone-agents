@@ -15,6 +15,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/netguard"
@@ -623,7 +624,7 @@ func TestAuthenticatedClient_aUserOnlyServerUsesTheSharedCredentialForDiscovery(
 	}))
 	t.Cleanup(remote.Close)
 
-	client, err := authenticatedClientWithPolicy("google",
+	client, err := authenticatedClientWithPolicy(domain.MCPServer{Name: "google"},
 		domain.MCPCredentials{Token: "shared"},
 		nil, personalCreds{},
 		credentialPolicy{requirePersonal: true},
@@ -650,7 +651,7 @@ func TestAuthenticatedClient_aUserOnlyServerDoesNotUseTheSharedCredentialForACro
 	}))
 	t.Cleanup(remote.Close)
 
-	client, err := authenticatedClientWithPolicy("google",
+	client, err := authenticatedClientWithPolicy(domain.MCPServer{Name: "google"},
 		domain.MCPCredentials{Token: "shared"},
 		nil, personalCreds{},
 		credentialPolicy{requirePersonal: true},
@@ -680,7 +681,7 @@ func TestAuthenticatedClient_aUserOnlyServerStillBlocksToolCallsWithoutAnyCreden
 	}))
 	t.Cleanup(remote.Close)
 
-	client, err := authenticatedClientWithPolicy("google",
+	client, err := authenticatedClientWithPolicy(domain.MCPServer{Name: "google"},
 		domain.MCPCredentials{},
 		nil, nil,
 		credentialPolicy{requirePersonal: true},
@@ -713,7 +714,7 @@ func TestAuthenticatedClient_aUserOnlyServerDoesNotUseTheSharedCredentialWhenThe
 	}))
 	t.Cleanup(remote.Close)
 
-	client, err := authenticatedClientWithPolicy("google",
+	client, err := authenticatedClientWithPolicy(domain.MCPServer{Name: "google"},
 		domain.MCPCredentials{Token: "shared"},
 		nil, personalCreds{},
 		credentialPolicy{requirePersonal: true},
@@ -844,23 +845,24 @@ func TestAuthenticatedClient_persistsPersonalOAuthRefreshForThatUser(t *testing.
 
 type recordingOAuthStore struct {
 	name  string
+	scope domain.Scope
 	owner domain.UserID
 	was   domain.MCPOAuthGrant
 	next  domain.MCPOAuthGrant
 	err   error
 }
 
-func (s *recordingOAuthStore) RefreshMCPServerOAuth(
-	_ context.Context, name string, owner domain.UserID, was, next domain.MCPOAuthGrant,
-) error {
-	s.name, s.owner, s.was, s.next = name, owner, was, next
+func (s *recordingOAuthStore) RefreshMCPServerOAuth(_ context.Context, r admin.MCPOAuthRefresh) error {
+	s.name, s.scope, s.owner, s.was, s.next = r.Server, r.Scope, r.Principal, r.Was, r.Next
 	return s.err
 }
+
+var _ OAuthGrantStore = (*recordingOAuthStore)(nil)
 
 type personalCreds map[domain.UserID]domain.MCPCredentials
 
 func (p personalCreds) MCPPersonalCredential(
-	_ context.Context, _ string, principal domain.UserID,
+	_ context.Context, _ domain.Scope, _ string, principal domain.UserID,
 ) (domain.MCPCredentials, bool, error) {
 	creds, ok := p[principal]
 	return creds, ok, nil
@@ -872,7 +874,7 @@ type rotatingPersonal struct {
 }
 
 func (p *rotatingPersonal) MCPPersonalCredential(
-	context.Context, string, domain.UserID,
+	context.Context, domain.Scope, string, domain.UserID,
 ) (domain.MCPCredentials, bool, error) {
 	return p.creds, !p.creds.Empty(), p.err
 }
@@ -1371,26 +1373,40 @@ func TestReconciler_aKnownLegacyRecipeCarriesTheProtocolToTheConnection(t *testi
 }
 
 type probeServers struct {
-	servers []domain.MCPServer
-	probes  []string
+	servers     []domain.MCPServer
+	probes      []string
+	probeScopes map[string]domain.Scope
+	// opened is each server whose credential the worker asked for, as it
+	// named it; credentialsErr is what the store answers.
+	opened         []domain.MCPServer
+	credentialsErr error
 }
 
 func (p *probeServers) MCPServers(context.Context) ([]domain.MCPServer, error) {
 	return append([]domain.MCPServer(nil), p.servers...), nil
 }
 
-func (p *probeServers) MCPCredentials(context.Context, string) (domain.MCPCredentials, error) {
-	return domain.MCPCredentials{}, nil
+func (p *probeServers) MCPServerCredentials(_ context.Context, server domain.MCPServer) (domain.MCPCredentials, error) {
+	p.opened = append(p.opened, server)
+	return domain.MCPCredentials{}, p.credentialsErr
 }
 
-func (p *probeServers) ClaimMCPProbes(_ context.Context, limit int) ([]string, error) {
+// ClaimMCPProbes hands out the queued probes as requests about servers of the
+// installation, where every server this fake holds is stored, unless a probe
+// was queued at a scope of its own.
+func (p *probeServers) ClaimMCPProbes(_ context.Context, limit int) ([]admin.MCPServerRequest, error) {
 	if limit > len(p.probes) {
 		limit = len(p.probes)
 	}
-	out := append([]string(nil), p.probes[:limit]...)
+	out := make([]admin.MCPServerRequest, 0, limit)
+	for _, name := range p.probes[:limit] {
+		out = append(out, admin.MCPServerRequest{Name: name, Scope: p.probeScopes[name]})
+	}
 	p.probes = p.probes[limit:]
 	return out, nil
 }
+
+var _ probeClaimer = (*probeServers)(nil)
 
 type personalRequirement map[string]bool
 

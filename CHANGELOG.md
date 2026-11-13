@@ -28,6 +28,38 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+NT-019 phase 2, a second readers' release: what a worker reads and writes about an
+MCP server, it reads and writes of the server's row, never of whatever holds the name
+now. No door writes an area's server yet, so nothing changes for an installation
+today. Adds migration `0109_mcp_requests_name_their_row`.
+
+### Upgrade notes
+
+- **Every `serve` and `worker` replica must run this release before the writers'
+  release.** An older worker joins a server's configuration and its credential by name
+  alone: once areas write servers, a name removed from one area and stored again in
+  another could have its token sent to the first one's URL.
+- **Rollback floor, from the writers' release on:** once an area's server has been
+  written, never go below this release. Rolling back to 0.107.0 before then is safe.
+  The floors already set still hold: never go below 0.103.0.
+
+### Fixed
+
+- **A worker opens the credential of the server row it read.** A row gone from where
+  it was read, or revised since, is read again on the next pass. It is not reported
+  as the server failing.
+- **A person's credential is sent only to the server it was stored for.** Stored again
+  for a server of the same name stored elsewhere, it keeps nothing of the old
+  credential. One stored before this release belongs to the installation's server.
+- **A refreshed OAuth grant is written back only to the row it was refreshed for,**
+  for the server's own grant and for a person's.
+- **A probe or rediscovery request is answered only by the server it was asked of.**
+  It stores that server's row, and a worker holding a server of the name stored
+  elsewhere neither runs it nor answers it by connecting. Receipts name the row they
+  answer, and a server's rediscovery status shows only its own request and receipts.
+
 ## [0.107.0] — 2026-11-12
 
 NT-019 phase 2, the readers' release: every reader of an MCP server and of a tool's

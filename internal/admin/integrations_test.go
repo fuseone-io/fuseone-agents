@@ -189,7 +189,7 @@ func TestRequestMCPProbe_recordsAWorkerRequestForAnEnabledServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClaimMCPProbes: %v", err)
 	}
-	if len(claimed) != 1 || claimed[0] != "crm" {
+	if len(claimed) != 1 || claimed[0].Name != "crm" {
 		t.Fatalf("claimed = %v, want crm", claimed)
 	}
 	again, err := i.ClaimMCPProbes(ctx, 1)
@@ -494,7 +494,7 @@ func TestPutMCPPersonalCredential_sealsOneUsersRemoteCredential(t *testing.T) {
 		t.Fatalf("other presence = %+v, want no cross-user credential leak", otherPresence)
 	}
 
-	creds, found, err := i.MCPPersonalCredential(ctx, "newrelic", "usr_ana")
+	creds, found, err := i.MCPPersonalCredential(ctx, domain.Scope{}, "newrelic", "usr_ana")
 	if err != nil {
 		t.Fatalf("MCPPersonalCredential: %v", err)
 	}
@@ -556,7 +556,7 @@ func TestMCPPersonalCredential_refusesCorruptedMetadata(t *testing.T) {
 		t.Fatalf("corrupt metadata: %v", err)
 	}
 
-	_, found, err := i.MCPPersonalCredential(ctx, "github", "usr_ana")
+	_, found, err := i.MCPPersonalCredential(ctx, domain.Scope{}, "github", "usr_ana")
 	if !errors.Is(err, admin.ErrMCPPersonalCredentialCorrupt) {
 		t.Fatalf("MCPPersonalCredential err = %v found=%v, want the corrupted row refused", err, found)
 	}
@@ -584,11 +584,11 @@ func TestRefreshMCPServerOAuth_personalGrantStaysWithThatUser(t *testing.T) {
 		t.Fatalf("PutMCPPersonalCredential: %v", err)
 	}
 
-	if err := i.RefreshMCPServerOAuth(ctx, "google-workspace", "usr_ana", was, next); err != nil {
+	if err := i.RefreshMCPServerOAuth(ctx, admin.MCPOAuthRefresh{Server: "google-workspace", Principal: "usr_ana", Was: was, Next: next}); err != nil {
 		t.Fatalf("RefreshMCPServerOAuth: %v", err)
 	}
 
-	creds, found, err := i.MCPPersonalCredential(ctx, "google-workspace", "usr_ana")
+	creds, found, err := i.MCPPersonalCredential(ctx, domain.Scope{}, "google-workspace", "usr_ana")
 	if err != nil {
 		t.Fatalf("MCPPersonalCredential: %v", err)
 	}
@@ -646,10 +646,10 @@ func TestDeleteMCPServer_removesPersonalCredentialsForThatServer(t *testing.T) {
 	if rows != 1 {
 		t.Fatalf("personal credential rows = %d, want only the unrelated server left", rows)
 	}
-	if _, found, err := i.MCPPersonalCredential(ctx, "github", "usr_ana"); err != nil || found {
+	if _, found, err := i.MCPPersonalCredential(ctx, domain.Scope{}, "github", "usr_ana"); err != nil || found {
 		t.Fatalf("deleted credential found=%v err=%v, want it gone", found, err)
 	}
-	if _, found, err := i.MCPPersonalCredential(ctx, "stripe", "usr_ana"); err != nil || !found {
+	if _, found, err := i.MCPPersonalCredential(ctx, domain.Scope{}, "stripe", "usr_ana"); err != nil || !found {
 		t.Fatalf("unrelated credential found=%v err=%v, want it preserved", found, err)
 	}
 }
@@ -738,7 +738,7 @@ func TestRefreshMCPServerOAuth_persistsTheRotatedGrantAndRecordsNoSecret(t *test
 		domain.MCPCredentialPatch{OAuth: &was}); err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
 	}
-	if err := i.RefreshMCPServerOAuth(ctx, "google-sheets", "", was, next); err != nil {
+	if err := i.RefreshMCPServerOAuth(ctx, admin.MCPOAuthRefresh{Server: "google-sheets", Was: was, Next: next}); err != nil {
 		t.Fatalf("RefreshMCPServerOAuth: %v", err)
 	}
 
@@ -805,7 +805,7 @@ func TestRefreshMCPServerOAuth_refusesToOverwriteAChangedGrant(t *testing.T) {
 		t.Fatalf("PutMCPServer replacing: %v", err)
 	}
 
-	err := i.RefreshMCPServerOAuth(ctx, "google-sheets", "", was, next)
+	err := i.RefreshMCPServerOAuth(ctx, admin.MCPOAuthRefresh{Server: "google-sheets", Was: was, Next: next})
 	if !errors.Is(err, admin.ErrOAuthGrantChanged) {
 		t.Fatalf("RefreshMCPServerOAuth = %v, want the changed grant refused", err)
 	}

@@ -13,7 +13,7 @@ func (c configuredServers) MCPServers(context.Context) ([]domain.MCPServer, erro
 	return c, nil
 }
 
-func (configuredServers) MCPCredentials(context.Context, string) (domain.MCPCredentials, error) {
+func (configuredServers) MCPServerCredentials(context.Context, domain.MCPServer) (domain.MCPCredentials, error) {
 	return domain.MCPCredentials{}, nil
 }
 

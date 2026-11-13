@@ -87,8 +87,8 @@ func TestRequestMCPRediscovery_eachRequestIsTheNextGeneration_onTheTrail(t *test
 	if err != nil {
 		t.Fatalf("MCPRediscoveries: %v", err)
 	}
-	if wanted["rediscovery-crm"] != second {
-		t.Errorf("a worker reads generation %d, want %d", wanted["rediscovery-crm"], second)
+	if wanted["rediscovery-crm"].Generation != second {
+		t.Errorf("a worker reads generation %d, want %d", wanted["rediscovery-crm"].Generation, second)
 	}
 	var action, by string
 	if err := pool.QueryRow(ctx,

@@ -122,6 +122,9 @@ type storedMCPUserCredential struct {
 	Principal  string `json:"principal"`
 	HasHeaders bool   `json:"hasHeaders,omitempty"`
 	HasOAuth   bool   `json:"hasOAuth,omitempty"`
+	// ServerAt is the row of the server it was stored for (NT-019). Absent,
+	// it was stored before credentials named one: the installation's.
+	ServerAt *requestedAt `json:"serverAt,omitempty"`
 }
 
 // Integrations configures what the platform talks to.
@@ -609,8 +612,11 @@ func (i *Integrations) MCPPersonalCredentialPresence(
 // MCPPersonalCredential opens one person's credential for one server. It is
 // used only at call time, when the run has an OnBehalfOf to name whose
 // credential may be sent.
+//
+// at is where the server the worker connected is stored: a credential stored
+// for a server of the name stored elsewhere is not this one's (NT-019).
 func (i *Integrations) MCPPersonalCredential(
-	ctx context.Context, name string, principal domain.UserID,
+	ctx context.Context, at domain.Scope, name string, principal domain.UserID,
 ) (domain.MCPCredentials, bool, error) {
 	if principal == "" {
 		return domain.MCPCredentials{}, false, nil
@@ -626,8 +632,12 @@ func (i *Integrations) MCPPersonalCredential(
 	case !set.HasSecret:
 		return domain.MCPCredentials{}, false, nil
 	}
-	if _, err := storedPersonalCredential(set, name, principal); err != nil {
+	stored, err := storedPersonalCredential(set, name, principal)
+	if err != nil {
 		return domain.MCPCredentials{}, false, err
+	}
+	if !sameServerRow(stored.serverRuntime(), at) {
+		return domain.MCPCredentials{}, false, nil
 	}
 	return domain.ReadMCPCredentials(set.Secret).ForTransport(domain.TransportHTTP), true, nil
 }
@@ -641,9 +651,11 @@ func (i *Integrations) PutMCPPersonalCredential(
 	if strings.TrimSpace(name) == "" {
 		return ErrNoName
 	}
-	if err := i.personalCredentialTarget(ctx, name); err != nil {
+	serverKind, serverAt, err := i.personalCredentialTarget(ctx, name)
+	if err != nil {
 		return err
 	}
+	target := mcpServerRuntimeScope(serverKind, serverAt)
 
 	key := mcpUserCredentialName(name, by)
 	return writeFolded(ctx, i.pool, i.settings, folded{
@@ -654,8 +666,14 @@ func (i *Integrations) PutMCPPersonalCredential(
 			Enabled: true, UpdatedBy: string(by),
 		},
 		fold: func(stored settings.Setting) (settings.Setting, any, error) {
-			merged := given.Apply(domain.ReadMCPCredentials(stored.Secret)).
-				ForTransport(domain.TransportHTTP)
+			kept := domain.ReadMCPCredentials(stored.Secret)
+			if held, err := storedPersonalCredential(stored, name, by); stored.Kind != "" &&
+				(err != nil || !sameServerRow(held.serverRuntime(), target)) {
+				// Stored for a server of the name stored elsewhere, since
+				// removed: nothing of it carries over to this one (NT-019).
+				kept = domain.MCPCredentials{}
+			}
+			merged := given.Apply(kept).ForTransport(domain.TransportHTTP)
 			if merged.Empty() {
 				return settings.Setting{}, nil, ErrNoMCPCredential
 			}
@@ -664,6 +682,7 @@ func (i *Integrations) PutMCPPersonalCredential(
 			}
 			value, err := json.Marshal(storedMCPUserCredential{
 				Server: name, Principal: string(by),
+				ServerAt:   serverRow(serverKind, serverAt),
 				HasHeaders: len(merged.Headers) > 0,
 				HasOAuth:   merged.OAuth != nil && !merged.OAuth.Empty(),
 			})
@@ -722,22 +741,26 @@ func (i *Integrations) DeleteMCPPersonalCredential(
 	return tx.Commit(ctx)
 }
 
-func (i *Integrations) personalCredentialTarget(ctx context.Context, name string) error {
+// personalCredentialTarget is where the server a person's credential is for
+// is stored, refusing one that cannot take a personal credential.
+func (i *Integrations) personalCredentialTarget(
+	ctx context.Context, name string,
+) (settings.ScopeKind, domain.Scope, error) {
 	kind, scope, err := i.mcpServerAt(ctx, name)
 	if err != nil {
-		return err
+		return "", domain.Scope{}, err
 	}
 	set, err := i.settings.Get(ctx, kind, scope, settings.KindMCPServer, name)
 	switch {
 	case errors.Is(err, settings.ErrNotFound):
-		return ErrMCPServerUnknown
+		return "", domain.Scope{}, ErrMCPServerUnknown
 	case err != nil:
-		return err
+		return "", domain.Scope{}, err
 	}
 	var stored storedServer
 	if len(set.Value) > 0 {
 		if err := json.Unmarshal(set.Value, &stored); err != nil {
-			return fmt.Errorf("admin: decode MCP server %s: %w", name, err)
+			return "", domain.Scope{}, fmt.Errorf("admin: decode MCP server %s: %w", name, err)
 		}
 	}
 	transport := stored.Transport
@@ -745,12 +768,12 @@ func (i *Integrations) personalCredentialTarget(ctx context.Context, name string
 		transport = domain.TransportStdio
 	}
 	if transport != domain.TransportHTTP {
-		return ErrMCPPersonalCredentialLocal
+		return "", domain.Scope{}, ErrMCPPersonalCredentialLocal
 	}
 	if stored.GitHubApp != nil {
-		return ErrMCPPersonalCredentialApp
+		return "", domain.Scope{}, ErrMCPPersonalCredentialApp
 	}
-	return nil
+	return kind, scope, nil
 }
 
 func mcpUserCredentialName(server string, principal domain.UserID) string {
@@ -821,15 +844,17 @@ func (i *Integrations) RequestMCPProbe(
 		ScopeKind: settings.ScopeInstallation,
 		Kind:      kindMCPProbe,
 		Name:      name,
-		Value:     json.RawMessage(`{}`),
+		// The row the probe was asked of, which the worker checks before it
+		// acts (NT-019).
+		Value:     probeRequestValue(kind, at),
 		Enabled:   true,
 		UpdatedBy: string(by),
 	}, "mcp_server.probe_requested", name, map[string]any{"server": name})
 }
 
-// ClaimMCPProbes returns server names whose explicit probe requests this worker
-// owns now, removing the request rows in the same statement.
-func (i *Integrations) ClaimMCPProbes(ctx context.Context, limit int) ([]string, error) {
+// ClaimMCPProbes returns the explicit probe requests this worker owns now,
+// each with the row it was asked of, removing them in the same statement.
+func (i *Integrations) ClaimMCPProbes(ctx context.Context, limit int) ([]MCPServerRequest, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
@@ -849,20 +874,23 @@ func (i *Integrations) ClaimMCPProbes(ctx context.Context, limit int) ([]string,
 		  and s.area_id = p.area_id
 		  and s.kind = p.kind
 		  and s.name = p.name
-		returning s.name`,
+		returning s.name, s.value`,
 		string(settings.ScopeInstallation), string(kindMCPProbe), limit)
 	if err != nil {
 		return nil, fmt.Errorf("admin: claim MCP probes: %w", err)
 	}
 	defer rows.Close()
 
-	var out []string
+	var out []MCPServerRequest
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
+		var (
+			name string
+			raw  []byte
+		)
+		if err := rows.Scan(&name, &raw); err != nil {
+			return nil, fmt.Errorf("admin: read claimed MCP probe: %w", err)
 		}
-		out = append(out, name)
+		out = append(out, MCPServerRequest{Name: name, Scope: requestedScope(raw)})
 	}
 	return out, rows.Err()
 }
@@ -876,25 +904,25 @@ worker preserving an operator's earlier credential decision, not a new
 configuration act by a person. It still takes the one configuration write path:
 the stored secret and the event that explains it commit together.
 */
-func (i *Integrations) RefreshMCPServerOAuth(
-	ctx context.Context, name string, principal domain.UserID, was, next domain.MCPOAuthGrant,
-) error {
+//
+// It lands on the row the worker connected, named by r.Scope, and on no other
+// of the name: a late refresh of a server since removed and stored again
+// elsewhere, even with the same grant, finds nothing to rewrite (NT-019).
+func (i *Integrations) RefreshMCPServerOAuth(ctx context.Context, r MCPOAuthRefresh) error {
+	name, was, next := r.Server, r.Was, r.Next
 	if strings.TrimSpace(name) == "" {
 		return ErrNoName
 	}
 	if next.Empty() {
 		return ErrOAuthGrantChanged
 	}
-	if principal != "" {
-		return i.refreshMCPPersonalOAuth(ctx, name, principal, was, next)
+	if r.Principal != "" {
+		return i.refreshMCPPersonalOAuth(ctx, r)
 	}
-	// The grant is rewritten where the server is stored, sealed under that
-	// scope: an area's server refreshed into an installation row would leave
-	// two rows for one name, which the database refuses (NT-019).
-	kind, at, err := i.mcpServerAt(ctx, name)
-	if err != nil {
-		return err
-	}
+	// Sealed under the scope of the row it rewrites: an area's server
+	// refreshed into an installation row would leave two rows for one name,
+	// which the database refuses.
+	kind, at := storedAt(r.Scope)
 	return writeFolded(ctx, i.pool, i.settings, folded{
 		by:     domain.SystemWorker,
 		scope:  mcpServerRuntimeScope(kind, at),
@@ -955,10 +983,8 @@ func (i *Integrations) RefreshMCPServerOAuth(
 	})
 }
 
-func (i *Integrations) refreshMCPPersonalOAuth(
-	ctx context.Context, name string, principal domain.UserID,
-	was, next domain.MCPOAuthGrant,
-) error {
+func (i *Integrations) refreshMCPPersonalOAuth(ctx context.Context, r MCPOAuthRefresh) error {
+	name, principal, was, next := r.Server, r.Principal, r.Was, r.Next
 	key := mcpUserCredentialName(name, principal)
 	return writeFolded(ctx, i.pool, i.settings, folded{
 		by:     domain.SystemWorker,
@@ -974,8 +1000,14 @@ func (i *Integrations) refreshMCPPersonalOAuth(
 			if stored.Kind == "" {
 				return settings.Setting{}, nil, ErrOAuthGrantChanged
 			}
-			if _, err := storedPersonalCredential(stored, name, principal); err != nil {
+			held, err := storedPersonalCredential(stored, name, principal)
+			if err != nil {
 				return settings.Setting{}, nil, err
+			}
+			if !sameServerRow(held.serverRuntime(), r.Scope) {
+				// Stored for a server of the name stored elsewhere: not the
+				// credential the worker refreshed (NT-019).
+				return settings.Setting{}, nil, ErrOAuthGrantChanged
 			}
 			creds := domain.ReadMCPCredentials(stored.Secret).ForTransport(domain.TransportHTTP)
 			if creds.OAuth == nil || !creds.OAuth.Equal(was) {
@@ -984,7 +1016,7 @@ func (i *Integrations) refreshMCPPersonalOAuth(
 			kept := domain.KeptGeneration(*creds.OAuth, next)
 			merged := domain.MCPCredentialPatch{OAuth: &kept}.Apply(creds).ForTransport(domain.TransportHTTP)
 			value, err := json.Marshal(storedMCPUserCredential{
-				Server: name, Principal: string(principal),
+				Server: name, Principal: string(principal), ServerAt: held.ServerAt,
 				HasHeaders: len(merged.Headers) > 0,
 				HasOAuth:   merged.OAuth != nil && !merged.OAuth.Empty(),
 			})

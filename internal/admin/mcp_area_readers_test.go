@@ -42,10 +42,22 @@ func withAreaServerHolding(t *testing.T, patch domain.MCPCredentialPatch) areaSe
 	t.Helper()
 	ctx := context.Background()
 	pool := openPool(t)
-	if _, err := pool.Exec(ctx,
-		`delete from settings where kind in ('mcp_server', 'mcp_user_credential', 'mcp_probe', 'mcp_rediscovery')`); err != nil {
+	clean := func() error {
+		_, err := pool.Exec(context.Background(),
+			`delete from settings where kind in ('mcp_server', 'mcp_user_credential', 'mcp_probe', 'mcp_rediscovery')`)
+		return err
+	}
+	if err := clean(); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
+	// Left behind, the area's "github" is a configured server to every later
+	// test in the package: a catalogue publication of "github" is judged
+	// against it and dropped.
+	t.Cleanup(func() {
+		if err := clean(); err != nil {
+			t.Errorf("clean up: %v", err)
+		}
+	})
 	v, err := vault.New(make([]byte, 32), "test")
 	if err != nil {
 		t.Fatalf("vault: %v", err)
@@ -255,7 +267,7 @@ func TestRefreshMCPServerOAuth_anAreasServer_rewritesItsOwnRow(t *testing.T) {
 	w := withAreaServerHolding(t, domain.MCPCredentialPatch{OAuth: &was})
 	ctx := context.Background()
 
-	if err := w.integrations.RefreshMCPServerOAuth(ctx, "github", "", was, next); err != nil {
+	if err := w.integrations.RefreshMCPServerOAuth(ctx, admin.MCPOAuthRefresh{Server: "github", Scope: cxScope, Was: was, Next: next}); err != nil {
 		t.Fatalf("RefreshMCPServerOAuth: %v", err)
 	}
 	creds, err := w.integrations.MCPCredentials(ctx, "github")

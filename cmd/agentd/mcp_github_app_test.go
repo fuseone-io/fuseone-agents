@@ -157,7 +157,7 @@ func (s appServers) MCPServers(context.Context) ([]domain.MCPServer, error) {
 	return []domain.MCPServer{s.server}, nil
 }
 
-func (s appServers) MCPCredentials(context.Context, string) (domain.MCPCredentials, error) {
+func (s appServers) MCPServerCredentials(context.Context, domain.MCPServer) (domain.MCPCredentials, error) {
 	return s.creds, nil
 }
 
@@ -338,7 +338,7 @@ func TestAuthenticatedClient_aGitHubAppServerUnderAPersonalPolicy_refusesToolCal
 	})}
 	remote := httptest.NewServer(wire)
 	t.Cleanup(remote.Close)
-	client, err := authenticatedClientWithPolicy("github", githubAppCreds(github), nil,
+	client, err := authenticatedClientWithPolicy(domain.MCPServer{Name: "github"}, githubAppCreds(github), nil,
 		personalCreds{"usr_ana": domain.MCPCredentials{Token: "personal-token"}},
 		credentialPolicy{requirePersonal: true})
 	if err != nil {
