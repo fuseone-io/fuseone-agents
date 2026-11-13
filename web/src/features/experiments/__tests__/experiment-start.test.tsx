@@ -20,7 +20,7 @@ function showStart() {
   const posted = stubApi({
     "GET /agents/triage": { agent, versions: [{ versionId: agent.versionId, publishedAt: agent.publishedAt, latest: true }] },
     "GET /agents/triage/regressions": { items: [{ id: "a" }, { id: "b" }, { id: "c" }] },
-    "GET /admin/integrations": { providers: [], presets: [] },
+    "GET /providers?scope=acme%2Fcx": { items: [] },
     "POST /agents/triage/experiments": { id: "exp_triage_1", cases: 3, repetitions: 1, runs: 3, datasetVersion: 2 },
   });
   const onStarted = vi.fn();

@@ -22,9 +22,12 @@ function showStart() {
     "GET /agents/triage?version=v1aaaaaaaaaa": { agent: older, versions },
     "GET /agents/triage?version=v2bbbbbbbbbb": { agent: current, versions },
     "GET /agents/triage/regressions": { items: [{ id: "a" }, { id: "b" }, { id: "c" }] },
-    "GET /admin/integrations": {
-      providers: [{ name: "anthropic", models: ["claude-x"] }, { name: "openai", models: ["gpt-y"] }],
-      presets: [],
+    // Asked for the agent's own scope, so an area's author is answered (NT-019).
+    "GET /providers?scope=acme%2Fcx": {
+      items: [
+        { name: "anthropic", kind: "anthropic", models: ["claude-x"], usable: true },
+        { name: "openai", kind: "openai_compatible", models: ["gpt-y"], usable: true },
+      ],
     },
   });
   renderWithClient(<ExperimentStart agentId="triage" onClose={vi.fn()} onStarted={vi.fn()} />);
