@@ -83,6 +83,9 @@ func TestMCPRediscovery_ofANameStoredElsewhereNow_showsNothingOfTheFirst(t *test
 	}); err != nil {
 		t.Fatalf("RecordMCPRediscovery: %v", err)
 	}
+	if before, err := w.integrations.MCPRediscovery(ctx, "github"); err != nil || len(before.Receipts) != 1 {
+		t.Fatalf("before the move: %+v, %v; want the receipt of the server at %s", before, err, cxScope)
+	}
 	moveServer(t, w, cxScope, financeScope)
 
 	status, err := w.integrations.MCPRediscovery(ctx, "github")

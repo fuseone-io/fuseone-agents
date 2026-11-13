@@ -46,6 +46,11 @@ func TestMCPServerCredentials_ofANameStoredElsewhereNow_areNotOpened(t *testing.
 	read := snapshotOf(t, w)
 	moveServer(t, w, cxScope, financeScope)
 	restoreToken(t, w, financeScope, "finance_secret")
+	// Even at the very revision the worker read: where it is stored decides.
+	if _, err := w.pool.Exec(context.Background(), `
+		update settings set updated_at = $1 where kind = 'mcp_server' and name = 'github'`, read.UpdatedAt); err != nil {
+		t.Fatalf("align the revision: %v", err)
+	}
 
 	creds, err := w.integrations.MCPServerCredentials(context.Background(), read)
 	if !errors.Is(err, admin.ErrMCPServerChanged) {
@@ -188,5 +193,25 @@ func TestMCPPersonalCredential_storedBeforeItNamedARow_isTheInstallationServers(
 	creds, found, err := w.integrations.MCPPersonalCredential(ctx, domain.Scope{}, "legacy", "usr_ana")
 	if err != nil || !found || creds.Token != "legacy-token" {
 		t.Errorf("at the installation: %+v, %v, %v; want the credential", creds, found, err)
+	}
+}
+
+// Stored again for a server of the name stored elsewhere, a person's
+// credential keeps nothing of the one they had for the first.
+func TestPutMCPPersonalCredential_forAnotherServerRow_keepsNothingOfTheOld(t *testing.T) {
+	w := withAreaServer(t)
+	ctx := context.Background()
+	if err := w.integrations.PutMCPPersonalCredential(ctx, "usr_ana", platform, "github",
+		domain.MCPCredentialPatch{OAuth: &oldGrant}); err != nil {
+		t.Fatalf("PutMCPPersonalCredential at cx: %v", err)
+	}
+	moveServer(t, w, cxScope, financeScope)
+	if err := w.integrations.PutMCPPersonalCredential(ctx, "usr_ana", platform, "github",
+		domain.MCPCredentialPatch{Token: ptr("finance-token")}); err != nil {
+		t.Fatalf("PutMCPPersonalCredential at finance: %v", err)
+	}
+	creds, found, err := w.integrations.MCPPersonalCredential(ctx, financeScope, "github", "usr_ana")
+	if err != nil || !found || creds.Token != "finance-token" || creds.OAuth != nil {
+		t.Errorf("at finance: %+v, %v, %v; want only the token given for finance", creds, found, err)
 	}
 }
