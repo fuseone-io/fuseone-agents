@@ -44,6 +44,12 @@ var (
 	// runtime must not trust a rule it only enforces at the door.
 	ErrLocalExecutionNotAccepted = errors.New(
 		"admin: a local server runs code inside the worker, and that has to be accepted explicitly")
+	// ErrAreaServerIsRemote is a company's or an area's server that is not a
+	// remote one (NT-019, decided 2026-11-13): a stdio server runs on the
+	// platform's worker, which no area may command. The database refuses
+	// the row too (0109).
+	ErrAreaServerIsRemote = errors.New(
+		"admin: an area's or a company's MCP server is remote; a local server runs on the platform's worker and is the platform's")
 	ErrNoBaseURL         = errors.New("admin: a provider needs a base URL")
 	ErrOAuthGrantChanged = errors.New(
 		"admin: the stored OAuth grant changed before the refresh could be saved")
@@ -224,8 +230,13 @@ func (i *Integrations) PutMCPServer(
 
 // MCPServerWrite is a server being configured, and the precondition it answers.
 type MCPServerWrite struct {
-	By     domain.UserID
-	Scope  domain.Scope
+	By domain.UserID
+	// Scope is the audit's: where the write is recorded.
+	Scope domain.Scope
+	// At and Stored are where the row lives (NT-019). Zero At is the
+	// installation, as every server was before areas wrote their own.
+	At     settings.ScopeKind
+	Stored domain.Scope
 	Server domain.MCPServer
 	Given  domain.MCPCredentialPatch
 	Expect domain.IfMatch
@@ -241,10 +252,16 @@ func (i *Integrations) mcpRevision(set settings.Setting) domain.Revision {
 // WriteMCPServer stores a server and answers its resulting revision.
 func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (domain.Revision, error) {
 	by, scope, server, given := w.By, w.Scope, w.Server, w.Given
+	at, storedScope := w.At, w.Stored
+	if at == "" {
+		at, storedScope = settings.ScopeInstallation, domain.Scope{}
+	}
 	transport := server.TransportOf()
 	switch {
 	case strings.TrimSpace(server.Name) == "":
 		return "", ErrNoName
+	case at != settings.ScopeInstallation && transport != domain.TransportHTTP:
+		return "", ErrAreaServerIsRemote
 	case transport == domain.TransportStdio && strings.TrimSpace(server.Command) == "":
 		return "", ErrNoCommand
 	case transport == domain.TransportStdio && !server.AcceptsLocalExecution:
@@ -314,8 +331,8 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 			return err
 		},
 		set: settings.Setting{
-			ScopeKind: settings.ScopeInstallation,
-			Kind:      settings.KindMCPServer, Name: server.Name,
+			ScopeKind: at, Scope: storedScope,
+			Kind: settings.KindMCPServer, Name: server.Name,
 			Enabled: server.Enabled, UpdatedBy: string(by),
 		},
 		fold: func(stored settings.Setting) (settings.Setting, any, error) {
@@ -391,8 +408,8 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 			}
 
 			return settings.Setting{
-					ScopeKind: settings.ScopeInstallation,
-					Kind:      settings.KindMCPServer, Name: server.Name,
+					ScopeKind: at, Scope: storedScope,
+					Kind: settings.KindMCPServer, Name: server.Name,
 					Value: value, Secret: merged.Sealed(),
 					// Nothing left to keep is a removal to carry out, not a
 					// write to skip: the store's own rule makes "clear it" and

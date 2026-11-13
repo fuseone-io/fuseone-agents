@@ -107,3 +107,9 @@ func (c *Curator) rulingsInForce(
 	}
 	return out, nil
 }
+
+// MCPServerStoredAt is mcpServerAt, for a door that authorizes at the row's
+// scope before it acts on a server it names.
+func (i *Integrations) MCPServerStoredAt(ctx context.Context, name string) (settings.ScopeKind, domain.Scope, error) {
+	return i.mcpServerAt(ctx, name)
+}
