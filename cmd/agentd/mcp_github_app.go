@@ -97,7 +97,9 @@ func (a *credentialAuth) githubApp(app domain.MCPGitHubApp) *githubAppAuth {
 	}
 	// Its own client, guarded like every other outbound call: the API base
 	// URL is configuration, and configuration can point at metadata.
-	mint := &http.Client{Transport: baseHTTPTransport(), Timeout: 30 * time.Second}
+	// And held to the server's egress policy (NT-019): the API base is a
+	// request of this server's.
+	mint := &http.Client{Transport: guardEgress(a.server, a.egress, baseHTTPTransport()), Timeout: 30 * time.Second}
 	source, err := githubapp.NewSource(app, mint, clock)
 	a.app = &githubAppAuth{from: app, source: source, err: err}
 	return a.app

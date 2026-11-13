@@ -89,6 +89,9 @@ func transportFor(
 ) (mcp.Transport, func(), error) {
 	switch server.TransportOf() {
 	case domain.TransportHTTP:
+		if err := egressAllowsServer(server); err != nil {
+			return nil, noop, err
+		}
 		client, err := authenticatedClientWithPolicy(server, creds, oauth, personal, policy)
 		if err != nil {
 			return nil, noop, fmt.Errorf("%s: prepare HTTP credential: %w", server.Name, err)
@@ -98,6 +101,7 @@ func transportFor(
 		}
 		client = withTolerantCancel(server.Name, client)
 		client = applyCallTimeout(server, client)
+		client = withEgress(server, client)
 		return &mcp.StreamableClientTransport{
 			Endpoint:   server.URL,
 			HTTPClient: client,
@@ -259,7 +263,8 @@ func authenticatedClientWithPolicy(
 	}
 	return &http.Client{
 		Transport: &credentialAuth{
-			server: server.Name, scope: server.Scope, shared: creds, personal: personal,
+			server: server.Name, scope: server.Scope, egress: server.Egress,
+			shared: creds, personal: personal,
 			policy: policy,
 			oauth:  oauth, base: base, grants: make(map[domain.UserID]*oauthTransport),
 		},
@@ -316,7 +321,10 @@ type credentialAuth struct {
 	mu     sync.Mutex
 	server string
 	// scope is where the server row the worker connected is stored (NT-019).
-	scope    domain.Scope
+	scope domain.Scope
+	// egress is the platform's policy for that scope; nil is the
+	// installation's server (NT-019).
+	egress   *domain.MCPEgress
 	shared   domain.MCPCredentials
 	personal MCPUserCredentialStore
 	policy   credentialPolicy
@@ -427,6 +435,8 @@ func (a *credentialAuth) oauthRoundTrip(
 	if transport == nil || !transport.derivedFrom(grant) {
 		transport = newOAuthTransport(a.server, owner, grant, a.oauth, a.base)
 		transport.scope = a.scope
+		// The token endpoint is a request of this server's too (NT-019).
+		transport.refresh.Transport = guardEgress(a.server, a.egress, transport.refresh.Transport)
 		a.grants[owner] = transport
 	}
 	a.mu.Unlock()
@@ -624,6 +634,7 @@ func fingerprint(server domain.MCPServer) string {
 		rateLimitFingerprint(server.RateLimit), resultCacheFingerprint(server.Cache),
 		stdioEgressFingerprint(server.StdioEgress),
 		fmt.Sprint(server.Enabled), server.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		egressFingerprint(server.Egress),
 	}, "\x00")))
 	return hex.EncodeToString(sum[:8])
 }
