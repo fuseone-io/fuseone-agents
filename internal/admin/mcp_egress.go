@@ -61,11 +61,15 @@ func (i *Integrations) PutMCPEgressPolicy(ctx context.Context, by domain.UserID,
 	if err != nil {
 		return fmt.Errorf("admin: encode MCP egress policy: %w", err)
 	}
-	return writeSetting(ctx, i.pool, i.settings, by, audit, settings.Setting{
-		ScopeKind: settings.ScopeInstallation, Kind: kindMCPEgressPolicy, Name: egressPolicyName(p.Scope),
-		Value: value, Enabled: true, UpdatedBy: string(by),
-	}, "mcp_egress_policy.configured", egressPolicyName(p.Scope), map[string]any{
-		"company": string(p.Scope.Company), "area": string(p.Scope.Area), "origins": origins,
+	return writeGuarded(ctx, i.pool, i.settings, LockMCPEgressPolicies, folded{
+		by: by, scope: audit, action: "mcp_egress_policy.configured", target: egressPolicyName(p.Scope),
+		set: settings.Setting{
+			ScopeKind: settings.ScopeInstallation, Kind: kindMCPEgressPolicy, Name: egressPolicyName(p.Scope),
+			Value: value, Enabled: true, UpdatedBy: string(by),
+		},
+		detail: map[string]any{
+			"company": string(p.Scope.Company), "area": string(p.Scope.Area), "origins": origins,
+		},
 	})
 }
 
@@ -81,8 +85,13 @@ func (i *Integrations) DeleteMCPEgressPolicy(ctx context.Context, by domain.User
 		return fmt.Errorf("admin: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// The row first, then the policies' lock, as a PUT of a policy takes them:
+	// two writes of one policy then never wait on each other crosswise.
 	if err := i.settings.DeleteTx(ctx, tx, settings.ScopeInstallation, domain.Scope{},
 		kindMCPEgressPolicy, egressPolicyName(at)); err != nil {
+		return err
+	}
+	if err := LockMCPEgressPolicies(ctx, tx); err != nil {
 		return err
 	}
 	if err := Record(ctx, tx, Event{
@@ -100,6 +109,11 @@ func (i *Integrations) MCPEgressPolicies(ctx context.Context) ([]MCPEgressPolicy
 	if err != nil {
 		return nil, err
 	}
+	return policiesFrom(rows)
+}
+
+// policiesFrom decodes stored policy rows.
+func policiesFrom(rows []settings.Setting) ([]MCPEgressPolicy, error) {
 	out := make([]MCPEgressPolicy, 0, len(rows))
 	for _, row := range rows {
 		var stored storedEgressPolicy
@@ -183,17 +197,49 @@ func egressOrigins(given []string) ([]string, error) {
 // the platform's egress policy for its scope, or whose scope it allows nothing.
 var ErrEgressNotAllowed = errors.New("admin: outside the platform's egress policy for this server's scope")
 
-// egressAt is the policy a server stored at kind/stored is held to: nil for
-// the installation's.
-func (i *Integrations) egressAt(ctx context.Context, kind settings.ScopeKind, stored domain.Scope) (*domain.MCPEgress, error) {
+// egressAtTx is the policy a server stored at kind/stored is held to, nil for
+// the installation's, read inside the server write's transaction under the
+// policies' lock held shared: no policy can change between this read and the
+// write's commit.
+func (i *Integrations) egressAtTx(ctx context.Context, tx settings.DB, kind settings.ScopeKind, stored domain.Scope) (*domain.MCPEgress, error) {
 	if kind == settings.ScopeInstallation {
 		return nil, nil
 	}
-	policies, err := i.MCPEgressPolicies(ctx)
+	if err := LockMCPEgressPoliciesShared(ctx, tx); err != nil {
+		return nil, err
+	}
+	rows, err := i.settings.ListTx(ctx, tx, kindMCPEgressPolicy)
+	if err != nil {
+		return nil, err
+	}
+	policies, err := policiesFrom(rows)
 	if err != nil {
 		return nil, err
 	}
 	return egressFor(policies, mcpServerRuntimeScope(kind, stored)), nil
+}
+
+/*
+LockMCPEgressPolicies holds the policies for a write of one, until the
+transaction ends. A server write holds the same lock shared while it reads the
+policy for its scope and until it commits (LockMCPEgressPoliciesShared), so a
+policy narrowed meanwhile either waits for the server's commit or is the one
+the server is judged by. A policy write takes no other lock, so no order
+between the two can deadlock.
+*/
+func LockMCPEgressPolicies(ctx context.Context, tx settings.DB) error {
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended('mcp_egress_policies', 0))`); err != nil {
+		return fmt.Errorf("admin: lock the MCP egress policies: %w", err)
+	}
+	return nil
+}
+
+// LockMCPEgressPoliciesShared is the server write's side of the policies' lock.
+func LockMCPEgressPoliciesShared(ctx context.Context, tx settings.DB) error {
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock_shared(hashtextextended('mcp_egress_policies', 0))`); err != nil {
+		return fmt.Errorf("admin: lock the MCP egress policies shared: %w", err)
+	}
+	return nil
 }
 
 // withinEgress refuses a server whose URL, OAuth token endpoint or GitHub App

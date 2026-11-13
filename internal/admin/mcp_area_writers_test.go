@@ -62,9 +62,10 @@ func TestWriteMCPServer_anAreasLocalServer_isRefused(t *testing.T) {
 }
 
 // One name, one server: an area cannot take a name the platform holds.
+// With no egress policy for the area either: a name taken is a 409 whatever
+// else the write would have been refused for.
 func TestWriteMCPServer_aNameThePlatformHolds_isTaken(t *testing.T) {
 	i := newIntegrations(t)
-	allowEgress(t, i, domain.Scope{Company: "acme"}, "https://mcp.example.com")
 	ctx := context.Background()
 	if err := i.PutMCPServer(ctx, "usr_ana", platform, remoteServer("jira"), domain.MCPCredentialPatch{}); err != nil {
 		t.Fatalf("the platform's server: %v", err)

@@ -312,11 +312,9 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 		somebody believes they revoked.
 	*/
 	// Where a server outside the installation may send requests (NT-019):
-	// judged in the fold, on the credential that will be stored.
-	egress, err := i.egressAt(ctx, at, storedScope)
-	if err != nil {
-		return "", err
-	}
+	// read by the guard, judged in the fold on the credential that will be
+	// stored.
+	var egress *domain.MCPEgress
 	var toolsRemoved int64
 	return writeRevised(ctx, i.pool, i.settings, folded{
 		by: by, scope: scope, action: "mcp_server.configured", target: server.Name,
@@ -342,10 +340,18 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 			}); err != nil {
 				return err
 			}
+			// A name another scope holds is a 409 before anything else this
+			// write could be refused for (NT-019).
+			if err := nameHeldElsewhere(ctx, tx, server.Name, at, storedScope); err != nil {
+				return err
+			}
+			var err error
+			if egress, err = i.egressAtTx(ctx, tx, at, storedScope); err != nil {
+				return err
+			}
 			if server.Enabled {
 				return nil
 			}
-			var err error
 			toolsRemoved, err = dropServerTools(ctx, tx, server.Name)
 			return err
 		},

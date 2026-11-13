@@ -104,3 +104,73 @@ func TestWriteMCPServer_anAreasGitHubAppOutsideThePolicy_isRefused(t *testing.T)
 		t.Errorf("err = %v, want ErrEgressNotAllowed for the default API base", err)
 	}
 }
+
+/*
+A server write and a policy write take turns (NT-019).
+
+Read before the server's transaction, or inside it without a lock, a policy
+could be narrowed between the read and the commit: the door would store a
+server the platform had just refused. A policy write holds one lock for its
+whole transaction; a server write holds the same lock shared while it reads
+the policy and until it commits.
+*/
+func TestWriteMCPServer_waitsForAPolicyBeingWritten_andJudgesWhatItCommitted(t *testing.T) {
+	i := newIntegrations(t)
+	pool := openPool(t)
+	ctx := context.Background()
+	allowEgress(t, i, cxScope, "https://mcp.example.com")
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := admin.LockMCPEgressPolicies(ctx, tx); err != nil {
+		t.Fatalf("hold the policies: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		update settings set value = '{"company":"acme","area":"cx","origins":[]}'
+		where kind = 'mcp_egress_policy' and name = 'acme/cx'`); err != nil {
+		t.Fatalf("narrow the policy: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- writeAtCX(i, "cx-race", domain.MCPCredentialPatch{}) }()
+	if !waitForAdvisoryWait(t, pool) {
+		t.Fatal("the server write never waited on the policies' lock")
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if err := <-done; !errors.Is(err, admin.ErrEgressNotAllowed) {
+		t.Errorf("err = %v, want ErrEgressNotAllowed under the policy committed meanwhile", err)
+	}
+}
+
+func TestPutMCPEgressPolicy_waitsForAServerWriteThatReadThePolicy(t *testing.T) {
+	i := newIntegrations(t)
+	pool := openPool(t)
+	ctx := context.Background()
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := admin.LockMCPEgressPoliciesShared(ctx, tx); err != nil {
+		t.Fatalf("hold the policies shared: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- i.PutMCPEgressPolicy(ctx, "usr_ana", platform, admin.MCPEgressPolicy{Scope: cxScope, Origins: []string{}})
+	}()
+	if !waitForAdvisoryWait(t, pool) {
+		t.Fatal("the policy write never waited for the server write holding the policies")
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if err := <-done; err != nil {
+		t.Errorf("PutMCPEgressPolicy after the server write: %v", err)
+	}
+	t.Cleanup(func() { _ = i.DeleteMCPEgressPolicy(context.Background(), "usr_ana", platform, cxScope) })
+}
