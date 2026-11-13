@@ -3995,6 +3995,8 @@ export interface components {
             reason?: string;
         };
         Tool: {
+            /** @description Where the server that declares this tool is stored, as a run's scope: the installation's is company `*` (NT-019). A tool reaches a run only when this contains the run's scope, and an owner's ruling on it needs tool:classify here. */
+            scope?: components["schemas"]["Scope"];
             /** @description Namespaced by server, because two servers naming a tool "search" must not collide into one capability. */
             toolId: string;
             server: string;

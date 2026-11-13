@@ -191,3 +191,27 @@ func TestListTools_withoutATarget_isTheInstallationsUnlessThePlatformReads(t *te
 		}
 	}
 }
+
+// Each listed tool says where its server is stored, for the console to decide
+// who may rule on it (NT-019).
+func TestListTools_eachToolCarriesItsServersScope(t *testing.T) {
+	w := newTargetWorld(t)
+	resp, err := w.api.ListTools(as(domain.RoleCurator), openapi.ListToolsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	items := resp.(openapi.ListTools200JSONResponse).Items
+	found := false
+	for _, tool := range items {
+		if tool.ToolId != "cx-jira.search" {
+			continue
+		}
+		found = true
+		if tool.Scope == nil || tool.Scope.Company != "acme" || tool.Scope.Area != "cx" {
+			t.Errorf("cx-jira.search scope = %+v, want acme/cx", tool.Scope)
+		}
+	}
+	if !found {
+		t.Fatal("cx-jira.search not listed")
+	}
+}

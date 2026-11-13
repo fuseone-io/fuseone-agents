@@ -33,6 +33,11 @@ type Me struct {
 	// for a connector instance may offer (NT-019). Held at the platform's
 	// administration, it governs every scope, which platform already says.
 	Configure []MeScope `json:"configure"`
+	// Classify is where the caller holds tool:classify: an owner's ruling is
+	// for a tool whose server is stored at a scope one of these contains
+	// (NT-019). Held at the platform's administration, it governs every
+	// scope, which platform already says.
+	Classify []MeScope `json:"classify"`
 }
 
 type MeScope struct {
@@ -55,10 +60,13 @@ type MeGrant struct {
 func meFrom(p domain.Principal) Me {
 	out := Me{
 		ID: string(p.ID), Display: p.Display, Kind: string(p.Kind),
-		Grants: []MeGrant{}, Can: []string{}, Platform: []string{}, Configure: []MeScope{},
+		Grants: []MeGrant{}, Can: []string{}, Platform: []string{}, Configure: []MeScope{}, Classify: []MeScope{},
 	}
 	for _, scope := range p.ScopesFor(permConfigure) {
 		out.Configure = append(out.Configure, MeScope{Company: string(scope.Company), Area: string(scope.Area)})
+	}
+	for _, scope := range p.ScopesFor(domain.PermToolClassify) {
+		out.Classify = append(out.Classify, MeScope{Company: string(scope.Company), Area: string(scope.Area)})
 	}
 	seen := map[domain.Permission]struct{}{}
 
@@ -96,9 +104,10 @@ own scope leaves this list in the same change.
 var platformOnly = map[domain.Permission]bool{
 	// provider:write left with NT-019 phase 1: connector instances are
 	// configured at their own scope. The console reads MCP servers, providers
-	// and channels, still the platform's, from Me.Platform.
-	domain.PermToolClassify: true,
-	domain.PermBudgetWrite:  true, domain.PermPolicyWrite: true,
+	// and channels, still the platform's, from Me.Platform. tool:classify
+	// left with phase 2's owner rulings: an area classifies its own servers'
+	// tools, and Me.Classify says where.
+	domain.PermBudgetWrite: true, domain.PermPolicyWrite: true,
 	domain.PermApprovalGrant: true, domain.PermAuditExport: true,
 	domain.PermBrandWrite: true, domain.PermDataErase: true,
 }

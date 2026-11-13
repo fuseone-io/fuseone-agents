@@ -134,6 +134,11 @@ author picks tools and providers from is asked for the agent's scope. Adds migra
     installation's today, so every reachable target is answered them.
   - The worker still reads every ruling whatever a listing asked for: the filter is in
     the listing, never in the rulings a sync applies.
+  - Each listed tool says where its server is stored (`scope`), and a tool's scope is
+    read in the same snapshot as the tool, so a server moved meanwhile never hands one
+    area's tool to another.
+  - `tool:classify` leaves the console's platform-only list: `/me` now tells an area
+    curator it classifies, and where (`classify`), for the tools of its own servers.
   - The console does not send `scope` yet; the agent editor moves to these answers
     next.
 

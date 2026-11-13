@@ -130,6 +130,8 @@ func (s *Server) ListTools(ctx context.Context, req openapi.ListToolsRequestObje
 		tool := openapi.Tool{
 			ToolId: string(e.ID), Server: e.Server, Description: &description,
 			Effect: openapi.ToolEffect(e.Effect.String()), Untrusted: e.Untrusted,
+			// Where the declaring server is stored (NT-019).
+			Scope: &openapi.Scope{Company: string(e.Scope.Company), Area: string(e.Scope.Area)},
 		}
 		if e.CompensatedBy != "" {
 			tool.CompensatedBy = ptr(string(e.CompensatedBy))

@@ -6720,6 +6720,14 @@ components:
       type: object
       required: [toolId, server, effect, untrusted]
       properties:
+        scope:
+          description: >
+            Where the server that declares this tool is stored, as a run's
+            scope: the installation's is company `*` (NT-019). A tool reaches
+            a run only when this contains the run's scope, and an owner's
+            ruling on it needs tool:classify here.
+          allOf:
+            - $ref: '#/components/schemas/Scope'
         toolId:
           type: string
           description: Namespaced by server, because two servers naming a tool "search" must not collide into one capability.
