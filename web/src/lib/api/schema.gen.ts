@@ -3294,7 +3294,8 @@ export interface components {
          * @description Whose word a ruling is (NT-019). `platform` is the ceiling, stored at
          *     the installation, and wins. `owner` is stored at the scope of the
          *     tool's server. Absent on a write, it is `platform`; any value other
-         *     than these two answers 400, never the platform's default.
+         *     than these two, `null` included, answers 400, never the platform's
+         *     default.
          * @default platform
          * @enum {string}
          */
