@@ -74,6 +74,22 @@ describe("integrations for an administrator of one area", () => {
   });
 });
 
+// NT-019 changes nothing for the platform's administration: every section,
+// and connecting starts at the catalogue.
+describe("integrations for the platform's administration", () => {
+  it("show every section and the way to connect a system", async () => {
+    signedInAs(["tool:read", "provider:write"], ["tool:read", "provider:write"]);
+    openAt("/integrations");
+
+    expect(
+      await screen.findByRole("button", { name: "Conectar sistema" }, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+    for (const section of ["Conectados", "Disponíveis", "Connectors", "Provedores de modelo", "Canais"]) {
+      expect(screen.getByRole("link", { name: section }), section).toBeInTheDocument();
+    }
+  });
+});
+
 // NT-019: an area's administrator configures its own connector instances and
 // its own MCP servers.
 describe("integrations for an administrator who configures an area's connectors", () => {
