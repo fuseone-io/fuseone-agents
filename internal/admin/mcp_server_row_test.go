@@ -197,7 +197,9 @@ func TestMCPPersonalCredential_storedBeforeItNamedARow_isTheInstallationServers(
 }
 
 // Stored again for a server of the name stored elsewhere, a person's
-// credential keeps nothing of the one they had for the first.
+// credential keeps nothing of the one they had for the first: saving it with
+// nothing new, as a form resending unchanged fields does, stores nothing for
+// the second server rather than the first one's grant.
 func TestPutMCPPersonalCredential_forAnotherServerRow_keepsNothingOfTheOld(t *testing.T) {
 	w := withAreaServer(t)
 	ctx := context.Background()
@@ -206,12 +208,12 @@ func TestPutMCPPersonalCredential_forAnotherServerRow_keepsNothingOfTheOld(t *te
 		t.Fatalf("PutMCPPersonalCredential at cx: %v", err)
 	}
 	moveServer(t, w, cxScope, financeScope)
-	if err := w.integrations.PutMCPPersonalCredential(ctx, "usr_ana", platform, "github",
-		domain.MCPCredentialPatch{Token: ptr("finance-token")}); err != nil {
-		t.Fatalf("PutMCPPersonalCredential at finance: %v", err)
+
+	err := w.integrations.PutMCPPersonalCredential(ctx, "usr_ana", platform, "github", domain.MCPCredentialPatch{})
+	if !errors.Is(err, admin.ErrNoMCPCredential) {
+		t.Errorf("err = %v, want ErrNoMCPCredential: nothing was given for the server at %s", err, financeScope)
 	}
-	creds, found, err := w.integrations.MCPPersonalCredential(ctx, financeScope, "github", "usr_ana")
-	if err != nil || !found || creds.Token != "finance-token" || creds.OAuth != nil {
-		t.Errorf("at finance: %+v, %v, %v; want only the token given for finance", creds, found, err)
+	if creds, found, _ := w.integrations.MCPPersonalCredential(ctx, financeScope, "github", "usr_ana"); found {
+		t.Errorf("at finance: %+v; want no credential carried over from %s", creds.OAuth, cxScope)
 	}
 }
