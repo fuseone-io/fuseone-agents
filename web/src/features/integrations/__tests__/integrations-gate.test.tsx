@@ -8,7 +8,7 @@ import ConsoleRoutes from "@/routes/console-routes";
 // administrator of one area who follows a link there must read why, not a page
 // of requests answering 403.
 
-function signedInAs(platform: string[], can = ["tool:read", "scope:write"]) {
+function signedInAs(platform: string[], can = ["tool:read", "scope:write"], mcpServers: object[] = []) {
   const me = {
     id: "usr_ana", display: "Ana", kind: "human",
     can, platform, grants: [],
@@ -18,7 +18,7 @@ function signedInAs(platform: string[], can = ["tool:read", "scope:write"]) {
     "fetch",
     vi.fn(async (input: Request | string) => {
       const url = input instanceof Request ? input.url : String(input);
-      const body = url.endsWith("/api/v1/me") ? me : { items: [], mcpServers: [], providers: [] };
+      const body = url.endsWith("/api/v1/me") ? me : { items: [], mcpServers, providers: [] };
       return new Response(JSON.stringify(body), {
         status: 200, headers: { "Content-Type": "application/json" },
       });
@@ -103,6 +103,18 @@ describe("integrations for an administrator who configures an area's connectors"
       await screen.findByText("Nenhum servidor configurado", {}, { timeout: LAZY_SCREEN }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Novo" })).toBeInTheDocument();
+  });
+
+  it("show them their own server with its area, and an inherited one without its actions", async () => {
+    signedInAs([], areaAdmin, [
+      { name: "crm", transport: "http", enabled: true, scopeKind: "area", company: "acme", area: "cx", editable: true },
+      { name: "docs", transport: "http", enabled: true, scopeKind: "installation", editable: false },
+    ]);
+    openAt("/integrations");
+
+    expect(await screen.findByText("acme/cx", {}, { timeout: LAZY_SCREEN })).toBeInTheDocument();
+    expect(screen.getByText("Da plataforma")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Editar" })).toHaveLength(1);
   });
 
   it.each(["/integrations/providers", "/integrations/channels", "/integrations/mcp"])(
