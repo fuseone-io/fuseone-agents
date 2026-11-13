@@ -145,12 +145,19 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 		return nil, err
 	}
 
+	// Every server outside the installation carries the platform's egress
+	// policy for its scope (NT-019): the worker holds its requests to it.
+	policies, err := i.MCPEgressPolicies(ctx)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]domain.MCPServer, 0, len(rows))
 	for _, row := range rows {
 		server, err := serverFromRow(row)
 		if err != nil {
 			return nil, err
 		}
+		server.Egress = egressFor(policies, server.Scope)
 		out = append(out, server)
 	}
 	return out, nil

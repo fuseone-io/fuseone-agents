@@ -148,6 +148,10 @@ type MCPServer struct {
 	// scope. Zero is a server no row describes, such as one a --mcp flag
 	// connected, and those are the installation's.
 	Scope Scope
+	// Egress is where a server stored outside the installation may send
+	// requests, from the platform's policy for its scope (NT-019). Nil is the
+	// installation's server, unrestricted as before; empty allows nothing.
+	Egress *MCPEgress
 	// Credential and SecretFingerprint are filled by a read of this one server,
 	// which opens its sealed document. A listing opens none and leaves them empty.
 	Credential        *MCPCredentialSummary

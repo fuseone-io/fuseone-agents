@@ -28,6 +28,40 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+NT-019 phase 2, the egress barrier: before areas may register MCP servers, the platform
+decides where those servers may send requests. No door writes an area's server yet, so
+nothing changes for an installation today. No migration.
+
+### Upgrade notes
+
+- **Every `serve` and `worker` replica must run this release before the writers'
+  release.** An older worker does not know the egress policy, and would let an area's
+  server reach any endpoint the worker can, with that area's credential.
+- **Rollback floor, from the writers' release on:** once an area's server has been
+  written, never go below this release. Rolling back to 0.108.0 before then is safe.
+  The floors already set still hold.
+
+### Added
+
+- **An egress policy for MCP servers outside the installation.** The platform's
+  administration keeps one per company or area, a list of exact origins, through
+  `GET`, `PUT` and `DELETE /admin/integrations/mcp-egress-policies`. An area's
+  administrator can neither read nor change it.
+  - A server of an area is held to its area's policy, or else to its company's, never
+    both. With neither, it reaches nothing. An empty list is a deny-all that overrides
+    the company's; removing an area's policy inherits the company's again.
+  - A server outside the installation whose policy is missing for any reason reaches
+    nothing: only the installation's servers, and those no row describes, carry
+    none.
+  - The worker refuses a server whose URL is not listed before sending anything, and
+    every request as it leaves: redirects, and the endpoints that refresh an OAuth grant
+    or mint a GitHub App token. A changed policy connects the server again.
+  - Origins are scheme, host and port, with no path or wildcard. One that `netguard`
+    would never reach (cloud metadata, link-local) is refused.
+  - The installation's servers are not held to any policy, and keep their reach.
+
 ## [0.108.0] — 2026-11-13
 
 NT-019 phase 2, a second readers' release: what a worker reads and writes about an

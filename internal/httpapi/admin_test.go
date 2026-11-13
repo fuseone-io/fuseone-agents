@@ -44,7 +44,37 @@ type fakeAdmin struct {
 	// rediscoveries the answers the store holds, by server.
 	rediscovered  string
 	rediscoveries map[string]domain.MCPRediscoveryStatus
-	err           error
+	// egress is the platform's policies, by company/area.
+	egress map[domain.Scope]admin.MCPEgressPolicy
+	err    error
+}
+
+func (f *fakeAdmin) PutMCPEgressPolicy(_ context.Context, by domain.UserID, _ domain.Scope, p admin.MCPEgressPolicy) error {
+	if f.err != nil {
+		return f.err
+	}
+	if f.egress == nil {
+		f.egress = map[domain.Scope]admin.MCPEgressPolicy{}
+	}
+	p.UpdatedBy = string(by)
+	f.egress[p.Scope] = p
+	return nil
+}
+
+func (f *fakeAdmin) DeleteMCPEgressPolicy(_ context.Context, _ domain.UserID, _ domain.Scope, at domain.Scope) error {
+	if f.err != nil {
+		return f.err
+	}
+	delete(f.egress, at)
+	return nil
+}
+
+func (f *fakeAdmin) MCPEgressPolicies(context.Context) ([]admin.MCPEgressPolicy, error) {
+	out := make([]admin.MCPEgressPolicy, 0, len(f.egress))
+	for _, p := range f.egress {
+		out = append(out, p)
+	}
+	return out, f.err
 }
 
 func (f *fakeAdmin) MCPServers(context.Context) ([]domain.MCPServer, error) {

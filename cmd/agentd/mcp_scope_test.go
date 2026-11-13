@@ -51,6 +51,8 @@ func TestConnectServer_anAreasServer_isItsAreasInTheCatalogue(t *testing.T) {
 	if err := connectServer(t.Context(), catalog, domain.MCPServer{
 		Name: "jira", Transport: domain.TransportHTTP, URL: remote.URL,
 		ProtocolMode: domain.MCPProtocolLegacy, Enabled: true, Scope: cx,
+		// An area's server reaches only the origins its scope is allowed.
+		Egress: &domain.MCPEgress{Origins: []string{mcpOrigin(t, remote.URL)}},
 	}, domain.MCPCredentials{}, nil, nil, credentialPolicy{}, nil); err != nil {
 		t.Fatalf("connectServer: %v", err)
 	}
