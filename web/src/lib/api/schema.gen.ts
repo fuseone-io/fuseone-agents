@@ -4589,6 +4589,12 @@ export interface components {
             scopes?: string[];
         };
         MCPServer: {
+            /** @description Where the server is stored (NT-019). */
+            scopeKind?: components["schemas"]["ConnectorScopeKind"];
+            company?: string;
+            area?: string;
+            /** @description Whether the caller may change or remove this server: it holds provider:write at the server's scope, or at the platform's administration. A server listed because the caller's area inherits it is not. */
+            editable?: boolean;
             /** @description Only on the read by name. The names of the stored HTTP headers; the values never come back, because a value cannot be told apart from a credential by reading it. */
             headerNames?: string[];
             /** @description Only on the read by name. The names of the stored variables, never their values. */
@@ -9996,6 +10002,10 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description Where the server is stored (NT-019). Absent is the installation, as every server was before areas configured their own. A company's or an area's server is remote (transport http): a local one runs on the platform's worker, and is the platform's. Writing it needs provider:write at that scope, or at the platform's administration. A server's scope does not move: a name another scope holds answers 409. */
+                    scopeKind?: components["schemas"]["ConnectorScopeKind"];
+                    company?: string;
+                    area?: string;
                     /** @default stdio */
                     transport?: components["schemas"]["Transport"];
                     /** @description Required for stdio. */
@@ -10056,6 +10066,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["NameTaken"];
             412: components["responses"]["PreconditionFailed"];
         };
     };

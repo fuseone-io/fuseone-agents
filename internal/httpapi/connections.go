@@ -11,6 +11,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/model"
+	"github.com/fuseone/agents/internal/settings"
 )
 
 /*
@@ -25,6 +26,9 @@ needs the absence answered as plainly as the presence.
 type Integrations interface {
 	MCPServers(ctx context.Context) ([]domain.MCPServer, error)
 	MCPServerNamed(ctx context.Context, name string) (domain.MCPServer, error)
+	// MCPServerStoredAt is where a server's row lives, the installation's for
+	// a name no row holds (NT-019).
+	MCPServerStoredAt(ctx context.Context, name string) (settings.ScopeKind, domain.Scope, error)
 	MCPPersonalCredentials(ctx context.Context, principal domain.UserID) ([]domain.MCPPersonalCredential, error)
 	MCPPersonalCredentialPresence(ctx context.Context, principal domain.UserID, servers []string) (map[string]bool, error)
 	PutMCPPersonalCredential(ctx context.Context, by domain.UserID, scope domain.Scope, name string, creds domain.MCPCredentialPatch) error
@@ -68,9 +72,13 @@ func healthFrom(seen domain.IntegrationHealth) openapi.IntegrationHealth {
 }
 
 func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegrationsRequestObject) (openapi.ListIntegrationsResponseObject, error) {
-	if resp := s.refuse(ctx, domain.PermToolRead); resp != nil {
+	// A reader of the platform's, as before, or whoever configures in some
+	// scope: an area's administrator lists its own servers and the ones it
+	// inherits, and nothing of a sibling (NT-019).
+	caller, allowed := mcpListingCaller(ctx)
+	if !allowed {
 		return openapi.ListIntegrations403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *resp,
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermToolRead, adminScope),
 		}, nil
 	}
 
@@ -110,7 +118,12 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 	configured := map[string]bool{}
 	for _, srv := range servers {
 		configured[srv.Name] = true
+		listed, editable := mcpServerListing(caller, srv)
+		if !listed {
+			continue
+		}
 		server := mcpServerConfig(srv)
+		server.Editable = ptr(editable)
 		server.CallAuth = ptr(callAuth.forServer(srv.Name, srv.TransportOf()))
 		server.Egress = ptr(s.mcpEgress(srv))
 		// Absent when no worker has tried yet, which is a different thing from

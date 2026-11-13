@@ -15,6 +15,7 @@ import (
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/known"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/settings"
 )
 
 // fakeAdmin records what the handlers asked for, so a test can assert on the
@@ -166,6 +167,13 @@ func (f *fakeAdmin) RequestMCPProbe(_ context.Context, by domain.UserID, _ domai
 	f.probed, f.putBy = name, by
 	return f.err
 }
+
+// MCPServerStoredAt places every server the fake holds at the installation,
+// as every server was before areas configured their own.
+func (f *fakeAdmin) MCPServerStoredAt(context.Context, string) (settings.ScopeKind, domain.Scope, error) {
+	return settings.ScopeInstallation, domain.Scope{}, nil
+}
+
 func (f *fakeAdmin) RemoveMCPServer(_ context.Context, r admin.Removal) error {
 	f.deleted, f.putBy = r.Name, r.By
 	return f.err

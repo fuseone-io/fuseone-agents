@@ -3472,6 +3472,19 @@ paths:
             schema:
               type: object
               properties:
+                scopeKind:
+                  allOf: [{ $ref: '#/components/schemas/ConnectorScopeKind' }]
+                  description: >
+                    Where the server is stored (NT-019). Absent is the
+                    installation, as every server was before areas configured
+                    their own. A company's or an area's server is remote
+                    (transport http): a local one runs on the platform's
+                    worker, and is the platform's. Writing it needs
+                    provider:write at that scope, or at the platform's
+                    administration. A server's scope does not move: a name
+                    another scope holds answers 409.
+                company: { type: string }
+                area: { type: string }
                 transport:
                   allOf: [{ $ref: '#/components/schemas/Transport' }]
                   default: stdio
@@ -3604,6 +3617,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/NameTaken' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
     delete:
       tags: [admin]
@@ -7611,6 +7625,18 @@ components:
       type: object
       required: [name, enabled]
       properties:
+        scopeKind:
+          allOf: [{ $ref: '#/components/schemas/ConnectorScopeKind' }]
+          description: Where the server is stored (NT-019).
+        company: { type: string }
+        area: { type: string }
+        editable:
+          type: boolean
+          description: >
+            Whether the caller may change or remove this server: it holds
+            provider:write at the server's scope, or at the platform's
+            administration. A server listed because the caller's area inherits
+            it is not.
         headerNames:
           type: array
           items: { type: string }

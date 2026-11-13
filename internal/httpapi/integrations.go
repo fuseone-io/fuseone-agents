@@ -8,6 +8,7 @@ import (
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/settings"
 )
 
 // Configuring what the platform may talk to is governed by one permission.
@@ -20,8 +21,7 @@ const permConfigure = domain.PermProviderWrite
 var errNoAdministration = errors.New("this installation has no administration store")
 
 func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerRequestObject) (openapi.PutMCPServerResponseObject, error) {
-	caller, forbidden := s.configurer(ctx)
-	if forbidden != nil {
+	if forbidden := configuresSomewhere(ctx); forbidden != nil {
 		return openapi.PutMCPServer403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
 		}, nil
@@ -100,12 +100,35 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
 		}, nil
 	}
+	kind, stored, err := connectorScopeOrInstallation(req.Body.ScopeKind, req.Body.Company, req.Body.Area)
+	if err != nil {
+		return openapi.PutMCPServer400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
+		}, nil
+	}
+	caller, forbidden := s.configurerAt(ctx, kind, stored)
+	if forbidden != nil {
+		return openapi.PutMCPServer403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
+		}, nil
+	}
 	revision, err := s.integrations.WriteMCPServer(ctx, admin.MCPServerWrite{
-		By: caller, Scope: adminScope, Server: server, Given: creds, Expect: expect,
+		By: caller, Scope: connectorRuntimeScope(kind, stored), At: kind, Stored: stored,
+		Server: server, Given: creds, Expect: expect,
 	})
 	if stale, ok := staleFrom(err); ok {
 		return openapi.PutMCPServer412ApplicationProblemPlusJSONResponse{
 			PreconditionFailedApplicationProblemPlusJSONResponse: stale,
+		}, nil
+	}
+	if errors.Is(err, settings.ErrNameTaken) {
+		return openapi.PutMCPServer409ApplicationProblemPlusJSONResponse{
+			NameTakenApplicationProblemPlusJSONResponse: openapi.NameTakenApplicationProblemPlusJSONResponse(nameTaken()),
+		}, nil
+	}
+	if errors.Is(err, admin.ErrAreaServerIsRemote) {
+		return openapi.PutMCPServer400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
 		}, nil
 	}
 	if err != nil {
@@ -164,8 +187,10 @@ func stdioEgressFromRequest(egress *openapi.MCPStdioEgress) *domain.MCPStdioEgre
 }
 
 func (s *Server) ProbeMCPServer(ctx context.Context, req openapi.ProbeMCPServerRequestObject) (openapi.ProbeMCPServerResponseObject, error) {
-	caller, forbidden := s.configurer(ctx)
-	if forbidden != nil {
+	// Refused before the lookup for whoever configures nowhere; then at the
+	// server's own scope, where a name no row holds is the installation's, so
+	// an area hears the same about a sibling's server as about none (NT-019).
+	if forbidden := configuresSomewhere(ctx); forbidden != nil {
 		return openapi.ProbeMCPServer403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
 		}, nil
@@ -173,8 +198,17 @@ func (s *Server) ProbeMCPServer(ctx context.Context, req openapi.ProbeMCPServerR
 	if s.integrations == nil {
 		return nil, errNoAdministration
 	}
+	caller, at, forbidden, err := s.mcpConfigurer(ctx, req.Name)
+	if err != nil {
+		return nil, err
+	}
+	if forbidden != nil {
+		return openapi.ProbeMCPServer403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
+		}, nil
+	}
 
-	if err := s.integrations.RequestMCPProbe(ctx, caller, adminScope, req.Name); err != nil {
+	if err := s.integrations.RequestMCPProbe(ctx, caller, at, req.Name); err != nil {
 		return openapi.ProbeMCPServer400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				upstreamRefused(err.Error())),
@@ -203,14 +237,25 @@ func oauthGrantFromRequest(in *openapi.MCPOAuthGrant) *domain.MCPOAuthGrant {
 }
 
 func (s *Server) DeleteMCPServer(ctx context.Context, req openapi.DeleteMCPServerRequestObject) (openapi.DeleteMCPServerResponseObject, error) {
-	caller, forbidden := s.configurer(ctx)
-	if forbidden != nil {
+	// Refused before the lookup for whoever configures nowhere; then at the
+	// server's own scope, where a name no row holds is the installation's, so
+	// an area hears the same about a sibling's server as about none (NT-019).
+	if forbidden := configuresSomewhere(ctx); forbidden != nil {
 		return openapi.DeleteMCPServer403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
 		}, nil
 	}
 	if s.integrations == nil {
 		return nil, errNoAdministration
+	}
+	caller, at, forbidden, err := s.mcpConfigurer(ctx, req.Name)
+	if err != nil {
+		return nil, err
+	}
+	if forbidden != nil {
+		return openapi.DeleteMCPServer403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
+		}, nil
 	}
 
 	expect, err := domain.ParseIfMatch(req.Params.IfMatch)
@@ -219,7 +264,7 @@ func (s *Server) DeleteMCPServer(ctx context.Context, req openapi.DeleteMCPServe
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
 		}, nil
 	}
-	err = s.integrations.RemoveMCPServer(ctx, admin.Removal{By: caller, Scope: adminScope, Name: req.Name, Expect: expect})
+	err = s.integrations.RemoveMCPServer(ctx, admin.Removal{By: caller, Scope: at, Name: req.Name, Expect: expect})
 	if stale, ok := staleFrom(err); ok {
 		return openapi.DeleteMCPServer412ApplicationProblemPlusJSONResponse{
 			PreconditionFailedApplicationProblemPlusJSONResponse: stale,

@@ -24,7 +24,7 @@ reports only that one is stored.
 // GetMCPServer answers a server configured here. One a worker reports from a
 // flag is on the listing, and has no stored form to compare with.
 func (s *Server) GetMCPServer(ctx context.Context, req openapi.GetMCPServerRequestObject) (openapi.GetMCPServerResponseObject, error) {
-	if _, forbidden := s.configurer(ctx); forbidden != nil {
+	if forbidden := configuresSomewhere(ctx); forbidden != nil {
 		return openapi.GetMCPServer403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
 		}, nil
@@ -32,14 +32,25 @@ func (s *Server) GetMCPServer(ctx context.Context, req openapi.GetMCPServerReque
 	if s.integrations == nil {
 		return nil, errNoAdministration
 	}
+	// One read, then the decision on what it found: a lookup before the read
+	// would let a write land between the two, and the answer would not be the
+	// state the read began on. A name no row holds is the installation's, so
+	// an area hears the same about a sibling's server as about none (NT-019).
 	server, err := s.integrations.MCPServerNamed(ctx, req.Name)
-	if errors.Is(err, admin.ErrMCPServerUnknown) {
+	unknown := errors.Is(err, admin.ErrMCPServerUnknown)
+	if err != nil && !unknown {
+		return nil, fmt.Errorf("get MCP server: %w", err)
+	}
+	kind, stored := mcpServerStored(server.Scope)
+	if _, forbidden := s.configurerAt(ctx, kind, stored); forbidden != nil {
+		return openapi.GetMCPServer403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
+		}, nil
+	}
+	if unknown {
 		return openapi.GetMCPServer404ApplicationProblemPlusJSONResponse{
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
 		}, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("get MCP server: %w", err)
 	}
 	out := mcpServerConfig(server)
 	out.SecretFingerprint = someString(server.SecretFingerprint)
@@ -153,8 +164,13 @@ func applyCredentialSummary(out *openapi.MCPServer, summary *domain.MCPCredentia
 // mcpServerConfig is a server as it was configured, before anything observed
 // about it is added.
 func mcpServerConfig(srv domain.MCPServer) openapi.MCPServer {
+	kind, stored := mcpServerStored(srv.Scope)
+	company, area := responseScope(kind, stored)
 	server := openapi.MCPServer{
 		Name: srv.Name, Enabled: srv.Enabled,
+		// Where it is stored, so a client that sends back what it read writes
+		// the same row (NT-019).
+		ScopeKind: ptr(openapi.ConnectorScopeKind(kind)), Company: company, Area: area,
 		Transport:          ptr(openapi.Transport(srv.TransportOf())),
 		ProtocolMode:       ptr(openapi.MCPProtocolMode(srv.MCPProtocolModeOf())),
 		RateLimit:          rateLimitToResponse(srv.RateLimit),

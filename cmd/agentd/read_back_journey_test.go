@@ -142,7 +142,9 @@ func (w *readBackWorld) sealedHalf(t *testing.T, c readBack) string {
 	if c.sealed == "" {
 		return ""
 	}
-	row, err := w.store.Reveal(t.Context(), settings.ScopeInstallation, domain.Scope{}, c.sealed, c.key)
+	// By name: every kind sealed here has names unique across scopes (0108),
+	// so an area's row is found where it lives.
+	row, err := w.store.RevealNamed(t.Context(), c.sealed, c.key)
 	if err != nil {
 		t.Fatalf("reveal %s: %v", c.key, err)
 	}
@@ -493,6 +495,16 @@ func TestReadBack_mcpServer_putWhatGetAnsweredChangesNothing(t *testing.T) {
 		},
 		writeOnly: map[string]string{"token": "hasSecret"},
 		secrets:   []string{"readback-bearer-secret"},
+	}, {
+		// NT-019: an area's server, named by where it is stored.
+		name: "remote, stored in an area",
+		path: base + "readback-area", sealed: settings.KindMCPServer, key: "readback-area",
+		body: map[string]any{
+			"scopeKind": "area", "company": "acme", "area": "cx",
+			"transport": "http", "url": "https://mcp.example.test/mcp", "token": "readback-area-secret",
+		},
+		writeOnly: map[string]string{"token": "hasSecret"},
+		secrets:   []string{"readback-area-secret"},
 	}, {
 		name: "remote with headers and a surface chosen as empty",
 		path: base + "readback-headers", sealed: settings.KindMCPServer, key: "readback-headers",
