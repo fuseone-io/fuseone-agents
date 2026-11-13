@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -17,6 +18,11 @@ import (
 // here by the consumer.
 type Curator interface {
 	Classify(ctx context.Context, scope domain.Scope, ruling domain.ToolClassification) error
+	// OwnerOf, ClassifyAsOwner and Withdraw are the owner's ruling and the
+	// ceiling's withdrawal (NT-019).
+	OwnerOf(ctx context.Context, tool domain.ToolID) (admin.ToolOwner, error)
+	ClassifyAsOwner(ctx context.Context, owner admin.ToolOwner, ruling domain.ToolClassification) error
+	Withdraw(ctx context.Context, by domain.UserID, scope domain.Scope, tool domain.ToolID) error
 	List(ctx context.Context, scope domain.Scope) ([]domain.ToolClassification, error)
 	Events(ctx context.Context, target, cursor string, limit int) ([]domain.AdminEvent, string, error)
 }
@@ -153,6 +159,7 @@ func (s *Server) ListTools(ctx context.Context, _ openapi.ListToolsRequestObject
 			tool.Stale = ptr(true)
 		}
 		tool.OnSurface = ptr(e.OnSurface)
+		tool.Rulings = toolRulings(e.Rulings)
 		if named := declaring[e.ID]; len(named) > 0 {
 			tool.DeclaredBy = &named
 		}

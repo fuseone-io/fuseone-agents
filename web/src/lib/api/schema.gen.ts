@@ -1585,11 +1585,35 @@ export interface paths {
         get?: never;
         /**
          * Record what a tool does to the world
-         * @description The single point where write access enters the platform. The ruling is durable and attributed; the previous one is not amended, it is superseded, and both stay in the administrative trail.
+         * @description The single point where write access enters the platform. The ruling is
+         *     durable and attributed; the previous one is not amended, it is
+         *     superseded, and both stay in the administrative trail.
+         *
+         *     A tool has at most two rulings (NT-019). The platform's, the ceiling,
+         *     is stored at the installation and needs `tool:classify` in the
+         *     platform's administration; it is `level: platform`, the default. The
+         *     owner's, `level: owner`, is stored at the scope where the tool's
+         *     server is stored and needs `tool:classify` there, or in the platform's
+         *     administration. The platform's ruling wins when both exist. For a
+         *     server of the installation the two are one row.
+         *
+         *     An owner's ruling on a tool whose server is not stored at a scope the
+         *     caller may classify (the platform's own servers, a sibling area's, or
+         *     a tool nobody published) answers the same 403, naming the platform's
+         *     administration, whichever it was.
          */
         put: operations["classifyTool"];
         post?: never;
-        delete?: never;
+        /**
+         * Withdraw the platform's ruling on a tool
+         * @description Removes the platform's ruling, the ceiling (NT-019). The owner's
+         *     ruling, when there is one, is then the one in force; with none the
+         *     tool never executes. Needs `tool:classify` in the platform's
+         *     administration. Only `level: platform` is offered: nothing lets an
+         *     owner remove the platform's row, and an owner changes its own ruling
+         *     by ruling again.
+         */
+        delete: operations["withdrawToolClassification"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3267,6 +3291,28 @@ export interface components {
             why: string;
         };
         /**
+         * @description Whose word a ruling is (NT-019). `platform` is the ceiling, stored at
+         *     the installation, and wins. `owner` is stored at the scope of the
+         *     tool's server. Absent on a write, it is `platform`.
+         * @default platform
+         * @enum {string}
+         */
+        RulingLevel: "owner" | "platform";
+        ToolRuling: {
+            level: components["schemas"]["RulingLevel"];
+            /** @description Where the ruling is stored. The platform's is the installation, company `*`. */
+            scope: components["schemas"]["Scope"];
+            effect: components["schemas"]["Effect"];
+            untrusted: boolean;
+            /**
+             * @description The ruling the worker applies. Whether it still matches the tool's
+             *     definition is the tool's `stale`.
+             */
+            inForce: boolean;
+            /** @description An owner's ruling while the platform has one on the same tool — overridden by the platform. */
+            overridden?: boolean;
+        };
+        /**
          * @description What a tool does to the world, as a reader sees it — the same values and `unknown` besides, because a tool nobody has ruled on is a state this platform has and a screen has to be able to show.
          *     Two schemas rather than one with a note, because the direction is the whole difference: a reader must be able to see "nobody has said", and a caller must never be able to write it. Collapsed into one enum, the API would either emit a value outside its own schema — which it did — or offer `unknown` as something to assert.
          * @enum {string}
@@ -3977,6 +4023,13 @@ export interface components {
              *     alike makes the second look like somebody forgot.
              */
             stale?: boolean;
+            /**
+             * @description The platform's and the owner's rulings on the tool, the platform's
+             *     first (NT-019). Absent for a tool nobody ruled on. An owner's
+             *     ruling under a platform ruling is listed, marked overridden, and
+             *     not applied.
+             */
+            rulings?: components["schemas"]["ToolRuling"][];
             /**
              * @description Whether the server that offers this tool answers now.
              *
@@ -8878,6 +8931,7 @@ export interface operations {
                      *     known — the ruling then applies until a definition is.
                      */
                     digest?: string;
+                    level?: components["schemas"]["RulingLevel"];
                 };
             };
         };
@@ -8892,7 +8946,11 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            /** @description The definition changed since the screen showed it. */
+            /**
+             * @description The definition changed since the screen showed it, or, for an
+             *     owner's ruling, the tool's server is no longer stored where it was
+             *     when the ruling was authorized.
+             */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8901,6 +8959,32 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    withdrawToolClassification: {
+        parameters: {
+            query: {
+                level: "platform";
+            };
+            header?: never;
+            path: {
+                toolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The platform's ruling is withdrawn. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listBudgetAlerts: {

@@ -25,6 +25,7 @@ using the screen.
 // judging is a Curator that records what it was asked to store, over a
 // catalogue holding one tool with a known definition.
 type judging struct {
+	noOwnerRulings
 	stored domain.ToolClassification
 	tools  []domain.ToolEntry
 }

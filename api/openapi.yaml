@@ -2322,10 +2322,23 @@ paths:
       tags: [admin]
       operationId: classifyTool
       summary: Record what a tool does to the world
-      description: >
+      description: |
         The single point where write access enters the platform. The ruling is
         durable and attributed; the previous one is not amended, it is
         superseded, and both stay in the administrative trail.
+
+        A tool has at most two rulings (NT-019). The platform's, the ceiling,
+        is stored at the installation and needs `tool:classify` in the
+        platform's administration; it is `level: platform`, the default. The
+        owner's, `level: owner`, is stored at the scope where the tool's
+        server is stored and needs `tool:classify` there, or in the platform's
+        administration. The platform's ruling wins when both exist. For a
+        server of the installation the two are one row.
+
+        An owner's ruling on a tool whose server is not stored at a scope the
+        caller may classify (the platform's own servers, a sibling area's, or
+        a tool nobody published) answers the same 403, naming the platform's
+        administration, whichever it was.
       parameters:
         - name: toolId
           in: path
@@ -2368,16 +2381,49 @@ paths:
 
                     Omit only when ruling on a tool whose definition is not
                     known — the ruling then applies until a definition is.
+                level:
+                  $ref: '#/components/schemas/RulingLevel'
       responses:
         '204': { description: The ruling is recorded. }
         '409':
-          description: The definition changed since the screen showed it.
+          description: |
+            The definition changed since the screen showed it, or, for an
+            owner's ruling, the tool's server is no longer stored where it was
+            when the ruling was authorized.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [admin]
+      operationId: withdrawToolClassification
+      summary: Withdraw the platform's ruling on a tool
+      description: |
+        Removes the platform's ruling, the ceiling (NT-019). The owner's
+        ruling, when there is one, is then the one in force; with none the
+        tool never executes. Needs `tool:classify` in the platform's
+        administration. Only `level: platform` is offered: nothing lets an
+        owner remove the platform's row, and an owner changes its own ruling
+        by ruling again.
+      parameters:
+        - name: toolId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: level
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [platform]
+      responses:
+        '204': { description: The platform's ruling is withdrawn. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /budgets/alerts:
     get:
@@ -5445,6 +5491,34 @@ components:
         compensatedBy: { type: string }
         why: { type: string }
 
+    RulingLevel:
+      type: string
+      description: |
+        Whose word a ruling is (NT-019). `platform` is the ceiling, stored at
+        the installation, and wins. `owner` is stored at the scope of the
+        tool's server. Absent on a write, it is `platform`.
+      enum: [owner, platform]
+      default: platform
+
+    ToolRuling:
+      type: object
+      required: [level, scope, effect, untrusted, inForce]
+      properties:
+        level: { $ref: '#/components/schemas/RulingLevel' }
+        scope:
+          $ref: '#/components/schemas/Scope'
+          description: Where the ruling is stored. The platform's is the installation, company `*`.
+        effect: { $ref: '#/components/schemas/Effect' }
+        untrusted: { type: boolean }
+        inForce:
+          type: boolean
+          description: |
+            The ruling the worker applies. Whether it still matches the tool's
+            definition is the tool's `stale`.
+        overridden:
+          type: boolean
+          description: An owner's ruling while the platform has one on the same tool — overridden by the platform.
+
     ToolEffect:
       type: string
       description: >
@@ -6636,6 +6710,14 @@ components:
             purpose. A tool nobody ruled on is a decision to make; a tool that
             changed under its ruling is a decision to check, and rendering them
             alike makes the second look like somebody forgot.
+        rulings:
+          type: array
+          items: { $ref: '#/components/schemas/ToolRuling' }
+          description: |
+            The platform's and the owner's rulings on the tool, the platform's
+            first (NT-019). Absent for a tool nobody ruled on. An owner's
+            ruling under a platform ruling is listed, marked overridden, and
+            not applied.
         offered:
           type: boolean
           description: |

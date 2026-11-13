@@ -228,6 +228,7 @@ func serverWith(t *testing.T, admin *fakeAdmin) *Server {
 }
 
 type eventAdmin struct {
+	noOwnerRulings
 	askedCursor string
 	next        string
 	events      []domain.AdminEvent
