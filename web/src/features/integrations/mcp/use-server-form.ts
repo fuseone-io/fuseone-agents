@@ -70,6 +70,7 @@ export function useServerForm(
     try {
       await put.mutateAsync({
         name: values.name,
+        scope: values,
         transport: values.transport,
         protocolMode: values.protocolMode,
         command: values.command,
@@ -125,6 +126,10 @@ function defaultServerValues(
   return {
     name: server?.name ?? "",
     transport: server?.transport ?? "stdio",
+    // As stored, sent back unchanged: a server's scope does not move.
+    scopeKind: server?.scopeKind ?? "installation",
+    company: server?.company ?? "",
+    area: server?.area ?? "",
     protocolMode: server?.protocolMode ?? recipe?.protocolMode ?? "auto",
     command: server?.command ?? "",
     args: (server?.args ?? []).join(" "),

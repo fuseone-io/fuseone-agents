@@ -3,13 +3,6 @@ import type { UseFormReturn } from "react-hook-form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   FormControl,
   FormDescription,
   FormField,
@@ -18,11 +11,14 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { ServerFields } from "@/features/integrations/server-fields";
+import { ServerTransportField } from "@/features/integrations/server-transport-field";
+import { ScopeFields } from "@/features/integrations/scope/scope-fields";
 import type { ServerFormValues } from "@/features/integrations/server-schema";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 
 /** Everything a tool server is, in the order somebody fills it: what it is
- *  called, how it is reached, and then whichever half that answer needs. */
+ *  called, where it is stored, how it is reached, and then whichever half
+ *  that answer needs. */
 export function ServerFormBody({
   form,
   editing,
@@ -60,32 +56,12 @@ export function ServerFormBody({
         )}
       />
 
-      <FormField
-        control={form.control}
-        name="transport"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{t("integrations.transport")}</FormLabel>
-            <Select value={field.value} onValueChange={field.onChange}>
-              <FormControl>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                <SelectItem value="stdio">
-                  {t("integrations.transportStdio")}
-                </SelectItem>
-                <SelectItem value="http">
-                  {t("integrations.transportHTTP")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <FormDescription>{t("integrations.transportHint")}</FormDescription>
-            <FormMessage />
-          </FormItem>
-        )}
+      <ScopeFields
+        editing={editing}
+        labels={{ kind: "integrations.scopeKind", held: "integrations.scopeHeld" }}
       />
+
+      <ServerTransportField form={form} />
 
       <ServerFields
         form={form}
