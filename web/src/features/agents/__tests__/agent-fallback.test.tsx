@@ -33,16 +33,16 @@ const base = {
   triggers: [],
 } as unknown as AgentDefinition;
 
-function stubIntegrations() {
-  const providers = [
-    { name: "anthropic", kind: "anthropic", baseUrl: "", enabled: true, hasKey: true },
-    { name: "openai", kind: "openai", baseUrl: "", enabled: true, hasKey: true },
+function stubProviders() {
+  const items = [
+    { name: "anthropic", kind: "anthropic", models: [], usable: true },
+    { name: "openai", kind: "openai_compatible", models: [], usable: true },
   ];
   vi.stubGlobal(
     "fetch",
     vi.fn(
       async () =>
-        new Response(JSON.stringify({ providers, presets: [], mcpServers: [] }), {
+        new Response(JSON.stringify({ items }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -91,7 +91,7 @@ describe("the fallback provider select", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     setLocale("en-US");
-    stubIntegrations();
+    stubProviders();
   });
 
   it("starts a fallback on the chosen provider, with its model still to pick", async () => {

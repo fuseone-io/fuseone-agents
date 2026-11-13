@@ -7,7 +7,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ModelField, modelsFor } from "@/features/agents/model-field";
-import { useIntegrations } from "@/features/integrations/api";
+import { agentTarget } from "@/features/agents/agent-target";
+import { useProviderChoices } from "@/features/agents/providers-api";
+import { TargetError } from "@/features/agents/target-error";
 import { Labelled } from "@/features/policies/section";
 import { agentRequirementMarked } from "@/features/agents/agent-required";
 import type { AgentDefinition } from "@/lib/api/client";
@@ -21,9 +23,8 @@ export function AgentServingFields({
   patch: (over: Partial<AgentDefinition>) => void;
 }) {
   const { t } = useTranslation();
-  const integrations = useIntegrations().data;
-  const providers = integrations?.providers ?? [];
-  const presets = integrations?.presets ?? [];
+  const choices = useProviderChoices(agentTarget(draft));
+  const providers = choices.data?.items ?? [];
 
   return (
     /* Every track allowed to shrink below its content. A grid track is
@@ -31,9 +32,14 @@ export function AgentServingFields({
        shrink its own label — which is how one long option pushed this row
        out past the card it sits in. */
     <div className="grid gap-3 sm:grid-cols-[minmax(0,200px)_minmax(0,1fr)_minmax(0,140px)]">
-      {/* Offered from what this installation has actually configured. A
-          typed provider name that nothing serves is an agent that publishes
-          and fails on its first turn, naming a provider nobody connected. */}
+      {choices.error && (
+        <div className="sm:col-span-3">
+          <TargetError error={choices.error} onRetry={() => void choices.refetch()} />
+        </div>
+      )}
+      {/* Offered from what this agent's scope reaches. A typed provider name
+          that nothing serves is an agent that publishes and fails on its
+          first turn, naming a provider nobody connected. */}
       <Labelled
         label={t("agents.provider")}
         htmlFor="agent-provider"
@@ -41,6 +47,7 @@ export function AgentServingFields({
       >
         <Select
           value={draft.provider}
+          disabled={choices.isLoading}
           onValueChange={(provider) => patch({ provider, model: "" })}
         >
           <SelectTrigger
@@ -67,7 +74,7 @@ export function AgentServingFields({
         <ModelField
           id="agent-model"
           value={draft.model}
-          options={modelsFor(draft.provider, providers, presets)}
+          options={modelsFor(draft.provider, providers, [])}
           onChange={(model) => patch({ model })}
           required={agentRequirementMarked("model")}
         />

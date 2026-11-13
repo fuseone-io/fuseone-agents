@@ -6,12 +6,12 @@ import { AgentServingFields } from "@/features/agents/agent-serving-fields";
 import { setLocale } from "@/i18n";
 import type { AgentDefinition } from "@/lib/api/client";
 
-function stubIntegrations() {
+function stubProviders() {
   vi.stubGlobal(
     "fetch",
     vi.fn(
       async () =>
-        new Response(JSON.stringify({ providers: [], presets: [] }), {
+        new Response(JSON.stringify({ items: [] }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -64,7 +64,7 @@ describe("the reply-language select", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     setLocale("en-US");
-    stubIntegrations();
+    stubProviders();
   });
 
   it("patches the draft with the chosen language", async () => {
@@ -103,7 +103,7 @@ describe("the serving selects", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     setLocale("en-US");
-    stubIntegrations();
+    stubProviders();
   });
 
   it("every trigger fills its grid track instead of sizing to its label", () => {

@@ -7,7 +7,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ModelField, modelsFor } from "@/features/agents/model-field";
-import { useIntegrations } from "@/features/integrations/api";
+import { agentTarget } from "@/features/agents/agent-target";
+import { useProviderChoices } from "@/features/agents/providers-api";
 import { Labelled } from "@/features/policies/section";
 import type { AgentDefinition } from "@/lib/api/client";
 
@@ -17,7 +18,7 @@ const NONE = "none";
  * The pair a draft or copilot run switches to when the declared one keeps
  * failing as overloaded, rate limited or unavailable.
  *
- * Offered from the providers this installation configures, beside the
+ * Offered from the providers the agent's scope reaches, beside the
  * declared pair, because publishing refuses any other: the moment an unknown
  * fallback would otherwise be found out is the outage it exists for.
  */
@@ -29,9 +30,8 @@ export function AgentFallbackFields({
   patch: (over: Partial<AgentDefinition>) => void;
 }) {
   const { t } = useTranslation();
-  const integrations = useIntegrations().data;
-  const providers = integrations?.providers ?? [];
-  const presets = integrations?.presets ?? [];
+  // The same answer the serving fields ask for, which also say when it fails.
+  const providers = useProviderChoices(agentTarget(draft)).data?.items ?? [];
   const fallback = draft.fallback;
 
   return (
@@ -63,7 +63,7 @@ export function AgentFallbackFields({
           <ModelField
             id="agent-fallback-model"
             value={fallback.model}
-            options={modelsFor(fallback.provider, providers, presets)}
+            options={modelsFor(fallback.provider, providers, [])}
             onChange={(model) => patch({ fallback: { ...fallback, model } })}
           />
         </Labelled>
