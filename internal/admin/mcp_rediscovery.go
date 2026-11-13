@@ -29,8 +29,11 @@ func (i *Integrations) RequestMCPRediscovery(
 	if strings.TrimSpace(name) == "" {
 		return 0, ErrNoName
 	}
-	server, err := i.settings.Get(ctx,
-		settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, name)
+	kind, at, err := i.mcpServerAt(ctx, name)
+	if err != nil {
+		return 0, err
+	}
+	server, err := i.settings.Get(ctx, kind, at, settings.KindMCPServer, name)
 	switch {
 	case errors.Is(err, settings.ErrNotFound):
 		return 0, ErrMCPServerUnknown
@@ -112,14 +115,17 @@ func (i *Integrations) RecordMCPRediscovery(ctx context.Context, r domain.MCPRed
 // receipt, newest first.
 func (i *Integrations) MCPRediscovery(ctx context.Context, name string) (domain.MCPRediscoveryStatus, error) {
 	status := domain.MCPRediscoveryStatus{Server: name}
-	if _, err := i.settings.Get(ctx,
-		settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, name); errors.Is(err, settings.ErrNotFound) {
+	kind, at, err := i.mcpServerAt(ctx, name)
+	if err != nil {
+		return status, err
+	}
+	if _, err := i.settings.Get(ctx, kind, at, settings.KindMCPServer, name); errors.Is(err, settings.ErrNotFound) {
 		return status, ErrMCPServerUnknown
 	} else if err != nil {
 		return status, err
 	}
 	var by string
-	err := i.pool.QueryRow(ctx, `
+	err = i.pool.QueryRow(ctx, `
 		select generation, requested_by, requested_at from mcp_rediscoveries where server = $1`,
 		name).Scan(&status.Generation, &by, &status.RequestedAt)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {

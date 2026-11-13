@@ -28,6 +28,35 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+NT-019 phase 2, the readers' release: every reader of an MCP server and of a tool's
+classification learns where it is stored. No door writes an area's server or ruling
+yet, so nothing changes for an installation today. No migration.
+
+### Upgrade notes
+
+- **Every `serve` and `worker` replica must run this release before the next one.**
+  The next release opens the doors that write an area's MCP servers and rulings. An
+  older replica would read an area's server as the platform's: its tools in every
+  area's runs, and its credential opened at the wrong scope.
+- **Rollback floor, from the next release on:** once an area's server or ruling has
+  been written, never go below this release. Rolling back to 0.106.0 before then is
+  safe. The floor 0.104.0 set still holds: never go below 0.103.0.
+
+### Changed
+
+- **An MCP server is read where it is stored.** That covers its credential, a probe,
+  a rediscovery, its removal, and its OAuth grant's refresh, which is written back to
+  the row it came from. Its tools carry its scope into the catalogue, and the Gate
+  stops them for a run outside that scope.
+- **A tool's classification is chosen the same way everywhere.** The platform's ruling
+  wins over its owner's, an owner's ruling counts only at the scope of the tool's
+  server, and a ruling stored anywhere else is ignored. The worker's catalogue and the
+  console's listing use one rule.
+- **An area's server keeps its tools in the shared catalogue.** Publications are judged
+  against the configured servers at every scope.
+
 ## [0.106.0] — 2026-11-12
 
 NT-019 phase 1: the administrator of an area configures that area's own connector

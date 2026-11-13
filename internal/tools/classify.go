@@ -43,7 +43,7 @@ func (c *Catalog) Sync(ctx context.Context, from Classifier, scope domain.Scope)
 	defer c.mu.Unlock()
 
 	applied := 0
-	for _, r := range rulings {
+	for _, r := range c.rulingsInForce(rulings) {
 		entry, ok := c.entries[r.Tool]
 		if !ok || !r.Effect.Valid() || r.Dedupe.Validate() != nil {
 			continue
@@ -61,7 +61,16 @@ func (c *Catalog) Sync(ctx context.Context, from Classifier, scope domain.Scope)
 			still applies, or every installation would upgrade into an outage.
 		*/
 		if r.Digest != "" && r.Digest != entry.Digest {
+			// Back to how discovery leaves a tool, not merely flagged: what an
+			// earlier ruling set would otherwise keep deciding. With two
+			// rulings per tool (NT-019) a stale ceiling can arrive after the
+			// owner's took effect, and keeping the owner's read is the
+			// fall-back the ceiling rules out.
 			entry.Stale = true
+			entry.Effect = domain.EffectUnknown
+			entry.Untrusted = true
+			entry.CompensatedBy = ""
+			entry.Dedupe = domain.ToolDedupe{}
 			c.entries[r.Tool] = entry
 			continue
 		}

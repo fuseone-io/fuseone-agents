@@ -143,6 +143,11 @@ type MCPStdioEgress struct {
 }
 
 type MCPServer struct {
+	// Scope is where the server belongs: the runtime scope of its stored row
+	// (NT-019). A run reaches its tools only when this contains the run's
+	// scope. Zero is a server no row describes, such as one a --mcp flag
+	// connected, and those are the installation's.
+	Scope Scope
 	// Credential and SecretFingerprint are filled by a read of this one server,
 	// which opens its sealed document. A listing opens none and leaves them empty.
 	Credential        *MCPCredentialSummary

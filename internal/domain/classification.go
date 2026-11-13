@@ -6,6 +6,11 @@ package domain
 // other both speak it: the catalogue that enforces it and the administration
 // that records it. Neither imports the other; they meet on this type.
 type ToolClassification struct {
+	// Scope is where the ruling is stored (NT-019): the installation's is the
+	// platform's, which wins; the owner's is the scope of the tool's server.
+	// Zero is a ruling read before rulings had a scope, when every one was
+	// the platform's.
+	Scope  Scope
 	Tool   ToolID
 	Effect Effect
 	// Untrusted marks a tool whose results carry data the platform did not

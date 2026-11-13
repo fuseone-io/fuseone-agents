@@ -82,6 +82,11 @@ func (s *Store) openRow(row pgx.Row, out Setting) (Setting, error) {
 	if err != nil {
 		return Setting{}, fmt.Errorf("settings: read %s/%s: %w", out.Kind, out.Name, err)
 	}
+	return s.open(out, ciphertext, nonce)
+}
+
+// open decrypts a scanned row's credential under the scope the row names.
+func (s *Store) open(out Setting, ciphertext, nonce []byte) (Setting, error) {
 	out.HasSecret = len(ciphertext) > 0
 	if !out.HasSecret {
 		return out, nil

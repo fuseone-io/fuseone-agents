@@ -45,6 +45,7 @@ type serverOptions struct {
 	cache       *domain.MCPResultCache
 	callTimeout time.Duration
 	provenance  domain.ToolProvenance
+	scope       domain.Scope
 }
 
 type ServerOption func(*serverOptions)

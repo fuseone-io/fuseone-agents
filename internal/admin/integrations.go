@@ -189,6 +189,7 @@ func serverFromRow(row settings.Setting) (domain.MCPServer, error) {
 		ConfigFileEnv:         configFileEnv(stored.ConfigFileEnv),
 		Enabled:               row.Enabled,
 		UpdatedBy:             row.UpdatedBy, UpdatedAt: row.UpdatedAt,
+		Scope: mcpServerRuntimeScope(row.ScopeKind, row.Scope),
 	}
 	server.Transport = server.TransportOf()
 	return server, nil
@@ -533,7 +534,7 @@ func validConfigFileEnv(name string) bool {
 func (i *Integrations) MCPCredentials(
 	ctx context.Context, name string,
 ) (domain.MCPCredentials, error) {
-	set, err := i.settings.Reveal(ctx, settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, name)
+	set, err := i.settings.RevealNamed(ctx, settings.KindMCPServer, name)
 	if err != nil {
 		return domain.MCPCredentials{}, err
 	}
@@ -722,8 +723,11 @@ func (i *Integrations) DeleteMCPPersonalCredential(
 }
 
 func (i *Integrations) personalCredentialTarget(ctx context.Context, name string) error {
-	set, err := i.settings.Get(ctx,
-		settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, name)
+	kind, scope, err := i.mcpServerAt(ctx, name)
+	if err != nil {
+		return err
+	}
+	set, err := i.settings.Get(ctx, kind, scope, settings.KindMCPServer, name)
 	switch {
 	case errors.Is(err, settings.ErrNotFound):
 		return ErrMCPServerUnknown
@@ -799,8 +803,11 @@ func (i *Integrations) RequestMCPProbe(
 	if strings.TrimSpace(name) == "" {
 		return ErrNoName
 	}
-	server, err := i.settings.Get(ctx,
-		settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, name)
+	kind, at, err := i.mcpServerAt(ctx, name)
+	if err != nil {
+		return err
+	}
+	server, err := i.settings.Get(ctx, kind, at, settings.KindMCPServer, name)
 	switch {
 	case errors.Is(err, settings.ErrNotFound):
 		return ErrMCPServerUnknown
@@ -881,14 +888,21 @@ func (i *Integrations) RefreshMCPServerOAuth(
 	if principal != "" {
 		return i.refreshMCPPersonalOAuth(ctx, name, principal, was, next)
 	}
+	// The grant is rewritten where the server is stored, sealed under that
+	// scope: an area's server refreshed into an installation row would leave
+	// two rows for one name, which the database refuses (NT-019).
+	kind, at, err := i.mcpServerAt(ctx, name)
+	if err != nil {
+		return err
+	}
 	return writeFolded(ctx, i.pool, i.settings, folded{
 		by:     domain.SystemWorker,
-		scope:  domain.Scope{Company: domain.Installation},
+		scope:  mcpServerRuntimeScope(kind, at),
 		action: "mcp_oauth.refreshed",
 		target: name,
 		set: settings.Setting{
-			ScopeKind: settings.ScopeInstallation,
-			Kind:      settings.KindMCPServer, Name: name,
+			ScopeKind: kind, Scope: at,
+			Kind: settings.KindMCPServer, Name: name,
 			UpdatedBy: string(domain.SystemWorker),
 		},
 		fold: func(stored settings.Setting) (settings.Setting, any, error) {
@@ -923,8 +937,8 @@ func (i *Integrations) RefreshMCPServerOAuth(
 			}
 
 			return settings.Setting{
-					ScopeKind: settings.ScopeInstallation,
-					Kind:      settings.KindMCPServer, Name: name,
+					ScopeKind: kind, Scope: at,
+					Kind: settings.KindMCPServer, Name: name,
 					Value: value, Secret: merged.Sealed(),
 					ClearSecret: merged.Empty(),
 					Enabled:     stored.Enabled, UpdatedBy: string(domain.SystemWorker),
@@ -1013,6 +1027,10 @@ func (i *Integrations) DeleteMCPServer(ctx context.Context, by domain.UserID, sc
 // RemoveMCPServer deletes a server, if it is still at a revision the caller named.
 func (i *Integrations) RemoveMCPServer(ctx context.Context, r Removal) error {
 	by, scope, name := r.By, r.Scope, r.Name
+	kind, at, err := i.mcpServerAt(ctx, name)
+	if err != nil {
+		return err
+	}
 	tx, err := i.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("admin: begin: %w", err)
@@ -1021,7 +1039,7 @@ func (i *Integrations) RemoveMCPServer(ctx context.Context, r Removal) error {
 
 	// First of all, before the catalogue's lock below and before anything is dropped.
 	if err := removalGuard(ctx, tx, i.settings, settings.Setting{
-		ScopeKind: settings.ScopeInstallation, Kind: settings.KindMCPServer, Name: name,
+		ScopeKind: kind, Scope: at, Kind: settings.KindMCPServer, Name: name,
 	}, &revised{expect: r.Expect, of: i.mcpRevision}); err != nil {
 		return err
 	}
@@ -1032,9 +1050,7 @@ func (i *Integrations) RemoveMCPServer(ctx context.Context, r Removal) error {
 	if err != nil {
 		return err
 	}
-	if err := i.settings.DeleteTx(ctx, tx,
-		settings.ScopeInstallation, domain.Scope{},
-		settings.KindMCPServer, name); err != nil {
+	if err := i.settings.DeleteTx(ctx, tx, kind, at, settings.KindMCPServer, name); err != nil {
 		return err
 	}
 	tag, err := tx.Exec(ctx, `

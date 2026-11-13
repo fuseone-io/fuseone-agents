@@ -70,6 +70,10 @@ func connectServer(
 		tools.WithResultCache(server.Cache),
 		tools.WithCallTimeout(server.CallTimeout),
 		tools.WithProvenance(domain.HostedGitHubProvenance(server, creds)),
+		// Where the row that configures it is stored (NT-019). Zero is a
+		// server no row describes, a --mcp flag's, and the catalogue reads
+		// that as the installation's.
+		tools.WithScope(server.Scope),
 	); err != nil {
 		_ = managed.Close()
 		return fmt.Errorf("import tools from %s: %w", server.Name, err)
