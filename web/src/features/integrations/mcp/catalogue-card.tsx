@@ -40,7 +40,7 @@ export function CatalogueCard({
         "flex min-h-[166px] flex-col gap-2 rounded-lg border bg-card p-3 text-left shadow-sm transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         selected && "border-primary ring-1 ring-primary/30",
       )}
-      aria-label={t(entry.configured ? "mcp.configureNamed" : readOnly ? "mcp.viewNamed" : "mcp.connectNamed", {
+      aria-label={t(readOnly ? "mcp.viewNamed" : entry.configured ? "mcp.configureNamed" : "mcp.connectNamed", {
         name: entry.title,
       })}
       aria-pressed={selected}

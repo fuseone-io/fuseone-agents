@@ -198,8 +198,12 @@ export function AvailableServersPanel({
             server={chosenServer}
             tools={toolsByServer.get(chosenEntry.name) ?? []}
             onClose={() => setPanel(undefined)}
-            onConfigure={() =>
-              void navigate(`/integrations/mcp/${chosenEntry.name}`)
+            // Read-only for whoever may not change it: the server's page
+            // would answer 403 (NT-019).
+            onConfigure={
+              canCreate
+                ? () => void navigate(`/integrations/mcp/${chosenEntry.name}`)
+                : undefined
             }
           />
         ) : (
@@ -315,7 +319,7 @@ function ConnectedServerPanel({
   server: MCPServer;
   tools: Tool[];
   onClose: () => void;
-  onConfigure: () => void;
+  onConfigure?: () => void;
 }) {
   const { t } = useTranslation();
   const state = stateOf(server.enabled, server.health);
@@ -437,9 +441,9 @@ function ConnectedServerPanel({
       </div>
       <div className="flex items-center gap-2 border-t p-4">
         <span className="flex-1 text-xs text-muted-foreground">
-          {t("mcp.connectedFooter")}
+          {t(onConfigure ? "mcp.connectedFooter" : "mcp.connectNeedsConfigure")}
         </span>
-        <Button onClick={onConfigure}>{t("mcp.configure")}</Button>
+        {onConfigure && <Button onClick={onConfigure}>{t("mcp.configure")}</Button>}
       </div>
     </aside>
   );

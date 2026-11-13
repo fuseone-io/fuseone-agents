@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AvailableServersPanel } from "@/features/integrations/mcp/available-servers-panel";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
+import type { MCPServer } from "@/features/integrations/api";
 
 const api = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
@@ -113,7 +114,7 @@ const outline: ServerRecipe = {
   note: "Workspace wiki.",
 };
 
-function open(recipes: ServerRecipe[] = [stripe], canCreate?: boolean) {
+function open(recipes: ServerRecipe[] = [stripe], canCreate?: boolean, servers: MCPServer[] = []) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -121,7 +122,7 @@ function open(recipes: ServerRecipe[] = [stripe], canCreate?: boolean) {
     <QueryClientProvider client={client}>
       <MemoryRouter>
         <AvailableServersPanel
-          servers={[]}
+          servers={servers}
           recipes={recipes}
           isLoading={false}
           error={null}
@@ -288,5 +289,16 @@ describe("the catalogue for someone who may not create a server", () => {
     expect(screen.getByText(/Conectar um servidor pede provider:write/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Conectar" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Nome")).not.toBeInTheDocument();
+  });
+
+  // A connected server is read too: "Configurar" would open a page that
+  // answers 403 to whoever may not change it.
+  it("opens a connected server to read, with no configure", async () => {
+    const connected = { name: "stripe", transport: "http", url: "https://mcp.stripe.com", enabled: true } as MCPServer;
+    open([stripe], false, [connected]);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Ver Stripe" }));
+
+    expect(screen.queryByRole("button", { name: "Configurar" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Conectar um servidor pede provider:write/)).toBeInTheDocument();
   });
 });
