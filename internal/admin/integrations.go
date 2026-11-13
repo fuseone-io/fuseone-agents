@@ -812,8 +812,12 @@ func personalCredentialTarget(
 	if err != nil {
 		return "", domain.Scope{}, fmt.Errorf("admin: read MCP server %s: %w", name, err)
 	}
+	// Both ways, as the listing has it: a server the person's scopes inherit,
+	// and one stored in a scope a grant of theirs contains, such as an area
+	// of their company (NT-019).
 	runtime := storedRuntimeScope(kind, company, area)
-	if !slices.ContainsFunc(visible, runtime.Contains) {
+	reached := func(v domain.Scope) bool { return runtime.Contains(v) || v.Contains(runtime) }
+	if !slices.ContainsFunc(visible, reached) {
 		return "", domain.Scope{}, ErrMCPServerUnknown
 	}
 	var stored storedServer

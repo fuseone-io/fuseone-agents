@@ -297,3 +297,19 @@ func TestGetMCPServer_aSiblingsUnreadableSecret_isTheSameRefusal(t *testing.T) {
 		t.Errorf("response = %T, want 403", resp)
 	}
 }
+
+// A grant on a company reaches its areas' servers as it reaches the company's:
+// containment runs both ways, inherited and governed (NT-019).
+func TestPutMCPUserCredential_aCompanyGrant_reachesItsAreasServer(t *testing.T) {
+	s := mcpWorld(t)
+	putMCP(t, s, as(domain.RoleCurator), "cx-jira", atCX, false)
+	resp, err := s.PutMCPUserCredential(grantedAt(domain.RoleAuthor, acmeOnly), openapi.PutMCPUserCredentialRequestObject{
+		Name: "cx-jira", Body: &openapi.PutMCPUserCredentialJSONRequestBody{Token: ptr("mine")},
+	})
+	if err != nil {
+		t.Fatalf("PutMCPUserCredential: %v", err)
+	}
+	if _, ok := resp.(openapi.PutMCPUserCredential204Response); !ok {
+		t.Errorf("an author of acme = %T, want 204 for a server of acme/cx", resp)
+	}
+}
