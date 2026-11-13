@@ -2302,6 +2302,25 @@ paths:
         suggestion with its reasoning, so that act is a confirmation rather
         than forty rulings invented from a list of bare names. A suggestion is
         never a classification.
+
+        Read with tool:read in any scope (NT-019). With `scope`, the answer is
+        every tool an agent stored at that target can run: the tools whose
+        server's runtime scope contains it, the target's own, its company's
+        and the installation's, and no sibling area's. The caller must hold
+        tool:read at a scope containing the target, or at the platform's
+        administration; otherwise 404, so the answer does not confirm that a
+        scope the caller cannot see exists. Without `scope`, a reader at the
+        platform's administration gets every tool, the screen that lists every
+        owner's ruling; anyone else gets only the installation's tools, which
+        every scope inherits.
+      parameters:
+        - name: scope
+          in: query
+          required: false
+          description: >
+            The target scope, `company` or `company/area`, as stored: no
+            surrounding spaces, no upper case, never the installation's `*`.
+          schema: { type: string }
       responses:
         '200':
           description: The tool catalogue.
@@ -2314,8 +2333,10 @@ paths:
                   items:
                     type: array
                     items: { $ref: '#/components/schemas/Tool' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /admin/tools/{toolId}/classification:
     put:

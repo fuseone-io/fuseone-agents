@@ -1565,6 +1565,7 @@ export interface paths {
          * Every tool the platform knows, and what it is classified as
          * @description Tools arrive from their servers unclassified whatever the server claims about itself, and an unclassified tool is refused at run time. Saying what one does is a separate, recorded act.
          *     Where the platform already knows the server, each tool carries a suggestion with its reasoning, so that act is a confirmation rather than forty rulings invented from a list of bare names. A suggestion is never a classification.
+         *     Read with tool:read in any scope (NT-019). With `scope`, the answer is every tool an agent stored at that target can run: the tools whose server's runtime scope contains it, the target's own, its company's and the installation's, and no sibling area's. The caller must hold tool:read at a scope containing the target, or at the platform's administration; otherwise 404, so the answer does not confirm that a scope the caller cannot see exists. Without `scope`, a reader at the platform's administration gets every tool, the screen that lists every owner's ruling; anyone else gets only the installation's tools, which every scope inherits.
          */
         get: operations["listTools"];
         put?: never;
@@ -8872,7 +8873,10 @@ export interface operations {
     };
     listTools: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The target scope, `company` or `company/area`, as stored: no surrounding spaces, no upper case, never the installation's `*`. */
+                scope?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -8890,8 +8894,10 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     classifyTool: {

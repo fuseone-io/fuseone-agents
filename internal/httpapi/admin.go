@@ -81,16 +81,21 @@ var identityScope = domain.Scope{Company: domain.Installation}
 // server off the list.
 const staleObservation = 5 * time.Minute
 
-func (s *Server) ListTools(ctx context.Context, _ openapi.ListToolsRequestObject) (openapi.ListToolsResponseObject, error) {
+func (s *Server) ListTools(ctx context.Context, req openapi.ListToolsRequestObject) (openapi.ListToolsResponseObject, error) {
 	// Read with tool:read in any scope, not only the platform's: the catalogue
 	// is what an author picks tools from when building an agent in their own
 	// area. It names tools, their servers and effects, never a server's
 	// address or credentials, and who declares each tool is filtered by where
-	// the caller may read agents (declaringTools).
+	// the caller may read agents (declaringTools). Which tools are answered is
+	// the target's reach (readerReach, NT-019).
 	if len(auth.VisibleScopes(ctx, domain.PermToolRead)) == 0 {
 		return openapi.ListTools403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermToolRead, domain.Scope{}),
 		}, nil
+	}
+	keep, refused := listToolsReach(ctx, req.Params.Scope)
+	if refused != nil {
+		return refused, nil
 	}
 	if s.tools == nil {
 		return openapi.ListTools200JSONResponse{Items: []openapi.Tool{}}, nil
@@ -100,6 +105,7 @@ func (s *Server) ListTools(ctx context.Context, _ openapi.ListToolsRequestObject
 	if err != nil {
 		return nil, fmt.Errorf("list tools: %w", err)
 	}
+	entries = toolsInReach(entries, keep)
 
 	// Whether each tool's server answers now. The published list is what this
 	// installation has ever offered and it never shrinks — two workers

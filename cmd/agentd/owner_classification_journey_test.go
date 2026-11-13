@@ -90,10 +90,12 @@ func grantedOn(role domain.Role, scope domain.Scope) context.Context {
 }
 
 // rule classifies cx-ping.ping through the door, naming the definition the
-// console lists.
+// console lists for the area the tool's server is stored at.
 func (j ownerJourney) rule(t *testing.T, caller context.Context, level openapi.RulingLevel, effect openapi.Effect) {
 	t.Helper()
-	page, err := j.api.ListTools(caller, openapi.ListToolsRequestObject{})
+	page, err := j.api.ListTools(caller, openapi.ListToolsRequestObject{
+		Params: openapi.ListToolsParams{Scope: ptrTo("acme/cx")},
+	})
 	listed, ok := page.(openapi.ListTools200JSONResponse)
 	if err != nil || !ok {
 		t.Fatalf("ListTools = %#v, %v", page, err)
