@@ -74,18 +74,29 @@ describe("integrations for an administrator of one area", () => {
   });
 });
 
-// NT-019: an area's administrator configures its own connector instances.
+// NT-019: an area's administrator configures its own connector instances and
+// its own MCP servers.
 describe("integrations for an administrator who configures an area's connectors", () => {
   const areaAdmin = ["tool:read", "scope:write", "provider:write"];
 
-  it.each(["/integrations", "/integrations/providers"])(
-    "take them from %s to the connectors, where they can add one",
+  it("open the connected MCP servers at /integrations, where they can add one", async () => {
+    signedInAs([], areaAdmin);
+    openAt("/integrations");
+
+    expect(
+      await screen.findByText("Nenhum servidor configurado", {}, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Novo" })).toBeInTheDocument();
+  });
+
+  it.each(["/integrations/providers", "/integrations/channels", "/integrations/mcp"])(
+    "take them from %s, which is the platform's, to the connected servers",
     async (path) => {
       signedInAs([], areaAdmin);
       openAt(path);
 
       expect(
-        await screen.findByRole("button", { name: "Nova instância" }, { timeout: LAZY_SCREEN }),
+        await screen.findByText("Nenhum servidor configurado", {}, { timeout: LAZY_SCREEN }),
       ).toBeInTheDocument();
       expect(
         screen.queryByText("As integrações são configuradas pela administração da plataforma"),
@@ -103,29 +114,31 @@ describe("integrations for an administrator who configures an area's connectors"
     expect(screen.queryByRole("button", { name: "Conectar sistema" })).not.toBeInTheDocument();
   });
 
-  it("show them the connectors and none of the platform's sections", async () => {
+  it("show them the connectors and the connected servers, and none of the platform's sections", async () => {
     signedInAs([], areaAdmin);
     openAt("/integrations/connectors");
 
     expect(
       await screen.findByRole("link", { name: "Connectors" }, { timeout: LAZY_SCREEN }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Provedores de modelo" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Conectados" })).toBeInTheDocument();
+    for (const section of ["Provedores de modelo", "Disponíveis", "Canais"]) {
+      expect(screen.queryByRole("link", { name: section }), section).not.toBeInTheDocument();
+    }
   });
 
-  // Each of these is the platform's, and would answer 403.
+  // Each of these is the platform's, and would answer 403. The listing of MCP
+  // servers is theirs too now: it holds their own and what they inherit.
   it("ask for none of the platform's lists", async () => {
     signedInAs([], areaAdmin);
-    openAt("/integrations/connectors");
-    await screen.findByRole("button", { name: "Nova instância" }, { timeout: LAZY_SCREEN });
+    openAt("/integrations");
+    await screen.findByText("Nenhum servidor configurado", {}, { timeout: LAZY_SCREEN });
 
     const asked = vi.mocked(fetch).mock.calls.map(([input]) =>
       new URL(input instanceof Request ? input.url : String(input), "http://console").pathname,
     );
-    expect(asked.some((path) => path.endsWith("/admin/integrations/connectors/instances"))).toBe(true);
-    const platformLists = [
-      "/admin/integrations", "/admin/channels", "/admin/integrations/recipes", "/integrations/mcp-credentials",
-    ];
+    expect(asked.some((path) => path.endsWith("/admin/integrations"))).toBe(true);
+    const platformLists = ["/admin/channels", "/admin/integrations/recipes", "/integrations/mcp-credentials"];
     for (const list of platformLists) {
       expect(asked.filter((path) => path.endsWith(list)), list).toEqual([]);
     }

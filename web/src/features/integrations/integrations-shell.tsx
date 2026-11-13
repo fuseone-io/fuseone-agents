@@ -68,6 +68,8 @@ const sections: {
   },
 ];
 
+const areaSections: IntegrationSection[] = ["connected", "connectors"];
+
 /**
  * The four jobs under integrations, with one side rail.
  *
@@ -87,10 +89,11 @@ export function IntegrationsShell({
 }) {
   const { t } = useTranslation();
   const { data: me } = useMe();
-  // An area's administrator has the connectors and nothing else here (NT-019).
+  // An area's administrator has its servers and connectors, and nothing else
+  // here (NT-019).
   const shown = integrationAccess(me).platform
     ? sections
-    : sections.filter((section) => section.id === "connectors");
+    : sections.filter((section) => areaSections.includes(section.id));
 
   return (
     <div className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
