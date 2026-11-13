@@ -162,3 +162,14 @@ func openAnswerTicket(t *testing.T, tickets *ticket.Memory) ticket.Ticket {
 	}
 	return held
 }
+
+// The ticket answer is listed where the runtime serves it: the installation's,
+// so every scope's author is offered it, as Layer.Scope admits it everywhere
+// (NT-019). The zero scope reaches nothing, and listing it so would hide the
+// tool from every reduced answer.
+func TestTicketAnswerEntry_isTheInstallations(t *testing.T) {
+	t.Parallel()
+	if got := connectortools.TicketAnswerEntry().Scope; got != (domain.Scope{Company: domain.Installation}) {
+		t.Errorf("TicketAnswerEntry().Scope = %+v, want the installation's", got)
+	}
+}

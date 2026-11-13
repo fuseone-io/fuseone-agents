@@ -238,6 +238,8 @@ func TicketAnswerEntry() domain.ToolEntry {
 			"It is published only after somebody who may decide approves the exact text.",
 		Effect: domain.EffectWrite,
 		Native: true,
+		// The installation's, as Layer.Scope serves it to every run.
+		Scope: domain.Scope{Company: domain.Installation},
 	}
 }
 
