@@ -296,9 +296,27 @@ describe("the catalogue for someone who may not create a server", () => {
   it("opens a connected server to read, with no configure", async () => {
     const connected = { name: "stripe", transport: "http", url: "https://mcp.stripe.com", enabled: true } as MCPServer;
     open([stripe], false, [connected]);
+    expect(screen.queryByText("Configurar")).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: "Ver Stripe" }));
 
     expect(screen.queryByRole("button", { name: "Configurar" })).not.toBeInTheDocument();
     expect(screen.getByText(/Conectar um servidor pede provider:write/)).toBeInTheDocument();
   });
+});
+
+// Whoever may create somewhere still reads a server they may not change: one
+// of another scope (editable false) or one passed to the process (managed
+// false), whose page has no row to change (NT-019).
+describe("the catalogue for someone who may create, on a server they may not change", () => {
+  for (const [why, flags] of [["of another scope", { editable: false }], ["not managed here", { managed: false }]] as const) {
+    it(`reads a server ${why}, with no configure`, async () => {
+      const server = { name: "stripe", transport: "http", url: "https://mcp.stripe.com", enabled: true, ...flags } as MCPServer;
+      open([stripe], true, [server]);
+      expect(screen.queryByText("Configurar")).not.toBeInTheDocument();
+      await userEvent.setup().click(screen.getByRole("button", { name: "Ver Stripe" }));
+
+      expect(screen.queryByRole("button", { name: "Configurar" })).not.toBeInTheDocument();
+      expect(screen.getByText(/não pode alterá-lo aqui/)).toBeInTheDocument();
+    });
+  }
 });

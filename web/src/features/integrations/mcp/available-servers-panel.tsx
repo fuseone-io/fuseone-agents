@@ -49,6 +49,7 @@ import {
 import { CallAuthNote } from "@/features/integrations/mcp/call-auth-note";
 import { EgressNote } from "@/features/integrations/mcp/egress-note";
 import { cn } from "@/lib/utils";
+import { configurable } from "@/features/integrations/mcp/server-configurable";
 
 const ORIGINS = ["all", "published", "reference", "archived"] as const;
 type OriginFilter = (typeof ORIGINS)[number];
@@ -175,7 +176,7 @@ export function AvailableServersPanel({
                       key={entry.name}
                       entry={entry}
                       selected={panel === entry.name}
-                      readOnly={!canCreate}
+                      readOnly={!configurable(canCreate, serversByName.get(entry.name))}
                       onOpen={() => setPanel(entry.name)}
                     />
                   ))}
@@ -201,10 +202,11 @@ export function AvailableServersPanel({
             // Read-only for whoever may not change it: the server's page
             // would answer 403 (NT-019).
             onConfigure={
-              canCreate
+              configurable(canCreate, chosenServer)
                 ? () => void navigate(`/integrations/mcp/${chosenEntry.name}`)
                 : undefined
             }
+            readOnlyNote={canCreate ? "mcp.serverReadOnlyHere" : "mcp.connectNeedsConfigure"}
           />
         ) : (
           <ConnectServerPanel
@@ -314,12 +316,14 @@ function ConnectedServerPanel({
   tools,
   onClose,
   onConfigure,
+  readOnlyNote,
 }: {
   entry: Listing;
   server: MCPServer;
   tools: Tool[];
   onClose: () => void;
   onConfigure?: () => void;
+  readOnlyNote: string;
 }) {
   const { t } = useTranslation();
   const state = stateOf(server.enabled, server.health);
@@ -441,7 +445,7 @@ function ConnectedServerPanel({
       </div>
       <div className="flex items-center gap-2 border-t p-4">
         <span className="flex-1 text-xs text-muted-foreground">
-          {t(onConfigure ? "mcp.connectedFooter" : "mcp.connectNeedsConfigure")}
+          {t(onConfigure ? "mcp.connectedFooter" : readOnlyNote)}
         </span>
         {onConfigure && <Button onClick={onConfigure}>{t("mcp.configure")}</Button>}
       </div>

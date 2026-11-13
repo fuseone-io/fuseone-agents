@@ -2015,6 +2015,7 @@
     "connectByAddress": "Connect by address",
     "viewIt": "View",
     "viewNamed": "View {{name}}",
+    "serverReadOnlyHere": "This server belongs to another scope or was passed to the process: you can read it, but you cannot change it here.",
     "connectNeedsConfigure": "Connecting a server takes provider:write. You can read the catalogue, but not connect from it.",
     "chooseServer": "Choose a server",
     "chooseServerHint": "Pick one recipe to configure it here. The list stays beside the form so connecting one server never hides the rest of the catalogue.",

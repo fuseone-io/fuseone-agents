@@ -98,10 +98,10 @@ export function CatalogueCard({
           </span>
         </span>
         <span className="ml-auto rounded-md border px-2 py-1 text-2xs font-medium">
-          {entry.configured
-            ? t("mcp.configure")
-            : readOnly
-              ? t("mcp.viewIt")
+          {readOnly
+            ? t("mcp.viewIt")
+            : entry.configured
+              ? t("mcp.configure")
               : t("mcp.connectIt")}
         </span>
       </div>
