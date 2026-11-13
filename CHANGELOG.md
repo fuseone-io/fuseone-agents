@@ -28,7 +28,7 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.109.0] — 2026-11-13
 
 NT-019 phase 2, the egress barrier: before areas may register MCP servers, the platform
 decides where those servers may send requests. No door writes an area's server yet, so
@@ -45,7 +45,7 @@ nothing changes for an installation today. No migration.
 
 ### Added
 
-- **An egress policy for MCP servers outside the installation.** The platform's
+- **An egress policy for MCP servers outside the installation** (#338). The platform's
   administration keeps one per company or area, a list of exact origins, through
   `GET`, `PUT` and `DELETE /admin/integrations/mcp-egress-policies`. An area's
   administrator can neither read nor change it.
