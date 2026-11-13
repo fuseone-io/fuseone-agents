@@ -330,3 +330,22 @@ func TestListTools_reportsEachRulingsLevel_andTheOverriddenOwner(t *testing.T) {
 	}
 	t.Error("cx-jira.search is not listed")
 }
+
+// A level given must be one there is: a typo does not fall back to the
+// platform's ceiling, which would override the owner with a stronger rule.
+// Only a level left out means platform, as before.
+func TestClassifyTool_anUnknownLevel_isRefusedAndStoresNothing(t *testing.T) {
+	w := newClassifyWorld(t)
+	for _, level := range []openapi.RulingLevel{"ower", "PLATFORM", " platform"} {
+		resp, err := w.api.ClassifyTool(as(domain.RoleCurator), classifyAt(level, "cx-jira.search", openapi.EffectRead))
+		if err != nil {
+			t.Fatalf("ClassifyTool %q: %v", level, err)
+		}
+		if got, _ := classifyStatus(t, resp); got != "400" {
+			t.Errorf("level %q = %s, want 400", level, got)
+		}
+	}
+	if stored := w.storedAt(t, "cx-jira.search"); len(stored) != 0 {
+		t.Errorf("stored at %v, want nothing from an unknown level", stored)
+	}
+}

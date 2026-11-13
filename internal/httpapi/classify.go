@@ -18,6 +18,15 @@ enters the platform, and the only handler that answers 409.
 */
 
 func (s *Server) ClassifyTool(ctx context.Context, req openapi.ClassifyToolRequestObject) (openapi.ClassifyToolResponseObject, error) {
+	// A level given must be one there is. Only a level left out means the
+	// platform's, as before: a typo falling back to the ceiling would write a
+	// ruling stronger than the owner's (NT-019).
+	if req.Body.Level != nil && !req.Body.Level.Valid() {
+		return openapi.ClassifyTool400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				invalid("level is owner or platform; leave it out for the platform's")),
+		}, nil
+	}
 	if req.Body.Level != nil && *req.Body.Level == openapi.RulingLevelOwner {
 		return s.classifyAsOwner(ctx, req)
 	}
