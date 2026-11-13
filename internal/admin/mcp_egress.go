@@ -85,13 +85,14 @@ func (i *Integrations) DeleteMCPEgressPolicy(ctx context.Context, by domain.User
 		return fmt.Errorf("admin: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	// The row first, then the policies' lock, as a PUT of a policy takes them:
-	// two writes of one policy then never wait on each other crosswise.
-	if err := i.settings.DeleteTx(ctx, tx, settings.ScopeInstallation, domain.Scope{},
-		kindMCPEgressPolicy, egressPolicyName(at)); err != nil {
+	// The policies' lock first, then the row, as a PUT of a policy takes them
+	// (its guard runs before it reads or writes the row): two writes of one
+	// policy then never wait on each other crosswise.
+	if err := LockMCPEgressPolicies(ctx, tx); err != nil {
 		return err
 	}
-	if err := LockMCPEgressPolicies(ctx, tx); err != nil {
+	if err := i.settings.DeleteTx(ctx, tx, settings.ScopeInstallation, domain.Scope{},
+		kindMCPEgressPolicy, egressPolicyName(at)); err != nil {
 		return err
 	}
 	if err := Record(ctx, tx, Event{
@@ -224,8 +225,9 @@ LockMCPEgressPolicies holds the policies for a write of one, until the
 transaction ends. A server write holds the same lock shared while it reads the
 policy for its scope and until it commits (LockMCPEgressPoliciesShared), so a
 policy narrowed meanwhile either waits for the server's commit or is the one
-the server is judged by. A policy write takes no other lock, so no order
-between the two can deadlock.
+the server is judged by. Every policy write takes this lock before its row,
+and a server write never locks a policy row, so no two of them can each hold
+what the other waits for.
 */
 func LockMCPEgressPolicies(ctx context.Context, tx settings.DB) error {
 	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended('mcp_egress_policies', 0))`); err != nil {

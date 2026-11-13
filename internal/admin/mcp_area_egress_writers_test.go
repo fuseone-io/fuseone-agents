@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
@@ -201,4 +203,113 @@ func TestDeleteMCPEgressPolicy_waitsForAServerWriteThatReadThePolicy(t *testing.
 	if err := <-done; err != nil {
 		t.Errorf("DeleteMCPEgressPolicy after the server write: %v", err)
 	}
+}
+
+/*
+Two writes of one policy take its locks in one order: the policies' lock,
+then the row (NT-019). Crosswise, a PUT and a DELETE each held what the other
+waited for, and Postgres aborted one as a deadlock.
+
+Each door is caught waiting on the row, held here, and must already hold the
+policies' lock by then: a shared try from a third connection then fails.
+*/
+func TestEgressPolicyWrites_holdThePoliciesLockBeforeTheRow(t *testing.T) {
+	for name, write := range map[string]func(*admin.Integrations) error{
+		"put": func(i *admin.Integrations) error {
+			return i.PutMCPEgressPolicy(context.Background(), "usr_ana", platform,
+				admin.MCPEgressPolicy{Scope: cxScope, Origins: []string{"https://b.example.com"}})
+		},
+		"delete": func(i *admin.Integrations) error {
+			return i.DeleteMCPEgressPolicy(context.Background(), "usr_ana", platform, cxScope)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			i := newIntegrations(t)
+			pool := openPool(t)
+			ctx := context.Background()
+			allowEgress(t, i, cxScope, "https://a.example.com")
+
+			tx, err := pool.Begin(ctx)
+			if err != nil {
+				t.Fatalf("begin: %v", err)
+			}
+			defer func() { _ = tx.Rollback(ctx) }()
+			if _, err := tx.Exec(ctx, `
+				select 1 from settings where kind = 'mcp_egress_policy' and name = 'acme/cx' for update`); err != nil {
+				t.Fatalf("hold the row: %v", err)
+			}
+			done := make(chan error, 1)
+			go func() { done <- write(i) }()
+			if !waitForRowWait(t, pool) {
+				t.Fatalf("the %s never waited on the policy's row", name)
+			}
+			if policiesFree(t, pool) {
+				t.Errorf("the %s waits on the row without holding the policies' lock", name)
+			}
+			if err := tx.Commit(ctx); err != nil {
+				t.Fatalf("commit: %v", err)
+			}
+			if err := <-done; err != nil {
+				t.Errorf("%s: %v", name, err)
+			}
+		})
+	}
+}
+
+// A PUT and a DELETE of one policy at once, round after round: neither is
+// aborted as a deadlock.
+func TestEgressPolicyWrites_aPutAndADeleteAtOnce_neitherIsAbortedAsADeadlock(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	for round := range 20 {
+		allowEgress(t, i, cxScope, "https://a.example.com")
+		done := make(chan error, 2)
+		go func() {
+			done <- i.PutMCPEgressPolicy(ctx, "usr_ana", platform,
+				admin.MCPEgressPolicy{Scope: cxScope, Origins: []string{"https://b.example.com"}})
+		}()
+		go func() { done <- i.DeleteMCPEgressPolicy(ctx, "usr_ana", platform, cxScope) }()
+		for range 2 {
+			if err := <-done; err != nil {
+				t.Fatalf("round %d: %v", round, err)
+			}
+		}
+	}
+}
+
+// waitForRowWait reports whether some session waits on a row lock.
+func waitForRowWait(t *testing.T, pool *pgxpool.Pool) bool {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		var waiting int
+		if err := pool.QueryRow(context.Background(), `
+			select count(*) from pg_stat_activity
+			where datname = current_database() and wait_event_type = 'Lock' and wait_event <> 'advisory'`,
+		).Scan(&waiting); err != nil {
+			t.Fatalf("read pg_stat_activity: %v", err)
+		}
+		if waiting > 0 {
+			return true
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return false
+}
+
+// policiesFree reports whether the policies' lock could be taken shared now.
+func policiesFree(t *testing.T, pool *pgxpool.Pool) bool {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var free bool
+	if err := tx.QueryRow(ctx,
+		`select pg_try_advisory_xact_lock_shared(hashtextextended('mcp_egress_policies', 0))`).Scan(&free); err != nil {
+		t.Fatalf("try the policies' lock: %v", err)
+	}
+	return free
 }
