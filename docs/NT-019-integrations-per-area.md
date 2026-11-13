@@ -44,8 +44,13 @@ integrations and the ones above it. Nothing here is done by an agent.
   - **by the worker**, which starts no local process for a server outside the
     installation.
 
-  Remote servers reach the network through the worker's guard against internal
-  addresses (`netguard`), as connectors do.
+  A remote server is reached through the worker's `netguard`, as connectors are.
+  It refuses cloud metadata and link-local addresses only. Private addresses are
+  allowed on purpose, because on-premise MCP servers are a normal case. So an area's
+  administrator can point a server at any HTTP endpoint the worker can reach on the
+  customer's network, and the worker sends that area's credential there. Delegating
+  remote servers to areas delegates that reach. It does not delegate running code on
+  the platform's host, which is what keeping stdio the platform's prevents.
 - **An area may create conversations and its own channel connections.** It can use the
   platform's Slack connection, or register another app or workspace of its own.
 - **A server outside the installation reaches only the origins the platform allows its

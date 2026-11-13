@@ -3,8 +3,9 @@
 -- A stdio server is a process the platform's worker starts on its own host:
 -- its command, arguments, environment and configuration file run there.
 -- Registered by an area, it would run that area's commands on infrastructure
--- every area shares, so only the installation holds one. Remote servers reach
--- the network through the worker's guard against internal addresses.
+-- every area shares, so only the installation holds one. A remote server is
+-- reached through the worker's netguard, which refuses cloud metadata and
+-- link-local addresses only: private addresses stay reachable on purpose.
 --
 -- Held by the database, so the rule binds every binary, the previous one
 -- included. An absent transport reads as stdio, as rows from before the field
