@@ -16,6 +16,8 @@ import { SurfacePicker } from "@/features/integrations/mcp/surface-picker";
 import { ConnectionPanel } from "@/features/integrations/mcp/connection-panel";
 import { RediscoveryPanel } from "@/features/integrations/mcp/rediscovery-panel";
 import { ClassifyDialog } from "@/features/admin/classify-dialog";
+import { classifyOffer } from "@/features/admin/classify-offer";
+import { useMe } from "@/features/session/api";
 import type { Tool } from "@/features/admin/api";
 import { useSetSurface } from "@/features/integrations/mcp/api";
 import { useMCPServer } from "@/features/integrations/mcp/use-mcp-server";
@@ -46,6 +48,8 @@ export function MCPServerPage() {
     isLoading, error, refetch,
   } = useMCPServer(name, read.data?.body);
   const server = listed && read.data ? { ...listed, ...read.data.body } : undefined;
+  // Who may rule on this server's tools, and as whom (NT-019).
+  const offer = classifyOffer(useMe().data, server);
   const save = useSetSurface();
   // The revision the page opened on, kept until a reload: a re-read brought
   // by anything else must not become what an edit begun before it answers.
@@ -146,7 +150,7 @@ export function MCPServerPage() {
             tools={tools}
             chosen={chosen}
             onToggle={toggle}
-            onClassify={setRuling}
+            onClassify={offer ? setRuling : undefined}
           />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={reset} disabled={!dirty}>
@@ -166,6 +170,7 @@ export function MCPServerPage() {
         tool={ruling}
         tools={catalogue}
         onClose={() => setRuling(null)}
+        offer={offer ?? "platform"}
       />
     </div>
   );

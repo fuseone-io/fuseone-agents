@@ -28,7 +28,8 @@ export function SurfacePicker({
   tools: Tool[];
   chosen: Set<string>;
   onToggle: (remoteName: string, next: boolean) => void;
-  onClassify: (tool: Tool) => void;
+  /** Absent when the caller may not rule on this server's tools (NT-019). */
+  onClassify?: (tool: Tool) => void;
 }) {
   const { t } = useTranslation();
 
@@ -79,7 +80,7 @@ function ToolRow({
   tool: Tool;
   chosen: boolean;
   onToggle: (remoteName: string, next: boolean) => void;
-  onClassify: (tool: Tool) => void;
+  onClassify?: (tool: Tool) => void;
 }) {
   const { t } = useTranslation();
   const declaredBy = tool.declaredBy ?? [];
@@ -129,9 +130,11 @@ function ToolRow({
           what it does, and the button says which act this is. */}
       <div className="flex shrink-0 items-center gap-2">
         <EffectBadge effect={tool.effect} stale={tool.stale} />
-        <Button size="sm" variant="ghost" className="h-7" onClick={() => onClassify(tool)}>
-          {t(`mcp.${actOn(tool)}`)}
-        </Button>
+        {onClassify && (
+          <Button size="sm" variant="ghost" className="h-7" onClick={() => onClassify(tool)}>
+            {t(`mcp.${actOn(tool)}`)}
+          </Button>
+        )}
       </div>
     </li>
   );
