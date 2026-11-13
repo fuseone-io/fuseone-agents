@@ -22,7 +22,7 @@ an administrator of one area put menus and buttons on the screen that answered
 // What remains the platform's (MCP servers, providers, channels) the console
 // reads from platform, not from can.
 var platformOnlyPerms = []domain.Permission{
-	domain.PermBudgetWrite,
+	domain.PermToolClassify, domain.PermBudgetWrite,
 	domain.PermPolicyWrite, domain.PermApprovalGrant, domain.PermAuditExport,
 	domain.PermBrandWrite, domain.PermDataErase,
 }
@@ -104,15 +104,12 @@ func TestMeFrom_anAuthor_configuresNowhere(t *testing.T) {
 	}
 }
 
-// tool:classify left the platform's list with NT-019's owner rulings: an area
-// curator classifies its own servers' tools, so it is told so, and where.
+// An area curator is told where it classifies (NT-019), for the console that
+// rules per tool. tool:classify stays out of `can` until that console ships.
 func TestMeFrom_anAreaAdministrator_isToldWhereItClassifies(t *testing.T) {
 	t.Parallel()
 	me := meFrom(areaAdministrator())
 
-	if !slices.Contains(me.Can, string(domain.PermToolClassify)) {
-		t.Errorf("can = %v, want tool:classify", me.Can)
-	}
 	want := []MeScope{{Company: "acme", Area: "cx"}}
 	if !slices.Equal(me.Classify, want) {
 		t.Errorf("classify = %v, want %v", me.Classify, want)

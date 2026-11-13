@@ -137,8 +137,8 @@ author picks tools and providers from is asked for the agent's scope. Adds migra
   - Each listed tool says where its server is stored (`scope`), and a tool's scope is
     read in the same snapshot as the tool, so a server moved meanwhile never hands one
     area's tool to another.
-  - `tool:classify` leaves the console's platform-only list: `/me` now tells an area
-    curator it classifies, and where (`classify`), for the tools of its own servers.
+  - `/me` tells an area curator where it classifies (`classify`), for the console that
+    offers an owner's ruling per tool.
   - The console does not send `scope` yet; the agent editor moves to these answers
     next.
 

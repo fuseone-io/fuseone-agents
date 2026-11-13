@@ -105,9 +105,11 @@ var platformOnly = map[domain.Permission]bool{
 	// provider:write left with NT-019 phase 1: connector instances are
 	// configured at their own scope. The console reads MCP servers, providers
 	// and channels, still the platform's, from Me.Platform. tool:classify
-	// left with phase 2's owner rulings: an area classifies its own servers'
-	// tools, and Me.Classify says where.
-	domain.PermBudgetWrite: true, domain.PermPolicyWrite: true,
+	// leaves with the console that rules per tool (NT-019, B2b): until then
+	// the console's tools screen lists unscoped and rules at the platform's
+	// level, which an area curator would meet as 403 on every click.
+	domain.PermToolClassify: true,
+	domain.PermBudgetWrite:  true, domain.PermPolicyWrite: true,
 	domain.PermApprovalGrant: true, domain.PermAuditExport: true,
 	domain.PermBrandWrite: true, domain.PermDataErase: true,
 }
