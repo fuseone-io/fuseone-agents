@@ -35,6 +35,25 @@ integrations and the ones above it. Nothing here is done by an agent.
   `internal/budget/alerts.go:121`).
 - **An area may create conversations and its own channel connections.** It can use the
   platform's Slack connection, or register another app or workspace of its own.
+- **A server outside the installation reaches only the origins the platform allows its
+  scope** (decided 2026-11-13, after review of the writers). `netguard` refuses cloud
+  metadata and link-local addresses only; private addresses stay reachable on purpose,
+  because on-premise MCP servers are normal. Delegating servers to areas would delegate
+  reaching any endpoint the worker can, with the area's credential. So:
+  - The platform keeps one policy per company or area: a list of exact origins (scheme,
+    host and port, no wildcards), stored at the installation and written only by the
+    platform's administration. An area can neither create nor widen it.
+  - A server of an area is held to its area's policy, or else to its company's, never to
+    both together. With neither, it reaches nothing.
+  - The worker refuses a server whose URL is not listed before sending anything, and
+    checks every request as it leaves: redirects, and the endpoints that refresh an
+    OAuth grant or mint a GitHub App token. A changed policy reconnects the server.
+  - The writers' door checks the server's origins at the PUT too, once it opens.
+  - The installation's servers are not held to any list. `netguard` keeps refusing
+    metadata and link-local for every server, and NetworkPolicy remains a defence in
+    depth, not a substitute.
+  - The enforcement ships in its own release, on every replica, before the writers. Once
+    an area's server exists, that release is the rollback floor.
 
 ## Where things stand
 
