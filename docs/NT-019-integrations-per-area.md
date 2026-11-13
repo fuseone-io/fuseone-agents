@@ -33,6 +33,19 @@ integrations and the ones above it. Nothing here is done by an agent.
   area's. Nothing new is needed for that: a run's spend is already measured against the
   run's scope (`budget.Watcher.check` reads `SpentSince(ctx, ceiling.Scope, …)`,
   `internal/budget/alerts.go:121`).
+- **An area's MCP server is remote** (decided by Kleber on 2026-11-13, while building
+  phase 2's writers). A stdio server is a process the platform's worker starts on its
+  own host, with its command, arguments, environment and configuration file. Registered
+  by an area, it would run that area's commands on infrastructure every area shares.
+  So a company's or an area's server is HTTP, and stdio servers stay the platform's.
+  The rule is held three times:
+  - **by the database**, migration `0109`, so every binary is bound;
+  - **by the door**, which answers 400 to an area's write naming a local server;
+  - **by the worker**, which starts no local process for a server outside the
+    installation.
+
+  Remote servers reach the network through the worker's guard against internal
+  addresses (`netguard`), as connectors do.
 - **An area may create conversations and its own channel connections.** It can use the
   platform's Slack connection, or register another app or workspace of its own.
 - **A server outside the installation reaches only the origins the platform allows its
