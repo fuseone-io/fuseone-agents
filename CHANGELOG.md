@@ -28,7 +28,7 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.107.0] — 2026-11-12
 
 NT-019 phase 2, the readers' release: every reader of an MCP server and of a tool's
 classification learns where it is stored. No door writes an area's server or ruling
@@ -46,7 +46,7 @@ yet, so nothing changes for an installation today. No migration.
 
 ### Changed
 
-- **An MCP server is read where it is stored.** That covers its credential, a probe,
+- **An MCP server is read where it is stored** (#333). That covers its credential, a probe,
   a rediscovery, its removal, and its OAuth grant's refresh, which is written back to
   the row it came from. Its tools carry its scope into the catalogue, and the Gate
   stops them for a run outside that scope.
@@ -54,6 +54,10 @@ yet, so nothing changes for an installation today. No migration.
   wins over its owner's, an owner's ruling counts only at the scope of the tool's
   server, and a ruling stored anywhere else is ignored. The worker's catalogue and the
   console's listing use one rule.
+- **A ruling judged against an older definition stops its tool.** The tool returns to
+  how discovery leaves it: no effect, untrusted, nothing to compensate with, no dedupe.
+  Before, the entry was only marked stale, and what an earlier ruling had set stayed in
+  force.
 - **An area's server keeps its tools in the shared catalogue.** Publications are judged
   against the configured servers at every scope.
 
