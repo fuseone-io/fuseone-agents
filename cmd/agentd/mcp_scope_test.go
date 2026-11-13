@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -60,5 +61,29 @@ func TestConnectServer_anAreasServer_isItsAreasInTheCatalogue(t *testing.T) {
 
 	if got, ok := catalog.Scope("jira.search"); !ok || got != cx {
 		t.Errorf("scope = %s (%v), want %s", got, ok, cx)
+	}
+}
+
+/*
+The worker never starts an area's local server (NT-019, decided 2026-11-13).
+
+The doors refuse one and the database does too, so such a row can only come by
+restore or by hand. The worker refuses it as well, before any process starts:
+a command an area named would run on the platform's host.
+*/
+func TestConnectServer_anAreasLocalServer_isRefusedBeforeAnyProcessStarts(t *testing.T) {
+	marker := t.TempDir() + "/started"
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	err := connectServer(t.Context(), catalog, domain.MCPServer{
+		Name: "cx-local", Transport: domain.TransportStdio, Command: "sh",
+		Args: []string{"-c", "touch " + marker}, AcceptsLocalExecution: true, Enabled: true,
+		Scope: domain.Scope{Company: "acme", Area: "cx"},
+	}, domain.MCPCredentials{}, nil, nil, credentialPolicy{}, nil)
+	if err == nil {
+		_ = catalog.RemoveServer("cx-local")
+		t.Fatal("an area's local server was connected")
+	}
+	if _, statErr := os.Stat(marker); statErr == nil {
+		t.Error("the area's command ran on the worker")
 	}
 }

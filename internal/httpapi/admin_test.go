@@ -15,6 +15,7 @@ import (
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/known"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/settings"
 )
 
 // fakeAdmin records what the handlers asked for, so a test can assert on the
@@ -26,6 +27,7 @@ type fakeAdmin struct {
 
 	putServer   domain.MCPServer
 	putPersonal string
+	putVisible  []domain.Scope
 	putToken    string
 	putHeaders  map[string]string
 	putOAuth    *domain.MCPOAuthGrant
@@ -119,6 +121,13 @@ func (f *fakeAdmin) MCPPersonalCredentialPresence(
 	}
 	return out, f.err
 }
+
+// WriteMCPPersonalCredential records what the door sent, as the put does.
+func (f *fakeAdmin) WriteMCPPersonalCredential(ctx context.Context, w admin.PersonalCredentialWrite) error {
+	f.putVisible = w.Visible
+	return f.PutMCPPersonalCredential(ctx, w.By, w.Scope, w.Server, w.Given)
+}
+
 func (f *fakeAdmin) PutMCPPersonalCredential(
 	_ context.Context, by domain.UserID, _ domain.Scope, name string,
 	creds domain.MCPCredentialPatch,
@@ -166,6 +175,40 @@ func (f *fakeAdmin) RequestMCPProbe(_ context.Context, by domain.UserID, _ domai
 	f.probed, f.putBy = name, by
 	return f.err
 }
+
+func (f *fakeAdmin) RequestMCPProbeAt(ctx context.Context, by domain.UserID, at admin.MCPServerAt, name string) error {
+	return f.RequestMCPProbe(ctx, by, at.Audit, name)
+}
+
+func (f *fakeAdmin) RequestMCPRediscoveryAt(
+	ctx context.Context, by domain.UserID, at admin.MCPServerAt, name string,
+) (int64, error) {
+	return f.RequestMCPRediscovery(ctx, by, at.Audit, name)
+}
+
+func (f *fakeAdmin) MCPRediscoveryAt(ctx context.Context, _ admin.MCPServerAt, name string) (domain.MCPRediscoveryStatus, error) {
+	return f.MCPRediscovery(ctx, name)
+}
+
+// MCPServerNamedIf asks allow at the installation, where every server the
+// fake holds lives, and then reads as MCPServerNamed.
+func (f *fakeAdmin) MCPServerNamedIf(
+	ctx context.Context, name string, allow func(settings.ScopeKind, domain.Scope) error,
+) (domain.MCPServer, error) {
+	if allow != nil {
+		if err := allow(settings.ScopeInstallation, domain.Scope{}); err != nil {
+			return domain.MCPServer{}, err
+		}
+	}
+	return f.MCPServerNamed(ctx, name)
+}
+
+// MCPServerStoredAt places every server the fake holds at the installation,
+// as every server was before areas configured their own.
+func (f *fakeAdmin) MCPServerStoredAt(context.Context, string) (settings.ScopeKind, domain.Scope, error) {
+	return settings.ScopeInstallation, domain.Scope{}, nil
+}
+
 func (f *fakeAdmin) RemoveMCPServer(_ context.Context, r admin.Removal) error {
 	f.deleted, f.putBy = r.Name, r.By
 	return f.err

@@ -59,11 +59,18 @@ func (s *Server) configurerAt(
 // inherits it or the caller governs it, and editable when rule 2 lets them
 // write it. Nothing of a sibling area is listed.
 func connectorListing(p domain.Principal, instance connectortools.ConfiguredInstance) (listed, editable bool) {
-	editable = mayConfigure(p, instance.ScopeKind, instance.Scope)
+	return rowListing(p, instance.ScopeKind, instance.Scope)
+}
+
+// rowListing is rule 4 for any configured row: listed when the caller's
+// scopes inherit it or the caller governs it, editable when rule 2 lets them
+// write it, and never a sibling area's. One rule for every kind (NT-019).
+func rowListing(p domain.Principal, kind settings.ScopeKind, stored domain.Scope) (listed, editable bool) {
+	editable = mayConfigure(p, kind, stored)
 	if editable {
 		return true, true
 	}
-	runtime := connectorRuntimeScope(instance.ScopeKind, instance.Scope)
+	runtime := connectorRuntimeScope(kind, stored)
 	for _, held := range p.ScopesFor(permConfigure) {
 		if runtime.Contains(held) {
 			return true, false

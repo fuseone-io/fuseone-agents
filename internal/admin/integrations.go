@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -44,6 +45,12 @@ var (
 	// runtime must not trust a rule it only enforces at the door.
 	ErrLocalExecutionNotAccepted = errors.New(
 		"admin: a local server runs code inside the worker, and that has to be accepted explicitly")
+	// ErrAreaServerIsRemote is a company's or an area's server that is not a
+	// remote one (NT-019, decided 2026-11-13): a stdio server runs on the
+	// platform's worker, which no area may command. The database refuses
+	// the row too (0110).
+	ErrAreaServerIsRemote = errors.New(
+		"admin: an area's or a company's MCP server is remote; a local server runs on the platform's worker and is the platform's")
 	ErrNoBaseURL         = errors.New("admin: a provider needs a base URL")
 	ErrOAuthGrantChanged = errors.New(
 		"admin: the stored OAuth grant changed before the refresh could be saved")
@@ -224,8 +231,13 @@ func (i *Integrations) PutMCPServer(
 
 // MCPServerWrite is a server being configured, and the precondition it answers.
 type MCPServerWrite struct {
-	By     domain.UserID
-	Scope  domain.Scope
+	By domain.UserID
+	// Scope is the audit's: where the write is recorded.
+	Scope domain.Scope
+	// At and Stored are where the row lives (NT-019). Zero At is the
+	// installation, as every server was before areas wrote their own.
+	At     settings.ScopeKind
+	Stored domain.Scope
 	Server domain.MCPServer
 	Given  domain.MCPCredentialPatch
 	Expect domain.IfMatch
@@ -241,10 +253,16 @@ func (i *Integrations) mcpRevision(set settings.Setting) domain.Revision {
 // WriteMCPServer stores a server and answers its resulting revision.
 func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (domain.Revision, error) {
 	by, scope, server, given := w.By, w.Scope, w.Server, w.Given
+	at, storedScope := w.At, w.Stored
+	if at == "" {
+		at, storedScope = settings.ScopeInstallation, domain.Scope{}
+	}
 	transport := server.TransportOf()
 	switch {
 	case strings.TrimSpace(server.Name) == "":
 		return "", ErrNoName
+	case at != settings.ScopeInstallation && transport != domain.TransportHTTP:
+		return "", ErrAreaServerIsRemote
 	case transport == domain.TransportStdio && strings.TrimSpace(server.Command) == "":
 		return "", ErrNoCommand
 	case transport == domain.TransportStdio && !server.AcceptsLocalExecution:
@@ -293,10 +311,16 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 		"nobody chose" reopens every tool, and a credential restored is one
 		somebody believes they revoked.
 	*/
+	// Where a server outside the installation may send requests (NT-019):
+	// read by the guard, judged in the fold on the credential that will be
+	// stored.
+	var egress *domain.MCPEgress
 	var toolsRemoved int64
 	return writeRevised(ctx, i.pool, i.settings, folded{
 		by: by, scope: scope, action: "mcp_server.configured", target: server.Name,
-		revised: &revised{expect: w.Expect, of: i.mcpRevision},
+		// The guard takes the row's lock, after the name's: a removal takes
+		// the name then the row, and the two orders must agree (NT-019).
+		revised: &revised{expect: w.Expect, of: i.mcpRevision, lockedByGuard: true},
 		// Switched off, its tools go in the same transaction, as on removal:
 		// the worker that published them may be gone, and one that never
 		// reached the server has nothing to withdraw.
@@ -306,16 +330,34 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 		// the catalogue's lock and never a server row's, so no two of the
 		// three can each hold what the other waits for.
 		guard: func(ctx context.Context, tx settings.DB) error {
+			// First, before any row: a removal of this name in flight finishes
+			// before this write decides anything (NT-019).
+			if err := LockMCPServerName(ctx, tx, server.Name); err != nil {
+				return err
+			}
+			if err := settings.GuardTx(ctx, tx, settings.Setting{
+				ScopeKind: at, Scope: storedScope, Kind: settings.KindMCPServer, Name: server.Name,
+			}); err != nil {
+				return err
+			}
+			// A name another scope holds is a 409 before anything else this
+			// write could be refused for (NT-019).
+			if err := nameHeldElsewhere(ctx, tx, server.Name, at, storedScope); err != nil {
+				return err
+			}
+			var err error
+			if egress, err = i.egressAtTx(ctx, tx, at, storedScope); err != nil {
+				return err
+			}
 			if server.Enabled {
 				return nil
 			}
-			var err error
 			toolsRemoved, err = dropServerTools(ctx, tx, server.Name)
 			return err
 		},
 		set: settings.Setting{
-			ScopeKind: settings.ScopeInstallation,
-			Kind:      settings.KindMCPServer, Name: server.Name,
+			ScopeKind: at, Scope: storedScope,
+			Kind: settings.KindMCPServer, Name: server.Name,
 			Enabled: server.Enabled, UpdatedBy: string(by),
 		},
 		fold: func(stored settings.Setting) (settings.Setting, any, error) {
@@ -359,6 +401,9 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 			if err := domain.CheckHeaderNames(merged.Headers); err != nil {
 				return settings.Setting{}, nil, err
 			}
+			if err := withinEgress(egress, server.URL, merged); err != nil {
+				return settings.Setting{}, nil, err
+			}
 			// Judged on what will be stored, not on what was sent: an edit
 			// that only moves the URL still decides where the token goes.
 			if merged.GitHubApp != nil && !merged.GitHubApp.Empty() {
@@ -391,8 +436,8 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 			}
 
 			return settings.Setting{
-					ScopeKind: settings.ScopeInstallation,
-					Kind:      settings.KindMCPServer, Name: server.Name,
+					ScopeKind: at, Scope: storedScope,
+					Kind: settings.KindMCPServer, Name: server.Name,
 					Value: value, Secret: merged.Sealed(),
 					// Nothing left to keep is a removal to carry out, not a
 					// write to skip: the store's own rule makes "clear it" and
@@ -655,17 +700,43 @@ func (i *Integrations) PutMCPPersonalCredential(
 	ctx context.Context, by domain.UserID, scope domain.Scope,
 	name string, given domain.MCPCredentialPatch,
 ) error {
+	return i.WriteMCPPersonalCredential(ctx, PersonalCredentialWrite{
+		By: by, Scope: scope, Visible: []domain.Scope{scope}, Server: name, Given: given,
+	})
+}
+
+// PersonalCredentialWrite is one person's credential for a server, and the
+// scopes they may read tools in: the server has to be one of theirs (NT-019).
+type PersonalCredentialWrite struct {
+	By      domain.UserID
+	Scope   domain.Scope
+	Visible []domain.Scope
+	Server  string
+	Given   domain.MCPCredentialPatch
+}
+
+// WriteMCPPersonalCredential stores a person's credential for a server their
+// scopes reach. Checked under the server's row, inside the write: a server
+// moved to another area between a check and the write would otherwise take a
+// credential its new area never let this person hold.
+func (i *Integrations) WriteMCPPersonalCredential(ctx context.Context, w PersonalCredentialWrite) error {
+	by, scope, name, given := w.By, w.Scope, w.Server, w.Given
 	if strings.TrimSpace(name) == "" {
 		return ErrNoName
 	}
-	serverKind, serverAt, err := i.personalCredentialTarget(ctx, name)
-	if err != nil {
-		return err
-	}
-	target := mcpServerRuntimeScope(serverKind, serverAt)
+	// Where the server is stored, read under its row's lock by the guard: the
+	// credential records it, and is handed only for that row (NT-019).
+	var (
+		serverKind settings.ScopeKind
+		serverAt   domain.Scope
+	)
 
 	key := mcpUserCredentialName(name, by)
 	return writeFolded(ctx, i.pool, i.settings, folded{
+		guard: func(ctx context.Context, tx settings.DB) (err error) {
+			serverKind, serverAt, err = personalCredentialTarget(ctx, tx, name, w.Visible)
+			return err
+		},
 		by: by, scope: scope, action: "mcp_credential.configured", target: name,
 		set: settings.Setting{
 			ScopeKind: settings.ScopeInstallation,
@@ -673,6 +744,7 @@ func (i *Integrations) PutMCPPersonalCredential(
 			Enabled: true, UpdatedBy: string(by),
 		},
 		fold: func(stored settings.Setting) (settings.Setting, any, error) {
+			target := mcpServerRuntimeScope(serverKind, serverAt)
 			kept := domain.ReadMCPCredentials(stored.Secret)
 			if held, err := storedPersonalCredential(stored, name, by); stored.Kind != "" &&
 				(err != nil || !sameServerRow(held.serverRuntime(), target)) {
@@ -748,25 +820,36 @@ func (i *Integrations) DeleteMCPPersonalCredential(
 	return tx.Commit(ctx)
 }
 
-// personalCredentialTarget is where the server a person's credential is for
-// is stored, refusing one that cannot take a personal credential.
-func (i *Integrations) personalCredentialTarget(
-	ctx context.Context, name string,
+// personalCredentialTarget is the server a person may hold a credential for:
+// remote, not a GitHub App, and reached by one of their scopes. Its row is held
+// for share until the write commits, so it cannot move or change under it. A
+// server out of reach answers as one that does not exist.
+func personalCredentialTarget(
+	ctx context.Context, tx settings.DB, name string, visible []domain.Scope,
 ) (settings.ScopeKind, domain.Scope, error) {
-	kind, scope, err := i.mcpServerAt(ctx, name)
-	if err != nil {
-		return "", domain.Scope{}, err
-	}
-	set, err := i.settings.Get(ctx, kind, scope, settings.KindMCPServer, name)
-	switch {
-	case errors.Is(err, settings.ErrNotFound):
+	var kind, company, area string
+	var raw []byte
+	err := tx.QueryRow(ctx, `
+		select scope_kind, company_id, area_id, value from settings
+		where kind = $1 and name = $2 for share`, string(settings.KindMCPServer), name,
+	).Scan(&kind, &company, &area, &raw)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return "", domain.Scope{}, ErrMCPServerUnknown
-	case err != nil:
-		return "", domain.Scope{}, err
+	}
+	if err != nil {
+		return "", domain.Scope{}, fmt.Errorf("admin: read MCP server %s: %w", name, err)
+	}
+	// Both ways, as the listing has it: a server the person's scopes inherit,
+	// and one stored in a scope a grant of theirs contains, such as an area
+	// of their company (NT-019).
+	runtime := storedRuntimeScope(kind, company, area)
+	reached := func(v domain.Scope) bool { return runtime.Contains(v) || v.Contains(runtime) }
+	if !slices.ContainsFunc(visible, reached) {
+		return "", domain.Scope{}, ErrMCPServerUnknown
 	}
 	var stored storedServer
-	if len(set.Value) > 0 {
-		if err := json.Unmarshal(set.Value, &stored); err != nil {
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &stored); err != nil {
 			return "", domain.Scope{}, fmt.Errorf("admin: decode MCP server %s: %w", name, err)
 		}
 	}
@@ -780,7 +863,7 @@ func (i *Integrations) personalCredentialTarget(
 	if stored.GitHubApp != nil {
 		return "", domain.Scope{}, ErrMCPPersonalCredentialApp
 	}
-	return kind, scope, nil
+	return settings.ScopeKind(kind), domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}, nil
 }
 
 func mcpUserCredentialName(server string, principal domain.UserID) string {
@@ -830,33 +913,40 @@ func rowServer(stored storedMCPUserCredential, name string) string {
 func (i *Integrations) RequestMCPProbe(
 	ctx context.Context, by domain.UserID, scope domain.Scope, name string,
 ) error {
-	if strings.TrimSpace(name) == "" {
-		return ErrNoName
-	}
-	kind, at, err := i.mcpServerAt(ctx, name)
+	at, err := i.at(ctx, name, scope)
 	if err != nil {
 		return err
 	}
-	server, err := i.settings.Get(ctx, kind, at, settings.KindMCPServer, name)
-	switch {
-	case errors.Is(err, settings.ErrNotFound):
-		return ErrMCPServerUnknown
-	case err != nil:
-		return err
-	case !server.Enabled:
-		return ErrMCPServerDisabled
-	}
+	return i.RequestMCPProbeAt(ctx, by, at, name)
+}
 
-	return writeSetting(ctx, i.pool, i.settings, by, scope, settings.Setting{
-		ScopeKind: settings.ScopeInstallation,
-		Kind:      kindMCPProbe,
-		Name:      name,
-		// The row the probe was asked of, which the worker checks before it
-		// acts (NT-019).
-		Value:     probeRequestValue(kind, at),
-		Enabled:   true,
-		UpdatedBy: string(by),
-	}, "mcp_server.probe_requested", name, map[string]any{"server": name})
+// RequestMCPProbeAt asks for a probe of the server at the exact row a door
+// authorized, held while the request is written (NT-019).
+func (i *Integrations) RequestMCPProbeAt(ctx context.Context, by domain.UserID, at MCPServerAt, name string) error {
+	if strings.TrimSpace(name) == "" {
+		return ErrNoName
+	}
+	return writeFolded(ctx, i.pool, i.settings, folded{
+		guard: func(ctx context.Context, tx settings.DB) error {
+			enabled, err := lockMCPServerAt(ctx, tx, at, name)
+			if err == nil && !enabled {
+				return ErrMCPServerDisabled
+			}
+			return err
+		},
+		by: by, scope: at.Audit, action: "mcp_server.probe_requested", target: name,
+		set: settings.Setting{
+			ScopeKind: settings.ScopeInstallation,
+			Kind:      kindMCPProbe,
+			Name:      name,
+			// The row the probe was asked of, which the worker checks
+			// before it acts (NT-019).
+			Value:     probeRequestValue(at.Kind, at.Stored),
+			Enabled:   true,
+			UpdatedBy: string(by),
+		},
+		detail: map[string]any{"server": name},
+	})
 }
 
 // ClaimMCPProbes returns the explicit probe requests this worker owns now,
@@ -1066,9 +1156,12 @@ func (i *Integrations) DeleteMCPServer(ctx context.Context, by domain.UserID, sc
 // RemoveMCPServer deletes a server, if it is still at a revision the caller named.
 func (i *Integrations) RemoveMCPServer(ctx context.Context, r Removal) error {
 	by, scope, name := r.By, r.Scope, r.Name
-	kind, at, err := i.mcpServerAt(ctx, name)
-	if err != nil {
-		return err
+	kind, at := r.At, r.Stored
+	if kind == "" {
+		var err error
+		if kind, at, err = i.mcpServerAt(ctx, name); err != nil {
+			return err
+		}
 	}
 	tx, err := i.pool.Begin(ctx)
 	if err != nil {
@@ -1076,10 +1169,36 @@ func (i *Integrations) RemoveMCPServer(ctx context.Context, r Removal) error {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// The name before anything else, for the whole transaction: a creation of
+	// it in another scope waits until this removal has decided and cleared.
+	if err := LockMCPServerName(ctx, tx, name); err != nil {
+		return err
+	}
+
 	// First of all, before the catalogue's lock below and before anything is dropped.
 	if err := removalGuard(ctx, tx, i.settings, settings.Setting{
 		ScopeKind: kind, Scope: at, Kind: settings.KindMCPServer, Name: name,
 	}, &revised{expect: r.Expect, of: i.mcpRevision}); err != nil {
+		return err
+	}
+
+	// Only the row this removal is about. Held, it cannot be replaced under
+	// us. Gone while a server of the same name is stored elsewhere, the name
+	// is another scope's now, and so are the tools and observations under it:
+	// nothing here is this removal's (NT-019). Gone everywhere, the removal
+	// still clears what is left under the name, as for a server a flag
+	// started and nobody configured.
+	if _, err := lockMCPServerAt(ctx, tx, MCPServerAt{Kind: kind, Stored: at}, name); errors.Is(err, ErrMCPServerUnknown) {
+		var elsewhere bool
+		if err := tx.QueryRow(ctx, `
+			select exists (select 1 from settings where kind = $1 and name = $2)`,
+			string(settings.KindMCPServer), name).Scan(&elsewhere); err != nil {
+			return fmt.Errorf("admin: look for %s elsewhere: %w", name, err)
+		}
+		if elsewhere {
+			return nil
+		}
+	} else if err != nil {
 		return err
 	}
 

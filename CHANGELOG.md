@@ -28,6 +28,67 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+NT-019 phase 2, the writers' release, part one: the administrator of an area configures
+that area's own MCP servers. They are remote; local servers stay the platform's. Adds
+migration `0110_area_mcp_servers_are_remote`.
+
+### Upgrade notes
+
+- **Every replica must already run 0.109.0**, the egress barrier, before this one. An
+  older worker either joins a server's configuration and credential by name alone
+  (before 0.108.0) or does not hold an area's server to the platform's egress policy
+  (before 0.109.0).
+- **Rollback floor:** once an area's MCP server exists, never go below 0.109.0. Rolling
+  back to 0.109.0 is safe.
+- **The integrations listing (`GET /admin/integrations`) changes who may read it.** A
+  reader of the platform reads it as before. Whoever configures in some scope reads it
+  too, with their own servers, the ones they inherit, and those of the areas they
+  govern; never a sibling area's. Each server says where it is stored and whether the
+  caller may change it (`editable`).
+
+### Added
+
+- **An area's own remote MCP servers.**
+  - Writing one needs `provider:write` at its scope, or at the platform's
+    administration. Reading, probing, rediscovering and removing it need the same, at
+    the scope where it is stored.
+  - A server's scope does not move: a name another scope holds answers 409
+    `fuseone:integration-name-taken`.
+  - A local (stdio) server from an area is refused, by the door with 400, by the
+    database, and by the worker, which starts no such process. It would run that area's
+    commands on the platform's host.
+  - A remote server reaches only the origins the platform's egress policy allows its
+    scope (0.109.0). The door checks the server's URL, its OAuth token endpoint and its
+    GitHub App API base (`api.github.com` when none is named) against that policy, and
+    answers 400 `fuseone:egress-not-allowed` for an origin outside it and for a scope
+    the platform allows nothing; the problem's `detail` is the canonical origin alone. A
+    policy changed while the write is in flight is either waited for or the one it is
+    judged by. A name another scope holds still answers 409 first.
+  - The scope a write names must be a real company or area: the installation's `*`,
+    an identifier in another form (upper case, spaces), or a company or area without
+    `scopeKind` answers 400.
+  - A door acts on the server it authorized and no other. A server removed and stored
+    again under the same name in another scope meanwhile is not removed, probed or
+    rediscovered by a request authorized for the first, and its rediscovery status
+    shows nothing of the first.
+  - Writing and removing a server of one name take turns, whatever the scope: a
+    removal never clears what a concurrent creation of the name in another scope
+    stored.
+- **A personal MCP credential is held only for a server the person's scopes reach.**
+  Checked under the server's row when the credential is written, and recorded for that
+  row. Reach goes both ways: a server the person's scopes inherit, and one stored in a
+  scope a grant of theirs contains, such as an area of their company. A server out of
+  reach answers as one that does not exist.
+
+### Fixed
+
+- **A connector instance's scope must be a real company or area.** Its writes shared
+  the check that let `company="*"` through, a row every reader takes for the
+  installation's, and an area typed in another form, a row no registered area reaches.
+  Both now answer 400.
+
 ## [0.109.0] — 2026-11-13
 
 NT-019 phase 2, the egress barrier: before areas may register MCP servers, the platform

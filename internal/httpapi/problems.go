@@ -78,6 +78,11 @@ const (
 	// already holds (NT-019). Its own code, so the console can ask for another
 	// name rather than report a failure. It never says which scope holds it.
 	CodeIntegrationNameTaken Code = "fuseone:integration-name-taken"
+	// CodeEgressNotAllowed is an MCP server outside the installation that
+	// would send a request outside the platform's egress policy for its scope
+	// (NT-019). The detail is the canonical origin refused and nothing else,
+	// so the console can name it without parsing a sentence.
+	CodeEgressNotAllowed Code = "fuseone:egress-not-allowed"
 	// CodeNoMasterKey is a GitHub webhook's secret refused because the
 	// installation has no master key to seal it with (#202). Its own code so
 	// the console can say what to configure rather than report a failure.
@@ -148,6 +153,11 @@ func conflicted(detail string) openapi.Problem {
 func nameTaken() openapi.Problem {
 	return refusal(http.StatusConflict, CodeIntegrationNameTaken, "Name taken",
 		"another scope already holds this name; choose another")
+}
+
+// egressNotAllowed names the origin the egress policy refused.
+func egressNotAllowed(origin string) openapi.Problem {
+	return refusal(http.StatusBadRequest, CodeEgressNotAllowed, "Origin not allowed", origin)
 }
 
 // upstreamRefused is something outside this installation saying no.

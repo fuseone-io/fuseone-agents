@@ -107,3 +107,80 @@ func (c *Curator) rulingsInForce(
 	}
 	return out, nil
 }
+
+// MCPServerStoredAt is mcpServerAt, for a door that authorizes at the row's
+// scope before it acts on a server it names.
+func (i *Integrations) MCPServerStoredAt(ctx context.Context, name string) (settings.ScopeKind, domain.Scope, error) {
+	return i.mcpServerAt(ctx, name)
+}
+
+// MCPServerAt is the exact row a door was authorized for, and the scope its
+// act is recorded at. A door acts on this row and no other: the name is looked
+// up once, before the authorization, and a row replaced since by another
+// scope's server of the same name is not the one that was authorized.
+type MCPServerAt struct {
+	Kind   settings.ScopeKind
+	Stored domain.Scope
+	Audit  domain.Scope
+}
+
+// lockMCPServerAt holds the server's row at the exact key until the
+// transaction ends, and answers whether it is switched on.
+func lockMCPServerAt(ctx context.Context, tx settings.DB, at MCPServerAt, name string) (bool, error) {
+	var enabled bool
+	err := tx.QueryRow(ctx, `
+		select enabled from settings
+		where scope_kind = $1 and company_id = $2 and area_id = $3 and kind = $4 and name = $5
+		for share`,
+		string(at.Kind), string(at.Stored.Company), string(at.Stored.Area),
+		string(settings.KindMCPServer), name,
+	).Scan(&enabled)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, ErrMCPServerUnknown
+	}
+	if err != nil {
+		return false, fmt.Errorf("admin: hold MCP server %s: %w", name, err)
+	}
+	return enabled, nil
+}
+
+// at is where a server is stored now, for a caller that authorized nothing.
+func (i *Integrations) at(ctx context.Context, name string, audit domain.Scope) (MCPServerAt, error) {
+	kind, stored, err := i.mcpServerAt(ctx, name)
+	return MCPServerAt{Kind: kind, Stored: stored, Audit: audit}, err
+}
+
+/*
+LockMCPServerName holds one lock per server name until the transaction ends.
+
+A row lock cannot guard a name nobody holds: a removal that finds the name
+nowhere clears what is left under it (personal credentials, observations), and
+a creation of the name in another scope landing between that decision and the
+clearing would lose what it just stored. Every write of a server and every
+removal take this lock first, so the two take turns (NT-019).
+*/
+func LockMCPServerName(ctx context.Context, tx settings.DB, name string) error {
+	if _, err := tx.Exec(ctx,
+		`select pg_advisory_xact_lock(hashtextextended('mcp_server:' || $1, 0))`, name); err != nil {
+		return fmt.Errorf("admin: lock the MCP server name %s: %w", name, err)
+	}
+	return nil
+}
+
+// nameHeldElsewhere answers ErrNameTaken when the name is a server's stored at
+// another scope: names are unique across scopes (0108), and the write would
+// meet that constraint only after judging everything else.
+func nameHeldElsewhere(ctx context.Context, tx settings.DB, name string, kind settings.ScopeKind, stored domain.Scope) error {
+	var elsewhere bool
+	if err := tx.QueryRow(ctx, `
+		select exists (select 1 from settings where kind = $1 and name = $2
+			and not (scope_kind = $3 and company_id = $4 and area_id = $5))`,
+		string(settings.KindMCPServer), name, string(kind), string(stored.Company), string(stored.Area),
+	).Scan(&elsewhere); err != nil {
+		return fmt.Errorf("admin: look for %s elsewhere: %w", name, err)
+	}
+	if elsewhere {
+		return fmt.Errorf("%w: %s", settings.ErrNameTaken, name)
+	}
+	return nil
+}

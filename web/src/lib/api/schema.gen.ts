@@ -1715,8 +1715,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Everything the platform is configured to talk to
+         * The tool servers and model providers the caller uses or governs
          * @description Tool servers and model providers. Credentials are never returned; a provider only reports whether one is stored.
+         *     Read by a holder of tool:read at the platform's administration, who is listed every server, or by whoever holds provider:write in some scope (NT-019). The latter is listed the servers of the scopes they govern, and the ones their scopes inherit from their company or the installation; never a sibling area's. Each server says where it is stored (scopeKind, company, area) and whether the caller may change it (editable): an inherited server is listed read-only. Model providers are the platform's and are listed as they are.
          */
         get: operations["listIntegrations"];
         put?: never;
@@ -2320,6 +2321,18 @@ export interface paths {
          *     other administrative change. The tools it offers arrive unclassified
          *     and do nothing until somebody says what they do; that stays a separate
          *     act.
+         *
+         *     A company's or an area's server is held to the platform's egress
+         *     policy for its scope (`/admin/integrations/mcp-egress-policies`): its
+         *     URL, its OAuth token endpoint and its GitHub App API base
+         *     (`https://api.github.com` when none is named) must each be an origin
+         *     the policy lists, or the write answers 400 with problem type
+         *     `fuseone:egress-not-allowed`, whose `detail` is the canonical origin
+         *     refused (scheme, host and port) and nothing else. An OAuth token
+         *     endpoint or App API base that is not an http(s) address with a host
+         *     has no origin to name, and answers 400 `fuseone:invalid-input`
+         *     instead. A scope with no policy, or a deny-all, allows none. A name another scope holds answers 409 first.
+         *     The installation's servers are not held to any policy.
          */
         put: operations["putMCPServer"];
         post?: never;
@@ -4589,6 +4602,12 @@ export interface components {
             scopes?: string[];
         };
         MCPServer: {
+            /** @description Where the server is stored (NT-019). */
+            scopeKind?: components["schemas"]["ConnectorScopeKind"];
+            company?: string;
+            area?: string;
+            /** @description Whether the caller may change or remove this server: it holds provider:write at the server's scope, or at the platform's administration. A server listed because the caller's area inherits it is not. */
+            editable?: boolean;
             /** @description Only on the read by name. The names of the stored HTTP headers; the values never come back, because a value cannot be told apart from a credential by reading it. */
             headerNames?: string[];
             /** @description Only on the read by name. The names of the stored variables, never their values. */
@@ -9996,6 +10015,10 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description Where the server is stored (NT-019). Absent is the installation, as every server was before areas configured their own. A company's or an area's server is remote (transport http): a local one runs on the platform's worker, and is the platform's. Writing it needs provider:write at that scope, or at the platform's administration. A server's scope does not move: a name another scope holds answers 409. */
+                    scopeKind?: components["schemas"]["ConnectorScopeKind"];
+                    company?: string;
+                    area?: string;
                     /** @default stdio */
                     transport?: components["schemas"]["Transport"];
                     /** @description Required for stdio. */
@@ -10056,6 +10079,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["NameTaken"];
             412: components["responses"]["PreconditionFailed"];
         };
     };

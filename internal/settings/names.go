@@ -33,6 +33,22 @@ state the read began on. The credential is opened under the scope the row
 itself names.
 */
 func (s *Store) RevealNamed(ctx context.Context, kind Kind, name string) (Setting, error) {
+	return s.RevealNamedIf(ctx, kind, name, nil)
+}
+
+/*
+RevealNamedIf is RevealNamed that asks first, with the row's scope in hand,
+whether its credential may be opened at all.
+
+Still one statement, so the answer is the state the read began on. allow runs
+on the scope the row names before anything is decrypted: a caller refused the
+row is refused there, and never hears what opening it would have said — such as
+a credential the vault cannot open, which an error would otherwise tell apart
+from a row that does not exist. A nil allow opens every row.
+*/
+func (s *Store) RevealNamedIf(
+	ctx context.Context, kind Kind, name string, allow func(ScopeKind, domain.Scope) error,
+) (Setting, error) {
 	out := Setting{Kind: kind, Name: name}
 	var scopeKind, company, area string
 	var ciphertext, nonce []byte
@@ -48,5 +64,10 @@ func (s *Store) RevealNamed(ctx context.Context, kind Kind, name string) (Settin
 	}
 	out.ScopeKind = ScopeKind(scopeKind)
 	out.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
+	if allow != nil {
+		if err := allow(out.ScopeKind, out.Scope); err != nil {
+			return Setting{}, err
+		}
+	}
 	return s.open(out, ciphertext, nonce)
 }

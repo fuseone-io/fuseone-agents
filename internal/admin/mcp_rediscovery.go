@@ -29,25 +29,29 @@ func (i *Integrations) RequestMCPRediscovery(
 	if strings.TrimSpace(name) == "" {
 		return 0, ErrNoName
 	}
-	kind, at, err := i.mcpServerAt(ctx, name)
+	at, err := i.at(ctx, name, scope)
 	if err != nil {
 		return 0, err
 	}
-	server, err := i.settings.Get(ctx, kind, at, settings.KindMCPServer, name)
-	switch {
-	case errors.Is(err, settings.ErrNotFound):
-		return 0, ErrMCPServerUnknown
-	case err != nil:
-		return 0, err
-	case !server.Enabled:
-		return 0, ErrMCPServerDisabled
-	}
+	return i.RequestMCPRediscoveryAt(ctx, by, at, name)
+}
 
+// RequestMCPRediscoveryAt asks every worker holding the server at the exact
+// row a door authorized to discover its tools again (NT-019).
+func (i *Integrations) RequestMCPRediscoveryAt(
+	ctx context.Context, by domain.UserID, at MCPServerAt, name string,
+) (int64, error) {
 	tx, err := i.pool.Begin(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("admin: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// The exact row a door authorized, held while the request is written.
+	if enabled, err := lockMCPServerAt(ctx, tx, at, name); err != nil {
+		return 0, err
+	} else if !enabled {
+		return 0, ErrMCPServerDisabled
+	}
 
 	var generation int64
 	if err := tx.QueryRow(ctx, `
@@ -61,11 +65,11 @@ func (i *Integrations) RequestMCPRediscovery(
 			company_id   = excluded.company_id,
 			area_id      = excluded.area_id
 		returning generation`, name, string(by),
-		string(kind), string(at.Company), string(at.Area)).Scan(&generation); err != nil {
+		string(at.Kind), string(at.Stored.Company), string(at.Stored.Area)).Scan(&generation); err != nil {
 		return 0, fmt.Errorf("admin: request rediscovery of %s: %w", name, err)
 	}
 	if err := Record(ctx, tx, Event{
-		Principal: by, Scope: scope, Action: "mcp_server.rediscovery_requested", Target: name,
+		Principal: by, Scope: at.Audit, Action: "mcp_server.rediscovery_requested", Target: name,
 		Detail: map[string]any{"server": name, "generation": generation},
 	}); err != nil {
 		return 0, err
@@ -133,12 +137,19 @@ func (i *Integrations) RecordMCPRediscovery(ctx context.Context, r domain.MCPRed
 // (NT-019). A request or receipt about a server of the name stored elsewhere,
 // since removed, belongs to that server and is not shown.
 func (i *Integrations) MCPRediscovery(ctx context.Context, name string) (domain.MCPRediscoveryStatus, error) {
-	status := domain.MCPRediscoveryStatus{Server: name}
-	kind, at, err := i.mcpServerAt(ctx, name)
+	at, err := i.at(ctx, name, domain.Scope{})
 	if err != nil {
-		return status, err
+		return domain.MCPRediscoveryStatus{Server: name}, err
 	}
-	if _, err := i.settings.Get(ctx, kind, at, settings.KindMCPServer, name); errors.Is(err, settings.ErrNotFound) {
+	return i.MCPRediscoveryAt(ctx, at, name)
+}
+
+// MCPRediscoveryAt is the status of the server at the exact row a door
+// authorized: a server of the same name stored elsewhere since is not it.
+func (i *Integrations) MCPRediscoveryAt(ctx context.Context, at MCPServerAt, name string) (domain.MCPRediscoveryStatus, error) {
+	status := domain.MCPRediscoveryStatus{Server: name}
+	var err error
+	if _, err := i.settings.Get(ctx, at.Kind, at.Stored, settings.KindMCPServer, name); errors.Is(err, settings.ErrNotFound) {
 		return status, ErrMCPServerUnknown
 	} else if err != nil {
 		return status, err
@@ -147,7 +158,7 @@ func (i *Integrations) MCPRediscovery(ctx context.Context, name string) (domain.
 	err = i.pool.QueryRow(ctx, `
 		select generation, requested_by, requested_at from mcp_rediscoveries
 		where server = $1 and scope_kind = $2 and company_id = $3 and area_id = $4`,
-		name, string(kind), string(at.Company), string(at.Area),
+		name, string(at.Kind), string(at.Stored.Company), string(at.Stored.Area),
 	).Scan(&status.Generation, &by, &status.RequestedAt)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return status, fmt.Errorf("admin: read rediscovery of %s: %w", name, err)
@@ -157,13 +168,13 @@ func (i *Integrations) MCPRediscovery(ctx context.Context, name string) (domain.
 	rows, err := i.pool.Query(ctx, `
 		select worker, generation, succeeded, at from mcp_rediscovery_receipts
 		where server = $1 and scope_kind = $2 and company_id = $3 and area_id = $4
-		order by at desc, worker`, name, string(kind), string(at.Company), string(at.Area))
+		order by at desc, worker`, name, string(at.Kind), string(at.Stored.Company), string(at.Stored.Area))
 	if err != nil {
 		return status, fmt.Errorf("admin: read rediscovery receipts of %s: %w", name, err)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		r := domain.MCPRediscoveryReceipt{Server: name, Scope: mcpServerRuntimeScope(kind, at)}
+		r := domain.MCPRediscoveryReceipt{Server: name, Scope: mcpServerRuntimeScope(at.Kind, at.Stored)}
 		if err := rows.Scan(&r.Worker, &r.Generation, &r.Succeeded, &r.At); err != nil {
 			return status, err
 		}

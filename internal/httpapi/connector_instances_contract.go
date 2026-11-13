@@ -53,7 +53,35 @@ func connectorScope(kind openapi.ConnectorScopeKind, company, area *string) (dom
 			return domain.Scope{}, fmt.Errorf("area connector scope needs company and area")
 		}
 	}
+	if err := realScope(scope); err != nil {
+		return domain.Scope{}, err
+	}
 	return scope, nil
+}
+
+// realScope refuses a company or area no company or area could have (NT-019):
+// "*" is the installation's company, and a row stored at company/* reads back
+// as the installation's. An identifier in a form the platform would store
+// differently is refused rather than folded, so the row is the one named.
+func realScope(scope domain.Scope) error {
+	if scope.Company != "" {
+		if err := domain.ValidCompanyID(string(scope.Company)); err != nil {
+			return err
+		}
+		if strings.TrimSpace(string(scope.Company)) != string(scope.Company) {
+			return fmt.Errorf("company %q: no surrounding spaces", scope.Company)
+		}
+	}
+	if scope.Area != "" {
+		folded, err := domain.NormalizeAreaID(string(scope.Area))
+		if err != nil {
+			return err
+		}
+		if folded != scope.Area {
+			return fmt.Errorf("area %q: the identifier is %q", scope.Area, folded)
+		}
+	}
+	return nil
 }
 
 func vaultConfigFromRequest(in *openapi.ConnectorVaultConfig) connectortools.VaultConfig {

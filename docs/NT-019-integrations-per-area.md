@@ -33,6 +33,20 @@ integrations and the ones above it. Nothing here is done by an agent.
   area's. Nothing new is needed for that: a run's spend is already measured against the
   run's scope (`budget.Watcher.check` reads `SpentSince(ctx, ceiling.Scope, …)`,
   `internal/budget/alerts.go:121`).
+- **An area's MCP server is remote** (decided by Kleber on 2026-11-13, while building
+  phase 2's writers). A stdio server is a process the platform's worker starts on its
+  own host, with its command, arguments, environment and configuration file. Registered
+  by an area, it would run that area's commands on infrastructure every area shares.
+  So a company's or an area's server is HTTP, and stdio servers stay the platform's.
+  The rule is held three times:
+  - **by the database**, migration `0110`, so every binary is bound;
+  - **by the door**, which answers 400 to an area's write naming a local server;
+  - **by the worker**, which starts no local process for a server outside the
+    installation.
+
+  Keeping stdio the platform's prevents running an area's code on the platform's
+  host. Where a remote server may send requests is a separate rule, below: only the
+  origins the platform allows the server's scope.
 - **An area may create conversations and its own channel connections.** It can use the
   platform's Slack connection, or register another app or workspace of its own.
 - **A server outside the installation reaches only the origins the platform allows its
@@ -51,7 +65,12 @@ integrations and the ones above it. Nothing here is done by an agent.
   - The worker refuses a server whose URL is not listed before sending anything, and
     checks every request as it leaves: redirects, and the endpoints that refresh an
     OAuth grant or mint a GitHub App token. A changed policy reconnects the server.
-  - The writers' door checks the server's origins at the PUT too, once it opens.
+  - The writers' door checks the server's origins at the PUT too: its URL, its OAuth
+    token endpoint and its GitHub App API base (`api.github.com` when none is named).
+    It reads the policy inside the write's transaction, holding the policies' lock
+    shared until it commits; a policy write holds that lock exclusively. So a policy
+    narrowed meanwhile is either waited for or the one the server is judged by. A name
+    another scope holds answers 409 before the policy is judged.
   - The installation's servers are not held to any list. `netguard` keeps refusing
     metadata and link-local for every server, and NetworkPolicy remains a defence in
     depth, not a substitute.

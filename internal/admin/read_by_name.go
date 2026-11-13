@@ -33,9 +33,18 @@ A document that will not open is an error. Reported as absent, a client would
 read the credential as gone and write it back.
 */
 func (i *Integrations) MCPServerNamed(ctx context.Context, name string) (domain.MCPServer, error) {
+	return i.MCPServerNamedIf(ctx, name, nil)
+}
+
+// MCPServerNamedIf is MCPServerNamed that asks allow, with the server's
+// stored scope, before its sealed document is opened (NT-019): a caller
+// refused the server never reaches the vault.
+func (i *Integrations) MCPServerNamedIf(
+	ctx context.Context, name string, allow func(settings.ScopeKind, domain.Scope) error,
+) (domain.MCPServer, error) {
 	// Found and opened in one statement: the answer is the state the read
 	// began on, at whatever scope the server is stored (NT-019).
-	row, err := i.settings.RevealNamed(ctx, settings.KindMCPServer, name)
+	row, err := i.settings.RevealNamedIf(ctx, settings.KindMCPServer, name, allow)
 	if errors.Is(err, settings.ErrNotFound) {
 		return domain.MCPServer{}, fmt.Errorf("%w: %s", ErrMCPServerUnknown, name)
 	}
