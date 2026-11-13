@@ -28,9 +28,11 @@ holds the rule, so every binary is bound by it, the previous one included.
 const beforeNames = "0107_version_claims_enforced"
 
 // previousUpsert is settings.PutTx as every release before this one wrote it.
+// The value is a remote server's: an area's MCP server is http (0109), and for
+// every other kind the field is noise.
 const previousUpsert = `
 	insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by, updated_at)
-	values ($1, $2, $3, $4, $5, '{}'::jsonb, true, 'usr_old', now())
+	values ($1, $2, $3, $4, $5, '{"transport":"http"}'::jsonb, true, 'usr_old', now())
 	on conflict (scope_kind, company_id, area_id, kind, name) do update set
 		value = excluded.value, enabled = excluded.enabled,
 		updated_by = excluded.updated_by, updated_at = now()`
@@ -178,4 +180,37 @@ func testVault(t *testing.T) *vault.Vault {
 		t.Fatalf("vault: %v", err)
 	}
 	return v
+}
+
+/*
+An area's MCP server is remote (NT-019, decided 2026-11-13).
+
+A stdio server is a process on the platform's worker. Registered by an area, it
+would run that area's commands on shared infrastructure, so only the
+installation holds one. The database holds the rule, whatever binary writes.
+*/
+func TestRemoteOnly_anAreasStdioServer_isRefusedByTheDatabase(t *testing.T) {
+	pool := testdb.Isolated(t)
+	ctx := context.Background()
+	put := func(kindOfScope, company, area, name, value string) error {
+		_, err := pool.Exec(ctx, `
+			insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by)
+			values ($1, $2, $3, 'mcp_server', $4, $5::jsonb, true, 'usr_old')`,
+			kindOfScope, company, area, name, value)
+		return err
+	}
+	for _, refused := range []struct{ kind, company, area, name, value string }{
+		{"area", "acme", "cx", "cx-local", `{"transport":"stdio","command":"sh"}`},
+		{"company", "acme", "", "acme-local", `{"command":"sh"}`},
+	} {
+		if err := put(refused.kind, refused.company, refused.area, refused.name, refused.value); err == nil {
+			t.Errorf("%s: a %s stdio server was stored", refused.name, refused.kind)
+		}
+	}
+	if err := put("area", "acme", "cx", "cx-remote", `{"transport":"http","url":"https://mcp.example.com"}`); err != nil {
+		t.Errorf("an area's remote server: %v", err)
+	}
+	if err := put("installation", "", "", "platform-local", `{"transport":"stdio","command":"sh"}`); err != nil {
+		t.Errorf("the platform's stdio server: %v", err)
+	}
 }

@@ -161,7 +161,7 @@ func TestPublish_anAreasServer_isJudgedByItsConfiguration(t *testing.T) {
 	var generation time.Time
 	if err := pool.QueryRow(context.Background(), `
 		insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by, updated_at)
-		values ('area', 'acme', 'cx', 'mcp_server', 'cx-jira', '{}', true, 'usr_ana', clock_timestamp())
+		values ('area', 'acme', 'cx', 'mcp_server', 'cx-jira', '{"transport":"http"}', true, 'usr_ana', clock_timestamp())
 		returning updated_at`).Scan(&generation); err != nil {
 		t.Fatalf("configure the area's server: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestCuratorTools_readsTheRulingInForce(t *testing.T) {
 	for _, stmt := range []string{
 		`delete from settings where kind in ('tool_classification', 'mcp_server')`,
 		`insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by)
-		 values ('area', 'acme', 'cx', 'mcp_server', 'cx-jira', '{}', true, 'usr_ana')`,
+		 values ('area', 'acme', 'cx', 'mcp_server', 'cx-jira', '{"transport":"http"}', true, 'usr_ana')`,
 		`insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by)
 		 values ('installation', '', '', 'tool', 'cx-jira.search', '{"server":"cx-jira","onSurface":true}', true, 'w'),
 		        ('installation', '', '', 'tool', 'cx-jira.create', '{"server":"cx-jira","onSurface":true}', true, 'w')`,
