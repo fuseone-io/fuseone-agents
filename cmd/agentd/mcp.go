@@ -51,6 +51,14 @@ func connectServer(
 	creds domain.MCPCredentials, oauth OAuthGrantStore, personal MCPUserCredentialStore,
 	policy credentialPolicy, observer stdioEgressObserver,
 ) error {
+	// An area's or a company's server is remote (NT-019, decided 2026-11-13):
+	// the doors and the database refuse a local one, and so does the worker,
+	// before any process starts, whatever brought the row here. A command an
+	// area named would run on the platform's host.
+	if !serverOfTheInstallation(server.Scope) && server.TransportOf() != domain.TransportHTTP {
+		return fmt.Errorf("connect %s: a local server of %s is refused; an area's server is remote",
+			server.Name, server.Scope)
+	}
 	client := mcp.NewClient(&mcp.Implementation{Name: "fuseone-agents", Version: version}, nil)
 
 	transport, cleanup, err := transportFor(ctx, server, creds, oauth, personal, policy, observer)
@@ -1330,4 +1338,10 @@ func childEnv() []string {
 		}
 	}
 	return env
+}
+
+// serverOfTheInstallation is a server no area owns: one a --mcp flag started,
+// with no row, or one stored at the installation.
+func serverOfTheInstallation(scope domain.Scope) bool {
+	return scope == (domain.Scope{}) || scope == (domain.Scope{Company: domain.Installation})
 }
