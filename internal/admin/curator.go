@@ -35,77 +35,6 @@ func NewCurator(pool *pgxpool.Pool) *Curator {
 	return &Curator{pool: pool, clock: time.Now}
 }
 
-// Classify records a ruling and the fact that somebody made it.
-//
-// EffectUnknown is refused rather than stored: it is the zero value that makes
-// an unclassified tool fail closed, and writing it deliberately would look
-// like a decision when it is the absence of one.
-func (c *Curator) Classify(ctx context.Context, scope domain.Scope, ruling domain.ToolClassification) error {
-	if !ruling.Effect.Valid() {
-		return fmt.Errorf("%w: %s", ErrNotClassifiable, ruling.Effect)
-	}
-	if err := ruling.Dedupe.Validate(); err != nil {
-		return fmt.Errorf("%w: invalid dedupe for %s: %w", ErrNotClassifiable, ruling.Tool, err)
-	}
-	if ruling.Tool == "" {
-		return errors.New("admin: a ruling needs a tool")
-	}
-
-	value, err := json.Marshal(struct {
-		Effect        string `json:"effect"`
-		Untrusted     bool   `json:"untrusted"`
-		Reason        string `json:"reason,omitempty"`
-		CompensatedBy string `json:"compensated_by,omitempty"`
-		Dedupe        *struct {
-			WindowSeconds int      `json:"window_seconds"`
-			ArgPaths      []string `json:"arg_paths"`
-		} `json:"dedupe,omitempty"`
-		// The definition this was a judgement about. Omitted when the caller
-		// did not name one, which reads as a ruling from before this was kept
-		// rather than as a ruling about nothing.
-		Digest string `json:"digest,omitempty"`
-	}{
-		ruling.Effect.String(), ruling.Untrusted, ruling.Reason,
-		string(ruling.CompensatedBy), storedDedupe(ruling.Dedupe), ruling.Digest,
-	})
-	if err != nil {
-		return fmt.Errorf("admin: encode ruling: %w", err)
-	}
-
-	tx, err := c.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("admin: begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if _, err := tx.Exec(ctx, `
-		insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by, updated_at)
-		values ('installation', '', '', $1, $2, $3, true, $4, now())
-		on conflict (scope_kind, company_id, area_id, kind, name) do update set
-			value = excluded.value, updated_by = excluded.updated_by, updated_at = now()`,
-		classificationKind, string(ruling.Tool), value, string(ruling.By)); err != nil {
-		return fmt.Errorf("admin: store ruling for %s: %w", ruling.Tool, err)
-	}
-
-	// In the same transaction as the change it describes. A ruling that took
-	// effect without a record of who made it is exactly what the trail exists
-	// to make impossible.
-	if err := Record(ctx, tx, Event{
-		Principal: ruling.By,
-		Scope:     scope,
-		Action:    "tool.classified",
-		Target:    string(ruling.Tool),
-		Detail:    json.RawMessage(value),
-	}); err != nil {
-		return err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("admin: commit ruling: %w", err)
-	}
-	return nil
-}
-
 // List returns every ruling on record.
 //
 // The signature is what package tools declares as its Classifier, so the
@@ -176,22 +105,6 @@ func (c *Curator) List(ctx context.Context, scope domain.Scope) ([]domain.ToolCl
 		})
 	}
 	return out, rows.Err()
-}
-
-func storedDedupe(d domain.ToolDedupe) *struct {
-	WindowSeconds int      `json:"window_seconds"`
-	ArgPaths      []string `json:"arg_paths"`
-} {
-	if !d.Enabled() {
-		return nil
-	}
-	return &struct {
-		WindowSeconds int      `json:"window_seconds"`
-		ArgPaths      []string `json:"arg_paths"`
-	}{
-		WindowSeconds: d.WindowSeconds,
-		ArgPaths:      append([]string(nil), d.ArgPaths...),
-	}
 }
 
 // Events reads the administrative trail, newest first.
@@ -293,11 +206,12 @@ func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	byTool, err := c.rulingsInForce(ctx, entries, rulings)
+	byTool, listed, err := c.rulingsInForce(ctx, entries, rulings)
 	if err != nil {
 		return nil, err
 	}
 	for i, e := range entries {
+		entries[i].Rulings = listed[e.ID]
 		r, ok := byTool[e.ID]
 		if !ok {
 			continue

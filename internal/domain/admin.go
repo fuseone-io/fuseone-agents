@@ -60,6 +60,9 @@ type ToolEntry struct {
 	// unruled tool and shown differently: one is a decision to make, the other
 	// a decision to check.
 	Stale bool
+	// Rulings are the platform's and the owner's rulings on the tool, each
+	// with where it is stored (NT-019). Empty for a tool nobody ruled on.
+	Rulings []ToolRuling
 }
 
 // ToolSuggestion is a shipped opinion about one tool, and the sentence behind

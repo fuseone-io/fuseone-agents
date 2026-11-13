@@ -31,7 +31,8 @@ field" is a commit message.
 ## [Unreleased]
 
 NT-019 phase 2, the writers' release, part one: the administrator of an area configures
-that area's own MCP servers. They are remote; local servers stay the platform's. Adds
+that area's own MCP servers, and the area's curator classifies their tools under the
+platform's ceiling. The servers are remote; local servers stay the platform's. Adds
 migration `0110_area_mcp_servers_are_remote`.
 
 ### Upgrade notes
@@ -47,6 +48,11 @@ migration `0110_area_mcp_servers_are_remote`.
   too, with their own servers, the ones they inherit, and those of the areas they
   govern; never a sibling area's. Each server says where it is stored and whether the
   caller may change it (`editable`).
+- **Withdrawing the platform's ruling on a tool needs every worker on this release.** A
+  worker on 0.109.0 or older keeps applying a withdrawn ruling that has no owner's ruling
+  under it until it restarts; this release's worker stops the tool at its next sync.
+  Owner rulings themselves are safe from 0.107.0, whose readers already resolve
+  precedence.
 
 ### Added
 
@@ -81,9 +87,37 @@ migration `0110_area_mcp_servers_are_remote`.
   row. Reach goes both ways: a server the person's scopes inherit, and one stored in a
   scope a grant of theirs contains, such as an area of their company. A server out of
   reach answers as one that does not exist.
+- **An area classifies the tools of its own MCP servers, under the platform's ceiling.**
+  - `PUT /admin/tools/{tool}/classification` takes `level: owner | platform`. Without
+    one it is `platform`: today's ruling, stored at the installation, needing
+    `tool:classify` at the platform's administration.
+  - `level: owner` stores the ruling at the scope where the tool's server is stored,
+    and needs `tool:classify` there, or at the platform's administration. On a server
+    of the installation it is the platform's row and needs the platform's
+    administration.
+  - A tool whose server the caller may not classify (the platform's own servers, a
+    sibling area's, or a tool nobody published) answers one 403 naming the platform's
+    administration, whichever it was. The platform's curator gets 400 for a tool whose
+    server is not stored at any scope, such as one a `--mcp` flag connected.
+  - The ruling lands on the server row the door authorized, or nowhere: a server
+    removed and stored again in another scope meanwhile answers 409, and a removal in
+    flight is waited for.
+  - `DELETE /admin/tools/{tool}/classification?level=platform` withdraws the platform's
+    ruling and needs `tool:classify` at the platform's administration. The owner's
+    ruling, if any, is then in force; with none the tool never executes. Nothing lets
+    an owner write or remove the platform's row.
+  - `GET /admin/tools` gains `rulings` on each tool: the platform's and the owner's,
+    each with its `level`, `scope`, `effect` and `untrusted`, the one `inForce`, and an
+    owner's ruling under a platform ruling marked `overridden`.
+  - The console still classifies at the platform's level only; `tool:classify` stays
+    advertised from the platform's administration until it offers `level: owner`.
 
 ### Fixed
 
+- **A tool no ruling decides reads unclassified at the worker's next sync.** The worker
+  applied the rulings it read and left every other tool as it was, enough while rulings
+  were only ever replaced. A withdrawn platform ruling, or an owner's ruling whose server
+  moved to another scope, now stops deciding the tool.
 - **A connector instance's scope must be a real company or area.** Its writes shared
   the check that let `company="*"` through, a row every reader takes for the
   installation's, and an area typed in another form, a row no registered area reaches.

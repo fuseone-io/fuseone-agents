@@ -78,20 +78,21 @@ func serverScopes(ctx context.Context, q settings.DB) (map[string]domain.Scope, 
 
 // rulingsInForce is the ruling each listed tool is under, chosen as the worker
 // chooses it (domain.RulingsInForce): the platform's over the owner's, and the
-// owner only at the scope of the tool's server.
+// owner only at the scope of the tool's server. Listed beside it are both
+// rulings, as domain.RulingsOf reads them, for the screen.
 func (c *Curator) rulingsInForce(
 	ctx context.Context, entries []domain.ToolEntry, rulings []domain.ToolClassification,
-) (map[domain.ToolID]domain.ToolClassification, error) {
+) (map[domain.ToolID]domain.ToolClassification, map[domain.ToolID][]domain.ToolRuling, error) {
 	scopes, err := serverScopes(ctx, c.pool)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	serverOf := make(map[domain.ToolID]string, len(entries))
 	for _, e := range entries {
 		serverOf[e.ID] = e.Server
 	}
 	installation := domain.Scope{Company: domain.Installation}
-	inForce := domain.RulingsInForce(rulings, func(id domain.ToolID) (domain.Scope, bool) {
+	scopeOf := func(id domain.ToolID) (domain.Scope, bool) {
 		server, ok := serverOf[id]
 		if !ok {
 			return domain.Scope{}, false
@@ -100,12 +101,12 @@ func (c *Curator) rulingsInForce(
 			return scope, true
 		}
 		return installation, true
-	})
-	out := make(map[domain.ToolID]domain.ToolClassification, len(inForce))
-	for _, r := range inForce {
+	}
+	out := map[domain.ToolID]domain.ToolClassification{}
+	for _, r := range domain.RulingsInForce(rulings, scopeOf) {
 		out[r.Tool] = r
 	}
-	return out, nil
+	return out, domain.RulingsOf(rulings, scopeOf), nil
 }
 
 // MCPServerStoredAt is mcpServerAt, for a door that authorizes at the row's
