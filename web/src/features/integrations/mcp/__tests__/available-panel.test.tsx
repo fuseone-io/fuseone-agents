@@ -113,7 +113,7 @@ const outline: ServerRecipe = {
   note: "Workspace wiki.",
 };
 
-function open(recipes: ServerRecipe[] = [stripe]) {
+function open(recipes: ServerRecipe[] = [stripe], canCreate?: boolean) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -126,6 +126,7 @@ function open(recipes: ServerRecipe[] = [stripe]) {
           isLoading={false}
           error={null}
           onRetry={vi.fn()}
+          canCreate={canCreate}
         />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -272,5 +273,20 @@ describe("available MCP servers", () => {
       await screen.findByText(/preencha só uma forma de credencial/i),
     ).toBeInTheDocument();
     expect(api.mutateAsync).not.toHaveBeenCalled();
+  });
+});
+
+// A reader of the platform's who configures nowhere reads the catalogue and
+// is offered no way to connect: the write would answer 403 (NT-019).
+describe("the catalogue for someone who may not create a server", () => {
+  it("opens a recipe to read, with no form and no connect", async () => {
+    open([stripe], false);
+    expect(screen.queryByRole("button", { name: "Conectar por endereço" })).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Ver Stripe" }));
+
+    expect(screen.getAllByText("Payments and billing.")).toHaveLength(2);
+    expect(screen.getByText(/Conectar um servidor pede provider:write/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Conectar" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Nome")).not.toBeInTheDocument();
   });
 });

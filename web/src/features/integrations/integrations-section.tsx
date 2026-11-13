@@ -13,7 +13,8 @@ export function IntegrationsSection({
   children,
 }: {
   title: string;
-  onAdd: () => void;
+  /** Absent for a caller who may not add one. */
+  onAdd?: () => void;
   empty: ReactNode;
   footer?: ReactNode;
   children: ReactNode;
@@ -23,15 +24,17 @@ export function IntegrationsSection({
     <section className="flex flex-col gap-2.5">
       <div className="flex items-center gap-2">
         <h2 className="text-sm font-medium">{title}</h2>
-        <Button
-          size="sm"
-          variant="outline"
-          className="ml-auto h-7"
-          onClick={onAdd}
-        >
-          <Plus className="size-4" aria-hidden />
-          {t("common.new")}
-        </Button>
+        {onAdd && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto h-7"
+            onClick={onAdd}
+          >
+            <Plus className="size-4" aria-hidden />
+            {t("common.new")}
+          </Button>
+        )}
       </div>
 
       {empty || (

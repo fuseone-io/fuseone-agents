@@ -90,6 +90,30 @@ describe("integrations for the platform's administration", () => {
   });
 });
 
+// A reader of the platform's who configures nowhere reads every section and
+// is offered nothing to create: the write would answer 403 (NT-019).
+describe("integrations for the platform's auditor", () => {
+  it("offer no new server in the connected list", async () => {
+    signedInAs(["tool:read"], ["tool:read"]);
+    openAt("/integrations");
+
+    expect(
+      await screen.findByText("Nenhum servidor configurado", {}, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Novo" })).not.toBeInTheDocument();
+  });
+
+  it("keep the catalogue readable, with no way to connect by address", async () => {
+    signedInAs(["tool:read"], ["tool:read"]);
+    openAt("/integrations/mcp");
+
+    expect(
+      await screen.findByLabelText("Buscar servidor ou ferramenta", {}, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Conectar por endereço" })).not.toBeInTheDocument();
+  });
+});
+
 // NT-019: an area's administrator configures its own connector instances and
 // its own MCP servers.
 describe("integrations for an administrator who configures an area's connectors", () => {

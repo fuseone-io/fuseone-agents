@@ -111,8 +111,11 @@ export function IntegrationsPage({
     section === "providers" ||
     section === "credentials";
 
+  // Where a server may be placed, for the sheet and the catalogue's form alike.
   return (
-    <>
+    <ScopeChoiceContext.Provider
+      value={{ anyScope: access.anyScope, configure: access.configure }}
+    >
       <PageHeader
         icon={PAGE_ICONS.integrations}
         title={t("nav.integrations")}
@@ -149,10 +152,13 @@ export function IntegrationsPage({
             servers={servers}
             // The catalogue is the platform's; an area's configurer connects
             // a server by its address, in the sheet (NT-019).
-            onAdd={() =>
-              access.platform
-                ? void navigate("/integrations/mcp")
-                : setEditing({ kind: "server", value: null })
+            // Offered only to whoever may create one somewhere (NT-019).
+            onAdd={
+              !access.createServer
+                ? undefined
+                : access.platform
+                  ? () => void navigate("/integrations/mcp")
+                  : () => setEditing({ kind: "server", value: null })
             }
             onEdit={(server) => setEditing({ kind: "server", value: server })}
           />
@@ -191,6 +197,7 @@ export function IntegrationsPage({
           </>
         ) : section === "available" ? (
           <AvailableServersPanel
+            canCreate={access.createServer}
             servers={servers}
             recipes={recipes.data?.items ?? []}
             isLoading={integrations.isLoading || recipes.isLoading}
@@ -253,11 +260,7 @@ export function IntegrationsPage({
       </IntegrationsShell>
 
       {editing?.kind === "server" && (
-        <ScopeChoiceContext.Provider
-          value={{ anyScope: access.anyScope, configure: access.configure }}
-        >
-          <ServerEditor server={editing.value} onClose={() => setEditing(null)} />
-        </ScopeChoiceContext.Provider>
+        <ServerEditor server={editing.value} onClose={() => setEditing(null)} />
       )}
       {editing?.kind === "provider" && (
         <ProviderEditor
@@ -265,6 +268,6 @@ export function IntegrationsPage({
           onClose={() => setEditing(null)}
         />
       )}
-    </>
+    </ScopeChoiceContext.Provider>
   );
 }

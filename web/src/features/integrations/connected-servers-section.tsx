@@ -17,7 +17,8 @@ export function ConnectedServersSection({
   onEdit,
 }: {
   servers: MCPServer[];
-  onAdd: () => void;
+  /** Absent for a caller who may not create a server. */
+  onAdd?: () => void;
   onEdit: (server: MCPServer) => void;
 }) {
   const { t } = useTranslation();
