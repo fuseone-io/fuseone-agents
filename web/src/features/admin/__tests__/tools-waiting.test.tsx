@@ -1,14 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { ToolsPanel, Waiting } from "@/features/admin/tools-panel";
 import { waitingFor } from "@/features/admin/waiting-tools";
-import { useTools, type Tool } from "@/features/admin/api";
+import type { Tool } from "@/features/admin/api";
+import { json } from "@/test/revised-routes";
 
-vi.mock("@/features/admin/api", () => ({
-  useTools: vi.fn(),
-  useClassifyTool: vi.fn(() => ({ isPending: false, mutateAsync: vi.fn() })),
-}));
+afterEach(() => vi.unstubAllGlobals());
+
+/** The catalogue at the network; no session, so every door is open. */
+function stubCatalogue(items: Tool[]) {
+  vi.stubGlobal("fetch", async (input: Request | string) => {
+    const url = typeof input === "string" ? input : input.url;
+    return url.includes("/admin/tools") ? json({ items }) : json({}, 404);
+  });
+}
 
 function tool(toolId: string, effect: Tool["effect"]): Tool {
   return { toolId, server: "crm", effect, untrusted: false };
@@ -84,31 +91,21 @@ describe("what the queue holds", () => {
 });
 
 describe("the tools waiting table", () => {
-  it("keeps the classification action visible when a tool description is long", () => {
+  it("keeps the classification action visible when a tool description is long", async () => {
     const description =
       "Add a comment and/or reaction to a specific issue or issue comment in a GitHub repository. Use this tool with pull requests as well and only when the requester really asked for it.";
-    vi.mocked(useTools).mockReturnValue({
-      data: {
-        items: [
-          {
-            ...tool("github.add_issue_comment", "unknown"),
-            server: "github",
-            description,
-          },
-        ],
-      },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    } as unknown as ReturnType<typeof useTools>);
-
+    stubCatalogue([
+      { ...tool("github.add_issue_comment", "unknown"), server: "github", description },
+    ]);
     render(
-      <MemoryRouter>
-        <ToolsPanel />
-      </MemoryRouter>,
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <ToolsPanel />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
 
-    const table = screen.getByRole("table");
+    const table = await screen.findByRole("table");
     expect(table).toHaveClass("min-w-[1040px]", "table-fixed");
     const columns = table.querySelectorAll("col");
     expect([...columns].map((column) => column.className)).toEqual([

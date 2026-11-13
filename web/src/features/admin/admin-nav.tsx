@@ -16,7 +16,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { type AdminTab, type AdminTabValue } from "@/features/admin/admin-tabs";
-import { useTools } from "@/features/admin/api";
+import { useCuratorTools } from "@/features/admin/use-curator-tools";
 import { waitingFor } from "@/features/admin/waiting-tools";
 import { cn } from "@/lib/utils";
 
@@ -124,7 +124,8 @@ function AdminNavItem({
 
 function ToolsWaitingBadge({ active }: { active: boolean }) {
   const { t } = useTranslation();
-  const { data } = useTools();
+  // The queue's own answer, so the count is what the tab lists.
+  const { data } = useCuratorTools();
   const waiting = waitingFor(data?.items ?? []).length;
 
   if (waiting === 0) return null;

@@ -9,13 +9,10 @@ const hooks = vi.hoisted(() => ({
   tools: [] as Tool[],
 }));
 
-vi.mock("@/features/admin/api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/features/admin/api")>();
-  return {
-    ...actual,
-    useTools: () => ({ data: { items: hooks.tools } }),
-  };
-});
+// The badge counts the curator's queue, whatever scopes it was asked for.
+vi.mock("@/features/admin/use-curator-tools", () => ({
+  useCuratorTools: () => ({ data: { items: hooks.tools } }),
+}));
 
 function tool(toolId: string, effect: Tool["effect"]): Tool {
   return { toolId, server: "crm", effect, untrusted: false };

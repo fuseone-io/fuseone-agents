@@ -35,16 +35,20 @@ export const adminKeys = {
  * reader gets every tool and anyone else the installation's alone.
  */
 export function useTools(enabled = true, scope?: string) {
-  return useQuery({
+  return useQuery({ ...toolsQuery(scope), enabled });
+}
+
+/** The catalogue's query for one target, shared by every reader of it. */
+export function toolsQuery(scope?: string) {
+  return {
     queryKey: adminKeys.tools(scope),
-    enabled,
     queryFn: async () =>
       unwrap(
         await api.GET("/admin/tools", {
           params: { query: scope ? { scope } : {} },
         }),
       ),
-  });
+  };
 }
 
 export function useAdminEvents(target?: string) {

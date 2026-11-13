@@ -21,7 +21,9 @@ import {
 } from "@/components/shared/states";
 import { EffectBadge } from "@/features/admin/effect-badge";
 import { ClassifyDialog } from "@/features/admin/classify-dialog";
-import { useTools, type Tool } from "@/features/admin/api";
+import type { Tool } from "@/features/admin/api";
+import { classifyOffer } from "@/features/admin/classify-offer";
+import { useCuratorTools } from "@/features/admin/use-curator-tools";
 import { Badge } from "@/components/ui/badge";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 import { waitingFor } from "@/features/admin/waiting-tools";
@@ -82,7 +84,8 @@ decision to make, the other a decision to check.
 */
 export function ToolsPanel() {
   const { t } = useTranslation();
-  const { data, isLoading, error, refetch } = useTools();
+  // Asked where the caller classifies; each row offers the ruling they may record.
+  const { me, data, isLoading, error, refetch } = useCuratorTools();
   const [classifying, setClassifying] = useState<Tool | null>(null);
   const tools = useMemo(() => waitingFor(data?.items ?? []), [data]);
   const page = useVisibleItems(tools, 50);
@@ -198,13 +201,15 @@ export function ToolsPanel() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setClassifying(tool)}
-                    >
-                      {t("admin.classify")}
-                    </Button>
+                    {classifyOffer(me, tool) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setClassifying(tool)}
+                      >
+                        {t("admin.classify")}
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -226,6 +231,7 @@ export function ToolsPanel() {
         tool={classifying}
         tools={tools}
         onClose={() => setClassifying(null)}
+        offer={classifyOffer(me, classifying ?? undefined) ?? "platform"}
       />
     </Panel>
   );
