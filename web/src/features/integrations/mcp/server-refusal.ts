@@ -3,21 +3,13 @@ import { ApiError } from "@/lib/api/client";
 import { problemMessage } from "@/lib/api/problem-message";
 
 /*
- * The server refuses a company's or an area's server outside the platform's
- * egress policy as invalid input, with no code of its own (NT-019), so the
- * sentence it ends in is what tells the refusal apart. The origin it names
- * after the colon is the particular, and is interpolated, not translated.
+ * A company's or an area's server outside the platform's egress policy for
+ * its scope (NT-019). The problem's type names the refusal and its detail is
+ * the canonical origin alone, interpolated rather than translated.
  */
-const outsideEgress = "outside the platform's egress policy";
-
 function egressOrigin(error: unknown): string | null {
-  if (!(error instanceof ApiError) || error.problem?.type !== "fuseone:invalid-input") return null;
-  const detail = error.detail ?? "";
-  const at = detail.indexOf(outsideEgress);
-  if (at < 0) return null;
-  const rest = detail.slice(at + outsideEgress.length);
-  const colon = rest.indexOf(": ");
-  return colon < 0 ? "" : rest.slice(colon + 2).trim();
+  if (!(error instanceof ApiError) || error.problem?.type !== "fuseone:egress-not-allowed") return null;
+  return error.detail ?? "";
 }
 
 /** A refusal said beside the field it is about, or null for any other. */

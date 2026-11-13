@@ -2491,6 +2491,7 @@
     "forbidden": "Sem permissão — esta ação exige {{detail}}",
     "invalid-input": "O pedido não pôde ser aceito: {{detail}}",
     "integration-name-taken": "Outro escopo já usa este nome. Escolha outro.",
+    "egress-not-allowed": "Fora da política de egresso da plataforma para este escopo: {{detail}}",
     "not-found": "Não encontrado: {{detail}}",
     "not-signed-in": "Sua sessão terminou. Entre de novo.",
     "precondition-failed": "Alguém alterou isto depois da leitura, então nada foi salvo. Leia de novo e decida com o que está lá agora.",
