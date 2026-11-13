@@ -263,6 +263,10 @@ type Removal struct {
 	Scope  domain.Scope
 	Name   string
 	Expect domain.IfMatch
+	// At and Stored are the exact row an MCP server's removal was authorized
+	// for (NT-019). Zero finds the row by its name.
+	At     settings.ScopeKind
+	Stored domain.Scope
 }
 
 // RemoveProvider deletes a provider, if it is still at a revision the caller named.

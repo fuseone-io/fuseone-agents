@@ -208,7 +208,7 @@ func (s *Server) ProbeMCPServer(ctx context.Context, req openapi.ProbeMCPServerR
 		}, nil
 	}
 
-	if err := s.integrations.RequestMCPProbe(ctx, caller, at, req.Name); err != nil {
+	if err := s.integrations.RequestMCPProbeAt(ctx, caller, at, req.Name); err != nil {
 		return openapi.ProbeMCPServer400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				upstreamRefused(err.Error())),
@@ -264,7 +264,9 @@ func (s *Server) DeleteMCPServer(ctx context.Context, req openapi.DeleteMCPServe
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
 		}, nil
 	}
-	err = s.integrations.RemoveMCPServer(ctx, admin.Removal{By: caller, Scope: at, Name: req.Name, Expect: expect})
+	err = s.integrations.RemoveMCPServer(ctx, admin.Removal{
+		By: caller, Scope: at.Audit, Name: req.Name, Expect: expect, At: at.Kind, Stored: at.Stored,
+	})
 	if stale, ok := staleFrom(err); ok {
 		return openapi.DeleteMCPServer412ApplicationProblemPlusJSONResponse{
 			PreconditionFailedApplicationProblemPlusJSONResponse: stale,

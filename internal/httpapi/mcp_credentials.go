@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -58,8 +59,13 @@ func (s *Server) PutMCPUserCredential(
 		Headers: stringMapOrNil(req.Body.Headers),
 		OAuth:   oauthGrantFromRequest(req.Body.Oauth),
 	}
-	if err := s.integrations.PutMCPPersonalCredential(ctx,
-		caller.ID, firstVisibleScope(caller), req.Name, creds); err != nil {
+	// Every scope the person reads tools in: a server their scopes do not
+	// reach is one they may not hold a credential for, and the check is made
+	// under the server's row when the credential is written (NT-019).
+	if err := s.integrations.WriteMCPPersonalCredential(ctx, admin.PersonalCredentialWrite{
+		By: caller.ID, Scope: firstVisibleScope(caller), Visible: caller.ScopesFor(domain.PermToolRead),
+		Server: req.Name, Given: creds,
+	}); err != nil {
 		return openapi.PutMCPUserCredential400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				invalid(err.Error())),

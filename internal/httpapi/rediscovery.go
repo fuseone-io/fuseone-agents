@@ -36,7 +36,7 @@ func (s *Server) RequestMCPRediscovery(
 			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
 		}, nil
 	}
-	generation, err := s.integrations.RequestMCPRediscovery(ctx, caller, at, req.Name)
+	generation, err := s.integrations.RequestMCPRediscoveryAt(ctx, caller, at, req.Name)
 	switch {
 	case errors.Is(err, admin.ErrMCPServerUnknown):
 		return openapi.RequestMCPRediscovery404ApplicationProblemPlusJSONResponse{
@@ -68,7 +68,7 @@ func (s *Server) GetMCPRediscovery(
 	if s.integrations == nil {
 		return nil, errNoAdministration
 	}
-	_, _, forbidden, err := s.mcpConfigurer(ctx, req.Name)
+	_, at, forbidden, err := s.mcpConfigurer(ctx, req.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (s *Server) GetMCPRediscovery(
 			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
 		}, nil
 	}
-	status, err := s.integrations.MCPRediscovery(ctx, req.Name)
+	status, err := s.integrations.MCPRediscoveryAt(ctx, at, req.Name)
 	if errors.Is(err, admin.ErrMCPServerUnknown) {
 		return openapi.GetMCPRediscovery404ApplicationProblemPlusJSONResponse{
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),

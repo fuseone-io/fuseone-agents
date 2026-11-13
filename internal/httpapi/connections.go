@@ -26,18 +26,28 @@ needs the absence answered as plainly as the presence.
 type Integrations interface {
 	MCPServers(ctx context.Context) ([]domain.MCPServer, error)
 	MCPServerNamed(ctx context.Context, name string) (domain.MCPServer, error)
+	// MCPServerNamedIf asks allow with the server's stored scope before its
+	// sealed document is opened.
+	MCPServerNamedIf(ctx context.Context, name string, allow func(settings.ScopeKind, domain.Scope) error) (domain.MCPServer, error)
 	// MCPServerStoredAt is where a server's row lives, the installation's for
 	// a name no row holds (NT-019).
 	MCPServerStoredAt(ctx context.Context, name string) (settings.ScopeKind, domain.Scope, error)
 	MCPPersonalCredentials(ctx context.Context, principal domain.UserID) ([]domain.MCPPersonalCredential, error)
 	MCPPersonalCredentialPresence(ctx context.Context, principal domain.UserID, servers []string) (map[string]bool, error)
 	PutMCPPersonalCredential(ctx context.Context, by domain.UserID, scope domain.Scope, name string, creds domain.MCPCredentialPatch) error
+	// WriteMCPPersonalCredential checks, under the server's row, that the
+	// person's scopes reach the server (NT-019).
+	WriteMCPPersonalCredential(ctx context.Context, w admin.PersonalCredentialWrite) error
 	DeleteMCPPersonalCredential(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
 	Providers(ctx context.Context) ([]domain.ModelProvider, error)
 	ProviderNamed(ctx context.Context, name string) (domain.ModelProvider, error)
 	WriteMCPServer(ctx context.Context, w admin.MCPServerWrite) (domain.Revision, error)
 	MCPCredentials(ctx context.Context, name string) (domain.MCPCredentials, error)
 	RequestMCPProbe(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
+	// The ...At doors act on the exact row a door authorized (NT-019).
+	RequestMCPProbeAt(ctx context.Context, by domain.UserID, at admin.MCPServerAt, name string) error
+	RequestMCPRediscoveryAt(ctx context.Context, by domain.UserID, at admin.MCPServerAt, name string) (int64, error)
+	MCPRediscoveryAt(ctx context.Context, at admin.MCPServerAt, name string) (domain.MCPRediscoveryStatus, error)
 	RequestMCPRediscovery(ctx context.Context, by domain.UserID, scope domain.Scope, name string) (int64, error)
 	MCPRediscovery(ctx context.Context, name string) (domain.MCPRediscoveryStatus, error)
 	RemoveMCPServer(ctx context.Context, r admin.Removal) error

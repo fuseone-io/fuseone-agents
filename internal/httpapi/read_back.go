@@ -10,6 +10,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/policy"
+	"github.com/fuseone/agents/internal/settings"
 )
 
 /*
@@ -36,18 +37,33 @@ func (s *Server) GetMCPServer(ctx context.Context, req openapi.GetMCPServerReque
 	// would let a write land between the two, and the answer would not be the
 	// state the read began on. A name no row holds is the installation's, so
 	// an area hears the same about a sibling's server as about none (NT-019).
-	server, err := s.integrations.MCPServerNamed(ctx, req.Name)
+	// The decision is made on the row's scope before its sealed document is
+	// opened, so a refused caller never reaches the vault: a credential that
+	// does not open would otherwise answer differently from a name nobody holds.
+	var refused *openapi.ForbiddenApplicationProblemPlusJSONResponse
+	server, err := s.integrations.MCPServerNamedIf(ctx, req.Name, func(kind settings.ScopeKind, stored domain.Scope) error {
+		if _, refused = s.configurerAt(ctx, kind, stored); refused != nil {
+			return errMCPServerRefused
+		}
+		return nil
+	})
+	if refused != nil {
+		return openapi.GetMCPServer403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *refused,
+		}, nil
+	}
 	unknown := errors.Is(err, admin.ErrMCPServerUnknown)
 	if err != nil && !unknown {
 		return nil, fmt.Errorf("get MCP server: %w", err)
 	}
-	kind, stored := mcpServerStored(server.Scope)
-	if _, forbidden := s.configurerAt(ctx, kind, stored); forbidden != nil {
-		return openapi.GetMCPServer403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
-		}, nil
-	}
 	if unknown {
+		// A name nobody holds is the installation's: an area hears 403, as it
+		// does for a sibling's server.
+		if _, forbidden := s.configurerAt(ctx, settings.ScopeInstallation, domain.Scope{}); forbidden != nil {
+			return openapi.GetMCPServer403ApplicationProblemPlusJSONResponse{
+				ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
+			}, nil
+		}
 		return openapi.GetMCPServer404ApplicationProblemPlusJSONResponse{
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
 		}, nil

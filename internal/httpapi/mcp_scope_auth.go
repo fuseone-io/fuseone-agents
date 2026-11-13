@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -34,15 +36,22 @@ func mcpServerStored(runtime domain.Scope) (settings.ScopeKind, domain.Scope) {
 
 // mcpConfigurer is configurerAt for the server a door names. A name no row
 // holds is the installation's to write, as a new server is by default.
+//
+// The row it authorized is the one the door then acts on, and no other: the
+// answer carries the exact key, so a server removed and recreated under the
+// same name in another scope meanwhile is not touched by an act that was
+// authorized for the first.
 func (s *Server) mcpConfigurer(ctx context.Context, name string) (
-	domain.UserID, domain.Scope, *openapi.ForbiddenApplicationProblemPlusJSONResponse, error,
+	domain.UserID, admin.MCPServerAt, *openapi.ForbiddenApplicationProblemPlusJSONResponse, error,
 ) {
 	kind, stored, err := s.integrations.MCPServerStoredAt(ctx, name)
 	if err != nil {
-		return "", domain.Scope{}, nil, fmt.Errorf("find MCP server %s: %w", name, err)
+		return "", admin.MCPServerAt{}, nil, fmt.Errorf("find MCP server %s: %w", name, err)
 	}
 	caller, forbidden := s.configurerAt(ctx, kind, stored)
-	return caller, connectorRuntimeScope(kind, stored), forbidden, nil
+	return caller, admin.MCPServerAt{
+		Kind: kind, Stored: stored, Audit: connectorRuntimeScope(kind, stored),
+	}, forbidden, nil
 }
 
 // mcpListingCaller is who may read the integrations listing: a reader of the
@@ -76,3 +85,7 @@ func connectorScopeOrInstallation(
 	}
 	return settings.ScopeKind(*kind), scope, nil
 }
+
+// errMCPServerRefused stops a read by name before the server's sealed document
+// is opened: the caller may not configure the scope it is stored at.
+var errMCPServerRefused = errors.New("the caller may not configure this server's scope")
