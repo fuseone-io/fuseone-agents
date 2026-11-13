@@ -106,3 +106,48 @@ func TestSync_aStalePlatformRuling_doesNotFallBackToTheOwners(t *testing.T) {
 		t.Error("a stale platform ruling fell back to the owner's")
 	}
 }
+
+/*
+A stale ceiling arriving after the owner's ruling took effect stops the tool.
+
+In sequence, on one catalogue: the owner's read applies, then a later sweep
+brings the platform's ruling, judged against an older definition. Marking the
+entry stale and keeping what the owner had set left the tool readable, the
+fall-back NT-019 rules out. A stale decision returns the tool to how discovery
+leaves it: no effect, untrusted, nothing to compensate with, no dedupe.
+*/
+func TestSync_aStaleCeilingAfterTheOwnersRuling_returnsTheToolToUnclassified(t *testing.T) {
+	t.Parallel()
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	if err := catalog.AddServer(context.Background(), "crm", scopedLookupServer(), nil, tools.WithScope(cx)); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	owner := domain.ToolClassification{
+		Tool: "crm.lookup", Effect: domain.EffectRead, Scope: cx, CompensatedBy: "crm.undo",
+		Dedupe: domain.ToolDedupe{WindowSeconds: 60, ArgPaths: []string{"id"}},
+	}
+	if _, err := catalog.Sync(context.Background(), rulings{owner}, domain.Scope{}); err != nil {
+		t.Fatalf("first Sync: %v", err)
+	}
+	if effect, _ := catalog.Effect("crm.lookup"); effect != domain.EffectRead {
+		t.Fatalf("after the owner's ruling, effect = %v, want read", effect)
+	}
+
+	stale := domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectWrite,
+		Scope: installation, Digest: "sha256:an-older-definition"}
+	if _, err := catalog.Sync(context.Background(), rulings{owner, stale}, domain.Scope{}); err != nil {
+		t.Fatalf("second Sync: %v", err)
+	}
+
+	entry, ok := catalog.Lookup("crm.lookup")
+	if !ok {
+		t.Fatal("crm.lookup left the catalogue")
+	}
+	if entry.Effect != domain.EffectUnknown || !entry.Untrusted || entry.CompensatedBy != "" || entry.Dedupe.Enabled() {
+		t.Errorf("entry = effect %v untrusted %v compensatedBy %q dedupe %+v, want unclassified",
+			entry.Effect, entry.Untrusted, entry.CompensatedBy, entry.Dedupe)
+	}
+	if !entry.Stale {
+		t.Error("the entry does not say its ruling is stale")
+	}
+}
