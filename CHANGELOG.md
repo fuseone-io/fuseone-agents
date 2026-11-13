@@ -114,8 +114,14 @@ author picks tools and providers from is asked for the agent's scope. Adds migra
   - `GET /admin/tools` gains `rulings` on each tool: the platform's and the owner's,
     each with its `level`, `scope`, `effect` and `untrusted`, the one `inForce`, and an
     owner's ruling under a platform ruling marked `overridden`.
-  - The console still classifies at the platform's level only; `tool:classify` stays
-    advertised from the platform's administration until it offers `level: owner`.
+  - The console offers it on a server's page. The administrator of a company's or an
+    area's server rules on its tools as the owner; the installation's servers and a
+    parent company's are not offered. The platform's curator keeps recording the
+    ceiling by default, may record the owner's ruling instead on a company's or an
+    area's server, and alone is offered withdrawing the ceiling. The dialog lists the
+    tool's rulings, the one in force, and an owner's ruling overridden by the platform.
+  - `tool:classify` stays advertised from the platform's administration only, so the
+    administration's queue of tools waiting stays the platform curator's.
 - **What an author picks from is asked for one target scope.**
   - `GET /admin/tools` takes `scope`, `company` or `company/area`, and answers every
     tool an agent stored there can run: those whose server's (or connector instance's)
@@ -138,9 +144,12 @@ author picks tools and providers from is asked for the agent's scope. Adds migra
     read in the same snapshot as the tool, so a server moved meanwhile never hands one
     area's tool to another.
   - `/me` tells an area curator where it classifies (`classify`), for the console that
-    offers an owner's ruling per tool.
-  - The console does not send `scope` yet; the agent editor moves to these answers
-    next.
+    offers an owner's ruling per tool; `tool:classify` leaves the console's
+    platform-only list with that console.
+  - The console asks for them: the agent editor's tool picker and its provider and
+    fallback pickers, and an experiment's provider picker, send the agent's scope
+    (a new agent's once its area is chosen) and read providers from `GET /providers`.
+    A target out of the author's reach reads as such.
 
 ### Fixed
 
