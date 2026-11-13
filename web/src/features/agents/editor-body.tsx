@@ -2,6 +2,10 @@ import { TabDefinition } from "@/features/agents/tab-definition";
 import { TabGovernance } from "@/features/agents/tab-governance";
 import { TabSteps } from "@/features/agents/tab-steps";
 import { AgentToolsSection } from "@/features/agents/agent-tools-section";
+import {
+  CatalogueStates,
+  type CatalogueState,
+} from "@/features/agents/catalogue-states";
 import { TemplateGallery } from "@/features/agents/template-gallery";
 import type { EditorTab } from "@/features/agents/editor-tabs";
 import type { AgentDefinition, Policy, Tool } from "@/lib/api/client";
@@ -19,6 +23,7 @@ export function EditorBody({
   patch,
   editing,
   tools,
+  catalogueState,
   onSteps,
 }: {
   tab: EditorTab;
@@ -34,6 +39,8 @@ export function EditorBody({
     published?: string;
   };
   tools: { catalogue: Tool[]; policies: Policy[]; enabled: string[] };
+  /** How the catalogue, asked for the agent's target, is answering. */
+  catalogueState: CatalogueState;
   /** Moving to the tab where the instructions are read as stages. */
   onSteps: () => void;
 }) {
@@ -109,12 +116,14 @@ export function EditorBody({
       )}
       {tab === "tools" && (
         <div className="flex min-h-0 flex-1 flex-col">
-          <AgentToolsSection
-            granted={draft.tools ?? []}
-            catalogue={tools.catalogue}
-            policies={tools.policies}
-            patch={patch}
-          />
+          <CatalogueStates state={catalogueState}>
+            <AgentToolsSection
+              granted={draft.tools ?? []}
+              catalogue={tools.catalogue}
+              policies={tools.policies}
+              patch={patch}
+            />
+          </CatalogueStates>
         </div>
       )}
       {tab === "governance" && (

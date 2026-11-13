@@ -17,17 +17,29 @@ export type ScopeBudget = components["schemas"]["ScopeBudget"];
 
 export const adminKeys = {
   all: ["admin"] as const,
-  tools: () => [...adminKeys.all, "tools"] as const,
+  tools: (scope?: string) => [...adminKeys.all, "tools", scope ?? ""] as const,
   events: (target?: string) =>
     [...adminKeys.all, "events", target ?? ""] as const,
   budgets: () => [...adminKeys.all, "budgets"] as const,
 };
 
-export function useTools(enabled = true) {
+/**
+ * The tool catalogue, asked for one target scope when there is one (NT-019).
+ *
+ * With `scope` (`company` or `company/area`), the tools an agent stored there
+ * can run, which is what an author picks from. Without one, the platform's
+ * reader gets every tool and anyone else the installation's alone.
+ */
+export function useTools(enabled = true, scope?: string) {
   return useQuery({
-    queryKey: adminKeys.tools(),
+    queryKey: adminKeys.tools(scope),
     enabled,
-    queryFn: async () => unwrap(await api.GET("/admin/tools")),
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/admin/tools", {
+          params: { query: scope ? { scope } : {} },
+        }),
+      ),
   });
 }
 
