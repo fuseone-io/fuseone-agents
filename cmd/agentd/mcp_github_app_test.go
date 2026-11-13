@@ -157,7 +157,7 @@ func (s appServers) MCPServers(context.Context) ([]domain.MCPServer, error) {
 	return []domain.MCPServer{s.server}, nil
 }
 
-func (s appServers) MCPCredentials(context.Context, string) (domain.MCPCredentials, error) {
+func (s appServers) MCPServerCredentials(context.Context, domain.MCPServer) (domain.MCPCredentials, error) {
 	return s.creds, nil
 }
 

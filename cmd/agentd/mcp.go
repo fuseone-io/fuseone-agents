@@ -646,8 +646,13 @@ func stdioEgressFingerprint(egress *domain.MCPStdioEgress) string {
 // consumer.
 type Servers interface {
 	MCPServers(ctx context.Context) ([]domain.MCPServer, error)
-	MCPCredentials(ctx context.Context, name string) (domain.MCPCredentials, error)
+	// MCPServerCredentials opens the credential of the row the worker read,
+	// where it is stored and at its revision, never another of the name
+	// (NT-019). admin.ErrMCPServerChanged is a row that is not that one now.
+	MCPServerCredentials(ctx context.Context, server domain.MCPServer) (domain.MCPCredentials, error)
 }
+
+var _ Servers = (*admin.Integrations)(nil)
 
 // MCPUserCredentialStore resolves a per-person credential at the only moment
 // it can be chosen: a concrete tool call carrying OnBehalfOf.
@@ -954,7 +959,14 @@ func sameServerScope(a, b domain.Scope) bool {
 
 func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool {
 	server = r.withProtocol(server)
-	creds, err := r.servers.MCPCredentials(ctx, server.Name)
+	creds, err := r.servers.MCPServerCredentials(ctx, server)
+	if errors.Is(err, admin.ErrMCPServerChanged) {
+		// Not a failure of the server's: the row is not the one this pass
+		// read, and the next pass reads it again (NT-019).
+		slog.Info("tool server changed since it was read; connecting on the next pass",
+			"server", server.Name, "err", err)
+		return false
+	}
 	if err != nil {
 		slog.Error("tool server has no readable credential", "server", server.Name, "err", err)
 		observe(ctx, r.health, server.Name, false, 0, err.Error())

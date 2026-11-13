@@ -1375,14 +1375,19 @@ type probeServers struct {
 	servers     []domain.MCPServer
 	probes      []string
 	probeScopes map[string]domain.Scope
+	// opened is each server whose credential the worker asked for, as it
+	// named it; credentialsErr is what the store answers.
+	opened         []domain.MCPServer
+	credentialsErr error
 }
 
 func (p *probeServers) MCPServers(context.Context) ([]domain.MCPServer, error) {
 	return append([]domain.MCPServer(nil), p.servers...), nil
 }
 
-func (p *probeServers) MCPCredentials(context.Context, string) (domain.MCPCredentials, error) {
-	return domain.MCPCredentials{}, nil
+func (p *probeServers) MCPServerCredentials(_ context.Context, server domain.MCPServer) (domain.MCPCredentials, error) {
+	p.opened = append(p.opened, server)
+	return domain.MCPCredentials{}, p.credentialsErr
 }
 
 // ClaimMCPProbes hands out the queued probes as requests about servers of the

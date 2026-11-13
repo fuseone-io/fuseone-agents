@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/tools"
@@ -109,5 +111,43 @@ func TestReconciler_aReceipt_namesTheRowItAnswered(t *testing.T) {
 
 	if len(w.servers.receipts) != 1 || w.servers.receipts[0].Scope != cxArea {
 		t.Errorf("receipts = %+v, want one about the server at %s", w.servers.receipts, cxArea)
+	}
+}
+
+/*
+The worker opens the credential of the row it read (NT-019).
+
+It names the server as it read it, where it is stored and at which revision, so
+the store never hands over the credential of a server of the name stored
+elsewhere since. A row that changed is read again on the next pass, and is not
+a failure of the server's.
+*/
+func TestReconciler_opensTheCredentialOfTheRowItRead(t *testing.T) {
+	t.Parallel()
+	w := rediscoveryFixture(t)
+	w.servers.servers[0].Scope = cxArea
+
+	w.r.reconcile(context.Background())
+
+	opened := w.servers.opened
+	if len(opened) != 1 || opened[0].Scope != cxArea || !opened[0].UpdatedAt.Equal(w.servers.servers[0].UpdatedAt) {
+		t.Errorf("opened = %+v, want the server as read: at %s, its revision", opened, cxArea)
+	}
+}
+
+func TestReconciler_aServerChangedSinceItWasRead_isNotConnected(t *testing.T) {
+	t.Parallel()
+	w := rediscoveryFixture(t)
+	w.servers.credentialsErr = fmt.Errorf("wrapped: %w", admin.ErrMCPServerChanged)
+	health := recordingHealth{}
+	w.r.health = health
+
+	w.r.reconcile(context.Background())
+
+	if *w.connects != 0 {
+		t.Errorf("connects = %d, want none with a credential of another row", *w.connects)
+	}
+	if h, seen := health["crm"]; seen {
+		t.Errorf("health = %+v, want nothing recorded: the server did not fail, it changed", h)
 	}
 }
