@@ -77,6 +77,7 @@ export function MCPServerPage() {
       await inOrder(({ body, etag }) =>
         save.mutateAsync({
           name: body.name,
+          scope: body,
           surface: [...chosen],
           transport: body.transport ?? "stdio",
           protocolMode: body.protocolMode ?? "auto",

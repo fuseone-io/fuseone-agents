@@ -107,6 +107,8 @@ export function ConnectionPanel({
     const send = (record: MCPServer, etag?: string) =>
       put.mutateAsync({
         name: record.name,
+        // Where it is stored, as read: a server's scope does not move.
+        scope: record,
         transport: record.transport ?? "stdio",
         protocolMode: record.protocolMode ?? "auto",
         command: record.command ?? "",
