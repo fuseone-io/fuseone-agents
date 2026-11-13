@@ -28,6 +28,7 @@ import {
   githubAppHeaders,
 } from "@/features/integrations/mcp/github-app-credential";
 import { problemMessage } from "@/lib/api/problem-message";
+import { serverRefusal } from "@/features/integrations/mcp/server-refusal";
 import { isStale } from "@/lib/api/revision";
 
 /**
@@ -57,13 +58,7 @@ export function useServerForm(
     const remotePlan = remoteAuthPlan(recipe?.authModes, recipe !== undefined && recipe !== null);
     const remoteHeaders = headerNames(remotePlan.multiHeaders);
     const dsnMode = values.transport === "stdio" ? dsnEnvMode(recipe?.authModes) : null;
-    const hasSomeHeaders = remoteHeaders.some(
-      (header) => values.headers[header]?.trim() !== "",
-    );
-    const hasAllHeaders =
-      remoteHeaders.length > 0 &&
-      remoteHeaders.every((header) => values.headers[header]?.trim() !== "");
-    if (hasSomeHeaders && !hasAllHeaders) {
+    if (headersIncomplete(values, remoteHeaders)) {
       form.setError("headers", { message: "mcp.remoteHeadersIncomplete" });
       return;
     }
@@ -111,7 +106,9 @@ export function useServerForm(
       });
       onDone(values.name);
     } catch (error) {
+      const refusal = serverRefusal(error, t);
       if (revision && isStale(error)) revision.onStale();
+      else if (refusal) form.setError(refusal.field, { message: refusal.message });
       else toast.error(problemMessage(error, t));
     }
   }
@@ -164,6 +161,12 @@ function defaultServerValues(
     acceptsLocalExecution: server?.acceptsLocalExecution ?? false,
     enabled: server?.enabled ?? true,
   };
+}
+
+/** Some of the headers a credential needs are filled, and not all of them. */
+function headersIncomplete(values: ServerFormValues, headers: string[]) {
+  const filled = (header: string) => values.headers[header]?.trim() !== "";
+  return headers.some(filled) && !(headers.length > 0 && headers.every(filled));
 }
 
 function remoteCredential(

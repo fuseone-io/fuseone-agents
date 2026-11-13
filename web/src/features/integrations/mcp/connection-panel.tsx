@@ -38,6 +38,7 @@ import {
   remoteTokenHint,
   remoteTokenLabel,
 } from "@/features/integrations/mcp/credential-labels";
+import { serverProblemMessage } from "@/features/integrations/mcp/server-refusal";
 import {
   usePutMCPServer,
   useProbeMCPServer,
@@ -136,7 +137,7 @@ export function ConnectionPanel({
       return true;
     } catch (problem) {
       if (revision && isStale(problem)) revision.onStale();
-      else toast.error(problemMessage(problem, t));
+      else toast.error(serverProblemMessage(problem, t));
       return false;
     }
   }
