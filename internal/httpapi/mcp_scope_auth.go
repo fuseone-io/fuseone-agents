@@ -72,11 +72,16 @@ func mcpServerListing(p domain.Principal, srv domain.MCPServer) (listed, editabl
 
 // connectorScopeOrInstallation reads the scope a write names, the
 // installation's when it names none, as every server was before areas
-// configured their own.
+// configured their own. A company or area with no kind is refused: written
+// at the installation, it would be a server stored somewhere the caller did
+// not ask for.
 func connectorScopeOrInstallation(
 	kind *openapi.ConnectorScopeKind, company, area *string,
 ) (settings.ScopeKind, domain.Scope, error) {
 	if kind == nil {
+		if company != nil || area != nil {
+			return "", domain.Scope{}, errors.New("a company or area needs scopeKind")
+		}
 		return settings.ScopeInstallation, domain.Scope{}, nil
 	}
 	scope, err := connectorScope(*kind, company, area)

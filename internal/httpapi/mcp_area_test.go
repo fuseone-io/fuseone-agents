@@ -313,3 +313,57 @@ func TestPutMCPUserCredential_aCompanyGrant_reachesItsAreasServer(t *testing.T) 
 		t.Errorf("an author of acme = %T, want 204 for a server of acme/cx", resp)
 	}
 }
+
+/*
+A scope a write names is a real company or area, never the installation's
+sentinel in disguise (NT-019).
+
+"*" is the installation's company: a row stored at company/* is read back as
+the installation's, so the server would be reported at the wrong scope and the
+worker could not open its row again. An identifier the platform would store
+in another form (upper case, spaces) is refused rather than folded: the row
+must be the one the caller named. And a company or area without a scope kind
+is refused, not silently written at the installation.
+*/
+func TestConnectorScope_refusesIdentitiesNoCompanyOrAreaHas(t *testing.T) {
+	t.Parallel()
+	company, area := openapi.ConnectorScopeKindCompany, openapi.ConnectorScopeKindArea
+	for _, one := range []struct {
+		name          string
+		kind          openapi.ConnectorScopeKind
+		company, area *string
+	}{
+		{"the installation as a company", company, ptr("*"), nil},
+		{"the installation as an area's company", area, ptr("*"), ptr("cx")},
+		{"a company in upper case", company, ptr("Acme"), nil},
+		{"a company with a space", company, ptr("ac me"), nil},
+		{"an area in upper case", area, ptr("acme"), ptr("CX")},
+		{"an area with a space", area, ptr("acme"), ptr("c x")},
+		{"an area with a slash", area, ptr("acme"), ptr("cx/finance")},
+	} {
+		if scope, err := connectorScope(one.kind, one.company, one.area); err == nil {
+			t.Errorf("%s: accepted as %v, want refused", one.name, scope)
+		}
+	}
+	if _, err := connectorScope(area, ptr("acme"), ptr("cx")); err != nil {
+		t.Errorf("acme/cx: %v, want accepted", err)
+	}
+}
+
+func TestPutMCPServer_aScopeWithNoKind_isRefusedRatherThanStoredAtTheInstallation(t *testing.T) {
+	s := mcpWorld(t)
+	for name, body := range map[string]openapi.PutMCPServerJSONRequestBody{
+		"no-kind-company": {Company: ptr("acme")},
+		"no-kind-area":    {Company: ptr("acme"), Area: ptr("cx")},
+		"star-company":    {ScopeKind: ptr(openapi.ConnectorScopeKindCompany), Company: ptr("*")},
+	} {
+		body.Transport, body.Url = ptr(openapi.TransportHttp), ptr("https://mcp.example.com/"+name)
+		resp, err := s.PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{Name: name, Body: &body})
+		if err != nil {
+			t.Fatalf("PutMCPServer %s: %v", name, err)
+		}
+		if _, ok := resp.(openapi.PutMCPServer400ApplicationProblemPlusJSONResponse); !ok {
+			t.Errorf("%s = %T, want 400", name, resp)
+		}
+	}
+}
