@@ -170,9 +170,15 @@ One rule, for every kind:
    a company and a platform caller, and an author, who is refused 403.
 5. **What an author picks from is a reduced answer, on `tool:read`.** Building an agent
    needs names, not addresses:
-   - **Tools:** `ListTools`, as #324 left it.
+   - **Tools:** `ListTools`, open to `tool:read` in any scope since #324, now asked for a
+     target as below.
    - **Providers and their models:** a new `GET /providers`, which answers name, kind,
      models and whether each is usable. It never answers a base URL or anything sealed.
+     Usable is what the serving process's registry answers (`Registry.Usable`: switched
+     on, credential opened, address whole) for a provider switched on; with no registry
+     wired, a provider switched on. Providers are stored at the installation today, so
+     every reachable target is answered the installation's; the filter is the same
+     containment rule, ready for an area's providers.
      The agent editor reads providers from `ListIntegrations` today
      (`web/src/features/agents/agent-serving-fields.tsx`, `agent-fallback-fields.tsx`,
      `web/src/features/experiments/experiment-config-fields.tsx`). That listing needs
@@ -196,8 +202,23 @@ One rule, for every kind:
      only those. That is exactly what an agent stored at the target can run, so what the
      editor offers and what `checkScope` admits are the same set.
    - **Without `scope`**, an answer holds only the installation's rows, which every
-     scope inherits. Today's callers keep working, and nothing of any area is answered
-     without naming it.
+     scope inherits, and nothing of any area is answered without naming it.
+     **Exception, decided in part B2a:** a caller holding `tool:read` at `adminScope` keeps
+     every row without `scope`. The platform's tools screen lists every tool and every
+     owner's ruling on it (B1's `rulings`), and is where the ceiling is ruled and
+     withdrawn; answering it only the installation's tools would hide every area's tool
+     from the one screen that rules over them. The platform's administration already
+     sees every row (rule 4), so nothing is answered it could not otherwise read. The
+     same reader may also name any target, since `adminScope` governs every area but
+     does not contain one by `Scope.Contains`.
+   - **400 before 404.** A target that is not a real company or area as stored (an
+     identifier in another form, a missing part, the installation's `*`) answers 400,
+     judged as part A's `realScope` judges a write's scope. The form of a request says
+     nothing about which scopes exist; only then is the caller's reach judged.
+   - **The worker's rulings stay whole.** The filter lives in the listing door, never in
+     `Curator.List`, which the worker's `Catalog.Sync` reads with the empty scope: Sync
+     resets every tool no ruling decides (B1), and a narrowed source would reset area
+     tools their owners ruled on. A journey test pins it.
    - The agent editor, the fallback fields and the experiment form pass the agent's
      scope. The experiment form passes the experimented agent's scope.
 
@@ -289,8 +310,13 @@ The instance already has the scope. Only the doors change:
 - **The catalogue knows each tool's scope.** A tool entry carries the scope of the
   server that declares it.
   - `ListTools` already returns tools to `tool:read` in any scope (#324). It now keeps
-    only the tools usable from the target scope it is asked for, by rule 5.
-  - Today it filters only who declares each tool (`internal/httpapi/admin.go:79-84`).
+    only the tools usable from the target scope it is asked for, by rule 5: each entry
+    carries the runtime scope of the server or connector instance that declares it (the
+    installation's for a `--mcp` flag's server and the platform's own tools), and a tool
+    is answered when that scope contains the target. Without a target the platform's
+    administration keeps every tool, and anyone else gets the installation's (rule 5's
+    exception).
+  - Before part B2a it filtered only who declares each tool (`declaringTools`).
 - **Personal credentials** (`mcp_user_credential`) stay keyed by server and person
   (`internal/admin/integrations.go:752`). A person stores one only for a server they
   can see.
@@ -566,7 +592,8 @@ their own Jira, Elasticsearch or SQL from their own area.
   - An author granted on `acme` asks for `acme/cx`, and the answer includes `acme/cx`'s
     own rows.
   - An `acme/cx` author asking for `acme/finance` gets 404.
-  - Without `scope`, only installation rows.
+  - Without `scope`, only installation rows, except for a reader at `adminScope`, who
+    keeps every row.
   - Sabotage: answer the union of the caller's scopes; the multi-area test must name
     `finance`'s tool. Then filter by the caller's grants instead of the target; the
     company test must name the area's row it lost.
