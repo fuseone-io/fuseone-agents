@@ -3,6 +3,7 @@ import { BookOpenText } from "lucide-react";
 import { narrate } from "@/features/agents/narrative";
 import { usePolicies } from "@/features/policies/api";
 import { useTools } from "@/features/admin/api";
+import { agentTarget } from "@/features/agents/agent-target";
 import { formatMicros } from "@/lib/format";
 import type { AgentDefinition } from "@/lib/api/client";
 
@@ -16,7 +17,7 @@ import type { AgentDefinition } from "@/lib/api/client";
  */
 export function NarrativeCard({ draft }: { draft: AgentDefinition }) {
   const { t } = useTranslation();
-  const tools = useTools().data?.items ?? [];
+  const tools = useTools(true, agentTarget(draft)).data?.items ?? [];
   const policies = usePolicies().data?.items ?? [];
 
   // Micros are the wire's unit, never a reader's. A sentence about money has
