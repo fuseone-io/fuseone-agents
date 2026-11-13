@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -149,5 +153,98 @@ func TestReconciler_aServerChangedSinceItWasRead_isNotConnected(t *testing.T) {
 	}
 	if h, seen := health["crm"]; seen {
 		t.Errorf("health = %+v, want nothing recorded: the server did not fail, it changed", h)
+	}
+}
+
+// scopedPersonal holds one person's credential for the server row it was
+// stored for, as the administration does, and records the row it was asked of.
+type scopedPersonal struct {
+	at    domain.Scope
+	creds domain.MCPCredentials
+	asked []domain.Scope
+}
+
+func (p *scopedPersonal) MCPPersonalCredential(
+	_ context.Context, at domain.Scope, _ string, _ domain.UserID,
+) (domain.MCPCredentials, bool, error) {
+	p.asked = append(p.asked, at)
+	if at != p.at {
+		return domain.MCPCredentials{}, false, nil
+	}
+	return p.creds, true, nil
+}
+
+var _ MCPUserCredentialStore = (*scopedPersonal)(nil)
+
+/*
+A person's credential travels only to the server row it was stored for.
+
+Ana stored hers for jira at acme/finance. The worker holds a server of that
+name read at acme/cx: it asks for the credential of the row it connected, and
+the request goes out with the server's own credential, never Ana's.
+*/
+func TestAuthenticatedClient_asksForThePersonalCredentialOfTheRowItConnected(t *testing.T) {
+	t.Parallel()
+	var seen string
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(remote.Close)
+	personal := &scopedPersonal{
+		at: domain.Scope{Company: "acme", Area: "finance"}, creds: domain.MCPCredentials{Token: "ana-finance"},
+	}
+	client, err := authenticatedClientWithPolicy(domain.MCPServer{Name: "jira", Scope: cxArea},
+		domain.MCPCredentials{Token: "cx-shared"}, nil, personal, credentialPolicy{})
+	if err != nil {
+		t.Fatalf("authenticatedClientWithPolicy: %v", err)
+	}
+	req, err := http.NewRequestWithContext(tools.WithCaller(t.Context(), "usr_ana"), http.MethodGet, remote.URL, nil)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if seen != "Bearer cx-shared" || len(personal.asked) != 1 || personal.asked[0] != cxArea {
+		t.Errorf("Authorization = %q, asked %v; want the cx server's own token, asked of %s", seen, personal.asked, cxArea)
+	}
+}
+
+// A refreshed grant is written back to the row the worker connected, named by
+// where it is stored, so it cannot land on a server of the name stored
+// elsewhere since.
+func TestOAuthRefresh_isWrittenBackToTheRowItConnected(t *testing.T) {
+	t.Parallel()
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/token" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "fresh", "expires_in": 3600})
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(remote.Close)
+	grant := domain.MCPOAuthGrant{
+		AccessToken: "expired", RefreshToken: "refresh", TokenURL: remote.URL + "/token",
+		ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
+	}
+	store := &recordingOAuthStore{}
+	client, err := authenticatedClientWithPolicy(domain.MCPServer{Name: "jira", Scope: cxArea},
+		domain.MCPCredentials{OAuth: &grant}, store, nil, credentialPolicy{})
+	if err != nil {
+		t.Fatalf("authenticatedClientWithPolicy: %v", err)
+	}
+	resp, err := client.Get(remote.URL + "/resource")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if store.name != "jira" || store.scope != cxArea {
+		t.Errorf("written back to %s at %s, want jira at %s", store.name, store.scope, cxArea)
 	}
 }

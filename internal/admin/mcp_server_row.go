@@ -43,3 +43,41 @@ func (i *Integrations) MCPServerCredentials(
 	}
 	return domain.ReadMCPCredentials(set.Secret), nil
 }
+
+// MCPOAuthRefresh is a grant a worker refreshed, for the server row it
+// connected: Scope is where that row is stored, zero for a server no row
+// describes. Principal is the person whose own credential it was, or empty for
+// the server's.
+type MCPOAuthRefresh struct {
+	Server    string
+	Scope     domain.Scope
+	Principal domain.UserID
+	Was, Next domain.MCPOAuthGrant
+}
+
+// sameServerRow compares where two descriptions of one name say the server is
+// stored. Zero, a server no row describes, is the installation's.
+func sameServerRow(a, b domain.Scope) bool {
+	installation := domain.Scope{Company: domain.Installation}
+	if a == (domain.Scope{}) {
+		a = installation
+	}
+	if b == (domain.Scope{}) {
+		b = installation
+	}
+	return a == b
+}
+
+// serverRow is what a person's credential stores about its server's row.
+func serverRow(kind settings.ScopeKind, stored domain.Scope) *requestedAt {
+	return &requestedAt{ScopeKind: string(kind), Company: string(stored.Company), Area: string(stored.Area)}
+}
+
+// serverRuntime is where the server a credential was stored for is: the
+// installation's for one stored before credentials named a row.
+func (c storedMCPUserCredential) serverRuntime() domain.Scope {
+	if c.ServerAt == nil || c.ServerAt.ScopeKind == "" {
+		return domain.Scope{Company: domain.Installation}
+	}
+	return storedRuntimeScope(c.ServerAt.ScopeKind, c.ServerAt.Company, c.ServerAt.Area)
+}

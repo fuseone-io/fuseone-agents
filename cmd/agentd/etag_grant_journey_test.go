@@ -115,7 +115,7 @@ func rotate(t *testing.T, w *readBackWorld, name string) {
 	next.AccessToken, next.RefreshToken, next.ExpiresAtUnix = "ETAG-ROTATED", "ETAG-ROTATED-REFRESH", 1_900_000_000
 	next.Generation = ""
 	if err := admin.NewIntegrations(testdb.Pool(t), w.store).
-		RefreshMCPServerOAuth(t.Context(), name, "", *was, next); err != nil {
+		RefreshMCPServerOAuth(t.Context(), admin.MCPOAuthRefresh{Server: name, Was: *was, Next: next}); err != nil {
 		t.Fatalf("rotate: %v", err)
 	}
 }

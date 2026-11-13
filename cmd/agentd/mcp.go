@@ -89,7 +89,7 @@ func transportFor(
 ) (mcp.Transport, func(), error) {
 	switch server.TransportOf() {
 	case domain.TransportHTTP:
-		client, err := authenticatedClientWithPolicy(server.Name, creds, oauth, personal, policy)
+		client, err := authenticatedClientWithPolicy(server, creds, oauth, personal, policy)
 		if err != nil {
 			return nil, noop, fmt.Errorf("%s: prepare HTTP credential: %w", server.Name, err)
 		}
@@ -236,11 +236,15 @@ func authenticatedClient(
 	server string, creds domain.MCPCredentials,
 	oauth OAuthGrantStore, personal MCPUserCredentialStore,
 ) (*http.Client, error) {
-	return authenticatedClientWithPolicy(server, creds, oauth, personal, credentialPolicy{})
+	return authenticatedClientWithPolicy(domain.MCPServer{Name: server}, creds, oauth, personal, credentialPolicy{})
 }
 
+// authenticatedClientWithPolicy authenticates requests to the server row the
+// worker connected: a person's credential and a refreshed grant are read and
+// written for that row, by where it is stored, never another of its name
+// (NT-019).
 func authenticatedClientWithPolicy(
-	server string, creds domain.MCPCredentials,
+	server domain.MCPServer, creds domain.MCPCredentials,
 	oauth OAuthGrantStore, personal MCPUserCredentialStore,
 	policy credentialPolicy,
 ) (*http.Client, error) {
@@ -255,7 +259,7 @@ func authenticatedClientWithPolicy(
 	}
 	return &http.Client{
 		Transport: &credentialAuth{
-			server: server, shared: creds, personal: personal,
+			server: server.Name, scope: server.Scope, shared: creds, personal: personal,
 			policy: policy,
 			oauth:  oauth, base: base, grants: make(map[domain.UserID]*oauthTransport),
 		},
@@ -309,8 +313,10 @@ func (h headerAuth) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 type credentialAuth struct {
-	mu       sync.Mutex
-	server   string
+	mu     sync.Mutex
+	server string
+	// scope is where the server row the worker connected is stored (NT-019).
+	scope    domain.Scope
 	shared   domain.MCPCredentials
 	personal MCPUserCredentialStore
 	policy   credentialPolicy
@@ -378,7 +384,7 @@ func (a *credentialAuth) credentials(ctx context.Context) (domain.MCPCredentials
 	}
 	principal, hasCaller := tools.CallerFrom(ctx)
 	if hasCaller && a.personal != nil {
-		creds, found, err := a.personal.MCPPersonalCredential(ctx, a.server, principal)
+		creds, found, err := a.personal.MCPPersonalCredential(ctx, a.scope, a.server, principal)
 		if err != nil {
 			return domain.MCPCredentials{}, "", credentialFailure(
 				tools.CodeMCPPersonalCredentialRead, a.server,
@@ -420,6 +426,7 @@ func (a *credentialAuth) oauthRoundTrip(
 	transport := a.grants[owner]
 	if transport == nil || !transport.derivedFrom(grant) {
 		transport = newOAuthTransport(a.server, owner, grant, a.oauth, a.base)
+		transport.scope = a.scope
 		a.grants[owner] = transport
 	}
 	a.mu.Unlock()
@@ -427,8 +434,10 @@ func (a *credentialAuth) oauthRoundTrip(
 }
 
 type oauthTransport struct {
-	mu        sync.Mutex
-	server    string
+	mu     sync.Mutex
+	server string
+	// scope is where the server row it refreshes for is stored (NT-019).
+	scope     domain.Scope
 	owner     domain.UserID
 	grant     domain.MCPOAuthGrant
 	base      http.RoundTripper
@@ -508,7 +517,9 @@ func (t *oauthTransport) persist(ctx context.Context) error {
 		t.dirtyFrom = domain.MCPOAuthGrant{}
 		return nil
 	}
-	if err := t.store.RefreshMCPServerOAuth(ctx, t.server, t.owner, t.dirtyFrom, t.grant); err != nil {
+	if err := t.store.RefreshMCPServerOAuth(ctx, admin.MCPOAuthRefresh{
+		Server: t.server, Scope: t.scope, Principal: t.owner, Was: t.dirtyFrom, Next: t.grant,
+	}); err != nil {
 		return fmt.Errorf("persist refreshed oauth grant: %w", err)
 	}
 	t.dirty = false
@@ -657,19 +668,23 @@ var _ Servers = (*admin.Integrations)(nil)
 // MCPUserCredentialStore resolves a per-person credential at the only moment
 // it can be chosen: a concrete tool call carrying OnBehalfOf.
 type MCPUserCredentialStore interface {
+	// at is where the server row the worker connected is stored: a
+	// credential stored for another of the name is not handed (NT-019).
 	MCPPersonalCredential(
-		ctx context.Context, name string, principal domain.UserID,
+		ctx context.Context, at domain.Scope, name string, principal domain.UserID,
 	) (domain.MCPCredentials, bool, error)
 }
+
+var _ MCPUserCredentialStore = (*admin.Integrations)(nil)
 
 // OAuthGrantStore persists refresh-token rotation before a request is sent
 // with a grant that only exists in memory.
 type OAuthGrantStore interface {
-	RefreshMCPServerOAuth(
-		ctx context.Context, name string, principal domain.UserID,
-		was, next domain.MCPOAuthGrant,
-	) error
+	// The refresh names the row the worker connected (NT-019).
+	RefreshMCPServerOAuth(ctx context.Context, r admin.MCPOAuthRefresh) error
 }
+
+var _ OAuthGrantStore = (*admin.Integrations)(nil)
 
 // Publisher records what the installation now offers, so the administration
 // area shows the tools of a server that connected after start-up. Optional: a

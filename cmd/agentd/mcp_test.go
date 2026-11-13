@@ -624,7 +624,7 @@ func TestAuthenticatedClient_aUserOnlyServerUsesTheSharedCredentialForDiscovery(
 	}))
 	t.Cleanup(remote.Close)
 
-	client, err := authenticatedClientWithPolicy("google",
+	client, err := authenticatedClientWithPolicy(domain.MCPServer{Name: "google"},
 		domain.MCPCredentials{Token: "shared"},
 		nil, personalCreds{},
 		credentialPolicy{requirePersonal: true},
@@ -651,7 +651,7 @@ func TestAuthenticatedClient_aUserOnlyServerDoesNotUseTheSharedCredentialForACro
 	}))
 	t.Cleanup(remote.Close)
 
-	client, err := authenticatedClientWithPolicy("google",
+	client, err := authenticatedClientWithPolicy(domain.MCPServer{Name: "google"},
 		domain.MCPCredentials{Token: "shared"},
 		nil, personalCreds{},
 		credentialPolicy{requirePersonal: true},
@@ -681,7 +681,7 @@ func TestAuthenticatedClient_aUserOnlyServerStillBlocksToolCallsWithoutAnyCreden
 	}))
 	t.Cleanup(remote.Close)
 
-	client, err := authenticatedClientWithPolicy("google",
+	client, err := authenticatedClientWithPolicy(domain.MCPServer{Name: "google"},
 		domain.MCPCredentials{},
 		nil, nil,
 		credentialPolicy{requirePersonal: true},
@@ -714,7 +714,7 @@ func TestAuthenticatedClient_aUserOnlyServerDoesNotUseTheSharedCredentialWhenThe
 	}))
 	t.Cleanup(remote.Close)
 
-	client, err := authenticatedClientWithPolicy("google",
+	client, err := authenticatedClientWithPolicy(domain.MCPServer{Name: "google"},
 		domain.MCPCredentials{Token: "shared"},
 		nil, personalCreds{},
 		credentialPolicy{requirePersonal: true},
@@ -845,23 +845,24 @@ func TestAuthenticatedClient_persistsPersonalOAuthRefreshForThatUser(t *testing.
 
 type recordingOAuthStore struct {
 	name  string
+	scope domain.Scope
 	owner domain.UserID
 	was   domain.MCPOAuthGrant
 	next  domain.MCPOAuthGrant
 	err   error
 }
 
-func (s *recordingOAuthStore) RefreshMCPServerOAuth(
-	_ context.Context, name string, owner domain.UserID, was, next domain.MCPOAuthGrant,
-) error {
-	s.name, s.owner, s.was, s.next = name, owner, was, next
+func (s *recordingOAuthStore) RefreshMCPServerOAuth(_ context.Context, r admin.MCPOAuthRefresh) error {
+	s.name, s.scope, s.owner, s.was, s.next = r.Server, r.Scope, r.Principal, r.Was, r.Next
 	return s.err
 }
+
+var _ OAuthGrantStore = (*recordingOAuthStore)(nil)
 
 type personalCreds map[domain.UserID]domain.MCPCredentials
 
 func (p personalCreds) MCPPersonalCredential(
-	_ context.Context, _ string, principal domain.UserID,
+	_ context.Context, _ domain.Scope, _ string, principal domain.UserID,
 ) (domain.MCPCredentials, bool, error) {
 	creds, ok := p[principal]
 	return creds, ok, nil
@@ -873,7 +874,7 @@ type rotatingPersonal struct {
 }
 
 func (p *rotatingPersonal) MCPPersonalCredential(
-	context.Context, string, domain.UserID,
+	context.Context, domain.Scope, string, domain.UserID,
 ) (domain.MCPCredentials, bool, error) {
 	return p.creds, !p.creds.Empty(), p.err
 }

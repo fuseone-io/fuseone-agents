@@ -255,7 +255,7 @@ func TestRefreshMCPServerOAuth_anAreasServer_rewritesItsOwnRow(t *testing.T) {
 	w := withAreaServerHolding(t, domain.MCPCredentialPatch{OAuth: &was})
 	ctx := context.Background()
 
-	if err := w.integrations.RefreshMCPServerOAuth(ctx, "github", "", was, next); err != nil {
+	if err := w.integrations.RefreshMCPServerOAuth(ctx, admin.MCPOAuthRefresh{Server: "github", Scope: cxScope, Was: was, Next: next}); err != nil {
 		t.Fatalf("RefreshMCPServerOAuth: %v", err)
 	}
 	creds, err := w.integrations.MCPCredentials(ctx, "github")
