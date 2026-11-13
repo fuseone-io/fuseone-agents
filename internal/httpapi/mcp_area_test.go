@@ -423,7 +423,7 @@ func TestPutMCPServer_anAuxiliaryAddressWithNoOrigin_isInvalidInputNotAnEgressRe
 	if !ok {
 		t.Fatalf("PutMCPServer = %T, want 400", resp)
 	}
-	if valueOr(bad.Type) == "fuseone:egress-not-allowed" || valueOr(bad.Detail) == "" {
-		t.Errorf("problem = %s %q, want a refusal that is not egress-not-allowed, with a detail", valueOr(bad.Type), valueOr(bad.Detail))
+	if valueOr(bad.Type) != "fuseone:invalid-input" || valueOr(bad.Detail) == "" {
+		t.Errorf("problem = %s %q, want fuseone:invalid-input with a detail", valueOr(bad.Type), valueOr(bad.Detail))
 	}
 }
