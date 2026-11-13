@@ -198,6 +198,7 @@ func TestFingerprint_changesWithThePolicy(t *testing.T) {
 	narrow := areaServer(u.String(), &domain.MCPEgress{Origins: []string{"https://jira.example.com:443"}})
 	none := areaServer(u.String(), &domain.MCPEgress{})
 	installation := areaServer(u.String(), nil)
+	installation.Scope = domain.Scope{Company: domain.Installation}
 	seen := map[string]bool{}
 	for _, s := range []domain.MCPServer{wide, narrow, none, installation} {
 		seen[fingerprint(s)] = true
@@ -220,5 +221,26 @@ func TestTransportFor_anAreasServerOutsideItsPolicy_isRefusedBeforeATransportExi
 		if err == nil || transport != nil {
 			t.Errorf("%s: transport = %v, err = %v; want refused", name, transport, err)
 		}
+	}
+}
+
+/*
+An area's server whose policy got lost on the way is refused, not treated as
+the installation's: only a server with no scope, or the installation's, may
+carry no policy.
+*/
+func TestEgress_anAreasServerWithItsPolicyLost_isRefusedNotUnrestricted(t *testing.T) {
+	t.Parallel()
+	remote, hits := countingServer(t, nil)
+	lost := areaServer(remote.URL, nil)
+	if transport, _, err := transportFor(t.Context(), lost, domain.MCPCredentials{}, nil, nil, credentialPolicy{}, nil); err == nil {
+		t.Errorf("transportFor = %v, nil; want refused", transport)
+	}
+	if resp, err := withEgress(lost, nil).Get(remote.URL); err == nil {
+		_ = resp.Body.Close()
+		t.Error("the client sent a request for an area's server with no policy")
+	}
+	if hits.Load() != 0 {
+		t.Errorf("hits = %d, want none", hits.Load())
 	}
 }

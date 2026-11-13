@@ -263,7 +263,7 @@ func authenticatedClientWithPolicy(
 	}
 	return &http.Client{
 		Transport: &credentialAuth{
-			server: server.Name, scope: server.Scope, egress: server.Egress,
+			server: server.Name, scope: server.Scope, egress: effectiveEgress(server),
 			shared: creds, personal: personal,
 			policy: policy,
 			oauth:  oauth, base: base, grants: make(map[domain.UserID]*oauthTransport),
@@ -634,7 +634,7 @@ func fingerprint(server domain.MCPServer) string {
 		rateLimitFingerprint(server.RateLimit), resultCacheFingerprint(server.Cache),
 		stdioEgressFingerprint(server.StdioEgress),
 		fmt.Sprint(server.Enabled), server.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		egressFingerprint(server.Egress),
+		egressFingerprint(effectiveEgress(server)),
 	}, "\x00")))
 	return hex.EncodeToString(sum[:8])
 }

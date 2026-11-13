@@ -48,10 +48,25 @@ func guardEgress(server string, egress *domain.MCPEgress, base http.RoundTripper
 	return egressGuard{server: server, egress: egress, base: base}
 }
 
+// effectiveEgress is the policy a server is held to. Only a server with no
+// scope, a --mcp flag's, or the installation's may carry none. Any other
+// server whose policy got lost on the way allows nothing: a missing field
+// fails closed, never into the installation's reach.
+func effectiveEgress(server domain.MCPServer) *domain.MCPEgress {
+	if server.Egress != nil {
+		return server.Egress
+	}
+	if server.Scope == (domain.Scope{}) || server.Scope.IsInstallation() {
+		return nil
+	}
+	return &domain.MCPEgress{}
+}
+
 // withEgress holds a server's whole client to its policy, outermost, so every
 // decoration underneath and every redirect passes through it.
 func withEgress(server domain.MCPServer, client *http.Client) *http.Client {
-	if server.Egress == nil {
+	egress := effectiveEgress(server)
+	if egress == nil {
 		return client
 	}
 	if client == nil {
@@ -62,24 +77,25 @@ func withEgress(server domain.MCPServer, client *http.Client) *http.Client {
 	if base == nil {
 		base = baseHTTPTransport()
 	}
-	out.Transport = guardEgress(server.Name, server.Egress, base)
+	out.Transport = guardEgress(server.Name, egress, base)
 	return &out
 }
 
 // egressAllowsServer refuses, before any request, a server whose own URL its
-// policy does not list, and one with no policy at all.
+// policy does not list, and one whose policy allows nothing.
 func egressAllowsServer(server domain.MCPServer) error {
-	if server.Egress == nil {
+	egress := effectiveEgress(server)
+	if egress == nil {
 		return nil
 	}
 	u, err := url.Parse(server.URL)
 	if err != nil {
 		return fmt.Errorf("%s: parse url: %w", server.Name, err)
 	}
-	if len(server.Egress.Origins) == 0 {
-		return fmt.Errorf("%s: the platform has no egress policy for this server's scope (NT-019)", server.Name)
+	if len(egress.Origins) == 0 {
+		return fmt.Errorf("%s: the platform allows this server's scope no origin (NT-019)", server.Name)
 	}
-	if !server.Egress.Allows(u) {
+	if !egress.Allows(u) {
 		return egressRefused(server.Name, u)
 	}
 	return nil

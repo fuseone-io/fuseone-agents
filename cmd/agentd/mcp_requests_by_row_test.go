@@ -233,8 +233,9 @@ func TestOAuthRefresh_isWrittenBackToTheRowItConnected(t *testing.T) {
 		ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
 	}
 	store := &recordingOAuthStore{}
-	client, err := authenticatedClientWithPolicy(domain.MCPServer{Name: "jira", Scope: cxArea},
-		domain.MCPCredentials{OAuth: &grant}, store, nil, credentialPolicy{})
+	client, err := authenticatedClientWithPolicy(domain.MCPServer{
+		Name: "jira", Scope: cxArea, Egress: &domain.MCPEgress{Origins: []string{mcpOrigin(t, remote.URL)}},
+	}, domain.MCPCredentials{OAuth: &grant}, store, nil, credentialPolicy{})
 	if err != nil {
 		t.Fatalf("authenticatedClientWithPolicy: %v", err)
 	}
