@@ -198,17 +198,19 @@ func egressOrigins(given []string) ([]string, error) {
 // the platform's egress policy for its scope, or whose scope it allows nothing.
 var ErrEgressNotAllowed = errors.New("admin: outside the platform's egress policy for this server's scope")
 
+// ErrEgressAddressInvalid is a server's OAuth token endpoint or GitHub App API
+// base that is not an http(s) address with a host: there is no origin a policy
+// could list, so it is refused as invalid input, not as an egress refusal.
+var ErrEgressAddressInvalid = errors.New("admin: the OAuth token endpoint and the GitHub App API base must be http or https addresses with a host")
+
 // EgressRefusal is ErrEgressNotAllowed naming the origin refused: canonical,
 // with no path or query, since a token endpoint's query may carry a secret.
-// Empty is an address that does not parse.
+// It is never empty: an address with no origin is ErrEgressAddressInvalid.
 type EgressRefusal struct {
 	Origin string
 }
 
 func (e *EgressRefusal) Error() string {
-	if e.Origin == "" {
-		return ErrEgressNotAllowed.Error() + ": an address that does not parse"
-	}
 	return ErrEgressNotAllowed.Error() + ": " + e.Origin
 }
 
@@ -281,10 +283,13 @@ func withinEgress(egress *domain.MCPEgress, serverURL string, creds domain.MCPCr
 	for _, raw := range targets {
 		u, err := url.Parse(raw)
 		if err != nil {
-			return &EgressRefusal{}
+			return ErrEgressAddressInvalid
+		}
+		origin, ok := domain.OriginOf(u)
+		if !ok {
+			return ErrEgressAddressInvalid
 		}
 		if !egress.Allows(u) {
-			origin, _ := domain.OriginOf(u)
 			return &EgressRefusal{Origin: origin}
 		}
 	}

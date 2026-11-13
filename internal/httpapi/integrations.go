@@ -132,7 +132,7 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(egressNotAllowed(refused.Origin)),
 		}, nil
 	}
-	if errors.Is(err, admin.ErrAreaServerIsRemote) {
+	if errors.Is(err, admin.ErrAreaServerIsRemote) || errors.Is(err, admin.ErrEgressAddressInvalid) {
 		return openapi.PutMCPServer400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
 		}, nil

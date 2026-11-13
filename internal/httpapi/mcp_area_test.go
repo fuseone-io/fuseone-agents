@@ -404,3 +404,26 @@ func TestPutMCPServer_anAreasServerOutsideItsEgressPolicy_isABadRequest(t *testi
 		t.Errorf("problem = %s %q, want fuseone:egress-not-allowed with the origin alone", valueOr(bad.Type), valueOr(bad.Detail))
 	}
 }
+
+// An auxiliary address with no origin is not an egress refusal: there is no
+// origin to name. It answers invalid-input, never egress-not-allowed with an
+// empty detail.
+func TestPutMCPServer_anAuxiliaryAddressWithNoOrigin_isInvalidInputNotAnEgressRefusal(t *testing.T) {
+	s := mcpWorld(t)
+	body := openapi.PutMCPServerJSONRequestBody{
+		ScopeKind: ptr(atCX.kind), Company: atCX.company, Area: atCX.area,
+		Transport: ptr(openapi.TransportHttp), Url: ptr("https://mcp.example.com/cx-bad-token"),
+		Oauth: &openapi.MCPOAuthGrant{AccessToken: ptr("a"), RefreshToken: ptr("r"), TokenURL: ptr("not a url at all")},
+	}
+	resp, err := s.PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{Name: "cx-bad-token", Body: &body})
+	if err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	bad, ok := resp.(openapi.PutMCPServer400ApplicationProblemPlusJSONResponse)
+	if !ok {
+		t.Fatalf("PutMCPServer = %T, want 400", resp)
+	}
+	if valueOr(bad.Type) == "fuseone:egress-not-allowed" || valueOr(bad.Detail) == "" {
+		t.Errorf("problem = %s %q, want a refusal that is not egress-not-allowed, with a detail", valueOr(bad.Type), valueOr(bad.Detail))
+	}
+}
