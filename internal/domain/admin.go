@@ -336,6 +336,9 @@ type ModelProvider struct {
 	// so the fact has to be declarable where the endpoint is configured.
 	AutoToolChoiceModels []string
 	Enabled              bool
+	// Scope is the runtime scope of the provider's row: the installation's
+	// for every provider written today (NT-019). Filled by the listing.
+	Scope Scope
 	// HasKey reports that a credential is stored, never what it is.
 	HasKey bool
 	// SecretFingerprint is filled by a read of this one provider, which opens

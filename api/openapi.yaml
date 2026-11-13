@@ -234,6 +234,50 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /providers:
+    get:
+      tags: [agents]
+      operationId: listProviders
+      summary: The model providers an author picks from
+      description: >
+        The reduced answer an agent's author picks a provider and a model from
+        (NT-019, rule 5): each provider's name, kind, models, and whether this
+        installation could ask it now. Never an address, a key, a header or
+        anything sealed; configuring providers is GET /admin/integrations.
+
+        Read with tool:read in any scope, asked for one target as ListTools is.
+        With `scope`, the answer is every provider whose runtime scope
+        contains the target. The caller must hold tool:read at a scope
+        containing the target, or at the platform's administration; otherwise
+        404. Without `scope`, a reader at the platform's administration gets
+        every provider and anyone else the installation's. Providers are
+        stored at the installation today, so every reachable target is
+        answered the installation's.
+      parameters:
+        - name: scope
+          in: query
+          required: false
+          description: >
+            The target scope, `company` or `company/area`, as stored: no
+            surrounding spaces, no upper case, never the installation's `*`.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The providers the target reaches.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProviderChoice' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /runs:
     get:
       tags: [runs]
@@ -8148,6 +8192,27 @@ components:
           format: date-time
           description: The last successful tools/call observation, if one has ever succeeded.
 
+    ProviderChoice:
+      type: object
+      description: >
+        A model provider as an author picks it: what it is called and serves,
+        never where it is or how it is reached.
+      required: [name, kind, models, usable]
+      properties:
+        name: { type: string }
+        kind:
+          type: string
+          enum: [anthropic, openai_compatible]
+        models:
+          type: array
+          items: { type: string }
+          description: The models this endpoint serves, as the installation configured them.
+        usable:
+          type: boolean
+          description: >
+            Whether this installation would ask it now: switched on, its
+            credential opened and its address whole. A provider that is not
+            usable is listed so an agent already on it reads as such.
     ModelProvider:
       type: object
       required: [name, kind, baseUrl, enabled, hasKey]
