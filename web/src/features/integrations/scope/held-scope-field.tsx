@@ -40,10 +40,14 @@ export function HeldScopeField({
   const area = form.watch("area");
   useEffect(() => {
     const first = scopes[0];
-    // A new form may open on a scope from elsewhere, such as the area the
-    // caller works in under another grant: kept, it would be refused on save.
-    const held = scopes.some((s) => contains(s, { company, area }));
-    if (!editing && !held && first) choose(first);
+    // A new form opens on the scope the console is reading, kept when a grant
+    // reaches it, even one naming its company only. A scope from elsewhere,
+    // such as an area under another grant, would be refused on save: the
+    // first held scope replaces it.
+    const current = { company, area };
+    const held = scopes.some((s) => contains(s, current));
+    if (!editing && held) choose(current);
+    else if (!editing && first) choose(first);
     // Once, for a new row: a choice the person made is not undone.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Toaster } from "@/components/ui/sonner";
 import { ServerEditor } from "@/features/integrations/server-editor";
 import { ScopeChoiceContext, type ScopeChoice } from "@/features/integrations/scope/scope-choice";
+import { useActiveScope } from "@/features/scope/active-scope";
 import { setLocale } from "@/i18n";
 import { json, revisedCollection, stubNetwork } from "@/test/revised-routes";
 
@@ -37,6 +38,7 @@ async function fill(name: string, url: string) {
 
 beforeEach(() => {
   setLocale("pt-BR");
+  useActiveScope.setState({ company: "", area: "" });
   Element.prototype.hasPointerCapture ??= () => false;
   Element.prototype.scrollIntoView ??= () => {};
 });
@@ -89,5 +91,24 @@ describe("a new server's scope", () => {
 
     await waitFor(() => expect(puts()).toHaveLength(1));
     expect(puts()[0]?.body).toMatchObject({ scopeKind: "area", company: "Acme", area: "cx" });
+  });
+
+  // The scope the console is reading is where a new server starts, when a
+  // grant reaches it: not the first grant listed.
+  it("starts on the active area that a company grant contains", async () => {
+    useActiveScope.setState({ company: "acme", area: "cx" });
+    const puts = connect({ anyScope: false, configure: [{ company: "acme", area: "" }] });
+
+    expect(screen.getByRole("combobox", { name: "Onde o servidor vale" })).toHaveTextContent("acme/cx");
+    await fill("crm", "https://crm.example.com/mcp");
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    expect(puts()[0]?.body).toMatchObject({ scopeKind: "area", company: "acme", area: "cx" });
+  });
+
+  it("starts on the active area rather than the first one granted", () => {
+    useActiveScope.setState({ company: "acme", area: "cx" });
+    connect({ anyScope: false, configure: [{ company: "acme", area: "finance" }, { company: "acme", area: "cx" }] });
+
+    expect(screen.getByRole("combobox", { name: "Onde o servidor vale" })).toHaveTextContent("acme/cx");
   });
 });
