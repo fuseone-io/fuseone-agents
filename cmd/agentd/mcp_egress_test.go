@@ -206,3 +206,19 @@ func TestFingerprint_changesWithThePolicy(t *testing.T) {
 		t.Errorf("%d distinct fingerprints for four policies, want 4", len(seen))
 	}
 }
+
+// The URL is judged before a transport exists, not only when the first
+// request leaves: each layer holds on its own.
+func TestTransportFor_anAreasServerOutsideItsPolicy_isRefusedBeforeATransportExists(t *testing.T) {
+	t.Parallel()
+	for name, egress := range map[string]*domain.MCPEgress{
+		"no policy":      {},
+		"another origin": {Origins: []string{"https://other.example.com:443"}},
+	} {
+		transport, _, err := transportFor(t.Context(), areaServer("https://jira.example.com/mcp", egress),
+			domain.MCPCredentials{}, nil, nil, credentialPolicy{}, nil)
+		if err == nil || transport != nil {
+			t.Errorf("%s: transport = %v, err = %v; want refused", name, transport, err)
+		}
+	}
+}
