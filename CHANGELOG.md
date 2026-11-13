@@ -28,7 +28,7 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.108.0] — 2026-11-13
 
 NT-019 phase 2, a second readers' release: what a worker reads and writes about an
 MCP server, it reads and writes of the server's row, never of whatever holds the name
@@ -47,7 +47,7 @@ today. Adds migration `0109_mcp_requests_name_their_row`.
 
 ### Fixed
 
-- **A worker opens the credential of the server row it read.** A row gone from where
+- **A worker opens the credential of the server row it read** (#336). A row gone from where
   it was read, or revised since, is read again on the next pass. It is not reported
   as the server failing.
 - **A person's credential is sent only to the server it was stored for.** Stored again
