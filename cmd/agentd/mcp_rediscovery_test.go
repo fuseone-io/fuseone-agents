@@ -8,6 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/tools"
@@ -17,15 +18,25 @@ import (
 // every worker to do again, and what each worker answered.
 type rediscoveryServers struct {
 	probeServers
-	requested map[string]int64
-	receipts  []domain.MCPRediscoveryReceipt
+	requested     map[string]int64
+	requestScopes map[string]domain.Scope
+	receipts      []domain.MCPRediscoveryReceipt
 	// recordFails is how many receipts in a row the store fails to keep.
 	recordFails int
 }
 
-func (s *rediscoveryServers) MCPRediscoveries(context.Context) (map[string]int64, error) {
-	return s.requested, nil
+// MCPRediscoveries hands out the requests as about servers of the
+// installation, where every server this fake holds is stored, unless a
+// request names a scope of its own.
+func (s *rediscoveryServers) MCPRediscoveries(context.Context) (map[string]admin.MCPServerRequest, error) {
+	out := make(map[string]admin.MCPServerRequest, len(s.requested))
+	for name, generation := range s.requested {
+		out[name] = admin.MCPServerRequest{Name: name, Generation: generation, Scope: s.requestScopes[name]}
+	}
+	return out, nil
 }
+
+var _ rediscoveryStore = (*rediscoveryServers)(nil)
 
 func (s *rediscoveryServers) RecordMCPRediscovery(_ context.Context, r domain.MCPRediscoveryReceipt) error {
 	if s.recordFails > 0 {

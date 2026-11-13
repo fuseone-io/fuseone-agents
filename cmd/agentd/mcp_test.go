@@ -15,6 +15,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/netguard"
@@ -1371,8 +1372,9 @@ func TestReconciler_aKnownLegacyRecipeCarriesTheProtocolToTheConnection(t *testi
 }
 
 type probeServers struct {
-	servers []domain.MCPServer
-	probes  []string
+	servers     []domain.MCPServer
+	probes      []string
+	probeScopes map[string]domain.Scope
 }
 
 func (p *probeServers) MCPServers(context.Context) ([]domain.MCPServer, error) {
@@ -1383,14 +1385,22 @@ func (p *probeServers) MCPCredentials(context.Context, string) (domain.MCPCreden
 	return domain.MCPCredentials{}, nil
 }
 
-func (p *probeServers) ClaimMCPProbes(_ context.Context, limit int) ([]string, error) {
+// ClaimMCPProbes hands out the queued probes as requests about servers of the
+// installation, where every server this fake holds is stored, unless a probe
+// was queued at a scope of its own.
+func (p *probeServers) ClaimMCPProbes(_ context.Context, limit int) ([]admin.MCPServerRequest, error) {
 	if limit > len(p.probes) {
 		limit = len(p.probes)
 	}
-	out := append([]string(nil), p.probes[:limit]...)
+	out := make([]admin.MCPServerRequest, 0, limit)
+	for _, name := range p.probes[:limit] {
+		out = append(out, admin.MCPServerRequest{Name: name, Scope: p.probeScopes[name]})
+	}
 	p.probes = p.probes[limit:]
 	return out, nil
 }
+
+var _ probeClaimer = (*probeServers)(nil)
 
 type personalRequirement map[string]bool
 

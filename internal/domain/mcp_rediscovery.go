@@ -18,6 +18,9 @@ type MCPRediscoveryReceipt struct {
 	Generation int64
 	Succeeded  bool
 	At         time.Time
+	// Scope is where the server answered was stored (NT-019): a receipt
+	// about a server of the name stored elsewhere is not this one's.
+	Scope Scope
 }
 
 // MCPRediscoveryStatus is the latest request for one server and every worker's

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/tools"
 )
@@ -25,14 +26,19 @@ receipt says it failed, and nothing is retried until somebody asks again.
 // requests, declared here by the consumer. Optional: a worker whose store has
 // no such requests simply never rediscovers on request.
 type rediscoveryStore interface {
-	MCPRediscoveries(ctx context.Context) (map[string]int64, error)
+	// Each with where the server it was asked of was stored (NT-019).
+	MCPRediscoveries(ctx context.Context) (map[string]admin.MCPServerRequest, error)
 	RecordMCPRediscovery(ctx context.Context, r domain.MCPRediscoveryReceipt) error
 }
+
+// The administration is found by assertion at run time, so a drifted
+// signature would switch rediscovery off without a word.
+var _ rediscoveryStore = (*admin.Integrations)(nil)
 
 // rediscoveries is the reconciler's view of the requests: what was asked, as
 // read at the start of this pass, and what this worker has answered.
 type rediscoveries struct {
-	requested map[string]int64
+	requested map[string]admin.MCPServerRequest
 	answered  map[string]int64
 	// unrecorded is each answer the store has not kept yet. The answer stands
 	// and is not repeated; only its record is retried, on every pass.
@@ -56,8 +62,14 @@ func (r *reconciler) readRediscoveries(ctx context.Context) {
 
 // answeredByConnecting records that a fresh connection is this worker's answer
 // to whatever had been asked of the server when the pass began.
-func (r *reconciler) answeredByConnecting(ctx context.Context, server string) {
-	r.answer(ctx, server, r.rediscovery.requested[server], true)
+func (r *reconciler) answeredByConnecting(ctx context.Context, server domain.MCPServer) {
+	request, asked := r.rediscovery.requested[server.Name]
+	if asked && !sameServerScope(server.Scope, request.Scope) {
+		// Asked of a server of this name stored elsewhere, which is gone:
+		// connecting this one is not its answer (NT-019).
+		request.Generation = 0
+	}
+	r.answer(ctx, server, request.Generation, true)
 }
 
 // rediscover answers every request this worker is behind on, for the servers
@@ -65,9 +77,15 @@ func (r *reconciler) answeredByConnecting(ctx context.Context, server string) {
 func (r *reconciler) rediscover(ctx context.Context, wanted map[string]domain.MCPServer) bool {
 	r.recordUnrecorded(ctx)
 	changed := false
-	for name, generation := range r.rediscovery.requested {
+	for name, request := range r.rediscovery.requested {
+		generation := request.Generation
 		server, held := wanted[name]
 		if !held || !r.catalog.Connected(name) || r.rediscovery.answered[name] >= generation {
+			continue
+		}
+		if !sameServerScope(server.Scope, request.Scope) {
+			// Asked of a server of this name stored elsewhere, which is gone:
+			// the one held now is another scope's (NT-019).
 			continue
 		}
 		err := r.catalog.Rediscover(ctx, name, server.Surface)
@@ -81,7 +99,7 @@ func (r *reconciler) rediscover(ctx context.Context, wanted map[string]domain.MC
 		} else {
 			r.applyRulingsAfterRediscovery(ctx, name)
 		}
-		r.answer(ctx, name, generation, err == nil)
+		r.answer(ctx, server, generation, err == nil)
 		changed = changed || err == nil
 	}
 	return changed
@@ -104,11 +122,11 @@ func (r *reconciler) applyRulingsAfterRediscovery(ctx context.Context, server st
 	}
 }
 
-func (r *reconciler) answer(ctx context.Context, server string, generation int64, succeeded bool) {
+func (r *reconciler) answer(ctx context.Context, server domain.MCPServer, generation int64, succeeded bool) {
 	if r.rediscovery.answered == nil {
 		r.rediscovery.answered = map[string]int64{}
 	}
-	r.rediscovery.answered[server] = generation
+	r.rediscovery.answered[server.Name] = generation
 	if r.holder == "" {
 		return
 	}
@@ -116,8 +134,9 @@ func (r *reconciler) answer(ctx context.Context, server string, generation int64
 		r.rediscovery.unrecorded = map[string]domain.MCPRediscoveryReceipt{}
 	}
 	// A newer answer replaces one still waiting: the store keeps only the newest.
-	r.rediscovery.unrecorded[server] = domain.MCPRediscoveryReceipt{
-		Server: server, Worker: r.holder, Generation: generation, Succeeded: succeeded,
+	r.rediscovery.unrecorded[server.Name] = domain.MCPRediscoveryReceipt{
+		Server: server.Name, Worker: r.holder, Generation: generation, Succeeded: succeeded,
+		Scope: server.Scope,
 	}
 	r.recordUnrecorded(ctx)
 }

@@ -821,15 +821,17 @@ func (i *Integrations) RequestMCPProbe(
 		ScopeKind: settings.ScopeInstallation,
 		Kind:      kindMCPProbe,
 		Name:      name,
-		Value:     json.RawMessage(`{}`),
+		// The row the probe was asked of, which the worker checks before it
+		// acts (NT-019).
+		Value:     probeRequestValue(kind, at),
 		Enabled:   true,
 		UpdatedBy: string(by),
 	}, "mcp_server.probe_requested", name, map[string]any{"server": name})
 }
 
-// ClaimMCPProbes returns server names whose explicit probe requests this worker
-// owns now, removing the request rows in the same statement.
-func (i *Integrations) ClaimMCPProbes(ctx context.Context, limit int) ([]string, error) {
+// ClaimMCPProbes returns the explicit probe requests this worker owns now,
+// each with the row it was asked of, removing them in the same statement.
+func (i *Integrations) ClaimMCPProbes(ctx context.Context, limit int) ([]MCPServerRequest, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
@@ -849,20 +851,23 @@ func (i *Integrations) ClaimMCPProbes(ctx context.Context, limit int) ([]string,
 		  and s.area_id = p.area_id
 		  and s.kind = p.kind
 		  and s.name = p.name
-		returning s.name`,
+		returning s.name, s.value`,
 		string(settings.ScopeInstallation), string(kindMCPProbe), limit)
 	if err != nil {
 		return nil, fmt.Errorf("admin: claim MCP probes: %w", err)
 	}
 	defer rows.Close()
 
-	var out []string
+	var out []MCPServerRequest
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
+		var (
+			name string
+			raw  []byte
+		)
+		if err := rows.Scan(&name, &raw); err != nil {
+			return nil, fmt.Errorf("admin: read claimed MCP probe: %w", err)
 		}
-		out = append(out, name)
+		out = append(out, MCPServerRequest{Name: name, Scope: requestedScope(raw)})
 	}
 	return out, rows.Err()
 }

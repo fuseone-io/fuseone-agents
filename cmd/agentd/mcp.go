@@ -22,6 +22,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/githubapp"
 	"github.com/fuseone/agents/internal/netguard"
@@ -687,8 +688,13 @@ type mcpProtocolPolicy interface {
 }
 
 type probeClaimer interface {
-	ClaimMCPProbes(ctx context.Context, limit int) ([]string, error)
+	// Each with where the server it was asked of was stored (NT-019).
+	ClaimMCPProbes(ctx context.Context, limit int) ([]admin.MCPServerRequest, error)
 }
+
+// The administration is found by assertion at run time, so a drifted
+// signature would stop probes without a word. The compiler says it instead.
+var _ probeClaimer = (*admin.Integrations)(nil)
 
 const probeBatch = 20
 
@@ -905,18 +911,25 @@ func (r *reconciler) consumeProbes(ctx context.Context, wanted map[string]domain
 	if !ok {
 		return false
 	}
-	names, err := claimer.ClaimMCPProbes(ctx, probeBatch)
+	claims, err := claimer.ClaimMCPProbes(ctx, probeBatch)
 	if err != nil {
 		slog.Error("could not claim MCP probe requests", "err", err)
 		return false
 	}
 
 	changed := false
-	for _, name := range names {
-		server, ok := wanted[name]
+	for _, claim := range claims {
+		server, ok := wanted[claim.Name]
 		if !ok {
 			// The server was deleted or disabled after the operator clicked.
 			// There is no configured integration left for a worker to reach.
+			continue
+		}
+		if !sameServerScope(server.Scope, claim.Scope) {
+			// The name is another scope's server now: the probe was asked of
+			// the one stored where it was authorized, which is gone (NT-019).
+			slog.Info("probe request for a server stored elsewhere now; not answered",
+				"server", claim.Name, "requested", claim.Scope, "held", server.Scope)
 			continue
 		}
 		if r.connect(ctx, server) {
@@ -924,6 +937,19 @@ func (r *reconciler) consumeProbes(ctx context.Context, wanted map[string]domain
 		}
 	}
 	return changed
+}
+
+// sameServerScope compares where two descriptions of one name say the server
+// is stored. A server no row describes, a --mcp flag's, is the installation's.
+func sameServerScope(a, b domain.Scope) bool {
+	installation := domain.Scope{Company: domain.Installation}
+	if a == (domain.Scope{}) {
+		a = installation
+	}
+	if b == (domain.Scope{}) {
+		b = installation
+	}
+	return a == b
 }
 
 func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool {
@@ -968,7 +994,7 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool 
 
 	r.connected[server.Name] = fingerprint(server)
 	r.generations[server.Name] = server.UpdatedAt
-	r.answeredByConnecting(ctx, server.Name)
+	r.answeredByConnecting(ctx, server)
 	count := r.catalog.CountFrom(server.Name)
 	slog.Info("tool server connected",
 		"server", server.Name, "transport", server.TransportOf(), "tools", count)

@@ -189,7 +189,7 @@ func TestRequestMCPProbe_recordsAWorkerRequestForAnEnabledServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClaimMCPProbes: %v", err)
 	}
-	if len(claimed) != 1 || claimed[0] != "crm" {
+	if len(claimed) != 1 || claimed[0].Name != "crm" {
 		t.Fatalf("claimed = %v, want crm", claimed)
 	}
 	again, err := i.ClaimMCPProbes(ctx, 1)
