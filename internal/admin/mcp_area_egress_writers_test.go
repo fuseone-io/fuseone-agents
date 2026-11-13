@@ -174,3 +174,31 @@ func TestPutMCPEgressPolicy_waitsForAServerWriteThatReadThePolicy(t *testing.T) 
 	}
 	t.Cleanup(func() { _ = i.DeleteMCPEgressPolicy(context.Background(), "usr_ana", platform, cxScope) })
 }
+
+// Removing a policy widens nothing by surprise either: it waits too.
+func TestDeleteMCPEgressPolicy_waitsForAServerWriteThatReadThePolicy(t *testing.T) {
+	i := newIntegrations(t)
+	pool := openPool(t)
+	ctx := context.Background()
+	allowEgress(t, i, cxScope)
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := admin.LockMCPEgressPoliciesShared(ctx, tx); err != nil {
+		t.Fatalf("hold the policies shared: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- i.DeleteMCPEgressPolicy(ctx, "usr_ana", platform, cxScope) }()
+	if !waitForAdvisoryWait(t, pool) {
+		t.Fatal("the policy removal never waited for the server write holding the policies")
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if err := <-done; err != nil {
+		t.Errorf("DeleteMCPEgressPolicy after the server write: %v", err)
+	}
+}
