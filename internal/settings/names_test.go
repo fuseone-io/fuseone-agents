@@ -28,7 +28,7 @@ holds the rule, so every binary is bound by it, the previous one included.
 const beforeNames = "0107_version_claims_enforced"
 
 // previousUpsert is settings.PutTx as every release before this one wrote it.
-// The value is a remote server's: an area's MCP server is http (0109), and for
+// The value is a remote server's: an area's MCP server is http (0110), and for
 // every other kind the field is noise.
 const previousUpsert = `
 	insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by, updated_at)

@@ -39,7 +39,7 @@ integrations and the ones above it. Nothing here is done by an agent.
   by an area, it would run that area's commands on infrastructure every area shares.
   So a company's or an area's server is HTTP, and stdio servers stay the platform's.
   The rule is held three times:
-  - **by the database**, migration `0109`, so every binary is bound;
+  - **by the database**, migration `0110`, so every binary is bound;
   - **by the door**, which answers 400 to an area's write naming a local server;
   - **by the worker**, which starts no local process for a server outside the
     installation.

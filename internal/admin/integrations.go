@@ -48,7 +48,7 @@ var (
 	// ErrAreaServerIsRemote is a company's or an area's server that is not a
 	// remote one (NT-019, decided 2026-11-13): a stdio server runs on the
 	// platform's worker, which no area may command. The database refuses
-	// the row too (0109).
+	// the row too (0110).
 	ErrAreaServerIsRemote = errors.New(
 		"admin: an area's or a company's MCP server is remote; a local server runs on the platform's worker and is the platform's")
 	ErrNoBaseURL         = errors.New("admin: a provider needs a base URL")
