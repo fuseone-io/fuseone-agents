@@ -156,7 +156,13 @@ func egressPolicyScope(s domain.Scope) error {
 // egressOrigins is the canonical, sorted, deduplicated list, refusing any
 // origin netguard would never let a request reach. An empty list is a policy
 // too: it allows nothing, and overrides the company's for an area.
+//
+// Nil is origins not given, a body that forgot the field or sent null: not a
+// deny-all, which would replace a working list by accident. It is refused.
 func egressOrigins(given []string) ([]string, error) {
+	if given == nil {
+		return nil, fmt.Errorf("%w: origins are required; an empty list allows nothing", ErrEgressPolicyInvalid)
+	}
 	out := []string{}
 	for _, raw := range given {
 		origin, err := domain.CanonicalOrigin(raw)

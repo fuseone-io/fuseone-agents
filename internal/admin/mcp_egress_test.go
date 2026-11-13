@@ -2,6 +2,7 @@ package admin_test
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"testing"
 
@@ -154,7 +155,11 @@ func TestPutMCPEgressPolicy_anEmptyListAtAnArea_deniesWhatItsCompanyAllows(t *te
 	cleanEgress(t, w)
 	ctx := context.Background()
 	putEgress(t, w.integrations, acmeScope, "https://company.example.com")
-	putEgress(t, w.integrations, cxScope)
+	if err := w.integrations.PutMCPEgressPolicy(ctx, "usr_ana", platform, admin.MCPEgressPolicy{
+		Scope: cxScope, Origins: []string{},
+	}); err != nil {
+		t.Fatalf("PutMCPEgressPolicy acme/cx deny-all: %v", err)
+	}
 
 	servers, err := w.integrations.MCPServers(ctx)
 	if err != nil || len(servers) != 1 {
@@ -169,5 +174,15 @@ func TestPutMCPEgressPolicy_anEmptyListAtAnArea_deniesWhatItsCompanyAllows(t *te
 	}
 	if i := slices.IndexFunc(policies, func(p admin.MCPEgressPolicy) bool { return p.Scope == cxScope }); i < 0 || policies[i].Origins == nil {
 		t.Errorf("policies = %+v, want cx's stored with an empty list", policies)
+	}
+}
+
+// Origins not given are not a deny-all: only an empty list is.
+func TestPutMCPEgressPolicy_originsNotGiven_isRefused(t *testing.T) {
+	w := withAreaServer(t)
+	cleanEgress(t, w)
+	err := w.integrations.PutMCPEgressPolicy(context.Background(), "usr_ana", platform, admin.MCPEgressPolicy{Scope: cxScope})
+	if !errors.Is(err, admin.ErrEgressPolicyInvalid) {
+		t.Errorf("err = %v, want ErrEgressPolicyInvalid", err)
 	}
 }

@@ -62,3 +62,31 @@ func TestEgressJourney_aPolicyPutThroughTheAPI_holdsTheWorkersAreaServer(t *test
 		t.Error("the area's server did not connect once its origin was allowed")
 	}
 }
+
+/*
+A policy's origins are said, never assumed (NT-019).
+
+`origins: []` is a deny-all, and replaces whatever the scope had. A body that
+forgets the field, or sends null, says nothing: taken as a deny-all it would
+replace a working list by accident and cut the scope's servers off.
+*/
+func TestEgressJourney_originsAbsentOrNull_areRefused_andAnEmptyListIsADenyAll(t *testing.T) {
+	pool := testdb.Pool(t)
+	w := readBackWorldOn(t, pool)
+	const path = "/admin/integrations/mcp-egress-policies"
+	t.Cleanup(func() { w.send(t, http.MethodDelete, path+"?company=acme&area=egress-origins", nil) })
+
+	for name, body := range map[string]map[string]any{
+		"absent": {"company": "acme", "area": "egress-origins"},
+		"null":   {"company": "acme", "area": "egress-origins", "origins": nil},
+	} {
+		if code, answer := w.send(t, http.MethodPut, path, body); code != http.StatusBadRequest {
+			t.Errorf("origins %s: %d %s, want 400", name, code, answer)
+		}
+	}
+	if code, answer := w.send(t, http.MethodPut, path, map[string]any{
+		"company": "acme", "area": "egress-origins", "origins": []string{},
+	}); code != http.StatusNoContent {
+		t.Errorf("origins []: %d %s, want 204", code, answer)
+	}
+}
