@@ -361,6 +361,19 @@ resets every tool no ruling decides (B1), and a narrowed source would reset area
 tools their owners ruled on. A journey test pins it.</li>
 <li>The agent editor, the fallback fields and the experiment form pass the agent’s
 scope. The experiment form passes the experimented agent’s scope.</li>
+<li><strong>What a curator governs is a third answer, decided in part B2b:</strong>
+<code dir="auto">ListTools?classifiable=true</code>. A target answer runs upwards (rows whose scope
+contains the target), so a company curator asking for <code dir="auto">acme</code> never sees
+<code dir="auto">acme/cx</code>’s tools, which an <code dir="auto">acme</code> grant may classify. This answer runs downwards:
+the tools whose server is stored at a company or an area that a scope where the
+caller holds <code dir="auto">tool:classify</code> contains, as the owner’s door (<code dir="auto">ClassifyTool</code>,
+<code dir="auto">level: owner</code>) authorizes it. A company’s grant answers its own and its areas’;
+an area’s only its own; never a sibling’s, never the installation’s. The
+platform’s curator (<code dir="auto">tool:classify</code> at <code dir="auto">adminScope</code>) gets every tool. A caller
+holding <code dir="auto">tool:classify</code> nowhere is answered 403, as every classify door answers
+them; asked together with <code dir="auto">scope</code>, 400, since the two answers run in opposite
+directions and a combination would have to invent which one wins. The console’s
+queue of tools waiting asks this once.</li>
 </ul>
 </li>
 </ol>
