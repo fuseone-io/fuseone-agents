@@ -2360,6 +2360,7 @@
     "rolesByScope": "Papéis por escopo",
     "saveFailed": "Não foi possível salvar o acesso",
     "saved": "Acesso de {{name}} atualizado",
+    "scopesFailed": "Não foi possível carregar as empresas e áreas. O acesso que já existe continua aparecendo.",
     "scope": "Escopo",
     "scopeCount_one": "{{count}} escopo",
     "scopeCount_other": "{{count}} escopos",
@@ -2374,6 +2375,7 @@
     "subtitle": "Quem consegue acessar o console, e o que cada pessoa pode fazer em qual empresa.",
     "summary": "{{noRole}} sem papel · {{local}} com senha local",
     "title": "Pessoas",
+    "unknownScope": "{{label}} (não registrada)",
     "username": "Usuário",
     "usernameHint": "Letras, números, ponto, hífen e sublinhado.",
     "usernameShape": "Use 3 ou mais caracteres: letras, números, ponto, hífen ou sublinhado.",
@@ -2383,7 +2385,10 @@
       "local": "Local",
       "noRole": "Sem papel",
       "provider": "Provedor"
-    }
+    },
+    "wholeCompany": "Toda a empresa",
+    "wholeInstallation": "Toda a instalação",
+    "withdrawnScope": "{{label}} (retirada)"
   },
   "policies": {
     "addCondition": "Adicionar condição",

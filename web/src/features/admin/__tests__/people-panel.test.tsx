@@ -1,6 +1,12 @@
-import { render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render as renderBare, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReactElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  grantScopesRoute,
+  pathOf,
+} from "@/features/admin/__tests__/grant-scopes-network";
 import { PeoplePanel } from "@/features/admin/people-panel";
 import type { Person } from "@/features/admin/people-api";
 
@@ -24,6 +30,22 @@ vi.mock("@/features/admin/people-api", async (importOriginal) => {
     useSetGrants: () => ({ mutate: hooks.setGrants, isPending: false }),
   };
 });
+
+// The grant editor reads the companies and areas over the network.
+function render(ui: ReactElement) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => grantScopesRoute("GET", pathOf(request))),
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return renderBare(
+    <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
+  );
+}
+
+afterEach(() => vi.unstubAllGlobals());
 
 const people: Person[] = [
   {
@@ -160,7 +182,8 @@ describe("people administration", () => {
       screen.getByRole("button", { name: "Conceder administrador" }),
     );
 
-    expect(screen.getByDisplayValue("*")).toBeInTheDocument();
+    const companies = screen.getAllByRole("combobox", { name: "Empresa" });
+    expect(companies.at(-1)).toHaveTextContent("Toda a instalação");
     const roles = screen.getAllByRole("combobox", { name: "Papel" });
     expect(roles.at(-1)).toHaveTextContent("Administrador");
   });

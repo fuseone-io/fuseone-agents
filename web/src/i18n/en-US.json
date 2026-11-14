@@ -2360,6 +2360,7 @@
     "rolesByScope": "Roles by scope",
     "saveFailed": "Could not save the access",
     "saved": "{{name}}'s access updated",
+    "scopesFailed": "Couldn't load the companies and areas. Access already held still shows.",
     "scope": "Scope",
     "scopeCount_one": "{{count}} scope",
     "scopeCount_other": "{{count}} scopes",
@@ -2374,6 +2375,7 @@
     "subtitle": "Who can reach the console, and what each one is allowed to do in which company.",
     "summary": "{{noRole}} without a role · {{local}} local sign-in",
     "title": "People",
+    "unknownScope": "{{label}} (not registered)",
     "username": "Username",
     "usernameHint": "Letters, digits, dot, hyphen and underscore.",
     "usernameShape": "Use 3 or more characters: letters, digits, dot, hyphen or underscore.",
@@ -2383,7 +2385,10 @@
       "local": "Local",
       "noRole": "No role",
       "provider": "Provider"
-    }
+    },
+    "wholeCompany": "Whole company",
+    "wholeInstallation": "Whole installation",
+    "withdrawnScope": "{{label}} (withdrawn)"
   },
   "policies": {
     "addCondition": "Add a condition",

@@ -46,6 +46,14 @@ field" is a commit message.
   management. The username stays with the removed account and cannot be given to a
   new one.
 
+### Changed
+
+- **A person's grant names its company and area from lists** rather than typed text:
+  the companies registered (a withdrawn one is not offered for a new grant) and the
+  chosen company's areas, or the whole company. A grant that already names a
+  withdrawn company, or a scope from before areas were registered, still shows and
+  saves unchanged.
+
 ## [0.110.0] — 2026-11-13
 
 NT-019 phase 2, the writers' release (#335, #340, #341, #342, #343): the administrator of an area configures
