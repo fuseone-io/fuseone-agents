@@ -129,8 +129,10 @@ export const NAV: NavGroup[] = [
         to: "/integrations",
         label: "nav.integrations",
         icon: Plug,
+        // Whoever reads tools somewhere keeps their own credentials there,
+        // and an area's configurer its servers and connectors (NT-019). The
+        // gate opens each the sections that are theirs.
         permission: "tool:read",
-        platformPermission: "tool:read",
         orPermission: "provider:write",
       },
       { to: "/manual", label: "nav.manual", icon: BookOpen },

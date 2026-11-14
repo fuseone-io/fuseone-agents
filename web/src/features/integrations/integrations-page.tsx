@@ -39,6 +39,7 @@ import { ConnectorCatalogPanel } from "@/features/integrations/connectors/connec
 import { useRecipes } from "@/features/integrations/mcp/api";
 import { AvailableServersPanel } from "@/features/integrations/mcp/available-servers-panel";
 import { UserCredentialsPanel } from "@/features/integrations/mcp/user-credentials-panel";
+import { credentialServers } from "@/features/integrations/mcp/credential-server";
 import { LoadMore } from "@/components/shared/load-more";
 import { integrationAccess } from "@/features/integrations/integration-access";
 import { useMe } from "@/features/session/api";
@@ -108,10 +109,11 @@ export function IntegrationsPage({
     providers: integrations.data ? providers.length : undefined,
     channels: channels.data ? channels.data.items.length : undefined,
   };
+  // The credentials read the servers' listing only for whoever may list it.
   const needsIntegrations =
     section === "connected" ||
     section === "providers" ||
-    section === "credentials";
+    (section === "credentials" && access.servers);
 
   // Where a server may be placed, for the sheet and the catalogue's form alike.
   return (
@@ -236,7 +238,10 @@ export function IntegrationsPage({
           />
         ) : section === "credentials" ? (
           <UserCredentialsPanel
-            servers={servers}
+            servers={credentialServers(
+              integrations.data?.mcpServers,
+              credentials.data?.servers,
+            )}
             recipes={recipes.data?.items ?? []}
             credentials={credentials.data?.items ?? []}
             isLoading={

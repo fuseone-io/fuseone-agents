@@ -43,9 +43,9 @@ function openAt(path: string) {
   );
 }
 
-describe("integrations for an administrator of one area", () => {
+describe("integrations for somebody who reads no tools", () => {
   it("say they are configured by the platform's administration", async () => {
-    signedInAs([]);
+    signedInAs([], ["scope:write"]);
     openAt("/integrations/connectors");
 
     expect(
@@ -57,6 +57,49 @@ describe("integrations for an administrator of one area", () => {
     ).toBeInTheDocument();
   });
 
+});
+
+describe("integrations for an author of one area", () => {
+  const crm = { name: "crm", scopeKind: "area", company: "acme", area: "cx", shared: false };
+
+  function signedInAsAuthor() {
+    const me = { id: "usr_bia", display: "Bia", kind: "human", can: ["tool:read"], platform: [], grants: [], configure: [] };
+    vi.stubGlobal("fetch", vi.fn(async (input: Request | string) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const body = url.endsWith("/api/v1/me") ? me : { items: [], servers: [crm] };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
+  }
+
+  // Their agents may need a personal credential for a server their area
+  // reaches; nothing else under integrations is theirs (NT-019).
+  it("take them to their credentials, offering the servers their area reaches", async () => {
+    signedInAsAuthor();
+    openAt("/integrations");
+
+    expect(await screen.findByRole("link", { name: "Credenciais" }, { timeout: LAZY_SCREEN }))
+      .toHaveAttribute("aria-current", "page");
+    expect(await screen.findAllByText("crm")).not.toHaveLength(0);
+    for (const section of ["Conectados", "Disponíveis", "Connectors", "Provedores de modelo", "Canais"]) {
+      expect(screen.queryByRole("link", { name: section }), section).not.toBeInTheDocument();
+    }
+  });
+
+  it("ask for no list of the servers' configuration", async () => {
+    signedInAsAuthor();
+    openAt("/integrations/credentials");
+    await screen.findAllByText("crm", {}, { timeout: LAZY_SCREEN });
+
+    const asked = vi.mocked(fetch).mock.calls.map(([input]) =>
+      new URL(input instanceof Request ? input.url : String(input), "http://console").pathname,
+    );
+    for (const list of ["/admin/integrations", "/admin/integrations/recipes", "/admin/channels"]) {
+      expect(asked.filter((path) => path.endsWith(list)), list).toEqual([]);
+    }
+  });
+});
+
+describe("integrations for a reader of the platform", () => {
   it("open as usual for someone who holds tool:read at the platform", async () => {
     signedInAs(["tool:read"]);
     openAt("/integrations");

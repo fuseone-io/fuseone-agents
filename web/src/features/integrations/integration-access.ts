@@ -30,7 +30,10 @@ export interface IntegrationAccess {
   createServer: boolean;
   /** Opens the MCP catalogue: the platform's readers, and whoever connects a server somewhere. */
   catalogue: boolean;
-  /** Opens the caller's own credentials for the servers they see. */
+  /**
+   * Opens the caller's own credentials: anyone who reads tools somewhere,
+   * for the remote servers their scopes reach (NT-019).
+   */
   credentials: boolean;
 }
 
@@ -54,7 +57,7 @@ export function integrationAccess(me: Me | null | undefined): IntegrationAccess 
     servers: opensAll || writes,
     createServer: writes,
     catalogue: opensAll || writes,
-    credentials: opensAll || writes,
+    credentials: opensAll || writes || (known && can.includes("tool:read")),
   };
 }
 

@@ -33,12 +33,13 @@ describe("the navigation", () => {
     expect(navItemVisible(item("/admin"), can)).toBe(false);
   });
 
-  it("hides integrations from an area administrator, whose tool:read is not the platform's", () => {
-    // Integrations are configured, and listed, at the platform's scope only.
+  it("shows integrations to whoever reads tools in an area, for their own credentials", () => {
+    // NT-019: an area's author keeps a personal credential for the servers
+    // their scope reaches; the rest of integrations stays closed to them.
     const can = ["tool:read", "scope:write"];
 
-    expect(navItemVisible(item("/integrations"), can, [])).toBe(false);
-    expect(navItemVisible(item("/integrations"), can, ["tool:read"])).toBe(true);
+    expect(navItemVisible(item("/integrations"), can, [])).toBe(true);
+    expect(navItemVisible(item("/integrations"), ["scope:write"], [])).toBe(false);
   });
 
   it("shows integrations to an area administrator, who configures its connectors", () => {
