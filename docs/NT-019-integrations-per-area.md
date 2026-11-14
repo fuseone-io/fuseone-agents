@@ -461,9 +461,10 @@ area, so no area may do that on its own.
 The last refusal is there because the move has an effect beyond the row. `checkScope`
 (`internal/gate/checks.go:62-67`) blocks a tool whose scope does not contain the run's
 scope. After the move, a run of any agent outside the target asking for one of these
-tools is blocked, and the block is recorded as a `StepGateDecided` step. No earlier
-wall stops it: nothing checks a tool's scope at publication. The console shows the list
-before it asks to confirm.
+tools is blocked, and the block is recorded as a `StepGateDecided` step. Those agents
+were published while the tools were the installation's, so publication had nothing to
+refuse, and they keep running against tools they no longer reach. The console shows the
+list before it asks to confirm.
 
 **The refusal is a snapshot. Publication and the Gate hold afterwards.** The list is
 the agents whose current version names one of the server's tools when the move reads
