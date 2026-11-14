@@ -34,7 +34,9 @@ export function CompanyAreaFields({
 }) {
   const { t } = useTranslation();
   const { data, isLoading } = useScopeLists();
-  const companies = companyOptions(data.companies, value.company);
+  const companies = companyOptions(data.companies, value.company, {
+    scopes: data.scopes,
+  });
   const areas = areaOptions(data.scopes, value.company, value.area);
 
   return (

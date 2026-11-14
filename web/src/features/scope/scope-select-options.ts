@@ -28,11 +28,18 @@ export type ScopeOption = {
 
 const INSTALLATION = "*";
 
+/** What else a company select may draw on. */
+export type CompanyOffer = {
+  /** The areas: their companies stand in when the company list is refused. */
+  scopes?: RegisteredScope[];
+};
+
 export function companyOptions(
   companies: Company[] | undefined,
   current: string,
+  offer: CompanyOffer = {},
 ): ScopeOption[] {
-  const listed = companies ?? [];
+  const listed = companies ?? companiesOfAreas(offer.scopes);
   const offered: ScopeOption[] = listed
     .filter((c) => !c.archived || c.id === current)
     .map((c) => ({
@@ -70,6 +77,14 @@ export function areaOptions(
     offered.push(asHeld(current, scopes));
   }
   return offered;
+}
+
+// The company list needs authority over the installation, the areas do not:
+// somebody who governs one company still chooses among the companies they
+// see areas of. Not a list that answered, so nothing is called unregistered.
+function companiesOfAreas(scopes: RegisteredScope[] | undefined): Company[] {
+  const ids = [...new Set((scopes ?? []).map((s) => s.company))];
+  return ids.map((id) => ({ id, label: id, areas: 0, archived: false }));
 }
 
 // Unknown only once the list has answered: before then, or when it failed,
