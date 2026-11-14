@@ -21,9 +21,13 @@ import (
 // fakeAdmin records what the handlers asked for, so a test can assert on the
 // call rather than on a database.
 type fakeAdmin struct {
-	servers   []domain.MCPServer
-	personal  []domain.MCPPersonalCredential
-	providers []domain.ModelProvider
+	servers  []domain.MCPServer
+	personal []domain.MCPPersonalCredential
+	// credentialServers answers MCPPersonalCredentialServers, which records
+	// the scopes it was asked for in credentialScopes.
+	credentialServers []domain.MCPCredentialServer
+	credentialScopes  []domain.Scope
+	providers         []domain.ModelProvider
 
 	putServer   domain.MCPServer
 	putPersonal string
@@ -100,6 +104,10 @@ func (f *fakeAdmin) ProviderNamed(_ context.Context, name string) (domain.ModelP
 }
 func (f *fakeAdmin) Providers(context.Context) ([]domain.ModelProvider, error) {
 	return f.providers, f.err
+}
+func (f *fakeAdmin) MCPPersonalCredentialServers(_ context.Context, visible []domain.Scope) ([]domain.MCPCredentialServer, error) {
+	f.credentialScopes = visible
+	return f.credentialServers, f.err
 }
 func (f *fakeAdmin) MCPPersonalCredentials(_ context.Context, principal domain.UserID) ([]domain.MCPPersonalCredential, error) {
 	f.personalFor = principal

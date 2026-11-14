@@ -1790,6 +1790,13 @@ export interface paths {
          *     widen the tool surface, or classify an effect. It lets a run carrying
          *     this user's delegation call a remote server as that user instead of as
          *     the installation.
+         *
+         *     `servers` are the remote servers the caller may hold a credential for
+         *     (NT-019): those whose scope a scope where the caller holds `tool:read`
+         *     reaches, either way, reached over HTTP and without a GitHub App. It
+         *     names no address, so an area's author, who cannot list the servers'
+         *     configuration, still finds the server their agent needs. Absent from
+         *     a server that predates it.
          */
         get: operations["listMCPUserCredentials"];
         put?: never;
@@ -4330,6 +4337,19 @@ export interface components {
             updatedBy?: string;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        /** @description A remote MCP server the caller may hold a personal credential for. No address: only whoever configures the server reads that. */
+        MCPCredentialServer: {
+            name: string;
+            /**
+             * @description Where the server is stored.
+             * @enum {string}
+             */
+            scopeKind: "installation" | "company" | "area";
+            company?: string;
+            area?: string;
+            /** @description The server holds a credential of its own, used when the person has none. */
+            shared: boolean;
         };
         /** @description Per-worker token bucket for outgoing tool calls to one MCP server. With multiple worker replicas, each process has its own bucket; this is an operational guard against bursts, not an installation-wide quota. Set both fields to zero to disable it. */
         MCPRateLimit: {
@@ -9307,6 +9327,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["MCPUserCredential"][];
+                        servers?: components["schemas"]["MCPCredentialServer"][];
                     };
                 };
             };
