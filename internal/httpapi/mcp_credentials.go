@@ -9,6 +9,21 @@ import (
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 )
 
+// PersonalCredentials is what the doors of a person's own MCP credentials
+// need, declared here by the consumer.
+type PersonalCredentials interface {
+	MCPPersonalCredentials(ctx context.Context, principal domain.UserID) ([]domain.MCPPersonalCredential, error)
+	MCPPersonalCredentialPresence(ctx context.Context, principal domain.UserID, servers []string) (map[string]bool, error)
+	// MCPPersonalCredentialServers are the remote servers the given scopes
+	// reach, by the write's rule, with no address (NT-019).
+	MCPPersonalCredentialServers(ctx context.Context, visible []domain.Scope) ([]domain.MCPCredentialServer, error)
+	PutMCPPersonalCredential(ctx context.Context, by domain.UserID, scope domain.Scope, name string, creds domain.MCPCredentialPatch) error
+	// WriteMCPPersonalCredential checks, under the server's row, that the
+	// person's scopes reach the server (NT-019).
+	WriteMCPPersonalCredential(ctx context.Context, w admin.PersonalCredentialWrite) error
+	DeleteMCPPersonalCredential(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
+}
+
 func (s *Server) ListMCPUserCredentials(
 	ctx context.Context, _ openapi.ListMCPUserCredentialsRequestObject,
 ) (openapi.ListMCPUserCredentialsResponseObject, error) {
@@ -32,7 +47,31 @@ func (s *Server) ListMCPUserCredentials(
 	for _, credential := range listed {
 		body.Items = append(body.Items, mcpUserCredentialOf(credential))
 	}
+	// The servers they may hold one for, asked by where they read tools: an
+	// area's author cannot list the servers' configuration (NT-019).
+	servers, err := s.integrations.MCPPersonalCredentialServers(ctx, caller.ScopesFor(domain.PermToolRead))
+	if err != nil {
+		return nil, err
+	}
+	offered := make([]openapi.MCPCredentialServer, 0, len(servers))
+	for _, server := range servers {
+		offered = append(offered, mcpCredentialServerOf(server))
+	}
+	body.Servers = &offered
 	return body, nil
+}
+
+func mcpCredentialServerOf(server domain.MCPCredentialServer) openapi.MCPCredentialServer {
+	out := openapi.MCPCredentialServer{Name: server.Name, Shared: server.Shared,
+		ScopeKind: openapi.MCPCredentialServerScopeKindInstallation}
+	if server.Scope.Company == "" {
+		return out
+	}
+	out.ScopeKind, out.Company = openapi.MCPCredentialServerScopeKindCompany, ptr(string(server.Scope.Company))
+	if server.Scope.Area != "" {
+		out.ScopeKind, out.Area = openapi.MCPCredentialServerScopeKindArea, ptr(string(server.Scope.Area))
+	}
+	return out
 }
 
 func (s *Server) PutMCPUserCredential(

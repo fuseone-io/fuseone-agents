@@ -7,11 +7,8 @@ import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states"
 import { Mono } from "@/components/shared/mono";
 import { problemMessage } from "@/lib/api/problem-message";
 import { cn } from "@/lib/utils";
-import type {
-  MCPOAuthGrant,
-  MCPServer,
-  MCPUserCredential,
-} from "@/features/integrations/api";
+import type { MCPOAuthGrant, MCPUserCredential } from "@/features/integrations/api";
+import type { CredentialServer } from "@/features/integrations/mcp/credential-server";
 import {
   useDeleteMCPUserCredential,
   usePutMCPUserCredential,
@@ -53,7 +50,7 @@ export function UserCredentialsPanel({
   error,
   onRetry,
 }: {
-  servers: MCPServer[];
+  servers: CredentialServer[];
   recipes: ServerRecipe[];
   credentials: MCPUserCredential[];
   isLoading: boolean;
@@ -164,7 +161,7 @@ function PersonalCredentialEditor({
   recipe,
   credential,
 }: {
-  server: MCPServer;
+  server: CredentialServer;
   recipe: ServerRecipe | null;
   credential: MCPUserCredential | null;
 }) {

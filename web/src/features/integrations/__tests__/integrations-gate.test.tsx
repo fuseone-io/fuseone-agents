@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ConsoleRoutes from "@/routes/console-routes";
@@ -43,9 +44,9 @@ function openAt(path: string) {
   );
 }
 
-describe("integrations for an administrator of one area", () => {
+describe("integrations for somebody who reads no tools", () => {
   it("say they are configured by the platform's administration", async () => {
-    signedInAs([]);
+    signedInAs([], ["scope:write"]);
     openAt("/integrations/connectors");
 
     expect(
@@ -57,6 +58,72 @@ describe("integrations for an administrator of one area", () => {
     ).toBeInTheDocument();
   });
 
+});
+
+describe("integrations for an author of one area", () => {
+  const crm = { name: "crm", scopeKind: "area", company: "acme", area: "cx", shared: false };
+
+  function signedInAsAuthor({ failFirst = false } = {}) {
+    const me = { id: "usr_bia", display: "Bia", kind: "human", can: ["tool:read"], platform: [], grants: [], configure: [] };
+    let failing = failFirst;
+    vi.stubGlobal("fetch", vi.fn(async (input: Request | string) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (failing && url.endsWith("/integrations/mcp-credentials")) {
+        failing = false;
+        return new Response(JSON.stringify({ title: "unavailable", status: 503 }), { status: 503 });
+      }
+      const body = url.endsWith("/api/v1/me") ? me : { items: [], servers: [crm] };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
+  }
+
+  // Their agents may need a personal credential for a server their area
+  // reaches; nothing else under integrations is theirs (NT-019).
+  it("take them to their credentials, offering the servers their area reaches", async () => {
+    signedInAsAuthor();
+    openAt("/integrations");
+
+    expect(await screen.findByRole("link", { name: "Credenciais" }, { timeout: LAZY_SCREEN }))
+      .toHaveAttribute("aria-current", "page");
+    expect(await screen.findAllByText("crm")).not.toHaveLength(0);
+    for (const section of ["Conectados", "Disponíveis", "Connectors", "Provedores de modelo", "Canais"]) {
+      expect(screen.queryByRole("link", { name: section }), section).not.toBeInTheDocument();
+    }
+  });
+
+  // A retry asks again what failed, and still nothing they may not read: the
+  // servers' listing and the catalogue would answer 403 and keep the error.
+  it("recover their credentials from a failure, asking for nothing they may not read", async () => {
+    signedInAsAuthor({ failFirst: true });
+    openAt("/integrations/credentials");
+    await userEvent.setup().click(
+      await screen.findByRole("button", { name: "Tentar de novo" }, { timeout: LAZY_SCREEN }),
+    );
+
+    expect(await screen.findAllByText("crm")).not.toHaveLength(0);
+    const asked = vi.mocked(fetch).mock.calls.map(([input]) =>
+      new URL(input instanceof Request ? input.url : String(input), "http://console").pathname,
+    );
+    for (const list of ["/admin/integrations", "/admin/integrations/recipes"]) {
+      expect(asked.filter((path) => path.endsWith(list)), list).toEqual([]);
+    }
+  });
+
+  it("ask for no list of the servers' configuration", async () => {
+    signedInAsAuthor();
+    openAt("/integrations/credentials");
+    await screen.findAllByText("crm", {}, { timeout: LAZY_SCREEN });
+
+    const asked = vi.mocked(fetch).mock.calls.map(([input]) =>
+      new URL(input instanceof Request ? input.url : String(input), "http://console").pathname,
+    );
+    for (const list of ["/admin/integrations", "/admin/integrations/recipes", "/admin/channels"]) {
+      expect(asked.filter((path) => path.endsWith(list)), list).toEqual([]);
+    }
+  });
+});
+
+describe("integrations for a reader of the platform", () => {
   it("open as usual for someone who holds tool:read at the platform", async () => {
     signedInAs(["tool:read"]);
     openAt("/integrations");
@@ -141,7 +208,7 @@ describe("integrations for an administrator who configures an area's connectors"
     expect(screen.getAllByRole("button", { name: "Editar" })).toHaveLength(1);
   });
 
-  it.each(["/integrations/providers", "/integrations/channels", "/integrations/mcp"])(
+  it.each(["/integrations/providers", "/integrations/channels"])(
     "take them from %s, which is the platform's, to the connected servers",
     async (path) => {
       signedInAs([], areaAdmin);
@@ -166,21 +233,44 @@ describe("integrations for an administrator who configures an area's connectors"
     expect(screen.queryByRole("button", { name: "Conectar sistema" })).not.toBeInTheDocument();
   });
 
-  it("show them the connectors and the connected servers, and none of the platform's sections", async () => {
+  it("show them what they connect and their credentials, and none of the platform's sections", async () => {
     signedInAs([], areaAdmin);
     openAt("/integrations/connectors");
 
     expect(
       await screen.findByRole("link", { name: "Connectors" }, { timeout: LAZY_SCREEN }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Conectados" })).toBeInTheDocument();
-    for (const section of ["Provedores de modelo", "Disponíveis", "Canais"]) {
+    for (const section of ["Conectados", "Disponíveis", "Credenciais"]) {
+      expect(screen.getByRole("link", { name: section }), section).toBeInTheDocument();
+    }
+    for (const section of ["Provedores de modelo", "Canais"]) {
       expect(screen.queryByRole("link", { name: section }), section).not.toBeInTheDocument();
     }
   });
 
-  // Each of these is the platform's, and would answer 403. The listing of MCP
-  // servers is theirs too now: it holds their own and what they inherit.
+  // Connecting a server starts at the catalogue for them too: the recipes
+  // name nothing of this installation, and the form places the server only
+  // where they may.
+  it("open the catalogue, where they connect a server by its address too", async () => {
+    signedInAs([], areaAdmin);
+    openAt("/integrations/mcp");
+
+    expect(
+      await screen.findByRole("button", { name: "Conectar por endereço" }, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+  });
+
+  it("open their personal credentials", async () => {
+    signedInAs([], areaAdmin);
+    openAt("/integrations/credentials");
+
+    expect(
+      await screen.findByRole("link", { name: "Credenciais" }, { timeout: LAZY_SCREEN }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  // Channels are the platform's, and would answer 403. The listing of MCP
+  // servers, the catalogue and their own credentials are theirs.
   it("ask for none of the platform's lists", async () => {
     signedInAs([], areaAdmin);
     openAt("/integrations");
@@ -190,9 +280,9 @@ describe("integrations for an administrator who configures an area's connectors"
       new URL(input instanceof Request ? input.url : String(input), "http://console").pathname,
     );
     expect(asked.some((path) => path.endsWith("/admin/integrations"))).toBe(true);
-    const platformLists = ["/admin/channels", "/admin/integrations/recipes", "/integrations/mcp-credentials"];
-    for (const list of platformLists) {
-      expect(asked.filter((path) => path.endsWith(list)), list).toEqual([]);
+    expect(asked.filter((path) => path.endsWith("/admin/channels"))).toEqual([]);
+    for (const own of ["/admin/integrations/recipes", "/integrations/mcp-credentials"]) {
+      expect(asked.some((path) => path.endsWith(own)), own).toBe(true);
     }
   });
 });

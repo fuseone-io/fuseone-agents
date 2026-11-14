@@ -68,7 +68,8 @@ const sections: {
   },
 ];
 
-const areaSections: IntegrationSection[] = ["connected", "connectors"];
+/** What a configurer outside the platform opens (NT-019); providers and channels are the platform's. */
+const configurerSections: IntegrationSection[] = ["connected", "available", "connectors", "credentials"];
 
 /**
  * The four jobs under integrations, with one side rail.
@@ -91,9 +92,16 @@ export function IntegrationsShell({
   const { data: me } = useMe();
   // An area's administrator has its servers and connectors, and nothing else
   // here (NT-019).
-  const shown = integrationAccess(me).platform
+  const access = integrationAccess(me);
+  const shown = access.platform
     ? sections
-    : sections.filter((section) => areaSections.includes(section.id));
+    : sections.filter((section) =>
+        // Until the session answers, as before it: the gate opens nothing
+        // yet, and a page rendered alone shows the configurer's rail.
+        access.servers || !access.known
+          ? configurerSections.includes(section.id)
+          : access.credentials && section.id === "credentials",
+      );
 
   return (
     <div className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]">

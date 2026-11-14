@@ -1,9 +1,9 @@
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
-import { useTools } from "@/features/admin/api";
 import { useIntegrations } from "@/features/integrations/api";
 import { AvailableServersPanel } from "@/features/integrations/mcp/available-servers-panel";
 import { useRecipes } from "@/features/integrations/mcp/api";
+import { useCatalogueTools } from "@/features/integrations/mcp/use-catalogue-tools";
 import { useTranslation } from "react-i18next";
 import { integrationAccess } from "@/features/integrations/integration-access";
 import { ScopeChoiceContext } from "@/features/integrations/scope/scope-choice";
@@ -13,9 +13,11 @@ export function CataloguePage() {
   const { t } = useTranslation();
   const integrations = useIntegrations();
   const recipes = useRecipes();
-  const tools = useTools();
   const access = integrationAccess(useMe().data);
   const servers = integrations.data?.mcpServers ?? [];
+  // Asked inside the caller's own scopes, so an area's server, and one the
+  // area inherits from its company, lists its tools (NT-019).
+  const tools = useCatalogueTools(servers, access.platform, access.configure);
 
   // Only whoever may create a server is offered to connect one, and only
   // where they may place it (NT-019).
@@ -38,7 +40,7 @@ export function CataloguePage() {
         onRetry={() => {
           void integrations.refetch();
           void recipes.refetch();
-          void tools.refetch();
+          tools.refetch();
         }}
       />
     </ScopeChoiceContext.Provider>

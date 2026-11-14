@@ -2039,6 +2039,7 @@
     "viewNamed": "Ver {{name}}",
     "serverReadOnlyHere": "Este servidor é de outro escopo ou foi passado ao processo: você pode lê-lo, mas não pode alterá-lo aqui.",
     "connectNeedsConfigure": "Conectar um servidor pede provider:write. Você pode ler o catálogo, mas não conectar a partir dele.",
+    "localIsThePlatforms": "Servidores locais são da plataforma: um processo local roda no worker da plataforma. Fora da instalação, conecte este servidor por um endereço remoto, se o fornecedor publicar um.",
     "chooseServer": "Escolha um servidor",
     "chooseServerHint": "Selecione uma receita para configurá-la aqui. A lista fica ao lado do formulário para conectar um servidor sem esconder o restante do catálogo.",
     "connectionFor": "{{name}}",

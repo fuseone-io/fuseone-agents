@@ -2703,6 +2703,13 @@ paths:
         widen the tool surface, or classify an effect. It lets a run carrying
         this user's delegation call a remote server as that user instead of as
         the installation.
+
+        `servers` are the remote servers the caller may hold a credential for
+        (NT-019): those whose scope a scope where the caller holds `tool:read`
+        reaches, either way, reached over HTTP and without a GitHub App. It
+        names no address, so an area's author, who cannot list the servers'
+        configuration, still finds the server their agent needs. Absent from
+        a server that predates it.
       responses:
         '200':
           description: The caller's MCP credential presence.
@@ -2715,6 +2722,9 @@ paths:
                   items:
                     type: array
                     items: { $ref: '#/components/schemas/MCPUserCredential' }
+                  servers:
+                    type: array
+                    items: { $ref: '#/components/schemas/MCPCredentialServer' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
@@ -3423,6 +3433,11 @@ paths:
         platform did not write these servers and vouches for nothing beyond
         saying where it read what it read. Its suggestions about what a tool
         does are proposals a Curator confirms, never classifications.
+
+        Read by whoever may connect a server somewhere (`provider:write` in
+        any scope, so an area's administrator connecting the area's own), and
+        by the platform's classifiers (`tool:classify` there). A recipe names
+        nothing of this installation, so no scope is read from it.
       responses:
         '200':
           description: What is known.
@@ -7167,6 +7182,24 @@ components:
           description: Whether the stored credential is an OAuth grant.
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
+
+    MCPCredentialServer:
+      type: object
+      description: >
+        A remote MCP server the caller may hold a personal credential for. No
+        address: only whoever configures the server reads that.
+      required: [name, scopeKind, shared]
+      properties:
+        name: { type: string }
+        scopeKind:
+          type: string
+          enum: [installation, company, area]
+          description: Where the server is stored.
+        company: { type: string }
+        area: { type: string }
+        shared:
+          type: boolean
+          description: The server holds a credential of its own, used when the person has none.
 
     MCPRateLimit:
       type: object

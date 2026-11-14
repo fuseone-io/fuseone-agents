@@ -10,10 +10,11 @@ import { useMe } from "@/features/session/api";
 /**
  * The integrations screens, for those the server serves them to.
  *
- * Providers, channels and the MCP catalogue are listed and configured at the
- * platform's administration scope only. Connector instances and MCP servers
- * are configured at their own scope (NT-019), so an area's administrator
- * opens those screens and no other. Following a link elsewhere takes them to
+ * Providers and channels are listed and configured at the platform's
+ * administration scope only. Connector instances and MCP servers are
+ * configured at their own scope (NT-019), so an area's administrator opens
+ * those screens, the catalogue they connect a server from and their own
+ * credentials, and no other. Following a link elsewhere takes them to
  * what they have, rather than to a page of requests answering 403; one who
  * configures nowhere reads why. An unknown platform list is a server that
  * predates it, and opens as before.
@@ -28,9 +29,13 @@ export function IntegrationsGate() {
   // Until the session answers, open nothing: a screen opened on a guess asks
   // the platform for lists an area's administrator would be refused.
   if (!access.known) return <LoadingRows rows={3} />;
-  if (access.platform || (own && access.servers)) return <Outlet />;
-  // An area's administrator has the connected servers and the connectors.
+  if (access.platform) return <Outlet />;
+  if (own === "servers" && access.servers) return <Outlet />;
+  if (own === "credentials" && access.credentials) return <Outlet />;
+  // An area's administrator has the connected servers and the connectors;
+  // whoever only reads tools there, their own credentials.
   if (access.servers) return <Navigate to="/integrations" replace />;
+  if (access.credentials) return <Navigate to="/integrations/credentials" replace />;
 
   return (
     <>
@@ -49,15 +54,20 @@ export function IntegrationsGate() {
 }
 
 /**
- * The screens an area's configurer opens: the connected servers, a server's
- * own page, and the connectors. The catalogue at /integrations/mcp is the
- * platform's, and so are providers, credentials and channels.
+ * Which access a screen outside the platform's needs: the connected servers,
+ * the catalogue, a server's own page and the connectors are a configurer's;
+ * the credentials, anyone's who reads tools. Providers and channels are the
+ * platform's.
  */
-function ownScreen(pathname: string) {
+function ownScreen(pathname: string): "servers" | "credentials" | null {
   const path = pathname.replace(/\/+$/, "");
-  return (
+  if (path === "/integrations/credentials") return "credentials";
+  if (
     path === "/integrations" ||
     path.startsWith("/integrations/connectors") ||
-    /^\/integrations\/mcp\/[^/]+$/.test(path)
-  );
+    /^\/integrations\/mcp(\/[^/]+)?$/.test(path)
+  ) {
+    return "servers";
+  }
+  return null;
 }
