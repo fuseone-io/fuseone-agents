@@ -2108,7 +2108,6 @@
     "accepted": "Sugestão de memória aceita",
     "agent": "Agente",
     "agentFilter": "Filtrar por agente",
-    "agentFilterPlaceholder": "triage",
     "assertions": "Assertivas lembradas",
     "claim": "Afirmação",
     "claimHint": "Texto estruturado pequeno que o modelo pode recordar. Ele continua marcado pela evidência de onde veio.",
@@ -2237,7 +2236,8 @@
     "ttlNote": "Vale por 30 dias. Reafirmar com evidência nova renova o prazo.",
     "updated": "Atualizada {{seen}}",
     "viewFilter": "Visão da memória",
-    "whichOutput": "Qual saída deste run"
+    "whichOutput": "Qual saída deste run",
+    "allAgents": "Todos os agentes"
   },
   "nav": {
     "admin": "Administração",

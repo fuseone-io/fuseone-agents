@@ -2108,7 +2108,6 @@
     "accepted": "Memory suggestion accepted",
     "agent": "Agent",
     "agentFilter": "Filter by agent",
-    "agentFilterPlaceholder": "triage",
     "assertions": "Remembered assertions",
     "claim": "Claim",
     "claimHint": "Small structured text the model may recall. It is still labelled by the evidence it came from.",
@@ -2237,7 +2236,8 @@
     "ttlNote": "Lasts 30 days. Reasserting with new evidence renews it.",
     "updated": "Updated {{seen}}",
     "viewFilter": "Memory view",
-    "whichOutput": "Which output of this run"
+    "whichOutput": "Which output of this run",
+    "allAgents": "All agents"
   },
   "nav": {
     "admin": "Administration",
