@@ -35,28 +35,26 @@ export function blankDedupe(): DedupeRuling {
 /*
 startRulingFromTool is what a ruling opens on, for the level being recorded.
 
-A tool nobody has judged, or whose ruling a new definition overtook, opens
-blank: a pre-filled effect would be the platform answering for the Curator.
+A tool opens on the listed ruling of that level (NT-019), looked up first. The
+tool's own fields are the ruling in force, the platform's under a ceiling, and
+read unclassified when a new definition overtook it: an owner started from
+them would save the platform's word, or nothing, over their own and lose its
+compensation and dedupe. A level nobody ruled at opens blank: a pre-filled
+effect would be the platform answering for the Curator.
 
-A tool already ruled on opens on the ruling of that level (NT-019). The
-tool's own fields are the ruling in force, which under a ceiling is the
-platform's: an owner started from them would save the platform's word over
-their own and lose its compensation and dedupe. A level nobody ruled at opens
-blank. A server that predates `rulings` answers for the platform's alone, so
-its tool's own fields are that ruling.
+A server that predates `rulings` answers for the platform's alone, so its
+tool's own fields are that ruling, and blank while they read unclassified.
 */
 export function startRulingFromTool(
   tool: Tool,
   level: RulingLevel = "platform",
 ): Ruling {
-  if (tool.effect === "unknown") return blankRuling();
-  if (tool.rulings === undefined) {
-    return level === "platform"
-      ? rulingOf({ ...tool, effect: tool.effect })
-      : blankRuling();
+  if (tool.rulings !== undefined) {
+    const ruled = tool.rulings.find((one) => one.level === level);
+    return ruled ? rulingOf(ruled) : blankRuling();
   }
-  const ruled = tool.rulings.find((one) => one.level === level);
-  return ruled ? rulingOf(ruled) : blankRuling();
+  if (tool.effect === "unknown" || level !== "platform") return blankRuling();
+  return rulingOf({ ...tool, effect: tool.effect });
 }
 
 function rulingOf(said: Pick<

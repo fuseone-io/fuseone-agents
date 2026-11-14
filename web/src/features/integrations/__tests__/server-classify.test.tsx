@@ -235,3 +235,22 @@ describe("editing one level's ruling", () => {
     expect(screen.getByRole("button", { name: "Registrar classificação" })).toBeDisabled();
   });
 });
+
+/*
+A stale ceiling makes the tool read unclassified, and the owner's ruling is
+still there. Started blank, saving it would wipe the owner's word.
+*/
+describe("editing the owner's ruling under a stale ceiling", () => {
+  it("starts from and sends the owner's values", async () => {
+    const user = userEvent.setup();
+    const stale = ruled({ effect: "unknown", stale: true, rulings: UNDER_CEILING });
+    const { asked } = world(AREA_CURATOR, [stale]);
+    show();
+
+    await user.click(await screen.findByRole("button", { name: "Revisar decisão" }));
+    await user.click(screen.getByRole("button", { name: "Registrar classificação" }));
+
+    await waitFor(() => expect(classified(asked)).toHaveLength(1));
+    expect(classified(asked)[0]?.body).toMatchObject(OWNERS_WORD);
+  });
+});
