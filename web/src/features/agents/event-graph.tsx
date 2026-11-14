@@ -1,10 +1,9 @@
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, CircleAlert } from "lucide-react";
 import { Panel } from "@/components/shared/panel";
 import { EmptyState } from "@/components/shared/states";
 import { Mono } from "@/components/shared/mono";
-import { api, unwrap } from "@/lib/api/client";
+import { useEventGraph } from "@/features/agents/api";
 
 /**
  * Who triggers whom (PRD SE-10).
@@ -20,12 +19,9 @@ import { api, unwrap } from "@/lib/api/client";
  */
 export function EventGraph() {
   const { t } = useTranslation();
-  const graph = useQuery({
-    queryKey: ["event-graph"],
-    queryFn: async () => unwrap(await api.GET("/agents/events")).edges,
-  });
+  const graph = useEventGraph();
 
-  const edges = graph.data ?? [];
+  const edges = graph.data?.edges ?? [];
 
   return (
     <Panel title={t("agents.eventGraph")} flush>
