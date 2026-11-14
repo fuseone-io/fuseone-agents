@@ -66,6 +66,7 @@ func TestRemovePerson_refusals_answerTheirCodes(t *testing.T) {
 		{auth.ErrNotLocal, http.StatusConflict, CodePersonNotLocal},
 		{auth.ErrRemovingYourself, http.StatusConflict, CodePersonIsYou},
 		{auth.ErrLastAdministrator, http.StatusConflict, CodeLastAdministrator},
+		{auth.ErrRemoved, http.StatusConflict, CodePersonRemoved},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.code), func(t *testing.T) {

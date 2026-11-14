@@ -43,12 +43,15 @@ func (s *Server) RemovePerson(
 	return nil, fmt.Errorf("remove %s: %w", req.PrincipalId, err)
 }
 
+// removalRefusal names the refusals both people doors answer with 409.
 func removalRefusal(err error) (Code, bool) {
 	switch {
 	case errors.Is(err, auth.ErrNotLocal):
 		return CodePersonNotLocal, true
 	case errors.Is(err, auth.ErrRemovingYourself):
 		return CodePersonIsYou, true
+	case errors.Is(err, auth.ErrRemoved):
+		return CodePersonRemoved, true
 	case errors.Is(err, auth.ErrLastAdministrator):
 		return CodeLastAdministrator, true
 	}

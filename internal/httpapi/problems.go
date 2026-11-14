@@ -99,11 +99,13 @@ const (
 	// the session gate waits for before rendering anything at all.
 	CodeSignInFailed Code = "fuseone:sign-in-failed"
 	CodeNotSignedIn  Code = "fuseone:not-signed-in"
-	// The three refusals of removing a person. Separate codes because the
-	// console says three different things: change the group in the provider,
-	// ask another administrator, grant administration to somebody else first.
+	// The refusals of removing a person or replacing their grants. Separate
+	// codes because the console says different things: change the group in the
+	// provider, ask another administrator, grant identity management to
+	// somebody else first, or that the person is gone.
 	CodePersonNotLocal    Code = "fuseone:person-not-local"
 	CodePersonIsYou       Code = "fuseone:person-is-you"
+	CodePersonRemoved     Code = "fuseone:person-removed"
 	CodeLastAdministrator Code = "fuseone:last-administrator"
 )
 

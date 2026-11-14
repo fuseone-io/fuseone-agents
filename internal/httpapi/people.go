@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
@@ -77,6 +78,10 @@ func (s *Server) SetGrants(
 		return openapi.SetGrants404ApplicationProblemPlusJSONResponse{
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.PrincipalId),
 		}, nil
+	}
+	if code, refused := removalRefusal(err); refused {
+		return openapi.SetGrants409ApplicationProblemPlusJSONResponse(
+			refusal(http.StatusConflict, code, "Conflict", req.PrincipalId)), nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("set grants for %s: %w", req.PrincipalId, err)

@@ -29,6 +29,9 @@ func (f *fakePeople) RemoveLocal(_ context.Context, r auth.Removal) error {
 func (f *fakePeople) People(context.Context) ([]domain.Person, error) { return f.listed, nil }
 
 func (f *fakePeople) SetGrants(_ context.Context, _ string, grants []domain.Grant, by string) error {
+	if f.refuse != nil {
+		return f.refuse
+	}
 	f.set, f.by = grants, by
 	return nil
 }
@@ -146,5 +149,30 @@ func TestSetGrants_adminInTheAdministrationAreaCannotMintInstallationAdmins(t *t
 	}
 	if len(people.set) != 0 {
 		t.Error("an area administrator minted an installation administrator")
+	}
+}
+
+func TestSetGrants_refusals_answerTheirCodes(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		refuse error
+		code   Code
+	}{
+		{auth.ErrLastAdministrator, CodeLastAdministrator},
+		{auth.ErrRemoved, CodePersonRemoved},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.code), func(t *testing.T) {
+			t.Parallel()
+			resp, err := peopleServer(&fakePeople{refuse: tc.refuse}).SetGrants(asInstallation(domain.RoleAdmin),
+				openapi.SetGrantsRequestObject{PrincipalId: "usr_bia", Body: &openapi.SetGrantsJSONRequestBody{}})
+			if err != nil {
+				t.Fatalf("SetGrants: %v", err)
+			}
+			problem, ok := resp.(openapi.SetGrants409ApplicationProblemPlusJSONResponse)
+			if !ok || problem.Type == nil || *problem.Type != string(tc.code) {
+				t.Errorf("resp = %#v, want 409 %s", resp, tc.code)
+			}
+		})
 	}
 }

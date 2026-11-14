@@ -2994,10 +2994,12 @@ paths:
         in the provider is what to change. A service account is refused the
         same way and is disabled on its own screen.
 
-        Refused with `fuseone:person-is-you` for the caller's own account, and
-        with `fuseone:last-administrator` when the account is the last active
-        holder of administration at the installation scope, since nobody would
-        be left who could grant it again.
+        Refused with `fuseone:person-is-you` for the caller's own account,
+        with `fuseone:person-removed` for somebody already removed, and with
+        `fuseone:last-administrator` when nobody active would be left holding,
+        at the installation scope, a role that manages identity
+        (`identity:write`: today administrator or curator), since nobody could
+        grant it again.
       parameters:
         - name: principalId
           in: path
@@ -3009,7 +3011,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: Not an account made here, your own, or the last installation administrator.
+          description: Not an account made here, your own, already removed, or the last who manages identity over the installation.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -3069,6 +3071,12 @@ paths:
         one alone. The two writers are separate on purpose: an identity
         provider re-derives its own on every sign-in, and a console that
         overwrote them would hand back access somebody lost by leaving a team.
+
+        Refused with `fuseone:person-removed` for somebody removed (a disabled
+        service account still takes grants: disabling one is reversible), and
+        with `fuseone:last-administrator` when the change would leave nobody
+        active holding, at the installation scope, a role that manages
+        identity — whether that grant came from a provider or from here.
       parameters:
         - name: principalId
           in: path
@@ -3090,6 +3098,11 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The person was removed, or nobody would be left who manages identity over the installation.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /admin/retention:
     get:
