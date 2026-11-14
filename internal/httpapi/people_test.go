@@ -4,15 +4,26 @@ import (
 	"context"
 	"testing"
 
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
 )
 
 type fakePeople struct {
-	listed []domain.Person
-	set    []domain.Grant
-	by     string
+	listed  []domain.Person
+	set     []domain.Grant
+	by      string
+	removed auth.Removal
+	refuse  error
+}
+
+func (f *fakePeople) RemoveLocal(_ context.Context, r auth.Removal) error {
+	if f.refuse != nil {
+		return f.refuse
+	}
+	f.removed = r
+	return nil
 }
 
 func (f *fakePeople) People(context.Context) ([]domain.Person, error) { return f.listed, nil }

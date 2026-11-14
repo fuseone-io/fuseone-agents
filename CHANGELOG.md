@@ -28,6 +28,24 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **An account made here can be removed** (`DELETE /admin/people/{principalId}`).
+  Removing deactivates rather than deletes: the account stops signing in, every
+  session it holds is revoked and every grant it holds is taken away, in one
+  transaction, and `person.removed` is recorded with the two ids. The person leaves
+  the people list; audit and run views that name them by id keep reading. Only
+  accounts created with a password or by the setup token: somebody an identity
+  provider vouched for is refused (`fuseone:person-not-local`), since their next
+  sign-in would bring them back — change the group in the provider. Nobody can
+  remove themselves (`fuseone:person-is-you`), nor the last active holder of
+  administration over the whole installation (`fuseone:last-administrator`).
+  Requires `identity:write` over the installation, like the rest of people
+  management. The username stays with the removed account and cannot be given to a
+  new one.
+
 ## [0.110.0] — 2026-11-13
 
 NT-019 phase 2, the writers' release (#335, #340, #341, #342, #343): the administrator of an area configures

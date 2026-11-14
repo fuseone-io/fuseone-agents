@@ -15,6 +15,7 @@ import (
 type People interface {
 	People(ctx context.Context) ([]domain.Person, error)
 	SetGrants(ctx context.Context, principalID string, grants []domain.Grant, by string) error
+	RemoveLocal(ctx context.Context, removal auth.Removal) error
 }
 
 // WithPeople wires the directory of who exists and what they hold.
