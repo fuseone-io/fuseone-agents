@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ConsoleRoutes from "@/routes/console-routes";
@@ -62,10 +63,15 @@ describe("integrations for somebody who reads no tools", () => {
 describe("integrations for an author of one area", () => {
   const crm = { name: "crm", scopeKind: "area", company: "acme", area: "cx", shared: false };
 
-  function signedInAsAuthor() {
+  function signedInAsAuthor({ failFirst = false } = {}) {
     const me = { id: "usr_bia", display: "Bia", kind: "human", can: ["tool:read"], platform: [], grants: [], configure: [] };
+    let failing = failFirst;
     vi.stubGlobal("fetch", vi.fn(async (input: Request | string) => {
       const url = input instanceof Request ? input.url : String(input);
+      if (failing && url.endsWith("/integrations/mcp-credentials")) {
+        failing = false;
+        return new Response(JSON.stringify({ title: "unavailable", status: 503 }), { status: 503 });
+      }
       const body = url.endsWith("/api/v1/me") ? me : { items: [], servers: [crm] };
       return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
     }));
@@ -82,6 +88,24 @@ describe("integrations for an author of one area", () => {
     expect(await screen.findAllByText("crm")).not.toHaveLength(0);
     for (const section of ["Conectados", "Disponíveis", "Connectors", "Provedores de modelo", "Canais"]) {
       expect(screen.queryByRole("link", { name: section }), section).not.toBeInTheDocument();
+    }
+  });
+
+  // A retry asks again what failed, and still nothing they may not read: the
+  // servers' listing and the catalogue would answer 403 and keep the error.
+  it("recover their credentials from a failure, asking for nothing they may not read", async () => {
+    signedInAsAuthor({ failFirst: true });
+    openAt("/integrations/credentials");
+    await userEvent.setup().click(
+      await screen.findByRole("button", { name: "Tentar de novo" }, { timeout: LAZY_SCREEN }),
+    );
+
+    expect(await screen.findAllByText("crm")).not.toHaveLength(0);
+    const asked = vi.mocked(fetch).mock.calls.map(([input]) =>
+      new URL(input instanceof Request ? input.url : String(input), "http://console").pathname,
+    );
+    for (const list of ["/admin/integrations", "/admin/integrations/recipes"]) {
+      expect(asked.filter((path) => path.endsWith(list)), list).toEqual([]);
     }
   });
 

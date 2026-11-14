@@ -250,9 +250,11 @@ export function IntegrationsPage({
               credentials.isLoading
             }
             error={integrations.error ?? recipes.error ?? credentials.error}
+            // Asks again only what the caller may read: an area's author was
+            // never asked for the servers' listing or the catalogue.
             onRetry={() => {
-              void integrations.refetch();
-              void recipes.refetch();
+              if (access.servers) void integrations.refetch();
+              if (access.catalogue) void recipes.refetch();
               void credentials.refetch();
             }}
           />
