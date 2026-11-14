@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { GrantAddButtons } from "@/features/admin/grant-add-buttons";
 import { GrantRow } from "@/features/admin/grant-row";
-import { GrantScopeNotice } from "@/features/admin/grant-scope-notice";
+import { ScopeListsNotice } from "@/features/scope/scope-lists-notice";
 import { GrantBadge } from "@/features/admin/grant-badge";
 import {
   useSetGrants,
@@ -108,7 +108,7 @@ export function GrantEditor({
           machine={machine}
           onAdd={(grant) => setGranted([...granted, grant])}
         />
-        <GrantScopeNotice />
+        <ScopeListsNotice message={t("people.scopesFailed")} />
       </div>
 
       <div className="flex gap-2">

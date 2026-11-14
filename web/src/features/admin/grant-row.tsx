@@ -9,8 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GrantScopeFields } from "@/features/admin/grant-scope-fields";
 import type { GrantInput } from "@/features/admin/people-api";
+import { CompanyAreaFields } from "@/features/scope/company-area-fields";
 
 const ROLES: GrantInput["role"][] = [
   "admin",
@@ -47,10 +47,9 @@ export function GrantRow({
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px_32px] items-end gap-2">
-      <GrantScopeFields
-        grant={grant}
-        index={index}
-        labelClass={heading}
+      <CompanyAreaFields
+        value={grant}
+        shape={{ idPrefix: `grant-${index}`, labelClass: heading }}
         onChange={onChange}
       />
 

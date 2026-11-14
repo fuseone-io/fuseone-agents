@@ -2,12 +2,12 @@ import { useCompanies } from "@/features/companies/api";
 import { useScopes } from "@/features/scope/api";
 
 /**
- * The companies and areas a grant can name.
+ * The companies and areas a company and area select can offer.
  *
- * Both lists are read by the editor and by each row's selects; TanStack keeps
- * one request per list however many rows ask.
+ * Read by every select on a screen; TanStack keeps one request per list
+ * however many of them ask.
  */
-export function useGrantScopes() {
+export function useScopeLists() {
   const companies = useCompanies();
   const scopes = useScopes();
   return {

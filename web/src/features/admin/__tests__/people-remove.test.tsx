@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { pathOf } from "@/features/admin/__tests__/grant-scopes-network";
+import { pathOf } from "@/test/scope-lists-routes";
 import type { Person } from "@/features/admin/people-api";
 import { PeoplePanel } from "@/features/admin/people-panel";
 

@@ -3,9 +3,9 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  grantScopesRoute,
+  scopeListsRoute,
   pathOf,
-} from "@/features/admin/__tests__/grant-scopes-network";
+} from "@/test/scope-lists-routes";
 import { GrantEditor } from "@/features/admin/grant-editor";
 import type { GrantInput, Person } from "@/features/admin/people-api";
 
@@ -23,7 +23,7 @@ function stub(lists: { fail?: boolean } = {}) {
     "fetch",
     vi.fn(async (request: Request) => {
       const path = pathOf(request);
-      const listed = grantScopesRoute(request.method, path, lists);
+      const listed = scopeListsRoute(request.method, path, lists);
       if (listed) return listed;
       const text = await request.clone().text();
       sent.push({ method: request.method, path, body: text && JSON.parse(text) });

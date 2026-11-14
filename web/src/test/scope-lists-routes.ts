@@ -2,8 +2,9 @@ import type { Company } from "@/features/companies/api";
 import type { RegisteredScope } from "@/features/scope/api";
 
 /**
- * The two lists a grant's selects read, as the server answers them: every
- * company with withdrawn ones marked, and the areas ordered by company.
+ * The two lists the company and area selects read, as the server answers
+ * them: every company with withdrawn ones marked, and the areas ordered by
+ * company.
  */
 export const COMPANIES: Company[] = [
   { id: "acme", label: "Acme", areas: 2, archived: false },
@@ -24,7 +25,7 @@ const json = (body: unknown) =>
   });
 
 /** Answers the two lists, or undefined for any other path. */
-export function grantScopesRoute(
+export function scopeListsRoute(
   method: string,
   path: string,
   lists: { fail?: boolean } = {},

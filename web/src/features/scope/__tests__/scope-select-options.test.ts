@@ -5,7 +5,7 @@ import {
   areaOptions,
   companyOptions,
   WHOLE_COMPANY,
-} from "@/features/admin/grant-scope-options";
+} from "@/features/scope/scope-select-options";
 
 const company = (id: string, archived = false): Company => ({
   id,

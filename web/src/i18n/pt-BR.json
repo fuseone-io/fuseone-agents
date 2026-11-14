@@ -2380,7 +2380,6 @@
     "subtitle": "Quem consegue acessar o console, e o que cada pessoa pode fazer em qual empresa.",
     "summary": "{{noRole}} sem papel · {{local}} com senha local",
     "title": "Pessoas",
-    "unknownScope": "{{label}} (não registrada)",
     "username": "Usuário",
     "usernameHint": "Letras, números, ponto, hífen e sublinhado.",
     "usernameShape": "Use 3 ou mais caracteres: letras, números, ponto, hífen ou sublinhado.",
@@ -2390,10 +2389,7 @@
       "local": "Local",
       "noRole": "Sem papel",
       "provider": "Provedor"
-    },
-    "wholeCompany": "Toda a empresa",
-    "wholeInstallation": "Toda a instalação",
-    "withdrawnScope": "{{label}} (retirada)"
+    }
   },
   "policies": {
     "addCondition": "Adicionar condição",
@@ -2974,6 +2970,10 @@
     "everything": "Tudo o que eu alcanço",
     "label": "Contexto",
     "noAreas": "Nenhuma área declarada",
+    "optionUnknown": "{{label}} (não registrada)",
+    "optionWholeCompany": "Toda a empresa",
+    "optionWholeInstallation": "Toda a instalação",
+    "optionWithdrawn": "{{label}} (retirada)",
     "wholeCompany": "Toda a {{company}}"
   },
   "serviceAccounts": {

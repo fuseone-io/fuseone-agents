@@ -2,15 +2,15 @@ import type { Company } from "@/features/companies/api";
 import type { RegisteredScope } from "@/features/scope/api";
 
 /**
- * What the company and area selects of a grant offer.
+ * What a company and an area select offer.
  *
- * A select can only show a value it lists, so whatever a grant already names
+ * A select can only show a value it lists, so whatever a form already holds
  * is always listed — a withdrawn company, or a scope from before areas were
- * registered, or one the lists failed to bring. Otherwise opening the editor
- * and saving would silently change a grant nobody touched.
+ * registered, or one the lists failed to bring. Otherwise opening an editor
+ * and saving would silently change a record nobody touched.
  */
 
-/** The area value of a grant over a whole company. A select item cannot be "". */
+/** The area value over a whole company. A select item cannot be "". */
 export const WHOLE_COMPANY = "__whole_company__";
 
 export type ScopeOptionState =
