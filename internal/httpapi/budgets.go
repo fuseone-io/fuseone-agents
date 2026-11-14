@@ -92,7 +92,7 @@ func (s *Server) DeleteBudget(ctx context.Context, req openapi.DeleteBudgetReque
 		return nil, errNoAdministration
 	}
 
-	scope, ok := parseBudgetScope(req.Scope)
+	scope, ok := parseBudgetShape(req.Scope)
 	if !ok {
 		return openapi.DeleteBudget204Response{}, nil
 	}
@@ -113,18 +113,33 @@ func (s *Server) budgetSetter(ctx context.Context) (domain.UserID, *openapi.Forb
 // parseBudgetScope reads the three shapes a ceiling can be set on.
 //
 // A closed set rather than free text: "installation" is not a company called
-// installation, and an area with no company is not a scope.
+// installation, and an area with no company is not a scope. And a real one,
+// written once (NT-019): a company or area in another form (spaces around a
+// part or around the whole path, upper case, a further slash, the
+// installation's `*`) is refused, never folded, as the connector and MCP doors
+// refuse it, so the ceiling governs the scope the caller named and not a
+// lookalike no agent belongs to.
 func parseBudgetScope(raw string) (domain.Scope, bool) {
-	raw = strings.TrimSpace(raw)
-	switch {
-	case raw == "" || raw == "installation":
-		return domain.Scope{}, true
-	case !strings.Contains(raw, "/"):
-		return domain.Scope{Company: domain.CompanyID(raw)}, true
+	if strings.TrimSpace(raw) != raw {
+		return domain.Scope{}, false
 	}
+	scope, ok := parseBudgetShape(raw)
+	if !ok || (scope != domain.Scope{} && realScope(scope) != nil) {
+		return domain.Scope{}, false
+	}
+	return scope, true
+}
 
-	company, area, _ := strings.Cut(raw, "/")
-	if company == "" || area == "" {
+// parseBudgetShape reads a path by its shape alone. Removal takes it, so a
+// ceiling stored in another form before scopes were checked can still be
+// removed: refused here it would answer 204 and stay.
+func parseBudgetShape(raw string) (domain.Scope, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "installation" {
+		return domain.Scope{}, true
+	}
+	company, area, hasArea := strings.Cut(raw, "/")
+	if company == "" || (hasArea && area == "") {
 		return domain.Scope{}, false
 	}
 	return domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}, true
