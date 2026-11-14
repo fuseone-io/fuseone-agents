@@ -176,6 +176,15 @@ func TestRemoveLocal_refusals(t *testing.T) {
 			}
 			return svc.ID, r.admin
 		}, auth.ErrNotLocal},
+		// Whatever its provider says: only a person signs in with a password.
+		{"a machine filed as local", func(t *testing.T, r removal) (string, string) {
+			if _, err := r.pool.Exec(t.Context(), `
+				insert into principals (principal_id, kind, provider, subject, display)
+				values ('svc_odd', 'service', 'local', 'odd', 'odd')`); err != nil {
+				t.Fatalf("insert: %v", err)
+			}
+			return "svc_odd", r.admin
+		}, auth.ErrNotLocal},
 		{"yourself", func(t *testing.T, r removal) (string, string) {
 			ana := r.local(t, "ana")
 			return ana, ana
