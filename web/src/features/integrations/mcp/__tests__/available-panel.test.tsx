@@ -340,12 +340,25 @@ describe("the catalogue for someone who connects only an area's servers", () => 
     );
   }
 
-  it("reads a local-only recipe, saying local servers are the platform's", async () => {
-    openInArea([postgres]);
-    await userEvent.setup().click(screen.getByRole("button", { name: "Ver PostgreSQL" }));
+  const git: ServerRecipe = { ...postgres, server: "git", title: "Git", transport: "stdio", command: "uvx" };
+
+  it("reads a recipe that is explicitly local, saying local servers are the platform's", async () => {
+    openInArea([git]);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Ver Git" }));
 
     expect(screen.getByText(/Servidores locais são da plataforma/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Conectar sistema" })).not.toBeInTheDocument();
+  });
+
+  // No transport is a recipe whose endpoint is the installation's own (an
+  // Elastic or ServiceNow instance): it opens as a remote server, asking for
+  // the address.
+  it("connects a recipe that names no transport, as a remote server", async () => {
+    openInArea([postgres]);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Conectar PostgreSQL" }));
+
+    expect(screen.getByRole("button", { name: "Conectar sistema" })).toBeInTheDocument();
+    expect(screen.queryByText(/Servidores locais são da plataforma/)).not.toBeInTheDocument();
   });
 
   it("still connects a remote recipe", async () => {

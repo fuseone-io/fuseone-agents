@@ -16,16 +16,20 @@ export function configurable(canCreate: boolean, server: MCPServer | null | unde
 }
 
 /**
- * Whether a recipe is reached only by a local command (NT-019). Outside the
+ * Whether a recipe is explicitly a local server (NT-019). Outside the
  * installation a server is remote: a local process runs on the platform's
  * worker, which no company or area commands, and the server refuses one
  * stored there. So a caller who places servers only in their own scopes
  * (`anyScope` false) reads such a recipe and is not offered to connect it.
+ *
+ * Only `stdio` says so. A recipe naming no transport is often a server whose
+ * endpoint is the installation's own (an Elastic or ServiceNow instance): it
+ * opens as a remote server and asks for the address.
  */
 export function localOnly(
-  recipe: Pick<ServerRecipe, "transport" | "url"> | null | undefined,
+  recipe: Pick<ServerRecipe, "transport"> | null | undefined,
   anyScope: boolean,
 ): boolean {
   if (anyScope || !recipe) return false;
-  return recipe.transport !== "http" && !recipe.url;
+  return recipe.transport === "stdio";
 }
