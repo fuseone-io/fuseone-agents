@@ -72,8 +72,8 @@ field" is a commit message.
 - **A ceiling's scope must be a real company or area, written once.** `PUT
   /admin/budgets/{scope}` trimmed only the whole path, so `acme / cx` or `Acme` set a
   ceiling on a scope no agent belongs to. A company or area in another form (spaces
-  around a part, upper case, a further slash, the installation's `*`) now answers
-  400, as the connector and MCP doors already do. Removing a ceiling still reads the
+  around a part or around the whole path, upper case, a further slash, the
+  installation's `*`) now answers 400, as the connector and MCP doors already do. Removing a ceiling still reads the
   path by its shape, so one stored in another form before this can be removed.
 
 ## [0.110.0] — 2026-11-13

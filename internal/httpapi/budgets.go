@@ -115,10 +115,14 @@ func (s *Server) budgetSetter(ctx context.Context) (domain.UserID, *openapi.Forb
 // A closed set rather than free text: "installation" is not a company called
 // installation, and an area with no company is not a scope. And a real one,
 // written once (NT-019): a company or area in another form (spaces around a
-// part, upper case, a further slash, the installation's `*`) is refused, never
-// folded, as the connector and MCP doors refuse it, so the ceiling governs the
-// scope the caller named and not a lookalike no agent belongs to.
+// part or around the whole path, upper case, a further slash, the
+// installation's `*`) is refused, never folded, as the connector and MCP doors
+// refuse it, so the ceiling governs the scope the caller named and not a
+// lookalike no agent belongs to.
 func parseBudgetScope(raw string) (domain.Scope, bool) {
+	if strings.TrimSpace(raw) != raw {
+		return domain.Scope{}, false
+	}
 	scope, ok := parseBudgetShape(raw)
 	if !ok || (scope != domain.Scope{} && realScope(scope) != nil) {
 		return domain.Scope{}, false
