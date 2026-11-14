@@ -76,6 +76,14 @@ integrations and the ones above it. Nothing here is done by an agent.
     depth, not a substitute.
   - The enforcement ships in its own release, on every replica, before the writers. Once
     an area's server exists, that release is the rollback floor.
+- **A server stored at the installation by mistake moves to the area that owns it**
+  (decided by Kleber on 2026-11-14, after testing phase 2 as an area administrator).
+  Servers created before phase 2 were stored at the installation, because no other scope
+  existed. Every area inherits them, including servers one area runs for itself. The rule
+  that the installation is inherited by every area stays. What changes is where those
+  servers are stored: a platform-only door moves a server out of the installation, and
+  re-seals its secret under the new scope. See [Moving a server out of the
+  installation](#moving-a-server-out-of-the-installation).
 
 ## Where things stand
 
@@ -427,6 +435,96 @@ any of them.
     (`internal/httpapi/channels.go:228-233`).
   - **Choosing a `runAs` user**, which needs `identity:write` (`channels.go:361`).
 
+### Moving a server out of the installation
+
+A server keeps its name, configuration, secret, tools and rulings. Only its scope
+changes, from the installation to a company or one of its areas. This phase moves out
+of the installation only. A server already stored at a company or area is not moved:
+its owner's rulings sit at its old scope, and nothing would carry them.
+
+**The door.** `POST /admin/integrations/mcp/{name}/move`, body `{scope}`, `If-Match`
+required. Only the platform's administration may use it (`provider:write` at
+`adminScope`). Moving a server out of the installation takes it away from every other
+area, so no area may do that on its own.
+
+**What it refuses, before writing anything:**
+
+| Refused | Answer |
+|---|---|
+| A stale `If-Match` | 412 |
+| A local (stdio) server. Outside the installation a server is remote, and migration `0110` holds that in the database | 400 `fuseone:invalid-input` |
+| A target that is not a registered company or area, or is written in another form (`realScope`) | 400 `fuseone:invalid-input` |
+| A server already outside the installation | 409 |
+| An origin the target's egress policy does not admit: the server's URL, its OAuth token endpoint, its GitHub App API base. Same rule as the PUT: the area's policy, else its company's, never both | 400 `fuseone:egress-not-allowed`, naming the origin |
+| Published agents outside the target that use the server's tools, unless the request says `strand: true` | 409 `fuseone:move-strands-agents`, listing the agent ids and scopes |
+
+The last refusal is there because the move has an effect beyond the row. `checkScope`
+(`internal/gate/checks.go:62-67`) blocks a tool whose scope does not contain the run's
+scope. After the move, a run of any agent outside the target asking for one of these
+tools is blocked, and the block is recorded as a `StepGateDecided` step. No earlier
+wall stops it: nothing checks a tool's scope at publication. The console shows the list
+before it asks to confirm.
+
+**One transaction, in the order the PUT already takes locks** (`integrations.go:321-331`):
+
+1. The name lock `mcp_server:<name>`. Every write to the server takes it first, so a PUT
+   and a move of the same server never interleave.
+2. The row guard at the installation key, then at the target key.
+3. The egress policies lock, shared, to check the origins.
+4. Reveal the secret at the installation key. The sealed data names the scope
+   (`contextFor`, `internal/settings/settings.go:275-278`), so it opens only there.
+5. Delete the installation row, insert the target row with the same value, and seal the
+   secret again under the target's key.
+   - The unique name index (`0108`) holds, because each statement is checked on its own
+     and the old row is already gone.
+   - Changing only the scope columns in place would leave a ciphertext that no longer
+     opens (`vault.ErrCiphertext`), which is why the secret is sealed again.
+6. Rewrite `ServerAt` on the server's personal credentials. They are stored at the
+   installation and named by server and person, so they are not sealed again. Without
+   this step the worker hands them nothing after the move (`sameServerRow`,
+   `integrations.go:691`), while the presence check still reports them, because it
+   reads no scope (`integrations.go:645-659`).
+7. Record `mcp_server.moved` in `admin_events` at both scopes, with the old and new
+   scope, so the platform's trail and the area's both show it.
+
+**What the move keeps as it is:**
+
+- **The platform's rulings.** A tool's ruling stored at the installation is the
+  platform's ceiling for a server at any scope (`RulingsInForce`,
+  `internal/domain/ruling_precedence.go:15-45`). The classifications the platform made
+  keep applying, and the area's curator rules under them.
+- **Health, leases and egress denials.** They are keyed by name.
+- **The tools' rows.** They are stored at the installation with `value.server`, and
+  their scope is read from the server's row (`mcp_server_scope.go:59-99`).
+
+**What the move ends:** a pending rediscovery or probe stored at the installation. The
+worker skips a request whose scope no longer matches. Ask again after the move.
+
+**When the worker notices.** Its reconnect fingerprint includes `updated_at`
+(`cmd/agentd/mcp.go:640-647`), and the new row has a new one. The worker reconnects,
+and the catalogue gives the tools the target's scope. From then on the server's
+requests are held to the target's egress policy (`cmd/agentd/mcp_egress.go:55-102`).
+
+**Rollback.** A moved server is an ordinary company or area row, which 0.110.0 already
+reads and enforces. A binary without the door does nothing different with it, so the
+door adds no new floor. The floor stays 0.109.0, as it is once an area's server exists.
+
+**Console.** On a server's own page, the platform's administration sees **Move to…**.
+The target is chosen from the lists (`CompanyAreaFields`). Before it confirms, the
+console shows the origins the target's policy must admit and the agents the move
+would strand.
+
+**Doing it for the servers that need it.** This is an operation, not a migration, and it
+is done in this order:
+
+1. The platform's administration adds the servers' origins to the owning area's egress
+   policy, or to its company's.
+2. It moves each server.
+3. It checks that each server answers from its new scope.
+
+Which servers, which area and which origins are the instance's configuration. None of it
+is written here.
+
 ## Enforcement
 
 A scope check only at the doors that write would be a check in the console. A run must
@@ -541,6 +639,7 @@ platform's trail shows every scope.
 | 3 | Model providers | Readers, then writers |
 | 4 | Channel connections | Readers, then writers. Conversations change only their doors, like phase 1 |
 | 5 | Console: gate, scope field, inherited marks | With each writers' release, per kind |
+| 2b | Moving a server out of the installation: the door, its refusals, the console action | One release, after phase 2. Readers need nothing new: a moved server is an ordinary company or area row |
 
 Phase 1 is the smallest step to something an area administrator can use: connecting
 their own Jira, Elasticsearch or SQL from their own area.
