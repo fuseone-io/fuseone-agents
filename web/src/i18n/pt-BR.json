@@ -758,7 +758,8 @@
     },
     "fromGitHub": "GitHub",
     "githubSecretField": "Campo Secret do webhook no GitHub",
-    "githubDeliveryExplains": "No GitHub, cole este endereço em Payload URL, escolha <code>application/json</code> em Content type e cole a chave em Secret. O GitHub assina cada entrega com ela; a chave nunca é enviada."
+    "githubDeliveryExplains": "No GitHub, cole este endereço em Payload URL, escolha <code>application/json</code> em Content type e cole a chave em Secret. O GitHub assina cada entrega com ela; a chave nunca é enviada.",
+    "suggestEvent": "Sugerir eventos conhecidos"
   },
   "approvals": {
     "actionDenied": "Ação negada",
@@ -1067,7 +1068,9 @@
     "saveFailed": "Não foi possível salvar",
     "showing": "{{loaded}} carregados",
     "showingOf": "{{loaded}} de {{total}}",
-    "yes": "sim"
+    "yes": "sim",
+    "suggestFilter": "Filtrar…",
+    "suggestTypeFreely": "Nada conhecido com esse nome — digite o valor direto no campo."
   },
   "companies": {
     "active": "ativa",
@@ -2102,7 +2105,6 @@
     "accepted": "Sugestão de memória aceita",
     "agent": "Agente",
     "agentFilter": "Filtrar por agente",
-    "agentFilterPlaceholder": "triage",
     "assertions": "Assertivas lembradas",
     "claim": "Afirmação",
     "claimHint": "Texto estruturado pequeno que o modelo pode recordar. Ele continua marcado pela evidência de onde veio.",
@@ -2231,7 +2233,8 @@
     "ttlNote": "Vale por 30 dias. Reafirmar com evidência nova renova o prazo.",
     "updated": "Atualizada {{seen}}",
     "viewFilter": "Visão da memória",
-    "whichOutput": "Qual saída deste run"
+    "whichOutput": "Qual saída deste run",
+    "allAgents": "Todos os agentes"
   },
   "nav": {
     "admin": "Administração",

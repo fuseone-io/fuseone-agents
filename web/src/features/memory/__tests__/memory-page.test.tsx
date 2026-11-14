@@ -84,6 +84,8 @@ describe("governed memory page", () => {
     hooks.accept.mockReset();
     hooks.dismiss.mockReset();
     useActiveScope.setState({ company: "acme", area: "ops" });
+    // The agent filter lists the agents; a test that needs more stubs its own.
+    vi.stubGlobal("fetch", async () => Response.json({ items: [] }));
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -91,7 +93,7 @@ describe("governed memory page", () => {
     hooks.items = Array.from({ length: 9 }, (_, index) =>
       memoryAssertion(index),
     );
-    render(<MemoryPage />);
+    renderMemoryPageWithClient();
 
     for (const name of [
       "Active",
@@ -114,7 +116,7 @@ describe("governed memory page", () => {
 
   it("explains when a manual search exceeds the term budget", async () => {
     const user = userEvent.setup();
-    render(<MemoryPage />);
+    renderMemoryPageWithClient();
 
     expect(
       screen.queryByText(
@@ -145,7 +147,7 @@ describe("governed memory page", () => {
         },
       ],
     }));
-    render(<MemoryPage />);
+    renderMemoryPageWithClient();
 
     const third = screen.getByRole("button", { name: /subject-2/ });
     expect(within(third).getByText("Outside data")).toBeInTheDocument();
@@ -343,7 +345,7 @@ describe("governed memory page", () => {
         expiresAt: "2026-09-25T12:00:00Z",
       },
     ];
-    render(<MemoryPage />);
+    renderMemoryPageWithClient();
 
     await user.click(screen.getByRole("button", { name: "Correct" }));
     const dialog = screen.getByRole("alertdialog");
@@ -382,7 +384,7 @@ describe("governed memory page", () => {
   it("requires a reason before disabling a remembered assertion", async () => {
     const user = userEvent.setup();
     hooks.items = [memoryAssertion(0)];
-    render(<MemoryPage />);
+    renderMemoryPageWithClient();
 
     await user.click(screen.getByRole("button", { name: "Disable" }));
     const dialog = screen.getByRole("alertdialog");
@@ -403,7 +405,7 @@ describe("governed memory page", () => {
   it("reviews a pending suggestion inside its own scope", async () => {
     const user = userEvent.setup();
     hooks.suggestions = [memorySuggestion(0)];
-    render(<MemoryPage />);
+    renderMemoryPageWithClient();
 
     await user.click(screen.getByRole("tab", { name: "Suggested memory" }));
     await user.click(screen.getByRole("button", { name: "Accept suggestion" }));
@@ -430,7 +432,7 @@ describe("governed memory page", () => {
   it("accepts a suggestion in better words", async () => {
     const user = userEvent.setup();
     hooks.suggestions = [memorySuggestion(0)];
-    render(<MemoryPage />);
+    renderMemoryPageWithClient();
 
     await user.click(screen.getByRole("tab", { name: "Suggested memory" }));
     await user.click(screen.getByRole("button", { name: "Accept suggestion" }));
@@ -454,7 +456,7 @@ describe("governed memory page", () => {
   it("does not offer to rewrite the identity of a proposal", async () => {
     const user = userEvent.setup();
     hooks.suggestions = [memorySuggestion(0)];
-    render(<MemoryPage />);
+    renderMemoryPageWithClient();
 
     await user.click(screen.getByRole("tab", { name: "Suggested memory" }));
     await user.click(screen.getByRole("button", { name: "Accept suggestion" }));
@@ -470,7 +472,7 @@ describe("governed memory page", () => {
       memorySuggestion(index),
     );
 
-    render(<MemoryPage />);
+    renderMemoryPageWithClient();
 
     await user.click(screen.getByRole("tab", { name: "Suggested memory" }));
     expect(screen.getAllByText("suggested-subject-0").length).toBeGreaterThan(
@@ -490,7 +492,7 @@ describe("governed memory page", () => {
     hooks.items = [memoryAssertion(0)];
     hooks.suggestions = [memorySuggestion(0)];
 
-    render(<MemoryPage />);
+    renderMemoryPageWithClient();
 
     expect(screen.queryByRole("button", { name: "Record memory" })).toBeNull();
     expect(screen.queryByText("New memory")).not.toBeInTheDocument();

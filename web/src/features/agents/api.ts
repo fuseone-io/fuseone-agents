@@ -6,11 +6,13 @@ import type { components } from "@/lib/api/schema.gen";
 export type Agent = components["schemas"]["Agent"];
 export type AgentTrigger = components["schemas"]["AgentTrigger"];
 export type AgentActivity = components["schemas"]["AgentActivity"];
+export type EventEdge = components["schemas"]["EventEdge"];
 
 export const agentKeys = {
   all: ["agents"] as const,
   list: (scope: string, allVersions: boolean) =>
     [...agentKeys.all, "list", scope, allVersions] as const,
+  events: () => [...agentKeys.all, "events"] as const,
 };
 
 /**
@@ -27,6 +29,19 @@ export function useAgents(allVersions = false) {
           params: { query: { ...scope.params, allVersions } },
         }),
       ),
+  });
+}
+
+/**
+ * Who triggers whom (PRD SE-10): every edge between a publisher and a
+ * consumer, dangling ones included, derived from the published
+ * specifications. Under `agentKeys.all`, so a publish refreshes it.
+ */
+export function useEventGraph(enabled = true) {
+  return useQuery({
+    queryKey: agentKeys.events(),
+    enabled,
+    queryFn: async () => unwrap(await api.GET("/agents/events")),
   });
 }
 

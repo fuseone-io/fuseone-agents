@@ -17,6 +17,7 @@ import {
   needsEvents,
   type TriggerKind,
 } from "@/features/agents/trigger-kinds";
+import { EventNameField } from "@/features/agents/event-name-field";
 import { WebhookSourceField } from "@/features/agents/webhook-source-field";
 import type { AgentTrigger } from "@/lib/api/client";
 
@@ -68,13 +69,20 @@ export function TriggerRow({
           </p>
         ) : (
           <>
-            <Input
-              className="font-mono"
-              aria-label={t(`agents.triggerField.${kind}`)}
-              placeholder={t(`agents.triggerExample.${kind}`)}
-              value={String(trigger[field] ?? "")}
-              onChange={(e) => onChange({ [field]: e.target.value })}
-            />
+            {field === "event" ? (
+              <EventNameField
+                value={trigger.event ?? ""}
+                onChange={(event) => onChange({ event })}
+              />
+            ) : (
+              <Input
+                className="font-mono"
+                aria-label={t(`agents.triggerField.${kind}`)}
+                placeholder={t(`agents.triggerExample.${kind}`)}
+                value={String(trigger[field] ?? "")}
+                onChange={(e) => onChange({ [field]: e.target.value })}
+              />
+            )}
             {incomplete(trigger) && !needsEvents(trigger) && (
               <p className="text-2xs text-warning">
                 {t(`agents.triggerNeeds.${kind}`)}

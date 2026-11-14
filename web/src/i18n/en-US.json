@@ -758,7 +758,8 @@
     },
     "fromGitHub": "GitHub",
     "githubSecretField": "The GitHub webhook's Secret field",
-    "githubDeliveryExplains": "In GitHub, paste this address into Payload URL, choose <code>application/json</code> as the Content type and paste the key into Secret. GitHub signs every delivery with it; the key itself is never sent."
+    "githubDeliveryExplains": "In GitHub, paste this address into Payload URL, choose <code>application/json</code> as the Content type and paste the key into Secret. GitHub signs every delivery with it; the key itself is never sent.",
+    "suggestEvent": "Suggest known events"
   },
   "approvals": {
     "actionDenied": "Action denied",
@@ -1067,7 +1068,9 @@
     "saveFailed": "Could not save",
     "showing": "{{loaded}} loaded",
     "showingOf": "{{loaded}} of {{total}}",
-    "yes": "yes"
+    "yes": "yes",
+    "suggestFilter": "Filter…",
+    "suggestTypeFreely": "Nothing known by that name — type the value straight into the field."
   },
   "companies": {
     "active": "active",
@@ -2102,7 +2105,6 @@
     "accepted": "Memory suggestion accepted",
     "agent": "Agent",
     "agentFilter": "Filter by agent",
-    "agentFilterPlaceholder": "triage",
     "assertions": "Remembered assertions",
     "claim": "Claim",
     "claimHint": "Small structured text the model may recall. It is still labelled by the evidence it came from.",
@@ -2231,7 +2233,8 @@
     "ttlNote": "Lasts 30 days. Reasserting with new evidence renews it.",
     "updated": "Updated {{seen}}",
     "viewFilter": "Memory view",
-    "whichOutput": "Which output of this run"
+    "whichOutput": "Which output of this run",
+    "allAgents": "All agents"
   },
   "nav": {
     "admin": "Administration",

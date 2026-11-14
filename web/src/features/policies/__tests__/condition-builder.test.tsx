@@ -37,14 +37,17 @@ vi.mock("@/features/policies/api", async (importOriginal) => {
 describe("the policy condition builder", () => {
   it("renders translated conjunctions and lets condition rows shrink", () => {
     setLocale("en-US");
+    // A tool.id row offers the tool catalogue, which is a query.
     render(
-      <ConditionBuilder
-        conditions={[
-          { field: "tool.id", op: "eq", value: "grafana.query_loki_logs" },
-          { field: "args.rows", op: "lt", value: "1000" },
-        ]}
-        onChange={vi.fn()}
-      />,
+      <QueryClientProvider client={new QueryClient()}>
+        <ConditionBuilder
+          conditions={[
+            { field: "tool.id", op: "eq", value: "grafana.query_loki_logs" },
+            { field: "args.rows", op: "lt", value: "1000" },
+          ]}
+          onChange={vi.fn()}
+        />
+      </QueryClientProvider>,
     );
 
     expect(screen.getByText("when")).toBeInTheDocument();

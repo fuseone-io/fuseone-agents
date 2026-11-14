@@ -67,21 +67,40 @@ export function modelPriceFromForm(values: PriceFormValues): ModelPrice {
   };
 }
 
-export function knownPriceProviders(prices: PriceSuggestion[]): string[] {
-  return sortedUnique(prices.map((price) => price.provider));
+/** A connected provider as the price screen reads it from GET /providers. */
+export type PriceProviderChoice = { name: string; models: string[] };
+
+/**
+ * The providers a rate may name: the ones already priced and the ones the
+ * installation is connected to, each once. A suggestion, never a limit —
+ * prices may be set ahead of use.
+ */
+export function knownPriceProviders(
+  prices: PriceSuggestion[],
+  choices: PriceProviderChoice[] = [],
+): string[] {
+  return sortedUnique([
+    ...prices.map((price) => price.provider),
+    ...choices.map((choice) => choice.name),
+  ]);
 }
 
+/** The models priced for the provider and the ones its connection serves. */
 export function knownPriceModels(
   prices: PriceSuggestion[],
   provider: string | undefined,
+  choices: PriceProviderChoice[] = [],
 ): string[] {
   const selected = provider?.trim();
   if (!selected) return [];
-  return sortedUnique(
-    prices
+  return sortedUnique([
+    ...prices
       .filter((price) => price.provider === selected)
       .map((price) => price.model),
-  );
+    ...choices
+      .filter((choice) => choice.name === selected)
+      .flatMap((choice) => choice.models),
+  ]);
 }
 
 function blankPrice(provider: string, model: string): PriceFormValues {

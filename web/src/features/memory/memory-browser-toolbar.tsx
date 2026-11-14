@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { MemoryFilters } from "@/features/memory/api";
+import { MemoryAgentFilter } from "@/features/memory/memory-agent-filter";
 import type { MemoryView } from "@/features/memory/memory-view";
 
 const MAX_MEMORY_SEARCH_TERMS = 6;
@@ -71,12 +72,9 @@ export function MemoryBrowserToolbar({
           className="h-8 pl-8"
         />
       </div>
-      <Input
-        aria-label={t("memory.agentFilter")}
-        placeholder={t("memory.agentFilterPlaceholder")}
-        value={filters.agentId}
-        onChange={(event) => onFilters({ ...filters, agentId: event.target.value })}
-        className="h-8 min-w-44 flex-1 font-mono sm:max-w-56"
+      <MemoryAgentFilter
+        agentId={filters.agentId}
+        onChange={(agentId) => onFilters({ ...filters, agentId })}
       />
       <Tabs value={view} onValueChange={(next) => onView(next as MemoryView)}>
         <TabsList className="h-8" aria-label={t("memory.viewFilter")}>
