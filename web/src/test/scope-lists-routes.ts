@@ -26,19 +26,20 @@ const json = (body: unknown) =>
 
 /**
  * Answers the two lists, or undefined for any other path. `fail` fails both;
- * `companies` replaces the company list, or refuses it as the server does a
- * caller without authority over the installation.
+ * `companies` replaces the company list, refuses it as the server does a
+ * caller without authority over the installation, or fails it alone.
  */
 export function scopeListsRoute(
   method: string,
   path: string,
-  lists: { fail?: boolean; companies?: Company[] | "refused" } = {},
+  lists: { fail?: boolean; companies?: Company[] | "refused" | "failing" } = {},
 ): Response | undefined {
   if (method !== "GET") return undefined;
   if (path !== "/admin/companies" && path !== "/admin/scopes") return undefined;
   if (lists.fail) return new Response(null, { status: 500 });
   if (path === "/admin/scopes") return json({ items: SCOPES });
   if (lists.companies === "refused") return new Response(null, { status: 403 });
+  if (lists.companies === "failing") return new Response(null, { status: 500 });
   return json({ items: lists.companies ?? COMPANIES });
 }
 

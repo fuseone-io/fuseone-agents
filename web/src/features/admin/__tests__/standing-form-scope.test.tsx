@@ -19,7 +19,9 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-function mount(companies: Company[] | "refused" = [...COMPANIES, initech], fail = false) {
+type Companies = Company[] | "refused" | "failing";
+
+function mount(companies: Companies = [...COMPANIES, initech], fail = false) {
   const sent: { scope: unknown }[] = [];
   vi.stubGlobal("fetch", async (request: Request) => {
     const listed = scopeListsRoute(request.method, pathOf(request), { companies, fail });
@@ -112,5 +114,23 @@ describe("where a standing approval holds", () => {
     expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Empresa" })).toHaveTextContent("acme");
     expect(screen.getByRole("combobox", { name: "Área" })).toHaveTextContent("finance");
+  });
+
+  // Somebody who grants without authority over the installation is refused
+  // the company list by design: nothing failed, and a retry would be refused
+  // again.
+  it("takes a refused company list as no failure, with no retry", async () => {
+    mount("refused");
+    await waitFor(() => expect(document.querySelector('[data-slot="skeleton"]')).toBeNull());
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Tentar de novo" })).toBeNull();
+  });
+
+  it("says a company list that failed failed, with a retry", async () => {
+    mount("failing");
+
+    expect(await screen.findByText(/Não foi possível carregar as empresas e áreas/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
   });
 });
