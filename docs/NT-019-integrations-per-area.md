@@ -465,15 +465,16 @@ tools is blocked, and the block is recorded as a `StepGateDecided` step. No earl
 wall stops it: nothing checks a tool's scope at publication. The console shows the list
 before it asks to confirm.
 
-**The refusal is a snapshot, and the Gate is the guarantee.** The list is the agents
-whose current version names one of the server's tools when the move reads them, inside
-its transaction. It protects whoever moves the server from stranding agents they did not
-see. It promises nothing about later publications: an agent published after the move,
-or alongside it, that names one of these tools from outside the target is published as
-any agent naming an unreachable tool is today. Its runs are blocked by `checkScope` and
-recorded. The move takes no publication lock, and publication gains no check from this
-note. Checking a tool's scope at publication would be a rule for every tool, not for
-moved servers alone, and it gets its own decision.
+**The refusal is a snapshot. Publication and the Gate hold afterwards.** The list is
+the agents whose current version names one of the server's tools when the move reads
+them, inside its transaction. It protects whoever moves the server from stranding agents
+they did not see. After the move, the rules every tool is under apply to these tools
+too, as [Enforcement](#enforcement) states:
+
+- Publication refuses an agent that names one of them from outside the target.
+- A run that reaches one anyway is blocked by `checkScope` and recorded. That covers an
+  agent published in the same instant as the move, which the move takes no publication
+  lock to prevent.
 
 **One transaction, in the order the PUT already takes locks** (`integrations.go:321-331`):
 
@@ -543,7 +544,8 @@ imported. No effect bypasses the Gate.
 
 | Door | Check |
 |---|---|
-| Publication (console, API, Terraform, disk sync) | Every tool in the pack and every provider the agent names is usable from the agent's scope. Otherwise the answer is 422, naming the tool or provider |
+| Publication (console, API, Terraform) | Every tool in the pack and every provider the agent names is usable from the agent's scope. Otherwise the answer is 400, naming the tool as one the catalogue does not offer: the door's existing refusal, which judges every tool against the catalogue kept for the agent's scope |
+| Publication from disk, at the worker's boot | Not checked yet. The boot publishes before the tool catalogue is synced, so a refusal there means choosing between failing the boot and skipping the agent. That is its own decision. Until then the Gate is what stops such an agent's runs |
 | `tools` invocation | A call to a tool whose server's scope does not contain the run's is refused `ErrOutOfScope` before the server is contacted. This mirrors `Layer.Reserve` (`internal/connectortools/layer.go:311`) |
 | Gate | A new check, `checkScope`, beside `checkContract` (`internal/gate/gate.go:73`). The Gate cannot judge scope today: its `Request` carries the run's scope and the tool's effect, but not where the tool belongs (`internal/gate/pack.go:57-70`). `Request` gains `ToolScope`, and the check stops the call unless `ToolScope` contains `Scope`. That stop is recorded in the ledger as a `blocked` verdict with its reason. Where `ToolScope` comes from is the next section |
 | Model resolution | `Planner` with the run's scope, so a provider out of scope is not found |
