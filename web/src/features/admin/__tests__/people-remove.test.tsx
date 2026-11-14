@@ -104,7 +104,7 @@ describe("removing a person", () => {
     const dialog = await screen.findByRole("alertdialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Remover" }));
 
-    expect(await screen.findByText(/última pessoa que administra a instalação/)).toBeInTheDocument();
+    expect(await screen.findByText(/Ninguém mais conseguiria gerenciar as pessoas/)).toBeInTheDocument();
     expect(screen.getAllByText("Bia Local").length).toBeGreaterThan(0);
   });
 });
