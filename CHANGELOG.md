@@ -119,8 +119,9 @@ author picks tools and providers from is asked for the agent's scope. Adds migra
   - `GET /admin/tools?classifiable=true` answers what the caller may rule on as the
     owner: the tools whose server is stored at a company or an area contained by a
     scope where they hold `tool:classify` (a company's contains its areas'), every
-    tool for the platform's curator, never a sibling's or the installation's. 403 for
-    a caller who classifies nowhere; 400 together with `scope`.
+    tool for the platform's curator, never a sibling's or the installation's, and never
+    a native connector tool, which belongs to no stored MCP server. 403 for a caller
+    who classifies nowhere; 400 together with `scope`.
   - The console offers it per tool, on a server's page and in the administration's
     queue of tools waiting: as the owner on a company's or an area's tool contained by
     a scope where the caller holds `tool:classify` (`/me`'s `classify`), never on the

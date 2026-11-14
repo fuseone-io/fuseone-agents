@@ -75,3 +75,20 @@ func classifiableReach(ctx context.Context, withTarget bool) (reach, openapi.Lis
 		return owned && p.Can(domain.PermToolClassify, server)
 	}, nil
 }
+
+// ownersMayRule leaves out what no owner's ruling is written for: a native
+// tool, such as a connector instance's, belongs to no stored MCP server, so
+// the owner's door refuses it. The platform's administration keeps every tool.
+func ownersMayRule(ctx context.Context, entries []domain.ToolEntry) []domain.ToolEntry {
+	p, _ := auth.PrincipalFrom(ctx)
+	if p.Can(domain.PermToolClassify, adminScope) {
+		return entries
+	}
+	out := make([]domain.ToolEntry, 0, len(entries))
+	for _, e := range entries {
+		if !e.Native {
+			out = append(out, e)
+		}
+	}
+	return out
+}

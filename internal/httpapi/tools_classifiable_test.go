@@ -7,6 +7,7 @@ import (
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/ledger"
 )
 
 /*
@@ -78,5 +79,31 @@ func TestListTools_classifiable_refusals(t *testing.T) {
 	}
 	if got, _ := classifiableFor(t, w.api, grantedAt(domain.RoleCurator, cx), "acme/cx"); got != "400" {
 		t.Errorf("with a target = %s, want 400", got)
+	}
+}
+
+// withNativeTool lists a connector instance's tool beside the catalogue, as
+// serve does, native and at the instance's area.
+type withNativeTool struct{ base Tools }
+
+func (w withNativeTool) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
+	entries, err := w.base.Tools(ctx)
+	return append(entries, domain.ToolEntry{
+		ID: "sql.cx-db.query", Server: "sql.cx-db", Native: true,
+		Effect: domain.EffectRead, Scope: domain.Scope{Company: "acme", Area: "cx"},
+	}), err
+}
+
+// A connector's tool is native: no owner's ruling is written for it (the
+// owner's door finds only a stored MCP server's tools), so it is not answered
+// as classifiable to a curator who is not the platform's, even at their area.
+func TestListTools_classifiable_leavesOutNativeConnectorTools(t *testing.T) {
+	w := newTargetWorld(t)
+	s := NewServer(ledger.NewMemory(), "test").
+		WithAdministration(w.curator, withNativeTool{base: w.api.tools}, w.api.integrations)
+	for _, caller := range []context.Context{grantedAt(domain.RoleCurator, cx), grantedAt(domain.RoleCurator, acmeOnly)} {
+		if _, ids := classifiableFor(t, s, caller, ""); slices.Contains(ids, "sql.cx-db.query") {
+			t.Errorf("classifiable = %v, want no native connector tool", ids)
+		}
 	}
 }
