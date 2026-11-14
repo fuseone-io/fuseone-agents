@@ -93,7 +93,7 @@ func (s *Server) ListTools(ctx context.Context, req openapi.ListToolsRequestObje
 			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermToolRead, domain.Scope{}),
 		}, nil
 	}
-	keep, refused := listToolsReach(ctx, req.Params.Scope)
+	keep, refused := listToolsReach(ctx, req.Params)
 	if refused != nil {
 		return refused, nil
 	}

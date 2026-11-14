@@ -8946,6 +8946,8 @@ export interface operations {
             query?: {
                 /** @description The target scope, `company` or `company/area`, as stored: no surrounding spaces, no upper case, never the installation's `*`. */
                 scope?: string;
+                /** @description True answers the tools the caller may rule on as their owner: those whose server is stored at a company or an area contained by a scope where the caller holds tool:classify (a company's contains its areas'; an area's only its own), never the installation's or a sibling's. The platform's curator, tool:classify at the platform's administration, gets every tool. A caller holding tool:classify nowhere is answered 403. Asked together with `scope`, 400: one answers what a target can run, the other what the caller governs. False is the same as absent. */
+                classifiable?: boolean;
             };
             header?: never;
             path?: never;
