@@ -5585,6 +5585,15 @@ components:
         overridden:
           type: boolean
           description: An owner's ruling while the platform has one on the same tool — overridden by the platform.
+        compensatedBy:
+          type: string
+          description: |
+            The tool that undoes this one, as this ruling says. Each row carries
+            its own, so a screen editing one level starts from that level's
+            word and never from the other's. Absent when the ruling names none.
+        dedupe:
+          $ref: '#/components/schemas/ToolDedupe'
+          description: This ruling's own deduplication, absent when it declares none.
 
     ToolEffect:
       type: string

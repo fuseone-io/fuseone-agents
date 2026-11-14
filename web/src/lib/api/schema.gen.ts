@@ -3335,6 +3335,14 @@ export interface components {
             inForce: boolean;
             /** @description An owner's ruling while the platform has one on the same tool — overridden by the platform. */
             overridden?: boolean;
+            /**
+             * @description The tool that undoes this one, as this ruling says. Each row carries
+             *     its own, so a screen editing one level starts from that level's
+             *     word and never from the other's. Absent when the ruling names none.
+             */
+            compensatedBy?: string;
+            /** @description This ruling's own deduplication, absent when it declares none. */
+            dedupe?: components["schemas"]["ToolDedupe"];
         };
         /**
          * @description What a tool does to the world, as a reader sees it — the same values and `unknown` besides, because a tool nobody has ruled on is a state this platform has and a screen has to be able to show.

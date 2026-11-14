@@ -154,6 +154,15 @@ func toolRulings(in []domain.ToolRuling) *[]openapi.ToolRuling {
 		if r.Overridden {
 			listed.Overridden = ptr(true)
 		}
+		if r.CompensatedBy != "" {
+			listed.CompensatedBy = ptr(string(r.CompensatedBy))
+		}
+		if r.Dedupe.Enabled() {
+			listed.Dedupe = &openapi.ToolDedupe{
+				WindowSeconds: r.Dedupe.WindowSeconds,
+				ArgPaths:      append([]string(nil), r.Dedupe.ArgPaths...),
+			}
+		}
 		out = append(out, listed)
 	}
 	return &out

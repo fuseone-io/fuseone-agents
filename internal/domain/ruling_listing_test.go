@@ -89,3 +89,27 @@ func TestRulingsOf_theRulingInForce_isTheOneRulingsInForcePicks(t *testing.T) {
 		}
 	}
 }
+
+// Each row carries what its ruling says in full, so a screen editing one
+// level starts from that level's word and never from the other's.
+func TestRulingsOf_eachRowCarriesItsOwnCompensationAndDedupe(t *testing.T) {
+	t.Parallel()
+	ownerDedupe := domain.ToolDedupe{WindowSeconds: 3600, ArgPaths: []string{"ticket.id"}}
+	given := []domain.ToolClassification{
+		{Scope: listingCX, Tool: "cx-jira.create", Effect: domain.EffectWrite,
+			CompensatedBy: "cx-jira.close", Dedupe: ownerDedupe},
+		{Scope: listingInstallation, Tool: "cx-jira.create", Effect: domain.EffectDestructive},
+	}
+
+	rows := domain.RulingsOf(given, listingScopeOf)["cx-jira.create"]
+	if len(rows) != 2 {
+		t.Fatalf("rows = %+v, want the platform's and the owner's", rows)
+	}
+	platform, owner := rows[0], rows[1]
+	if owner.CompensatedBy != "cx-jira.close" || !reflect.DeepEqual(owner.Dedupe, ownerDedupe) {
+		t.Errorf("owner = %+v, want its own compensation and dedupe", owner)
+	}
+	if platform.CompensatedBy != "" || platform.Dedupe.Enabled() {
+		t.Errorf("platform = %+v, want none of the owner's", platform)
+	}
+}

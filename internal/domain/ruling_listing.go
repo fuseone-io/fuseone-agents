@@ -17,6 +17,11 @@ type ToolRuling struct {
 	Scope     Scope
 	Effect    Effect
 	Untrusted bool
+	// CompensatedBy and Dedupe are this row's own, so a screen editing one
+	// level starts from that level's word, never the other's. Who ruled and
+	// why stay in the trail: a listing carries no free text.
+	CompensatedBy ToolID
+	Dedupe        ToolDedupe
 	// InForce marks the ruling the worker applies, chosen as RulingsInForce
 	// chooses it. Whether it still matches the tool's definition is the
 	// tool's Stale, not this.
@@ -42,7 +47,10 @@ func RulingsOf(given []ToolClassification, scopeOf func(ToolID) (Scope, bool)) m
 		if !ok {
 			continue
 		}
-		listed := ToolRuling{Scope: r.Scope, Effect: r.Effect, Untrusted: r.Untrusted}
+		listed := ToolRuling{
+			Scope: r.Scope, Effect: r.Effect, Untrusted: r.Untrusted,
+			CompensatedBy: r.CompensatedBy, Dedupe: r.Dedupe.Clone(),
+		}
 		switch {
 		case r.Scope == (Scope{}) || r.Scope == installation:
 			listed.Level, listed.Scope = RulingPlatform, installation
