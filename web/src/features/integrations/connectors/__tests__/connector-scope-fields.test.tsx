@@ -1,10 +1,22 @@
-import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render as renderBare, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { beforeEach, describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Form } from "@/components/ui/form";
 import { ConnectorIdentityFields, type ConnectorIdentityValues } from "@/features/integrations/connectors/connector-identity-fields";
 import { ScopeChoiceContext } from "@/features/integrations/scope/scope-choice";
 import { setLocale } from "@/i18n";
+import { pathOf, scopeListsRoute } from "@/test/scope-lists-routes";
+
+// The free scope reads the registered companies and areas.
+const render = (ui: ReactElement) =>
+  renderBare(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      {ui}
+    </QueryClientProvider>,
+  );
 
 // NT-019: an area's administrator places an instance in a scope where it
 // configures, never in one typed freely that the server would refuse.
@@ -22,7 +34,18 @@ function Fields({ company = "", area = "", editing = false }: { company?: string
   );
 }
 
-beforeEach(() => setLocale("pt-BR"));
+beforeEach(() => {
+  setLocale("pt-BR");
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.scrollIntoView ??= () => {};
+});
+afterEach(() => vi.unstubAllGlobals());
+
+async function choose(name: string, option: string) {
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("combobox", { name }));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
 
 describe("ConnectorIdentityFields scope", () => {
   it("starts a new instance in the first scope the caller configures, with no free scope", () => {
@@ -81,5 +104,17 @@ describe("ConnectorIdentityFields scope", () => {
 
     expect(screen.getByText("Escopo da instância")).toBeInTheDocument();
     expect(screen.queryByText("Onde o connector vale")).not.toBeInTheDocument();
+  });
+
+  it("places a free instance at a company and an area chosen from the lists", async () => {
+    vi.stubGlobal("fetch", async (request: Request) =>
+      scopeListsRoute(request.method, pathOf(request)) ?? new Response(null, { status: 404 }),
+    );
+    render(<Fields />);
+    await choose("Escopo da instância", "Área");
+    await choose("Empresa", "Acme");
+    await choose("Área", "Operações");
+
+    expect(screen.getByLabelText("placed")).toHaveTextContent("area acme/ops");
   });
 });

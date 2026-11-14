@@ -1,4 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render as renderBare, screen, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -8,6 +10,14 @@ import type {
 import { SQLInstanceForm } from "@/features/integrations/connectors/sql-instance-form";
 import { useActiveScope } from "@/features/scope/active-scope";
 import { setLocale } from "@/i18n";
+
+// The free scope reads the registered companies and areas.
+const render = (ui: ReactElement) =>
+  renderBare(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      {ui}
+    </QueryClientProvider>,
+  );
 
 const vault: ConnectorInstance = {
   name: "prod",

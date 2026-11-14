@@ -7,7 +7,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -16,8 +15,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ScopeValues } from "@/features/integrations/scope/scope-choice";
+import { CompanyAreaFields } from "@/features/scope/company-area-fields";
 
-/** Any scope, named freely: for the platform's administration. */
+/** Any registered scope: for the platform's administration. */
 export function FreeScopeFields({ editing, label }: { editing: boolean; label: string }) {
   const { t } = useTranslation();
   const form = useFormContext<ScopeValues>();
@@ -56,54 +56,31 @@ export function FreeScopeFields({ editing, label }: { editing: boolean; label: s
           </FormItem>
         )}
       />
-      {scopeKind !== "installation" && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <IdentityTextField
-            name="company"
-            label={t("admin.company")}
-            disabled={editing}
-          />
-          {scopeKind === "area" && (
-            <IdentityTextField
-              name="area"
-              label={t("admin.area")}
-              disabled={editing}
-            />
-          )}
-        </div>
-      )}
+      {scopeKind !== "installation" && <PlacedScope editing={editing} />}
     </>
   );
 }
 
-function IdentityTextField({
-  name,
-  label,
-  disabled,
-}: {
-  name: "company" | "area";
-  label: string;
-  disabled: boolean;
-}) {
+/** The company, and the area when the row lives at one. */
+function PlacedScope({ editing }: { editing: boolean }) {
   const form = useFormContext<ScopeValues>();
+  const [scopeKind, company, area] = form.watch(["scopeKind", "company", "area"]);
+  const { errors, isSubmitted } = form.formState;
   return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Input
-              {...field}
-              disabled={disabled}
-              autoComplete="off"
-              className="font-mono"
-            />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
+    <div className="grid gap-3 sm:grid-cols-2">
+      <CompanyAreaFields
+        value={{ company, area }}
+        shape={{
+          idPrefix: "scope",
+          area: scopeKind === "area" ? "required" : "none",
+          errors: { company: errors.company?.message, area: errors.area?.message },
+        }}
+        disabled={editing}
+        onChange={(next) => {
+          form.setValue("company", next.company, { shouldValidate: isSubmitted });
+          form.setValue("area", next.area, { shouldValidate: isSubmitted });
+        }}
+      />
+    </div>
   );
 }

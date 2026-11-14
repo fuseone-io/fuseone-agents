@@ -8,10 +8,18 @@ import {
 import { ScopeSelect } from "@/features/scope/scope-select";
 import { useScopeLists } from "@/features/scope/use-scope-lists";
 
-/** How a form lays the pair out: ids, and the class of the two labels. */
+/**
+ * How a form lays the pair out.
+ *
+ * `area` says what the area select is for: "whole" offers the whole company
+ * beside its areas, "required" asks for one area, and "none" leaves the area
+ * select out. `errors` are i18n keys the form's validation gave.
+ */
 export type CompanyAreaShape = {
   idPrefix: string;
   labelClass?: string;
+  area?: "whole" | "required" | "none";
+  errors?: { company?: string; area?: string };
 };
 
 /**
@@ -19,7 +27,7 @@ export type CompanyAreaShape = {
  *
  * Chosen from what is registered rather than typed, so nothing can name an
  * area that does not exist and never meet the agents filed under the real one.
- * Two grid cells: the form around them decides the layout.
+ * One grid cell per select: the form around them decides the layout.
  */
 export function CompanyAreaFields({
   value,
@@ -34,40 +42,45 @@ export function CompanyAreaFields({
 }) {
   const { t } = useTranslation();
   const { data, isLoading } = useScopeLists();
+  const mode = shape.area ?? "whole";
   const companies = companyOptions(data.companies, value.company, {
     scopes: data.scopes,
   });
-  const areas = areaOptions(data.scopes, value.company, value.area);
+  const areas = areaOptions(data.scopes, value.company, value.area).filter(
+    (option) => mode === "whole" || option.state !== "whole",
+  );
+  // The whole company alone is no choice; an area to require needs one.
+  const choosable = areas.length > (mode === "whole" ? 1 : 0);
+  const field = (name: "company" | "area") => ({
+    id: `${shape.idPrefix}-${name}`,
+    label: t(`identity.${name}`),
+    labelClass: shape.labelClass,
+    error: shape.errors?.[name],
+  });
 
   return (
     <>
       <ScopeSelect
-        field={{
-          id: `${shape.idPrefix}-company`,
-          label: t("identity.company"),
-          labelClass: shape.labelClass,
-        }}
+        field={field("company")}
         value={value.company}
         options={companies}
         disabled={disabled || isLoading}
         onChange={(company) => onChange({ company, area: "" })}
       />
-      <ScopeSelect
-        field={{
-          id: `${shape.idPrefix}-area`,
-          label: t("identity.area"),
-          labelClass: shape.labelClass,
-        }}
-        value={value.area || WHOLE_COMPANY}
-        options={areas}
-        disabled={disabled || isLoading || areas.length < 2}
-        onChange={(area) =>
-          onChange({
-            company: value.company,
-            area: area === WHOLE_COMPANY ? "" : area,
-          })
-        }
-      />
+      {mode !== "none" && (
+        <ScopeSelect
+          field={field("area")}
+          value={mode === "whole" ? value.area || WHOLE_COMPANY : value.area}
+          options={areas}
+          disabled={disabled || isLoading || !choosable}
+          onChange={(area) =>
+            onChange({
+              company: value.company,
+              area: area === WHOLE_COMPANY ? "" : area,
+            })
+          }
+        />
+      )}
     </>
   );
 }
