@@ -133,6 +133,10 @@ func (p *Postgres) People(ctx context.Context) ([]domain.Person, error) {
 		       coalesce(g.role, ''), coalesce(g.granted_by, '')
 		from principals p
 		left join role_grants g on g.principal_id = p.principal_id
+		-- A person disabled is a person removed (RemoveLocal). The row stays
+		-- for whatever names them by id; the list is of who is still here.
+		-- A disabled machine stays, marked, where its own screen shows it.
+		where not (p.kind = 'user' and p.disabled_at is not null)
 		order by p.display, p.principal_id, g.company_id, g.area_id, g.role`)
 	if err != nil {
 		return nil, fmt.Errorf("auth: list people: %w", err)
