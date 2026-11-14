@@ -1,10 +1,31 @@
 import type { ScopeBudget } from "@/features/admin/api";
+import type { Scope } from "@/features/scope/active-scope";
 
 /** The path form the API takes: installation, a company, or company/area. */
 export function scopePath(budget: ScopeBudget): string {
   const company = budget.scope?.company ?? "";
   const area = budget.scope?.area ?? "";
   if (!company) return "installation";
+  return area ? `${company}/${area}` : company;
+}
+
+const INSTALLATION = "*";
+
+/**
+ * The company and area selects' value for a path: the installation is the
+ * company `*`, which is how grants name it too.
+ */
+export function scopeOfPath(path: string): Scope {
+  if (path === "") return { company: "", area: "" };
+  if (path === "installation") return { company: INSTALLATION, area: "" };
+  const [company = "", area = ""] = path.split("/");
+  return { company, area };
+}
+
+/** The path for the selects' value, as the form has always sent it. */
+export function pathOfScope({ company, area }: Scope): string {
+  if (company === "") return "";
+  if (company === INSTALLATION) return "installation";
   return area ? `${company}/${area}` : company;
 }
 

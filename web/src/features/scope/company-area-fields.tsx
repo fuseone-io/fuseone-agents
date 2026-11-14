@@ -13,12 +13,14 @@ import { useScopeLists } from "@/features/scope/use-scope-lists";
  *
  * `area` says what the area select is for: "whole" offers the whole company
  * beside its areas, "required" asks for one area, and "none" leaves the area
- * select out. `errors` are i18n keys the form's validation gave.
+ * select out. `installation` offers the installation as a company of its own,
+ * `*`. `errors` are i18n keys the form's validation gave.
  */
 export type CompanyAreaShape = {
   idPrefix: string;
   labelClass?: string;
   area?: "whole" | "required" | "none";
+  installation?: boolean;
   errors?: { company?: string; area?: string };
 };
 
@@ -45,6 +47,7 @@ export function CompanyAreaFields({
   const mode = shape.area ?? "whole";
   const companies = companyOptions(data.companies, value.company, {
     scopes: data.scopes,
+    installation: shape.installation,
   });
   const areas = areaOptions(data.scopes, value.company, value.area).filter(
     (option) => mode === "whole" || option.state !== "whole",

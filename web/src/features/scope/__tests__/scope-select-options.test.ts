@@ -46,6 +46,15 @@ describe("the companies a grant may name", () => {
     ]);
   });
 
+  // A ceiling may apply to the installation itself, which no company names.
+  it("offers the installation first when asked, and still keeps an unknown company", () => {
+    expect(companyOptions(companies, "legacy", { installation: true })).toEqual([
+      { value: "*", label: "", state: "installation" },
+      { value: "acme", label: "ACME", state: "active" },
+      { value: "legacy", label: "legacy", state: "unknown" },
+    ]);
+  });
+
   // The company list needs authority over the installation; the areas do
   // not. Without the list, the areas' companies are what can be offered,
   // and a held company outside them is still not called unregistered.

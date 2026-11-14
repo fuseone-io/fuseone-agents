@@ -32,6 +32,8 @@ const INSTALLATION = "*";
 export type CompanyOffer = {
   /** The areas: their companies stand in when the company list is refused. */
   scopes?: RegisteredScope[];
+  /** The installation is a choice of its own, not only a value held. */
+  installation?: boolean;
 };
 
 export function companyOptions(
@@ -47,13 +49,13 @@ export function companyOptions(
       label: c.label || c.id,
       state: c.archived ? "withdrawn" : "active",
     }));
-  if (current === INSTALLATION) {
-    return [{ value: INSTALLATION, label: "", state: "installation" }, ...offered];
-  }
-  if (current && !listed.some((c) => c.id === current)) {
+  const installation = current === INSTALLATION || offer.installation;
+  if (current && current !== INSTALLATION && !listed.some((c) => c.id === current)) {
     offered.push(asHeld(current, companies));
   }
-  return offered;
+  return installation
+    ? [{ value: INSTALLATION, label: "", state: "installation" }, ...offered]
+    : offered;
 }
 
 export function areaOptions(

@@ -156,7 +156,6 @@
     "retention": "Retention",
     "sayCompany": "Say which company the area belongs to.",
     "sayScope": "Say what this ceiling applies to.",
-    "scopeShapes": "<code>installation</code>, a company, or <code>company/area</code>.",
     "searchAreas": "Search areas",
     "searchTools": "Search tools…",
     "sections": "Administration sections",
