@@ -22,8 +22,15 @@ export function scopeOfPath(path: string): Scope {
   return { company, area };
 }
 
-/** The path for the selects' value, as the form has always sent it. */
-export function pathOfScope({ company, area }: Scope): string {
+/**
+ * The path for the selects' value, as the form has always sent it. Each part
+ * loses its own outer spaces before they are joined: typed in free mode,
+ * " acme " and " cx " are acme/cx, which the server would otherwise take as
+ * another scope.
+ */
+export function pathOfScope(scope: Scope): string {
+  const company = scope.company.trim();
+  const area = scope.area.trim();
   if (company === "") return "";
   if (company === INSTALLATION) return "installation";
   return area ? `${company}/${area}` : company;
