@@ -141,7 +141,7 @@ describe("integrations for an administrator who configures an area's connectors"
     expect(screen.getAllByRole("button", { name: "Editar" })).toHaveLength(1);
   });
 
-  it.each(["/integrations/providers", "/integrations/channels", "/integrations/mcp"])(
+  it.each(["/integrations/providers", "/integrations/channels"])(
     "take them from %s, which is the platform's, to the connected servers",
     async (path) => {
       signedInAs([], areaAdmin);
@@ -166,21 +166,44 @@ describe("integrations for an administrator who configures an area's connectors"
     expect(screen.queryByRole("button", { name: "Conectar sistema" })).not.toBeInTheDocument();
   });
 
-  it("show them the connectors and the connected servers, and none of the platform's sections", async () => {
+  it("show them what they connect and their credentials, and none of the platform's sections", async () => {
     signedInAs([], areaAdmin);
     openAt("/integrations/connectors");
 
     expect(
       await screen.findByRole("link", { name: "Connectors" }, { timeout: LAZY_SCREEN }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Conectados" })).toBeInTheDocument();
-    for (const section of ["Provedores de modelo", "Disponíveis", "Canais"]) {
+    for (const section of ["Conectados", "Disponíveis", "Credenciais"]) {
+      expect(screen.getByRole("link", { name: section }), section).toBeInTheDocument();
+    }
+    for (const section of ["Provedores de modelo", "Canais"]) {
       expect(screen.queryByRole("link", { name: section }), section).not.toBeInTheDocument();
     }
   });
 
-  // Each of these is the platform's, and would answer 403. The listing of MCP
-  // servers is theirs too now: it holds their own and what they inherit.
+  // Connecting a server starts at the catalogue for them too: the recipes
+  // name nothing of this installation, and the form places the server only
+  // where they may.
+  it("open the catalogue, where they connect a server by its address too", async () => {
+    signedInAs([], areaAdmin);
+    openAt("/integrations/mcp");
+
+    expect(
+      await screen.findByRole("button", { name: "Conectar por endereço" }, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+  });
+
+  it("open their personal credentials", async () => {
+    signedInAs([], areaAdmin);
+    openAt("/integrations/credentials");
+
+    expect(
+      await screen.findByRole("link", { name: "Credenciais" }, { timeout: LAZY_SCREEN }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  // Channels are the platform's, and would answer 403. The listing of MCP
+  // servers, the catalogue and their own credentials are theirs.
   it("ask for none of the platform's lists", async () => {
     signedInAs([], areaAdmin);
     openAt("/integrations");
@@ -190,9 +213,9 @@ describe("integrations for an administrator who configures an area's connectors"
       new URL(input instanceof Request ? input.url : String(input), "http://console").pathname,
     );
     expect(asked.some((path) => path.endsWith("/admin/integrations"))).toBe(true);
-    const platformLists = ["/admin/channels", "/admin/integrations/recipes", "/integrations/mcp-credentials"];
-    for (const list of platformLists) {
-      expect(asked.filter((path) => path.endsWith(list)), list).toEqual([]);
+    expect(asked.filter((path) => path.endsWith("/admin/channels"))).toEqual([]);
+    for (const own of ["/admin/integrations/recipes", "/integrations/mcp-credentials"]) {
+      expect(asked.some((path) => path.endsWith(own)), own).toBe(true);
     }
   });
 });

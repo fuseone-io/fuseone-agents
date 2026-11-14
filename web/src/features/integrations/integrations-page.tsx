@@ -72,15 +72,15 @@ export function IntegrationsPage({
   const navigate = useNavigate();
   const { data: me } = useMe();
   const access = integrationAccess(me);
-  // Providers, channels and recipes are the platform's; MCP servers and
-  // connector instances are their own scope's (NT-019). An area's
-  // administrator asks for none of the platform's lists, each of which would
-  // answer 403. The servers' listing answers them with their own and what
-  // they inherit.
+  // Providers and channels are the platform's; MCP servers and connector
+  // instances are their own scope's (NT-019). An area's administrator asks
+  // for neither platform list, each of which would answer 403. The servers'
+  // listing answers them with their own and what they inherit; the catalogue
+  // and their own credentials are theirs to read.
   const integrations = useIntegrations(access.servers);
-  const recipes = useRecipes(access.platform);
+  const recipes = useRecipes(access.catalogue);
   const channels = useChannels(access.platform);
-  const credentials = useMCPUserCredentials(access.platform);
+  const credentials = useMCPUserCredentials(access.credentials);
   // Asked whenever the connectors are offered, not only on their section:
   // the rail counts them from the moment the page opens.
   const connectorCatalog = useConnectorCatalog(access.connectors);
@@ -152,15 +152,10 @@ export function IntegrationsPage({
         ) : section === "connected" ? (
           <ConnectedServersSection
             servers={servers}
-            // The catalogue is the platform's; an area's configurer connects
-            // a server by its address, in the sheet (NT-019).
-            // Offered only to whoever may create one somewhere (NT-019).
+            // Connecting starts at the catalogue, offered only to whoever may
+            // create a server somewhere (NT-019).
             onAdd={
-              !access.createServer
-                ? undefined
-                : access.platform
-                  ? () => void navigate("/integrations/mcp")
-                  : () => setEditing({ kind: "server", value: null })
+              access.createServer ? () => void navigate("/integrations/mcp") : undefined
             }
             onEdit={(server) => setEditing({ kind: "server", value: server })}
           />

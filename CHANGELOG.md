@@ -30,6 +30,17 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **An area's administrator connects servers from the catalogue and keeps their own
+  credentials.** `GET /admin/integrations/recipes` answers whoever holds
+  `provider:write` in any scope, not only the platform's classifiers: a recipe names
+  a server other people publish, nothing of this installation. In the console the
+  area's integrations show the catalogue and the personal credentials beside the
+  connected servers and the connectors, and adding a server starts at the
+  catalogue. A recipe reached only by a local command is read, not offered: an
+  area's server is remote. Model providers and channels stay the platform's.
+
 ### Fixed
 
 - **Publishing an agent refuses an MCP tool its scope cannot reach.** NT-019 requires

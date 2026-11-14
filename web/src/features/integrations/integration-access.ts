@@ -4,10 +4,10 @@ import type { Me, MeScope } from "@/features/session/api";
  * What the caller may open and change under integrations (NT-019).
  *
  * Connector instances and MCP servers are configured at their own scope, so
- * an area's administrator works on them. Providers, channels and the MCP
- * catalogue are still the platform's: they open and change only for what is
- * held there. A server that predates `platform` answers for `can` alone, as
- * before.
+ * an area's administrator works on them, starting from the MCP catalogue, and
+ * keeps their own personal credentials. Providers and channels are still the
+ * platform's: they open and change only for what is held there. A server that
+ * predates `platform` answers for `can` alone, as before.
  */
 export interface IntegrationAccess {
   /** The session has answered. Until it does, nothing of the platform is asked for. */
@@ -28,6 +28,10 @@ export interface IntegrationAccess {
   servers: boolean;
   /** May create an MCP server somewhere. */
   createServer: boolean;
+  /** Opens the MCP catalogue: the platform's readers, and whoever connects a server somewhere. */
+  catalogue: boolean;
+  /** Opens the caller's own credentials for the servers they see. */
+  credentials: boolean;
 }
 
 export function integrationAccess(me: Me | null | undefined): IntegrationAccess {
@@ -49,6 +53,8 @@ export function integrationAccess(me: Me | null | undefined): IntegrationAccess 
     configure: me?.configure ?? [],
     servers: opensAll || writes,
     createServer: writes,
+    catalogue: opensAll || writes,
+    credentials: opensAll || writes,
   };
 }
 
@@ -62,4 +68,6 @@ const open: IntegrationAccess = {
   configure: [],
   servers: true,
   createServer: true,
+  catalogue: true,
+  credentials: true,
 };

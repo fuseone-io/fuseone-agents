@@ -68,7 +68,8 @@ const sections: {
   },
 ];
 
-const areaSections: IntegrationSection[] = ["connected", "connectors"];
+/** What an area's configurer opens (NT-019); providers and channels are the platform's. */
+const areaSections: IntegrationSection[] = ["connected", "available", "connectors", "credentials"];
 
 /**
  * The four jobs under integrations, with one side rail.
