@@ -30,6 +30,19 @@ const waiting = (toolId: string, company: string, area = ""): Tool => ({
 });
 const TOOLS = [waiting("crm.search", "acme", "cx"), waiting("shared.search", "*")];
 
+/*
+As the server answers: a target holds the tools whose scope contains it, which
+for `acme` is the company's and the installation's and never `acme/cx`'s;
+`classifiable` holds what the caller governs (the stub's two tools stand for
+it, the installation's included, so the per-row guard is still exercised).
+*/
+function answered(query: URLSearchParams): Tool[] {
+  if (query.get("classifiable") === "true") return TOOLS;
+  const [company, area = ""] = (query.get("scope") ?? "*").split("/");
+  return TOOLS.filter(({ scope }) =>
+    scope?.company === "*" || (scope?.company === company && (scope?.area === "" || scope?.area === area)));
+}
+
 function world(me: object) {
   const asked: Recorded[] = [];
   const urls: URL[] = [];
@@ -41,7 +54,7 @@ function world(me: object) {
     asked.push({ method: request.method, path, ifMatch: null, body: text ? JSON.parse(text) : undefined });
     urls.push(url);
     if (path === "/me") return json(me);
-    if (path === "/admin/tools") return json({ items: TOOLS });
+    if (path === "/admin/tools") return json({ items: answered(url.searchParams) });
     if (path.endsWith("/classification")) return json({});
     return json({}, 404);
   });
@@ -64,13 +77,13 @@ beforeEach(() => setLocale("pt-BR"));
 afterEach(() => vi.unstubAllGlobals());
 
 describe("an area's curator in the queue", () => {
-  it("asks for the tools of each scope they classify at", async () => {
+  it("asks once for what they govern, not for a target", async () => {
     const { urls } = world(AREA_CURATOR);
     show();
 
     await screen.findByText("crm.search");
-    const scopes = urls.filter((u) => u.pathname.endsWith("/admin/tools"));
-    expect(scopes.map((u) => u.searchParams.get("scope"))).toEqual(["acme/cx"]);
+    const asked = urls.filter((u) => u.pathname.endsWith("/admin/tools"));
+    expect(asked.map((u) => u.search)).toEqual(["?classifiable=true"]);
   });
 
   it("is offered their own tool, not the installation's", async () => {
@@ -93,5 +106,19 @@ describe("an area's curator in the queue", () => {
 
     await waitFor(() => expect(asked.some((r) => r.method === "PUT")).toBe(true));
     expect(asked.find((r) => r.method === "PUT")?.body).toMatchObject({ level: "owner" });
+  });
+});
+
+/*
+A company's grant classifies its areas' tools. A target answer for `acme`
+holds only what contains acme, so the queue asks what the curator governs.
+*/
+describe("a company's curator in the queue", () => {
+  it("is offered a tool of one of the company's areas", async () => {
+    world({ ...AREA_CURATOR, classify: [{ company: "acme", area: "" }] });
+    show();
+
+    await screen.findByText("crm.search");
+    expect(within(row("crm.search")).getByRole("button", { name: "Classificar" })).toBeInTheDocument();
   });
 });

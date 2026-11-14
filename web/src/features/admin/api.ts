@@ -22,6 +22,7 @@ export type ScopeBudget = components["schemas"]["ScopeBudget"];
 export const adminKeys = {
   all: ["admin"] as const,
   tools: (scope?: string) => [...adminKeys.all, "tools", scope ?? ""] as const,
+  classifiable: () => [...adminKeys.all, "tools", "classifiable"] as const,
   events: (target?: string) =>
     [...adminKeys.all, "events", target ?? ""] as const,
   budgets: () => [...adminKeys.all, "budgets"] as const,
@@ -36,6 +37,24 @@ export const adminKeys = {
  */
 export function useTools(enabled = true, scope?: string) {
   return useQuery({ ...toolsQuery(scope), enabled });
+}
+
+/**
+ * The tools the caller may rule on as their owner, every tool for the
+ * platform's curator (NT-019): the curator's queue, in one request. A target
+ * answer runs the other way and would never hold a company's areas' tools.
+ */
+export function useClassifiableTools(enabled = true) {
+  return useQuery({
+    queryKey: adminKeys.classifiable(),
+    enabled,
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/admin/tools", {
+          params: { query: { classifiable: true } },
+        }),
+      ),
+  });
 }
 
 /** The catalogue's query for one target, shared by every reader of it. */
