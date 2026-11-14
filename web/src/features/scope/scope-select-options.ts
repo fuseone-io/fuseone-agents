@@ -2,15 +2,15 @@ import type { Company } from "@/features/companies/api";
 import type { RegisteredScope } from "@/features/scope/api";
 
 /**
- * What the company and area selects of a grant offer.
+ * What a company and an area select offer.
  *
- * A select can only show a value it lists, so whatever a grant already names
+ * A select can only show a value it lists, so whatever a form already holds
  * is always listed — a withdrawn company, or a scope from before areas were
- * registered, or one the lists failed to bring. Otherwise opening the editor
- * and saving would silently change a grant nobody touched.
+ * registered, or one the lists failed to bring. Otherwise opening an editor
+ * and saving would silently change a record nobody touched.
  */
 
-/** The area value of a grant over a whole company. A select item cannot be "". */
+/** The area value over a whole company. A select item cannot be "". */
 export const WHOLE_COMPANY = "__whole_company__";
 
 export type ScopeOptionState =
@@ -28,9 +28,16 @@ export type ScopeOption = {
 
 const INSTALLATION = "*";
 
+/** What else a company select may offer. */
+export type CompanyOffer = {
+  /** The installation is a choice of its own, not only a value held. */
+  installation?: boolean;
+};
+
 export function companyOptions(
   companies: Company[] | undefined,
   current: string,
+  offer: CompanyOffer = {},
 ): ScopeOption[] {
   const listed = companies ?? [];
   const offered: ScopeOption[] = listed
@@ -40,13 +47,13 @@ export function companyOptions(
       label: c.label || c.id,
       state: c.archived ? "withdrawn" : "active",
     }));
-  if (current === INSTALLATION) {
-    return [{ value: INSTALLATION, label: "", state: "installation" }, ...offered];
-  }
-  if (current && !listed.some((c) => c.id === current)) {
+  const installation = current === INSTALLATION || offer.installation;
+  if (current && current !== INSTALLATION && !listed.some((c) => c.id === current)) {
     offered.push(asHeld(current, companies));
   }
-  return offered;
+  return installation
+    ? [{ value: INSTALLATION, label: "", state: "installation" }, ...offered]
+    : offered;
 }
 
 export function areaOptions(

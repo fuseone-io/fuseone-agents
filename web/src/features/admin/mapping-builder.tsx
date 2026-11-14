@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/select";
 import { MappingField } from "@/features/admin/mapping-field";
 import type { GroupMapping } from "@/features/admin/identity-api";
+import { CompanyAreaFields } from "@/features/scope/company-area-fields";
+import { ScopeListsNotice } from "@/features/scope/scope-lists-notice";
 
 const ROLES: GroupMapping["role"][] = [
   "admin",
@@ -20,7 +22,11 @@ const ROLES: GroupMapping["role"][] = [
   "auditor",
 ];
 
-/** Which group gets which role, where. */
+/**
+ * Which group gets which role, where. The group is the identity provider's
+ * and is typed; where is chosen from what is registered. The installation,
+ * `*`, comes from its own button.
+ */
 export function MappingBuilder({
   mappings,
   onChange,
@@ -51,17 +57,10 @@ export function MappingBuilder({
             onChange={(group) => update(index, { group })}
             id={`group-${index}`}
           />
-          <MappingField
-            label={t("identity.company")}
-            value={mapping.company}
-            onChange={(company) => update(index, { company })}
-            id={`company-${index}`}
-          />
-          <MappingField
-            label={t("identity.area")}
-            value={mapping.area}
-            onChange={(area) => update(index, { area })}
-            id={`area-${index}`}
+          <CompanyAreaFields
+            value={mapping}
+            shape={{ idPrefix: `mapping-${index}`, labelClass: "text-xs" }}
+            onChange={(scope) => update(index, scope)}
           />
 
           <div className="flex flex-col gap-1.5">
@@ -131,6 +130,9 @@ export function MappingBuilder({
           {t("identity.addAdminMapping")}
         </Button>
       </div>
+      {mappings.length > 0 && (
+        <ScopeListsNotice message={t("scope.listsFailed")} />
+      )}
     </div>
   );
 }

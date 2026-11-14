@@ -47,7 +47,7 @@ describe("Gravitee connector instance editor", () => {
   it("loads the configurer-only detail before mounting the edit form", async () => {
     let request: Request | undefined;
     vi.stubGlobal("fetch", async (next: Request) => {
-      request = next;
+      if (next.url.includes("/connectors/instances/")) request = next;
       return new Response(
         JSON.stringify({
           ...listed,

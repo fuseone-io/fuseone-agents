@@ -1,4 +1,4 @@
-import { Trans, useTranslation } from "react-i18next";
+import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { usePutBudget, type ScopeBudget } from "@/features/admin/api";
 import { scopePath } from "@/features/admin/budget-scope";
+import { BudgetScopeField } from "@/features/admin/budget-scope-field";
 import { problemMessage } from "@/lib/api/problem-message";
 import { microsFromText, textFromMicros } from "@/lib/money";
 
@@ -44,6 +45,8 @@ const schema = z.object({
   enabled: z.boolean(),
 });
 
+export type BudgetValues = z.infer<typeof schema>;
+
 export function BudgetForm({
   budget,
   onClose,
@@ -53,7 +56,7 @@ export function BudgetForm({
 }) {
   const { t } = useTranslation();
   const put = usePutBudget();
-  const form = useForm<z.infer<typeof schema>>({
+  const form = useForm<BudgetValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       scope: budget ? scopePath(budget) : "",
@@ -64,7 +67,7 @@ export function BudgetForm({
     },
   });
 
-  async function submit(values: z.infer<typeof schema>) {
+  async function submit(values: BudgetValues) {
     try {
       await put.mutateAsync({
         scope: values.scope.trim(),
@@ -97,29 +100,9 @@ export function BudgetForm({
           className="flex min-h-0 flex-1 flex-col"
         >
           <PropertiesSheetBody className="space-y-4">
-            <FormField
+            <BudgetScopeField
               control={form.control}
-              name="scope"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("admin.appliesTo")}</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      disabled={!!budget}
-                      className="font-mono"
-                      placeholder="acme/cx"
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    <Trans
-                      i18nKey="admin.scopeShapes"
-                      components={{ code: <code className="font-mono" /> }}
-                    />
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
+              locked={!!budget}
             />
 
             <FormField

@@ -1,9 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { firstOffered } from "@/features/admin/grant-scope-options";
+import { firstOffered } from "@/features/scope/scope-select-options";
 import type { GrantInput } from "@/features/admin/people-api";
-import { useGrantScopes } from "@/features/admin/use-grant-scopes";
+import { useScopeLists } from "@/features/scope/use-scope-lists";
 
 /**
  * The two ways to add a grant. A new one starts on the first company that can
@@ -20,7 +20,7 @@ export function GrantAddButtons({
   onAdd: (grant: GrantInput) => void;
 }) {
   const { t } = useTranslation();
-  const { data } = useGrantScopes();
+  const { data } = useScopeLists();
   const hasInstallationAdmin = granted.some(
     (g) => g.company === "*" && g.area === "" && g.role === "admin",
   );

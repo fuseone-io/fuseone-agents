@@ -2,8 +2,9 @@ import type { Company } from "@/features/companies/api";
 import type { RegisteredScope } from "@/features/scope/api";
 
 /**
- * The two lists a grant's selects read, as the server answers them: every
- * company with withdrawn ones marked, and the areas ordered by company.
+ * The two lists the company and area selects read, as the server answers
+ * them: every company with withdrawn ones marked, and the areas ordered by
+ * company.
  */
 export const COMPANIES: Company[] = [
   { id: "acme", label: "Acme", areas: 2, archived: false },
@@ -23,16 +24,23 @@ const json = (body: unknown) =>
     headers: { "Content-Type": "application/json" },
   });
 
-/** Answers the two lists, or undefined for any other path. */
-export function grantScopesRoute(
+/**
+ * Answers the two lists, or undefined for any other path. `fail` fails both;
+ * `companies` replaces the company list, refuses it as the server does a
+ * caller without authority over the installation, or fails it alone.
+ */
+export function scopeListsRoute(
   method: string,
   path: string,
-  lists: { fail?: boolean } = {},
+  lists: { fail?: boolean; companies?: Company[] | "refused" | "failing" } = {},
 ): Response | undefined {
   if (method !== "GET") return undefined;
   if (path !== "/admin/companies" && path !== "/admin/scopes") return undefined;
   if (lists.fail) return new Response(null, { status: 500 });
-  return json({ items: path === "/admin/companies" ? COMPANIES : SCOPES });
+  if (path === "/admin/scopes") return json({ items: SCOPES });
+  if (lists.companies === "refused") return new Response(null, { status: 403 });
+  if (lists.companies === "failing") return new Response(null, { status: 500 });
+  return json({ items: lists.companies ?? COMPANIES });
 }
 
 /** Where a fetch was aimed, whether it was given a Request or a string. */

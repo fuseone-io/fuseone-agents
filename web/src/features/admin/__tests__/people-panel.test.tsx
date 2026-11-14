@@ -4,9 +4,9 @@ import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  grantScopesRoute,
+  scopeListsRoute,
   pathOf,
-} from "@/features/admin/__tests__/grant-scopes-network";
+} from "@/test/scope-lists-routes";
 import { PeoplePanel } from "@/features/admin/people-panel";
 import type { Person } from "@/features/admin/people-api";
 
@@ -35,7 +35,7 @@ vi.mock("@/features/admin/people-api", async (importOriginal) => {
 function render(ui: ReactElement) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (request: Request) => grantScopesRoute("GET", pathOf(request))),
+    vi.fn(async (request: Request) => scopeListsRoute("GET", pathOf(request))),
   );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },

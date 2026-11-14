@@ -156,7 +156,6 @@
     "retention": "Retenção",
     "sayCompany": "Diga a que empresa a área pertence.",
     "sayScope": "Diga a que este teto se aplica.",
-    "scopeShapes": "<code>installation</code>, uma empresa, ou <code>empresa/área</code>.",
     "searchAreas": "Buscar áreas",
     "searchTools": "Buscar ferramenta…",
     "sections": "Seções de administração",
@@ -219,8 +218,6 @@
     "standingRevokeBody": "{{tool}} para {{agent}} volta a exigir um clique humano em cada uso. A linha fica na trilha.",
     "standingSuggestTools": "Sugerir ferramentas governadas",
     "standingSuggestAgents": "Sugerir agentes",
-    "standingSuggestCompanies": "Sugerir empresas declaradas",
-    "standingSuggestAreas": "Sugerir áreas declaradas",
     "standingDailyCapHint": "Usos que este mandato pode liberar por dia."
   },
   "agents": {
@@ -2380,7 +2377,6 @@
     "subtitle": "Quem consegue acessar o console, e o que cada pessoa pode fazer em qual empresa.",
     "summary": "{{noRole}} sem papel · {{local}} com senha local",
     "title": "Pessoas",
-    "unknownScope": "{{label}} (não registrada)",
     "username": "Usuário",
     "usernameHint": "Letras, números, ponto, hífen e sublinhado.",
     "usernameShape": "Use 3 ou mais caracteres: letras, números, ponto, hífen ou sublinhado.",
@@ -2390,10 +2386,7 @@
       "local": "Local",
       "noRole": "Sem papel",
       "provider": "Provedor"
-    },
-    "wholeCompany": "Toda a empresa",
-    "wholeInstallation": "Toda a instalação",
-    "withdrawnScope": "{{label}} (retirada)"
+    }
   },
   "policies": {
     "addCondition": "Adicionar condição",
@@ -2973,7 +2966,15 @@
   "scope": {
     "everything": "Tudo o que eu alcanço",
     "label": "Contexto",
+    "listsFailed": "Não foi possível carregar as empresas e áreas. O que já está escolhido continua aparecendo.",
     "noAreas": "Nenhuma área declarada",
+    "noSuggestions": "Nenhuma conhecida. Digite o identificador.",
+    "optionUnknown": "{{label}} (não registrada)",
+    "optionWholeCompany": "Toda a empresa",
+    "optionWholeInstallation": "Toda a instalação",
+    "optionWithdrawn": "{{label}} (retirada)",
+    "suggestAreas": "Sugerir áreas conhecidas",
+    "suggestCompanies": "Sugerir empresas conhecidas",
     "wholeCompany": "Toda a {{company}}"
   },
   "serviceAccounts": {

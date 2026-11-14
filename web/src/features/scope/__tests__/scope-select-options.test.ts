@@ -5,7 +5,7 @@ import {
   areaOptions,
   companyOptions,
   WHOLE_COMPANY,
-} from "@/features/admin/grant-scope-options";
+} from "@/features/scope/scope-select-options";
 
 const company = (id: string, archived = false): Company => ({
   id,
@@ -43,6 +43,15 @@ describe("the companies a grant may name", () => {
   it("claims nothing about a company before the list has answered", () => {
     expect(companyOptions(undefined, "acme")).toEqual([
       { value: "acme", label: "acme", state: "active" },
+    ]);
+  });
+
+  // A ceiling may apply to the installation itself, which no company names.
+  it("offers the installation first when asked, and still keeps an unknown company", () => {
+    expect(companyOptions(companies, "legacy", { installation: true })).toEqual([
+      { value: "*", label: "", state: "installation" },
+      { value: "acme", label: "ACME", state: "active" },
+      { value: "legacy", label: "legacy", state: "unknown" },
     ]);
   });
 });

@@ -3,23 +3,31 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Toaster } from "@/components/ui/sonner";
+import type { MCPServer } from "@/features/integrations/api";
 import { ServerEditor } from "@/features/integrations/server-editor";
 import { ScopeChoiceContext, type ScopeChoice } from "@/features/integrations/scope/scope-choice";
 import { useActiveScope } from "@/features/scope/active-scope";
 import { setLocale } from "@/i18n";
 import { json, revisedCollection, stubNetwork } from "@/test/revised-routes";
+import { scopeListsRoute } from "@/test/scope-lists-routes";
 
 // NT-019: a new server is placed at a scope, and outside the installation it
 // is remote, because a local one runs on the platform's worker.
 
 const areaAdmin: ScopeChoice = { anyScope: false, configure: [{ company: "acme", area: "cx" }] };
 
-function connect(choice?: ScopeChoice) {
-  const servers = revisedCollection<{ name: string }>("/admin/integrations/mcp-servers", []);
-  const requests = stubNetwork([servers], (_m, path) =>
-    path === "/admin/integrations" ? json({ mcpServers: [], providers: [] }) : undefined,
+function connect(
+  choice?: ScopeChoice,
+  server: MCPServer | null = null,
+  lists: Parameters<typeof scopeListsRoute>[2] = {},
+) {
+  const servers = revisedCollection<{ name: string }>("/admin/integrations/mcp-servers", server ? [server] : []);
+  const requests = stubNetwork([servers], (method, path) =>
+    path === "/admin/integrations"
+      ? json({ mcpServers: [], providers: [] })
+      : scopeListsRoute(method, path, lists),
   );
-  const editor = <ServerEditor server={null} onClose={vi.fn()} />;
+  const editor = <ServerEditor server={server} onClose={vi.fn()} />;
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       {choice ? <ScopeChoiceContext.Provider value={choice}>{editor}</ScopeChoiceContext.Provider> : editor}
@@ -78,20 +86,6 @@ describe("a new server's scope", () => {
     expect(puts()[0]?.body).toMatchObject({ scopeKind: "installation" });
   });
 
-  // As the connectors do: the outer spaces go, the case stays as typed, since
-  // the server refuses an identifier it would store differently.
-  it("sends a freely typed company and area without their outer spaces", async () => {
-    const user = userEvent.setup();
-    const puts = connect();
-    await user.click(screen.getByRole("combobox", { name: "Escopo do servidor" }));
-    await user.click(await screen.findByRole("option", { name: "Área" }));
-    await user.type(screen.getByLabelText("Empresa"), " Acme ");
-    await user.type(screen.getByLabelText("Área"), " cx ");
-    await fill("crm", "https://crm.example.com/mcp");
-
-    await waitFor(() => expect(puts()).toHaveLength(1));
-    expect(puts()[0]?.body).toMatchObject({ scopeKind: "area", company: "Acme", area: "cx" });
-  });
 
   // The scope the console is reading is where a new server starts, when a
   // grant reaches it: not the first grant listed.
@@ -110,5 +104,116 @@ describe("a new server's scope", () => {
     connect({ anyScope: false, configure: [{ company: "acme", area: "finance" }, { company: "acme", area: "cx" }] });
 
     expect(screen.getByRole("combobox", { name: "Onde o servidor vale" })).toHaveTextContent("acme/cx");
+  });
+});
+
+async function choose(name: string, option: string) {
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("combobox", { name }));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
+
+async function optionsOf(name: string) {
+  await waitFor(() => expect(screen.getByRole("combobox", { name })).toBeEnabled());
+  await userEvent.setup().click(screen.getByRole("combobox", { name }));
+  return screen.getAllByRole("option").map((option) => option.textContent);
+}
+
+// The platform's administration places a server at any registered scope,
+// chosen from the lists rather than typed.
+describe("the platform's free scope", () => {
+  it("offers the registered companies, never a withdrawn one", async () => {
+    connect();
+    await choose("Escopo do servidor", "Área");
+
+    expect(await optionsOf("Empresa")).toEqual(["Acme", "Example"]);
+  });
+
+  it("offers only the chosen company's areas, and an area is required", async () => {
+    connect();
+    await choose("Escopo do servidor", "Área");
+    await choose("Empresa", "Acme");
+
+    expect(await optionsOf("Área")).toEqual(["Financeiro", "Operações"]);
+  });
+
+  it("sends the chosen company and area", async () => {
+    const puts = connect();
+    await choose("Escopo do servidor", "Área");
+    await choose("Empresa", "Acme");
+    await choose("Área", "Operações");
+    await userEvent.setup().click(screen.getByRole("combobox", { name: "Como é alcançado" }));
+    await userEvent.setup().click(await screen.findByRole("option", { name: "Endereço remoto (HTTP)" }));
+    await fill("crm", "https://crm.example.com/mcp");
+
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    expect(puts()[0]?.body).toMatchObject({ scopeKind: "area", company: "acme", area: "ops" });
+  });
+
+  it("refuses an area server with no area chosen, and says so under the select", async () => {
+    const puts = connect();
+    await choose("Escopo do servidor", "Área");
+    await choose("Empresa", "Acme");
+    await userEvent.setup().click(screen.getByRole("combobox", { name: "Como é alcançado" }));
+    await userEvent.setup().click(await screen.findByRole("option", { name: "Endereço remoto (HTTP)" }));
+    await fill("crm", "https://crm.example.com/mcp");
+
+    expect(await screen.findByText("Informe a área.")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Área" })).toHaveAttribute("aria-invalid", "true");
+    expect(puts()).toHaveLength(0);
+  });
+
+  it("sends a company's server with the company alone", async () => {
+    const puts = connect();
+    await choose("Escopo do servidor", "Empresa");
+    await choose("Empresa", "Example");
+    expect(screen.queryByRole("combobox", { name: "Área" })).toBeNull();
+    await userEvent.setup().click(screen.getByRole("combobox", { name: "Como é alcançado" }));
+    await userEvent.setup().click(await screen.findByRole("option", { name: "Endereço remoto (HTTP)" }));
+    await fill("crm", "https://crm.example.com/mcp");
+
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    expect(puts()[0]?.body).toMatchObject({ scopeKind: "company", company: "example" });
+    expect(puts()[0]?.body).not.toHaveProperty("area");
+  });
+
+  it("shows an edited server's unregistered scope, locked", async () => {
+    connect(undefined, {
+      name: "old", transport: "http", url: "https://old.example.com/mcp", enabled: true,
+      scopeKind: "area", company: "legacy", area: "gone", editable: true,
+    });
+
+    const company = await screen.findByRole("combobox", { name: "Empresa" });
+    await waitFor(() => expect(company).toHaveTextContent("legacy (não registrada)"));
+    expect(company).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Área" })).toHaveTextContent("gone (não registrada)");
+  });
+
+  it("says the lists failed, offers a retry, and keeps an edited server's scope", async () => {
+    connect(undefined, {
+      name: "crm", transport: "http", url: "https://crm.example.com/mcp", enabled: true,
+      scopeKind: "area", company: "acme", area: "cx", editable: true,
+    }, { fail: true });
+
+    expect(await screen.findByText(/Não foi possível carregar as empresas e áreas/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Empresa" })).toHaveTextContent("acme");
+    expect(screen.getByRole("combobox", { name: "Área" })).toHaveTextContent("cx");
+  });
+
+  // A platform operator may place a server at any scope without the
+  // authority to list every company: the scope is then typed.
+  it("takes a typed company and area when the company list is refused", async () => {
+    const user = userEvent.setup();
+    const puts = connect(undefined, null, { companies: "refused" });
+    await choose("Escopo do servidor", "Área");
+    await user.type(await screen.findByRole("textbox", { name: "Empresa" }), " Initech ");
+    await user.type(screen.getByRole("textbox", { name: "Área" }), "legacy");
+    await user.click(screen.getByRole("combobox", { name: "Como é alcançado" }));
+    await user.click(await screen.findByRole("option", { name: "Endereço remoto (HTTP)" }));
+    await fill("crm", "https://crm.example.com/mcp");
+
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    expect(puts()[0]?.body).toMatchObject({ scopeKind: "area", company: "Initech", area: "legacy" });
   });
 });
