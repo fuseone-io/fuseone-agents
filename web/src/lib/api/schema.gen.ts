@@ -11171,7 +11171,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description `installation`, a company id, or `company/area`. */
+                /** @description `installation`, a company id, or `company/area`, each written as the platform stores it: lower case, no spaces, one slash. Setting a ceiling refuses another form with 400 rather than folding it; removing one still reads the path by its shape, so a ceiling stored before this check can be removed. */
                 scope: string;
             };
             cookie?: never;
