@@ -465,6 +465,16 @@ tools is blocked, and the block is recorded as a `StepGateDecided` step. No earl
 wall stops it: nothing checks a tool's scope at publication. The console shows the list
 before it asks to confirm.
 
+**The refusal is a snapshot, and the Gate is the guarantee.** The list is the agents
+whose current version names one of the server's tools when the move reads them, inside
+its transaction. It protects whoever moves the server from stranding agents they did not
+see. It promises nothing about later publications: an agent published after the move,
+or alongside it, that names one of these tools from outside the target is published as
+any agent naming an unreachable tool is today. Its runs are blocked by `checkScope` and
+recorded. The move takes no publication lock, and publication gains no check from this
+note. Checking a tool's scope at publication would be a rule for every tool, not for
+moved servers alone, and it gets its own decision.
+
 **One transaction, in the order the PUT already takes locks** (`integrations.go:321-331`):
 
 1. The name lock `mcp_server:<name>`. Every write to the server takes it first, so a PUT
