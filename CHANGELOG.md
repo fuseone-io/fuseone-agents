@@ -32,8 +32,9 @@ field" is a commit message.
 
 NT-019 phase 2, the writers' release, part one: the administrator of an area configures
 that area's own MCP servers, and the area's curator classifies their tools under the
-platform's ceiling. The servers are remote; local servers stay the platform's. Adds
-migration `0110_area_mcp_servers_are_remote`.
+platform's ceiling. The servers are remote; local servers stay the platform's. What an
+author picks tools and providers from is asked for the agent's scope. Adds migration
+`0110_area_mcp_servers_are_remote`.
 
 ### Upgrade notes
 
@@ -48,6 +49,10 @@ migration `0110_area_mcp_servers_are_remote`.
   too, with their own servers, the ones they inherit, and those of the areas they
   govern; never a sibling area's. Each server says where it is stored and whether the
   caller may change it (`editable`).
+- **The tool catalogue (`GET /admin/tools`) answers less without a target.** A reader of
+  `tool:read` at the platform's administration still gets every tool. Anyone else
+  without `scope` now gets only the installation's tools; an area's or a company's
+  tools are answered when the request names a target they reach (`?scope=acme/cx`).
 - **Withdrawing the platform's ruling on a tool needs every worker on this release.** A
   worker on 0.109.0 or older keeps applying a withdrawn ruling that has no owner's ruling
   under it until it restarts; this release's worker stops the tool at its next sync.
@@ -111,9 +116,37 @@ migration `0110_area_mcp_servers_are_remote`.
     owner's ruling under a platform ruling marked `overridden`.
   - The console still classifies at the platform's level only; `tool:classify` stays
     advertised from the platform's administration until it offers `level: owner`.
+- **What an author picks from is asked for one target scope.**
+  - `GET /admin/tools` takes `scope`, `company` or `company/area`, and answers every
+    tool an agent stored there can run: those whose server's (or connector instance's)
+    runtime scope contains the target, the target's own, its company's and the
+    installation's, never a sibling area's. It is the Gate's scope check over the same
+    scopes. Every other field of an entry, `rulings` included, is unchanged.
+  - The caller holds `tool:read` at a scope containing the target, or at the platform's
+    administration; otherwise 404, so the answer does not confirm a scope the caller
+    cannot see. A target not stored as given (upper case, spaces, a missing part, the
+    installation's `*`) answers 400.
+  - Without `scope`, the platform's administration keeps every tool, the screen the
+    ceiling is ruled from; anyone else gets the installation's tools.
+  - A new `GET /providers`, on `tool:read`, answers each provider's name, kind, models
+    and whether this installation would ask it now (`usable`), never an address, a key
+    or anything sealed. It is asked for a target by the same rule; providers are the
+    installation's today, so every reachable target is answered them.
+  - The worker still reads every ruling whatever a listing asked for: the filter is in
+    the listing, never in the rulings a sync applies.
+  - Each listed tool says where its server is stored (`scope`), and a tool's scope is
+    read in the same snapshot as the tool, so a server moved meanwhile never hands one
+    area's tool to another.
+  - `/me` tells an area curator where it classifies (`classify`), for the console that
+    offers an owner's ruling per tool.
+  - The console does not send `scope` yet; the agent editor moves to these answers
+    next.
 
 ### Fixed
 
+- **The ticket answer is listed as the installation's.** The runtime served it to every
+  scope, but its catalogue entry carried no scope, so the flow check left it out of the
+  rulings it reads.
 - **A tool no ruling decides reads unclassified at the worker's next sync.** The worker
   applied the rulings it read and left every other tool as it was, enough while rulings
   were only ever replaced. A withdrawn platform ruling, or an owner's ruling whose server

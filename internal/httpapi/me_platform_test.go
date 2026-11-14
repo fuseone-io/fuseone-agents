@@ -103,3 +103,15 @@ func TestMeFrom_anAuthor_configuresNowhere(t *testing.T) {
 		t.Errorf("configure = %v, can = %v, want neither to configure", me.Configure, me.Can)
 	}
 }
+
+// An area curator is told where it classifies (NT-019), for the console that
+// rules per tool. tool:classify stays out of `can` until that console ships.
+func TestMeFrom_anAreaAdministrator_isToldWhereItClassifies(t *testing.T) {
+	t.Parallel()
+	me := meFrom(areaAdministrator())
+
+	want := []MeScope{{Company: "acme", Area: "cx"}}
+	if !slices.Equal(me.Classify, want) {
+		t.Errorf("classify = %v, want %v", me.Classify, want)
+	}
+}

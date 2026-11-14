@@ -76,37 +76,46 @@ func serverScopes(ctx context.Context, q settings.DB) (map[string]domain.Scope, 
 	return out, rows.Err()
 }
 
+// placeTools gives each listed tool the runtime scope of the server that
+// declares it (NT-019): what a run must be inside to reach it, as the worker's
+// catalogue reads it (tools.Catalog.Scope). A server no row holds, one a --mcp
+// flag connected, is the installation's.
+func placeTools(ctx context.Context, q settings.DB, entries []domain.ToolEntry) error {
+	scopes, err := serverScopes(ctx, q)
+	if err != nil {
+		return err
+	}
+	for i, e := range entries {
+		scope, configured := scopes[e.Server]
+		if !configured {
+			scope = domain.Scope{Company: domain.Installation}
+		}
+		entries[i].Scope = scope
+	}
+	return nil
+}
+
 // rulingsInForce is the ruling each listed tool is under, chosen as the worker
 // chooses it (domain.RulingsInForce): the platform's over the owner's, and the
-// owner only at the scope of the tool's server. Listed beside it are both
-// rulings, as domain.RulingsOf reads them, for the screen.
-func (c *Curator) rulingsInForce(
-	ctx context.Context, entries []domain.ToolEntry, rulings []domain.ToolClassification,
-) (map[domain.ToolID]domain.ToolClassification, map[domain.ToolID][]domain.ToolRuling, error) {
-	scopes, err := serverScopes(ctx, c.pool)
-	if err != nil {
-		return nil, nil, err
-	}
-	serverOf := make(map[domain.ToolID]string, len(entries))
+// owner only at the scope of the tool's server, which placeTools gave each
+// entry. Listed beside it are both rulings, as domain.RulingsOf reads them,
+// for the screen.
+func rulingsInForce(
+	entries []domain.ToolEntry, rulings []domain.ToolClassification,
+) (map[domain.ToolID]domain.ToolClassification, map[domain.ToolID][]domain.ToolRuling) {
+	placed := make(map[domain.ToolID]domain.Scope, len(entries))
 	for _, e := range entries {
-		serverOf[e.ID] = e.Server
+		placed[e.ID] = e.Scope
 	}
-	installation := domain.Scope{Company: domain.Installation}
 	scopeOf := func(id domain.ToolID) (domain.Scope, bool) {
-		server, ok := serverOf[id]
-		if !ok {
-			return domain.Scope{}, false
-		}
-		if scope, configured := scopes[server]; configured {
-			return scope, true
-		}
-		return installation, true
+		scope, ok := placed[id]
+		return scope, ok
 	}
 	out := map[domain.ToolID]domain.ToolClassification{}
 	for _, r := range domain.RulingsInForce(rulings, scopeOf) {
 		out[r.Tool] = r
 	}
-	return out, domain.RulingsOf(rulings, scopeOf), nil
+	return out, domain.RulingsOf(rulings, scopeOf)
 }
 
 // MCPServerStoredAt is mcpServerAt, for a door that authorizes at the row's

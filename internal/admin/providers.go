@@ -50,6 +50,7 @@ func providerFromRow(row settings.Setting) (domain.ModelProvider, error) {
 		Models:               stored.Models,
 		AutoToolChoiceModels: stored.AutoToolChoiceModels,
 		Enabled:              row.Enabled, HasKey: row.HasSecret,
+		Scope:     mcpServerRuntimeScope(row.ScopeKind, row.Scope),
 		UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
 	}, nil
 }

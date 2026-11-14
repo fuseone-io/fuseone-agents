@@ -175,6 +175,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The model providers an author picks from
+         * @description The reduced answer an agent's author picks a provider and a model from (NT-019, rule 5): each provider's name, kind, models, and whether this installation could ask it now. Never an address, a key, a header or anything sealed; configuring providers is GET /admin/integrations.
+         *     Read with tool:read in any scope, asked for one target as ListTools is. With `scope`, the answer is every provider whose runtime scope contains the target. The caller must hold tool:read at a scope containing the target, or at the platform's administration; otherwise 404. Without `scope`, a reader at the platform's administration gets every provider and anyone else the installation's. Providers are stored at the installation today, so every reachable target is answered the installation's.
+         */
+        get: operations["listProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs": {
         parameters: {
             query?: never;
@@ -1565,6 +1586,7 @@ export interface paths {
          * Every tool the platform knows, and what it is classified as
          * @description Tools arrive from their servers unclassified whatever the server claims about itself, and an unclassified tool is refused at run time. Saying what one does is a separate, recorded act.
          *     Where the platform already knows the server, each tool carries a suggestion with its reasoning, so that act is a confirmation rather than forty rulings invented from a list of bare names. A suggestion is never a classification.
+         *     Read with tool:read in any scope (NT-019). With `scope`, the answer is every tool an agent stored at that target can run: the tools whose server's runtime scope contains it, the target's own, its company's and the installation's, and no sibling area's. The caller must hold tool:read at a scope containing the target, or at the platform's administration; otherwise 404, so the answer does not confirm that a scope the caller cannot see exists. Without `scope`, a reader at the platform's administration gets every tool, the screen that lists every owner's ruling; anyone else gets only the installation's tools, which every scope inherits.
          */
         get: operations["listTools"];
         put?: never;
@@ -3973,6 +3995,8 @@ export interface components {
             reason?: string;
         };
         Tool: {
+            /** @description Where the server that declares this tool is stored, as a run's scope: the installation's is company `*` (NT-019). A tool reaches a run only when this contains the run's scope, and an owner's ruling on it needs tool:classify here. */
+            scope?: components["schemas"]["Scope"];
             /** @description Namespaced by server, because two servers naming a tool "search" must not collide into one capability. */
             toolId: string;
             server: string;
@@ -4933,6 +4957,16 @@ export interface components {
              * @description The last successful tools/call observation, if one has ever succeeded.
              */
             lastOkAt?: string;
+        };
+        /** @description A model provider as an author picks it: what it is called and serves, never where it is or how it is reached. */
+        ProviderChoice: {
+            name: string;
+            /** @enum {string} */
+            kind: "anthropic" | "openai_compatible";
+            /** @description The models this endpoint serves, as the installation configured them. */
+            models: string[];
+            /** @description Whether this installation would ask it now: switched on, its credential opened and its address whole. A provider that is not usable is listed so an agent already on it reads as such. */
+            usable: boolean;
         };
         ModelProvider: {
             /** @description Only on the read by name, and only when a secret is stored. Opaque: compare it for equality with an earlier answer. It moves when a stored secret changes, is keyed by this installation's master key and tied to this resource, and replacing the master key moves it. */
@@ -6954,6 +6988,35 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    listProviders: {
+        parameters: {
+            query?: {
+                /** @description The target scope, `company` or `company/area`, as stored: no surrounding spaces, no upper case, never the installation's `*`. */
+                scope?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The providers the target reaches. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ProviderChoice"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listRuns: {
         parameters: {
             query?: {
@@ -8872,7 +8935,10 @@ export interface operations {
     };
     listTools: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The target scope, `company` or `company/area`, as stored: no surrounding spaces, no upper case, never the installation's `*`. */
+                scope?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -8890,8 +8956,10 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     classifyTool: {

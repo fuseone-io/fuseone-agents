@@ -90,10 +90,12 @@ func grantedOn(role domain.Role, scope domain.Scope) context.Context {
 }
 
 // rule classifies cx-ping.ping through the door, naming the definition the
-// console lists.
+// console lists for the area the tool's server is stored at.
 func (j ownerJourney) rule(t *testing.T, caller context.Context, level openapi.RulingLevel, effect openapi.Effect) {
 	t.Helper()
-	page, err := j.api.ListTools(caller, openapi.ListToolsRequestObject{})
+	page, err := j.api.ListTools(caller, openapi.ListToolsRequestObject{
+		Params: openapi.ListToolsParams{Scope: ptrTo("acme/cx")},
+	})
 	listed, ok := page.(openapi.ListTools200JSONResponse)
 	if err != nil || !ok {
 		t.Fatalf("ListTools = %#v, %v", page, err)
@@ -168,5 +170,56 @@ func TestOwnerClassificationJourney_aCeilingWithdrawnWithNoOwnerRuling_stopsTheT
 	j.withdraw(t, platformCurator)
 	if got := j.applied(t); got != domain.EffectUnknown {
 		t.Errorf("after the withdrawal: %v, want unknown", got)
+	}
+}
+
+/*
+The reduced answers filter at the listing door, never in the rulings the worker
+syncs from (NT-019, writers B2a).
+
+B1's Sync reads every tool no ruling decides as unclassified, which is right
+only while it receives every ruling. An owner's ruling at an area and a
+platform ruling elsewhere both reach the worker after authors have asked
+ListTools for one target, for another, and for none.
+*/
+func TestOwnerClassificationJourney_targetScopedListings_leaveTheWorkersRulingsWhole(t *testing.T) {
+	j := newOwnerJourney(t)
+	ctx := t.Context()
+	j.rule(t, grantedOn(domain.RoleCurator, ownerArea), openapi.RulingLevelOwner, openapi.EffectRead)
+	if err := j.curator.Classify(ctx, domain.Scope{Company: "default", Area: "platform"}, domain.ToolClassification{
+		Tool: "github.search", Effect: domain.EffectWrite, By: "usr_ana",
+	}); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	finance := domain.Scope{Company: "acme", Area: "finance"}
+	for _, ask := range []struct {
+		caller context.Context
+		target *string
+	}{
+		{grantedOn(domain.RoleAuthor, ownerArea), ptrTo("acme/cx")},
+		{grantedOn(domain.RoleAuthor, finance), ptrTo("acme/finance")},
+		{grantedOn(domain.RoleAuthor, finance), nil},
+	} {
+		resp, err := j.api.ListTools(ask.caller, openapi.ListToolsRequestObject{
+			Params: openapi.ListToolsParams{Scope: ask.target},
+		})
+		if _, ok := resp.(openapi.ListTools200JSONResponse); err != nil || !ok {
+			t.Fatalf("ListTools = %#v, %v", resp, err)
+		}
+	}
+
+	rulings, err := j.curator.List(ctx, domain.Scope{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	at := map[domain.ToolID]domain.Scope{}
+	for _, r := range rulings {
+		at[r.Tool] = r.Scope
+	}
+	if at["cx-ping.ping"] != ownerArea || at["github.search"] != (domain.Scope{Company: domain.Installation}) {
+		t.Fatalf("the worker reads rulings at %v, want the owner's at %s and the platform's", at, ownerArea)
+	}
+	if got := j.applied(t); got != domain.EffectRead {
+		t.Errorf("after Sync: %v, want the owner's read still deciding", got)
 	}
 }

@@ -303,7 +303,11 @@ func TestListTools_reportsEachRulingsLevel_andTheOverriddenOwner(t *testing.T) {
 			t.Fatalf("ClassifyTool: %v", err)
 		}
 	}
-	resp, err := w.api.ListTools(grantedAt(domain.RoleAuthor, cx), openapi.ListToolsRequestObject{})
+	// Asked for cx, as the agent editor asks: without a target an area's
+	// author is answered only the installation's tools (NT-019, B2a).
+	resp, err := w.api.ListTools(grantedAt(domain.RoleAuthor, cx), openapi.ListToolsRequestObject{
+		Params: openapi.ListToolsParams{Scope: ptr("acme/cx")},
+	})
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
