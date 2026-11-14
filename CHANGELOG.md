@@ -44,7 +44,8 @@ field" is a commit message.
   administration over the whole installation (`fuseone:last-administrator`).
   Requires `identity:write` over the installation, like the rest of people
   management. The username stays with the removed account and cannot be given to a
-  new one.
+  new one. In the console, **Remove** appears on such a person's row, after a
+  confirmation that names them; never on your own row or a provider's person.
 
 ### Changed
 

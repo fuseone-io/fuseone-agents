@@ -89,3 +89,23 @@ export function useSetPassword() {
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all }),
   });
 }
+
+/**
+ * Removes somebody who signs in with a password made here.
+ *
+ * Deactivated rather than deleted: they stop signing in, lose their sessions
+ * and their grants, and leave this list, while the trail keeps naming them.
+ */
+export function useRemovePerson() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (principalId: string) =>
+      unwrap(
+        await api.DELETE("/admin/people/{principalId}", {
+          params: { path: { principalId } },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all }),
+  });
+}
