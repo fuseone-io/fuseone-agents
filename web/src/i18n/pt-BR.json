@@ -312,6 +312,7 @@
     "fallbackHint": "Execuções em rascunho e copiloto passam para este par quando o provedor acima continua sobrecarregado, com limite de taxa ou indisponível depois de todas as tentativas, e ficam nele até o fim da execução. Uma execução autônoma não troca: ela fica estacionada até que o fallback seja ensaiado.",
     "emptyCanvas": "Nenhuma etapa ainda. Peça ao assistente para ler as instruções, ou escreva a primeira.",
     "emptyCatalogue": "Nenhuma ferramenta no catálogo. Um servidor MCP precisa estar conectado antes que um agente possa fazer qualquer coisa.",
+    "providerUnavailable": "{{name}} · indisponível",
     "targetUnreadable": "Você não pode consultar o que esta área usa",
     "targetUnreadableHint": "As ferramentas e os provedores são respondidos para a área do agente, e o seu acesso não alcança essa área. Escolha uma área em que você tenha acesso, ou peça acesso a quem a administra.",
     "emptyHint": "Agentes aparecem aqui quando um worker publica as definições que carregou. Cada publicação cria uma versão nova; a anterior continua legível.",

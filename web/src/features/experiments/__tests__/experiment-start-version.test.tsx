@@ -27,6 +27,7 @@ function showStart() {
       items: [
         { name: "anthropic", kind: "anthropic", models: ["claude-x"], usable: true },
         { name: "openai", kind: "openai_compatible", models: ["gpt-y"], usable: true },
+        { name: "legacy", kind: "openai_compatible", models: [], usable: false },
       ],
     },
   });
@@ -72,5 +73,16 @@ describe("starting an experiment on an older version", () => {
 
     expect(await screen.findByRole("option", { name: "gpt-y" })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "claude-x" })).not.toBeInTheDocument();
+  });
+
+  it("offers a provider this installation would not ask now only as unavailable", async () => {
+    showStart();
+    const user = userEvent.setup();
+
+    await screen.findByText(new RegExp(`até ${escape(formatMicros(500_000))} cada`));
+    await user.click(screen.getByRole("combobox", { name: "Provedor" }));
+
+    const legacy = await screen.findByRole("option", { name: "legacy · indisponível" });
+    expect(legacy).toHaveAttribute("aria-disabled", "true");
   });
 });

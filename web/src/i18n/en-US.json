@@ -312,6 +312,7 @@
     "effortDefault": "default",
     "emptyCanvas": "No stages yet. Ask the assistant to read the instructions, or write the first one.",
     "emptyCatalogue": "No tool in the catalogue. An MCP server has to be connected before an agent can do anything at all.",
+    "providerUnavailable": "{{name}} · unavailable",
     "targetUnreadable": "You cannot read what this area uses",
     "targetUnreadableHint": "Tools and providers are answered for the agent's area, and your access does not reach it. Choose an area you have access to, or ask whoever administers it for access.",
     "emptyHint": "Agents appear here when a worker publishes the definitions it loaded. Each publication creates a new version; the previous one stays readable.",

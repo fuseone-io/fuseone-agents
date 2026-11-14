@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ModelField, modelsFor } from "@/features/agents/model-field";
+import { ProviderOptions } from "@/features/agents/provider-options";
 import { useProviderChoices } from "@/features/agents/providers-api";
 import { TargetError } from "@/features/agents/target-error";
 import { AS_PUBLISHED, type ExperimentForm } from "@/features/experiments/experiment-form";
@@ -59,11 +60,7 @@ export function ExperimentConfigFields({
               </FormControl>
               <SelectContent>
                 <SelectItem value={AS_PUBLISHED}>{t("experiments.asPublished")}</SelectItem>
-                {providers.map((p) => (
-                  <SelectItem key={p.name} value={p.name} className="font-mono">
-                    {p.name}
-                  </SelectItem>
-                ))}
+                <ProviderOptions providers={providers} current={field.value} />
               </SelectContent>
             </Select>
           </FormItem>

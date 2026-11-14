@@ -14,7 +14,10 @@ answer, asked for the agent's own scope (NT-019, rule 5).
 */
 
 const PROVIDERS = {
-  items: [{ name: "claude-cx", kind: "anthropic", models: ["sonnet"], usable: true }],
+  items: [
+    { name: "claude-cx", kind: "anthropic", models: ["sonnet"], usable: true },
+    { name: "claude-old", kind: "anthropic", models: ["haiku"], usable: false },
+  ],
 };
 
 function stubApi(status = 200) {
@@ -43,12 +46,12 @@ const DRAFT = {
   triggers: [],
 } as unknown as AgentDefinition;
 
-function renderFields() {
+function renderFields(over: Partial<AgentDefinition> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <AgentServingFields draft={DRAFT} patch={vi.fn()} />
-      <AgentFallbackFields draft={DRAFT} patch={vi.fn()} />
+      <AgentServingFields draft={{ ...DRAFT, ...over }} patch={vi.fn()} />
+      <AgentFallbackFields draft={{ ...DRAFT, ...over }} patch={vi.fn()} />
     </QueryClientProvider>,
   );
 }
@@ -87,5 +90,29 @@ describe("the provider pickers", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /cannot read what this area uses/,
     );
+  });
+
+  it("show a provider that cannot be asked now as unavailable, and refuse it as a new choice", async () => {
+    stubApi();
+    renderFields();
+
+    await userEvent.click(screen.getByRole("combobox", { name: "Provider" }));
+
+    const old = await screen.findByRole("option", { name: "claude-old · unavailable" });
+    expect(old).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("keep an agent's unusable provider selected, marked", async () => {
+    stubApi();
+    renderFields({ provider: "claude-old", fallback: { provider: "claude-old", model: "haiku" } });
+
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Provider" })).toHaveTextContent("claude-old · unavailable"),
+    );
+    expect(screen.getByRole("combobox", { name: "Fallback provider" })).toHaveTextContent(/unavailable/);
+    // Still selectable, so choosing another and coming back stays possible.
+    await userEvent.click(screen.getByRole("combobox", { name: "Provider" }));
+    const current = await screen.findByRole("option", { name: "claude-old · unavailable" });
+    expect(current).not.toHaveAttribute("aria-disabled", "true");
   });
 });

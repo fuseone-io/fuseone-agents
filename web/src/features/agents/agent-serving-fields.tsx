@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/select";
 import { ModelField, modelsFor } from "@/features/agents/model-field";
 import { agentTarget } from "@/features/agents/agent-target";
+import { ProviderOptions } from "@/features/agents/provider-options";
 import { useProviderChoices } from "@/features/agents/providers-api";
 import { TargetError } from "@/features/agents/target-error";
 import { Labelled } from "@/features/policies/section";
@@ -58,11 +59,7 @@ export function AgentServingFields({
             <SelectValue placeholder={t("agents.pickProvider")} />
           </SelectTrigger>
           <SelectContent>
-            {providers.map((p) => (
-              <SelectItem key={p.name} value={p.name} className="font-mono">
-                {p.name}
-              </SelectItem>
-            ))}
+            <ProviderOptions providers={providers} current={draft.provider} />
           </SelectContent>
         </Select>
       </Labelled>

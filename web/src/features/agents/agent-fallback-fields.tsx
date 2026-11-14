@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/select";
 import { ModelField, modelsFor } from "@/features/agents/model-field";
 import { agentTarget } from "@/features/agents/agent-target";
+import { ProviderOptions } from "@/features/agents/provider-options";
 import { useProviderChoices } from "@/features/agents/providers-api";
 import { Labelled } from "@/features/policies/section";
 import type { AgentDefinition } from "@/lib/api/client";
@@ -50,11 +51,7 @@ export function AgentFallbackFields({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={NONE}>{t("agents.fallbackNone")}</SelectItem>
-            {providers.map((p) => (
-              <SelectItem key={p.name} value={p.name} className="font-mono">
-                {p.name}
-              </SelectItem>
-            ))}
+            <ProviderOptions providers={providers} current={fallback?.provider} />
           </SelectContent>
         </Select>
       </Labelled>
