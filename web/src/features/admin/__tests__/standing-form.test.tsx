@@ -14,7 +14,6 @@ const lists = vi.hoisted(() => ({
   agents: {
     data: { items: [{ agentId: "security-sentinel", name: "Sentinel" }] },
   },
-  scopes: { data: { items: [{ company: "acme", area: "platform" }] } },
 }));
 
 vi.mock("@/features/admin/api", async (importOriginal) => ({
@@ -24,10 +23,6 @@ vi.mock("@/features/admin/api", async (importOriginal) => ({
 vi.mock("@/features/agents/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/agents/api")>()),
   useAgents: () => lists.agents,
-}));
-vi.mock("@/features/scope/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/features/scope/api")>()),
-  useScopes: () => lists.scopes,
 }));
 
 beforeEach(() => {
@@ -73,14 +68,4 @@ describe("the standing approval form", () => {
     await userEvent.type(screen.getByLabelText("Tool"), "x");
     expect(screen.getByLabelText("Tool")).toHaveValue("x");
   });
-});
-
-// The scope pair suggests the declared scopes, like every list here.
-it("offers the declared companies and areas", async () => {
-  mount();
-  await userEvent.click(
-    screen.getByRole("combobox", { name: "Suggest declared areas" }),
-  );
-  await userEvent.click(await screen.findByText("platform"));
-  expect(screen.getByLabelText("Area")).toHaveValue("platform");
 });

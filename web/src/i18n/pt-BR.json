@@ -218,8 +218,6 @@
     "standingRevokeBody": "{{tool}} para {{agent}} volta a exigir um clique humano em cada uso. A linha fica na trilha.",
     "standingSuggestTools": "Sugerir ferramentas governadas",
     "standingSuggestAgents": "Sugerir agentes",
-    "standingSuggestCompanies": "Sugerir empresas declaradas",
-    "standingSuggestAreas": "Sugerir áreas declaradas",
     "standingDailyCapHint": "Usos que este mandato pode liberar por dia."
   },
   "agents": {

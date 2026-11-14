@@ -24,16 +24,22 @@ const json = (body: unknown) =>
     headers: { "Content-Type": "application/json" },
   });
 
-/** Answers the two lists, or undefined for any other path. */
+/**
+ * Answers the two lists, or undefined for any other path. `fail` fails both;
+ * `companies` replaces the company list, or refuses it as the server does a
+ * caller without authority over the installation.
+ */
 export function scopeListsRoute(
   method: string,
   path: string,
-  lists: { fail?: boolean } = {},
+  lists: { fail?: boolean; companies?: Company[] | "refused" } = {},
 ): Response | undefined {
   if (method !== "GET") return undefined;
   if (path !== "/admin/companies" && path !== "/admin/scopes") return undefined;
   if (lists.fail) return new Response(null, { status: 500 });
-  return json({ items: path === "/admin/companies" ? COMPANIES : SCOPES });
+  if (path === "/admin/scopes") return json({ items: SCOPES });
+  if (lists.companies === "refused") return new Response(null, { status: 403 });
+  return json({ items: lists.companies ?? COMPANIES });
 }
 
 /** Where a fetch was aimed, whether it was given a Request or a string. */
