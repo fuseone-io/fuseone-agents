@@ -24,6 +24,19 @@ export function isLocalPasswordIdentity(person: Person) {
   );
 }
 
+/**
+ * Whether this console can remove somebody: an account made here, by an
+ * administrator or by the setup token, and never the caller's own. Somebody a
+ * provider vouched for would be back at their next sign-in.
+ */
+export function isRemovableHere(person: Person, callerId: string | undefined) {
+  return (
+    person.kind === "user" &&
+    ["local", "bootstrap"].includes(person.provider ?? "") &&
+    person.id !== callerId
+  );
+}
+
 export function matchesPerson(person: Person, query: string, t: TFunction) {
   return [
     person.display,

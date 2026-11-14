@@ -167,3 +167,42 @@ func TestOpen_reportsWhetherSomebodyCanStillClaim(t *testing.T) {
 		t.Fatalf("Open after reopen = %v, %v; want true", open, err)
 	}
 }
+
+/*
+The setup token is the way back when no administrator can get in. Its account
+is named by the display typed, and the default is the same every time, so a
+claim can land on a setup account that was removed since. Claiming must bring
+it back, or the rescue issues a session nobody can use.
+*/
+func TestClaim_ontoARemovedSetupAccount_signsInAgain(t *testing.T) {
+	b, pool := bootstrapFor(t)
+	dir := auth.NewPostgres(pool)
+	claimFirst(t, b)
+	var first string
+	if err := pool.QueryRow(t.Context(),
+		`select principal_id from principals where provider = 'bootstrap'`).Scan(&first); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if _, err := pool.Exec(t.Context(),
+		`update principals set disabled_at = now(), password_hash = 'old' where principal_id = $1`, first); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+
+	secret, err := b.Reopen(t.Context(), time.Hour, "nobody can get in")
+	if err != nil {
+		t.Fatalf("Reopen: %v", err)
+	}
+	session, _, err := b.Claim(t.Context(), secret, "Ana", "test", "127.0.0.1")
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if _, _, err := dir.PrincipalBySession(t.Context(), session.Hash, time.Now()); err != nil {
+		t.Fatalf("the rescued session does not sign in: %v", err)
+	}
+	// Whoever knew the removed account's password does not get in with it.
+	var kept bool
+	if err := pool.QueryRow(t.Context(),
+		`select password_hash is not null from principals where principal_id = $1`, first).Scan(&kept); err != nil || kept {
+		t.Errorf("the removed account's password came back (err %v)", err)
+	}
+}

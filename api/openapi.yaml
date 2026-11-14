@@ -2976,6 +2976,46 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /admin/people/{principalId}:
+    delete:
+      tags: [admin]
+      operationId: removePerson
+      summary: Remove somebody who signs in with a password
+      description: |
+        Deactivated and taken off the list, never deleted: the trail and every
+        run name people by id, and an id that resolves to nothing is an audit
+        nobody can read. In one transaction the account stops signing in,
+        every session it holds is revoked and every grant it holds is taken
+        away, and the act is recorded with ids only.
+
+        Only an account made here — by `POST /admin/people/local`, or by the
+        setup token. Somebody a provider vouched for comes back at their next
+        sign-in, so they are refused with `fuseone:person-not-local`: the group
+        in the provider is what to change. A service account is refused the
+        same way and is disabled on its own screen.
+
+        Refused with `fuseone:person-is-you` for the caller's own account,
+        with `fuseone:person-removed` for somebody already removed, and with
+        `fuseone:last-administrator` when nobody active would be left holding,
+        at the installation scope, a role that manages identity
+        (`identity:write`: today administrator or curator), since nobody could
+        grant it again.
+      parameters:
+        - name: principalId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Removed. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Not an account made here, your own, already removed, or the last who manages identity over the installation.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /admin/people/{principalId}/password:
     put:
       tags: [admin]
@@ -3031,6 +3071,12 @@ paths:
         one alone. The two writers are separate on purpose: an identity
         provider re-derives its own on every sign-in, and a console that
         overwrote them would hand back access somebody lost by leaving a team.
+
+        Refused with `fuseone:person-removed` for somebody removed (a disabled
+        service account still takes grants: disabling one is reversible), and
+        with `fuseone:last-administrator` when the change would leave nobody
+        active holding, at the installation scope, a role that manages
+        identity — whether that grant came from a provider or from here.
       parameters:
         - name: principalId
           in: path
@@ -3052,6 +3098,11 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The person was removed, or nobody would be left who manages identity over the installation.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /admin/retention:
     get:

@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -61,23 +60,23 @@ func (p *Postgres) SetGrants(
 	ctx context.Context, principalID string, grants []domain.Grant, by string,
 ) error {
 	return p.onTrail(ctx, func(tx pgx.Tx) error {
-		// Locked, so a principal removed meanwhile is not granted anything either, and
-		// first, so nobody gets a line on the trail for a change that never happened.
-		var exists bool
-		err := tx.QueryRow(ctx, `select true from principals where principal_id = $1 for update`,
-			principalID).Scan(&exists)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNoPrincipal
-		}
-		if err != nil {
-			return fmt.Errorf("auth: read principal: %w", err)
-		}
-		if err := replaceGrants(ctx, tx, grantWrite{principalID, by, grants},
-			`delete from role_grants where principal_id = $1 and granted_by not like $2`,
-			assertedPrefix+"%"); err != nil {
+		// Locked in the order holders.go sets out, and first, so a principal
+		// removed meanwhile is not granted anything either and nobody gets a
+		// line on the trail for a change that never happened.
+		if err := lockIdentity(ctx, tx); err != nil {
 			return err
 		}
-		return recordGrants(ctx, tx, by, principalID, grants)
+		if _, err := lockPrincipal(ctx, tx, principalID); err != nil {
+			return err
+		}
+		return keepingAnAdministrator(ctx, tx, func() error {
+			if err := replaceGrants(ctx, tx, grantWrite{principalID, by, grants},
+				`delete from role_grants where principal_id = $1 and granted_by not like $2`,
+				assertedPrefix+"%"); err != nil {
+				return err
+			}
+			return recordGrants(ctx, tx, by, principalID, grants)
+		})
 	})
 }
 
@@ -133,6 +132,10 @@ func (p *Postgres) People(ctx context.Context) ([]domain.Person, error) {
 		       coalesce(g.role, ''), coalesce(g.granted_by, '')
 		from principals p
 		left join role_grants g on g.principal_id = p.principal_id
+		-- A person disabled is a person removed (RemoveLocal). The row stays
+		-- for whatever names them by id; the list is of who is still here.
+		-- A disabled machine stays, marked, where its own screen shows it.
+		where not (p.kind = 'user' and p.disabled_at is not null)
 		order by p.display, p.principal_id, g.company_id, g.area_id, g.role`)
 	if err != nil {
 		return nil, fmt.Errorf("auth: list people: %w", err)

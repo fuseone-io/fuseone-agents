@@ -28,6 +28,45 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **An account made here can be removed** (`DELETE /admin/people/{principalId}`).
+  Removing deactivates rather than deletes: the account stops signing in, every
+  session it holds is revoked and every grant it holds is taken away, in one
+  transaction, and `person.removed` is recorded with the two ids. The person leaves
+  the people list; audit and run views that name them by id keep reading. Only
+  accounts created with a password or by the setup token: somebody an identity
+  provider vouched for is refused (`fuseone:person-not-local`), since their next
+  sign-in would bring them back — change the group in the provider. Nobody can
+  remove themselves (`fuseone:person-is-you`), and removing somebody already
+  removed answers `fuseone:person-removed`. Requires `identity:write` over the
+  installation, like the rest of people management. The username stays with the
+  removed account and cannot be given to a new one. In the console, **Remove** appears on such a person's row, after a
+  confirmation that names them; never on your own row or a provider's person.
+
+### Changed
+
+- **Somebody always remains who can manage identity over the whole installation.**
+  Removing a person and replacing a person's grants
+  (`PUT /admin/people/{principalId}/grants`) both refuse, with 409
+  `fuseone:last-administrator`, a change that would leave no active person holding
+  a role with `identity:write` (today administrator or curator) at the installation
+  scope, counting provider and console grants alike. Before, the only administrator
+  could drop their own grant and leave nobody able to repair it. An installation
+  with nobody yet is not refused, so its first grants still go in.
+- **A removed person takes no more grants.** `PUT /admin/people/{principalId}/grants`
+  answers 409 `fuseone:person-removed` for them, so a grant can no longer be written,
+  unseen, onto an account that left the list. A disabled service account still takes
+  grants, as before.
+- **A grant names its company and area from lists** rather than typed text, in a
+  person's access editor and in a service account's "What it may do":
+  the companies registered (a withdrawn one is not offered for a new grant) and the
+  chosen company's areas, or the whole company. A grant that already names a
+  withdrawn company, or a scope from before areas were registered, still shows and
+  saves unchanged.
+
 ## [0.110.0] — 2026-11-13
 
 NT-019 phase 2, the writers' release (#335, #340, #341, #342, #343): the administrator of an area configures

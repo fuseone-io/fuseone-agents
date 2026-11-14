@@ -1971,6 +1971,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/people/{principalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove somebody who signs in with a password
+         * @description Deactivated and taken off the list, never deleted: the trail and every
+         *     run name people by id, and an id that resolves to nothing is an audit
+         *     nobody can read. In one transaction the account stops signing in,
+         *     every session it holds is revoked and every grant it holds is taken
+         *     away, and the act is recorded with ids only.
+         *
+         *     Only an account made here — by `POST /admin/people/local`, or by the
+         *     setup token. Somebody a provider vouched for comes back at their next
+         *     sign-in, so they are refused with `fuseone:person-not-local`: the group
+         *     in the provider is what to change. A service account is refused the
+         *     same way and is disabled on its own screen.
+         *
+         *     Refused with `fuseone:person-is-you` for the caller's own account,
+         *     with `fuseone:person-removed` for somebody already removed, and with
+         *     `fuseone:last-administrator` when nobody active would be left holding,
+         *     at the installation scope, a role that manages identity
+         *     (`identity:write`: today administrator or curator), since nobody could
+         *     grant it again.
+         */
+        delete: operations["removePerson"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/people/{principalId}/password": {
         parameters: {
             query?: never;
@@ -2012,6 +2049,12 @@ export interface paths {
          *     one alone. The two writers are separate on purpose: an identity
          *     provider re-derives its own on every sign-in, and a console that
          *     overwrote them would hand back access somebody lost by leaving a team.
+         *
+         *     Refused with `fuseone:person-removed` for somebody removed (a disabled
+         *     service account still takes grants: disabling one is reversible), and
+         *     with `fuseone:last-administrator` when the change would leave nobody
+         *     active holding, at the installation scope, a role that manages
+         *     identity — whether that grant came from a provider or from here.
          */
         put: operations["setGrants"];
         post?: never;
@@ -9565,6 +9608,38 @@ export interface operations {
             };
         };
     };
+    removePerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                principalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Not an account made here, your own, already removed, or the last who manages identity over the installation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     setPassword: {
         parameters: {
             query?: never;
@@ -9633,6 +9708,15 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /** @description The person was removed, or nobody would be left who manages identity over the installation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     getRetention: {

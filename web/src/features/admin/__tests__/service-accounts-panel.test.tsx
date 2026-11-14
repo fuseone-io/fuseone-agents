@@ -459,4 +459,58 @@ describe("what an account may do", () => {
       { method: "PUT", path: "/admin/people/svc_publisher/grants", body: { grants: [] } },
     ]);
   });
+
+  it("offers the active companies and the chosen company's areas, not typed text", async () => {
+    const user = userEvent.setup();
+    stubAccounts();
+    mount();
+    await changing(user);
+    const company = screen.getByRole("combobox", { name: "Company" });
+    await waitFor(() => expect(company).toBeEnabled());
+    await user.click(company);
+
+    const offered = within(await screen.findByRole("listbox")).getAllByRole("option");
+    expect(offered.map((o) => o.textContent)).toEqual(["Acme", "Example"]);
+    await user.click(screen.getByRole("option", { name: "Example" }));
+    await user.click(screen.getByRole("combobox", { name: "Area" }));
+    const areas = within(await screen.findByRole("listbox")).getAllByRole("option");
+    expect(areas.map((o) => o.textContent)).toEqual(["Whole company", "Atendimento"]);
+  });
+
+  it("saves the chosen company and area through the grants route", async () => {
+    const user = userEvent.setup();
+    const { requests } = stubAccounts();
+    mount();
+    await changing(user);
+    const company = screen.getByRole("combobox", { name: "Company" });
+    await waitFor(() => expect(company).toBeEnabled());
+    await user.click(company);
+    await user.click(await screen.findByRole("option", { name: "Acme" }));
+    await user.click(screen.getByRole("combobox", { name: "Area" }));
+    await user.click(await screen.findByRole("option", { name: "Financeiro" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0]).toEqual({
+      method: "PUT",
+      path: "/admin/people/svc_publisher/grants",
+      body: { grants: [{ company: "acme", area: "finance", role: "author" }] },
+    });
+  });
+
+  it("still shows and saves a scope the lists do not know", async () => {
+    const user = userEvent.setup();
+    const { requests } = stubAccounts();
+    mount();
+    await changing(user);
+
+    // Acme has no area named cx: the grant predates the areas it is filed under.
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Area" })).toHaveTextContent("cx (not registered)"),
+    );
+    expect(screen.getByRole("combobox", { name: "Company" })).toHaveTextContent("Acme");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0]?.body).toEqual({ grants: [{ company: "acme", area: "cx", role: "author" }] });
+  });
 });

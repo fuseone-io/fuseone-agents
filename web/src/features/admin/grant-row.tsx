@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -10,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { GrantScopeFields } from "@/features/admin/grant-scope-fields";
 import type { GrantInput } from "@/features/admin/people-api";
 
 const ROLES: GrantInput["role"][] = [
@@ -46,20 +46,12 @@ export function GrantRow({
   );
 
   return (
-    <div className="grid grid-cols-[1fr_1fr_140px_32px] items-end gap-2">
-      <Cell
-        id={`grant-company-${index}`}
-        label={t("identity.company")}
+    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px_32px] items-end gap-2">
+      <GrantScopeFields
+        grant={grant}
+        index={index}
         labelClass={heading}
-        value={grant.company}
-        onChange={(company) => onChange({ company })}
-      />
-      <Cell
-        id={`grant-area-${index}`}
-        label={t("identity.area")}
-        labelClass={heading}
-        value={grant.area}
-        onChange={(area) => onChange({ area })}
+        onChange={onChange}
       />
 
       <div className="flex flex-col gap-1.5">
@@ -94,35 +86,6 @@ export function GrantRow({
         <X className="size-4" aria-hidden />
         <span className="sr-only">{t("people.removeGrant")}</span>
       </Button>
-    </div>
-  );
-}
-
-function Cell({
-  id,
-  label,
-  labelClass,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  labelClass: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id} className={labelClass}>
-        {label}
-      </Label>
-      <Input
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-9 font-mono text-xs"
-        autoComplete="off"
-      />
     </div>
   );
 }

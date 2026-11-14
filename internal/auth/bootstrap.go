@@ -161,12 +161,8 @@ func (b *Bootstrap) Claim(ctx context.Context, secret, display, userAgent, ip st
 	}
 	principalID := "usr_" + shortHash("bootstrap|"+display)
 
-	if _, err := tx.Exec(ctx, `
-		insert into principals (principal_id, kind, provider, subject, display, last_seen_at)
-		values ($1, 'user', 'bootstrap', $1, $2, now())
-		on conflict (principal_id) do update set last_seen_at = now()`,
-		principalID, display); err != nil {
-		return Token{}, domain.Principal{}, fmt.Errorf("auth: create principal: %w", err)
+	if err := claimPrincipal(ctx, tx, principalID, display); err != nil {
+		return Token{}, domain.Principal{}, err
 	}
 
 	// Installation administrator, deliberately.
@@ -216,4 +212,23 @@ func (b *Bootstrap) Claim(ctx context.Context, secret, display, userAgent, ip st
 			{Scope: bootstrapGrant, Role: domain.RoleAdmin},
 		},
 	}, nil
+}
+
+// claimPrincipal makes the setup account, or brings back one removed since:
+// the display is its key and the default never changes, and a claim landing on
+// a disabled row would issue a session nobody can use. Its old password goes
+// with the removal, so nobody who knew it gets in; the token holder sets a new one.
+func claimPrincipal(ctx context.Context, tx pgx.Tx, principalID, display string) error {
+	if _, err := tx.Exec(ctx, `
+		insert into principals (principal_id, kind, provider, subject, display, last_seen_at)
+		values ($1, 'user', 'bootstrap', $1, $2, now())
+		on conflict (principal_id) do update set
+			last_seen_at  = now(),
+			password_hash = case when principals.disabled_at is null
+			                     then principals.password_hash end,
+			disabled_at   = null`,
+		principalID, display); err != nil {
+		return fmt.Errorf("auth: create principal: %w", err)
+	}
+	return nil
 }

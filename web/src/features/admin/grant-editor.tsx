@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, ShieldCheck, TriangleAlert } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { GrantAddButtons } from "@/features/admin/grant-add-buttons";
 import { GrantRow } from "@/features/admin/grant-row";
+import { GrantScopeNotice } from "@/features/admin/grant-scope-notice";
 import { GrantBadge } from "@/features/admin/grant-badge";
 import {
   useSetGrants,
@@ -41,9 +43,6 @@ export function GrantEditor({
   const asserted = held.filter((g) => g.asserted);
   // Whichever screen brought a machine here: these are what no role can give it.
   const machine = person.kind !== "user";
-  const hasInstallationAdmin = granted.some(
-    (g) => g.company === "*" && g.area === "" && g.role === "admin",
-  );
   const update = (index: number, patch: Partial<GrantInput>) =>
     setGranted(granted.map((g, i) => (i === index ? { ...g, ...patch } : g)));
 
@@ -104,39 +103,12 @@ export function GrantEditor({
           />
         ))}
 
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            onClick={() =>
-              setGranted([
-                ...granted,
-                { company: "default", area: "", role: "author" },
-              ])
-            }
-          >
-            <Plus className="size-4" aria-hidden />
-            {t("people.addGrant")}
-          </Button>
-          {!machine && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8"
-              disabled={hasInstallationAdmin}
-              onClick={() =>
-                setGranted([
-                  ...granted,
-                  { company: "*", area: "", role: "admin" },
-                ])
-              }
-            >
-              <ShieldCheck className="size-4" aria-hidden />
-              {t("people.addAdminGrant")}
-            </Button>
-          )}
-        </div>
+        <GrantAddButtons
+          granted={granted}
+          machine={machine}
+          onAdd={(grant) => setGranted([...granted, grant])}
+        />
+        <GrantScopeNotice />
       </div>
 
       <div className="flex gap-2">
