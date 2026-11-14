@@ -117,6 +117,19 @@ describe("where a standing approval holds", () => {
     expect(await grant()).toEqual({ company: "globex", area: "legacy" });
   });
 
+  // As the closed selects do: an area typed for one company is not carried
+  // over to another the person then typed.
+  it("clears the area when the typed company changes, when the list is refused", async () => {
+    const grant = mount("refused");
+    const user = userEvent.setup();
+    const company = await screen.findByRole("textbox", { name: "Empresa" });
+    await user.type(company, "acme");
+    await user.type(screen.getByRole("textbox", { name: "Área" }), "cx");
+    await user.clear(company);
+    await user.type(company, "globex");
+    expect(await grant()).toEqual({ company: "globex", area: "" });
+  });
+
   it("suggests the areas' companies, then the chosen company's areas", async () => {
     mount("refused");
     const user = userEvent.setup();

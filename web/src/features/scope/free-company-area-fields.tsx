@@ -45,7 +45,9 @@ export function FreeCompanyAreaFields({
         value={value.company}
         suggestions={companySuggestions(scopes, shape.installation === true, t)}
         disabled={disabled}
-        onChange={(company) => onChange({ company, area: value.area })}
+        // Another company empties the area, as the closed selects do: an area
+        // typed for one company is not carried over to the next.
+        onChange={(company) => onChange({ company, area: company === value.company ? value.area : "" })}
       />
       {mode !== "none" && (
         <ScopeSuggestField
