@@ -15,9 +15,9 @@ export function CataloguePage() {
   const recipes = useRecipes();
   const access = integrationAccess(useMe().data);
   const servers = integrations.data?.mcpServers ?? [];
-  // Asked by the scope of each server shown, so an area's server lists its
-  // tools to an area's reader (NT-019).
-  const tools = useCatalogueTools(servers, access.platform);
+  // Asked inside the caller's own scopes, so an area's server, and one the
+  // area inherits from its company, lists its tools (NT-019).
+  const tools = useCatalogueTools(servers, access.platform, access.configure);
 
   // Only whoever may create a server is offered to connect one, and only
   // where they may place it (NT-019).
