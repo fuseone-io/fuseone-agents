@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useTools } from "@/features/admin/api";
 import { useAgents } from "@/features/agents/api";
 import { SuggestValue } from "@/features/policies/suggest-value";
 import { dedupe } from "@/features/policies/suggestion";
@@ -19,8 +21,9 @@ import type { PolicyCondition } from "@/lib/api/client";
  *
  * Which control appears is decided by the row's field: an agent id comes from
  * the agents the platform already lists, an area from the declared scopes, a
- * tool effect from the Gate's own enum. Everything the platform cannot know —
- * tool globs, labels, argument paths — stays the mono input it always was.
+ * tool effect from the Gate's own enum, a tool id from the governed catalogue.
+ * Everything the platform cannot know — labels, argument paths — stays the
+ * mono input it always was.
  *
  * Suggestions never become a closed set: a policy may legitimately name an
  * agent that does not exist yet, so the combobox always accepts what was
@@ -52,6 +55,10 @@ export function ConditionValueField({
     case "agent.id":
       return (
         <AgentValue condition={condition} label={label} onChange={onChange} />
+      );
+    case "tool.id":
+      return (
+        <ToolValue condition={condition} label={label} onChange={onChange} />
       );
     case "scope.area":
     case "scope.company":
@@ -134,6 +141,38 @@ function AgentValue({
       label={label}
       suggestions={dedupe(suggestions)}
       onChange={onChange}
+    />
+  );
+}
+
+/**
+ * The governed tool ids, as the policy's own Tool field offers them. Asked
+ * for only once the suggestions open: the page is visible to roles the tool
+ * listing refuses, and a refusal must leave the plain input it always was.
+ * Typing stays valid, because a glob such as `cloudflare.*` is a rule.
+ */
+function ToolValue({
+  condition,
+  label,
+  onChange,
+}: {
+  condition: PolicyCondition;
+  label: string;
+  onChange: (value: string) => void;
+}) {
+  const [asked, setAsked] = useState(false);
+  const tools = useTools(asked);
+  const suggestions = (tools.data?.items ?? []).map((tool) => ({
+    value: tool.toolId,
+    hint: tool.effect ?? "",
+  }));
+  return (
+    <SuggestValue
+      condition={condition}
+      label={label}
+      suggestions={dedupe(suggestions)}
+      onChange={onChange}
+      onOpen={() => setAsked(true)}
     />
   );
 }

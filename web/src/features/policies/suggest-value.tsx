@@ -35,11 +35,14 @@ export function SuggestValue({
   label,
   suggestions,
   onChange,
+  onOpen,
 }: {
   condition: PolicyCondition;
   label: string;
   suggestions: Suggestion[];
   onChange: (value: string) => void;
+  /** Called when the suggestions open, for a listing asked for lazily. */
+  onOpen?: () => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -75,7 +78,13 @@ export function SuggestValue({
           className="h-[34px] font-mono text-xs"
         />
       </div>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover
+        open={open}
+        onOpenChange={(next) => {
+          if (next) onOpen?.();
+          setOpen(next);
+        }}
+      >
         <PopoverTrigger asChild>
           <Button
             type="button"
