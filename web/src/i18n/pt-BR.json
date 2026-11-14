@@ -3072,7 +3072,8 @@
   "shell": {
     "breadcrumb": "Trilha de navegação",
     "signOut": "Sair",
-    "toggleSidebar": "Alternar barra lateral"
+    "toggleSidebar": "Alternar barra lateral",
+    "version": "Versão {{version}}"
   },
   "simulation": {
     "again": "Nova simulação",
