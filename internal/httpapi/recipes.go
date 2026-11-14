@@ -88,7 +88,7 @@ fills a form and decides nothing: not a supported connector, not a hosted
 service, and not an endorsement — this platform did not write these servers.
 */
 func (s *Server) ListRecipes(ctx context.Context, _ openapi.ListRecipesRequestObject) (openapi.ListRecipesResponseObject, error) {
-	if resp := s.refuse(ctx, domain.PermToolClassify); resp != nil {
+	if resp := s.refuseRecipes(ctx); resp != nil {
 		return openapi.ListRecipes403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *resp,
 		}, nil
@@ -187,4 +187,16 @@ func configRequirements(in []known.ConfigRequirement) []openapi.ServerRecipeConf
 		out = append(out, openapi.ServerRecipeConfigRequirements(one))
 	}
 	return out
+}
+
+// refuseRecipes opens the catalogue to whoever may connect a server somewhere
+// (NT-019): an area's administrator connects the area's own, and the
+// catalogue is where that starts. A recipe names a server other people
+// publish and nothing of this installation, so no scope is read from it. The
+// platform's classifiers keep reading it, as before.
+func (s *Server) refuseRecipes(ctx context.Context) *openapi.ForbiddenApplicationProblemPlusJSONResponse {
+	if caller, ok := auth.PrincipalFrom(ctx); ok && caller.CanAnywhere(domain.PermProviderWrite) {
+		return nil
+	}
+	return s.refuse(ctx, domain.PermToolClassify)
 }

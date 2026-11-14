@@ -2299,6 +2299,7 @@ export interface paths {
          * Tool servers this platform knows about
          * @description What the platform has read about servers other people publish: who publishes one, where it is documented, how it is usually reached, and the credential it expects.
          *     A recipe fills the connection form and decides nothing. It is not a supported connector, not a hosted service and not an endorsement — this platform did not write these servers and vouches for nothing beyond saying where it read what it read. Its suggestions about what a tool does are proposals a Curator confirms, never classifications.
+         *     Read by whoever may connect a server somewhere (`provider:write` in any scope, so an area's administrator connecting the area's own), and by the platform's classifiers (`tool:classify` there). A recipe names nothing of this installation, so no scope is read from it.
          */
         get: operations["listRecipes"];
         put?: never;

@@ -3423,6 +3423,11 @@ paths:
         platform did not write these servers and vouches for nothing beyond
         saying where it read what it read. Its suggestions about what a tool
         does are proposals a Curator confirms, never classifications.
+
+        Read by whoever may connect a server somewhere (`provider:write` in
+        any scope, so an area's administrator connecting the area's own), and
+        by the platform's classifiers (`tool:classify` there). A recipe names
+        nothing of this installation, so no scope is read from it.
       responses:
         '200':
           description: What is known.
