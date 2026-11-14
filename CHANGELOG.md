@@ -28,6 +28,17 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Publishing an agent refuses an MCP tool its scope cannot reach.** NT-019 requires
+  every tool an agent names to be usable from the agent's scope. Publication checked
+  that for connector instances only: an agent could name a tool of another area's MCP
+  server, be published, and have every run reaching it blocked by the Gate. It is now
+  refused at publication, as an unoffered tool, naming it. The Gate still stops a run
+  that reaches one.
+
 ## [0.111.0] — 2026-11-14
 
 People management and console fixes (#345, #347, #348): a grant's company and area

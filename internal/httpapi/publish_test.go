@@ -653,7 +653,7 @@ func TestPublishAgent_allowsNonReversibleToolBeforeTheUntrustedRead(t *testing.T
 func TestCheckDataFlow_nativeConnectorToolsAreClassifiedOnlyInsideTheirScope(t *testing.T) {
 	t.Parallel()
 	entries := []domain.ToolEntry{
-		{ID: "crm.lookup", Effect: domain.EffectRead, Untrusted: true, OnSurface: true},
+		{ID: "crm.lookup", Effect: domain.EffectRead, Untrusted: true, OnSurface: true, Scope: installationScope},
 		{ID: "vault.prod.write_secret", Server: "connector:vault/prod",
 			Effect: domain.EffectWrite, Native: true, OnSurface: true,
 			Scope: domain.Scope{Company: "acme", Area: "platform"}},
@@ -678,11 +678,15 @@ func TestCheckDataFlow_nativeConnectorToolsAreClassifiedOnlyInsideTheirScope(t *
 	}
 }
 
+// installationScope is where an MCP server's tool is placed when its server
+// is the installation's, as the catalogue places every entry (placeTools).
+var installationScope = domain.Scope{Company: domain.Installation}
+
 func publishFlowTools() *fakeTools {
 	return &fakeTools{entries: []domain.ToolEntry{
-		{ID: "crm.lookup", Effect: domain.EffectRead, Untrusted: true, OnSurface: true},
-		{ID: "crm.reply", Effect: domain.EffectWrite, OnSurface: true},
-		{ID: "pay.refund", Effect: domain.EffectFinancial, OnSurface: true},
+		{ID: "crm.lookup", Effect: domain.EffectRead, Untrusted: true, OnSurface: true, Scope: installationScope},
+		{ID: "crm.reply", Effect: domain.EffectWrite, OnSurface: true, Scope: installationScope},
+		{ID: "pay.refund", Effect: domain.EffectFinancial, OnSurface: true, Scope: installationScope},
 	}}
 }
 

@@ -80,6 +80,10 @@ func TestPublishAgent_toolTheCatalogueDoesNotKnow_isRefused(t *testing.T) {
 		{name: "a platform tool", tools: []string{"crm.lookup", string(domain.ToolMemoryFind)}},
 		{name: "a known tool not yet ruled on", tools: []string{"crm.lookup", "crm.archive"}},
 		{name: "a known tool kept off the surface", tools: []string{"crm.purge"}, refuse: "crm.purge"},
+		// NT-019 Enforcement: every tool must be usable from the agent's
+		// scope, an MCP server's as much as a connector's.
+		{name: "a tool of a sibling area's server", tools: []string{"ops.restart"}, refuse: "ops.restart"},
+		{name: "a tool of the company's server", tools: []string{"wiki.read"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -87,8 +91,12 @@ func TestPublishAgent_toolTheCatalogueDoesNotKnow_isRefused(t *testing.T) {
 			pub := newPublisher()
 			catalogue := publishFlowTools()
 			catalogue.entries = append(catalogue.entries,
-				domain.ToolEntry{ID: "crm.archive", OnSurface: true},
-				domain.ToolEntry{ID: "crm.purge", OnSurface: false})
+				domain.ToolEntry{ID: "crm.archive", OnSurface: true, Scope: installationScope},
+				domain.ToolEntry{ID: "crm.purge", OnSurface: false, Scope: installationScope},
+				domain.ToolEntry{ID: "ops.restart", Server: "ops", OnSurface: true,
+					Scope: domain.Scope{Company: "acme", Area: "ops"}},
+				domain.ToolEntry{ID: "wiki.read", Server: "wiki", OnSurface: true,
+					Scope: domain.Scope{Company: "acme"}})
 			resp, err := publishServer(t, pub).WithAdministration(nil, catalogue, nil).PublishAgent(
 				inArea("cx", domain.RoleAuthor),
 				openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
