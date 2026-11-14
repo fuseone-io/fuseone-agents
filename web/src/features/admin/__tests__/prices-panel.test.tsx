@@ -1,6 +1,7 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PricesPanel } from "@/features/admin/prices-panel";
 import type { ModelPrice } from "@/features/admin/prices-api";
 import { setInstallationCurrency } from "@/lib/format";
@@ -37,6 +38,19 @@ vi.mock("@/features/money/api", () => ({
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
+/** The panel, with the connected providers answered empty at the network. */
+function renderPanel() {
+  vi.stubGlobal("fetch", async () => Response.json({ items: [] }));
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <PricesPanel />
+    </QueryClientProvider>,
+  );
+}
+
 describe("price administration", () => {
   beforeEach(() => {
     hooks.prices = [];
@@ -47,6 +61,7 @@ describe("price administration", () => {
     hooks.put.mockReset();
     hooks.setMoney.mockReset();
   });
+  afterEach(() => vi.unstubAllGlobals());
 
   it("separates bundled market defaults from configured overrides", async () => {
     hooks.prices = [
@@ -68,7 +83,7 @@ describe("price administration", () => {
       },
     ];
 
-    render(<PricesPanel />);
+    renderPanel();
 
     expect(screen.getByText("default de mercado")).toBeInTheDocument();
     expect(screen.getByText("tarifa própria")).toBeInTheDocument();
@@ -99,7 +114,7 @@ describe("price administration", () => {
   it("saves the installation currency as a normalized code", async () => {
     const user = userEvent.setup();
 
-    render(<PricesPanel />);
+    renderPanel();
 
     const currency = screen.getByLabelText("Moeda da instalação");
     await user.clear(currency);
@@ -127,7 +142,7 @@ describe("price administration", () => {
       },
     ];
 
-    render(<PricesPanel />);
+    renderPanel();
 
     await user.click(screen.getByText("anthropic/claude-haiku-4-5"));
     const input = screen.getByLabelText("Entrada / milhão");
@@ -172,20 +187,24 @@ describe("price administration", () => {
       },
     ];
 
-    render(<PricesPanel />);
+    renderPanel();
 
     await user.click(screen.getByRole("button", { name: "Novo" }));
-    await user.click(screen.getByRole("button", { name: "anthropic" }));
+    await user.click(
+      screen.getByRole("combobox", { name: "Provedores conhecidos" }),
+    );
+    await user.click(await screen.findByRole("option", { name: "anthropic" }));
 
     expect(screen.getByLabelText("Provedor")).toHaveValue("anthropic");
+    await user.click(
+      screen.getByRole("combobox", { name: "Modelos conhecidos" }),
+    );
     expect(
-      screen.getByRole("button", { name: "claude-haiku-4-5" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "gpt-4o-mini" }),
+      screen.queryByRole("option", { name: "gpt-4o-mini" }),
     ).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "claude-haiku-4-5" }));
+    await user.click(
+      await screen.findByRole("option", { name: "claude-haiku-4-5" }),
+    );
 
     expect(screen.getByLabelText("Modelo")).toHaveValue("claude-haiku-4-5");
     expect(screen.getByLabelText("Entrada / milhão")).toHaveValue("");
