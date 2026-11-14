@@ -48,7 +48,8 @@ field" is a commit message.
 
 ### Changed
 
-- **A person's grant names its company and area from lists** rather than typed text:
+- **A grant names its company and area from lists** rather than typed text, in a
+  person's access editor and in a service account's "What it may do":
   the companies registered (a withdrawn one is not offered for a new grant) and the
   chosen company's areas, or the whole company. A grant that already names a
   withdrawn company, or a scope from before areas were registered, still shows and

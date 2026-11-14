@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { grantScopesRoute } from "@/features/admin/__tests__/grant-scopes-network";
 import type {
   ServiceAccount,
   ServiceToken,
@@ -58,6 +59,8 @@ export function stubAccounts(
     grants: ServiceAccount["grants"];
   };
   const route = (method: string, path: string, body: Body): Response => {
+    const listed = grantScopesRoute(method, path);
+    if (listed) return listed;
     if (path === "/admin/service-accounts") {
       if (method === "GET") return json({ items: state.accounts });
       const made = anAccount({
