@@ -28,9 +28,9 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.110.0] — 2026-11-13
 
-NT-019 phase 2, the writers' release, part one: the administrator of an area configures
+NT-019 phase 2, the writers' release (#335, #340, #341, #342, #343): the administrator of an area configures
 that area's own MCP servers, and the area's curator classifies their tools under the
 platform's ceiling. The servers are remote; local servers stay the platform's. What an
 author picks tools and providers from is asked for the agent's scope. Adds migration
