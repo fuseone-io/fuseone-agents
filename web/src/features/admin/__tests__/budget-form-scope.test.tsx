@@ -16,11 +16,11 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-function stub() {
+function stub(lists: { fail?: boolean } = {}) {
   const puts: string[] = [];
   vi.stubGlobal("fetch", async (request: Request) => {
     const path = pathOf(request);
-    const listed = scopeListsRoute(request.method, path);
+    const listed = scopeListsRoute(request.method, path, lists);
     if (listed) return listed;
     if (request.method === "PUT") puts.push(decodeURIComponent(path));
     return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
@@ -115,5 +115,15 @@ describe("a ceiling being edited", () => {
     stub();
     mount(ceiling("", ""));
     expect(await screen.findByRole("combobox", { name: "Empresa" })).toHaveTextContent("Toda a instalação");
+  });
+
+  it("says the lists failed, offers a retry, and keeps the ceiling's scope", async () => {
+    stub({ fail: true });
+    mount(ceiling("acme", "cx"));
+
+    expect(await screen.findByText(/Não foi possível carregar as empresas e áreas/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Empresa" })).toHaveTextContent("acme");
+    expect(screen.getByRole("combobox", { name: "Área" })).toHaveTextContent("cx");
   });
 });

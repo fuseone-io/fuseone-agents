@@ -4,6 +4,7 @@ import { FormField } from "@/components/ui/form";
 import type { BudgetValues } from "@/features/admin/budget-form";
 import { pathOfScope, scopeOfPath } from "@/features/admin/budget-scope";
 import { CompanyAreaFields } from "@/features/scope/company-area-fields";
+import { ScopeListsNotice } from "@/features/scope/scope-lists-notice";
 
 /**
  * What a ceiling applies to: the installation, a company, or one of its
@@ -39,6 +40,7 @@ export function BudgetScopeField({
               onChange={(next) => field.onChange(pathOfScope(next))}
             />
           </div>
+          <ScopeListsNotice message={t("scope.listsFailed")} />
         </fieldset>
       )}
     />

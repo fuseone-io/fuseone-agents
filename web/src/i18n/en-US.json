@@ -2966,6 +2966,7 @@
   "scope": {
     "everything": "Everything I can reach",
     "label": "Context",
+    "listsFailed": "Couldn't load the companies and areas. What is already chosen still shows.",
     "noAreas": "No area declared",
     "optionUnknown": "{{label}} (not registered)",
     "optionWholeCompany": "Whole company",

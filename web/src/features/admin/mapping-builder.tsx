@@ -12,6 +12,7 @@ import {
 import { MappingField } from "@/features/admin/mapping-field";
 import type { GroupMapping } from "@/features/admin/identity-api";
 import { CompanyAreaFields } from "@/features/scope/company-area-fields";
+import { ScopeListsNotice } from "@/features/scope/scope-lists-notice";
 
 const ROLES: GroupMapping["role"][] = [
   "admin",
@@ -129,6 +130,9 @@ export function MappingBuilder({
           {t("identity.addAdminMapping")}
         </Button>
       </div>
+      {mappings.length > 0 && (
+        <ScopeListsNotice message={t("scope.listsFailed")} />
+      )}
     </div>
   );
 }

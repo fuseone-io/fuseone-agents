@@ -2966,6 +2966,7 @@
   "scope": {
     "everything": "Tudo o que eu alcanço",
     "label": "Contexto",
+    "listsFailed": "Não foi possível carregar as empresas e áreas. O que já está escolhido continua aparecendo.",
     "noAreas": "Nenhuma área declarada",
     "optionUnknown": "{{label}} (não registrada)",
     "optionWholeCompany": "Toda a empresa",

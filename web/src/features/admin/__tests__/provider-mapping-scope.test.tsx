@@ -15,10 +15,10 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-function mount(mappings: GroupMapping[]) {
+function mount(mappings: GroupMapping[], lists: { fail?: boolean } = {}) {
   const sent: unknown[] = [];
   vi.stubGlobal("fetch", async (request: Request) => {
-    const listed = scopeListsRoute(request.method, pathOf(request));
+    const listed = scopeListsRoute(request.method, pathOf(request), lists);
     if (listed) return listed;
     if (request.method === "PUT") sent.push(await request.json());
     return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
@@ -92,5 +92,14 @@ describe("a mapping the lists do not choose", () => {
     await waitFor(() => expect(company).toHaveTextContent("legacy (não registrada)"));
     expect(screen.getByRole("combobox", { name: "Área" })).toHaveTextContent("gone (não registrada)");
     expect(await save()).toEqual([mapping("legacy", "gone")]);
+  });
+
+  it("says the lists failed, offers a retry, and keeps the mapping", async () => {
+    mount([mapping("acme", "finance")], { fail: true });
+
+    expect(await screen.findByText(/Não foi possível carregar as empresas e áreas/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Empresa" })).toHaveTextContent("acme");
+    expect(screen.getByRole("combobox", { name: "Área" })).toHaveTextContent("finance");
   });
 });

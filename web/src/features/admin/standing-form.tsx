@@ -136,9 +136,7 @@ export function StandingForm({ onClose }: { onClose: () => void }) {
               suggest={t("admin.standingSuggestAgents")}
               useSuggestions={useAgentSuggestions}
             />
-            <div className="grid items-start gap-3 sm:grid-cols-2">
-              <StandingScopeFields form={form} />
-            </div>
+            <StandingScopeFields form={form} />
             <div className="grid items-start gap-3 sm:grid-cols-2">
               <Field
                 form={form}

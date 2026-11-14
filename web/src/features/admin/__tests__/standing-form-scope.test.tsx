@@ -19,10 +19,10 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-function mount(companies: Company[] | "refused" = [...COMPANIES, initech]) {
+function mount(companies: Company[] | "refused" = [...COMPANIES, initech], fail = false) {
   const sent: { scope: unknown }[] = [];
   vi.stubGlobal("fetch", async (request: Request) => {
-    const listed = scopeListsRoute(request.method, pathOf(request), { companies });
+    const listed = scopeListsRoute(request.method, pathOf(request), { companies, fail });
     if (listed) return listed;
     if (request.method === "POST") sent.push(await request.json());
     return new Response(request.method === "POST" ? null : '{"items":[]}', {
@@ -102,5 +102,15 @@ describe("where a standing approval holds", () => {
   it("offers the areas' companies when the company list is refused", async () => {
     mount("refused");
     expect(await optionsOf("Empresa")).toEqual(["acme", "example"]);
+  });
+
+  it("says the lists failed, offers a retry, and keeps the active scope", async () => {
+    useActiveScope.setState({ company: "acme", area: "finance" });
+    mount(undefined, true);
+
+    expect(await screen.findByText(/Não foi possível carregar as empresas e áreas/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Empresa" })).toHaveTextContent("acme");
+    expect(screen.getByRole("combobox", { name: "Área" })).toHaveTextContent("finance");
   });
 });

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import type { ScopeValues } from "@/features/integrations/scope/scope-choice";
 import { CompanyAreaFields } from "@/features/scope/company-area-fields";
+import { ScopeListsNotice } from "@/features/scope/scope-lists-notice";
 
 /** Any registered scope: for the platform's administration. */
 export function FreeScopeFields({ editing, label }: { editing: boolean; label: string }) {
@@ -63,24 +64,28 @@ export function FreeScopeFields({ editing, label }: { editing: boolean; label: s
 
 /** The company, and the area when the row lives at one. */
 function PlacedScope({ editing }: { editing: boolean }) {
+  const { t } = useTranslation();
   const form = useFormContext<ScopeValues>();
   const [scopeKind, company, area] = form.watch(["scopeKind", "company", "area"]);
   const { errors, isSubmitted } = form.formState;
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <CompanyAreaFields
-        value={{ company, area }}
-        shape={{
-          idPrefix: "scope",
-          area: scopeKind === "area" ? "required" : "none",
-          errors: { company: errors.company?.message, area: errors.area?.message },
-        }}
-        disabled={editing}
-        onChange={(next) => {
-          form.setValue("company", next.company, { shouldValidate: isSubmitted });
-          form.setValue("area", next.area, { shouldValidate: isSubmitted });
-        }}
-      />
-    </div>
+    <>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <CompanyAreaFields
+          value={{ company, area }}
+          shape={{
+            idPrefix: "scope",
+            area: scopeKind === "area" ? "required" : "none",
+            errors: { company: errors.company?.message, area: errors.area?.message },
+          }}
+          disabled={editing}
+          onChange={(next) => {
+            form.setValue("company", next.company, { shouldValidate: isSubmitted });
+            form.setValue("area", next.area, { shouldValidate: isSubmitted });
+          }}
+        />
+      </div>
+      <ScopeListsNotice message={t("scope.listsFailed")} />
+    </>
   );
 }

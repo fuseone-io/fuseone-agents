@@ -16,12 +16,12 @@ import { scopeListsRoute } from "@/test/scope-lists-routes";
 
 const areaAdmin: ScopeChoice = { anyScope: false, configure: [{ company: "acme", area: "cx" }] };
 
-function connect(choice?: ScopeChoice, server: MCPServer | null = null) {
+function connect(choice?: ScopeChoice, server: MCPServer | null = null, lists: { fail?: boolean } = {}) {
   const servers = revisedCollection<{ name: string }>("/admin/integrations/mcp-servers", server ? [server] : []);
   const requests = stubNetwork([servers], (method, path) =>
     path === "/admin/integrations"
       ? json({ mcpServers: [], providers: [] })
-      : scopeListsRoute(method, path),
+      : scopeListsRoute(method, path, lists),
   );
   const editor = <ServerEditor server={server} onClose={vi.fn()} />;
   render(
@@ -183,5 +183,17 @@ describe("the platform's free scope", () => {
     await waitFor(() => expect(company).toHaveTextContent("legacy (não registrada)"));
     expect(company).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "Área" })).toHaveTextContent("gone (não registrada)");
+  });
+
+  it("says the lists failed, offers a retry, and keeps an edited server's scope", async () => {
+    connect(undefined, {
+      name: "crm", transport: "http", url: "https://crm.example.com/mcp", enabled: true,
+      scopeKind: "area", company: "acme", area: "cx", editable: true,
+    }, { fail: true });
+
+    expect(await screen.findByText(/Não foi possível carregar as empresas e áreas/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Empresa" })).toHaveTextContent("acme");
+    expect(screen.getByRole("combobox", { name: "Área" })).toHaveTextContent("cx");
   });
 });
