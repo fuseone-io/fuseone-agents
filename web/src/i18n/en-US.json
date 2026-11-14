@@ -3072,7 +3072,8 @@
   "shell": {
     "breadcrumb": "Breadcrumb",
     "signOut": "Sign out",
-    "toggleSidebar": "Toggle sidebar"
+    "toggleSidebar": "Toggle sidebar",
+    "version": "Version {{version}}"
   },
   "simulation": {
     "again": "New simulation",

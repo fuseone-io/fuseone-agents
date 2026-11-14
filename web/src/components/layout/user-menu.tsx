@@ -15,11 +15,12 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { csrfToken } from "@/lib/api/client";
-import { useMe, type MeGrant } from "@/features/session/api";
+import { useMe, useVersion, type MeGrant } from "@/features/session/api";
 
 export function UserMenu() {
   const { t } = useTranslation();
   const { data: me } = useMe();
+  const { data: version } = useVersion();
   if (!me) return null;
 
   return (
@@ -60,6 +61,14 @@ export function UserMenu() {
             <DropdownMenuLabel className="font-normal text-muted-foreground">
               {me.display}
             </DropdownMenuLabel>
+            {version && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="font-mono text-2xs font-normal tabular-nums text-muted-foreground">
+                  {t("shell.version", { version })}
+                </DropdownMenuLabel>
+              </>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={signOut}>
               <LogOut className="size-4" />

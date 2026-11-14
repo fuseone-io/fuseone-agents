@@ -47,7 +47,10 @@ export interface MeScope {
   area: string;
 }
 
-export const sessionKeys = { me: ["session", "me"] as const };
+export const sessionKeys = {
+  me: ["session", "me"] as const,
+  version: ["session", "version"] as const,
+};
 
 async function fetchMe(): Promise<Me | null> {
   const response = await fetch("/api/v1/me", { credentials: "same-origin" });
@@ -69,6 +72,24 @@ export function useMe() {
     queryKey: sessionKeys.me,
     queryFn: fetchMe,
     staleTime: 60_000,
+    retry: false,
+  });
+}
+
+/**
+ * The version of the platform this console talks to, from the health answer.
+ * It does not change while the page is open, so it is read once.
+ */
+export function useVersion() {
+  return useQuery({
+    queryKey: sessionKeys.version,
+    queryFn: async (): Promise<string | null> => {
+      const response = await fetch("/api/v1/healthz", { credentials: "same-origin" });
+      if (!response.ok) return null;
+      const health = (await response.json()) as { version?: string };
+      return health.version ?? null;
+    },
+    staleTime: Infinity,
     retry: false,
   });
 }

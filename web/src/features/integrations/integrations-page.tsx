@@ -81,7 +81,9 @@ export function IntegrationsPage({
   const recipes = useRecipes(access.platform);
   const channels = useChannels(access.platform);
   const credentials = useMCPUserCredentials(access.platform);
-  const connectorCatalog = useConnectorCatalog(section === "connectors");
+  // Asked whenever the connectors are offered, not only on their section:
+  // the rail counts them from the moment the page opens.
+  const connectorCatalog = useConnectorCatalog(access.connectors);
   // The instances carry hosts and databases, so they are listed to whoever
   // configures somewhere, and not to a reader of the platform (NT-019).
   const connectorInstances = useConnectorInstances(
