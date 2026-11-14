@@ -88,9 +88,14 @@ func (s *Server) rulingsFor(ctx context.Context, scope domain.Scope) (ruled, err
 	if err != nil {
 		return nil, fmt.Errorf("tool catalogue: %w", err)
 	}
+	// Only the tools usable from the agent's scope (NT-019 Enforcement): a
+	// connector instance's and an MCP server's alike. One out of it is not
+	// offered, so publishing an agent naming it is refused, and the Gate
+	// still stops a run that reaches one (checkScope). Every entry carries
+	// its server's runtime scope (placeTools), the installation's by default.
 	out := make(ruled, len(entries))
 	for _, entry := range entries {
-		if entry.Native && !entry.Scope.Contains(scope) {
+		if !entry.Scope.Contains(scope) {
 			continue
 		}
 		out[entry.ID] = entry
