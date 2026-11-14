@@ -28,7 +28,22 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.111.0] — 2026-11-14
+
+People management and console fixes (#345, #347, #348): a grant's company and area
+are chosen from lists, an account made here can be removed, somebody always remains
+who can manage identity, and a ceiling's scope is checked as the other doors check
+it. No migration.
+
+### Upgrade notes
+
+- **Nothing to do before upgrading.** Until every replica runs 0.111.0, a request
+  answered by an older one is judged as before: it does not offer removal, and it
+  still accepts a grants change that leaves nobody managing identity, or a grant for
+  a removed person. Finish the rollout before relying on those refusals.
+- **Rolling back to 0.110.0 keeps a removed person out**: the older binary already
+  refuses to sign in a deactivated account, and their grants and sessions are gone.
+  It does list them again among the people.
 
 ### Added
 
@@ -45,6 +60,8 @@ field" is a commit message.
   installation, like the rest of people management. The username stays with the
   removed account and cannot be given to a new one. In the console, **Remove** appears on such a person's row, after a
   confirmation that names them; never on your own row or a provider's person.
+- **The user menu shows the version of the platform** the console talks to, read
+  from `/healthz`.
 
 ### Changed
 
@@ -69,6 +86,8 @@ field" is a commit message.
 
 ### Fixed
 
+- **The integrations rail counts the connectors as soon as the page opens**, rather
+  than only after their section was clicked.
 - **A ceiling's scope must be a real company or area, written once.** `PUT
   /admin/budgets/{scope}` trimmed only the whole path, so `acme / cx` or `Acme` set a
   ceiling on a scope no agent belongs to. A company or area in another form (spaces
