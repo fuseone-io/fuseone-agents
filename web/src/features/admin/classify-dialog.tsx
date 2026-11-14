@@ -52,14 +52,11 @@ export function ClassifyDialog({
   const { t } = useTranslation();
   const classify = useClassifyTool();
   /*
-    Reset per tool, and started from what the tool already says.
+    Reset per tool, and started from what the level being recorded says.
 
-    The state used to begin blank and stay mounted between tools, which made
-    two failures out of one mistake. Opening "change the ruling" on a
-    destructive tool and filling in only the reason submitted `read` — the
-    dialog's zero value, not anybody's judgement. And what was typed for one
-    tool was still there for the next, so a decision could be signed with
-    another tool's answers.
+    It once began blank and stayed mounted between tools: a destructive tool
+    with only a reason filled in was submitted as `read`, the zero value, and
+    one tool's answers could be signed for the next.
 
     Keyed by the digest as well as the id: a tool whose definition moved is a
     different thing to judge, and carrying the old answers into it is the exact
@@ -72,9 +69,15 @@ export function ClassifyDialog({
 
   if (identity !== judging) {
     setJudging(identity);
-    setRuling(tool ? startRulingFromTool(tool) : BLANK);
-    setLevel(offer === "owner" ? "owner" : "platform");
+    const starting = offer === "owner" ? "owner" : "platform";
+    setLevel(starting);
+    setRuling(tool ? startRulingFromTool(tool, starting) : BLANK);
   }
+  // Each level starts from its own ruling, never the one just shown.
+  const switchLevel = (next: RulingLevel) => {
+    setLevel(next);
+    if (tool) setRuling(startRulingFromTool(tool, next));
+  };
 
   if (!tool) return null;
 
@@ -115,7 +118,7 @@ export function ClassifyDialog({
           />
         )}
 
-        <RulingLevelField offer={offer} level={level} onChange={setLevel} />
+        <RulingLevelField offer={offer} level={level} onChange={switchLevel} />
 
         <ClassifyFields
           ruling={ruling}

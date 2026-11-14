@@ -26,6 +26,7 @@ const AREA_CURATOR = {
 const waiting = (toolId: string, company: string, area = ""): Tool => ({
   toolId, server: toolId.split(".")[0] ?? "", effect: "read", stale: true,
   untrusted: false, digest: "sha-1", scope: { company, area },
+  rulings: [{ level: "owner", scope: { company, area }, effect: "read", untrusted: false, inForce: true }],
 });
 const TOOLS = [waiting("crm.search", "acme", "cx"), waiting("shared.search", "*")];
 

@@ -4,6 +4,7 @@ import type {
   RulingLevel,
   Tool,
   ToolDedupe,
+  ToolRuling,
 } from "@/features/admin/api";
 
 export type ClassificationInput = {
@@ -32,27 +33,46 @@ export function blankDedupe(): DedupeRuling {
 }
 
 /*
-startRulingFromTool is what a ruling opens on.
+startRulingFromTool is what a ruling opens on, for the level being recorded.
 
-A tool nobody has judged opens blank: there is nothing to carry forward, and a
-pre-filled effect would be the platform answering for the Curator.
+A tool nobody has judged, or whose ruling a new definition overtook, opens
+blank: a pre-filled effect would be the platform answering for the Curator.
 
-A tool already ruled on opens on its ruling. The act is "change this", and
-starting from the zero value makes the safest-looking answer — `read` — the one
-a distracted person submits by touching nothing.
+A tool already ruled on opens on the ruling of that level (NT-019). The
+tool's own fields are the ruling in force, which under a ceiling is the
+platform's: an owner started from them would save the platform's word over
+their own and lose its compensation and dedupe. A level nobody ruled at opens
+blank. A server that predates `rulings` answers for the platform's alone, so
+its tool's own fields are that ruling.
 */
-export function startRulingFromTool(tool: Tool): Ruling {
+export function startRulingFromTool(
+  tool: Tool,
+  level: RulingLevel = "platform",
+): Ruling {
   if (tool.effect === "unknown") return blankRuling();
+  if (tool.rulings === undefined) {
+    return level === "platform"
+      ? rulingOf({ ...tool, effect: tool.effect })
+      : blankRuling();
+  }
+  const ruled = tool.rulings.find((one) => one.level === level);
+  return ruled ? rulingOf(ruled) : blankRuling();
+}
+
+function rulingOf(said: Pick<
+  ToolRuling,
+  "effect" | "untrusted" | "compensatedBy" | "dedupe"
+>): Ruling {
   return {
-    effect: tool.effect,
-    untrusted: tool.untrusted,
+    effect: said.effect,
+    untrusted: said.untrusted,
     reason: "",
-    compensatedBy: tool.compensatedBy ?? "",
-    dedupe: tool.dedupe
+    compensatedBy: said.compensatedBy ?? "",
+    dedupe: said.dedupe
       ? {
           enabled: true,
-          windowSeconds: String(tool.dedupe.windowSeconds),
-          argPaths: tool.dedupe.argPaths.join("\n"),
+          windowSeconds: String(said.dedupe.windowSeconds),
+          argPaths: said.dedupe.argPaths.join("\n"),
         }
       : blankDedupe(),
   };

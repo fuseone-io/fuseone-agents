@@ -35,7 +35,13 @@ const shared: MCPServer = { ...crm, name: "shared", scopeKind: "installation", c
 
 const ruled = (over: Partial<Tool> = {}): Tool => ({
   toolId: "crm.search", server: "crm", effect: "read", untrusted: false, digest: "sha-1",
-  scope: { company: "acme", area: "cx" }, ...over,
+  scope: { company: "acme", area: "cx" },
+  // Ruled read at both levels, as the listing says of a ruled tool.
+  rulings: [
+    { level: "platform", scope: { company: "*", area: "" }, effect: "read", untrusted: false, inForce: true },
+    { level: "owner", scope: { company: "acme", area: "cx" }, effect: "read", untrusted: false, inForce: false, overridden: true },
+  ],
+  ...over,
 });
 
 function world(me: object, tools: Tool[]) {
@@ -172,5 +178,60 @@ describe("an area's curator and the ceiling", () => {
 
     expect(screen.getByRole("list", { name: "Decisões sobre a ferramenta" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Retirar o teto da plataforma" })).not.toBeInTheDocument();
+  });
+});
+
+/*
+Editing one level starts from that level's ruling. The tool's own fields are
+the ruling in force, the platform's under a ceiling: started from them, an
+owner saving their ruling would write the platform's word over their own and
+lose its compensation and dedupe.
+*/
+const UNDER_CEILING: Tool["rulings"] = [
+  { level: "platform", scope: { company: "*", area: "" }, effect: "read", untrusted: false, inForce: true },
+  {
+    level: "owner", scope: { company: "acme", area: "cx" }, effect: "write", untrusted: true,
+    inForce: false, overridden: true, compensatedBy: "crm.undo",
+    dedupe: { windowSeconds: 3600, argPaths: ["ticket.id"] },
+  },
+];
+const OWNERS_WORD = {
+  level: "owner", effect: "write", untrusted: true, compensatedBy: "crm.undo",
+  dedupe: { windowSeconds: 3600, argPaths: ["ticket.id"] },
+};
+
+describe("editing one level's ruling", () => {
+  it("starts the owner from the owner's ruling, not the ceiling in force", async () => {
+    const { asked } = world(AREA_CURATOR, [ruled({ rulings: UNDER_CEILING })]);
+    show();
+
+    await recordRuling();
+
+    await waitFor(() => expect(classified(asked)).toHaveLength(1));
+    expect(classified(asked)[0]?.body).toMatchObject(OWNERS_WORD);
+  });
+
+  it("starts again from the other level's ruling when the platform switches", async () => {
+    const user = userEvent.setup();
+    const { asked } = world(PLATFORM_CURATOR, [ruled({ rulings: UNDER_CEILING })]);
+    show();
+    await user.click(await screen.findByRole("button", { name: "Mudar a decisão" }));
+
+    await user.click(screen.getByRole("radio", { name: /Decisão do dono/ }));
+    await user.click(screen.getByRole("button", { name: "Registrar classificação" }));
+
+    await waitFor(() => expect(classified(asked)).toHaveLength(1));
+    expect(classified(asked)[0]?.body).toMatchObject(OWNERS_WORD);
+  });
+
+  it("starts a level nobody ruled at with no effect at all", async () => {
+    const user = userEvent.setup();
+    world(PLATFORM_CURATOR, [ruled({ rulings: UNDER_CEILING.slice(0, 1) })]);
+    show();
+    await user.click(await screen.findByRole("button", { name: "Mudar a decisão" }));
+
+    await user.click(screen.getByRole("radio", { name: /Decisão do dono/ }));
+
+    expect(screen.getByRole("button", { name: "Registrar classificação" })).toBeDisabled();
   });
 });
