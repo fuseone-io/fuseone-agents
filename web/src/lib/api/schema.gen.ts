@@ -3335,6 +3335,14 @@ export interface components {
             inForce: boolean;
             /** @description An owner's ruling while the platform has one on the same tool — overridden by the platform. */
             overridden?: boolean;
+            /**
+             * @description The tool that undoes this one, as this ruling says. Each row carries
+             *     its own, so a screen editing one level starts from that level's
+             *     word and never from the other's. Absent when the ruling names none.
+             */
+            compensatedBy?: string;
+            /** @description This ruling's own deduplication, absent when it declares none. */
+            dedupe?: components["schemas"]["ToolDedupe"];
         };
         /**
          * @description What a tool does to the world, as a reader sees it — the same values and `unknown` besides, because a tool nobody has ruled on is a state this platform has and a screen has to be able to show.
@@ -8938,6 +8946,8 @@ export interface operations {
             query?: {
                 /** @description The target scope, `company` or `company/area`, as stored: no surrounding spaces, no upper case, never the installation's `*`. */
                 scope?: string;
+                /** @description True answers the tools the caller may rule on as their owner: those whose server is stored at a company or an area contained by a scope where the caller holds tool:classify (a company's contains its areas'; an area's only its own), never the installation's or a sibling's, and never a native tool (a connector instance's), which belongs to no stored MCP server. The platform's curator, tool:classify at the platform's administration, gets every tool. A caller holding tool:classify nowhere is answered 403. Asked together with `scope`, 400: one answers what a target can run, the other what the caller governs. False is the same as absent. */
+                classifiable?: boolean;
             };
             header?: never;
             path?: never;

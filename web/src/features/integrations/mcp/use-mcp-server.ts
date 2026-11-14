@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useIntegrations, type MCPServer } from "@/features/integrations/api";
 import { useTools, type Tool } from "@/features/admin/api";
 import { remoteNameOf } from "@/features/integrations/mcp/tool-names";
+import { serverTarget } from "@/features/integrations/mcp/server-target";
 
 /**
  * One server, its tools, and the surface as it is being edited.
@@ -24,13 +25,16 @@ export function useMCPServer(
   stored?: MCPServer,
 ) {
   const integrations = useIntegrations();
-  const tools = useTools();
   const [edited, setEdited] = useState<Set<string> | null>(null);
 
   const server = useMemo(
     () => integrations.data?.mcpServers?.find((s) => s.name === name),
     [integrations.data, name],
   );
+  // Asked at the server's own scope once it is known: without a target, an
+  // area's administrator is answered the installation's tools alone, and
+  // their own server would show none of its own.
+  const tools = useTools(integrations.isSuccess, serverTarget(server));
 
   const its = useMemo(
     () => (tools.data?.items ?? []).filter((t: Tool) => t.server === name),

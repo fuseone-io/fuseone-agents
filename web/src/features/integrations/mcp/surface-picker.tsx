@@ -24,11 +24,14 @@ export function SurfacePicker({
   chosen,
   onToggle,
   onClassify,
+  classifiable = () => true,
 }: {
   tools: Tool[];
   chosen: Set<string>;
   onToggle: (remoteName: string, next: boolean) => void;
   onClassify: (tool: Tool) => void;
+  /** Whether the caller may rule on this tool at all (NT-019). */
+  classifiable?: (tool: Tool) => boolean;
 }) {
   const { t } = useTranslation();
 
@@ -44,7 +47,7 @@ export function SurfacePicker({
           tool={tool}
           chosen={chosen.has(remoteNameOf(tool))}
           onToggle={onToggle}
-          onClassify={onClassify}
+          onClassify={classifiable(tool) ? onClassify : undefined}
         />
       ))}
     </ul>
@@ -79,7 +82,7 @@ function ToolRow({
   tool: Tool;
   chosen: boolean;
   onToggle: (remoteName: string, next: boolean) => void;
-  onClassify: (tool: Tool) => void;
+  onClassify?: (tool: Tool) => void;
 }) {
   const { t } = useTranslation();
   const declaredBy = tool.declaredBy ?? [];
@@ -129,9 +132,11 @@ function ToolRow({
           what it does, and the button says which act this is. */}
       <div className="flex shrink-0 items-center gap-2">
         <EffectBadge effect={tool.effect} stale={tool.stale} />
-        <Button size="sm" variant="ghost" className="h-7" onClick={() => onClassify(tool)}>
-          {t(`mcp.${actOn(tool)}`)}
-        </Button>
+        {onClassify && (
+          <Button size="sm" variant="ghost" className="h-7" onClick={() => onClassify(tool)}>
+            {t(`mcp.${actOn(tool)}`)}
+          </Button>
+        )}
       </div>
     </li>
   );

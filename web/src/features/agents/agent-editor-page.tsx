@@ -17,6 +17,7 @@ import { announcePublished } from "@/features/agents/publish-feedback";
 import { currentLocale } from "@/i18n";
 import { useAgent } from "@/features/agents/agent-detail-api";
 import { useTools } from "@/features/admin/api";
+import { agentTarget } from "@/features/agents/agent-target";
 import { useChannels } from "@/features/channels/api";
 import { useMCPUserCredentials } from "@/features/integrations/api";
 import { useRecipes } from "@/features/integrations/mcp/api";
@@ -42,7 +43,6 @@ export function AgentEditorPage() {
   const navigate = useNavigate();
 
   const loaded = useAgent(creating ? "" : (routeId ?? ""), undefined);
-  const tools = useTools();
   const policies = usePolicies();
   const [fromTemplate, setFromTemplate] = useState<string>();
   const [agentId, setAgentId] = useState(creating ? "" : (routeId ?? ""));
@@ -50,10 +50,10 @@ export function AgentEditorPage() {
   const { draft, patch, changes, published } = useAgentDraft(
     creating ? undefined : loaded.data,
   );
+  // An agent being edited is asked for once its own scope is in the draft.
+  const tools = useTools(creating || draft.company !== "", agentTarget(draft));
   const selectedTools = draft.tools ?? [];
-  const hasChannelTrigger = (draft.triggers ?? []).some(
-    (trigger) => trigger.type === "channel",
-  );
+  const hasChannelTrigger = (draft.triggers ?? []).some((x) => x.type === "channel");
   const recipes = useRecipes(selectedTools.length > 0);
   const credentials = useMCPUserCredentials(selectedTools.length > 0);
   const channels = useChannels(hasChannelTrigger);
@@ -131,6 +131,7 @@ export function AgentEditorPage() {
             published,
           }}
           tools={{ catalogue, policies: rules, enabled: draft.tools ?? [] }}
+          catalogueState={tools}
           onSteps={() => setTab("steps")}
         />
       </div>

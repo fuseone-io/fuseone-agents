@@ -112,10 +112,26 @@ author picks tools and providers from is asked for the agent's scope. Adds migra
     ruling, if any, is then in force; with none the tool never executes. Nothing lets
     an owner write or remove the platform's row.
   - `GET /admin/tools` gains `rulings` on each tool: the platform's and the owner's,
-    each with its `level`, `scope`, `effect` and `untrusted`, the one `inForce`, and an
-    owner's ruling under a platform ruling marked `overridden`.
-  - The console still classifies at the platform's level only; `tool:classify` stays
-    advertised from the platform's administration until it offers `level: owner`.
+    each with its `level`, `scope`, `effect`, `untrusted`, `compensatedBy` and
+    `dedupe`, the one `inForce`, and an owner's ruling under a platform ruling marked
+    `overridden`. Each row carries its own, so editing one level starts from that
+    level's word.
+  - `GET /admin/tools?classifiable=true` answers what the caller may rule on as the
+    owner: the tools whose server is stored at a company or an area contained by a
+    scope where they hold `tool:classify` (a company's contains its areas'), every
+    tool for the platform's curator, never a sibling's or the installation's, and never
+    a native connector tool, which belongs to no stored MCP server. 403 for a caller
+    who classifies nowhere; 400 together with `scope`.
+  - The console offers it per tool, on a server's page and in the administration's
+    queue of tools waiting: as the owner on a company's or an area's tool contained by
+    a scope where the caller holds `tool:classify` (`/me`'s `classify`), never on the
+    installation's or a sibling's. The queue asks `classifiable=true`, so a company's
+    curator sees their areas' tools. The dialog starts from the listed ruling of the
+    level being recorded, never the one in force, and opens blank on a level nobody
+    ruled at. The platform's curator keeps recording the ceiling by default,
+    may record the owner's ruling instead on a company's or an area's tool, and alone
+    is offered withdrawing the ceiling. The dialog lists the tool's rulings, the one in
+    force, and an owner's ruling overridden by the platform.
 - **What an author picks from is asked for one target scope.**
   - `GET /admin/tools` takes `scope`, `company` or `company/area`, and answers every
     tool an agent stored there can run: those whose server's (or connector instance's)
@@ -138,9 +154,15 @@ author picks tools and providers from is asked for the agent's scope. Adds migra
     read in the same snapshot as the tool, so a server moved meanwhile never hands one
     area's tool to another.
   - `/me` tells an area curator where it classifies (`classify`), for the console that
-    offers an owner's ruling per tool.
-  - The console does not send `scope` yet; the agent editor moves to these answers
-    next.
+    offers an owner's ruling per tool; `tool:classify` leaves the console's
+    platform-only list with that console.
+  - The console asks for them: the agent editor's tool picker and its provider and
+    fallback pickers, and an experiment's provider picker, send the agent's scope
+    (a new agent's once its area is chosen) and read providers from `GET /providers`.
+    A target out of the author's reach reads as such, and a provider with `usable:
+    false` is marked unavailable and refused as a new choice (kept when already
+    chosen). An existing agent's capabilities, guide and read-back ask for the agent's
+    scope too, and the agents list asks once per distinct scope on the page.
 
 ### Fixed
 

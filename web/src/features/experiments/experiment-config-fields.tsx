@@ -9,7 +9,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ModelField, modelsFor } from "@/features/agents/model-field";
-import { useIntegrations } from "@/features/integrations/api";
+import { ProviderOptions } from "@/features/agents/provider-options";
+import { useProviderChoices } from "@/features/agents/providers-api";
+import { TargetError } from "@/features/agents/target-error";
 import { AS_PUBLISHED, type ExperimentForm } from "@/features/experiments/experiment-form";
 
 /**
@@ -20,18 +22,24 @@ import { AS_PUBLISHED, type ExperimentForm } from "@/features/experiments/experi
 export function ExperimentConfigFields({
   form,
   publishedProvider,
+  target,
 }: {
   form: UseFormReturn<ExperimentForm>;
   publishedProvider: string;
+  /** The agent's scope, which the providers are asked for (NT-019). */
+  target?: string;
 }) {
   const { t } = useTranslation();
-  const integrations = useIntegrations().data;
-  const providers = integrations?.providers ?? [];
+  const choices = useProviderChoices(target, target !== undefined);
+  const providers = choices.data?.items ?? [];
   const provider = useWatch({ control: form.control, name: "provider" });
   const effective = provider === AS_PUBLISHED ? publishedProvider : provider;
 
   return (
     <div className="space-y-4">
+      {choices.error && (
+        <TargetError error={choices.error} onRetry={() => void choices.refetch()} />
+      )}
       <FormField
         control={form.control}
         name="provider"
@@ -52,11 +60,7 @@ export function ExperimentConfigFields({
               </FormControl>
               <SelectContent>
                 <SelectItem value={AS_PUBLISHED}>{t("experiments.asPublished")}</SelectItem>
-                {providers.map((p) => (
-                  <SelectItem key={p.name} value={p.name} className="font-mono">
-                    {p.name}
-                  </SelectItem>
-                ))}
+                <ProviderOptions providers={providers} current={field.value} />
               </SelectContent>
             </Select>
           </FormItem>
@@ -71,7 +75,7 @@ export function ExperimentConfigFields({
             <ModelField
               id="experiment-model"
               value={field.value}
-              options={modelsFor(effective, providers, integrations?.presets ?? [])}
+              options={modelsFor(effective, providers, [])}
               onChange={field.onChange}
             />
             <FormDescription>{t("experiments.modelHint")}</FormDescription>

@@ -22,9 +22,13 @@ function showStart() {
     "GET /agents/triage?version=v1aaaaaaaaaa": { agent: older, versions },
     "GET /agents/triage?version=v2bbbbbbbbbb": { agent: current, versions },
     "GET /agents/triage/regressions": { items: [{ id: "a" }, { id: "b" }, { id: "c" }] },
-    "GET /admin/integrations": {
-      providers: [{ name: "anthropic", models: ["claude-x"] }, { name: "openai", models: ["gpt-y"] }],
-      presets: [],
+    // Asked for the agent's own scope, so an area's author is answered (NT-019).
+    "GET /providers?scope=acme%2Fcx": {
+      items: [
+        { name: "anthropic", kind: "anthropic", models: ["claude-x"], usable: true },
+        { name: "openai", kind: "openai_compatible", models: ["gpt-y"], usable: true },
+        { name: "legacy", kind: "openai_compatible", models: [], usable: false },
+      ],
     },
   });
   renderWithClient(<ExperimentStart agentId="triage" onClose={vi.fn()} onStarted={vi.fn()} />);
@@ -69,5 +73,16 @@ describe("starting an experiment on an older version", () => {
 
     expect(await screen.findByRole("option", { name: "gpt-y" })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "claude-x" })).not.toBeInTheDocument();
+  });
+
+  it("offers a provider this installation would not ask now only as unavailable", async () => {
+    showStart();
+    const user = userEvent.setup();
+
+    await screen.findByText(new RegExp(`até ${escape(formatMicros(500_000))} cada`));
+    await user.click(screen.getByRole("combobox", { name: "Provedor" }));
+
+    const legacy = await screen.findByRole("option", { name: "legacy · indisponível" });
+    expect(legacy).toHaveAttribute("aria-disabled", "true");
   });
 });

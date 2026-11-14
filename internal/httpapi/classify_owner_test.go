@@ -353,3 +353,48 @@ func TestClassifyTool_anUnknownLevel_isRefusedAndStoresNothing(t *testing.T) {
 		t.Errorf("stored at %v, want nothing from an unknown level", stored)
 	}
 }
+
+// Each listed ruling carries its own compensation and dedupe: a screen editing
+// the owner's ruling under a ceiling starts from the owner's word, and saving
+// it never writes the platform's values over it.
+func TestListTools_eachRulingCarriesItsOwnCompensationAndDedupe(t *testing.T) {
+	w := newClassifyWorld(t)
+	owner := classifyAt(openapi.RulingLevelOwner, "cx-jira.search", openapi.EffectWrite)
+	owner.Body.CompensatedBy = ptr("github.search")
+	owner.Body.Dedupe = &openapi.ToolDedupe{WindowSeconds: 3600, ArgPaths: []string{"ticket.id"}}
+	for caller, req := range map[context.Context]openapi.ClassifyToolRequestObject{
+		grantedAt(domain.RoleCurator, cx): owner,
+		as(domain.RoleCurator):            classifyAt(openapi.RulingLevelPlatform, "cx-jira.search", openapi.EffectRead),
+	} {
+		if resp, err := w.api.ClassifyTool(caller, req); err != nil {
+			t.Fatalf("ClassifyTool: %v", err)
+		} else if code, detail := classifyStatus(t, resp); code != "204" {
+			t.Fatalf("ClassifyTool = %s %s", code, detail)
+		}
+	}
+	rulings := listedRulings(t, w, "cx-jira.search")
+	if len(rulings) != 2 {
+		t.Fatalf("rulings = %+v, want the platform's and the owner's", rulings)
+	}
+	p, o := rulings[0], rulings[1]
+	if valueOr(o.CompensatedBy) != "github.search" || o.Dedupe == nil || o.Dedupe.WindowSeconds != 3600 {
+		t.Errorf("owner's ruling listed as %+v, want its compensation and dedupe", o)
+	}
+	if p.CompensatedBy != nil || p.Dedupe != nil {
+		t.Errorf("platform's ruling listed as %+v, want none of the owner's", p)
+	}
+}
+
+func listedRulings(t *testing.T, w classifyWorld, tool string) []openapi.ToolRuling {
+	t.Helper()
+	resp, err := w.api.ListTools(as(domain.RoleCurator), openapi.ListToolsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	for _, listed := range resp.(openapi.ListTools200JSONResponse).Items {
+		if listed.ToolId == tool && listed.Rulings != nil {
+			return *listed.Rulings
+		}
+	}
+	return nil
+}

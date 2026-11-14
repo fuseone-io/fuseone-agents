@@ -1,5 +1,11 @@
 import type { DedupeRuling, Ruling } from "@/features/admin/classify-fields";
-import type { Effect, Tool, ToolDedupe } from "@/features/admin/api";
+import type {
+  Effect,
+  RulingLevel,
+  Tool,
+  ToolDedupe,
+  ToolRuling,
+} from "@/features/admin/api";
 
 export type ClassificationInput = {
   toolId: string;
@@ -9,6 +15,7 @@ export type ClassificationInput = {
   compensatedBy?: string;
   dedupe?: ToolDedupe;
   digest?: string;
+  level?: RulingLevel;
 };
 
 export function blankRuling(): Ruling {
@@ -26,35 +33,57 @@ export function blankDedupe(): DedupeRuling {
 }
 
 /*
-startRulingFromTool is what a ruling opens on.
+startRulingFromTool is what a ruling opens on, for the level being recorded.
 
-A tool nobody has judged opens blank: there is nothing to carry forward, and a
-pre-filled effect would be the platform answering for the Curator.
+A tool opens on the listed ruling of that level (NT-019), looked up first. The
+tool's own fields are the ruling in force, the platform's under a ceiling, and
+read unclassified when a new definition overtook it: an owner started from
+them would save the platform's word, or nothing, over their own and lose its
+compensation and dedupe. A level nobody ruled at opens blank: a pre-filled
+effect would be the platform answering for the Curator.
 
-A tool already ruled on opens on its ruling. The act is "change this", and
-starting from the zero value makes the safest-looking answer — `read` — the one
-a distracted person submits by touching nothing.
+A server that predates `rulings` answers for the platform's alone, so its
+tool's own fields are that ruling, and blank while they read unclassified.
 */
-export function startRulingFromTool(tool: Tool): Ruling {
-  if (tool.effect === "unknown") return blankRuling();
+export function startRulingFromTool(
+  tool: Tool,
+  level: RulingLevel = "platform",
+): Ruling {
+  if (tool.rulings !== undefined) {
+    const ruled = tool.rulings.find((one) => one.level === level);
+    return ruled ? rulingOf(ruled) : blankRuling();
+  }
+  if (tool.effect === "unknown" || level !== "platform") return blankRuling();
+  return rulingOf({ ...tool, effect: tool.effect });
+}
+
+function rulingOf(said: Pick<
+  ToolRuling,
+  "effect" | "untrusted" | "compensatedBy" | "dedupe"
+>): Ruling {
   return {
-    effect: tool.effect,
-    untrusted: tool.untrusted,
+    effect: said.effect,
+    untrusted: said.untrusted,
     reason: "",
-    compensatedBy: tool.compensatedBy ?? "",
-    dedupe: tool.dedupe
+    compensatedBy: said.compensatedBy ?? "",
+    dedupe: said.dedupe
       ? {
           enabled: true,
-          windowSeconds: String(tool.dedupe.windowSeconds),
-          argPaths: tool.dedupe.argPaths.join("\n"),
+          windowSeconds: String(said.dedupe.windowSeconds),
+          argPaths: said.dedupe.argPaths.join("\n"),
         }
       : blankDedupe(),
   };
 }
 
+/*
+The level travels only when it is the owner's. Absent is the platform's on the
+server, so a platform curator's ruling is the request it always was.
+*/
 export function classificationInput(
   tool: Tool,
   ruling: Ruling,
+  level: RulingLevel = "platform",
 ): ClassificationInput | null {
   const dedupe = dedupeFromRuling(ruling);
   if (ruling.effect === "" || dedupe === null) return null;
@@ -67,6 +96,7 @@ export function classificationInput(
     compensatedBy: ruling.compensatedBy,
   };
   if (dedupe !== undefined) input.dedupe = dedupe;
+  if (level === "owner") input.level = "owner";
   return input;
 }
 
@@ -80,4 +110,24 @@ function dedupeFromRuling(ruling: Ruling): ToolDedupe | undefined | null {
   if (!Number.isInteger(windowSeconds) || windowSeconds < 1) return null;
   if (argPaths.length === 0) return null;
   return { windowSeconds, argPaths };
+}
+
+/*
+A suggestion accepted fills the form and keeps the reason the curator's.
+
+No fallback on the effect. The contract makes it required, so the only way
+`??` fires is a suggestion that arrived without one — and it would fire into
+`read`, the value this dialog stopped defaulting to everywhere else. An empty
+effect leaves the form unanswered, the honest reading of a suggestion that
+suggests nothing. Accepting a suggestion is still a decision somebody signs,
+and signing somebody else's sentence is not the same as writing one.
+*/
+export function rulingFromSuggestion(tool: Tool, current: Ruling): Ruling {
+  return {
+    effect: tool.suggested?.effect ?? "",
+    untrusted: tool.suggested?.untrusted ?? true,
+    compensatedBy: tool.suggested?.compensatedBy ?? "",
+    dedupe: current.dedupe,
+    reason: "",
+  };
 }

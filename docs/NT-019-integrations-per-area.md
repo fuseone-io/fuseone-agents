@@ -221,6 +221,19 @@ One rule, for every kind:
      tools their owners ruled on. A journey test pins it.
    - The agent editor, the fallback fields and the experiment form pass the agent's
      scope. The experiment form passes the experimented agent's scope.
+   - **What a curator governs is a third answer, decided in part B2b:**
+     `ListTools?classifiable=true`. A target answer runs upwards (rows whose scope
+     contains the target), so a company curator asking for `acme` never sees
+     `acme/cx`'s tools, which an `acme` grant may classify. This answer runs downwards:
+     the tools whose server is stored at a company or an area that a scope where the
+     caller holds `tool:classify` contains, as the owner's door (`ClassifyTool`,
+     `level: owner`) authorizes it. A company's grant answers its own and its areas';
+     an area's only its own; never a sibling's, never the installation's. The
+     platform's curator (`tool:classify` at `adminScope`) gets every tool. A caller
+     holding `tool:classify` nowhere is answered 403, as every classify door answers
+     them; asked together with `scope`, 400, since the two answers run in opposite
+     directions and a combination would have to invent which one wins. The console's
+     queue of tools waiting asks this once.
 
 ### Names are unique across the installation, in the database
 

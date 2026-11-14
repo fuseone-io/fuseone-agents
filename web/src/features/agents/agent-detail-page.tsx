@@ -18,6 +18,7 @@ import {
 } from "@/features/agents/agent-guided-path-model";
 import { AgentTrustCenter } from "@/features/agents/agent-trust-center";
 import { useTools } from "@/features/admin/api";
+import { agentTarget } from "@/features/agents/agent-target";
 import { useChannels } from "@/features/channels/api";
 import { useMCPUserCredentials } from "@/features/integrations/api";
 import { useRecipes } from "@/features/integrations/mcp/api";
@@ -44,7 +45,9 @@ export function AgentDetailPage() {
   const hasChannelTrigger = (publishedPreview?.triggers ?? []).some(
     (trigger) => trigger.type === "channel",
   );
-  const tools = useTools();
+  // At the agent's own scope once it is read, never unscoped first (NT-019).
+  const target = publishedPreview && agentTarget(publishedPreview.scope);
+  const tools = useTools(target !== undefined, target);
   const recipes = useRecipes(hasTools);
   const credentials = useMCPUserCredentials(hasTools);
   const channels = useChannels(hasChannelTrigger);

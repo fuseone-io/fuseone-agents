@@ -93,7 +93,7 @@ func (s *Server) ListTools(ctx context.Context, req openapi.ListToolsRequestObje
 			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermToolRead, domain.Scope{}),
 		}, nil
 	}
-	keep, refused := listToolsReach(ctx, req.Params.Scope)
+	keep, refused := listToolsReach(ctx, req.Params)
 	if refused != nil {
 		return refused, nil
 	}
@@ -106,6 +106,9 @@ func (s *Server) ListTools(ctx context.Context, req openapi.ListToolsRequestObje
 		return nil, fmt.Errorf("list tools: %w", err)
 	}
 	entries = toolsInReach(entries, keep)
+	if req.Params.Classifiable != nil && *req.Params.Classifiable {
+		entries = ownersMayRule(ctx, entries)
+	}
 
 	// Whether each tool's server answers now. The published list is what this
 	// installation has ever offered and it never shrinks — two workers

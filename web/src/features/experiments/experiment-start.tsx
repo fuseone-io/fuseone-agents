@@ -10,6 +10,7 @@ import {
   PropertiesSheetFooter,
 } from "@/components/shared/properties-sheet";
 import { useAgent } from "@/features/agents/agent-detail-api";
+import { agentTarget } from "@/features/agents/agent-target";
 import { ExperimentConfigFields } from "@/features/experiments/experiment-config-fields";
 import { ExperimentCost } from "@/features/experiments/experiment-cost";
 import { RepetitionsField, VersionField } from "@/features/experiments/experiment-pin-fields";
@@ -76,7 +77,11 @@ export function ExperimentStart({
         <form onSubmit={form.handleSubmit(submit)} className="flex min-h-0 flex-1 flex-col">
           <PropertiesSheetBody className="space-y-4">
             <VersionField form={form} versions={versions} />
-            <ExperimentConfigFields form={form} publishedProvider={agent?.provider ?? ""} />
+            <ExperimentConfigFields
+              form={form}
+              publishedProvider={agent?.provider ?? ""}
+              target={agent ? agentTarget(agent.scope) : undefined}
+            />
             <RepetitionsField form={form} />
             <ExperimentCost
               agentId={agentId}

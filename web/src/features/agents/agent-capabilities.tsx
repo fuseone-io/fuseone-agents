@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTools } from "@/features/admin/api";
+import { agentTarget } from "@/features/agents/agent-target";
 import { EffectBadge } from "@/features/agents/effect-badge";
 import { Mono } from "@/components/shared/mono";
 import { formatMicros, formatTokens } from "@/lib/format";
@@ -15,7 +16,8 @@ export function AgentCapabilities({
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const tools = useTools();
+  // At the agent's own scope, where its area's tools are answered (NT-019).
+  const tools = useTools(true, agentTarget(agent.scope));
   const effects = new Map(
     (tools.data?.items ?? []).map((t) => [t.toolId, t.effect] as const),
   );
