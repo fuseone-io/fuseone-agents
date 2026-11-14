@@ -54,17 +54,6 @@ describe("the companies a grant may name", () => {
       { value: "legacy", label: "legacy", state: "unknown" },
     ]);
   });
-
-  // The company list needs authority over the installation; the areas do
-  // not. Without the list, the areas' companies are what can be offered,
-  // and a held company outside them is still not called unregistered.
-  it("offers the areas' companies when the company list is refused", () => {
-    expect(companyOptions(undefined, "legacy", { scopes })).toEqual([
-      { value: "acme", label: "acme", state: "active" },
-      { value: "globex", label: "globex", state: "active" },
-      { value: "legacy", label: "legacy", state: "active" },
-    ]);
-  });
 });
 
 describe("the areas a grant may name", () => {

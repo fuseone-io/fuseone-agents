@@ -16,7 +16,11 @@ import { scopeListsRoute } from "@/test/scope-lists-routes";
 
 const areaAdmin: ScopeChoice = { anyScope: false, configure: [{ company: "acme", area: "cx" }] };
 
-function connect(choice?: ScopeChoice, server: MCPServer | null = null, lists: { fail?: boolean } = {}) {
+function connect(
+  choice?: ScopeChoice,
+  server: MCPServer | null = null,
+  lists: Parameters<typeof scopeListsRoute>[2] = {},
+) {
   const servers = revisedCollection<{ name: string }>("/admin/integrations/mcp-servers", server ? [server] : []);
   const requests = stubNetwork([servers], (method, path) =>
     path === "/admin/integrations"
@@ -195,5 +199,21 @@ describe("the platform's free scope", () => {
     expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Empresa" })).toHaveTextContent("acme");
     expect(screen.getByRole("combobox", { name: "Área" })).toHaveTextContent("cx");
+  });
+
+  // A platform operator may place a server at any scope without the
+  // authority to list every company: the scope is then typed.
+  it("takes a typed company and area when the company list is refused", async () => {
+    const user = userEvent.setup();
+    const puts = connect(undefined, null, { companies: "refused" });
+    await choose("Escopo do servidor", "Área");
+    await user.type(await screen.findByRole("textbox", { name: "Empresa" }), " Initech ");
+    await user.type(screen.getByRole("textbox", { name: "Área" }), "legacy");
+    await user.click(screen.getByRole("combobox", { name: "Como é alcançado" }));
+    await user.click(await screen.findByRole("option", { name: "Endereço remoto (HTTP)" }));
+    await fill("crm", "https://crm.example.com/mcp");
+
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    expect(puts()[0]?.body).toMatchObject({ scopeKind: "area", company: "Initech", area: "legacy" });
   });
 });

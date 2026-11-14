@@ -6,6 +6,7 @@ import {
   WHOLE_COMPANY,
 } from "@/features/scope/scope-select-options";
 import { ScopeSelect } from "@/features/scope/scope-select";
+import { FreeCompanyAreaFields } from "@/features/scope/free-company-area-fields";
 import { useScopeLists } from "@/features/scope/use-scope-lists";
 
 /**
@@ -29,6 +30,8 @@ export type CompanyAreaShape = {
  *
  * Chosen from what is registered rather than typed, so nothing can name an
  * area that does not exist and never meet the agents filed under the real one.
+ * Only while the company list answers: refused it, the caller types the scope
+ * with suggestions, as the server still accepts any.
  * One grid cell per select: the form around them decides the layout.
  */
 export function CompanyAreaFields({
@@ -43,10 +46,9 @@ export function CompanyAreaFields({
   onChange: (next: Scope) => void;
 }) {
   const { t } = useTranslation();
-  const { data, isLoading } = useScopeLists();
+  const { data, isLoading, refused } = useScopeLists();
   const mode = shape.area ?? "whole";
   const companies = companyOptions(data.companies, value.company, {
-    scopes: data.scopes,
     installation: shape.installation,
   });
   const areas = areaOptions(data.scopes, value.company, value.area).filter(
@@ -61,6 +63,17 @@ export function CompanyAreaFields({
     error: shape.errors?.[name],
   });
 
+  if (refused) {
+    return (
+      <FreeCompanyAreaFields
+        value={value}
+        shape={shape}
+        scopes={data.scopes}
+        disabled={disabled}
+        onChange={onChange}
+      />
+    );
+  }
   return (
     <>
       <ScopeSelect

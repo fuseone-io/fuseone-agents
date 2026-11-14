@@ -2968,10 +2968,13 @@
     "label": "Contexto",
     "listsFailed": "Não foi possível carregar as empresas e áreas. O que já está escolhido continua aparecendo.",
     "noAreas": "Nenhuma área declarada",
+    "noSuggestions": "Nenhuma conhecida. Digite o identificador.",
     "optionUnknown": "{{label}} (não registrada)",
     "optionWholeCompany": "Toda a empresa",
     "optionWholeInstallation": "Toda a instalação",
     "optionWithdrawn": "{{label}} (retirada)",
+    "suggestAreas": "Sugerir áreas conhecidas",
+    "suggestCompanies": "Sugerir empresas conhecidas",
     "wholeCompany": "Toda a {{company}}"
   },
   "serviceAccounts": {

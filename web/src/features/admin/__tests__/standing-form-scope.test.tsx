@@ -100,10 +100,33 @@ describe("where a standing approval holds", () => {
     expect(await screen.findByText("Informe a empresa.")).toBeInTheDocument();
   });
 
-  // Granting needs no authority over the installation; listing companies does.
-  it("offers the areas' companies when the company list is refused", async () => {
+  // Granting needs no authority over the installation; listing companies
+  // does. Without the list nothing proves a typed company wrong, so the scope
+  // stays typed, as the server accepts it.
+  it("lets a company no area names be typed and granted when the list is refused", async () => {
+    const grant = mount("refused");
+    await userEvent.setup().type(await screen.findByRole("textbox", { name: "Empresa" }), "initech");
+    expect(await grant()).toEqual({ company: "initech", area: "" });
+  });
+
+  it("lets an area of a company it cannot see be typed when the list is refused", async () => {
+    const grant = mount("refused");
+    const user = userEvent.setup();
+    await user.type(await screen.findByRole("textbox", { name: "Empresa" }), "globex");
+    await user.type(screen.getByRole("textbox", { name: "Área" }), "legacy");
+    expect(await grant()).toEqual({ company: "globex", area: "legacy" });
+  });
+
+  it("suggests the areas' companies, then the chosen company's areas", async () => {
     mount("refused");
-    expect(await optionsOf("Empresa")).toEqual(["acme", "example"]);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("combobox", { name: "Sugerir empresas conhecidas" }));
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["acme", "example"]);
+    await user.click(screen.getByRole("option", { name: "acme" }));
+    expect(screen.getByRole("textbox", { name: "Empresa" })).toHaveValue("acme");
+
+    await user.click(screen.getByRole("combobox", { name: "Sugerir áreas conhecidas" }));
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["financeFinanceiro", "opsOperações"]);
   });
 
   it("says the lists failed, offers a retry, and keeps the active scope", async () => {

@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-function stub(lists: { fail?: boolean } = {}) {
+function stub(lists: Parameters<typeof scopeListsRoute>[2] = {}) {
   const puts: string[] = [];
   vi.stubGlobal("fetch", async (request: Request) => {
     const path = pathOf(request);
@@ -125,5 +125,36 @@ describe("a ceiling being edited", () => {
     expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Empresa" })).toHaveTextContent("acme");
     expect(screen.getByRole("combobox", { name: "Área" })).toHaveTextContent("cx");
+  });
+
+  it("still shows a ceiling's scope when the company list is refused", async () => {
+    stub({ companies: "refused" });
+    mount(ceiling("", ""));
+    expect(await screen.findByRole("textbox", { name: "Empresa" })).toHaveValue("*");
+  });
+});
+
+describe("a new ceiling when the company list is refused", () => {
+  it.each([
+    ["a company no area names", "initech", undefined, "/admin/budgets/initech"],
+    ["an area of it", "initech", "legacy", "/admin/budgets/initech/legacy"],
+  ])("takes %s typed", async (_, company, area, path) => {
+    const puts = stub({ companies: "refused" });
+    mount();
+    const user = userEvent.setup();
+    await user.type(await screen.findByRole("textbox", { name: "Empresa" }), company);
+    if (area) await user.type(screen.getByRole("textbox", { name: "Área" }), area);
+    await save();
+    await waitFor(() => expect(puts).toEqual([path]));
+  });
+
+  it("offers the installation among the suggestions", async () => {
+    const puts = stub({ companies: "refused" });
+    mount();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("combobox", { name: "Sugerir empresas conhecidas" }));
+    await user.click(screen.getByRole("option", { name: "Toda a instalação" }));
+    await save();
+    await waitFor(() => expect(puts).toEqual(["/admin/budgets/installation"]));
   });
 });

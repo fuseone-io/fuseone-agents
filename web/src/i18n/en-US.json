@@ -2968,10 +2968,13 @@
     "label": "Context",
     "listsFailed": "Couldn't load the companies and areas. What is already chosen still shows.",
     "noAreas": "No area declared",
+    "noSuggestions": "None known. Type the identifier.",
     "optionUnknown": "{{label}} (not registered)",
     "optionWholeCompany": "Whole company",
     "optionWholeInstallation": "Whole installation",
     "optionWithdrawn": "{{label}} (withdrawn)",
+    "suggestAreas": "Suggest known areas",
+    "suggestCompanies": "Suggest known companies",
     "wholeCompany": "All of {{company}}"
   },
   "serviceAccounts": {
