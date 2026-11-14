@@ -310,9 +310,15 @@ a company and a platform caller, and an author, who is refused 403.</p>
 <p><strong>What an author picks from is a reduced answer, on <code dir="auto">tool:read</code>.</strong> Building an agent
 needs names, not addresses:</p>
 <ul>
-<li><strong>Tools:</strong> <code dir="auto">ListTools</code>, as #324 left it.</li>
+<li><strong>Tools:</strong> <code dir="auto">ListTools</code>, open to <code dir="auto">tool:read</code> in any scope since #324, now asked for a
+target as below.</li>
 <li><strong>Providers and their models:</strong> a new <code dir="auto">GET /providers</code>, which answers name, kind,
 models and whether each is usable. It never answers a base URL or anything sealed.
+Usable is what the serving process’s registry answers (<code dir="auto">Registry.Usable</code>: switched
+on, credential opened, address whole) for a provider switched on; with no registry
+wired, a provider switched on. Providers are stored at the installation today, so
+every reachable target is answered the installation’s; the filter is the same
+containment rule, ready for an area’s providers.
 The agent editor reads providers from <code dir="auto">ListIntegrations</code> today
 (<code dir="auto">web/src/features/agents/agent-serving-fields.tsx</code>, <code dir="auto">agent-fallback-fields.tsx</code>,
 <code dir="auto">web/src/features/experiments/experiment-config-fields.tsx</code>). That listing needs
@@ -336,8 +342,23 @@ caller cannot see exists.</li>
 only those. That is exactly what an agent stored at the target can run, so what the
 editor offers and what <code dir="auto">checkScope</code> admits are the same set.</li>
 <li><strong>Without <code dir="auto">scope</code></strong>, an answer holds only the installation’s rows, which every
-scope inherits. Today’s callers keep working, and nothing of any area is answered
-without naming it.</li>
+scope inherits, and nothing of any area is answered without naming it.
+<strong>Exception, decided in part B2a:</strong> a caller holding <code dir="auto">tool:read</code> at <code dir="auto">adminScope</code> keeps
+every row without <code dir="auto">scope</code>. The platform’s tools screen lists every tool and every
+owner’s ruling on it (B1’s <code dir="auto">rulings</code>), and is where the ceiling is ruled and
+withdrawn; answering it only the installation’s tools would hide every area’s tool
+from the one screen that rules over them. The platform’s administration already
+sees every row (rule 4), so nothing is answered it could not otherwise read. The
+same reader may also name any target, since <code dir="auto">adminScope</code> governs every area but
+does not contain one by <code dir="auto">Scope.Contains</code>.</li>
+<li><strong>400 before 404.</strong> A target that is not a real company or area as stored (an
+identifier in another form, a missing part, the installation’s <code dir="auto">*</code>) answers 400,
+judged as part A’s <code dir="auto">realScope</code> judges a write’s scope. The form of a request says
+nothing about which scopes exist; only then is the caller’s reach judged.</li>
+<li><strong>The worker’s rulings stay whole.</strong> The filter lives in the listing door, never in
+<code dir="auto">Curator.List</code>, which the worker’s <code dir="auto">Catalog.Sync</code> reads with the empty scope: Sync
+resets every tool no ruling decides (B1), and a narrowed source would reset area
+tools their owners ruled on. A journey test pins it.</li>
 <li>The agent editor, the fallback fields and the experiment form pass the agent’s
 scope. The experiment form passes the experimented agent’s scope.</li>
 </ul>
@@ -437,8 +458,13 @@ row finds nothing, and the AAD makes that a cryptographic fact, not only a query
 server that declares it.
 <ul>
 <li><code dir="auto">ListTools</code> already returns tools to <code dir="auto">tool:read</code> in any scope (#324). It now keeps
-only the tools usable from the target scope it is asked for, by rule 5.</li>
-<li>Today it filters only who declares each tool (<code dir="auto">internal/httpapi/admin.go:79-84</code>).</li>
+only the tools usable from the target scope it is asked for, by rule 5: each entry
+carries the runtime scope of the server or connector instance that declares it (the
+installation’s for a <code dir="auto">--mcp</code> flag’s server and the platform’s own tools), and a tool
+is answered when that scope contains the target. Without a target the platform’s
+administration keeps every tool, and anyone else gets the installation’s (rule 5’s
+exception).</li>
+<li>Before part B2a it filtered only who declares each tool (<code dir="auto">declaringTools</code>).</li>
 </ul>
 </li>
 <li><strong>Personal credentials</strong> (<code dir="auto">mcp_user_credential</code>) stay keyed by server and person
@@ -867,7 +893,8 @@ installation’s rows, and none of <code dir="auto">acme/finance</code>.</li>
 <li>An author granted on <code dir="auto">acme</code> asks for <code dir="auto">acme/cx</code>, and the answer includes <code dir="auto">acme/cx</code>’s
 own rows.</li>
 <li>An <code dir="auto">acme/cx</code> author asking for <code dir="auto">acme/finance</code> gets 404.</li>
-<li>Without <code dir="auto">scope</code>, only installation rows.</li>
+<li>Without <code dir="auto">scope</code>, only installation rows, except for a reader at <code dir="auto">adminScope</code>, who
+keeps every row.</li>
 <li>Sabotage: answer the union of the caller’s scopes; the multi-area test must name
 <code dir="auto">finance</code>’s tool. Then filter by the caller’s grants instead of the target; the
 company test must name the area’s row it lost.</li>
