@@ -27,7 +27,7 @@ import {
 } from "@/features/agents/agents-view";
 import { EventGraph } from "@/features/agents/event-graph";
 import { useAgents, type Agent } from "@/features/agents/api";
-import { useTools } from "@/features/admin/api";
+import { useScopedCatalogues } from "@/features/agents/use-scoped-catalogues";
 import { stateOfAgent, type AgentState } from "@/lib/agent-state";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 
@@ -48,7 +48,6 @@ export function AgentsPage() {
   const { data, isLoading, error, refetch } = useAgents(
     history.value === "all",
   );
-  const tools = useTools(view === "cards");
   const agents = useMemo(() => data?.items ?? [], [data]);
 
   // Filtered here rather than at the API, and that is defensible only because
@@ -63,6 +62,8 @@ export function AgentsPage() {
     [agents, search, area, state],
   );
   const page = useVisibleItems(shown, 50);
+  // Each card from its agent's own scope, asked for what the page shows.
+  const catalogueOf = useScopedCatalogues(page.visible, view === "cards");
 
   return (
     <>
@@ -153,7 +154,7 @@ export function AgentsPage() {
               <AgentCard
                 key={`${agent.agentId}@${agent.versionId}`}
                 agent={agent}
-                catalogue={tools.data?.items}
+                catalogue={catalogueOf(agent)}
               />
             ))}
           </div>
