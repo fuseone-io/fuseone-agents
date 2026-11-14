@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Archive,
@@ -49,7 +49,8 @@ import {
 import { CallAuthNote } from "@/features/integrations/mcp/call-auth-note";
 import { EgressNote } from "@/features/integrations/mcp/egress-note";
 import { cn } from "@/lib/utils";
-import { configurable } from "@/features/integrations/mcp/server-configurable";
+import { configurable, localOnly } from "@/features/integrations/mcp/server-configurable";
+import { ScopeChoiceContext } from "@/features/integrations/scope/scope-choice";
 
 const ORIGINS = ["all", "published", "reference", "archived"] as const;
 type OriginFilter = (typeof ORIGINS)[number];
@@ -93,6 +94,7 @@ export function AvailableServersPanel({
   const [origin, setOrigin] = useState<OriginFilter>("all");
   const [query, setQuery] = useState("");
   const [panel, setPanel] = useState<string | null | undefined>(undefined);
+  const { anyScope } = useContext(ScopeChoiceContext);
 
   const entries = useMemo(() => listing(servers, recipes), [servers, recipes]);
   const connected = entries.filter((entry) => entry.configured).length;
@@ -176,7 +178,10 @@ export function AvailableServersPanel({
                       key={entry.name}
                       entry={entry}
                       selected={panel === entry.name}
-                      readOnly={!configurable(canCreate, serversByName.get(entry.name))}
+                      readOnly={
+                        !configurable(canCreate, serversByName.get(entry.name)) ||
+                        (!entry.configured && localOnly(entry.recipe, anyScope))
+                      }
                       onOpen={() => setPanel(entry.name)}
                     />
                   ))}
@@ -470,6 +475,10 @@ function ConnectServerPanel({
   onCustom?: () => void;
 }) {
   const { t } = useTranslation();
+  // A recipe reached only locally is read by whoever connects only remote
+  // servers (NT-019): the form would offer a server they cannot store.
+  const local = localOnly(recipe, useContext(ScopeChoiceContext).anyScope);
+  const connects = onCustom !== undefined && !local;
   const initial = recipe
     ? {
         name: recipe.server,
@@ -573,7 +582,7 @@ function ConnectServerPanel({
           )}
         </div>
 
-        {onCustom ? (
+        {connects ? (
           <Form {...form}>
             <form
               id="mcp-connect-form"
@@ -591,12 +600,12 @@ function ConnectServerPanel({
           </Form>
         ) : (
           <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
-            {t("mcp.connectNeedsConfigure")}
+            {t(local ? "mcp.localIsThePlatforms" : "mcp.connectNeedsConfigure")}
           </p>
         )}
       </div>
 
-      {onCustom && (
+      {connects && (
         <div className="flex items-center gap-2 border-t p-4">
           <span className="flex-1 text-xs text-muted-foreground">
             {t("mcp.connectFooter")}

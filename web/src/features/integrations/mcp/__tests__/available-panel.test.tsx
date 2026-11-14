@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AvailableServersPanel } from "@/features/integrations/mcp/available-servers-panel";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 import type { MCPServer } from "@/features/integrations/api";
+import { ScopeChoiceContext } from "@/features/integrations/scope/scope-choice";
 
 const api = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
@@ -287,7 +288,7 @@ describe("the catalogue for someone who may not create a server", () => {
 
     expect(screen.getAllByText("Payments and billing.")).toHaveLength(2);
     expect(screen.getByText(/Conectar um servidor pede provider:write/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Conectar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Conectar sistema" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Nome")).not.toBeInTheDocument();
   });
 
@@ -319,4 +320,39 @@ describe("the catalogue for someone who may create, on a server they may not cha
       expect(screen.getByText(/não pode alterá-lo aqui/)).toBeInTheDocument();
     });
   }
+});
+
+// An area connects remote servers only (NT-019): a local process runs on the
+// platform's worker, and the server refuses one stored outside the
+// installation. A recipe reached only by a local command is read, not
+// offered to connect.
+describe("the catalogue for someone who connects only an area's servers", () => {
+  function openInArea(recipes: ServerRecipe[]) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <ScopeChoiceContext.Provider value={{ anyScope: false, configure: [{ company: "acme", area: "cx" }] }}>
+            <AvailableServersPanel servers={[]} recipes={recipes} isLoading={false} error={null} onRetry={vi.fn()} />
+          </ScopeChoiceContext.Provider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  it("reads a local-only recipe, saying local servers are the platform's", async () => {
+    openInArea([postgres]);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Ver PostgreSQL" }));
+
+    expect(screen.getByText(/Servidores locais são da plataforma/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Conectar sistema" })).not.toBeInTheDocument();
+  });
+
+  it("still connects a remote recipe", async () => {
+    openInArea([stripe]);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Conectar Stripe" }));
+
+    expect(screen.getByRole("button", { name: "Conectar sistema" })).toBeInTheDocument();
+    expect(screen.queryByText(/Servidores locais são da plataforma/)).not.toBeInTheDocument();
+  });
 });
