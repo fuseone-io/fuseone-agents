@@ -45,6 +45,34 @@ func (s *Server) unconfiguredFallback(published spec.Spec) string {
 		published.Fallback.Provider)
 }
 
+// unconfiguredPair is the refusal for either pair a version names: the main
+// one first, then its fallback.
+func (s *Server) unconfiguredPair(published spec.Spec) string {
+	if detail := s.unconfiguredProvider(published); detail != "" {
+		return detail
+	}
+	return s.unconfiguredFallback(published)
+}
+
+/*
+unconfiguredProvider is the refusal for a main pair whose provider is not
+configured for the agent's scope (NT-019, phase 3): another area's, or nobody's.
+
+Configured rather than Usable: a provider switched off, or whose key this
+process could not open, is still configured, and the worker's planner refuses
+a run on it. The detail names the provider and never where else it is
+configured.
+*/
+func (s *Server) unconfiguredProvider(published spec.Spec) string {
+	if s.providerNames == nil || published.Provider == "" {
+		return ""
+	}
+	if s.providerNames.Configured(published.Provider, specScope(published)) {
+		return ""
+	}
+	return fmt.Sprintf("the provider %q is not configured for this agent's scope", published.Provider)
+}
+
 func pairOf(in *openapi.ModelPair) domain.ModelPair {
 	if in == nil {
 		return domain.ModelPair{}
