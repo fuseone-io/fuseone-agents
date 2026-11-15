@@ -3871,6 +3871,65 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/integrations/mcp-servers/{name}/move:
+    post:
+      tags: [admin]
+      operationId: moveMCPServer
+      summary: Move a tool server out of the installation
+      description: |
+        Stores a server of the installation at a company or one of its areas
+        (NT-019): the same name, configuration, secret and tools, at another
+        scope. For a server stored at the installation before areas had their
+        own. Only the platform's administration moves one (`provider:write`
+        at the platform's scope), and only out of the installation.
+
+        Refused before anything is written:
+        a missing If-Match (428); a stale one (412); a local server, or a
+        target that is not a registered company or area (400); an origin the
+        target's egress policy does not admit (400
+        `fuseone:egress-not-allowed`); a server already outside the
+        installation (409 `fuseone:server-not-at-installation`); published
+        agents outside the target that name the server's tools, unless
+        `strand` is true (409 `fuseone:move-strands-agents`, listing them).
+        After the move those agents' runs are blocked by the Gate.
+
+        The secret is sealed again under the target, each person's credential
+        follows the server, and the move is recorded at both scopes. A pending
+        rediscovery or probe is not carried: ask again after the move.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MCPServerMove' }
+      responses:
+        '204':
+          description: The server is stored at the target.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            The server is already outside the installation, or moving it would
+            strand the published agents listed in `agents`.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/MCPServerMoveConflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428':
+          description: No If-Match. A move is made against the revision read. Problem type `fuseone:precondition-required`.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /admin/integrations/mcp-servers/{name}/rediscovery:
     post:
       tags: [admin]
@@ -5554,6 +5613,41 @@ components:
         contentType:
           type: string
           enum: [image/png, image/jpeg, image/webp]
+
+    MCPServerMove:
+      type: object
+      required: [company]
+      properties:
+        company:
+          type: string
+          description: The registered company the server moves to, as stored.
+        area:
+          type: string
+          description: One of the company's registered areas. Absent, the whole company.
+        strand:
+          type: boolean
+          description: Move even when published agents outside the target name the server's tools.
+
+    MCPServerMoveConflict:
+      type: object
+      description: RFC 9457 problem detail, with the agents a move would strand.
+      required: [title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        agents:
+          type: array
+          items: { $ref: '#/components/schemas/StrandedAgent' }
+
+    StrandedAgent:
+      type: object
+      required: [agentId, company, area]
+      properties:
+        agentId: { type: string }
+        company: { type: string }
+        area: { type: string }
 
     Problem:
       type: object
