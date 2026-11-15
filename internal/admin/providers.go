@@ -31,6 +31,10 @@ func (i *Integrations) Providers(ctx context.Context) ([]domain.ModelProvider, e
 	out := make([]domain.ModelProvider, 0, len(rows))
 	for _, row := range rows {
 		provider, err := providerFromRow(row)
+		if errors.Is(err, errProviderScopeUnknown) {
+			// Not listed: there is no scope to say it is configured at.
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -45,12 +49,16 @@ func providerFromRow(row settings.Setting) (domain.ModelProvider, error) {
 	if err := json.Unmarshal(row.Value, &stored); err != nil {
 		return domain.ModelProvider{}, fmt.Errorf("admin: decode provider %s: %w", row.Name, err)
 	}
+	scope, known := providerRuntimeScope(row.ScopeKind, row.Scope)
+	if !known {
+		return domain.ModelProvider{}, fmt.Errorf("%w: %s", errProviderScopeUnknown, row.Name)
+	}
 	return domain.ModelProvider{
 		Name: row.Name, Kind: stored.Kind, BaseURL: stored.BaseURL,
 		Models:               stored.Models,
 		AutoToolChoiceModels: stored.AutoToolChoiceModels,
 		Enabled:              row.Enabled, HasKey: row.HasSecret,
-		Scope:     mcpServerRuntimeScope(row.ScopeKind, row.Scope),
+		Scope:     scope,
 		UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
 	}, nil
 }
@@ -98,8 +106,10 @@ func (i *Integrations) ProvidersWithCredentials(ctx context.Context) ([]Configur
 				AutoToolChoiceModels: stored.AutoToolChoiceModels,
 				Enabled:              row.Enabled, HasKey: row.HasSecret,
 				// Where it is configured, which decides which runs reach it
-				// (NT-019): the registry finds it only from inside.
-				Scope:     mcpServerRuntimeScope(row.ScopeKind, row.Scope),
+				// (NT-019): the registry finds it only from inside. A row of
+				// no known scope stays listed with none, so its name is held
+				// and reaches no run, and the environment does not fill it.
+				Scope:     knownProviderScope(row),
 				UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
 			},
 			APIKey:     row.Secret,
@@ -280,14 +290,4 @@ func (i *Integrations) RemoveProvider(ctx context.Context, r Removal) error {
 		kind: settings.KindModelProvider, name: r.Name, action: "provider.removed",
 		revised: i.providerRevised(r.Expect),
 	})
-}
-
-// Credential opens a provider's key. Separate and explicit: reading
-// configuration is routine, reading a credential is not.
-func (i *Integrations) Credential(ctx context.Context, name string) (string, error) {
-	set, err := i.settings.Reveal(ctx, settings.ScopeInstallation, domain.Scope{}, settings.KindModelProvider, name)
-	if err != nil {
-		return "", err
-	}
-	return set.Secret, nil
 }

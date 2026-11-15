@@ -65,9 +65,12 @@ func (i *Integrations) MCPServerNamedIf(
 
 // ProviderNamed reads one provider, naming its key without saying what it is.
 // The key is opened here and goes no further.
+//
+// Found wherever it is stored, and opened under its own scope (NT-019). A row
+// of no scope this binary knows is not found, and its key is never opened.
 func (i *Integrations) ProviderNamed(ctx context.Context, name string) (domain.ModelProvider, error) {
-	row, err := i.settings.Reveal(ctx, settings.ScopeInstallation, domain.Scope{}, settings.KindModelProvider, name)
-	if errors.Is(err, settings.ErrNotFound) {
+	row, err := i.settings.RevealNamedIf(ctx, settings.KindModelProvider, name, refuseUnknownProviderScope)
+	if errors.Is(err, settings.ErrNotFound) || errors.Is(err, errProviderScopeUnknown) {
 		return domain.ModelProvider{}, fmt.Errorf("%w: %s", ErrProviderUnknown, name)
 	}
 	if err != nil {
