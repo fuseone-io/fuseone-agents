@@ -28,7 +28,31 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.112.0] — 2026-11-15
+
+Area access, continued (#350–#356): an area's administrator connects servers from the
+catalogue, whoever reads tools in an area keeps their own MCP credentials, publication
+refuses an MCP tool the agent's scope cannot reach, and the platform can move a server
+stored at the installation to the area that owns it. Company and area are chosen from
+lists across the console. No migration.
+
+### Upgrade notes
+
+- **Nothing to do before upgrading.** Until every replica runs 0.112.0, a request
+  answered by an older one is judged as before:
+  - an area's administrator is refused the catalogue;
+  - an area's author has no credentials screen;
+  - publication accepts an MCP tool out of the agent's scope, whose runs the Gate
+    already blocks;
+  - there is no move door.
+- **Publishing refuses what it used to accept.** An agent naming another area's MCP
+  tool publishes no new version until the tool is removed. Every MCP server is the
+  installation's until one is moved, so no such agent can exist before then.
+- **Moving a server needs an egress policy first.** Outside the installation a server
+  reaches only the origins its area's policy lists, or its company's. With no policy
+  the move is refused.
+- **Rolling back to 0.111.0 is safe.** A moved server is an ordinary area row, which
+  0.111.0 reads and holds to its egress policy. The rollback floor stays where it is.
 
 ### Added
 
@@ -64,6 +88,17 @@ field" is a commit message.
   `GET /integrations/mcp-credentials` also answers `servers`: the remote servers the
   caller's scopes reach, with where each is stored and no address. An area's author
   finds Integrations in the menu, opening on their credentials and nothing else.
+
+### Changed
+
+- **Company and area are chosen from lists across the console**: in integrations,
+  budget ceilings, group mappings and standing approvals. The lists show the
+  registered companies (never a withdrawn one for something new) and the chosen
+  company's areas, or the whole company. A caller the company list refuses types
+  them, with the companies their areas name suggested.
+- **Fields that name a known value offer it, and still take free text.** This covers
+  a policy condition's `tool.id`, an event trigger's name, a price's provider and
+  model, and the memory screen's agent filter.
 
 ### Fixed
 
