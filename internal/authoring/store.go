@@ -159,9 +159,13 @@ func (s *Store) write(
 	return tx.Commit(ctx)
 }
 
+// has is whether the installation connects name and it is switched on. The
+// installation's alone: the assistant runs as the platform, and an area's
+// provider would have that area's key pay for every authoring call (NT-019).
 func has(connected []settings.Setting, name string) bool {
 	for _, s := range connected {
-		if s.Name == name && s.Enabled {
+		if s.Name == name && s.Enabled &&
+			s.ScopeKind == settings.ScopeInstallation && s.Scope == (domain.Scope{}) {
 			return true
 		}
 	}

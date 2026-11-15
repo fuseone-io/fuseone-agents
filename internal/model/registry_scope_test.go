@@ -143,3 +143,29 @@ func TestRegister_aProviderNamingNoScope_isTheInstallations(t *testing.T) {
 		t.Error("an environment provider is not every scope's")
 	}
 }
+
+// The authoring assistant and the token count run as the platform, not as a
+// run of an area: they reach the installation's providers alone, so an area's
+// key never pays for the platform's work.
+func TestCompleterAndCounter_reachOnlyTheInstallationsProviders(t *testing.T) {
+	t.Parallel()
+
+	r := model.NewRegistry(nil)
+	r.SetConfigured([]model.Provider{
+		{Name: "shared", Kind: model.KindAnthropic, Scope: installation},
+		{Name: "cx-claude", Kind: model.KindAnthropic, Scope: cx},
+	}, model.Claim{Name: "shared", Scope: installation}, model.Claim{Name: "cx-claude", Scope: cx})
+
+	if _, err := r.Completer("shared", model.Config{Model: "m"}); err != nil {
+		t.Errorf("Completer(shared): %v", err)
+	}
+	if _, err := r.Counter("shared", model.Config{Model: "m"}); err != nil {
+		t.Errorf("Counter(shared): %v", err)
+	}
+	if _, err := r.Completer("cx-claude", model.Config{Model: "m"}); err == nil {
+		t.Error("the platform's assistant was built on acme/cx's provider")
+	}
+	if _, err := r.Counter("cx-claude", model.Config{Model: "m"}); err == nil {
+		t.Error("a token count was built on acme/cx's provider")
+	}
+}

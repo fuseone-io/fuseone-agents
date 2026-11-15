@@ -37,7 +37,9 @@ func (r *Registry) Completer(providerName string, cfg Config) (Completer, error)
 	r.mu.RLock()
 	p, ok := r.providers[providerName]
 	r.mu.RUnlock()
-	if !ok {
+	// The installation's alone: this runs as the platform, not as a run of an
+	// area, so an area's key never pays for it (NT-019).
+	if !ok || p.Scope != (domain.Scope{Company: domain.Installation}) {
 		return nil, fmt.Errorf("model: no provider named %q", providerName)
 	}
 
