@@ -47,6 +47,12 @@ field" is a commit message.
   Publishing a fallback, starting an experiment and the provider choices an author is
   offered are judged at the agent's scope. Every provider is still the installation's
   until the writers' release, so nothing changes for a run today.
+- **Publishing refuses a main provider the agent's scope has not configured.** The
+  main pair was never checked at publish, so an agent could name a provider nobody
+  configured, or another area's, and every run would fail. It is refused now, naming
+  the provider and not where else it is configured. A provider switched off, or whose
+  key this process cannot open, is still configured and is accepted. Versions already
+  published are not checked again.
 - **A refusal for a provider that is not configured names only that provider.** It
   used to list the configured ones, which would name other areas' providers.
 

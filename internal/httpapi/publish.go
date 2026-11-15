@@ -94,7 +94,7 @@ func (s *Server) PublishAgent(
 				invalid(fmt.Sprintf("the schedule %q is not one this platform can read", bad))),
 		}, nil
 	}
-	if detail := s.unconfiguredFallback(published); detail != "" {
+	if detail := s.unconfiguredPair(published); detail != "" {
 		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				invalid(detail)),
