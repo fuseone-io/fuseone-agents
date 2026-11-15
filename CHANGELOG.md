@@ -28,6 +28,16 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **The MCP egress policies have a screen.** Integrations → Egress, for the platform's
+  administration: each company's or area's list of allowed origins, created, edited
+  and removed in the console rather than through the API alone. An empty list shows
+  as reaching nothing. Removing one explains that an area falls back to its company's
+  list, or to nothing.
+
 ## [0.112.0] — 2026-11-15
 
 Area access, continued (#350–#356): an area's administrator connects servers from the

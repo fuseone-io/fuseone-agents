@@ -7,6 +7,7 @@ import { useState } from "react";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Plug } from "lucide-react";
+import { EgressPoliciesPanel } from "@/features/integrations/egress/egress-policies-panel";
 import { ChannelsTab } from "@/features/channels/channels-tab";
 import { useChannels } from "@/features/channels/api";
 import { ConnectMenu } from "@/features/integrations/connect-menu";
@@ -258,6 +259,8 @@ export function IntegrationsPage({
               void credentials.refetch();
             }}
           />
+        ) : section === "egress" ? (
+          <EgressPoliciesPanel />
         ) : (
           <ChannelsTab />
         )}

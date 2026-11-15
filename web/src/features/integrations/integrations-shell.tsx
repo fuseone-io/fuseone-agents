@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
+  Globe,
   KeyRound,
   MessageSquare,
   PackageOpen,
@@ -20,7 +21,8 @@ export type IntegrationSection =
   | "connectors"
   | "credentials"
   | "providers"
-  | "channels";
+  | "channels"
+  | "egress";
 
 export type IntegrationCounts = Partial<Record<IntegrationSection, number>>;
 
@@ -66,6 +68,12 @@ const sections: {
     path: "/integrations/channels",
     icon: MessageSquare,
   },
+  {
+    id: "egress",
+    label: "integrations.egress.section",
+    path: "/integrations/egress",
+    icon: Globe,
+  },
 ];
 
 /** What a configurer outside the platform opens (NT-019); providers and channels are the platform's. */
@@ -94,7 +102,9 @@ export function IntegrationsShell({
   // here (NT-019).
   const access = integrationAccess(me);
   const shown = access.platform
-    ? sections
+    ? // The egress policies are listed only to whoever may write them (the
+      // server refuses even the list to a reader).
+      sections.filter((section) => section.id !== "egress" || access.platformConfigure)
     : sections.filter((section) =>
         // Until the session answers, as before it: the gate opens nothing
         // yet, and a page rendered alone shows the configurer's rail.

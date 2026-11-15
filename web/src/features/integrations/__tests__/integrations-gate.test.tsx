@@ -151,7 +151,7 @@ describe("integrations for the platform's administration", () => {
     expect(
       await screen.findByRole("button", { name: "Conectar sistema" }, { timeout: LAZY_SCREEN }),
     ).toBeInTheDocument();
-    for (const section of ["Conectados", "Disponíveis", "Connectors", "Provedores de modelo", "Canais"]) {
+    for (const section of ["Conectados", "Disponíveis", "Connectors", "Provedores de modelo", "Canais", "Egress"]) {
       expect(screen.getByRole("link", { name: section }), section).toBeInTheDocument();
     }
   });
@@ -168,6 +168,22 @@ describe("integrations for the platform's auditor", () => {
       await screen.findByText("Nenhum servidor configurado", {}, { timeout: LAZY_SCREEN }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Novo" })).not.toBeInTheDocument();
+  });
+
+  // The egress policies are listed only to whoever may write them: the
+  // server refuses even the list to a reader.
+  it("offer no egress section, and take a direct visit to the connected servers", async () => {
+    signedInAs(["tool:read"], ["tool:read"]);
+    openAt("/integrations/egress");
+
+    expect(
+      await screen.findByText("Nenhum servidor configurado", {}, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Egress" })).not.toBeInTheDocument();
+    const asked = vi.mocked(fetch).mock.calls.map(([input]) =>
+      new URL(input instanceof Request ? input.url : String(input), "http://console").pathname,
+    );
+    expect(asked.filter((path) => path.endsWith("/mcp-egress-policies"))).toEqual([]);
   });
 
   it("keep the catalogue readable, with no way to connect by address", async () => {
@@ -208,7 +224,7 @@ describe("integrations for an administrator who configures an area's connectors"
     expect(screen.getAllByRole("button", { name: "Editar" })).toHaveLength(1);
   });
 
-  it.each(["/integrations/providers", "/integrations/channels"])(
+  it.each(["/integrations/providers", "/integrations/channels", "/integrations/egress"])(
     "take them from %s, which is the platform's, to the connected servers",
     async (path) => {
       signedInAs([], areaAdmin);
@@ -243,7 +259,7 @@ describe("integrations for an administrator who configures an area's connectors"
     for (const section of ["Conectados", "Disponíveis", "Credenciais"]) {
       expect(screen.getByRole("link", { name: section }), section).toBeInTheDocument();
     }
-    for (const section of ["Provedores de modelo", "Canais"]) {
+    for (const section of ["Provedores de modelo", "Canais", "Egress"]) {
       expect(screen.queryByRole("link", { name: section }), section).not.toBeInTheDocument();
     }
   });
