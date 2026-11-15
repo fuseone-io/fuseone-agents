@@ -103,9 +103,12 @@ export function MoveServerDialog({
                       errors: { company: form.formState.errors.scope?.company?.message },
                     }}
                     onChange={(next) => {
-                      // Agreeing to strand one target's agents is no word on another's.
+                      // Agreeing to strand one target's agents is no word on
+                      // another's, and a refusal speaks of the target that drew
+                      // it. A stale revision is no target's: it stays.
                       setStranded([]);
                       form.setValue("strand", false);
+                      if (!stale) setRefusal(undefined);
                       field.onChange(next);
                     }}
                   />

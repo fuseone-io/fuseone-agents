@@ -123,6 +123,32 @@ describe("moving a server out of the installation", () => {
   });
 });
 
+// A refusal speaks of the target that produced it: shown under another, it
+// would send somebody to change the wrong policy.
+it("drops the refusal of the previous target when the target changes", async () => {
+  mount([problem(400, { type: "fuseone:egress-not-allowed", detail: "https://wiki.example.com" })]);
+  const user = await chooseArea("Financeiro");
+  await user.click(screen.getByRole("button", { name: "Mover" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(/acme\/finance/);
+
+  await user.click(screen.getByRole("combobox", { name: "Área" }));
+  await user.click(screen.getByRole("option", { name: "Operações" }));
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+// A stale revision is no target's: the move stays blocked until the reload,
+// and says why whatever is chosen.
+it("keeps saying to reload after the revision went stale, whatever the target", async () => {
+  mount([problem(412, { type: "fuseone:precondition-failed" })]);
+  const user = await chooseArea("Financeiro");
+  await user.click(screen.getByRole("button", { name: "Mover" }));
+  await screen.findByRole("alert");
+
+  await user.click(screen.getByRole("combobox", { name: "Área" }));
+  await user.click(screen.getByRole("option", { name: "Operações" }));
+  expect(screen.getByRole("alert")).toHaveTextContent(/Recarregue/);
+});
+
 describe("when the page offers the move", () => {
   it("offers it to the platform for a remote server at the installation, and in no other case", () => {
     const platform = { platformConfigure: true };
