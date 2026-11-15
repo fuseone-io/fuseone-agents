@@ -45,9 +45,10 @@ lists across the console. No migration.
   - publication accepts an MCP tool out of the agent's scope, whose runs the Gate
     already blocks;
   - there is no move door.
-- **Publishing refuses what it used to accept.** An agent naming another area's MCP
-  tool publishes no new version until the tool is removed. Every MCP server is the
-  installation's until one is moved, so no such agent can exist before then.
+- **Publishing refuses what it used to accept.** Versions already published are not
+  checked again. An agent naming an MCP tool its scope cannot reach, such as one of a
+  sibling area's servers, keeps its current version, whose runs the Gate already
+  blocks. Its next version is refused until the tool is removed.
 - **Moving a server needs an egress policy first.** Outside the installation a server
   reaches only the origins its area's policy lists, or its company's. With no policy
   the move is refused.
