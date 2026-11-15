@@ -70,7 +70,7 @@ func capturingPlanner(t *testing.T) (engine.Planner, func() []byte) {
 	}); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
-	p, err := reg.Planner("under-test", model.Config{Model: "m-test"}, lookupSchema{})
+	p, err := reg.Planner("under-test", domain.Scope{Company: domain.Installation}, model.Config{Model: "m-test"}, lookupSchema{})
 	if err != nil {
 		t.Fatalf("Planner: %v", err)
 	}

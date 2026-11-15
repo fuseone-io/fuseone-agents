@@ -97,6 +97,9 @@ func (i *Integrations) ProvidersWithCredentials(ctx context.Context) ([]Configur
 				Models:               stored.Models,
 				AutoToolChoiceModels: stored.AutoToolChoiceModels,
 				Enabled:              row.Enabled, HasKey: row.HasSecret,
+				// Where it is configured, which decides which runs reach it
+				// (NT-019): the registry finds it only from inside.
+				Scope:     mcpServerRuntimeScope(row.ScopeKind, row.Scope),
 				UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
 			},
 			APIKey:     row.Secret,

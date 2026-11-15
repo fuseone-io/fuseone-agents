@@ -19,7 +19,7 @@ var (
 
 // Judges resolves a judge run, declared here by the consumer (NT-016).
 type Judges interface {
-	ResolveJudge(ctx context.Context, run domain.RunID, started domain.RunStartedPayload) (Resolution, error)
+	ResolveJudge(ctx context.Context, claim domain.Claim, started domain.RunStartedPayload) (Resolution, error)
 }
 
 // WithJudges wires how the simulation pool resolves a judge run. The real pool never gets
@@ -31,14 +31,14 @@ func (w *Worker) WithJudges(j Judges) *Worker {
 
 // resolveJudge is what a judge run plans with: refused outside an experiment, parked
 // where no judges are wired, and otherwise the judge's own resolution.
-func (w *Worker) resolveJudge(ctx context.Context, run domain.RunID, started domain.RunStartedPayload) (Resolution, error) {
-	if err := judgeRefusal(run, started); err != nil && !errors.Is(err, errJudgeNotRunHere) {
+func (w *Worker) resolveJudge(ctx context.Context, claim domain.Claim, started domain.RunStartedPayload) (Resolution, error) {
+	if err := judgeRefusal(claim.RunID, started); err != nil && !errors.Is(err, errJudgeNotRunHere) {
 		return Resolution{}, err
 	}
 	if w.judges == nil {
-		return Resolution{}, fmt.Errorf("%s: %w", run, errJudgeNotRunHere)
+		return Resolution{}, fmt.Errorf("%s: %w", claim.RunID, errJudgeNotRunHere)
 	}
-	return w.judges.ResolveJudge(ctx, run, started)
+	return w.judges.ResolveJudge(ctx, claim, started)
 }
 
 /*

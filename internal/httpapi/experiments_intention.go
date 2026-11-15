@@ -126,7 +126,9 @@ func (s *Server) unservedPair(
 	if intent.Config.Provider != "" {
 		provider = intent.Config.Provider
 	}
-	if s.providerNames.Usable(provider) {
+	// At the chosen version's scope: an agent republished elsewhere keeps its
+	// older versions published where they were, and their runs run there.
+	if s.providerNames.Usable(provider, version.Scope) {
 		return nil, nil
 	}
 	return fmt.Errorf("the experiment would run on provider %q, which this installation cannot ask",

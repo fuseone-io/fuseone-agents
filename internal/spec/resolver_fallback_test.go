@@ -95,7 +95,7 @@ func TestResolve_aDeclaredFallback_isHandedToTheWorker(t *testing.T) {
 	providers := newTwoProviders(t)
 	s, resolver := resolveLocal(t, providers.registry, fallbackDefinition)
 
-	resolved, err := resolver.Resolve(context.Background(), s.ID, s.Version)
+	resolved, err := resolver.Resolve(context.Background(), claimOf(s))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestResolve_theFallbackPlanner_asksTheFallbackPairAndBillsUnderIt(t *testin
 
 	providers := newTwoProviders(t)
 	s, resolver := resolveLocal(t, providers.registry, fallbackDefinition)
-	resolved, err := resolver.Resolve(context.Background(), s.ID, s.Version)
+	resolved, err := resolver.Resolve(context.Background(), claimOf(s))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestResolve_theCacheKeepsTheTwoPairsApart(t *testing.T) {
 	providers := newTwoProviders(t)
 	s, resolver := resolveLocal(t, providers.registry, fallbackDefinition)
 	for range 2 {
-		resolved, err := resolver.Resolve(context.Background(), s.ID, s.Version)
+		resolved, err := resolver.Resolve(context.Background(), claimOf(s))
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
@@ -168,7 +168,7 @@ func TestResolve_noFallbackDeclared_resolvesNone(t *testing.T) {
 	plain := strings.Replace(fallbackDefinition, "fallback: {provider: backup, model: backup-model}\n", "", 1)
 	s, resolver := resolveLocal(t, providers.registry, plain)
 
-	resolved, err := resolver.Resolve(context.Background(), s.ID, s.Version)
+	resolved, err := resolver.Resolve(context.Background(), claimOf(s))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestResolve_aFallbackThisWorkerCannotBuild_leavesTheDeclaredPairRunning(t *
 	s, resolver := resolveLocal(t, providers.registry,
 		strings.Replace(fallbackDefinition, "provider: backup", "provider: gone", 1))
 
-	resolved, err := resolver.Resolve(context.Background(), s.ID, s.Version)
+	resolved, err := resolver.Resolve(context.Background(), claimOf(s))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}

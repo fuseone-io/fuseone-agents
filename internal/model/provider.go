@@ -3,6 +3,8 @@ package model
 import (
 	"maps"
 	"slices"
+
+	"github.com/fuseone/agents/internal/domain"
 )
 
 // Kind is how a provider is spoken to, not who sells it.
@@ -22,6 +24,11 @@ type Provider struct {
 	Name    string
 	Kind    Kind
 	BaseURL string
+
+	// Scope is where the provider is configured (NT-019): a run reaches it
+	// only from inside it. The installation's is every scope's. One read from
+	// a row always carries its own; the zero scope reaches nothing.
+	Scope domain.Scope
 
 	// Models the platform knows this provider serves. Suggestions, never a
 	// closed set: a list shipped in a binary ages between releases, and one

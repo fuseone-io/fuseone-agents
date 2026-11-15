@@ -39,7 +39,7 @@ func TestResolve_declaredEvents_reachTheRunsStart(t *testing.T) {
 				t.Fatalf("Register: %v", err)
 			}
 
-			resolved, err := spec.NewResolver(registry, providers, nil).Resolve(ctx, version.ID, version.Version)
+			resolved, err := spec.NewResolver(registry, providers, nil).Resolve(ctx, claimOf(version))
 			if err != nil {
 				t.Fatalf("Resolve: %v", err)
 			}

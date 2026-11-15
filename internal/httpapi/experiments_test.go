@@ -38,8 +38,10 @@ func servedVersion(id domain.VersionID) domain.AgentSummary {
 // serving is which providers this installation configures, and which of them it could ask.
 type serving struct{ configured, usable map[string]bool }
 
-func (s serving) Configured(name string) bool { return s.configured[name] || s.usable[name] }
-func (s serving) Usable(name string) bool     { return s.usable[name] }
+func (s serving) Configured(name string, _ domain.Scope) bool {
+	return s.configured[name] || s.usable[name]
+}
+func (s serving) Usable(name string, _ domain.Scope) bool { return s.usable[name] }
 
 func experimentFixture(t *testing.T, store *ledger.Memory, agents Agents) (*Server, *fakeCorpus) {
 	t.Helper()

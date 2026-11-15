@@ -28,6 +28,8 @@ type experimentSpecs struct {
 	planner  engine.Planner
 	asked    []domain.ExperimentConfig
 	declared int
+	// scopes are the scopes each resolution was asked at: the run's.
+	scopes []domain.Scope
 }
 
 func (s *experimentSpecs) resolution() Resolution {
@@ -40,15 +42,17 @@ func (s *experimentSpecs) resolution() Resolution {
 	}
 }
 
-func (s *experimentSpecs) Resolve(context.Context, domain.AgentID, domain.VersionID) (Resolution, error) {
+func (s *experimentSpecs) Resolve(_ context.Context, claim domain.Claim) (Resolution, error) {
 	s.declared++
+	s.scopes = append(s.scopes, claim.Scope)
 	return s.resolution(), nil
 }
 
 func (s *experimentSpecs) ResolveExperiment(
-	_ context.Context, _ domain.AgentID, _ domain.VersionID, config domain.ExperimentConfig,
+	_ context.Context, claim domain.Claim, config domain.ExperimentConfig,
 ) (Resolution, error) {
 	s.asked = append(s.asked, config)
+	s.scopes = append(s.scopes, claim.Scope)
 	return s.resolution(), nil
 }
 
@@ -102,6 +106,25 @@ func TestTurn_anExperimentRun_plansOnItsConfiguration(t *testing.T) {
 	if len(specs.asked) != 1 || specs.asked[0] != config || specs.declared != 0 {
 		t.Errorf("asked %+v and the declared version %d times, want %+v alone",
 			specs.asked, specs.declared, config)
+	}
+}
+
+// A run plans at its own scope: the claim's, which the resolver hands the
+// registry, so a provider of another area is never planned on (NT-019).
+func TestTurn_resolvesAtTheRunsScope(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	config := domain.ExperimentConfig{Model: "other-model"}
+	openSimulated(t, store, domain.RunStartedPayload{
+		Trigger: "simulation", Simulated: true, Simulation: "exp-1", Case: "case-1",
+		Experiment: "exp-1", ExperimentConfig: &config,
+	})
+	specs := &experimentSpecs{planner: &flakyPlanner{}}
+
+	simulationTurn(t, store, specs)
+
+	if len(specs.scopes) != 1 || specs.scopes[0] != (domain.Scope{Company: "acme", Area: "cx"}) {
+		t.Errorf("resolved at %v, want the run's acme/cx", specs.scopes)
 	}
 }
 

@@ -25,11 +25,11 @@ an outage of the configuration for the fallback must not stop a run that never
 needed it. It fails at the moment it is asked, which parks the run with the
 reason on it.
 */
-func (r *Resolver) fallback(s Spec) *worker.Fallback {
+func (r *Resolver) fallback(s Spec, at domain.Scope) *worker.Fallback {
 	if s.Fallback.IsZero() {
 		return nil
 	}
-	planner, err := r.planner(s, s.Fallback)
+	planner, err := r.planner(s, s.Fallback, at)
 	if err != nil {
 		planner = unbuildable{err: err}
 	}

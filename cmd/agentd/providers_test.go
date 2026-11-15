@@ -53,7 +53,7 @@ func TestConfigureFrom_aCredentialThatCannotBeOpened_doesNotFallBackToAnotherEnd
 		t.Fatalf("configureFrom: %v", err)
 	}
 
-	if _, err := registry.Planner("anthropic", model.Config{Model: "anthropic-claude-sonnet-5"}, nil); err == nil {
+	if _, err := registry.Planner("anthropic", domain.Scope{Company: domain.Installation}, model.Config{Model: "anthropic-claude-sonnet-5"}, nil); err == nil {
 		t.Error("a provider whose credential could not be opened answered as configured")
 	}
 	// And the one beside it is registered: a failure is about one provider.
@@ -98,6 +98,11 @@ func (s *stubConfig) ProvidersWithCredentials(context.Context) ([]admin.Configur
 	}
 	out := make([]admin.ConfiguredProvider, 0, len(s.providers))
 	for _, p := range s.providers {
+		// As the real read: every row carries its scope, the installation's
+		// for one stored there (NT-019).
+		if p.Scope == (domain.Scope{}) {
+			p.Scope = domain.Scope{Company: domain.Installation}
+		}
 		one := admin.ConfiguredProvider{ModelProvider: p}
 		switch {
 		case !p.HasKey:
@@ -171,7 +176,7 @@ func TestApplyConfiguration_aProviderRemovedWhileRunning_stopsAnswering(t *testi
 		t.Fatalf("applyConfiguration again: %v", err)
 	}
 
-	if _, err := registry.Planner("litellm", model.Config{Model: "x"}, nil); err == nil {
+	if _, err := registry.Planner("litellm", domain.Scope{Company: domain.Installation}, model.Config{Model: "x"}, nil); err == nil {
 		t.Error("a provider nobody configures any more still answers")
 	}
 }
@@ -458,7 +463,7 @@ func TestApplyConfiguration_aDeclaredAutoModel_reachesThePlannerAsAutoFromTheFir
 		t.Fatalf("applyConfiguration: %v", err)
 	}
 
-	planner, err := registry.Planner("litellm",
+	planner, err := registry.Planner("litellm", domain.Scope{Company: domain.Installation},
 		model.Config{Model: "anthropic-claude-opus-5-5"}, nil)
 	if err != nil {
 		t.Fatalf("Planner: %v", err)
@@ -471,5 +476,34 @@ func TestApplyConfiguration_aDeclaredAutoModel_reachesThePlannerAsAutoFromTheFir
 	defer mu.Unlock()
 	if len(choices) != 1 || choices[0] != "auto" {
 		t.Fatalf("tool_choice per call = %v, want one call already on auto: a middle layer dropped the declaration", choices)
+	}
+}
+
+/*
+A provider stored at an area reaches the registry with its scope, switched on or
+not (NT-019, phase 3 readers): a run of another area is never handed its key,
+and its name claimed but not built answers only inside it.
+*/
+func TestConfigureFrom_aProviderOfAnArea_isTheAreasInTheRegistry(t *testing.T) {
+	t.Parallel()
+	registry := model.NewRegistry(nil)
+	cx := domain.Scope{Company: "acme", Area: "cx"}
+	finance := domain.Scope{Company: "acme", Area: "finance"}
+
+	if _, err := configureFrom(t.Context(), registry, &stubConfig{
+		providers: []domain.ModelProvider{
+			{Name: "cx-llm", Kind: "openai_compatible", BaseURL: "http://127.0.0.1:1", Enabled: true, Scope: cx},
+			{Name: "cx-off", Kind: "openai_compatible", BaseURL: "http://127.0.0.1:2", Enabled: false, Scope: cx},
+		},
+	}, nil); err != nil {
+		t.Fatalf("configureFrom: %v", err)
+	}
+	if !registry.Usable("cx-llm", cx) || registry.Usable("cx-llm", finance) {
+		t.Errorf("cx-llm usable at acme/cx %v, at acme/finance %v; want true, false",
+			registry.Usable("cx-llm", cx), registry.Usable("cx-llm", finance))
+	}
+	if !registry.Configured("cx-off", cx) || registry.Configured("cx-off", finance) {
+		t.Errorf("cx-off configured at acme/cx %v, at acme/finance %v; want true, false",
+			registry.Configured("cx-off", cx), registry.Configured("cx-off", finance))
 	}
 }

@@ -56,8 +56,11 @@ type Ceilings interface {
 	SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error)
 }
 
+// Specs resolves a run's version, declared here by the consumer. The claim
+// carries the run's scope, which is the only scope a provider is looked up at
+// (NT-019): a provider out of it is not planned on.
 type Specs interface {
-	Resolve(ctx context.Context, agent domain.AgentID, version domain.VersionID) (Resolution, error)
+	Resolve(ctx context.Context, claim domain.Claim) (Resolution, error)
 }
 
 // errNoPlanner means a spec resolved but carries nothing to plan with.

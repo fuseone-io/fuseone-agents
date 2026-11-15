@@ -282,9 +282,9 @@ type recordingJudges struct {
 }
 
 func (j *recordingJudges) ResolveJudge(
-	_ context.Context, run domain.RunID, _ domain.RunStartedPayload,
+	_ context.Context, claim domain.Claim, _ domain.RunStartedPayload,
 ) (Resolution, error) {
-	j.asked = append(j.asked, run)
+	j.asked = append(j.asked, claim.RunID)
 	return Resolution{Start: engine.Start{Pack: gate.NewPack(), Budget: domain.Budget{Micros: 1000}}, Planner: j.planner}, nil
 }
 

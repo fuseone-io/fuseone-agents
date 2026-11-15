@@ -12,9 +12,12 @@ import (
 // ProviderNames answers whether a model provider is one this installation
 // configures, from the administration area or the environment, and whether it is
 // one this process could ask. Declared here by the consumer.
+//
+// Each is asked at the scope the agent will run in (NT-019): a provider
+// configured for another area is neither configured nor usable there.
 type ProviderNames interface {
-	Configured(name string) bool
-	Usable(name string) bool
+	Configured(name string, at domain.Scope) bool
+	Usable(name string, at domain.Scope) bool
 }
 
 // WithProviderNames wires where a fallback provider is checked at publish.
@@ -35,7 +38,7 @@ func (s *Server) unconfiguredFallback(published spec.Spec) string {
 	if published.Fallback.IsZero() || s.providerNames == nil {
 		return ""
 	}
-	if s.providerNames.Configured(published.Fallback.Provider) {
+	if s.providerNames.Configured(published.Fallback.Provider, specScope(published)) {
 		return ""
 	}
 	return fmt.Sprintf("the fallback provider %q is not one this installation configures",
