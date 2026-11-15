@@ -140,3 +140,27 @@ func TestProviderReaders_aRowOfNoKnownScope_isRefusedByEveryReader(t *testing.T)
 		t.Errorf("ProvidersWithCredentials = %+v, %v; want openai held with no scope", configured, err)
 	}
 }
+
+// The scope is judged before the value is read: a row a later release writes
+// in a shape this binary cannot decode must not stop the refresh, or the
+// provider it replaced would stay in the registry and the environment keep its
+// name.
+func TestProviderReaders_aRowOfNoKnownScope_isRefusedBeforeItsValueIsRead(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	pool := openPool(t)
+	if _, err := pool.Exec(ctx, `
+		insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by)
+		values ('company', 'acme', 'cx', 'model_provider', 'future', '"a shape this binary cannot read"', true, 'usr_ana')`); err != nil {
+		t.Fatalf("plant: %v", err)
+	}
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `delete from settings where kind = 'model_provider'`) })
+
+	if listed, err := i.Providers(ctx); err != nil || len(listed) != 0 {
+		t.Errorf("Providers = %+v, %v; want the row left out without reading it", listed, err)
+	}
+	configured, err := i.ProvidersWithCredentials(ctx)
+	if err != nil || len(configured) != 1 || configured[0].Name != "future" || configured[0].Scope != (domain.Scope{}) {
+		t.Errorf("ProvidersWithCredentials = %+v, %v; want future held by name with no scope", configured, err)
+	}
+}

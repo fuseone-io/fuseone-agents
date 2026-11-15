@@ -22,12 +22,15 @@ provider reader refuses such a row before the writers' release, so no binary
 that serves while areas write their own providers can misread one.
 */
 func providerRuntimeScope(kind settings.ScopeKind, stored domain.Scope) (domain.Scope, bool) {
+	// The installation's sentinel contains every scope: as a company, or an
+	// area's company, it would hand the key to every run.
+	named := stored.Company != "" && stored.Company != domain.Installation
 	switch {
 	case kind == settings.ScopeInstallation && stored == (domain.Scope{}):
 		return domain.Scope{Company: domain.Installation}, true
-	case kind == settings.ScopeCompany && stored.Company != "" && stored.Area == "":
+	case kind == settings.ScopeCompany && named && stored.Area == "":
 		return stored, true
-	case kind == settings.ScopeArea && stored.Company != "" && stored.Area != "":
+	case kind == settings.ScopeArea && named && stored.Area != "":
 		return stored, true
 	}
 	return domain.Scope{}, false
@@ -51,9 +54,4 @@ func (i *Integrations) Credential(ctx context.Context, name string) (string, err
 		return "", err
 	}
 	return set.Secret, nil
-}
-
-func knownProviderScope(row settings.Setting) domain.Scope {
-	scope, _ := providerRuntimeScope(row.ScopeKind, row.Scope)
-	return scope
 }

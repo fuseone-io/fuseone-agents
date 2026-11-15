@@ -31,6 +31,10 @@ func TestProviderRuntimeScope_knowsOnlyTheThreeScopesItMeans(t *testing.T) {
 		{settings.ScopeArea, "acme", "", domain.Scope{}, false},
 		{settings.ScopeArea, "", "cx", domain.Scope{}, false},
 		{"team", "acme", "cx", domain.Scope{}, false},
+		// The installation's sentinel contains every scope: written as a
+		// company or an area's company it would reach every run.
+		{settings.ScopeCompany, "*", "", domain.Scope{}, false},
+		{settings.ScopeArea, "*", "cx", domain.Scope{}, false},
 	}
 	for _, c := range cases {
 		got, known := providerRuntimeScope(c.kind, domain.Scope{Company: domain.CompanyID(c.company), Area: domain.AreaID(c.area)})
