@@ -2079,7 +2079,22 @@
     "githubAppStored": "Acts as App {{app}}, installation {{installation}}.",
     "saveGitHubApp": "Save GitHub App",
     "revokeGitHubApp": "Remove GitHub App",
-    "githubAppConflict": "A GitHub App replaces the token and the OAuth grant. Fill in only one."
+    "githubAppConflict": "A GitHub App replaces the token and the OAuth grant. Fill in only one.",
+    "move": {
+      "action": "Move to…",
+      "title": "Move {{name}} to a company or area",
+      "description": "The server leaves the installation and becomes the chosen company's or area's alone: same name, configuration, credential and tools. Other areas stop seeing and using it. The target's egress policy must list its origins first.",
+      "companyRequired": "Choose the company.",
+      "submit": "Move",
+      "moved": "Server moved to {{scope}}.",
+      "strandedHeading_one": "{{count}} published agent outside the target uses this server:",
+      "strandedHeading_other": "{{count}} published agents outside the target use this server:",
+      "strandedHint": "After the move, runs of these agents that call this server's tools are blocked by the Gate.",
+      "strand": "Move anyway, knowing these agents lose this server's tools",
+      "egressRefused": "The egress policy of {{scope}} does not list {{origin}}. Ask the platform's administration to add that origin before moving.",
+      "notAtInstallation": "This server is no longer at the installation. Reload the page.",
+      "stale": "The server changed since the page opened. Reload before moving."
+    }
   },
   "narrative": {
     "asks": "It stops and waits for a person before {{tools}}.",

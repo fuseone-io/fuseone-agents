@@ -2079,7 +2079,22 @@
     "githubAppStored": "Age como App {{app}}, instalação {{installation}}.",
     "saveGitHubApp": "Salvar o GitHub App",
     "revokeGitHubApp": "Remover o GitHub App",
-    "githubAppConflict": "Um GitHub App substitui o token e o grant OAuth. Preencha só um deles."
+    "githubAppConflict": "Um GitHub App substitui o token e o grant OAuth. Preencha só um deles.",
+    "move": {
+      "action": "Mover para…",
+      "title": "Mover {{name}} para uma empresa ou área",
+      "description": "O servidor sai da instalação e passa a ser só da empresa ou área escolhida: mesmo nome, configuração, credencial e ferramentas. As outras áreas deixam de vê-lo e de usá-lo. Antes, a política de egress do destino precisa listar as origens dele.",
+      "companyRequired": "Informe a empresa.",
+      "submit": "Mover",
+      "moved": "Servidor movido para {{scope}}.",
+      "strandedHeading_one": "{{count}} agente publicado fora do destino usa este servidor:",
+      "strandedHeading_other": "{{count}} agentes publicados fora do destino usam este servidor:",
+      "strandedHint": "Depois da mudança, as execuções desses agentes que chamarem ferramentas deste servidor serão bloqueadas pelo Gate.",
+      "strand": "Mover mesmo assim, sabendo que esses agentes perdem as ferramentas deste servidor",
+      "egressRefused": "A política de egress de {{scope}} não lista {{origin}}. Peça à administração da plataforma para acrescentar essa origem antes de mover.",
+      "notAtInstallation": "Este servidor já não está na instalação. Recarregue a página.",
+      "stale": "O servidor mudou desde que a página foi aberta. Recarregue antes de mover."
+    }
   },
   "narrative": {
     "asks": "Para e espera uma pessoa antes de {{tools}}.",
