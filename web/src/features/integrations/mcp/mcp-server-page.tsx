@@ -133,8 +133,16 @@ export function MCPServerPage() {
       <PageHeader icon={Server} title={server.name} description={t("mcp.subtitle")}>
         {/* A remote server still at the installation moves to the area that
             owns it, by the platform alone (NT-019). */}
-        {moveOffered(integrationAccess(me), server) && read.data && (
-          <MoveServerDialog name={server.name} etag={read.data.etag} onMoved={reload} />
+        {/* Bound to the revision the page opened on, never a later read;
+            a reload remounts it with the new one. */}
+        {moveOffered(integrationAccess(me), server) && opened && (
+          <MoveServerDialog
+            key={opened}
+            name={server.name}
+            etag={opened}
+            onMoved={reload}
+            onStale={() => setStale(true)}
+          />
         )}
       </PageHeader>
 

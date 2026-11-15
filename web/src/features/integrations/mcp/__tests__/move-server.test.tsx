@@ -27,7 +27,7 @@ function mount(answers: Response[] = []) {
   });
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MoveServerDialog name="wiki" etag={'"v1-read"'} onMoved={onMoved} />
+      <MoveServerDialog name="wiki" etag={'"v1-read"'} onMoved={onMoved} onStale={vi.fn()} />
     </QueryClientProvider>,
   );
   return { sent, onMoved };
@@ -83,6 +83,35 @@ describe("moving a server out of the installation", () => {
     await user.click(screen.getByRole("button", { name: "Mover" }));
     await waitFor(() => expect(onMoved).toHaveBeenCalled());
     expect(sent[1]?.body).toEqual({ company: "acme", area: "finance", strand: true });
+  });
+
+  // Confirming the agents one target strands says nothing about another's.
+  it("forgets the confirmation to strand when the target changes", async () => {
+    const stranded = problem(409, {
+      type: "fuseone:move-strands-agents", agents: [{ agentId: "triage", company: "acme", area: "ops" }],
+    });
+    const { sent } = mount([stranded]);
+    const user = await chooseArea("Financeiro");
+    await user.click(screen.getByRole("button", { name: "Mover" }));
+    await user.click(await screen.findByRole("checkbox", { name: /Mover mesmo assim/ }));
+    await user.click(screen.getByRole("combobox", { name: "Área" }));
+    await user.click(screen.getByRole("option", { name: "Operações" }));
+    await user.click(screen.getByRole("button", { name: "Mover" }));
+
+    await waitFor(() => expect(sent).toHaveLength(2));
+    expect(sent[1]?.body).toEqual({ company: "acme", area: "ops" });
+  });
+
+  // After a 412 nothing is sent again until the page is reloaded: a retry
+  // would move a configuration nobody looked at.
+  it("sends nothing more after the revision went stale", async () => {
+    const { sent } = mount([problem(412, { type: "fuseone:precondition-failed" })]);
+    const user = await chooseArea("Financeiro");
+    await user.click(screen.getByRole("button", { name: "Mover" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Recarregue/);
+    expect(screen.getByRole("button", { name: "Mover" })).toBeDisabled();
+    expect(sent).toHaveLength(1);
   });
 
   it("names the origin the target's egress policy does not list", async () => {
