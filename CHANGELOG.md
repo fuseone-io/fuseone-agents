@@ -53,6 +53,13 @@ field" is a commit message.
   the provider and not where else it is configured. A provider switched off, or whose
   key this process cannot open, is still configured and is accepted. Versions already
   published are not checked again.
+- **Every reader of a provider knows where it is stored, and refuses a row of no scope
+  it knows.** A provider read by name is found wherever it is stored and its key opened
+  under its own scope. A row whose kind this binary does not know, or whose columns
+  contradict its kind, is not listed, not found by name, and held in the registry with
+  no scope: it reaches no run, and the environment does not fill its name. The authoring
+  assistant and the instruction token count run as the platform, so they reach only the
+  installation's providers.
 - **A refusal for a provider that is not configured names only that provider.** It
   used to list the configured ones, which would name other areas' providers.
 
