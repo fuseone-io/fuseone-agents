@@ -647,7 +647,7 @@ area.</li>
 changes, from the installation to a company or one of its areas. This phase moves out
 of the installation only. A server already stored at a company or area is not moved:
 its owner’s rulings sit at its old scope, and nothing would carry them.</p>
-<p><strong>The door.</strong> <code dir="auto">POST /admin/integrations/mcp/{name}/move</code>, body <code dir="auto">{scope}</code>, <code dir="auto">If-Match</code>
+<p><strong>The door.</strong> <code dir="auto">POST /admin/integrations/mcp-servers/{name}/move</code>, body <code dir="auto">{company, area, strand}</code>, <code dir="auto">If-Match</code>
 required. Only the platform’s administration may use it (<code dir="auto">provider:write</code> at
 <code dir="auto">adminScope</code>). Moving a server out of the installation takes it away from every other
 area, so no area may do that on its own.</p>
