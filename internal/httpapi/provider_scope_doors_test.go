@@ -127,3 +127,25 @@ func TestListProviders_withNoTarget_eachIsJudgedAtItsOwnScope(t *testing.T) {
 		t.Errorf("usable with no target = %v, want cx-llm judged at acme/cx", usable)
 	}
 }
+
+// The version an experiment runs is judged at its own scope: an agent
+// republished in another area keeps older versions published where they were,
+// and an experiment on one of them runs there.
+func TestStartExperiment_onAnOlderVersion_isJudgedAtThatVersionsScope(t *testing.T) {
+	t.Parallel()
+	older := servedVersion("v1")
+	older.Latest, older.Scope, older.Provider = false, domain.Scope{Company: "acme", Area: "ops"}, "ops-llm"
+	agents := &fakeDetail{versions: []domain.AgentSummary{servedVersion("v2"), older}}
+	server, _ := experimentFixture(t, ledger.NewMemory(), agents)
+	server.WithProviderNames(providersAt(t, map[string]domain.Scope{
+		"anthropic": installationScope, "ops-llm": {Company: "acme", Area: "ops"},
+	}))
+	both := inAreas(map[string]domain.Role{"cx": domain.RoleAuthor, "ops": domain.RoleAuthor})
+	resp, err := server.StartExperiment(both, startExperiment(openapi.ExperimentRequest{Version: ptr("v1")}))
+	if err != nil {
+		t.Fatalf("StartExperiment: %v", err)
+	}
+	if _, accepted := resp.(openapi.StartExperiment202JSONResponse); !accepted {
+		t.Fatalf("response = %#v, want v1 accepted on acme/ops's provider, where v1 is published", resp)
+	}
+}
