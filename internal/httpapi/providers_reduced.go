@@ -45,9 +45,10 @@ func (s *Server) ListProviders(ctx context.Context, req openapi.ListProvidersReq
 	if err != nil {
 		return nil, fmt.Errorf("list providers: %w", err)
 	}
+	target := providerTarget(req.Params.Scope)
 	for _, p := range providers {
 		if keep(p.Scope) {
-			page.Items = append(page.Items, s.providerChoice(p))
+			page.Items = append(page.Items, s.providerChoice(p, target))
 		}
 	}
 	return page, nil
@@ -55,20 +56,37 @@ func (s *Server) ListProviders(ctx context.Context, req openapi.ListProvidersReq
 
 // providerChoice is a provider as an author picks it, built field by field so
 // nothing the configuration carries rides along.
-func (s *Server) providerChoice(p domain.ModelProvider) openapi.ProviderChoice {
+func (s *Server) providerChoice(p domain.ModelProvider, target *domain.Scope) openapi.ProviderChoice {
 	return openapi.ProviderChoice{
 		Name: p.Name, Kind: openapi.ProviderChoiceKind(p.Kind),
-		Models: append([]string{}, p.Models...), Usable: s.usable(p),
+		Models: append([]string{}, p.Models...), Usable: s.usable(p, target),
 	}
+}
+
+// providerTarget is the scope asked for, already judged by readerReach, or
+// nil when none was: then each provider is judged at its own scope.
+func providerTarget(raw *string) *domain.Scope {
+	if raw == nil {
+		return nil
+	}
+	target, err := parseTarget(*raw)
+	if err != nil {
+		return nil
+	}
+	return &target
 }
 
 // usable is whether this process built the provider and would ask it
 // (Registry.Usable): switched on, its credential opened, its address whole.
 // Unwired, as on a laptop, nothing says what was built, and only a provider
 // switched off is known not to be.
-func (s *Server) usable(p domain.ModelProvider) bool {
+func (s *Server) usable(p domain.ModelProvider, target *domain.Scope) bool {
 	if s.providerNames == nil {
 		return p.Enabled
 	}
-	return p.Enabled && s.providerNames.Usable(p.Name)
+	at := p.Scope
+	if target != nil {
+		at = *target
+	}
+	return p.Enabled && s.providerNames.Usable(p.Name, at)
 }

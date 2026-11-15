@@ -58,6 +58,9 @@ type plannerKey struct {
 	version domain.VersionID
 	pair    domain.ModelPair
 	effort  string
+	// scope is the run's: a planner found for one scope is never the answer
+	// to a run of another (NT-019).
+	scope domain.Scope
 }
 
 func NewResolver(specs Definitions, providers *model.Registry, tools model.ToolSchemas) *Resolver {
@@ -79,17 +82,17 @@ var (
 // An empty version resolves to the current one, which is what a fresh trigger
 // gets. A run already in flight passes the version it was pinned to, so
 // publishing never changes what it is doing mid-run (PRD DE-09).
-func (r *Resolver) Resolve(ctx context.Context, agent domain.AgentID, version domain.VersionID) (worker.Resolution, error) {
-	spec, err := r.specs.Get(ctx, agent, version)
+func (r *Resolver) Resolve(ctx context.Context, claim domain.Claim) (worker.Resolution, error) {
+	spec, err := r.specs.Get(ctx, claim.AgentID, claim.VersionID)
 	if err != nil {
 		return worker.Resolution{}, err
 	}
 
-	planner, err := r.planner(spec, declaredPair(spec))
+	planner, err := r.planner(spec, declaredPair(spec), claim.Scope)
 	if err != nil {
 		return worker.Resolution{}, err
 	}
-	return resolution(spec, planner, r.fallback(spec)), nil
+	return resolution(spec, planner, r.fallback(spec, claim.Scope)), nil
 }
 
 // resolution is what a worker runs one version with, on the planner it was resolved to.
@@ -115,8 +118,8 @@ func resolution(spec Spec, planner engine.Planner, fallback *worker.Fallback) wo
 	}
 }
 
-func (r *Resolver) planner(spec Spec, pair domain.ModelPair) (engine.Planner, error) {
-	key := plannerKey{version: spec.Version, pair: pair, effort: spec.Effort}
+func (r *Resolver) planner(spec Spec, pair domain.ModelPair, at domain.Scope) (engine.Planner, error) {
+	key := plannerKey{version: spec.Version, pair: pair, effort: spec.Effort, scope: at}
 	for {
 		priceRevision := r.providers.Revision()
 		r.mu.RLock()
@@ -126,7 +129,7 @@ func (r *Resolver) planner(spec Spec, pair domain.ModelPair) (engine.Planner, er
 			return cached.planner, nil
 		}
 
-		planner, err := r.providers.Planner(pair.Provider, model.Config{
+		planner, err := r.providers.Planner(pair.Provider, at, model.Config{
 			Model:          pair.Model,
 			Effort:         spec.Effort,
 			CachePrefixTTL: spec.CachePrefixTTL,

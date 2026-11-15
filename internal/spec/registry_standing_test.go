@@ -78,7 +78,7 @@ func TestResolve_standingApprovalsForbidden_reachesTheRunsStart(t *testing.T) {
 	// The engine reads the setting from Start and nowhere else: dropped here,
 	// the registry keeps it and every grant still releases the run's writes.
 	resolved, err := spec.NewResolver(registry, providers, nil).
-		Resolve(ctx, forbidding.ID, forbidding.Version)
+		Resolve(ctx, claimOf(forbidding))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}

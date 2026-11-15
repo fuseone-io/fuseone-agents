@@ -125,7 +125,7 @@ func TestResolveJudge_plansTheRubricOnTheJudgesPair_withAnEmptyPack(t *testing.T
 	t.Parallel()
 	f := newJudgeFixture(t)
 
-	resolved, err := f.judges.ResolveJudge(context.Background(), "run-judge", f.started)
+	resolved, err := f.judges.ResolveJudge(context.Background(), domain.Claim{RunID: "run-judge", Scope: domain.Scope{Company: "acme", Area: "cx"}}, f.started)
 	if err != nil {
 		t.Fatalf("ResolveJudge: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestResolveJudge_anythingThatDoesNotMatchItsOpening_isRefused(t *testing.T)
 	} {
 		f := newJudgeFixture(t)
 		change(&f)
-		if _, err := f.judges.ResolveJudge(context.Background(), "run-judge", f.started); err == nil {
+		if _, err := f.judges.ResolveJudge(context.Background(), domain.Claim{RunID: "run-judge", Scope: domain.Scope{Company: "acme", Area: "cx"}}, f.started); err == nil {
 			t.Errorf("%s: resolved, want refused", name)
 		}
 	}
@@ -205,7 +205,7 @@ func finishing(t *testing.T, fields map[string]any) engine.Proposal {
 func TestResolveJudge_theCloser_sealsOnlyAClosedAnswer(t *testing.T) {
 	t.Parallel()
 	f := newJudgeFixture(t)
-	resolved, err := f.judges.ResolveJudge(context.Background(), "run-judge", f.started)
+	resolved, err := f.judges.ResolveJudge(context.Background(), domain.Claim{RunID: "run-judge", Scope: domain.Scope{Company: "acme", Area: "cx"}}, f.started)
 	if err != nil {
 		t.Fatalf("ResolveJudge: %v", err)
 	}
@@ -318,7 +318,7 @@ func TestResolveJudge_throughTheRealAdapter_theCloserReadsTheAnswerVerbatim(t *t
 				t.Fatalf("Register: %v", err)
 			}
 			_, resolver := resolveLocal(t, registry, experimentDefinition)
-			resolved, err := resolver.Judges(f.content).ResolveJudge(context.Background(), "run-judge", f.started)
+			resolved, err := resolver.Judges(f.content).ResolveJudge(context.Background(), domain.Claim{RunID: "run-judge", Scope: domain.Scope{Company: "acme", Area: "cx"}}, f.started)
 			if err != nil {
 				t.Fatalf("ResolveJudge: %v", err)
 			}

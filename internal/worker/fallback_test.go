@@ -35,7 +35,7 @@ type fallbackSpecs struct {
 	declared        bool
 }
 
-func (s fallbackSpecs) Resolve(context.Context, domain.AgentID, domain.VersionID) (Resolution, error) {
+func (s fallbackSpecs) Resolve(context.Context, domain.Claim) (Resolution, error) {
 	out := Resolution{
 		Start: engine.Start{
 			Pack:    gate.NewPack("crm.lookup"),

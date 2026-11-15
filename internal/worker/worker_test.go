@@ -95,7 +95,7 @@ type staticSpecs struct {
 	planner engine.Planner
 }
 
-func (s staticSpecs) Resolve(context.Context, domain.AgentID, domain.VersionID) (Resolution, error) {
+func (s staticSpecs) Resolve(context.Context, domain.Claim) (Resolution, error) {
 	if s.err != nil {
 		return Resolution{}, s.err
 	}

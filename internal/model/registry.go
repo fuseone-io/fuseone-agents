@@ -10,6 +10,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 )
 
@@ -32,10 +33,11 @@ type Registry struct {
 	providers map[string]Provider
 	http      *http.Client
 	revision  uint64
-	// configured is which names the administration area last supplied, so a
-	// refresh can express a removal without touching what the environment put
-	// there beside it.
-	configured map[string]bool
+	// configured is which names the administration area last supplied, and
+	// where each is configured, so a refresh can express a removal without
+	// touching what the environment put there beside it, and a name claimed
+	// and not built still answers only inside its scope.
+	configured map[string]domain.Scope
 }
 
 func NewRegistry(hc *http.Client) *Registry {
@@ -51,6 +53,11 @@ func (r *Registry) Register(p Provider) error {
 		return fmt.Errorf("model: provider %q needs a base URL", p.Name)
 	}
 
+	// The environment's providers, and a test's, name no scope: they are the
+	// installation's, as every provider was before areas configured their own.
+	if p.Scope == (domain.Scope{}) {
+		p.Scope = domain.Scope{Company: domain.Installation}
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	p.Prices = clonePriceMap(p.Prices)
@@ -72,11 +79,11 @@ environment are left alone unless the administration area now claims the same
 name, which is the precedence that already held at boot: configuration somebody
 can audit outranks configuration nobody can see.
 */
-func (r *Registry) SetConfigured(ps []Provider, claimed ...string) {
+func (r *Registry) SetConfigured(ps []Provider, claimed ...Claim) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	taken := make(map[string]bool, len(ps)+len(claimed))
+	taken := make(map[string]domain.Scope, len(ps)+len(claimed))
 	supplied := make(map[string]bool, len(ps))
 	for _, p := range ps {
 		supplied[p.Name] = true
@@ -93,13 +100,13 @@ func (r *Registry) SetConfigured(ps []Provider, claimed ...string) {
 	// the comparison below never had a previous value to compare against, so
 	// no pass ever looked unchanged and every planner in the installation was
 	// rebuilt every thirty seconds.
-	for _, name := range claimed {
-		taken[name] = true
-		if supplied[name] {
+	for _, claim := range claimed {
+		taken[claim.Name] = claim.Scope
+		if supplied[claim.Name] {
 			continue
 		}
-		if _, held := r.providers[name]; held {
-			delete(r.providers, name)
+		if _, held := r.providers[claim.Name]; held {
+			delete(r.providers, claim.Name)
 			changed = true
 		}
 	}
@@ -111,10 +118,10 @@ func (r *Registry) SetConfigured(ps []Provider, claimed ...string) {
 			changed = true
 		}
 		r.providers[p.Name] = p
-		taken[p.Name] = true
+		taken[p.Name] = p.Scope
 	}
 	for name := range r.configured {
-		if !taken[name] {
+		if _, still := taken[name]; !still {
 			delete(r.providers, name)
 			changed = true
 		}
@@ -128,9 +135,9 @@ func (r *Registry) SetConfigured(ps []Provider, claimed ...string) {
 // sameProvider answers whether a planner built from one would be built the same
 // from the other. Every field, because every field is something a request
 // carries — an address, a protocol, a credential, a rate, and the names offered
-// to an author.
+// to an author — and the scope, which decides which runs may be handed it.
 func sameProvider(a, b Provider) bool {
-	return a.Name == b.Name && a.Kind == b.Kind && a.BaseURL == b.BaseURL &&
+	return a.Name == b.Name && a.Scope == b.Scope && a.Kind == b.Kind && a.BaseURL == b.BaseURL &&
 		a.APIKey == b.APIKey &&
 		a.SupportsReasoningEffort == b.SupportsReasoningEffort &&
 		a.ReportsCachedTokens == b.ReportsCachedTokens &&
@@ -138,27 +145,6 @@ func sameProvider(a, b Provider) bool {
 		slices.Equal(a.AutoToolChoiceModels, b.AutoToolChoiceModels) &&
 		maps.Equal(a.Headers, b.Headers) &&
 		maps.Equal(a.Prices, b.Prices)
-}
-
-// Configured reports whether name is a provider this installation configures:
-// registered here, or claimed by the administration area even when this
-// process could not build it.
-func (r *Registry) Configured(name string) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	_, held := r.providers[name]
-	return held || r.configured[name]
-}
-
-// Usable reports whether name is a provider this process built and would ask: switched
-// on, its credential opened, its address whole. Configured also answers for a name that
-// is claimed and none of those, which is right for a fallback a worker may still reach
-// and wrong for an experiment, whose runs on such a name could only park.
-func (r *Registry) Usable(name string) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	_, held := r.providers[name]
-	return held
 }
 
 func (r *Registry) Names() []string {
@@ -221,19 +207,6 @@ func (r *Registry) SetPrices(priced map[string]map[string]Prices) bool {
 		r.revision++
 	}
 	return changed
-}
-
-// Planner builds the planner an agent runs on.
-func (r *Registry) Planner(providerName string, cfg Config, tools ToolSchemas) (engine.Planner, error) {
-	r.mu.RLock()
-	p, ok := r.providers[providerName]
-	r.mu.RUnlock()
-
-	if !ok {
-		return nil, fmt.Errorf("model: provider %q is not configured; available: %v", providerName, r.Names())
-	}
-
-	return r.plannerFrom(p, withAutoToolChoice(p, withPrice(p, cfg)), tools)
 }
 
 // withAutoToolChoice hands the provider's declared downgrades to the planner,

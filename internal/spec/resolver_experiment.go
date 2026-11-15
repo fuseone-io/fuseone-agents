@@ -22,12 +22,12 @@ published agent's does, so a provider this installation has not configured is re
 here rather than reached.
 */
 func (r *Resolver) ResolveExperiment(
-	ctx context.Context, agent domain.AgentID, version domain.VersionID, config domain.ExperimentConfig,
+	ctx context.Context, claim domain.Claim, config domain.ExperimentConfig,
 ) (worker.Resolution, error) {
 	if config.IsZero() {
-		return r.Resolve(ctx, agent, version)
+		return r.Resolve(ctx, claim)
 	}
-	spec, err := r.specs.Get(ctx, agent, version)
+	spec, err := r.specs.Get(ctx, claim.AgentID, claim.VersionID)
 	if err != nil {
 		return worker.Resolution{}, err
 	}
@@ -41,7 +41,7 @@ func (r *Resolver) ResolveExperiment(
 	if config.Effort != "" {
 		spec.Effort = config.Effort
 	}
-	planner, err := r.planner(spec, pair)
+	planner, err := r.planner(spec, pair, claim.Scope)
 	if err != nil {
 		return worker.Resolution{}, fmt.Errorf("experiment on %s/%s: %w", pair.Provider, pair.Model, err)
 	}

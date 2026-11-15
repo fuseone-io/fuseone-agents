@@ -12,9 +12,7 @@ import (
 // ExperimentSpecs resolves a version under an experiment's configuration, declared here
 // by the consumer.
 type ExperimentSpecs interface {
-	ResolveExperiment(
-		ctx context.Context, agent domain.AgentID, version domain.VersionID, config domain.ExperimentConfig,
-	) (Resolution, error)
+	ResolveExperiment(ctx context.Context, claim domain.Claim, config domain.ExperimentConfig) (Resolution, error)
 }
 
 // WithExperiments wires how the simulation pool resolves an experiment run.
@@ -44,16 +42,16 @@ func (w *Worker) resolve(ctx context.Context, claim domain.Claim) (Resolution, e
 		return Resolution{}, err
 	}
 	if started.Judge != nil {
-		return w.resolveJudge(ctx, claim.RunID, started)
+		return w.resolveJudge(ctx, claim, started)
 	}
 	if w.experiments == nil {
-		return w.specs.Resolve(ctx, claim.AgentID, claim.VersionID)
+		return w.specs.Resolve(ctx, claim)
 	}
 	config := experimentConfigOf(started)
 	if config == nil {
-		return w.specs.Resolve(ctx, claim.AgentID, claim.VersionID)
+		return w.specs.Resolve(ctx, claim)
 	}
-	return w.experiments.ResolveExperiment(ctx, claim.AgentID, claim.VersionID, *config)
+	return w.experiments.ResolveExperiment(ctx, claim, *config)
 }
 
 // Openings reads a run's first step alone, declared here by the consumer. Every turn of

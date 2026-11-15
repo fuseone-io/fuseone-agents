@@ -192,7 +192,7 @@ func plannerForPrices(
 		t.Fatalf("Register: %v", err)
 	}
 
-	p, err := reg.Planner("under-test", cfg, schemas{})
+	p, err := reg.Planner("under-test", installation, cfg, schemas{})
 	if err != nil {
 		t.Fatalf("Planner: %v", err)
 	}
@@ -1140,7 +1140,7 @@ func TestOpenAICompatible_providerRejectingUnknownFields_getsNoReasoningEffort(t
 		Name: "strict", Kind: model.KindOpenAICompatible,
 		BaseURL: c.server.URL, SupportsReasoningEffort: false,
 	})
-	p, _ := reg.Planner("strict", model.Config{Effort: "high"}, schemas{})
+	p, _ := reg.Planner("strict", installation, model.Config{Effort: "high"}, schemas{})
 
 	if _, err := p.Plan(context.Background(), input()); err != nil {
 		t.Fatalf("Plan: %v", err)
@@ -1338,15 +1338,18 @@ func TestAnthropic_transientWrappedIn400_isRetryable(t *testing.T) {
 
 // --- registry ---------------------------------------------------------------
 
-func TestRegistry_unknownProvider_saysWhatIsAvailable(t *testing.T) {
+// It used to list what is configured. Once areas configure their own, that
+// list names other areas' providers to a run that may not see them (NT-019):
+// the refusal names the provider asked for, and nothing else.
+func TestRegistry_unknownProvider_namesOnlyTheOneAskedFor(t *testing.T) {
 	t.Parallel()
 
 	reg := model.NewRegistry(nil)
 	_ = reg.Register(model.Provider{Name: "anthropic", Kind: model.KindAnthropic})
 
-	_, err := reg.Planner("openai", model.Config{}, schemas{})
-	if err == nil || !strings.Contains(err.Error(), "anthropic") {
-		t.Errorf("error = %v, want it to name the configured providers", err)
+	_, err := reg.Planner("openai", installation, model.Config{}, schemas{})
+	if err == nil || !strings.Contains(err.Error(), `"openai"`) || strings.Contains(err.Error(), "anthropic") {
+		t.Errorf("error = %v, want it to name openai and no other provider", err)
 	}
 }
 
@@ -1450,7 +1453,7 @@ func TestOpenAICompatible_promptCacheKey_sentOnlyWhereTheProviderAcceptsIt(t *te
 			}); err != nil {
 				t.Fatalf("Register: %v", err)
 			}
-			p, err := reg.Planner("under-test", model.Config{CacheKey: tc.key}, schemas{})
+			p, err := reg.Planner("under-test", installation, model.Config{CacheKey: tc.key}, schemas{})
 			if err != nil {
 				t.Fatalf("Planner: %v", err)
 			}

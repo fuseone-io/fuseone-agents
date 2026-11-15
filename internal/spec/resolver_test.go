@@ -37,7 +37,7 @@ func TestResolve_fromTheRegistry_runsAnAgentNobodyPutOnDisk(t *testing.T) {
 	}
 
 	resolved, err := spec.NewResolver(registry, providers, nil).
-		Resolve(ctx, authored.ID, authored.Version)
+		Resolve(ctx, claimOf(authored))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestResolve_rebuildsThePlannerWhenPricesChange(t *testing.T) {
 	}
 	resolver := spec.NewResolver(registry, providers, nil)
 
-	first, err := resolver.Resolve(ctx, authored.ID, authored.Version)
+	first, err := resolver.Resolve(ctx, claimOf(authored))
 	if err != nil {
 		t.Fatalf("Resolve first: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestResolve_rebuildsThePlannerWhenPricesChange(t *testing.T) {
 			"test-model": {InputMicros: 9_000_000},
 		},
 	})
-	second, err := resolver.Resolve(ctx, authored.ID, authored.Version)
+	second, err := resolver.Resolve(ctx, claimOf(authored))
 	if err != nil {
 		t.Fatalf("Resolve second: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestResolve_replyLocale_reachesTheProviderWire(t *testing.T) {
 	}
 
 	resolved, err := spec.NewResolver(registry, providers, nil).
-		Resolve(ctx, authored.ID, authored.Version)
+		Resolve(ctx, claimOf(authored))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestResolve_cachePrefixTTL_reachesTheProviderWire(t *testing.T) {
 	}
 
 	resolved, err := spec.NewResolver(registry, providers, nil).
-		Resolve(ctx, authored.ID, authored.Version)
+		Resolve(ctx, claimOf(authored))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestResolve_agentIDRidesAsThePromptCacheKey(t *testing.T) {
 	}
 
 	resolved, err := spec.NewResolver(registry, providers, nil).
-		Resolve(ctx, authored.ID, authored.Version)
+		Resolve(ctx, claimOf(authored))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}

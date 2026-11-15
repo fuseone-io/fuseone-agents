@@ -19,10 +19,10 @@ func TestConfigured_namesTheProvidersThisInstallationKnows(t *testing.T) {
 	// sealed credential is still a provider the administration area
 	// configures. Refusing it at publish would refuse every fallback the
 	// worker can in fact reach.
-	r.SetConfigured(nil, "sealed")
+	r.SetConfigured(nil, model.Claim{Name: "sealed", Scope: installation})
 
 	for name, want := range map[string]bool{"from-env": true, "sealed": true, "nobody": false} {
-		if got := r.Configured(name); got != want {
+		if got := r.Configured(name, installation); got != want {
 			t.Errorf("Configured(%q) = %v, want %v", name, got, want)
 		}
 	}
@@ -41,13 +41,14 @@ func TestUsable_onlyAProviderThisProcessBuilt(t *testing.T) {
 		t.Fatalf("Register: %v", err)
 	}
 	r.SetConfigured([]model.Provider{{
-		Name: "built", Kind: model.KindOpenAICompatible, BaseURL: "http://127.0.0.1:2",
-	}}, "built", "switched-off", "sealed")
+		Scope: installation,
+		Name:  "built", Kind: model.KindOpenAICompatible, BaseURL: "http://127.0.0.1:2",
+	}}, model.Claim{Name: "built", Scope: installation}, model.Claim{Name: "switched-off", Scope: installation}, model.Claim{Name: "sealed", Scope: installation})
 
 	for name, want := range map[string]bool{
 		"from-env": true, "built": true, "switched-off": false, "sealed": false, "nobody": false,
 	} {
-		if got := r.Usable(name); got != want {
+		if got := r.Usable(name, installation); got != want {
 			t.Errorf("Usable(%q) = %v, want %v", name, got, want)
 		}
 	}

@@ -37,8 +37,9 @@ func (r *Resolver) Judges(content Content) *Judges {
 // ResolveJudge is what a judge run plans with, refused when any object its opening names
 // does not match its digest.
 func (j *Judges) ResolveJudge(
-	ctx context.Context, run domain.RunID, started domain.RunStartedPayload,
+	ctx context.Context, claim domain.Claim, started domain.RunStartedPayload,
 ) (worker.Resolution, error) {
+	run := claim.RunID
 	material, err := readJudgeMaterial(ctx, j.content, started)
 	if err != nil {
 		return worker.Resolution{}, fmt.Errorf("judge %s: %w", run, err)
@@ -48,7 +49,7 @@ func (j *Judges) ResolveJudge(
 		return worker.Resolution{}, fmt.Errorf("judge %s: %w", run, err)
 	}
 	opening := started.Judge
-	planner, err := j.resolver.providers.Planner(opening.Provider, model.Config{
+	planner, err := j.resolver.providers.Planner(opening.Provider, claim.Scope, model.Config{
 		Model: opening.Model, Effort: opening.Effort,
 		SystemPrompt: judge.SystemPrompt(material.rubric),
 		// One cache identity per rubric: two judgments under it share their prefix.

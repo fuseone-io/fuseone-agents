@@ -90,12 +90,13 @@ func configureFrom(
 
 	failed := map[string]string{}
 	ready := make([]model.Provider, 0, len(configured))
-	claimed := make([]string, 0, len(configured))
+	claimed := make([]model.Claim, 0, len(configured))
 	for _, p := range configured {
 		// Claimed whether or not it can be used, and whether or not it is
-		// switched on. Disabled means this installation said no about that
-		// name; it does not mean "use whatever the environment has under it".
-		claimed = append(claimed, p.Name)
+		// switched on, with its scope (NT-019). Disabled means this
+		// installation said no about that name; it does not mean "use whatever
+		// the environment has under it".
+		claimed = append(claimed, model.Claim{Name: p.Name, Scope: p.Scope})
 		if !p.Enabled {
 			continue
 		}
@@ -194,6 +195,9 @@ func providerFrom(
 	// After the preset block, which replaces the struct whole: a declared
 	// field assigned before it would be the preset silently un-declaring it.
 	provider.AutoToolChoiceModels = p.AutoToolChoiceModels
+	// The row's scope, and only it: a provider whose read lost it reaches
+	// nothing rather than every scope (NT-019).
+	provider.Scope = p.Scope
 	if provider.Kind == model.KindOpenAICompatible && provider.BaseURL == "" {
 		return model.Provider{}, fmt.Errorf("an OpenAI-compatible provider needs an address")
 	}

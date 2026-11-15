@@ -192,7 +192,7 @@ func TestPlanner_carriesTheRateWithoutTheCallerAskingForIt(t *testing.T) {
 	// The caller passes a Config with no rate in it, as both callers do today,
 	// and the planner still accounts in money. Threading the price through
 	// every call site is how one of them ends up recording zero.
-	planner, err := registry.Planner("openai", model.Config{Model: "gpt"}, nil)
+	planner, err := registry.Planner("openai", installation, model.Config{Model: "gpt"}, nil)
 	if err != nil {
 		t.Fatalf("planner: %v", err)
 	}
@@ -230,7 +230,8 @@ func TestSetConfigured_anAddressEditedInTheConsole_isWhereTheRequestGoes(t *test
 	}
 
 	registry.SetConfigured([]model.Provider{{
-		Name: "anthropic", Kind: model.KindAnthropic,
+		Scope: installation,
+		Name:  "anthropic", Kind: model.KindAnthropic,
 		BaseURL: proxy.URL, APIKey: "from-the-console",
 	}})
 
@@ -267,7 +268,8 @@ func TestSetConfigured_aProviderRemovedFromTheConsole_leavesTheRegistry(t *testi
 		t.Fatalf("Register: %v", err)
 	}
 	registry.SetConfigured([]model.Provider{{
-		Name: "litellm", Kind: model.KindOpenAICompatible, BaseURL: "https://litellm.internal/v1",
+		Scope: installation,
+		Name:  "litellm", Kind: model.KindOpenAICompatible, BaseURL: "https://litellm.internal/v1",
 	}})
 	registry.SetConfigured(nil)
 
@@ -332,7 +334,8 @@ func TestSetConfigured_aDifferentAddress_movesTheRevision(t *testing.T) {
 
 	before := registry.Revision()
 	registry.SetConfigured([]model.Provider{{
-		Name: "litellm", Kind: model.KindOpenAICompatible, BaseURL: "https://a.internal/v1",
+		Scope: installation,
+		Name:  "litellm", Kind: model.KindOpenAICompatible, BaseURL: "https://a.internal/v1",
 	}})
 	if registry.Revision() == before {
 		t.Fatal("a provider arriving did not move the revision")
@@ -340,7 +343,8 @@ func TestSetConfigured_aDifferentAddress_movesTheRevision(t *testing.T) {
 
 	atA := registry.Revision()
 	registry.SetConfigured([]model.Provider{{
-		Name: "litellm", Kind: model.KindOpenAICompatible, BaseURL: "https://b.internal/v1",
+		Scope: installation,
+		Name:  "litellm", Kind: model.KindOpenAICompatible, BaseURL: "https://b.internal/v1",
 	}})
 	if registry.Revision() == atA {
 		t.Error("a new address did not move the revision; a run would keep the old planner")
@@ -361,16 +365,17 @@ func TestSetConfigured_theSameConfigurationAgain_leavesTheRevision(t *testing.T)
 	registry := model.NewRegistry(nil)
 
 	same := []model.Provider{{
-		Name: "litellm", Kind: model.KindOpenAICompatible, BaseURL: "https://a.internal/v1",
+		Scope: installation,
+		Name:  "litellm", Kind: model.KindOpenAICompatible, BaseURL: "https://a.internal/v1",
 		Models: []string{"gemini/gemini-2.5-pro"},
 		Prices: map[string]model.Prices{"gemini/gemini-2.5-pro": {InputMicros: 3}},
 	}}
 	// Claimed as well as supplied, which is the shape the wiring uses: every
 	// usable provider arrives twice, once as a claim on its name and once as a
 	// value.
-	registry.SetConfigured(same, "litellm")
+	registry.SetConfigured(same, model.Claim{Name: "litellm", Scope: installation})
 	before := registry.Revision()
-	registry.SetConfigured(same, "litellm")
+	registry.SetConfigured(same, model.Claim{Name: "litellm", Scope: installation})
 	if registry.Revision() != before {
 		t.Error("an identical pass moved the revision; every planner would be rebuilt twice a minute")
 	}
@@ -391,7 +396,8 @@ func TestPlanner_aProviderWithNoCredential_doesNotBorrowTheVendorsFromTheEnviron
 
 	registry := model.NewRegistry(proxy.Client())
 	registry.SetConfigured([]model.Provider{{
-		Name: "litellm", Kind: model.KindAnthropic, BaseURL: proxy.URL,
+		Scope: installation,
+		Name:  "litellm", Kind: model.KindAnthropic, BaseURL: proxy.URL,
 	}})
 
 	counter, err := registry.Counter("litellm", model.Config{Model: "anthropic-claude-sonnet-5"})
@@ -423,7 +429,8 @@ func TestCounter_whileTheProtocolIsBeingChanged_neverPanics(t *testing.T) {
 	kinds := []model.Kind{model.KindAnthropic, model.KindOpenAICompatible}
 	configure := func(kind model.Kind) {
 		registry.SetConfigured([]model.Provider{{
-			Name: "litellm", Kind: kind, BaseURL: "https://litellm.internal/v1", APIKey: "k",
+			Scope: installation,
+			Name:  "litellm", Kind: kind, BaseURL: "https://litellm.internal/v1", APIKey: "k",
 		}})
 	}
 	// Configured before anybody reads, so "not configured yet" is not one of
@@ -484,7 +491,8 @@ func TestSetConfigured_anEditedDeclaredAutoList_movesTheRevision(t *testing.T) {
 	registry := model.NewRegistry(nil)
 
 	base := model.Provider{
-		Name: "litellm", Kind: model.KindAnthropic, BaseURL: "https://a.internal",
+		Scope: installation,
+		Name:  "litellm", Kind: model.KindAnthropic, BaseURL: "https://a.internal",
 	}
 	registry.SetConfigured([]model.Provider{base})
 	before := registry.Revision()
@@ -513,7 +521,8 @@ func TestSetConfigured_aCallerReusingItsDeclarationBuffer_cannotAliasTheStoredOn
 
 	buffer := []string{"anthropic-claude-opus-5-5"}
 	registry.SetConfigured([]model.Provider{{
-		Name: "litellm", Kind: model.KindAnthropic, BaseURL: "https://a.internal",
+		Scope: installation,
+		Name:  "litellm", Kind: model.KindAnthropic, BaseURL: "https://a.internal",
 		AutoToolChoiceModels: buffer,
 	}})
 
@@ -524,7 +533,8 @@ func TestSetConfigured_aCallerReusingItsDeclarationBuffer_cannotAliasTheStoredOn
 	buffer[0] = "anthropic-claude-sonnet-5"
 	before := registry.Revision()
 	registry.SetConfigured([]model.Provider{{
-		Name: "litellm", Kind: model.KindAnthropic, BaseURL: "https://a.internal",
+		Scope: installation,
+		Name:  "litellm", Kind: model.KindAnthropic, BaseURL: "https://a.internal",
 		AutoToolChoiceModels: buffer,
 	}})
 	if registry.Revision() == before {

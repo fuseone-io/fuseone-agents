@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/model"
 )
 
@@ -43,6 +44,9 @@ func registerFromEnv(registry *model.Registry, priced map[string]map[string]mode
 			continue
 		}
 		p, _ := model.Preset(name)
+		// The environment is the installation's, said here rather than left
+		// to a default (NT-019).
+		p.Scope = domain.Scope{Company: domain.Installation}
 		p.APIKey = key
 		// Priced as it is registered, not afterwards. Applied as a second step
 		// it left a window — and on the pass where reading the providers

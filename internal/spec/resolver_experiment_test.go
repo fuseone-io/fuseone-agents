@@ -128,7 +128,7 @@ func TestResolveExperiment_aNonEmptyConfiguration_plansOnItAndDropsTheFallback(t
 			providers := newExperimentProviders(t)
 			s, resolver := resolveLocal(t, providers.registry, experimentDefinition)
 
-			resolved, err := resolver.ResolveExperiment(context.Background(), s.ID, s.Version, c.config)
+			resolved, err := resolver.ResolveExperiment(context.Background(), claimOf(s), c.config)
 			if err != nil {
 				t.Fatalf("ResolveExperiment: %v", err)
 			}
@@ -149,7 +149,7 @@ func TestResolveExperiment_anEmptyConfiguration_isTheVersionAsPublished(t *testi
 	providers := newExperimentProviders(t)
 	s, resolver := resolveLocal(t, providers.registry, experimentDefinition)
 
-	resolved, err := resolver.ResolveExperiment(context.Background(), s.ID, s.Version, domain.ExperimentConfig{})
+	resolved, err := resolver.ResolveExperiment(context.Background(), claimOf(s), domain.ExperimentConfig{})
 	if err != nil {
 		t.Fatalf("ResolveExperiment: %v", err)
 	}
@@ -170,11 +170,11 @@ func TestResolveExperiment_anotherEffort_doesNotLeakIntoTheVersionsPlanner(t *te
 	providers := newExperimentProviders(t)
 	s, resolver := resolveLocal(t, providers.registry, experimentDefinition)
 
-	if _, err := resolver.ResolveExperiment(context.Background(), s.ID, s.Version,
+	if _, err := resolver.ResolveExperiment(context.Background(), claimOf(s),
 		domain.ExperimentConfig{Effort: "low"}); err != nil {
 		t.Fatalf("ResolveExperiment: %v", err)
 	}
-	resolved, err := resolver.Resolve(context.Background(), s.ID, s.Version)
+	resolved, err := resolver.Resolve(context.Background(), claimOf(s))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestResolveExperiment_aModelTheInstallationDoesNotServe_isRefused(t *testin
 			providers := newExperimentProviders(t)
 			s, resolver := resolveLocal(t, providers.registry, experimentDefinition)
 
-			if _, err := resolver.ResolveExperiment(context.Background(), s.ID, s.Version, c.config); err == nil {
+			if _, err := resolver.ResolveExperiment(context.Background(), claimOf(s), c.config); err == nil {
 				t.Error("resolved an experiment on a model this installation does not serve")
 			}
 		})

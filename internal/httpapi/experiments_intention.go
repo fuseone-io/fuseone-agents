@@ -126,7 +126,7 @@ func (s *Server) unservedPair(
 	if intent.Config.Provider != "" {
 		provider = intent.Config.Provider
 	}
-	if s.providerNames.Usable(provider) {
+	if s.providerNames.Usable(provider, published.Scope) {
 		return nil, nil
 	}
 	return fmt.Errorf("the experiment would run on provider %q, which this installation cannot ask",
