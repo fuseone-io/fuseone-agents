@@ -38,6 +38,18 @@ field" is a commit message.
   as reaching nothing. Removing one explains that an area falls back to its company's
   list, or to nothing.
 
+### Changed
+
+- **A model provider is used only by the runs its scope reaches** (NT-019, phase 3,
+  readers). The registry is asked at the scope a run runs in, and a provider configured
+  for another area is not found: it is never planned on and never handed its key. This
+  holds for an agent's pair, its fallback, an experiment's configuration and a judge.
+  Publishing a fallback, starting an experiment and the provider choices an author is
+  offered are judged at the agent's scope. Every provider is still the installation's
+  until the writers' release, so nothing changes for a run today.
+- **A refusal for a provider that is not configured names only that provider.** It
+  used to list the configured ones, which would name other areas' providers.
+
 ## [0.112.0] — 2026-11-15
 
 Area access, continued (#350–#356): an area's administrator connects servers from the
