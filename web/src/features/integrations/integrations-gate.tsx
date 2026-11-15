@@ -29,6 +29,10 @@ export function IntegrationsGate() {
   // Until the session answers, open nothing: a screen opened on a guess asks
   // the platform for lists an area's administrator would be refused.
   if (!access.known) return <LoadingRows rows={3} />;
+  // The egress policies are the platform configurer's alone, list included.
+  if (isEgress(pathname) && !access.platformConfigure) {
+    return <Navigate to={access.servers ? "/integrations" : "/integrations/credentials"} replace />;
+  }
   if (access.platform) return <Outlet />;
   if (own === "servers" && access.servers) return <Outlet />;
   if (own === "credentials" && access.credentials) return <Outlet />;
@@ -70,4 +74,8 @@ function ownScreen(pathname: string): "servers" | "credentials" | null {
     return "servers";
   }
   return null;
+}
+
+function isEgress(pathname: string) {
+  return pathname.replace(/\/+$/, "") === "/integrations/egress";
 }

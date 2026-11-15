@@ -170,6 +170,22 @@ describe("integrations for the platform's auditor", () => {
     expect(screen.queryByRole("button", { name: "Novo" })).not.toBeInTheDocument();
   });
 
+  // The egress policies are listed only to whoever may write them: the
+  // server refuses even the list to a reader.
+  it("offer no egress section, and take a direct visit to the connected servers", async () => {
+    signedInAs(["tool:read"], ["tool:read"]);
+    openAt("/integrations/egress");
+
+    expect(
+      await screen.findByText("Nenhum servidor configurado", {}, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Egress" })).not.toBeInTheDocument();
+    const asked = vi.mocked(fetch).mock.calls.map(([input]) =>
+      new URL(input instanceof Request ? input.url : String(input), "http://console").pathname,
+    );
+    expect(asked.filter((path) => path.endsWith("/mcp-egress-policies"))).toEqual([]);
+  });
+
   it("keep the catalogue readable, with no way to connect by address", async () => {
     signedInAs(["tool:read"], ["tool:read"]);
     openAt("/integrations/mcp");

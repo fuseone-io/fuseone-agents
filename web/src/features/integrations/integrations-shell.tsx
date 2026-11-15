@@ -102,7 +102,9 @@ export function IntegrationsShell({
   // here (NT-019).
   const access = integrationAccess(me);
   const shown = access.platform
-    ? sections
+    ? // The egress policies are listed only to whoever may write them (the
+      // server refuses even the list to a reader).
+      sections.filter((section) => section.id !== "egress" || access.platformConfigure)
     : sections.filter((section) =>
         // Until the session answers, as before it: the gate opens nothing
         // yet, and a page rendered alone shows the configurer's rail.
