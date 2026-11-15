@@ -28,7 +28,29 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.113.0] — 2026-11-15
+
+NT-019 phase 3, the readers' release (#359, #360, #361), and a screen for the MCP egress
+policies (#358). Every reader of a model provider now knows where it is stored and looks
+it up at the scope a run runs in, a release before any provider can be stored outside the
+installation. No migration.
+
+### Upgrade notes
+
+- **Every replica must run 0.113.0 before the writers' release.** That release lets a
+  company or an area store its own provider, with its own key. A replica older than this
+  one finds a provider by name alone, and would hand an area's key to a run of any other
+  area. Once a provider exists outside the installation, 0.113.0 is the rollback floor.
+- **Publishing refuses a main provider the agent's scope has not configured.** Versions
+  already published are not checked again. An agent naming a provider nobody configures
+  has its next version refused until the provider is configured or the agent names
+  another. Its runs already failed at the planner.
+- **Nothing else changes for a run today.** Every provider is still the installation's.
+  The authoring assistant and the instruction token count reach the installation's
+  providers alone, which is every provider until the writers' release.
+- **A refusal for a provider that is not configured no longer lists the configured
+  ones.** A script that parsed that list will find only the name it asked for.
+- **Rolling back to 0.112.0 is safe** while every provider is the installation's.
 
 ### Added
 
