@@ -86,8 +86,11 @@ func TestConfigureFrom_anOpenAICompatibleProviderWithNoAddress_isNotRegistered(t
 // A sealed provider answers the way the real read does when the master key is
 // missing: the row says a credential is stored and none came back.
 type stubConfig struct {
-	providers    []domain.ModelProvider
-	sealed       map[string]bool
+	providers []domain.ModelProvider
+	sealed    map[string]bool
+	// unplaced are read with no scope, as the real read gives a row of no
+	// scope this binary knows.
+	unplaced     map[string]bool
 	rates        []admin.ModelPrice
 	providersErr error
 }
@@ -100,7 +103,7 @@ func (s *stubConfig) ProvidersWithCredentials(context.Context) ([]admin.Configur
 	for _, p := range s.providers {
 		// As the real read: every row carries its scope, the installation's
 		// for one stored there (NT-019).
-		if p.Scope == (domain.Scope{}) {
+		if p.Scope == (domain.Scope{}) && !s.unplaced[p.Name] {
 			p.Scope = domain.Scope{Company: domain.Installation}
 		}
 		one := admin.ConfiguredProvider{ModelProvider: p}
@@ -224,6 +227,7 @@ func TestApplyConfiguration_aNameTheConsoleClaims_isNotFilledByTheEnvironment(t 
 		name      string
 		configure domain.ModelProvider
 		sealed    bool
+		unplaced  bool
 	}{
 		{
 			name: "configured, and its credential cannot be opened",
@@ -240,6 +244,15 @@ func TestApplyConfiguration_aNameTheConsoleClaims_isNotFilledByTheEnvironment(t 
 				BaseURL: "https://litellm.internal", Enabled: false,
 			},
 		},
+		{
+			// A row of no scope this binary knows (NT-019): held with none.
+			name: "stored at a scope this binary does not know",
+			configure: domain.ModelProvider{
+				Name: "anthropic", Kind: "anthropic",
+				BaseURL: "https://litellm.internal", Enabled: true,
+			},
+			unplaced: true,
+		},
 	} {
 		t.Run(one.name, func(t *testing.T) {
 			t.Setenv("ANTHROPIC_API_KEY", "the-vendors-key")
@@ -248,6 +261,9 @@ func TestApplyConfiguration_aNameTheConsoleClaims_isNotFilledByTheEnvironment(t 
 			config := &stubConfig{providers: []domain.ModelProvider{one.configure}}
 			if one.sealed {
 				config.sealed = map[string]bool{"anthropic": true}
+			}
+			if one.unplaced {
+				config.unplaced = map[string]bool{"anthropic": true}
 			}
 			if _, err := applyConfiguration(t.Context(), registry, config); err != nil {
 				t.Fatalf("applyConfiguration: %v", err)

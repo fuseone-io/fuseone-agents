@@ -31,6 +31,10 @@ func (i *Integrations) Providers(ctx context.Context) ([]domain.ModelProvider, e
 	out := make([]domain.ModelProvider, 0, len(rows))
 	for _, row := range rows {
 		provider, err := providerFromRow(row)
+		if errors.Is(err, errProviderScopeUnknown) {
+			// Not listed: there is no scope to say it is configured at.
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -41,6 +45,12 @@ func (i *Integrations) Providers(ctx context.Context) ([]domain.ModelProvider, e
 
 // providerFromRow reads one stored provider, without its credential.
 func providerFromRow(row settings.Setting) (domain.ModelProvider, error) {
+	// The scope first: a row of a kind a later release writes may hold a value
+	// this binary cannot decode, and it is refused for its scope either way.
+	scope, known := providerRuntimeScope(row.ScopeKind, row.Scope)
+	if !known {
+		return domain.ModelProvider{}, fmt.Errorf("%w: %s", errProviderScopeUnknown, row.Name)
+	}
 	var stored storedProvider
 	if err := json.Unmarshal(row.Value, &stored); err != nil {
 		return domain.ModelProvider{}, fmt.Errorf("admin: decode provider %s: %w", row.Name, err)
@@ -50,63 +60,9 @@ func providerFromRow(row settings.Setting) (domain.ModelProvider, error) {
 		Models:               stored.Models,
 		AutoToolChoiceModels: stored.AutoToolChoiceModels,
 		Enabled:              row.Enabled, HasKey: row.HasSecret,
-		Scope:     mcpServerRuntimeScope(row.ScopeKind, row.Scope),
+		Scope:     scope,
 		UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
 	}, nil
-}
-
-/*
-ConfiguredProvider is a provider and the credential that goes with it, read
-together.
-
-They travel as one value because they were read as one row. Split into two
-calls, an edit between them pairs a new credential with an old address, which
-is the failure a rotation exists to avoid.
-*/
-type ConfiguredProvider struct {
-	domain.ModelProvider
-	APIKey string
-	// Unreadable says why a stored credential did not open here. The provider
-	// is still listed: its name and its address are true whatever this process
-	// can do with its key, and a caller that lost the row would let something
-	// else answer under that name.
-	Unreadable string
-}
-
-/*
-ProvidersWithCredentials is the list a process needs to build clients.
-
-One query, credentials opened. The ordinary listing says only that a credential
-exists, which is what a screen should know; this is the wiring that has to
-speak to the endpoint.
-*/
-func (i *Integrations) ProvidersWithCredentials(ctx context.Context) ([]ConfiguredProvider, error) {
-	rows, err := i.settings.RevealAll(ctx, settings.KindModelProvider)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]ConfiguredProvider, 0, len(rows))
-	for _, row := range rows {
-		var stored storedProvider
-		if err := json.Unmarshal(row.Value, &stored); err != nil {
-			return nil, fmt.Errorf("admin: decode provider %s: %w", row.Name, err)
-		}
-		out = append(out, ConfiguredProvider{
-			ModelProvider: domain.ModelProvider{
-				Name: row.Name, Kind: stored.Kind, BaseURL: stored.BaseURL,
-				Models:               stored.Models,
-				AutoToolChoiceModels: stored.AutoToolChoiceModels,
-				Enabled:              row.Enabled, HasKey: row.HasSecret,
-				// Where it is configured, which decides which runs reach it
-				// (NT-019): the registry finds it only from inside.
-				Scope:     mcpServerRuntimeScope(row.ScopeKind, row.Scope),
-				UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
-			},
-			APIKey:     row.Secret,
-			Unreadable: row.SecretUnreadable,
-		})
-	}
-	return out, nil
 }
 
 // PutProvider records a provider. An empty key keeps the stored one, so
@@ -280,14 +236,4 @@ func (i *Integrations) RemoveProvider(ctx context.Context, r Removal) error {
 		kind: settings.KindModelProvider, name: r.Name, action: "provider.removed",
 		revised: i.providerRevised(r.Expect),
 	})
-}
-
-// Credential opens a provider's key. Separate and explicit: reading
-// configuration is routine, reading a credential is not.
-func (i *Integrations) Credential(ctx context.Context, name string) (string, error) {
-	set, err := i.settings.Reveal(ctx, settings.ScopeInstallation, domain.Scope{}, settings.KindModelProvider, name)
-	if err != nil {
-		return "", err
-	}
-	return set.Secret, nil
 }

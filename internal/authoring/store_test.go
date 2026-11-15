@@ -202,3 +202,21 @@ func TestSpentToday_yesterdaysSpend_doesNotCountAgainstToday(t *testing.T) {
 		t.Errorf("got %d micros, want nothing", got)
 	}
 }
+
+// The assistant runs as the platform: it points at a provider of the
+// installation, never an area's, whose key would then pay for every
+// authoring call (NT-019, phase 3).
+func TestChoose_aProviderOfAnArea_refused(t *testing.T) {
+	store, set := storeFor(t)
+	if err := set.Put(t.Context(), settings.Setting{
+		ScopeKind: settings.ScopeArea, Scope: domain.Scope{Company: "acme", Area: "cx"},
+		Kind: settings.KindModelProvider, Name: "cx-claude", Value: []byte(`{"kind":"anthropic"}`), Enabled: true,
+	}); err != nil {
+		t.Fatalf("store the area's provider: %v", err)
+	}
+
+	err := store.Choose(t.Context(), authoring.Choice{Provider: "cx-claude", Model: "x", DailyMicros: 1_000_000}, "usr_a")
+	if !errors.Is(err, authoring.ErrNoProvider) {
+		t.Fatalf("got %v, want an area's provider refused", err)
+	}
+}

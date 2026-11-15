@@ -16,6 +16,7 @@ import (
 
 	"github.com/fuseone/agents/internal/admin"
 
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/model"
 )
 
@@ -168,6 +169,11 @@ func applyConfiguration(
 func providerFrom(
 	p admin.ConfiguredProvider, priced map[string]model.Prices,
 ) (model.Provider, error) {
+	// A row of no scope this binary knows is read with none: held by its
+	// claim, built for no run (NT-019).
+	if p.Scope == (domain.Scope{}) {
+		return model.Provider{}, errors.New("stored at a scope this binary does not know")
+	}
 	provider := model.Provider{
 		Name: p.Name, Kind: model.Kind(p.Kind), BaseURL: p.BaseURL,
 	}
