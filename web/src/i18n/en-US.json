@@ -1425,7 +1425,25 @@
     "autoToolChoiceModels": "Models driven with tool_choice auto",
     "autoToolChoiceModelsHint": "One per line. These models refuse the required-tool mode; behind a gateway with fallback routing the refusal never reaches the platform, so declare them here instead.",
     "removeProviderTitle": "Remove {{name}}?",
-    "providerRemoved": "{{name}} removed"
+    "providerRemoved": "{{name}} removed",
+    "egress": {
+      "section": "Egress",
+      "intro": "Where each company's or area's MCP servers may send requests. An area's server follows the area's list, or else the company's; with neither it reaches nothing. The installation's servers follow none.",
+      "new": "New policy",
+      "none": "No egress policy",
+      "noneHint": "With no policy, a company's or an area's MCP server reaches nothing. Create one to list the origins it may call.",
+      "reachesNothing": "Reaches nothing",
+      "newTitle": "New egress policy",
+      "editTitle": "Egress policy of {{scope}}",
+      "dialogHint": "Each origin is a scheme, host and port, with no path, query or wildcard. An empty list blocks everything and, for an area, overrides the company's.",
+      "origins": "Allowed origins",
+      "originsHint": "One per line, such as https://jira.example.com. Include the OAuth token endpoint and the GitHub App API when the server uses them.",
+      "companyRequired": "Choose the company.",
+      "saved": "Egress policy of {{scope}} saved.",
+      "removeTitle": "Remove the policy of {{scope}}?",
+      "removeHint": "Removing is not blocking: an area's servers follow the company's policy again, or reach nothing. To block everything, save an empty list.",
+      "remove": "Remove policy"
+    }
   },
   "connectors": {
     "title": "Governed connectors",

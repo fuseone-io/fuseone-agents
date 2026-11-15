@@ -1425,7 +1425,25 @@
     "autoToolChoiceModels": "Modelos conduzidos com tool_choice auto",
     "autoToolChoiceModelsHint": "Um por linha. Esses modelos recusam o modo de ferramenta obrigatória; atrás de um gateway com fallback a recusa nunca chega à plataforma, então declare-os aqui.",
     "removeProviderTitle": "Remover {{name}}?",
-    "providerRemoved": "{{name}} removido"
+    "providerRemoved": "{{name}} removido",
+    "egress": {
+      "section": "Egress",
+      "intro": "Para onde os servidores MCP de cada empresa ou área podem enviar requisições. Um servidor de área segue a lista da área, ou senão a da empresa; sem nenhuma, não alcança nada. Os servidores da instalação não seguem nenhuma.",
+      "new": "Nova política",
+      "none": "Nenhuma política de egress",
+      "noneHint": "Sem política, um servidor MCP de empresa ou área não alcança nada. Crie uma para listar as origens que ele pode chamar.",
+      "reachesNothing": "Não alcança nada",
+      "newTitle": "Nova política de egress",
+      "editTitle": "Política de egress de {{scope}}",
+      "dialogHint": "Cada origem é esquema, host e porta, sem caminho, consulta ou curinga. Uma lista vazia bloqueia tudo e, numa área, prevalece sobre a da empresa.",
+      "origins": "Origens permitidas",
+      "originsHint": "Uma por linha, por exemplo https://jira.example.com. Inclua o endpoint de token de OAuth e a API do GitHub App, quando o servidor usar.",
+      "companyRequired": "Informe a empresa.",
+      "saved": "Política de egress de {{scope}} salva.",
+      "removeTitle": "Remover a política de {{scope}}?",
+      "removeHint": "Remover não é bloquear: os servidores de uma área voltam a seguir a política da empresa, ou não alcançam nada. Para bloquear tudo, salve uma lista vazia.",
+      "remove": "Remover política"
+    }
   },
   "connectors": {
     "title": "Connectors governados",

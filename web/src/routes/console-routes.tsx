@@ -61,6 +61,10 @@ export default function ConsoleRoutes() {
               path="/integrations/channels"
               element={<P.IntegrationsPage section="channels" />}
             />
+            <Route
+              path="/integrations/egress"
+              element={<P.IntegrationsPage section="egress" />}
+            />
             <Route path="/integrations/mcp" element={<P.CataloguePage />} />
             <Route path="/integrations/mcp/new" element={<P.NewServerPage />} />
             <Route path="/integrations/mcp/:name" element={<P.MCPServerPage />} />

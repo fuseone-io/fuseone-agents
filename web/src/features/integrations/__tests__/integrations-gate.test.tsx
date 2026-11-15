@@ -151,7 +151,7 @@ describe("integrations for the platform's administration", () => {
     expect(
       await screen.findByRole("button", { name: "Conectar sistema" }, { timeout: LAZY_SCREEN }),
     ).toBeInTheDocument();
-    for (const section of ["Conectados", "Disponíveis", "Connectors", "Provedores de modelo", "Canais"]) {
+    for (const section of ["Conectados", "Disponíveis", "Connectors", "Provedores de modelo", "Canais", "Egress"]) {
       expect(screen.getByRole("link", { name: section }), section).toBeInTheDocument();
     }
   });
@@ -208,7 +208,7 @@ describe("integrations for an administrator who configures an area's connectors"
     expect(screen.getAllByRole("button", { name: "Editar" })).toHaveLength(1);
   });
 
-  it.each(["/integrations/providers", "/integrations/channels"])(
+  it.each(["/integrations/providers", "/integrations/channels", "/integrations/egress"])(
     "take them from %s, which is the platform's, to the connected servers",
     async (path) => {
       signedInAs([], areaAdmin);
@@ -243,7 +243,7 @@ describe("integrations for an administrator who configures an area's connectors"
     for (const section of ["Conectados", "Disponíveis", "Credenciais"]) {
       expect(screen.getByRole("link", { name: section }), section).toBeInTheDocument();
     }
-    for (const section of ["Provedores de modelo", "Canais"]) {
+    for (const section of ["Provedores de modelo", "Canais", "Egress"]) {
       expect(screen.queryByRole("link", { name: section }), section).not.toBeInTheDocument();
     }
   });

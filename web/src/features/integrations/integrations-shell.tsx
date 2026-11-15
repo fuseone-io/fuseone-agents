@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
+  Globe,
   KeyRound,
   MessageSquare,
   PackageOpen,
@@ -20,7 +21,8 @@ export type IntegrationSection =
   | "connectors"
   | "credentials"
   | "providers"
-  | "channels";
+  | "channels"
+  | "egress";
 
 export type IntegrationCounts = Partial<Record<IntegrationSection, number>>;
 
@@ -65,6 +67,12 @@ const sections: {
     label: "channels.channels",
     path: "/integrations/channels",
     icon: MessageSquare,
+  },
+  {
+    id: "egress",
+    label: "integrations.egress.section",
+    path: "/integrations/egress",
+    icon: Globe,
   },
 ];
 
