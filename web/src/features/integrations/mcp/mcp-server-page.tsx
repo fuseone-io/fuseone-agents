@@ -22,6 +22,9 @@ import type { Tool } from "@/features/admin/api";
 import { useSetSurface } from "@/features/integrations/mcp/api";
 import { useMCPServer } from "@/features/integrations/mcp/use-mcp-server";
 import { useOrderedWrites } from "@/features/integrations/mcp/use-ordered-writes";
+import { MoveServerDialog } from "@/features/integrations/mcp/move-server-dialog";
+import { moveOffered } from "@/features/integrations/mcp/move-offer";
+import { integrationAccess } from "@/features/integrations/integration-access";
 
 /**
  * One tool server, in the order the decisions are actually made.
@@ -127,11 +130,21 @@ export function MCPServerPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={Server}
-        title={server.name}
-        description={t("mcp.subtitle")}
-      />
+      <PageHeader icon={Server} title={server.name} description={t("mcp.subtitle")}>
+        {/* A remote server still at the installation moves to the area that
+            owns it, by the platform alone (NT-019). */}
+        {/* Bound to the revision the page opened on, never a later read;
+            a reload remounts it with the new one. */}
+        {moveOffered(integrationAccess(me), server) && opened && (
+          <MoveServerDialog
+            key={opened}
+            name={server.name}
+            etag={opened}
+            onMoved={reload}
+            onStale={() => setStale(true)}
+          />
+        )}
+      </PageHeader>
 
       {stale && <StaleNotice onReload={reload} reloading={read.isFetching} />}
 

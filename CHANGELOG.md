@@ -47,6 +47,9 @@ field" is a commit message.
     are blocked by the Gate.
   - Add the server's origins to the target's egress policy first: outside the
     installation a server reaches only those.
+  - In the console, **Move to…** on the server's page, for the platform's
+    administration. It lists the agents a move would strand before asking to go
+    ahead.
 
 - **An area's administrator connects servers from the catalogue and keeps their own
   credentials.** `GET /admin/integrations/recipes` answers whoever holds
