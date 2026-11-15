@@ -83,6 +83,13 @@ const (
 	// (NT-019). The detail is the canonical origin refused and nothing else,
 	// so the console can name it without parsing a sentence.
 	CodeEgressNotAllowed Code = "fuseone:egress-not-allowed"
+	// The move of a server out of the installation (NT-019): one stored at a
+	// company or area already, published agents it would strand (listed
+	// beside the problem), and a move sent without the revision it was read
+	// at. Their own codes, so the console can say which.
+	CodeServerNotAtInstallation Code = "fuseone:server-not-at-installation"
+	CodeMoveStrandsAgents       Code = "fuseone:move-strands-agents"
+	CodePreconditionRequired    Code = "fuseone:precondition-required"
 	// CodeNoMasterKey is a GitHub webhook's secret refused because the
 	// installation has no master key to seal it with (#202). Its own code so
 	// the console can say what to configure rather than report a failure.

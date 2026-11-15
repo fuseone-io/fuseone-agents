@@ -27,7 +27,12 @@ type fakeAdmin struct {
 	// the scopes it was asked for in credentialScopes.
 	credentialServers []domain.MCPCredentialServer
 	credentialScopes  []domain.Scope
-	providers         []domain.ModelProvider
+	// moved is the last move asked of MoveMCPServer, which answers
+	// moveRevision and moveErr.
+	moved        *admin.MCPServerMove
+	moveRevision domain.Revision
+	moveErr      error
+	providers    []domain.ModelProvider
 
 	putServer   domain.MCPServer
 	putPersonal string
@@ -104,6 +109,10 @@ func (f *fakeAdmin) ProviderNamed(_ context.Context, name string) (domain.ModelP
 }
 func (f *fakeAdmin) Providers(context.Context) ([]domain.ModelProvider, error) {
 	return f.providers, f.err
+}
+func (f *fakeAdmin) MoveMCPServer(_ context.Context, m admin.MCPServerMove) (domain.Revision, error) {
+	f.moved = &m
+	return f.moveRevision, f.moveErr
 }
 func (f *fakeAdmin) MCPPersonalCredentialServers(_ context.Context, visible []domain.Scope) ([]domain.MCPCredentialServer, error) {
 	f.credentialScopes = visible

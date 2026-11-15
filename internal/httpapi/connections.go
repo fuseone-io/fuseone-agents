@@ -33,6 +33,7 @@ type Integrations interface {
 	// a name no row holds (NT-019).
 	MCPServerStoredAt(ctx context.Context, name string) (settings.ScopeKind, domain.Scope, error)
 	PersonalCredentials
+	MCPServerMover
 	Providers(ctx context.Context) ([]domain.ModelProvider, error)
 	ProviderNamed(ctx context.Context, name string) (domain.ModelProvider, error)
 	WriteMCPServer(ctx context.Context, w admin.MCPServerWrite) (domain.Revision, error)

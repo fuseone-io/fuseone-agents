@@ -442,7 +442,7 @@ changes, from the installation to a company or one of its areas. This phase move
 of the installation only. A server already stored at a company or area is not moved:
 its owner's rulings sit at its old scope, and nothing would carry them.
 
-**The door.** `POST /admin/integrations/mcp/{name}/move`, body `{scope}`, `If-Match`
+**The door.** `POST /admin/integrations/mcp-servers/{name}/move`, body `{company, area, strand}`, `If-Match`
 required. Only the platform's administration may use it (`provider:write` at
 `adminScope`). Moving a server out of the installation takes it away from every other
 area, so no area may do that on its own.

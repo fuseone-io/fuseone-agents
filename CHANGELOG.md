@@ -32,6 +32,22 @@ field" is a commit message.
 
 ### Added
 
+- **A tool server stored at the installation can be moved to the company or area that
+  owns it** (`POST /admin/integrations/mcp-servers/{name}/move`, NT-019). For a server
+  created before areas had their own, which every area inherits.
+  - It keeps its name, configuration, secret and tools. The secret is sealed again
+    under the new scope, each person's credential follows the server, and the move
+    is recorded at both scopes.
+  - Only the platform's administration moves one, only out of the installation, and
+    only against the revision it read (If-Match, or 428).
+  - It refuses a local server, a target that is not a registered company or area,
+    and an origin the target's egress policy does not admit.
+  - It also refuses when published agents outside the target name the server's
+    tools, and lists them, unless `strand` is set. After the move those agents' runs
+    are blocked by the Gate.
+  - Add the server's origins to the target's egress policy first: outside the
+    installation a server reaches only those.
+
 - **An area's administrator connects servers from the catalogue and keeps their own
   credentials.** `GET /admin/integrations/recipes` answers whoever holds
   `provider:write` in any scope, not only the platform's classifiers: a recipe names

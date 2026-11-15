@@ -2460,6 +2460,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/integrations/mcp-servers/{name}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a tool server out of the installation
+         * @description Stores a server of the installation at a company or one of its areas
+         *     (NT-019): the same name, configuration, secret and tools, at another
+         *     scope. For a server stored at the installation before areas had their
+         *     own. Only the platform's administration moves one (`provider:write`
+         *     at the platform's scope), and only out of the installation.
+         *
+         *     Refused before anything is written:
+         *     a missing If-Match (428); a stale one (412); a local server, or a
+         *     target that is not a registered company or area (400); an origin the
+         *     target's egress policy does not admit (400
+         *     `fuseone:egress-not-allowed`); a server already outside the
+         *     installation (409 `fuseone:server-not-at-installation`); published
+         *     agents outside the target that name the server's tools, unless
+         *     `strand` is true (409 `fuseone:move-strands-agents`, listing them).
+         *     After the move those agents' runs are blocked by the Gate.
+         *
+         *     The secret is sealed again under the target, each person's credential
+         *     follows the server, and the move is recorded at both scopes. A pending
+         *     rediscovery or probe is not carried: ask again after the move.
+         */
+        post: operations["moveMCPServer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/integrations/mcp-servers/{name}/rediscovery": {
         parameters: {
             query?: never;
@@ -3296,6 +3334,27 @@ export interface components {
             url: string;
             /** @enum {string} */
             contentType: "image/png" | "image/jpeg" | "image/webp";
+        };
+        MCPServerMove: {
+            /** @description The registered company the server moves to, as stored. */
+            company: string;
+            /** @description One of the company's registered areas. Absent, the whole company. */
+            area?: string;
+            /** @description Move even when published agents outside the target name the server's tools. */
+            strand?: boolean;
+        };
+        /** @description RFC 9457 problem detail, with the agents a move would strand. */
+        MCPServerMoveConflict: {
+            type?: string;
+            title: string;
+            status: number;
+            detail?: string;
+            agents?: components["schemas"]["StrandedAgent"][];
+        };
+        StrandedAgent: {
+            agentId: string;
+            company: string;
+            area: string;
         };
         /**
          * @description RFC 9457 problem detail.
@@ -10407,6 +10466,66 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    moveMCPServer: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MCPServerMove"];
+            };
+        };
+        responses: {
+            /** @description The server is stored at the target. */
+            204: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The server is already outside the installation, or moving it would
+             *     strand the published agents listed in `agents`.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["MCPServerMoveConflict"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            /** @description No If-Match. A move is made against the revision read. Problem type `fuseone:precondition-required`. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     getMCPRediscovery: {
