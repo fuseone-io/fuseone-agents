@@ -457,9 +457,11 @@ any of them.
   - only a person holding a grant inside the connection's scope may be bound. Anybody
     else is refused 400, without saying who they are;
   - **a decision that arrives on that connection only decides a run inside its scope.**
-    A click for any other run is refused before `DecideApproval` is called, and the
-    refusal is logged with the run and the connection. The connection's owner can forge
-    clicks as the people bound to it; this fence is what keeps that inside the area.
+    The person bound to the account acts there with the grants they hold inside the
+    connection's scope (`Principal.Within`), so `DecideApproval` refuses any other run
+    with the console's own 403. The connection's owner can forge clicks as the people
+    bound to it; this fence is what keeps that inside the area. The installation's
+    connections serve every scope and narrow nothing.
 - **Direct messages.** With no connection named, the one enabled connection of the
   installation answers, as today (`internal/channel/addressing.go:147-171`). A company's
   or an area's connection is never counted there.
@@ -769,9 +771,9 @@ their own Jira, Elasticsearch or SQL from their own area.
 - **Channels, per fence** (phase 4).
   - A conversation of `acme/finance` planted on `acme/cx`'s connection, bypassing the
     door, is neither posted to nor admitted from.
-  - A signed click on `acme/cx`'s connection for a run of `acme/finance`, or of the
-    platform, is refused and never reaches `DecideApproval`, even from a bound person
-    who could approve that run from the console.
+  - A signed click on `acme/cx`'s connection for a run of `acme/finance` is refused and
+    seals no decision, even from a bound person who could approve that run from the
+    console.
   - Binding a person with no grant inside `acme/cx` on `acme/cx`'s connection is
     refused. The negative cases are a person whose only grant is at `acme/finance`, and
     one whose only grant is at `acme`: a grant over the area is not a grant inside it.
