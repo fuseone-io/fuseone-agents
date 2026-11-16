@@ -17,7 +17,6 @@ import (
 
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/slack"
-	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
 )
 
@@ -115,8 +114,10 @@ func (d *Drivers) Thread(
 }
 
 func (d *Drivers) driver(ctx context.Context, name string) (Driver, error) {
-	s, err := d.store.Reveal(ctx,
-		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
+	// By name, wherever the connection is stored: the name is unique across
+	// scopes, and the row is opened under its own (NT-019). One of no known
+	// scope is not opened at all.
+	s, err := d.store.RevealNamedIf(ctx, channel.KindChannel, name, channel.RefuseUnknownConnectionScope)
 	if err != nil {
 		return nil, channel.WrapError(
 			channel.CodeConfigurationReadFailed,

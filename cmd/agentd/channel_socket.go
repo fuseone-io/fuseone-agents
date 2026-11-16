@@ -15,7 +15,6 @@ import (
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/slack"
-	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/ticket"
 )
@@ -196,8 +195,10 @@ func (m *slackSocketManager) candidates(ctx context.Context) ([]slackSocketCandi
 func (m *slackSocketManager) target(
 	ctx context.Context, candidate slackSocketCandidate,
 ) (slackSocketTarget, bool) {
-	held, err := m.settings.Reveal(ctx,
-		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, candidate.name)
+	// Wherever the connection is stored, under its own scope; one of no known
+	// scope is never opened (NT-019).
+	held, err := m.settings.RevealNamedIf(ctx,
+		channel.KindChannel, candidate.name, channel.RefuseUnknownConnectionScope)
 	if err != nil {
 		m.log.Error("slack socket token could not be read",
 			"channel", candidate.name, "err", err)

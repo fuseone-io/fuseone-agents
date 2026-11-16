@@ -78,12 +78,12 @@ func (h *ChannelHooks) slackEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	creds, known := h.bindings.Secrets(r.Context(), name)
+	held, known := h.bindings.Secrets(r.Context(), name)
 	if !known {
 		http.Error(w, "no such channel", http.StatusNotFound)
 		return
 	}
-	if err := slack.Verify(r, body, creds.Signing, h.now()); err != nil {
+	if err := slack.Verify(r, body, held.Credentials.Signing, h.now()); err != nil {
 		h.log.Warn("a channel event was refused", "channel", name, "err", err)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
