@@ -392,6 +392,17 @@ func TestReadBack_channel_putWhatGetAnsweredChangesNothing(t *testing.T) {
 		name: "posting only, the fewest fields it can take",
 		path: base + "readback-bare",
 		body: map[string]any{"kind": "slack"},
+	}, {
+		// NT-019 phase 4: an area's connection, named by where it is stored.
+		name: "a connection stored in an area",
+		path: base + "readback-area-slack", sealed: channel.KindChannel, key: "readback-area-slack",
+		body: map[string]any{
+			"scopeKind": "area", "company": "acme", "area": "cx",
+			"kind": "slack", "deliveryMode": "http",
+			"token": "readback-area-bot-secret", "signingSecret": "readback-area-signing-secret",
+		},
+		writeOnly: map[string]string{"token": "hasCredential", "signingSecret": "hasSigning"},
+		secrets:   []string{"readback-area-bot-secret", "readback-area-signing-secret"},
 	}}
 	assertEveryAcceptedFieldIsWalked(t, base+"{name}", cases)
 	for _, c := range cases {
