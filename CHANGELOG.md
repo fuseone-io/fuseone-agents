@@ -30,26 +30,6 @@ field" is a commit message.
 
 ## [Unreleased]
 
-## [0.115.0] — 2026-11-16
-
-NT-019 phase 4, the readers' release (#368), with the decisions recorded in #367. Every
-reader of a channel connection finds it wherever it is stored and fences it to its scope,
-a release before any connection can be stored outside the installation. Two migrations,
-`0111` and `0112`.
-
-### Upgrade notes
-
-- **Every replica must run this release before a channel connection can be stored
-  outside the installation** (NT-019 phase 4, readers). An older replica reads a
-  connection at the installation only and does not check its scope. Once a connection
-  exists at a company or an area, this release is the rollback floor.
-- **Nothing changes for a channel today.** Every connection is still the installation's,
-  which carries every scope's conversations and narrows no decision.
-- **Rolling back to 0.114.0 is safe** while every connection is the installation's. Both
-  migrations hold for it: `0111` only relaxes the binding rule for connections it never
-  writes, and `0112` gives the asks it writes the installation's scope, the only one it
-  verifies with.
-
 ### Added
 
 - **A company or an area connects its own Slack app** (NT-019 phase 4, writers).
@@ -72,6 +52,26 @@ a release before any connection can be stored outside the installation. Two migr
     with 400. Bindings on the installation's connections stay the platform's.
   - The list of rooms a connection's bot is in is offered to whoever configures the
     connection.
+
+## [0.115.0] — 2026-11-16
+
+NT-019 phase 4, the readers' release (#368), with the decisions recorded in #367. Every
+reader of a channel connection finds it wherever it is stored and fences it to its scope,
+a release before any connection can be stored outside the installation. Two migrations,
+`0111` and `0112`.
+
+### Upgrade notes
+
+- **Every replica must run this release before a channel connection can be stored
+  outside the installation** (NT-019 phase 4, readers). An older replica reads a
+  connection at the installation only and does not check its scope. Once a connection
+  exists at a company or an area, this release is the rollback floor.
+- **Nothing changes for a channel today.** Every connection is still the installation's,
+  which carries every scope's conversations and narrows no decision.
+- **Rolling back to 0.114.0 is safe** while every connection is the installation's. Both
+  migrations hold for it: `0111` only relaxes the binding rule for connections it never
+  writes, and `0112` gives the asks it writes the installation's scope, the only one it
+  verifies with.
 
 ### Changed
 
