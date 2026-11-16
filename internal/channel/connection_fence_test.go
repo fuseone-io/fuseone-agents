@@ -224,14 +224,27 @@ func TestArrival_theConnectionReplacedBeforeTheEventIsJudged_isJudgedByTheSessio
 }
 
 // A Via that names no scope is an arrival nobody said where it came from, and
-// carries nothing: not even the installation's conversations.
+// carries nothing: not even the installation's conversations. A row stored at
+// the installation has the zero scope, which the zero scope contains, so that
+// row is the case a fence leaning on containment alone lets through.
 func TestArrival_aViaWithNoScope_carriesNothing(t *testing.T) {
 	store, channels, settingsStore := configuredChannelsWithStore(t)
 	connect(t, channels, "acme-slack")
 	conversationOn(t, settingsStore, "acme-slack", "C12-cx", settings.ScopeArea, areaCX, "mentions")
+	conversationOn(t, settingsStore, "acme-slack", "C13-inst", settings.ScopeInstallation, domain.Scope{}, "mentions")
+	conversationOn(t, settingsStore, "acme-slack", "C14-inst", settings.ScopeInstallation, domain.Scope{}, "watch")
+	unscoped := channel.Via{Name: "acme-slack"}
 
-	if _, err := store.Resolve(t.Context(), channel.Via{Name: "acme-slack"}, "C12-cx"); !errors.Is(err, channel.ErrNoConversation) {
-		t.Errorf("Resolve = %v, want nothing carried", err)
+	for _, id := range []string{"C12-cx", "C13-inst"} {
+		if _, err := store.Resolve(t.Context(), unscoped, id); !errors.Is(err, channel.ErrNoConversation) {
+			t.Errorf("Resolve %s = %v, want nothing carried", id, err)
+		}
+	}
+	if threads, err := store.IncludeThreadContext(t.Context(), unscoped, "C13-inst"); err != nil || threads {
+		t.Errorf("IncludeThreadContext = %v, %v; want nothing carried", threads, err)
+	}
+	if _, ok, err := store.WatchFor(t.Context(), unscoped, "C14-inst", channel.Source{Bot: "B-alerts"}); err != nil || ok {
+		t.Errorf("WatchFor = %v, %v; want nothing carried", ok, err)
 	}
 }
 

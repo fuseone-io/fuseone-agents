@@ -28,9 +28,15 @@ type Via struct {
 }
 
 // carries answers whether an arrival through this connection may reach a
-// conversation or a ticket stored at scope. The zero scope contains no stored
-// one, so a Via nobody gave a scope reaches nothing.
-func (v Via) carries(scope domain.Scope) bool { return v.Scope.Contains(scope) }
+// conversation or a ticket stored at scope.
+//
+// A Via nobody gave a scope reaches nothing, and containment alone does not
+// say so: a row stored at the installation has the zero scope, and the zero
+// scope contains itself. Without the first condition an arrival whose door
+// forgot the scope would reach every installation-wide conversation.
+func (v Via) carries(scope domain.Scope) bool {
+	return v.Scope != (domain.Scope{}) && v.Scope.Contains(scope)
+}
 
 // Held is a connection's credentials with the scope the connection serves: the
 // scope a run, a conversation or a decision must be inside to use it.
