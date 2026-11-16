@@ -243,7 +243,10 @@ func TestBindAndUnbind_atOnce_leaveTheTrailAgreeingWithTheState(t *testing.T) {
 	channels := admin.NewChannels(pool, store, onlySlack{})
 	ctx := context.Background()
 
-	barrier := hold(t, pool, "identity:acme-slack/U-RACED")
+	// The connection's lock, which both take first since a withdrawal is
+	// judged against the connection it is on (NT-019): that is where the two
+	// writers meet.
+	barrier := hold(t, pool, "channel:acme-slack")
 
 	results := make(chan error, 2)
 	go func() {

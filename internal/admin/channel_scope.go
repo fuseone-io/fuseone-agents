@@ -79,3 +79,40 @@ func channelStoredAtOn(
 	}
 	return settings.ScopeKind(k), domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}, true, nil
 }
+
+// refuseOutsideConnection stops a conversation naming a connection whose scope
+// does not contain its own (NT-019): acme/cx's conversation may use the
+// platform's connection or acme/cx's own, never acme/finance's. Read under the
+// connection's lock. A connection not stored yet is not a refusal: a
+// conversation may be configured before its connection, and that connection
+// is then refused a scope that would strand it.
+func refuseOutsideConnection(ctx context.Context, conn settings.DB, name string, scope domain.Scope) error {
+	kind, stored, found, err := channelStoredAtOn(ctx, conn, name)
+	if err != nil || !found {
+		return err
+	}
+	serves, known := channel.ConnectionScope(kind, stored)
+	if !known || !serves.Contains(scope) {
+		return fmt.Errorf("%w: %s", ErrConversationOutsideConnection, name)
+	}
+	return nil
+}
+
+// connectionAllowed reads where a connection stands under its lock, which the
+// caller holds, and asks allow there: a connection that does not exist is
+// ErrNoConnection, and one of no known scope is not anybody's to act on.
+func connectionAllowed(
+	ctx context.Context, conn settings.DB, name string, allow func(settings.ScopeKind, domain.Scope) error,
+) error {
+	kind, stored, found, err := channelStoredAtOn(ctx, conn, name)
+	if err != nil {
+		return err
+	}
+	if _, known := channel.ConnectionScope(kind, stored); !found || !known {
+		return fmt.Errorf("%w: %s", ErrNoConnection, name)
+	}
+	if allow == nil {
+		return nil
+	}
+	return allow(kind, stored)
+}
