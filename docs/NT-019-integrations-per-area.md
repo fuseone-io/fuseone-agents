@@ -84,6 +84,17 @@ integrations and the ones above it. Nothing here is done by an agent.
   servers are stored: a platform-only door moves a server out of the installation, and
   re-seals its secret under the new scope. See [Moving a server out of the
   installation](#moving-a-server-out-of-the-installation).
+- **An area's administrator binds people to the area's own channel connection**
+  (decided by Kleber on 2026-11-16, when phase 4 was planned). Only people who hold a
+  grant inside the connection's scope may be bound there. Whoever owns a Slack app holds
+  its signing secret, so they can forge any click or event on it as any account bound to
+  it. Two fences keep that inside the area: a decision that arrives on a connection
+  outside the installation only decides a run inside the connection's scope, and an event
+  on it only reaches conversations inside that scope. See [Channels](#channels).
+- **A direct message with no named connection picks among the installation's
+  connections only** (decided the same day). A connection of a company or an area is
+  never chosen by default, so creating one does not leave the platform with two
+  workspaces to choose between.
 
 ## Where things stand
 
@@ -421,16 +432,38 @@ any of them.
 
 - A channel connection is stored at the caller's scope. Its secret is sealed in the row,
   and `ChannelDoor.Secrets` reads it at that scope (`internal/admin/channel_identity.go:444-448`).
+  Every reader finds a connection by its name, which is unique across scopes (index
+  `0108`), and learns where it is stored: delivery (`internal/channel/connect/connect.go:117`),
+  the Socket Mode sweep (`cmd/agentd/channel_socket.go:196`), the webhooks' signing secret,
+  and the read-back. A row at a scope the reader cannot judge is refused, never taken as
+  the platform's.
+- A Slack connection names no URL, so it needs no egress policy: it reaches Slack's API
+  and nothing else.
 - **A conversation names a connection whose scope contains its own.** A conversation of
   `acme/cx` may use the platform's Slack connection or `acme/cx`'s own, and never one of
   `acme/finance`.
 - **Inbound traffic** finds the conversation by its unique name, as today. It is then
   dropped unless the connection it arrived on is the one the conversation names. An
   event cannot reach an area's conversation through another area's app.
+- **Delivery and arrival both check the connection's scope.** A conversation whose
+  connection's scope does not contain the conversation's own is neither posted to nor
+  admitted from, however the row was written. The door refuses such a conversation
+  first; the runtime holds against a row that reached the store any other way.
+- **Channel identities**, the bindings of a person to their Slack user
+  (`internal/admin/channel_identity.go:161`), stay stored at the installation: they
+  belong to the person. On a connection of the installation, binding stays the
+  platform's, as today. On a connection of a company or an area:
+  - binding and unbinding need `provider:write` at the connection's scope;
+  - only a person holding a grant inside the connection's scope may be bound. Anybody
+    else is refused 400, without saying who they are;
+  - **a decision that arrives on that connection only decides a run inside its scope.**
+    A click for any other run is refused before `DecideApproval` is called, and the
+    refusal is logged with the run and the connection. The connection's owner can forge
+    clicks as the people bound to it; this fence is what keeps that inside the area.
+- **Direct messages.** With no connection named, the one enabled connection of the
+  installation answers, as today (`internal/channel/addressing.go:147-171`). A company's
+  or an area's connection is never counted there.
 - **What stays at the platform:**
-  - **Channel identities.** These are the bindings of a person to their Slack user
-    (`internal/admin/channel_identity.go:161`), and they belong to the person, not to an
-    area.
   - **Installation-wide conversations**, which need `company:write` at the installation
     (`internal/httpapi/channels.go:228-233`).
   - **Choosing a `runAs` user**, which needs `identity:write` (`channels.go:361`).
@@ -650,7 +683,7 @@ platform's trail shows every scope.
 | 1 | Connector instances: doors at the instance's scope, filtered listing, catalogue on `tool:read` | Writers only. The readers already check scope |
 | 2 | MCP servers and classification | Readers, then writers |
 | 3 | Model providers | Readers, then writers |
-| 4 | Channel connections | Readers, then writers. Conversations change only their doors, like phase 1 |
+| 4 | Channel connections | Readers, then writers. The readers' release finds a connection by name at any scope, checks the connection's scope at delivery, arrival and decisions, and lets a binding name a connection at any scope (the `0100` triggers). The writers' release opens the connection doors at their scope, the 409, the filtered listing, bindings by the area's administrator and the console. Conversations change only their doors, like phase 1. Once a connection exists outside the installation, the readers' release is the rollback floor |
 | 5 | Console: gate, scope field, inherited marks | With each writers' release, per kind |
 | 2b | Moving a server out of the installation: the door, its refusals, the console action | One release, after phase 2. Readers need nothing new: a moved server is an ordinary company or area row |
 
@@ -733,6 +766,19 @@ their own Jira, Elasticsearch or SQL from their own area.
     must name the tool whose effect changed.
 - **Reveals read at the row's scope.** A reveal at the installation of an area server
   finds nothing, and opening an area row's sealed value under another scope's AAD fails.
+- **Channels, per fence** (phase 4).
+  - A conversation of `acme/finance` planted on `acme/cx`'s connection, bypassing the
+    door, is neither posted to nor admitted from.
+  - A signed click on `acme/cx`'s connection for a run of `acme/finance`, or of the
+    platform, is refused and never reaches `DecideApproval`, even from a bound person
+    who could approve that run from the console.
+  - Binding a person with no grant inside `acme/cx` on `acme/cx`'s connection is
+    refused. The negative cases are a person whose only grant is at `acme/finance`, and
+    one whose only grant is at `acme`: a grant over the area is not a grant inside it.
+  - With one installation connection and one area connection enabled, a direct message
+    with no named connection is sent on the installation's.
+  - Sabotage, per fence: drop the check and keep the others. Each test must name the
+    post, the admission or the decision it let through.
 - **Against the previous binary.** After the readers' release, an area row is refused,
   not loaded as global. Sabotage: the reader skips the scope check for rows it does not
   recognise; the test must find the area's tool in the catalogue of another area's run.
