@@ -69,7 +69,25 @@ func (i *Integrations) MCPServerNamedIf(
 // Found wherever it is stored, and opened under its own scope (NT-019). A row
 // of no scope this binary knows is not found, and its key is never opened.
 func (i *Integrations) ProviderNamed(ctx context.Context, name string) (domain.ModelProvider, error) {
-	row, err := i.settings.RevealNamedIf(ctx, settings.KindModelProvider, name, refuseUnknownProviderScope)
+	return i.ProviderNamedIf(ctx, name, nil)
+}
+
+// ProviderNamedIf is ProviderNamed that asks allow, with the row's stored scope
+// in hand, before its key is opened (NT-019): a caller refused the provider
+// never reaches the vault.
+func (i *Integrations) ProviderNamedIf(
+	ctx context.Context, name string, allow func(settings.ScopeKind, domain.Scope) error,
+) (domain.ModelProvider, error) {
+	row, err := i.settings.RevealNamedIf(ctx, settings.KindModelProvider, name,
+		func(kind settings.ScopeKind, stored domain.Scope) error {
+			if err := refuseUnknownProviderScope(kind, stored); err != nil {
+				return err
+			}
+			if allow != nil {
+				return allow(kind, stored)
+			}
+			return nil
+		})
 	if errors.Is(err, settings.ErrNotFound) || errors.Is(err, errProviderScopeUnknown) {
 		return domain.ModelProvider{}, fmt.Errorf("%w: %s", ErrProviderUnknown, name)
 	}
