@@ -30,6 +30,27 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.116.0] — 2026-11-16
+
+NT-019 phase 4, the writers' release (#369, #370, #371). A company or an area connects its
+own Slack app, attaches its own rooms and binds its own people. No migration.
+
+### Upgrade notes
+
+- **Every replica must run 0.115.0 or later before the first connection is stored outside
+  the installation.** An older replica reads a connection at the installation only and
+  would not fence it to its scope.
+- **Once a connection exists outside the installation, 0.115.0 is the rollback floor.**
+  Rolling back to 0.115.0 is safe; below it is not.
+- **An area's administrator can now create channel connections and bind people on
+  them.** Whoever holds `provider:write` at a company or an area can connect an app
+  there and bind accounts of people holding a grant inside that scope. Review who holds
+  that permission before upgrading if an area should not bring its own Slack app.
+- **The channel doors authorize at the resource's scope.** A configurer who held
+  `provider:write` only at the platform's administration keeps every right they had; a
+  script that called the conversation or binding doors as a company's configurer now
+  gets answers it was refused before.
+
 ### Added
 
 - **A company or an area connects its own Slack app** (NT-019 phase 4, writers).
