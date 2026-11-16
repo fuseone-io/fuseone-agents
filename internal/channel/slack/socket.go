@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/channel"
+	"github.com/fuseone/agents/internal/domain"
 )
 
 /*
@@ -63,7 +64,7 @@ type SocketArrivals interface {
 // WatchRules answers whether an ordinary channel message may become a run.
 type WatchRules interface {
 	WatchFor(
-		ctx context.Context, channelName, conversation string, source channel.Source,
+		ctx context.Context, via channel.Via, conversation string, source channel.Source,
 	) (channel.WatchRule, bool, error)
 }
 
@@ -76,6 +77,9 @@ type SeenAccounts interface {
 // SocketReceiver handles one Slack Socket Mode frame.
 type SocketReceiver struct {
 	Channel string
+	// Scope is the scope the connection was held at when this session was
+	// opened, which is what every event it receives is judged by (NT-019).
+	Scope   domain.Scope
 	Inbox   SocketArrivals
 	Rules   WatchRules
 	Tickets channel.TicketRouter
@@ -156,14 +160,14 @@ func (r SocketReceiver) handleEvent(
 	}
 
 	arrival := channel.Arrival{
-		Channel: r.Channel, Conversation: delivery.Conversation,
+		Channel: r.Channel, ConnectionScope: r.Scope, Conversation: delivery.Conversation,
 		EventID: delivery.EventID, Message: delivery.Message,
 		AskedBy: delivery.User, Text: delivery.Text, Thread: delivery.Thread,
 		Source: delivery.Source, Payload: envelope.Payload,
 	}
 	if r.Tickets != nil {
 		intent, ok, err := r.Tickets.Route(ctx, channel.TicketCandidate{
-			Connection: r.Channel, Conversation: delivery.Conversation,
+			Connection: r.Channel, ConnectionScope: r.Scope, Conversation: delivery.Conversation,
 			Message: delivery.Message, Thread: delivery.Thread,
 			Kind: delivery.Kind, Text: delivery.Text,
 			Reaction: delivery.Reaction, Source: delivery.Source,
@@ -187,7 +191,7 @@ func (r SocketReceiver) handleEvent(
 		if r.Rules == nil {
 			return AckSocketEnvelope(envelope.EnvelopeID)
 		}
-		rule, ok, err := r.Rules.WatchFor(ctx, r.Channel, delivery.Conversation, delivery.Source)
+		rule, ok, err := r.Rules.WatchFor(ctx, channel.Via{Name: r.Channel, Scope: r.Scope}, delivery.Conversation, delivery.Source)
 		if err != nil {
 			return nil, fmt.Errorf("slack: read watch rule: %w", err)
 		}

@@ -79,14 +79,11 @@ answered by separate calls could each see a different version of the
 configuration, and an ask governed by one row's scope and another row's agent
 is a combination nobody configured.
 */
-func (c *Configured) Resolve(ctx context.Context, channel, id string) (Mapped, error) {
+func (c *Configured) Resolve(ctx context.Context, via Via, id string) (Mapped, error) {
+	channel := via.Name
 	stored, err := c.store.List(ctx, KindConversation)
 	if err != nil {
 		return Mapped{}, fmt.Errorf("channel: list conversations: %w", err)
-	}
-	connections, err := c.carriers(ctx)
-	if err != nil {
-		return Mapped{}, err
 	}
 
 	// Collected by connection and id, which is one question and not two: the
@@ -97,7 +94,7 @@ func (c *Configured) Resolve(ctx context.Context, channel, id string) (Mapped, e
 	// administrative, and not something a conversation's configuration may
 	// widen.
 	var found []Mapped
-	for _, one := range conversationsNamed(stored, connections, channel, id) {
+	for _, one := range conversationsNamed(stored, via, id) {
 		// The mode as stored, not the normalised one. ConversationMode answers
 		// anything it does not recognise with "mentions", which is the right
 		// answer for a screen and the opposite of the right answer for

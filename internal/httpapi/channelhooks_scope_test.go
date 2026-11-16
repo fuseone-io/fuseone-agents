@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/slack"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
@@ -94,4 +95,38 @@ func parkAt(t *testing.T, store *ledger.Memory, run string, scope domain.Scope) 
 			t.Fatalf("park: %v", err)
 		}
 	}
+}
+
+/*
+An event over HTTP is judged by the scope of the connection that verified it,
+held from that one read (NT-019, phase 4 readers). The ticket route and the ask
+written to the inbox both carry it; neither reads the connection again.
+*/
+func TestSlackEvent_everyJudgementCarriesTheVerifyingConnectionsScope(t *testing.T) {
+	t.Parallel()
+	cx := domain.Scope{Company: "acme", Area: "cx"}
+	api := NewServer(ledger.NewMemory(), "test")
+	hooks := NewChannelHooks(api, &bindingSpy{servesAt: cx}, &directorySpy{},
+		func() time.Time { return time.Now() }, nil)
+	inbox := &inboxSpy{}
+	tickets := &scopedTicketRoutes{}
+	hooks.WithArrivals(inbox).WithTicketRoutes(tickets)
+
+	deliver(t, hooks, "cx-slack", mentionEvent("Ev-scope"))
+
+	if tickets.got.ConnectionScope != cx {
+		t.Errorf("ticket candidate scope = %+v, want the verifying connection's", tickets.got.ConnectionScope)
+	}
+	if len(inbox.received) != 1 || inbox.received[0].ConnectionScope != cx {
+		t.Errorf("received = %+v, want the ask carrying acme/cx", inbox.received)
+	}
+}
+
+type scopedTicketRoutes struct{ got channel.TicketCandidate }
+
+func (r *scopedTicketRoutes) Route(
+	_ context.Context, c channel.TicketCandidate,
+) (channel.TicketIntent, bool, error) {
+	r.got = c
+	return channel.TicketIntent{}, false, nil
 }

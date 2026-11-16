@@ -838,7 +838,7 @@ type conversationStub struct {
 	err   error
 }
 
-func (s *conversationStub) Resolve(context.Context, string, string) (channel.Mapped, error) {
+func (s *conversationStub) Resolve(context.Context, channel.Via, string) (channel.Mapped, error) {
 	return channel.Mapped{
 		Scope: s.scope, Agent: s.agent,
 		Mode: channel.ConversationMode(s.mode),
@@ -859,7 +859,7 @@ type threadPolicyStub struct {
 	err     error
 }
 
-func (s *threadPolicyStub) IncludeThreadContext(context.Context, string, string) (bool, error) {
+func (s *threadPolicyStub) IncludeThreadContext(context.Context, channel.Via, string) (bool, error) {
 	return s.include, s.err
 }
 

@@ -31,7 +31,7 @@ combination nobody ever wrote down, and an edit is exactly when a channel is
 busiest with people trying again.
 */
 type Mapping interface {
-	Resolve(ctx context.Context, channel, conversation string) (Mapped, error)
+	Resolve(ctx context.Context, via Via, conversation string) (Mapped, error)
 }
 
 // Mapped is one conversation's configuration, read at one instant.
@@ -95,7 +95,7 @@ type Subjects interface {
 // it is not authority: the conversation already speaks for a scope, and this
 // only controls how much untrusted evidence accompanies the ask.
 type ThreadContextPolicy interface {
-	IncludeThreadContext(ctx context.Context, channel, conversation string) (bool, error)
+	IncludeThreadContext(ctx context.Context, via Via, conversation string) (bool, error)
 }
 
 // ThreadReader reads earlier messages from a vendor thread.

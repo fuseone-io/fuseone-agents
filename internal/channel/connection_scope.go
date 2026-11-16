@@ -12,6 +12,26 @@ import (
 // ErrConnectionScopeUnknown is a connection row of no scope this binary knows.
 var ErrConnectionScopeUnknown = errors.New("channel: a connection stored at a scope this binary does not know")
 
+/*
+Via is the connection an event arrived on, with the scope the session that
+received it held: the HTTP door's verifying read, or the Socket Mode session as
+it was opened.
+
+Judged by this and never by the connection's row read again later. Between the
+event and the judgement the row can be removed, or recreated under the same
+name at another scope; the event still came from the app that held the old one,
+and is judged as that app's. A Via with no scope carries nothing.
+*/
+type Via struct {
+	Name  string
+	Scope domain.Scope
+}
+
+// carries answers whether an arrival through this connection may reach a
+// conversation or a ticket stored at scope. The zero scope contains no stored
+// one, so a Via nobody gave a scope reaches nothing.
+func (v Via) carries(scope domain.Scope) bool { return v.Scope.Contains(scope) }
+
 // Held is a connection's credentials with the scope the connection serves: the
 // scope a run, a conversation or a decision must be inside to use it.
 type Held struct {
@@ -55,7 +75,10 @@ func RefuseUnknownConnectionScope(kind settings.ScopeKind, stored domain.Scope) 
 }
 
 /*
-carriers is where each connection is stored, read once for one decision.
+carriers is where each connection is stored, read once for one delivery.
+
+Delivery only. An arrival is judged by the Via it came through, never by the
+row read again, because the row may have changed since the event was received.
 
 A connection that is not stored at all is not judged here. A conversation may be
 configured before its connection, and nothing can be posted to or arrive from a

@@ -494,18 +494,13 @@ type WatchRule struct {
 // The source is a filter, not authority. The returned RunAs is the principal a
 // person configured beforehand; a Slack bot id never becomes a FuseOne user.
 func (c *Configured) WatchFor(
-	ctx context.Context, channelName, id string, source Source,
+	ctx context.Context, via Via, id string, source Source,
 ) (WatchRule, bool, error) {
 	stored, err := c.store.List(ctx, KindConversation)
 	if err != nil {
 		return WatchRule{}, false, fmt.Errorf("channel: list conversations: %w", err)
 	}
-	connections, err := c.carriers(ctx)
-	if err != nil {
-		return WatchRule{}, false, err
-	}
-
-	found := conversationsNamed(stored, connections, channelName, id)
+	found := conversationsNamed(stored, via, id)
 	// Every row for this conversation, and only then a decision. Answering
 	// from the first one found made row order decide which configuration was
 	// in force: the same pair Resolve reports as ambiguous started the agent
@@ -541,7 +536,7 @@ type storedConversation struct {
 // connection. Two of them is a configuration nobody can act on, and saying so
 // is the caller's job — the count is the answer here.
 func conversationsNamed(
-	stored []settings.Setting, connections carriers, channelName, id string,
+	stored []settings.Setting, via Via, id string,
 ) []storedConversation {
 	var found []storedConversation
 	for _, s := range stored {
@@ -556,16 +551,17 @@ func conversationsNamed(
 			continue
 		}
 		// The connection first, then the id the row says it is for.
-		if v.Channel != channelName {
+		if v.Channel != via.Name {
 			continue
 		}
 		stored, legible := ConversationIDOf(v.KeyVersion, v.Channel, s.Name)
 		if !legible || stored != id {
 			continue
 		}
-		// Arriving on a connection is arriving inside its scope: an event an
-		// area's app signed reaches only that area's conversations (NT-019).
-		if !connections.carries(v.Channel, s.Scope) {
+		// Arriving on a connection is arriving inside the scope the receiving
+		// session held it at: an event an area's app signed reaches only that
+		// area's conversations (NT-019), whatever the row says by now.
+		if !via.carries(s.Scope) {
 			continue
 		}
 		found = append(found, storedConversation{scope: s.Scope, value: v})
@@ -578,17 +574,13 @@ func conversationsNamed(
 // to watched messages: those start from the message itself, while this option
 // covers a person replying to an existing alert thread with a mention.
 func (c *Configured) IncludeThreadContext(
-	ctx context.Context, channelName, id string,
+	ctx context.Context, via Via, id string,
 ) (bool, error) {
 	stored, err := c.store.List(ctx, KindConversation)
 	if err != nil {
 		return false, fmt.Errorf("channel: list conversations: %w", err)
 	}
-	connections, err := c.carriers(ctx)
-	if err != nil {
-		return false, err
-	}
-	for _, one := range conversationsNamed(stored, connections, channelName, id) {
+	for _, one := range conversationsNamed(stored, via, id) {
 		if !StartsFromMentions(one.value.Mode) {
 			continue
 		}

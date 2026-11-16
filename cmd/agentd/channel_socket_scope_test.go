@@ -29,6 +29,14 @@ func TestSlackSocket_aConnectionOfAnArea_isOpenedWithItsOwnToken(t *testing.T) {
 	if !ok || target.appToken != "xapp-cx-slack" {
 		t.Fatalf("target = %+v, %v; want the area's own app-level token", target, ok)
 	}
+	// The session keeps the scope it was opened with: every event it receives
+	// is judged by it, whatever the row says by the time the event arrives.
+	if target.scope != (domain.Scope{Company: "acme", Area: "cx"}) {
+		t.Errorf("session scope = %+v, want acme/cx", target.scope)
+	}
+	if got := manager.receiverFor(target); got.Scope != target.scope || got.Channel != "cx-slack" {
+		t.Errorf("receiver = %s at %+v, want the session's connection and scope", got.Channel, got.Scope)
+	}
 }
 
 // A connection of no scope this binary knows is not opened: its events would

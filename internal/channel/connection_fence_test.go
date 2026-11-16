@@ -22,6 +22,7 @@ store, bypassing the administration on purpose.
 */
 
 var (
+	cxVia       = channel.Via{Name: "cx-slack", Scope: domain.Scope{Company: "acme", Area: "cx"}}
 	areaCX      = domain.Scope{Company: "acme", Area: "cx"}
 	areaFinance = domain.Scope{Company: "acme", Area: "finance"}
 	companyAcme = domain.Scope{Company: "acme"}
@@ -85,13 +86,13 @@ func TestArrival_aConversationOutsideItsConnectionsScope_isNotAdmitted(t *testin
 	conversationOn(t, settingsStore, "cx-slack", "C6-fin", settings.ScopeArea, areaFinance, "mentions")
 	conversationOn(t, settingsStore, "cx-slack", "C7-fin", settings.ScopeArea, areaFinance, "watch")
 
-	if _, err := store.Resolve(t.Context(), "cx-slack", "C6-fin"); !errors.Is(err, channel.ErrNoConversation) {
+	if _, err := store.Resolve(t.Context(), cxVia, "C6-fin"); !errors.Is(err, channel.ErrNoConversation) {
 		t.Errorf("Resolve = %v, want no conversation", err)
 	}
-	if threads, err := store.IncludeThreadContext(t.Context(), "cx-slack", "C6-fin"); err != nil || threads {
+	if threads, err := store.IncludeThreadContext(t.Context(), cxVia, "C6-fin"); err != nil || threads {
 		t.Errorf("IncludeThreadContext = %v, %v; want false", threads, err)
 	}
-	_, ok, err := store.WatchFor(t.Context(), "cx-slack", "C7-fin", channel.Source{Bot: "B-alerts"})
+	_, ok, err := store.WatchFor(t.Context(), cxVia, "C7-fin", channel.Source{Bot: "B-alerts"})
 	if err != nil || ok {
 		t.Errorf("WatchFor = %v, %v; want no rule", ok, err)
 	}
@@ -105,14 +106,14 @@ func TestArrival_aConversationInsideItsConnectionsScope_isAdmitted(t *testing.T)
 	conversationOn(t, settingsStore, "cx-slack", "C8-cx", settings.ScopeArea, areaCX, "mentions")
 	conversationOn(t, settingsStore, "cx-slack", "C9-cx", settings.ScopeArea, areaCX, "watch")
 
-	got, err := store.Resolve(t.Context(), "cx-slack", "C8-cx")
+	got, err := store.Resolve(t.Context(), cxVia, "C8-cx")
 	if err != nil || got.Scope != areaCX {
 		t.Errorf("Resolve = %+v, %v; want acme/cx", got, err)
 	}
-	if threads, err := store.IncludeThreadContext(t.Context(), "cx-slack", "C8-cx"); err != nil || !threads {
+	if threads, err := store.IncludeThreadContext(t.Context(), cxVia, "C8-cx"); err != nil || !threads {
 		t.Errorf("IncludeThreadContext = %v, %v; want true", threads, err)
 	}
-	_, ok, err := store.WatchFor(t.Context(), "cx-slack", "C9-cx", channel.Source{Bot: "B-alerts"})
+	_, ok, err := store.WatchFor(t.Context(), cxVia, "C9-cx", channel.Source{Bot: "B-alerts"})
 	if err != nil || !ok {
 		t.Errorf("WatchFor = %v, %v; want the rule", ok, err)
 	}
@@ -162,7 +163,7 @@ func TestTicketRoutes_aRoomOutsideItsConnectionsScope_opensNothing(t *testing.T)
 	connectionAt(t, settingsStore, "acme-slack", settings.ScopeArea, areaCX)
 	routes := channel.NewTicketRoutes(settingsStore, ticket.NewMemory())
 
-	_, ok, err := routes.Route(t.Context(), ticketAsk())
+	_, ok, err := routes.Route(t.Context(), ticketAsk(areaCX))
 	if err != nil || ok {
 		t.Fatalf("Route: ok=%v err=%v, want nothing opened", ok, err)
 	}
@@ -176,15 +177,92 @@ func TestTicketRoutes_aRoomInsideItsConnectionsScope_opens(t *testing.T) {
 		domain.Scope{Company: "acme", Area: "support"})
 	routes := channel.NewTicketRoutes(settingsStore, ticket.NewMemory())
 
-	if _, ok, err := routes.Route(t.Context(), ticketAsk()); err != nil || !ok {
+	if _, ok, err := routes.Route(t.Context(), ticketAsk(domain.Scope{Company: "acme", Area: "support"})); err != nil || !ok {
 		t.Fatalf("Route: ok=%v err=%v, want the ticket opened", ok, err)
 	}
 }
 
-func ticketAsk() channel.TicketCandidate {
+func ticketAsk(received domain.Scope) channel.TicketCandidate {
 	return channel.TicketCandidate{
-		Connection: "acme-slack", Conversation: "C-tickets",
-		Message: "171.1", Thread: "171.1", Kind: "message",
+		Connection: "acme-slack", ConnectionScope: received,
+		Conversation: "C-tickets",
+		Message:      "171.1", Thread: "171.1", Kind: "message",
 		Text: "Please create an API key", Source: channel.Source{User: "U-requester"},
+	}
+}
+
+/*
+An event is judged by the scope of the session that received it, not by the
+connection's row as it stands when the event is judged (NT-019, phase 4
+readers).
+
+A Socket Mode session is reconciled with its row every thirty seconds, and an
+inbox row is consumed later still. In between the row can be removed, or
+recreated under the same name at another scope. The event still came from the
+app that held the old row; judged by the row instead, a removed connection
+carried everything and a replaced one carried the newcomer's scope.
+*/
+func TestArrival_theConnectionRemovedBeforeTheEventIsJudged_isJudgedByTheSession(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+	// No connection row at all: removed after the session opened.
+	conversationOn(t, settingsStore, "cx-slack", "C10-fin", settings.ScopeArea, areaFinance, "mentions")
+
+	if _, err := store.Resolve(t.Context(), cxVia, "C10-fin"); !errors.Is(err, channel.ErrNoConversation) {
+		t.Errorf("Resolve = %v, want acme/cx's session to reach no acme/finance conversation", err)
+	}
+}
+
+func TestArrival_theConnectionReplacedBeforeTheEventIsJudged_isJudgedByTheSession(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+	// Recreated under the same name by acme/finance after acme/cx's session opened.
+	connectionAt(t, settingsStore, "cx-slack", settings.ScopeArea, areaFinance)
+	conversationOn(t, settingsStore, "cx-slack", "C11-fin", settings.ScopeArea, areaFinance, "watch")
+
+	if _, ok, err := store.WatchFor(t.Context(), cxVia, "C11-fin", channel.Source{Bot: "B-alerts"}); err != nil || ok {
+		t.Errorf("WatchFor = %v, %v; want acme/cx's session to reach nothing of acme/finance", ok, err)
+	}
+}
+
+// A Via that names no scope is an arrival nobody said where it came from, and
+// carries nothing: not even the installation's conversations.
+func TestArrival_aViaWithNoScope_carriesNothing(t *testing.T) {
+	store, channels, settingsStore := configuredChannelsWithStore(t)
+	connect(t, channels, "acme-slack")
+	conversationOn(t, settingsStore, "acme-slack", "C12-cx", settings.ScopeArea, areaCX, "mentions")
+
+	if _, err := store.Resolve(t.Context(), channel.Via{Name: "acme-slack"}, "C12-cx"); !errors.Is(err, channel.ErrNoConversation) {
+		t.Errorf("Resolve = %v, want nothing carried", err)
+	}
+}
+
+// A ticket reply is judged by the session as well: removed or replaced, the
+// row of the moment does not decide which tickets acme/support's app reaches.
+func TestTicketRoutes_theConnectionRemovedOrReplaced_isJudgedByTheSession(t *testing.T) {
+	support := domain.Scope{Company: "acme", Area: "support"}
+	for name, after := range map[string]func(*testing.T, *settings.Store){
+		"removed": func(t *testing.T, s *settings.Store) {
+			if err := s.Delete(t.Context(), settings.ScopeArea, support, channel.KindChannel, "acme-slack"); err != nil {
+				t.Fatalf("remove: %v", err)
+			}
+		},
+		"replaced": func(t *testing.T, s *settings.Store) {
+			if err := s.Delete(t.Context(), settings.ScopeArea, support, channel.KindChannel, "acme-slack"); err != nil {
+				t.Fatalf("remove: %v", err)
+			}
+			connectionAt(t, s, "acme-slack", settings.ScopeArea, areaFinance)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			routes, settingsStore := financeTicketOnSupportSession(t)
+			after(t, settingsStore)
+			_, ok, err := routes.Route(t.Context(), channel.TicketCandidate{
+				Connection: "acme-slack", ConnectionScope: support, Conversation: "C-tickets",
+				Message: "171.2", Thread: "171.1", Kind: "message",
+				Source: channel.Source{User: "U-requester"},
+			})
+			if err != nil || ok {
+				t.Fatalf("Route: ok=%v err=%v, want acme/support's session to reach no acme/finance ticket", ok, err)
+			}
+		})
 	}
 }

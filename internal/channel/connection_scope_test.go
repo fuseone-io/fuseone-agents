@@ -46,3 +46,9 @@ func TestConnectionScope_knowsOnlyTheThreeScopesItMeans(t *testing.T) {
 		}
 	}
 }
+
+// installed is an arrival on a connection of the installation's, which serves
+// every scope: what every connection was before areas had their own.
+func installed(name string) channel.Via {
+	return channel.Via{Name: name, Scope: domain.Scope{Company: domain.Installation}}
+}

@@ -15,6 +15,7 @@ import (
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/slack"
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/ticket"
 )
@@ -63,6 +64,10 @@ type slackSocketTarget struct {
 	name     string
 	key      string
 	appToken string
+	// scope is where the connection was stored when the session was opened.
+	// Every event the session receives is judged by it, not by the row as it
+	// stands when the event arrives (NT-019).
+	scope domain.Scope
 }
 
 type slackSocketCandidate struct {
@@ -210,8 +215,10 @@ func (m *slackSocketManager) target(
 			"channel", candidate.name)
 		return slackSocketTarget{}, false
 	}
+	// Known: the read above refused any other.
+	scope, _ := channel.ConnectionScope(held.ScopeKind, held.Scope)
 	return slackSocketTarget{
-		name: candidate.name, key: candidate.key, appToken: creds.AppToken,
+		name: candidate.name, key: candidate.key, appToken: creds.AppToken, scope: scope,
 	}, true
 }
 
@@ -321,11 +328,7 @@ func (m *slackSocketManager) connectOnce(ctx context.Context, target slackSocket
 		}
 	}()
 
-	receiver := slack.SocketReceiver{
-		Channel: target.name, Inbox: m.inbox,
-		Rules: channel.NewConfigured(m.settings), Tickets: m.tickets, Seen: m.seen,
-		Now: time.Now, Log: m.log,
-	}
+	receiver := m.receiverFor(target)
 	for {
 		_, body, err := conn.ReadMessage()
 		if err != nil {
@@ -342,5 +345,16 @@ func (m *slackSocketManager) connectOnce(ctx context.Context, target slackSocket
 		if err := conn.WriteMessage(websocket.TextMessage, ack); err != nil {
 			return fmt.Errorf("slack: acknowledge socket envelope: %w", err)
 		}
+	}
+}
+
+// receiverFor is what one session hands every frame it reads: the scope it was
+// opened with travels with each event, so none is judged by a row that changed
+// since (NT-019).
+func (m *slackSocketManager) receiverFor(target slackSocketTarget) slack.SocketReceiver {
+	return slack.SocketReceiver{
+		Channel: target.name, Scope: target.scope, Inbox: m.inbox,
+		Rules: channel.NewConfigured(m.settings), Tickets: m.tickets, Seen: m.seen,
+		Now: time.Now, Log: m.log,
 	}
 }

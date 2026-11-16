@@ -48,7 +48,7 @@ func TestTicketRoutes_onlyAMatchingHumanRoot_opensATicket(t *testing.T) {
 	routes := channel.NewTicketRoutes(settingsStore, tickets)
 
 	base := channel.TicketCandidate{
-		Connection: "acme-slack", Conversation: "C-tickets",
+		Connection: "acme-slack", ConnectionScope: domain.Scope{Company: domain.Installation}, Conversation: "C-tickets",
 		Message: "171.1", Thread: "171.1", Kind: "message",
 		Text: "Please create an API key", Source: channel.Source{User: "U-requester"},
 	}
@@ -103,7 +103,7 @@ func TestTicketRoutes_aReplyUsesTheStoredOrigin_notItsWords(t *testing.T) {
 	routes := channel.NewTicketRoutes(settingsStore, tickets)
 
 	intent, ok, err := routes.Route(t.Context(), channel.TicketCandidate{
-		Connection: "acme-slack", Conversation: "C-tickets",
+		Connection: "acme-slack", ConnectionScope: domain.Scope{Company: domain.Installation}, Conversation: "C-tickets",
 		Message: "171.2", Thread: "171.1", Kind: "message",
 		Text: "does not match any admission pattern", Source: channel.Source{App: "A-address"},
 	})
@@ -112,7 +112,7 @@ func TestTicketRoutes_aReplyUsesTheStoredOrigin_notItsWords(t *testing.T) {
 	}
 
 	_, ok, err = routes.Route(t.Context(), channel.TicketCandidate{
-		Connection: "other-slack", Conversation: "C-tickets",
+		Connection: "other-slack", ConnectionScope: domain.Scope{Company: domain.Installation}, Conversation: "C-tickets",
 		Message: "171.3", Thread: "171.1", Kind: "message",
 	})
 	if err != nil || ok {
@@ -166,7 +166,7 @@ func TestTicketRoutes_aMarkedReplyUnderABotRoot_opensATicketKeyedOnTheRoot(t *te
 		t.Fatal(err)
 	}
 	base := channel.TicketCandidate{
-		Connection: "acme-slack", Conversation: "C-help",
+		Connection: "acme-slack", ConnectionScope: domain.Scope{Company: domain.Installation}, Conversation: "C-help",
 		Message: "171.2", Thread: "171.1", Kind: "message",
 		Text:   ":large_yellow_circle: [team-sre] [RTD-17] Ticket criado",
 		Source: channel.Source{User: "U-triage", Bot: "B-triage"},

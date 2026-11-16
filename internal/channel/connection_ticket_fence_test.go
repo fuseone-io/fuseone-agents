@@ -30,7 +30,7 @@ func TestTicketRoutes_aReplyToATicketOutsideItsConnectionsScope_reachesNothing(t
 	routes, _ := reusedNameTickets(t)
 
 	_, ok, err := routes.Route(t.Context(), channel.TicketCandidate{
-		Connection: "acme-slack", Conversation: "C-tickets",
+		Connection: "acme-slack", ConnectionScope: supportScope, Conversation: "C-tickets",
 		Message: "171.2", Thread: "171.1", Kind: "message",
 		Source: channel.Source{User: "U-requester"},
 	})
@@ -44,7 +44,7 @@ func TestTicketRoutes_aReviewReplyToATicketOutsideItsConnectionsScope_reachesNot
 	openReviewThread(t, tickets, "900.1")
 
 	_, ok, err := routes.Route(t.Context(), channel.TicketCandidate{
-		Connection: "acme-slack", Conversation: "C-review",
+		Connection: "acme-slack", ConnectionScope: supportScope, Conversation: "C-review",
 		Message: "900.2", Thread: "900.1", Kind: "message",
 		Source: channel.Source{User: "U-decider"},
 	})
@@ -57,7 +57,7 @@ func TestTicketRoutes_aReactionOnATicketOutsideItsConnectionsScope_closesNothing
 	routes, _ := reusedNameTickets(t)
 
 	_, ok, err := routes.Route(t.Context(), channel.TicketCandidate{
-		Connection: "acme-slack", Conversation: "C-tickets",
+		Connection: "acme-slack", ConnectionScope: supportScope, Conversation: "C-tickets",
 		Message: "171.1", Thread: "171.1", Kind: "reaction", Reaction: "white_check_mark",
 		Source: channel.Source{User: "U-decider"},
 	})
@@ -72,11 +72,11 @@ func TestTicketRoutes_aReactionOnATicketOutsideItsConnectionsScope_closesNothing
 func TestTicketRoutes_aTicketInsideItsConnectionsScope_isReached(t *testing.T) {
 	support := domain.Scope{Company: "acme", Area: "support"}
 	for name, candidate := range map[string]channel.TicketCandidate{
-		"reply": {Connection: "acme-slack", Conversation: "C-tickets",
+		"reply": {Connection: "acme-slack", ConnectionScope: supportScope, Conversation: "C-tickets",
 			Message: "171.2", Thread: "171.1", Kind: "message", Source: channel.Source{User: "U-requester"}},
-		"review": {Connection: "acme-slack", Conversation: "C-review",
+		"review": {Connection: "acme-slack", ConnectionScope: supportScope, Conversation: "C-review",
 			Message: "900.2", Thread: "900.1", Kind: "message", Source: channel.Source{User: "U-decider"}},
-		"reaction": {Connection: "acme-slack", Conversation: "C-tickets",
+		"reaction": {Connection: "acme-slack", ConnectionScope: supportScope, Conversation: "C-tickets",
 			Message: "171.1", Thread: "171.1", Kind: "reaction", Reaction: "white_check_mark",
 			Source: channel.Source{User: "U-decider"}},
 	} {
@@ -90,14 +90,31 @@ func TestTicketRoutes_aTicketInsideItsConnectionsScope_isReached(t *testing.T) {
 	}
 }
 
+var supportScope = domain.Scope{Company: "acme", Area: "support"}
+
 func reusedNameTickets(t *testing.T) (*channel.TicketRoutes, *ticket.Memory) {
 	t.Helper()
-	return ticketsOpenedAt(t, domain.Scope{Company: "acme", Area: "finance"})
+	routes, tickets, _ := ticketsOpenedWith(t, domain.Scope{Company: "acme", Area: "finance"})
+	return routes, tickets
 }
 
-// ticketsOpenedAt is acme/support's room on acme/support's own connection,
-// holding one open ticket stored at the scope given.
+// financeTicketOnSupportSession is the same room, for a test that goes on to
+// change the connection's row after the session that receives was opened.
+func financeTicketOnSupportSession(t *testing.T) (*channel.TicketRoutes, *settings.Store) {
+	t.Helper()
+	routes, _, store := ticketsOpenedWith(t, domain.Scope{Company: "acme", Area: "finance"})
+	return routes, store
+}
+
 func ticketsOpenedAt(t *testing.T, scope domain.Scope) (*channel.TicketRoutes, *ticket.Memory) {
+	t.Helper()
+	routes, tickets, _ := ticketsOpenedWith(t, scope)
+	return routes, tickets
+}
+
+// ticketsOpenedWith is acme/support's room on acme/support's own connection,
+// holding one open ticket stored at the scope given.
+func ticketsOpenedWith(t *testing.T, scope domain.Scope) (*channel.TicketRoutes, *ticket.Memory, *settings.Store) {
 	t.Helper()
 	_, channels, settingsStore := configuredChannelsWithStore(t)
 	support := domain.Scope{Company: "acme", Area: "support"}
@@ -128,5 +145,5 @@ func ticketsOpenedAt(t *testing.T, scope domain.Scope) (*channel.TicketRoutes, *
 	}); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	return channel.NewTicketRoutes(settingsStore, tickets), tickets
+	return channel.NewTicketRoutes(settingsStore, tickets), tickets, settingsStore
 }
