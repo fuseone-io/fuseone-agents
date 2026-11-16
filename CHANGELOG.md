@@ -63,6 +63,15 @@ a release before any connection can be stored outside the installation. Two migr
     ones they inherit, read-only, never a sibling area's. An inherited connection carries
     only the conversations of the caller's scopes, and none of its bindings or seen
     accounts.
+  - A conversation is configured, tested and removed by whoever holds `provider:write`
+    at the conversation's scope. It names a connection whose scope contains its own:
+    acme/cx's room may use the platform's connection or acme/cx's own, never another
+    area's (400). A room for the whole installation still needs authority over it.
+  - On a company's or an area's connection, its configurer binds people to their Slack
+    accounts, but only people holding a grant inside that scope; anybody else is refused
+    with 400. Bindings on the installation's connections stay the platform's.
+  - The list of rooms a connection's bot is in is offered to whoever configures the
+    connection.
 
 ### Changed
 
