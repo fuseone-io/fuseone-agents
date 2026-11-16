@@ -3,6 +3,9 @@ package admin
 import (
 	"context"
 	"errors"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
@@ -54,4 +57,49 @@ func (i *Integrations) Credential(ctx context.Context, name string) (string, err
 		return "", err
 	}
 	return set.Secret, nil
+}
+
+// lockProviderName holds every write and removal of one provider name, at any
+// scope, until the transaction ends: taken first, before any row, so two
+// scopes racing for one name meet here rather than at the unique index.
+func lockProviderName(ctx context.Context, tx settings.DB, name string) error {
+	if _, err := tx.Exec(ctx,
+		`select pg_advisory_xact_lock(hashtextextended('model_provider:' || $1, 0))`, name); err != nil {
+		return fmt.Errorf("admin: lock the provider name %s: %w", name, err)
+	}
+	return nil
+}
+
+// providerWriteGuard takes a provider write's locks in the order a removal
+// takes them, the name then the row, and answers a name another scope holds
+// before anything else (NT-019).
+func providerWriteGuard(name string, at settings.ScopeKind, stored domain.Scope) func(context.Context, settings.DB) error {
+	return func(ctx context.Context, tx settings.DB) error {
+		if err := lockProviderName(ctx, tx, name); err != nil {
+			return err
+		}
+		if err := settings.GuardTx(ctx, tx, settings.Setting{
+			ScopeKind: at, Scope: stored, Kind: settings.KindModelProvider, Name: name,
+		}); err != nil {
+			return err
+		}
+		return nameOfKindHeldElsewhere(ctx, tx, settings.KindModelProvider, name, at, stored)
+	}
+}
+
+// ProviderStoredAt is where a provider's row lives, the installation's for a
+// name no row holds: where a door authorizes an act on it (NT-019).
+func (i *Integrations) ProviderStoredAt(ctx context.Context, name string) (settings.ScopeKind, domain.Scope, error) {
+	var kind, company, area string
+	err := i.pool.QueryRow(ctx, `
+		select scope_kind, company_id, area_id from settings
+		where kind = $1 and name = $2`, string(settings.KindModelProvider), name,
+	).Scan(&kind, &company, &area)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return settings.ScopeInstallation, domain.Scope{}, nil
+	}
+	if err != nil {
+		return "", domain.Scope{}, fmt.Errorf("admin: find provider %s: %w", name, err)
+	}
+	return settings.ScopeKind(kind), domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}, nil
 }

@@ -42,6 +42,7 @@ func (s serving) Configured(name string, _ domain.Scope) bool {
 	return s.configured[name] || s.usable[name]
 }
 func (s serving) Usable(name string, _ domain.Scope) bool { return s.usable[name] }
+func (s serving) FromEnvironment(string) bool             { return false }
 
 func experimentFixture(t *testing.T, store *ledger.Memory, agents Agents) (*Server, *fakeCorpus) {
 	t.Helper()

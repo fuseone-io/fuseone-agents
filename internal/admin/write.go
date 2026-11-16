@@ -108,6 +108,9 @@ type removal struct {
 	kind             settings.Kind
 	name, action     string
 	revised          *revised
+	// lock, when set, is taken first, before the row: the order a write of
+	// the same name takes them in.
+	lock func(context.Context, settings.DB) error
 }
 
 func removeRevised(ctx context.Context, pool *pgxpool.Pool, store *settings.Store, r removal) error {
@@ -118,6 +121,11 @@ func removeRevised(ctx context.Context, pool *pgxpool.Pool, store *settings.Stor
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if r.lock != nil {
+		if err := r.lock(ctx, tx); err != nil {
+			return err
+		}
+	}
 	if r.revised != nil {
 		set := settings.Setting{ScopeKind: at, Scope: stored, Kind: kind, Name: name}
 		if err := removalGuard(ctx, tx, store, set, r.revised); err != nil {

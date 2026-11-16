@@ -175,3 +175,71 @@ func TestCompleterAndCounter_reachWhatTheirScopeReaches(t *testing.T) {
 		t.Error("a count with no agent scope was built on acme/cx's provider")
 	}
 }
+
+// A name the environment supplies stays the environment's while the console
+// overrides it: the override is the installation's, and once removed the
+// environment's answers again (NT-019). A name it never supplied is not.
+func TestFromEnvironment_isWhatTheEnvironmentSupplies(t *testing.T) {
+	t.Parallel()
+	r := model.NewRegistry(nil)
+	_ = r.Register(model.Provider{Name: "from-env", Kind: model.KindAnthropic})
+	_ = r.Register(model.Provider{Name: "overridden", Kind: model.KindAnthropic})
+	r.SetConfigured([]model.Provider{{Name: "console-only", Kind: model.KindAnthropic, Scope: installation}},
+		model.Claim{Name: "overridden", Scope: installation}, model.Claim{Name: "console-only", Scope: installation})
+	if !r.FromEnvironment("from-env") || !r.FromEnvironment("overridden") || r.FromEnvironment("console-only") {
+		t.Errorf("FromEnvironment = %v, %v, %v; want true, true, false",
+			r.FromEnvironment("from-env"), r.FromEnvironment("overridden"), r.FromEnvironment("console-only"))
+	}
+}
+
+// The environment's provider is remembered as the environment's: a console
+// override replaces it while it lasts, and once removed the environment's
+// answers again under the name, and still holds the name against an area.
+func TestFromEnvironment_survivesAnOverrideThatWasRemoved(t *testing.T) {
+	t.Parallel()
+	r := model.NewRegistry(nil)
+	if err := r.Register(model.Provider{Name: "anthropic", Kind: model.KindAnthropic, APIKey: "env-key"}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	r.SetConfigured([]model.Provider{{Name: "anthropic", Kind: model.KindAnthropic, APIKey: "console-key", Scope: installation}},
+		model.Claim{Name: "anthropic", Scope: installation})
+	r.SetConfigured(nil)
+
+	if !r.FromEnvironment("anthropic") {
+		t.Error("FromEnvironment(anthropic) = false after the override was removed")
+	}
+	if !r.Usable("anthropic", cx) {
+		t.Error("the environment's provider did not answer again once the override was removed")
+	}
+}
+
+// A name the console claims and could not build stays empty: the environment
+// does not fill it, removed override or not.
+func TestSetConfigured_aClaimNotBuilt_isNotFilledByTheEnvironment(t *testing.T) {
+	t.Parallel()
+	r := model.NewRegistry(nil)
+	_ = r.Register(model.Provider{Name: "anthropic", Kind: model.KindAnthropic})
+	r.SetConfigured(nil, model.Claim{Name: "anthropic", Scope: installation})
+	if r.Usable("anthropic", installation) {
+		t.Error("a claimed name not built was filled by the environment")
+	}
+}
+
+// The environment's provider comes back with the rates in force, not the ones
+// it was registered with: a rate edited while the override stood is what a run
+// planned on it is charged.
+func TestSetPrices_reachesTheEnvironmentsProviderAnOverrideHides(t *testing.T) {
+	t.Parallel()
+	r := model.NewRegistry(nil)
+	_ = r.Register(model.Provider{Name: "anthropic", Kind: model.KindAnthropic,
+		Prices: map[string]model.Prices{"m": {InputMicros: 5}}})
+	r.SetPrices(map[string]map[string]model.Prices{"anthropic": {"m": {InputMicros: 7}}})
+	r.SetConfigured([]model.Provider{{Name: "anthropic", Kind: model.KindAnthropic, Scope: installation}},
+		model.Claim{Name: "anthropic", Scope: installation})
+	r.SetConfigured(nil)
+
+	price, ok, err := r.PriceFor("anthropic", "m")
+	if err != nil || !ok || price.InputMicros != 7 {
+		t.Fatalf("PriceFor = %+v, %v, %v; want the rate in force, 7", price, ok, err)
+	}
+}

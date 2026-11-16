@@ -75,11 +75,16 @@ func (i *Integrations) PutProvider(ctx context.Context, by domain.UserID, scope 
 
 // ProviderWrite is a provider being configured, and the precondition it answers.
 type ProviderWrite struct {
-	By       domain.UserID
+	By domain.UserID
+	// Scope is the audit's: where the write is recorded.
 	Scope    domain.Scope
 	Provider domain.ModelProvider
 	APIKey   string
 	Expect   domain.IfMatch
+	// At and Stored are where the row lives (NT-019, phase 3 writers). Zero
+	// At is the installation, as every provider was before areas wrote theirs.
+	At     settings.ScopeKind
+	Stored domain.Scope
 }
 
 // providerRevised names a provider by its configuration and its key. The write does not
@@ -96,6 +101,10 @@ func (i *Integrations) providerRevised(expect domain.IfMatch) *revised {
 // WriteProvider stores a provider and answers its resulting revision.
 func (i *Integrations) WriteProvider(ctx context.Context, w ProviderWrite) (domain.Revision, error) {
 	by, scope, provider, apiKey := w.By, w.Scope, w.Provider, w.APIKey
+	at, stored := w.At, w.Stored
+	if at == "" {
+		at, stored = settings.ScopeInstallation, domain.Scope{}
+	}
 	switch {
 	case strings.TrimSpace(provider.Name) == "":
 		return "", ErrNoName
@@ -125,11 +134,15 @@ func (i *Integrations) WriteProvider(ctx context.Context, w ProviderWrite) (doma
 		return "", fmt.Errorf("admin: encode provider: %w", err)
 	}
 
+	revised := i.providerRevised(w.Expect)
+	revised.lockedByGuard = true
 	return writeRevised(ctx, i.pool, i.settings, folded{
 		by: by, scope: scope, action: "provider.configured", target: provider.Name,
-		revised: i.providerRevised(w.Expect),
+		revised: revised,
+		guard:   providerWriteGuard(provider.Name, at, stored),
 		set: settings.Setting{
-			ScopeKind: settings.ScopeInstallation,
+			ScopeKind: at,
+			Scope:     stored,
 			Kind:      settings.KindModelProvider,
 			Name:      provider.Name,
 			Value:     value,
@@ -231,9 +244,14 @@ type Removal struct {
 
 // RemoveProvider deletes a provider, if it is still at a revision the caller named.
 func (i *Integrations) RemoveProvider(ctx context.Context, r Removal) error {
+	at, stored := r.At, r.Stored
+	if at == "" {
+		at, stored = settings.ScopeInstallation, domain.Scope{}
+	}
 	return removeRevised(ctx, i.pool, i.settings, removal{
-		by: r.By, at: settings.ScopeInstallation, recorded: r.Scope,
+		by: r.By, at: at, stored: stored, recorded: r.Scope,
 		kind: settings.KindModelProvider, name: r.Name, action: "provider.removed",
 		revised: i.providerRevised(r.Expect),
+		lock:    func(ctx context.Context, tx settings.DB) error { return lockProviderName(ctx, tx, r.Name) },
 	})
 }

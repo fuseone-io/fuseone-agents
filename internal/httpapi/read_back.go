@@ -76,17 +76,31 @@ func (s *Server) GetMCPServer(ctx context.Context, req openapi.GetMCPServerReque
 	}, nil
 }
 
+// GetModelProvider reads a provider at its own scope, for whoever holds
+// provider:write there (NT-019), refused before its key is opened. A name
+// nobody holds is the installation's, so an area hears 403, as it does for a
+// sibling's provider.
 func (s *Server) GetModelProvider(ctx context.Context, req openapi.GetModelProviderRequestObject) (openapi.GetModelProviderResponseObject, error) {
-	if _, forbidden := s.configurer(ctx); forbidden != nil {
-		return openapi.GetModelProvider403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
-		}, nil
+	if forbidden := configuresSomewhere(ctx); forbidden != nil {
+		return openapi.GetModelProvider403ApplicationProblemPlusJSONResponse{ForbiddenApplicationProblemPlusJSONResponse: *forbidden}, nil
 	}
 	if s.integrations == nil {
 		return nil, errNoAdministration
 	}
-	provider, err := s.integrations.ProviderNamed(ctx, req.Name)
+	var refused *openapi.ForbiddenApplicationProblemPlusJSONResponse
+	provider, err := s.integrations.ProviderNamedIf(ctx, req.Name, func(kind settings.ScopeKind, stored domain.Scope) error {
+		if _, refused = s.configurerAt(ctx, kind, stored); refused != nil {
+			return errMCPServerRefused
+		}
+		return nil
+	})
+	if refused != nil {
+		return openapi.GetModelProvider403ApplicationProblemPlusJSONResponse{ForbiddenApplicationProblemPlusJSONResponse: *refused}, nil
+	}
 	if errors.Is(err, admin.ErrProviderUnknown) {
+		if _, forbidden := s.configurerAt(ctx, settings.ScopeInstallation, domain.Scope{}); forbidden != nil {
+			return openapi.GetModelProvider403ApplicationProblemPlusJSONResponse{ForbiddenApplicationProblemPlusJSONResponse: *forbidden}, nil
+		}
 		return openapi.GetModelProvider404ApplicationProblemPlusJSONResponse{
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
 		}, nil
@@ -224,7 +238,7 @@ func mcpServerConfig(srv domain.MCPServer) openapi.MCPServer {
 }
 
 func modelProviderConfig(p domain.ModelProvider) openapi.ModelProvider {
-	return openapi.ModelProvider{
+	out := openapi.ModelProvider{
 		Name: p.Name, Kind: openapi.ModelProviderKind(p.Kind), BaseUrl: p.BaseURL,
 		// An empty array and never null: a provider with no list is a
 		// provider that offers none, and the schema says array or absent.
@@ -235,4 +249,14 @@ func modelProviderConfig(p domain.ModelProvider) openapi.ModelProvider {
 		Enabled: p.Enabled, HasKey: p.HasKey,
 		UpdatedBy: ptr(p.UpdatedBy), UpdatedAt: ptr(p.UpdatedAt),
 	}
+	// Where it is stored (NT-019): the installation, a company or an area.
+	kind, stored := mcpServerStored(p.Scope)
+	out.ScopeKind = ptr(openapi.ModelProviderScopeKind(kind))
+	if stored.Company != "" {
+		out.Company = ptr(string(stored.Company))
+	}
+	if stored.Area != "" {
+		out.Area = ptr(string(stored.Area))
+	}
+	return out
 }

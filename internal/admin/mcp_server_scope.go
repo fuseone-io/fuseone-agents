@@ -181,11 +181,19 @@ func LockMCPServerName(ctx context.Context, tx settings.DB, name string) error {
 // another scope: names are unique across scopes (0108), and the write would
 // meet that constraint only after judging everything else.
 func nameHeldElsewhere(ctx context.Context, tx settings.DB, name string, kind settings.ScopeKind, stored domain.Scope) error {
+	return nameOfKindHeldElsewhere(ctx, tx, settings.KindMCPServer, name, kind, stored)
+}
+
+// nameOfKindHeldElsewhere is nameHeldElsewhere for any kind whose names are
+// unique across scopes (0108).
+func nameOfKindHeldElsewhere(
+	ctx context.Context, tx settings.DB, of settings.Kind, name string, kind settings.ScopeKind, stored domain.Scope,
+) error {
 	var elsewhere bool
 	if err := tx.QueryRow(ctx, `
 		select exists (select 1 from settings where kind = $1 and name = $2
 			and not (scope_kind = $3 and company_id = $4 and area_id = $5))`,
-		string(settings.KindMCPServer), name, string(kind), string(stored.Company), string(stored.Area),
+		string(of), name, string(kind), string(stored.Company), string(stored.Area),
 	).Scan(&elsewhere); err != nil {
 		return fmt.Errorf("admin: look for %s elsewhere: %w", name, err)
 	}
