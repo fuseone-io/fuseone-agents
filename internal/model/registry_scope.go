@@ -59,8 +59,8 @@ func (r *Registry) Planner(providerName string, at domain.Scope, cfg Config, too
 	return r.plannerFrom(p, withAutoToolChoice(p, withPrice(p, cfg)), tools)
 }
 
-// FromEnvironment reports whether name is a provider the environment supplies:
-// registered here and claimed by no configuration. It is the installation's,
+// FromEnvironment reports whether name is a provider the environment supplies,
+// whether or not a console override replaces it now. It is the installation's,
 // so no company or area may take the name (NT-019).
 //
 // Remembered apart from what is live, so a console override of the name, and

@@ -224,3 +224,22 @@ func TestSetConfigured_aClaimNotBuilt_isNotFilledByTheEnvironment(t *testing.T) 
 		t.Error("a claimed name not built was filled by the environment")
 	}
 }
+
+// The environment's provider comes back with the rates in force, not the ones
+// it was registered with: a rate edited while the override stood is what a run
+// planned on it is charged.
+func TestSetPrices_reachesTheEnvironmentsProviderAnOverrideHides(t *testing.T) {
+	t.Parallel()
+	r := model.NewRegistry(nil)
+	_ = r.Register(model.Provider{Name: "anthropic", Kind: model.KindAnthropic,
+		Prices: map[string]model.Prices{"m": {InputMicros: 5}}})
+	r.SetPrices(map[string]map[string]model.Prices{"anthropic": {"m": {InputMicros: 7}}})
+	r.SetConfigured([]model.Provider{{Name: "anthropic", Kind: model.KindAnthropic, Scope: installation}},
+		model.Claim{Name: "anthropic", Scope: installation})
+	r.SetConfigured(nil)
+
+	price, ok, err := r.PriceFor("anthropic", "m")
+	if err != nil || !ok || price.InputMicros != 7 {
+		t.Fatalf("PriceFor = %+v, %v, %v; want the rate in force, 7", price, ok, err)
+	}
+}

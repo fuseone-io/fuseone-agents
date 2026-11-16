@@ -210,6 +210,13 @@ func (r *Registry) SetPrices(priced map[string]map[string]Prices) bool {
 		r.providers[name] = provider
 		changed = true
 	}
+	// And the environment's providers an override hides: one put back when
+	// the override is removed carries the rates in force, not the ones it
+	// was registered with. Not live, so no revision moves for them.
+	for name, provider := range r.environment {
+		provider.Prices = clonePriceMap(priced[name])
+		r.environment[name] = provider
+	}
 	if changed {
 		r.revision++
 	}
