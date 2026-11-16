@@ -30,6 +30,25 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.114.0] — 2026-11-15
+
+NT-019 phase 3, the writers' release (#363, #364, #365). A company or an area stores its
+own model provider, with its own key, and only its runs reach it. No migration.
+
+### Upgrade notes
+
+- **Every replica must run 0.113.0 or later before the first provider is stored outside
+  the installation.** An older replica finds a provider by name alone and would hand an
+  area's key to a run of any other area.
+- **Once a provider exists outside the installation, 0.113.0 is the rollback floor.**
+  Rolling back to 0.113.0 is safe; below it is not. While every provider is still the
+  installation's, the floor stays where 0.113.0 left it.
+- **An area's administrator can now create providers.** Whoever holds `provider:write`
+  at a company or an area can store a provider there. Review who holds that permission
+  before upgrading if an area should not bring its own key.
+- **The instruction token count takes the agent's scope.** A caller that sends no scope
+  counts on the installation's providers, as before.
+
 ### Added
 
 - **A company or an area configures its own model provider, with its own key**
