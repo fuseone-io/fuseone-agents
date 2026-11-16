@@ -41,8 +41,8 @@ own model provider, with its own key, and only its runs reach it. No migration.
   the installation.** An older replica finds a provider by name alone and would hand an
   area's key to a run of any other area.
 - **Once a provider exists outside the installation, 0.113.0 is the rollback floor.**
-  Rolling back to 0.113.0 is safe; below it is not. Rolling back to 0.113.0 while
-  every provider is still the installation's changes nothing.
+  Rolling back to 0.113.0 is safe; below it is not. While every provider is still the
+  installation's, the floor stays where 0.113.0 left it.
 - **An area's administrator can now create providers.** Whoever holds `provider:write`
   at a company or an area can store a provider there. Review who holds that permission
   before upgrading if an area should not bring its own key.
