@@ -3,6 +3,9 @@ package channel
 import (
 	"context"
 	"fmt"
+
+	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/settings"
 )
 
 /*
@@ -32,6 +35,29 @@ func (r *Router) Post(ctx context.Context, c Conversation, m Message) (string, e
 
 // PostPlaced posts and answers with where the message landed, when the driver
 // can say. One that cannot is taken at its word that the address is the place.
+// drivesIf is Drivers that judges a caller on the row it opens the credential
+// from (NT-019).
+type drivesIf interface {
+	ForIf(ctx context.Context, channel string, allow func(settings.ScopeKind, domain.Scope) error) (Poster, error)
+}
+
+// PostIf posts through a connection judged by allow on the row its credential
+// is opened from. Drivers that cannot judge are refused rather than trusted.
+func (r *Router) PostIf(
+	ctx context.Context, c Conversation, m Message, allow func(settings.ScopeKind, domain.Scope) error,
+) (string, error) {
+	judged, ok := r.drivers.(drivesIf)
+	if !ok {
+		return "", fmt.Errorf("channel %q: these drivers cannot judge who posts", c.Channel)
+	}
+	driver, err := judged.ForIf(ctx, c.Channel, allow)
+	if err != nil {
+		return "", fmt.Errorf("channel %q: %w", c.Channel, err)
+	}
+	at, err := placed(ctx, driver, c, m)
+	return at.Ref, err
+}
+
 func (r *Router) PostPlaced(
 	ctx context.Context, c Conversation, m Message,
 ) (Placement, error) {

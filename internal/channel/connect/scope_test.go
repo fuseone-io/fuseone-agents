@@ -3,6 +3,7 @@ package connect
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/fuseone/agents/internal/channel"
@@ -60,5 +61,37 @@ func configureAt(
 		Enabled: true, UpdatedBy: "test",
 	}); err != nil {
 		t.Fatalf("configure %s: %v", name, err)
+	}
+}
+
+var errRefusedHere = errors.New("refused at this scope")
+
+/*
+A caller's allow is judged on the very row whose credential is opened (NT-019,
+phase 4 writers): one read finds the connection, judges where it is stored and
+opens its token. Judged on an earlier read, a connection replaced in between
+would be used under a decision taken about another.
+*/
+func TestPostIf_isJudgedOnTheRowWhoseCredentialIsOpened(t *testing.T) {
+	store, _ := stored(t)
+	configureAt(t, store, "cx-slack", settings.ScopeArea, domain.Scope{Company: "acme", Area: "finance"})
+	drivers, reached := spies(store)
+	var judged domain.Scope
+
+	_, err := drivers.PostIf(context.Background(),
+		channel.Conversation{Channel: "cx-slack", ID: "C1"}, channel.Message{},
+		func(_ settings.ScopeKind, at domain.Scope) error {
+			judged = at
+			return errRefusedHere
+		})
+	if !errors.Is(err, errRefusedHere) || judged != (domain.Scope{Company: "acme", Area: "finance"}) {
+		t.Fatalf("PostIf = %v judged at %+v, want refused at the row's own scope", err, judged)
+	}
+	if len(reached) != 0 {
+		t.Errorf("reached = %v, want no bot built for a refused caller", reached)
+	}
+	if _, err := drivers.ConversationsIf(context.Background(), "cx-slack",
+		func(settings.ScopeKind, domain.Scope) error { return errRefusedHere }); !errors.Is(err, errRefusedHere) {
+		t.Errorf("ConversationsIf = %v, want refused", err)
 	}
 }

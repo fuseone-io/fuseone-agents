@@ -56,7 +56,7 @@ func TestListChannels_neverHandsBackTheCredential(t *testing.T) {
 
 type listerSpy struct{ kinds []string }
 
-func (l *listerSpy) Conversations(context.Context, string) ([]channel.Available, error) {
+func (l *listerSpy) ConversationsIf(context.Context, string, func(settings.ScopeKind, domain.Scope) error) ([]channel.Available, error) {
 	return nil, nil
 }
 
@@ -373,8 +373,8 @@ type refusingPoster struct {
 	called bool
 }
 
-func (r *refusingPoster) Post(
-	context.Context, channel.Conversation, channel.Message,
+func (r *refusingPoster) PostIf(
+	context.Context, channel.Conversation, channel.Message, func(settings.ScopeKind, domain.Scope) error,
 ) (string, error) {
 	r.called = true
 	if r.err != nil {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/settings"
@@ -101,19 +102,19 @@ func (s *Server) connectionRefused(
 	}
 }
 
-// configuresConnection refuses a caller who may not configure the connection
-// where it is stored. A name no connection holds is the installation's.
-func (s *Server) configuresConnection(ctx context.Context, name string) *openapi.ForbiddenApplicationProblemPlusJSONResponse {
-	kind, stored := settings.ScopeInstallation, domain.Scope{}
-	configured, err := s.channels.List(ctx)
-	if err == nil {
-		for _, c := range configured {
-			if c.Name == name {
-				kind, stored = channelAt(c)
-				break
-			}
+// errRoomOutsideConnection is a room whose connection, as the post read it,
+// does not carry the room's scope.
+var errRoomOutsideConnection = errors.New("the conversation is outside the scope of the connection it names")
+
+// carriesRoom is the allow a test post opens its connection with: the
+// connection's scope must contain the room's, judged on the row it posts
+// through.
+func carriesRoom(room domain.Scope) func(settings.ScopeKind, domain.Scope) error {
+	return func(kind settings.ScopeKind, stored domain.Scope) error {
+		serves, known := channel.ConnectionScope(kind, stored)
+		if !known || !serves.Contains(room) {
+			return errRoomOutsideConnection
 		}
+		return nil
 	}
-	_, refused := s.configurerAt(ctx, kind, stored)
-	return refused
 }

@@ -39,7 +39,7 @@ type ChannelAdmin interface {
 
 // Announcer posts one message, for proving the wiring.
 type Announcer interface {
-	Post(ctx context.Context, c channel.Conversation, m channel.Message) (string, error)
+	PostIf(ctx context.Context, c channel.Conversation, m channel.Message, allow func(settings.ScopeKind, domain.Scope) error) (string, error)
 }
 
 // WithChannels wires channel configuration and the driver that proves it.
@@ -708,10 +708,21 @@ func (s *Server) TestConversation(
 			ForbiddenApplicationProblemPlusJSONResponse: *resp,
 		}, nil
 	}
+	// The same authority the room needed to exist: a post into the room that
+	// hears every company is not a configurer's to make (NT-019).
+	if scope.IsInstallation() {
+		if _, resp := s.governs(ctx); resp != nil {
+			return openapi.TestConversation403ApplicationProblemPlusJSONResponse{
+				ForbiddenApplicationProblemPlusJSONResponse: *resp,
+			}, nil
+		}
+	}
 
-	ref, err := s.announcer.Post(ctx,
+	// Posted through the connection as the post reads it: one whose scope no
+	// longer contains the room's, replaced since the listing, posts nothing.
+	ref, err := s.announcer.PostIf(ctx,
 		channel.Conversation{Channel: req.Name, ID: req.Conversation},
-		channel.Message{Event: eventTest, Scope: scope})
+		channel.Message{Event: eventTest, Scope: scope}, carriesRoom(scope))
 	if err != nil {
 		return openapi.TestConversation400ApplicationProblemPlusJSONResponse(
 			invalid(err.Error())), nil
@@ -727,7 +738,7 @@ const eventTest channel.Event = "test"
 // Lister answers which conversations a connection can be pointed at, and which
 // vendors this binary can connect at all.
 type Lister interface {
-	Conversations(ctx context.Context, channel string) ([]channel.Available, error)
+	ConversationsIf(ctx context.Context, channel string, allow func(settings.ScopeKind, domain.Scope) error) ([]channel.Available, error)
 	Kinds() []string
 }
 
@@ -756,15 +767,27 @@ func (s *Server) ListAvailableConversations(
 		return nil, errNoAdministration
 	}
 	// The listing uses the connection's token, so it is for whoever
-	// configures the connection where it is stored (NT-019).
-	if resp := s.configuresConnection(ctx, req.Name); resp != nil {
-		return openapi.ListAvailableConversations403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *resp,
-		}, nil
+	// configures the connection, judged on the row whose token it opens
+	// (NT-019). A name no connection holds is the installation's.
+	var refused *openapi.ForbiddenApplicationProblemPlusJSONResponse
+	judged := false
+	allow := s.connectionRefused(ctx, &refused)
+	found, err := s.channelListing.ConversationsIf(ctx, req.Name, func(kind settings.ScopeKind, stored domain.Scope) error {
+		judged = true
+		return allow(kind, stored)
+	})
+	if refused != nil {
+		return openapi.ListAvailableConversations403ApplicationProblemPlusJSONResponse{ForbiddenApplicationProblemPlusJSONResponse: *refused}, nil
 	}
-
-	found, err := s.channelListing.Conversations(ctx, req.Name)
 	if err != nil {
+		// Never judged means no connection this caller may be told about:
+		// asked as the installation's, so nobody learns what exists elsewhere.
+		// Judged and allowed, the reason is theirs to read.
+		if !judged {
+			if _, resp := s.configurerAt(ctx, settings.ScopeInstallation, domain.Scope{}); resp != nil {
+				return openapi.ListAvailableConversations403ApplicationProblemPlusJSONResponse{ForbiddenApplicationProblemPlusJSONResponse: *resp}, nil
+			}
+		}
 		// The channel's own reason. An app granted chat:write and not
 		// channels:read can post and cannot list, and an empty answer there
 		// would read as "the bot is in no channels" — which sends somebody to

@@ -145,7 +145,7 @@ func serve(args []string) error {
 		channels = admin.NewChannels(identity.pool, store, drivers)
 		connectorSettings := connectortools.NewSettings(store)
 		connectorInstances := admin.NewConnectorInstances(identity.pool, store)
-		api = api.WithChannels(channels, channel.NewRouter(drivers)).
+		api = api.WithChannels(channels, drivers).
 			WithChannelListing(drivers).
 			WithCompanies(admin.NewCompanies(identity.pool)).
 			WithAdministration(curator,

@@ -26,10 +26,26 @@ func scopedChannelServer(spy *channelSpy, people ...domain.Person) *Server {
 		WithPeople(&fakePeople{listed: people})
 }
 
-// postedTo is an announcer that records where it was asked to post.
-type postedTo struct{ to []string }
+// postedTo is an announcer that records where it posted. rowAt is where the
+// connection's row stands when the post reads it, the installation's when
+// zero, which is what its allow is judged on.
+type postedTo struct {
+	to    []string
+	rowAt domain.Scope
+}
 
-func (p *postedTo) Post(_ context.Context, c channel.Conversation, _ channel.Message) (string, error) {
+func (p *postedTo) PostIf(
+	_ context.Context, c channel.Conversation, _ channel.Message, allow func(settings.ScopeKind, domain.Scope) error,
+) (string, error) {
+	kind, at := settings.ScopeInstallation, domain.Scope{}
+	if p.rowAt != (domain.Scope{}) {
+		kind, at = settings.ScopeArea, p.rowAt
+	}
+	if allow != nil {
+		if err := allow(kind, at); err != nil {
+			return "", err
+		}
+	}
 	p.to = append(p.to, c.ID)
 	return "ref", nil
 }
@@ -154,8 +170,6 @@ func TestUnbindChannelIdentity_isAuthorizedWhereTheConnectionIsStored(t *testing
 
 func is[T any](v any) bool { _, ok := v.(T); return ok }
 
-var _ = errors.New
-
 // The picker lists the rooms a connection's bot is in, which takes the
 // connection's token: offered to whoever configures the connection, and to
 // nobody else.
@@ -165,7 +179,9 @@ func TestListAvailableConversations_isAuthorizedWhereTheConnectionIsStored(t *te
 		{Name: "cx-slack", At: settings.ScopeArea, Stored: cxScope},
 		{Name: "fin-slack", At: settings.ScopeArea, Stored: financeScope},
 	}}
-	s := scopedChannelServer(spy).WithChannelListing(roomsOf{})
+	s := scopedChannelServer(spy).WithChannelListing(roomsOf{rowAt: map[string]domain.Scope{
+		"cx-slack": cxScope, "fin-slack": financeScope,
+	}})
 	ctx := asAreaAdmin(cxScope)
 
 	if resp, _ := s.ListAvailableConversations(ctx, openapi.ListAvailableConversationsRequestObject{Name: "cx-slack"}); !is[openapi.ListAvailableConversations200JSONResponse](resp) {
@@ -176,9 +192,90 @@ func TestListAvailableConversations_isAuthorizedWhereTheConnectionIsStored(t *te
 	}
 }
 
-type roomsOf struct{}
+// roomsOf lists rooms through a connection whose row stands at rowAt when
+// the listing reads it: where its allow is judged. vendorRefuses is the
+// vendor's own refusal, after the connection was judged.
+type roomsOf struct {
+	rowAt         map[string]domain.Scope
+	vendorRefuses error
+}
 
-func (roomsOf) Conversations(context.Context, string) ([]channel.Available, error) {
+func (r roomsOf) ConversationsIf(
+	_ context.Context, name string, allow func(settings.ScopeKind, domain.Scope) error,
+) ([]channel.Available, error) {
+	at, ok := r.rowAt[name]
+	if !ok {
+		return nil, errors.New("no such connection")
+	}
+	if allow != nil {
+		if err := allow(settings.ScopeArea, at); err != nil {
+			return nil, err
+		}
+	}
+	if r.vendorRefuses != nil {
+		return nil, r.vendorRefuses
+	}
 	return []channel.Available{{ID: "C1", Name: "#ops"}}, nil
 }
 func (roomsOf) Kinds() []string { return []string{"slack"} }
+
+/*
+What is judged is the connection that is used (NT-019, phase 4 writers). The
+listing said cx-slack was acme/cx's; by the time the picker and the test post
+read it to use its token, it had been replaced by acme/finance's. Neither
+speaks through finance's app.
+*/
+func TestConnectionUse_isJudgedOnTheRowItUses(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{listed: []admin.Channel{{Name: "cx-slack", At: settings.ScopeArea, Stored: cxScope,
+		Conversations: []admin.Conversation{{ID: "C-cx", Scope: cxScope}}}}}
+	announcer := &postedTo{rowAt: financeScope}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, announcer).
+		WithChannelListing(roomsOf{rowAt: map[string]domain.Scope{"cx-slack": financeScope}})
+	ctx := asAreaAdmin(cxScope)
+
+	if resp, _ := s.ListAvailableConversations(ctx, openapi.ListAvailableConversationsRequestObject{Name: "cx-slack"}); is[openapi.ListAvailableConversations200JSONResponse](resp) {
+		t.Errorf("picker = %T, want finance's app not listed for acme/cx", resp)
+	}
+	if resp, _ := s.TestConversation(ctx, openapi.TestConversationRequestObject{Name: "cx-slack", Conversation: "C-cx"}); is[openapi.TestConversation200JSONResponse](resp) {
+		t.Errorf("test post = %T, want acme/cx's room not posted through finance's app", resp)
+	}
+	if len(announcer.to) != 0 {
+		t.Errorf("posted to %v, want nothing", announcer.to)
+	}
+}
+
+// A room for the whole installation is tested by whoever governs it, as it is
+// written and removed: a curator of the platform's administration, who holds
+// provider:write there and governs nothing, posts nothing into it.
+func TestTestConversation_aRoomForTheInstallation_needsAuthorityOverIt(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{listed: []admin.Channel{{Name: "acme-slack", Conversations: []admin.Conversation{
+		{ID: "C-all", Scope: domain.Scope{Company: domain.Installation}},
+	}}}}
+	announcer := &postedTo{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, announcer)
+
+	resp, _ := s.TestConversation(as(domain.RoleCurator), openapi.TestConversationRequestObject{Name: "acme-slack", Conversation: "C-all"})
+	if !is[openapi.TestConversation403ApplicationProblemPlusJSONResponse](resp) || len(announcer.to) != 0 {
+		t.Fatalf("response = %T, posted %v; want refused with nothing posted", resp, announcer.to)
+	}
+}
+
+// The vendor's refusal on the caller's own connection is theirs to read: an
+// app that can post and cannot list says so, and the picker passes it on.
+func TestListAvailableConversations_theVendorsRefusalOnTheirOwnConnection_isTheirs(t *testing.T) {
+	t.Parallel()
+	s := scopedChannelServer(&channelSpy{}).WithChannelListing(roomsOf{
+		rowAt: map[string]domain.Scope{"cx-slack": cxScope}, vendorRefuses: errors.New("missing_scope: channels:read"),
+	})
+
+	resp, _ := s.ListAvailableConversations(asAreaAdmin(cxScope), openapi.ListAvailableConversationsRequestObject{Name: "cx-slack"})
+	if !is[openapi.ListAvailableConversations400ApplicationProblemPlusJSONResponse](resp) {
+		t.Fatalf("response = %T, want the vendor's reason", resp)
+	}
+	resp, _ = s.ListAvailableConversations(asAreaAdmin(cxScope), openapi.ListAvailableConversationsRequestObject{Name: "nowhere-slack"})
+	if !is[openapi.ListAvailableConversations403ApplicationProblemPlusJSONResponse](resp) {
+		t.Fatalf("an unknown name = %T, want refused as the installation's", resp)
+	}
+}
