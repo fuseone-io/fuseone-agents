@@ -5316,6 +5316,15 @@ export interface components {
             identities?: components["schemas"]["ChannelIdentity"][];
             /** @description Channel accounts this installation has seen interact with it. Convenience for binding only; it grants nothing. */
             seenAccounts?: components["schemas"]["ChannelSeenAccount"][];
+            /**
+             * @description Where the connection is stored (NT-019).
+             * @enum {string}
+             */
+            scopeKind?: "installation" | "company" | "area";
+            company?: string;
+            area?: string;
+            /** @description Whether the caller may change or remove it. A connection listed because the caller's area inherits it is not, and carries only the conversations the caller may see, with no identities or seen accounts. */
+            editable?: boolean;
         };
         /** @description Which platform user a channel account speaks for. */
         ChannelIdentity: {
@@ -10799,6 +10808,10 @@ export interface operations {
                     signingSecret?: string;
                     /** @default true */
                     enabled?: boolean;
+                    /** @description Where the connection is stored (NT-019, phase 4). Absent is the installation. A company's or an area's connection is written by whoever holds provider:write there, and carries only the conversations inside its scope. */
+                    scopeKind?: components["schemas"]["ConnectorScopeKind"];
+                    company?: string;
+                    area?: string;
                 };
             };
         };
@@ -10814,6 +10827,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["NameTaken"];
             412: components["responses"]["PreconditionFailed"];
         };
     };
