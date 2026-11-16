@@ -1,6 +1,7 @@
 # NT-018 — The authoring workbench
 
-Status: proposed · 2026-11-11 · revises [NT-003](NT-003-conversational-authoring.md) §4 ·
+Status: proposed · 2026-11-11 · amended 2026-11-16 ([The workbench replaces the form](#the-workbench-replaces-the-form)) ·
+revises [NT-003](NT-003-conversational-authoring.md) §4 and §5 ·
 builds on [NT-006](NT-006-evaluating-agents.md), [NT-015](NT-015-evaluation-datasets-and-experiments.md)
 and [NT-016](NT-016-judge-evaluators.md)
 
@@ -62,6 +63,178 @@ Decided in review of `39c96e0a`:
    `policy:write`, the policy card opens that screen with the rule pre-filled.
    Review, simulation and saving stay behind its administrative boundary.
 
+Decided by Kleber on 2026-11-16, when the conversation resumed:
+
+7. **In the console, an agent is created only through the workbench.** The form
+   that creates an agent and the guided interview are removed.
+8. **The workbench replaces the editor, for every agent.** The instructions
+   change only through proposals of the conversation that a person accepts: the
+   assistant reads the current prompt and proposes improvements. Structured
+   fields change through the conversation or through controls on the draft, by
+   the same operations. Identity and authority stay human acts.
+9. **An agent can still be published as code.** `PUT /agents/{agentId}/versions`
+   accepts the repository's `.agent.md` file. The `agents/` directory, the JSON
+   API and NT-017's Terraform provider stay.
+
+What this makes is authoring that is conversational, versioned and supervised.
+It is not an agent that edits itself: the model proposes, a person accepts, and
+a person publishes.
+
+## The workbench replaces the form
+
+Decisions 7 to 9 reverse three statements this note made on 2026-11-11: that the
+form editor stays ([Phases](#phases)), that the workbench is not a replacement
+for it ([What this is not](#what-this-is-not)), and that the form still works
+when the conversation cannot ([Cost](#cost)). This section is the contract they
+are replaced by. Its tests are acceptance criteria of the deliveries that
+implement each part.
+
+**NT-003 §5 is kept by code.** An installation with no authoring provider can
+still publish agents, through the `.agent.md` file or the JSON API. In the
+workbench, without a provider or over the daily ceiling, the conversation is
+disabled, structured fields stay editable by hand, and the instructions are
+frozen until the conversation returns.
+
+### 1. Every field of the definition has a class
+
+| Class | Fields |
+|---|---|
+| Human only, never proposed by the model | `name`, `company`, `area`, `standingApprovals` (it decides whether authority already granted may release a call; it grants none). Stage stays outside the draft |
+| Immutable | The identifier, chosen at creation |
+| Conversation only | `instructions`, every block |
+| Conversation and controls | `provider`, `model`, `effort`, `fallback`, `cachePrefixTtl`, `replyLocale`, `tools`, `budget`, `triggers`, `memoryLearning`, `approvals`, `emits`, `steps` |
+
+- A parity test reads the generated schema and fails when `AgentDefinition`
+  gains a field with no class.
+- The draft holds the whole definition, and an operation touches only its own
+  field. Omitting a field never clears it.
+- Human-only fields are typed operations too, with `ETag`, validation and the
+  trail: `set_identity` (name and scope) and `set_standing_approvals`. A model
+  proposal carrying either is marked invalid and cannot be accepted.
+- **A draft's birth.** At `/agents/new` the first step is human: identifier,
+  name and scope. The `POST` that creates the draft carries `If-None-Match: *`
+  and refuses an identifier that already has a published agent or another
+  draft. The identifier is immutable from then on, and only then does the
+  conversation open.
+
+### 2. Blocks have a stable identity, and the codec is the server's
+
+- Six kinds: `prose`, `objective`, `howToAct`, `whenToStop`, `never` and
+  `howToReply`. Any kind may repeat, and prose may carry no label. The codec
+  moves out of the console (`web/src/features/agents/instruction-blocks.ts`,
+  which writes every label in the reader's current locale) into the server.
+- **No loss means the same bytes** of the `instructions` that `spec.Parse`
+  already normalises (it trims only the outer space). For each block the draft
+  keeps the original raw fragment: label, capitalisation, spacing, blank lines,
+  separator and line endings. An untouched block reuses its bytes. A new or
+  changed block is written in the canonical form, with the label in the locale
+  of whoever accepted it. Opening a draft and publishing it unchanged keeps the
+  version.
+- Operations: `insert_block` (kind, position), `replace_block`, `remove_block`,
+  `move_block`. They replace `set_block` in the table under
+  [The model proposes operations](#2-the-model-proposes-operations-and-never-grants).
+- A round-trip test, byte for byte, over the instructions of every example
+  agent and of fixtures with loose prose, repeated kinds and labels in both
+  languages.
+
+### 3. A block operation has only one origin
+
+- The public operations route refuses every block operation with 400.
+- From the conversation's delivery: `POST …/proposals/{id}/accept` takes only
+  the proposal's id. The server loads the stored proposal, checks its author,
+  thread and draft and the draft `ETag` the model read, and only then applies
+  it. A proposal made against an older draft answers 412.
+
+### 4. Two concurrency checks
+
+- **The draft's `ETag`** on every operation and on publication (412).
+- **The agent's `ETag`**, the part of
+  [NT-017](NT-017-terraform-provider.md) that does not exist yet:
+  `PUT /agents/{id}/versions` takes no `If-Match` today. It covers the current
+  version and whether the agent is retired, and `If-Match` is judged under the
+  agent's row lock, in the transaction that publishes, retires or restores. A
+  first version publishes with `If-None-Match: *`.
+- Publishing from the workbench checks, in one transaction, the draft's `ETag`,
+  the agent's `ETag` and both scopes, publishes, and resets the draft's base.
+- **Compatible first.** The release that adds the agent's `ETag` honours the
+  headers when present and keeps publishing without them, for the form, the
+  JSON API, the `.agent.md` file and older clients. The workbench requires them
+  only in a later release, once the first runs on every replica: an older
+  replica ignores `If-Match` and publishes.
+
+### 5. Authorization follows the current scope and the destination
+
+- A new agent: the chosen scope is the scope of authorization.
+- An existing agent whose draft keeps its scope: `agent:publish` on the current
+  scope.
+- A draft whose scope differs from the agent's current one: reading, changing
+  and publishing need both. `set_identity` checks both when it is applied.
+- Whoever loses either side gets 404, including when the agent was moved
+  elsewhere while the draft was open.
+- The current scope is judged before any 412, so an `ETag` never tells a caller
+  that an agent they cannot reach has changed.
+
+### 6. One validator, over the canonical form
+
+- `internal/authoring/read.go` stays as it is until the interview endpoints
+  leave: `interviewAgent` still uses it to filter a reply.
+- A new `ValidateOperation` applies the operation to a copy of the draft, takes
+  the result through the canonical form (`spec.Render`, then `Parse`), and runs
+  the checks `PublishAgent` runs today (`internal/httpapi/publish.go`):
+  provider in scope, tools offered, schedules, static flows. An accepted
+  operation never leaves a draft that publication would refuse for any of them.
+- Those checks move into one service below `httpapi`, or are injected into
+  `internal/authoring` through an interface declared there. `internal/authoring`
+  never depends on `internal/httpapi`.
+- The draft and its operations do not go through the content store's
+  truncation (`domain.DefaultContentLimit`, 1 MiB). Their limit is validated
+  before writing, and the write is exact and transactional.
+
+### 7. Turns are idempotent, serialised and paid for in advance
+
+- Each turn carries an idempotency key. At most one turn is active per thread.
+- **The reservation** is the worst case, priced at the provider and model's
+  rates: the tokens of the draft's projection, of the conversation window and
+  of the turn, plus the maximum output. An unknown price, or an input that
+  alone exceeds `maxTurnMicros`, is refused before the call. The reservation is
+  a row with a lease and an expiry; no database lock is held across the model
+  call. The real cost settles it afterwards.
+- **A crash window.** A turn stays `in_progress` until it is stored. A retry of
+  the same key that finds an expired `in_progress` does not call the model
+  again: the turn becomes `unknown`, and the author is told.
+- The trail tells apart confirmed cost, reserved value and a reservation kept
+  for an unknown result. A kept reservation counts toward the daily ceiling and
+  is never recorded as a real cost.
+- Each proposal records the draft `ETag` the model read.
+
+### 8. What the model receives is bounded
+
+- A projection of the whole definition, the blocks with their ids, and the
+  tools and providers offered in the scope. No secret and no address.
+- Deterministic limits on the size of a turn, the number of proposals per turn
+  and the window of conversation sent. The full transcript is still stored.
+- The policy cards stay with the conversation: they are not operations and
+  never save a policy.
+- Everything the author writes is untrusted, typed or pasted. The mark on a
+  proposal that read pasted content informs the author; it is not a fence.
+
+### 9. A `.agent.md` file names its company
+
+- The frontmatter accepts `company`, and `text/markdown` also accepts
+  `?company=`. Missing from both, or different in the two, is 400. The files in
+  `agents/` carry no `company` and keep working in the disk sync.
+- A company taken from the query enters the `Spec` before `Render → Parse`, so
+  the file and the equivalent JSON publish the same version.
+- The file's `id` must be the route's (400 otherwise). The file goes through the
+  same checks and the same claim as the JSON.
+
+### 10. Publishing from the workbench needs the `never` block
+
+Until candidates exist, the workbench publishes through ordinary publication,
+and its publish button refuses a draft with no `never` block, as activation will
+([decision 3](#decided)). The JSON API, the `.agent.md` file and Terraform keep
+publishing without it.
+
 ## What exists today
 
 Verified against `origin/main` at `b028e09a`.
@@ -113,18 +286,20 @@ more than that field does:
 | Operation | Edits | Validated against |
 |---|---|---|
 | `add_tool`, `remove_tool` | `tools` | The catalogue, as `read.go` does today |
-| `set_block` (add, replace or remove one block) | `instructions`: `objective`, `howToAct`, `whenToStop`, `never` | Length limit |
+| `insert_block`, `replace_block`, `remove_block`, `move_block` (since 2026-11-16; they replace `set_block`) | `instructions`: any of the six kinds, by stable block id | [Contracts 2 and 3](#2-blocks-have-a-stable-identity-and-the-codec-is-the-servers): only from an accepted proposal |
 | `add_step`, `edit_step`, `remove_step` | `steps` | `reaches` must be in the catalogue and in the draft's tools |
 | `set_approval_delivery` | `approvals` (`direct`, `notify`) | `notify` names people who may decide in the scope |
 | `set_trigger` | `triggers` | The same validation the form uses |
 | `set_model`, `set_budget` | provider, model, effort, budget | Provider registered; ceiling within the installation's maximum |
 
-Scope, name and stage are **not** operations. The author sets them by hand.
+Scope, name and stage are **not** operations the model proposes. The author sets
+name and scope by hand, through `set_identity` since 2026-11-16, and stage stays
+outside the draft.
 Scope decides who may act and stage decides how far the agent is trusted, so
 both stay human acts. A proposal that fails validation is shown crossed out with
 the reason, as the mockup does for `pagamentos.estornar_cartao`, and cannot be
-accepted. `read.go` grows from a filter on one reply into the validator of every
-operation.
+accepted. Since 2026-11-16 the validator is `ValidateOperation`, not `read.go`
+([contract 6](#6-one-validator-over-the-canonical-form)).
 
 **No operation creates a Gate rule.** `approvals` decides only where an
 approval is delivered (`domain.ApprovalPolicy`); whether a person must answer
@@ -274,9 +449,10 @@ suggestion came from.
 
 Each turn is an authoring call and counts against the existing daily ceiling.
 `ErrOverCeiling` ends the conversation for the day and leaves the draft intact.
-The form editor still works. NT-003 §5's requirement that an installation with
-no authoring provider can still publish agents is kept: without a provider the
-workbench opens with the conversation disabled, and the draft is edited by hand.
+Since 2026-11-16 there is no form to fall back on: the structured fields stay
+editable, the instructions are frozen until the conversation returns, and NT-003
+§5 is kept by publishing as code
+([The workbench replaces the form](#the-workbench-replaces-the-form)).
 
 ## The draft lives on the server
 
@@ -965,14 +1141,29 @@ Until then, the column is absent rather than empty.
 ## Phases
 
 One pull request per phase. The console screen grows with each phase, under a
-new route `/agents/:agentId/workbench`. The form editor stays where it is.
+new route `/agents/:agentId/workbench`.
+
+**Order since 2026-11-16.** The conversation comes before candidates, because it
+is what replaces the form: B → 1a → 1b → 3 → R, then 0, 2, 4 and 5. Phase 1 is
+split in two, and 1b ships only after 1a runs on every replica. Until phase 2,
+the workbench publishes through ordinary publication, with its fences and claim.
+
+| # | Delivery | Ships |
+|---|---|---|
+| B | Publishing as code | `PUT /agents/{agentId}/versions` accepts `text/markdown`, as in [contract 9](#9-a-agentmd-file-names-its-company). The checks of `PublishAgent` move into the shared service |
+| 1a | The agent's `ETag` | `If-Match` and `If-None-Match: *` on publish, retire and restore, judged under the agent's lock; a move needs both scopes. Optional for every client, as in [contract 4](#4-two-concurrency-checks) |
+| 1b | Server draft and operations | The draft table, the operations of [contracts 1 to 6](#1-every-field-of-the-definition-has-a-class), block operations refused, the workbench with the draft panel |
+| 3 | The conversation | As below, with [contracts 3, 7, 8 and 10](#3-a-block-operation-has-only-one-origin) |
+| R | Retiring the form | The interview, the form editor, the block editor and the template gallery leave. `/agents/new` renders the workbench in creation mode; `/agents/:id/edit` redirects to `/agents/:id/workbench`. `interviewAgent` and `suggestInterviewAnswers` are deprecated, unused by the console, and leave in a later release. Only with 1b and 3 in production and every field classed |
+
+The phases as decided on 2026-11-11:
 
 | # | Phase | Ships |
 |---|---|---|
 | C1, C2 | Claims, then their triggers | C1: `agent_version_digests`, `agent_specs.digest`, `NULL` backfill, `Spec.Digest`. Every writer claims and presents its digest, and refuses a row that exists unclaimed. The disk sync skips `NULL` claims. C2, after C1 is on every replica: claim the gap, then two triggers. One requires every insert to present a digest equal to its claim. The other refuses a non-`NULL` current version without a proven claim. The rollback floor goes in the release notes. Phase 2 ships in C2 or later. |
 | 0 | Close the doors | `DecideApproval` refuses simulated runs. `HasSimulation`, `Batteries` and `LastBatteryAt` exclude `rehearsal`, in Postgres and in memory. This must be released and deployed on every replica before phase 4 ships. |
 | 1 | Server draft and operations | Draft table, operations with validation, policy card, trail, ETag. Workbench with the draft panel and hand editing. |
-| 2 | Candidates | Insert-only `agent_seals` holding metadata, the sealed scope and provenance, with the full specification bytes in the content store. Every door authorizes against the sealed scope. The `Opener` fences candidates. Activation runs the eight steps in the publication's lock order, with one fence acquisition per request. A first version activates with `If-None-Match: *`. Unreadable candidates fail closed, at opening and at each turn. |
+| 2 | Candidates | Insert-only `agent_seals` holding metadata, the sealed scope and provenance, with the full specification bytes in the content store. Every door authorizes against the sealed scope. The `Opener` fences candidates. Activation runs the fourteen steps in the publication's lock order, with one fence acquisition per request. A first version activates with `If-None-Match: *`. Unreadable candidates fail closed, at opening and at each turn. |
 | 3 | The conversation | One thread per author: turns, proposals, checklist, transcript in the content store, references to runs, thread erasure, ceiling per turn. |
 | 4 | Live rehearsal | Parking tool layer, `rehearsal` marker, `world_*` and `rehearsal_decided` steps and their endpoints, one-second polling, Ensaio tab. |
 | 5 | Cases with the world, experiments in the thread | Ordered recording in the case, replay layer that consumes it once, `not_comparable` on divergence, Experimento and Casos tabs. |
@@ -988,8 +1179,10 @@ before it is in production.
   stands.
 - **Not a model that publishes, grants or promotes.** It proposes typed
   operations. A person accepts each one, publishes, and promotes the stage.
-- **Not a replacement for the form editor or the API.** Both stay, and NT-017's
-  Terraform provider publishes versions without passing through here.
+- **Not a replacement for the API.** Since 2026-11-16 the workbench replaces the
+  form editor, but publishing as code stays: the JSON API, the `.agent.md` file,
+  the `agents/` directory and NT-017's Terraform provider publish versions
+  without passing through here.
 
 ## Tests that must exist
 
