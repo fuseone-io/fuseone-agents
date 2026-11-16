@@ -153,7 +153,7 @@ func (r *TicketRoutes) reply(
 	}
 	held, err := r.tickets.AtOrigin(ctx, thread)
 	if err == nil {
-		return TicketIntent{Key: held.Key}, true, nil
+		return r.reached(ctx, candidate, held, TicketIntent{Key: held.Key})
 	}
 	if !errors.Is(err, ticket.ErrNotFound) {
 		return TicketIntent{}, false, fmt.Errorf("channel: find ticket reply: %w", err)
@@ -162,7 +162,7 @@ func (r *TicketRoutes) reply(
 	// being written, which is a different index and the same durable identity.
 	held, err = r.tickets.AtReview(ctx, thread)
 	if err == nil {
-		return TicketIntent{Key: held.Key, Review: true}, true, nil
+		return r.reached(ctx, candidate, held, TicketIntent{Key: held.Key, Review: true})
 	}
 	if !errors.Is(err, ticket.ErrNotFound) {
 		return TicketIntent{}, false, fmt.Errorf("channel: find ticket review reply: %w", err)
@@ -231,16 +231,44 @@ func (r *TicketRoutes) admission(
 	}
 	// The connection the ask arrived on carries only rooms inside its own
 	// scope: an area's app opens no other area's tickets (NT-019).
-	connection, err := r.settings.Named(ctx, KindChannel, candidate.Connection)
-	if err != nil {
-		return ticketAdmission{}, false, fmt.Errorf("channel: read ticket connection: %w", err)
-	}
-	if !carriersOf(connection).carries(candidate.Connection, set.Scope) {
-		return ticketAdmission{}, false, nil
+	if carried, err := r.carries(ctx, candidate.Connection, set.Scope); err != nil || !carried {
+		return ticketAdmission{}, false, err
 	}
 	compiled, err := r.matcher(name, set.UpdatedAt, *value.Ticket)
 	if err != nil {
 		return ticketAdmission{}, false, fmt.Errorf("channel: compile stored ticket route: %w", err)
 	}
 	return ticketAdmission{scope: set.Scope, value: value, compiled: compiled}, true, nil
+}
+
+/*
+reached answers with an existing ticket only if the connection the message
+arrived on carries the ticket's own scope (NT-019).
+
+The room's scope is not enough. A ticket outlives the connection it was opened
+on, so a connection recreated under the same name by another area meets every
+origin the old one left, and its owner can forge their identifiers. Judged by
+the ticket's scope, such a message reaches nothing.
+*/
+func (r *TicketRoutes) reached(
+	ctx context.Context, candidate TicketCandidate, held ticket.Ticket, intent TicketIntent,
+) (TicketIntent, bool, error) {
+	carried, err := r.carries(ctx, candidate.Connection, held.Scope)
+	if err != nil || !carried {
+		return TicketIntent{}, false, err
+	}
+	return intent, true, nil
+}
+
+// carries reads the connection by its name and answers whether it carries a
+// room or a ticket stored at scope.
+func (r *TicketRoutes) carries(ctx context.Context, connection string, scope domain.Scope) (bool, error) {
+	if r.settings == nil {
+		return false, nil
+	}
+	rows, err := r.settings.Named(ctx, KindChannel, connection)
+	if err != nil {
+		return false, fmt.Errorf("channel: read ticket connection: %w", err)
+	}
+	return carriersOf(rows).carries(connection, scope), nil
 }
