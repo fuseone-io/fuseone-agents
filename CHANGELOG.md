@@ -30,6 +30,20 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **A company or an area configures its own model provider, with its own key**
+  (NT-019, phase 3, writers).
+  - `PUT /admin/integrations/providers/{name}` takes `scopeKind`, `company` and
+    `area`, as an MCP server's write does. Whoever holds `provider:write` there
+    writes, reads and removes the provider; only that scope's runs reach it, and the
+    spend is that scope's.
+  - A provider's name is unique across scopes (409 `fuseone:integration-name-taken`).
+    No company or area may take the name of a provider the environment supplies.
+  - The integrations listing shows a configurer its own providers, editable, and the
+    ones it inherits, read-only, never a sibling area's. Each provider says where it
+    is stored.
+
 ### Changed
 
 - **An instruction's token count is asked of the provider the agent's runs reach.**
