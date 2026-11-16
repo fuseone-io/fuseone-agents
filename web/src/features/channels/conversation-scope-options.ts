@@ -48,3 +48,21 @@ function governsInstallation(me: Me | null | undefined) {
   if (!me?.can.includes("company:write")) return false;
   return me.grants.some((g) => g.company === INSTALLATION_COMPANY && g.area === "");
 }
+
+/**
+ * Whether the caller configures a conversation already stored at scope
+ * (NT-019, phase 4): its edit, test and removal are offered to them only then.
+ * On a connection an area inherits, the company's room and the installation's
+ * are read there, and every action on them would answer 403. The installation's
+ * room is its governor's alone. Null and a session that predates configure
+ * are not narrowed.
+ */
+export function configuresConversation(
+  me: Me | null | undefined,
+  scope: { company: string; area?: string },
+): boolean {
+  if (scope.company === INSTALLATION_COMPANY) {
+    return me === null || me === undefined || (governsInstallation(me) && Boolean(me.platform?.includes("provider:write")));
+  }
+  return configures({ company: scope.company, area: scope.area ?? "" }, me);
+}

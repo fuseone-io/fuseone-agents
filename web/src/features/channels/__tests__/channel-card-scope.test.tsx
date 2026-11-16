@@ -35,4 +35,12 @@ describe("a connection card's scope", () => {
     expect(screen.getByText("Da plataforma")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
   });
+
+  // An area may report through the platform's connection, so attaching its own
+  // room there stays offered on a connection it only inherits.
+  it("keeps offering to add a conversation on an inherited connection", () => {
+    card({ ...base, scopeKind: "installation", editable: false });
+
+    expect(screen.getByRole("button", { name: "Adicionar conversa" })).toBeInTheDocument();
+  });
 });
