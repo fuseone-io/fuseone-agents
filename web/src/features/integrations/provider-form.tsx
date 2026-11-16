@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
+import { ScopeFields } from "@/features/integrations/scope/scope-fields";
+import { useActiveScope } from "@/features/scope/active-scope";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -38,6 +40,9 @@ import { problemMessage } from "@/lib/api/problem-message";
 import { isStale, type FormRevision } from "@/lib/api/revision";
 import { StaleNotice } from "@/components/shared/stale-notice";
 
+/** The company the active scope names for the installation itself. */
+const INSTALLATION_COMPANY = "*";
+
 const schema = z.object({
   name: z.string().min(1, "integrations.nameProvider"),
   kind: z.enum(["anthropic", "openai_compatible"]),
@@ -56,7 +61,21 @@ const schema = z.object({
   autoToolChoiceModels: z.string(),
   apiKey: z.string(),
   enabled: z.boolean(),
-});
+  // Where it is stored (NT-019, phase 3): an area's administrator stores it
+  // in a scope they configure; the platform anywhere, the installation by
+  // default.
+  scopeKind: z.enum(["installation", "company", "area"]),
+  company: z.string(),
+  area: z.string(),
+})
+  .refine((v) => v.scopeKind === "installation" || v.company.trim() !== "", {
+    path: ["company"],
+    message: "connectors.companyRequired",
+  })
+  .refine((v) => v.scopeKind !== "area" || v.area.trim() !== "", {
+    path: ["area"],
+    message: "connectors.areaRequired",
+  });
 
 export function ProviderForm({
   provider,
@@ -72,6 +91,13 @@ export function ProviderForm({
   const put = usePutProvider();
   const [stale, setStale] = useState(false);
   const presets = useIntegrations().data?.presets ?? [];
+  // A new provider starts in the scope the console is reading, as a new
+  // server does: a company's administrator reading one of its areas offers
+  // that area first, and the key reaches no more than was asked (NT-019).
+  const activeCompany = useActiveScope((state) => state.company);
+  const activeArea = useActiveScope((state) => state.area);
+  const reading =
+    activeCompany === INSTALLATION_COMPANY ? { company: "", area: "" } : { company: activeCompany, area: activeArea };
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -84,6 +110,9 @@ export function ProviderForm({
       autoToolChoiceModels: (provider?.autoToolChoiceModels ?? []).join("\n"),
       apiKey: "",
       enabled: provider?.enabled ?? true,
+      scopeKind: provider?.scopeKind ?? "installation",
+      company: provider ? (provider.company ?? "") : reading.company,
+      area: provider ? (provider.area ?? "") : reading.area,
     },
   });
 
@@ -125,6 +154,7 @@ export function ProviderForm({
             : [],
         apiKey: values.apiKey || undefined,
         etag: revision?.etag,
+        scope: { scopeKind: values.scopeKind, company: values.company, area: values.area },
       });
       toast.success(t("integrations.saved", { name: values.name }));
       onClose();
@@ -154,6 +184,10 @@ export function ProviderForm({
             {stale && revision && (
               <StaleNotice onReload={revision.reload} reloading={revision.reloading} />
             )}
+            <ScopeFields
+              editing={provider !== null}
+              labels={{ kind: "integrations.providerScopeKind", held: "integrations.providerScopeHeld" }}
+            />
             <FormField
               control={form.control}
               name="name"

@@ -166,7 +166,8 @@ export function IntegrationsPage({
           <>
             <IntegrationsSection
               title={t("integrations.providers")}
-              onAdd={() => setEditing({ kind: "provider", value: null })}
+              // Offered only to whoever may create one somewhere (NT-019).
+              onAdd={access.createServer ? () => setEditing({ kind: "provider", value: null }) : undefined}
               empty={
                 providers.length === 0 && (
                   <EmptyState

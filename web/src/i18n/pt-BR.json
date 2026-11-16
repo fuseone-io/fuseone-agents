@@ -1413,6 +1413,8 @@
     "transportHint": "Processo local é código executado dentro do contêiner do worker. Endereço remoto é uma requisição — bem menos coisa para entregar a alguém.",
     "scopeKind": "Escopo do servidor",
     "scopeHeld": "Onde o servidor vale",
+    "providerScopeKind": "Escopo do provedor",
+    "providerScopeHeld": "Onde o provedor vale",
     "remoteOutsideInstallation": "Fora da instalação, o servidor é sempre remoto (HTTP): um processo local roda no worker da plataforma e é da plataforma.",
     "outsideEgressAt": "Este servidor chama uma origem fora da política de egresso da plataforma para este escopo: {{origin}}. A URL, o endpoint de token OAuth e a API do GitHub App (por padrão https://api.github.com) precisam ser origens permitidas; peça à administração da plataforma para liberar a origem.",
     "transportStdio": "Processo local (stdio)",

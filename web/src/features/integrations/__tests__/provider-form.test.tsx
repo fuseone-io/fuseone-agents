@@ -2,6 +2,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProviderForm } from "@/features/integrations/provider-form";
+import { ScopeChoiceContext } from "@/features/integrations/scope/scope-choice";
+import { useActiveScope } from "@/features/scope/active-scope";
 
 const api = vi.hoisted(() => ({ mutateAsync: vi.fn() }));
 
@@ -21,6 +23,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 // every describe — scoped to one block, the suite only passed because the
 // earlier tests happened to run first and install them.
 beforeEach(() => {
+  useActiveScope.setState({ company: "", area: "" });
   Element.prototype.hasPointerCapture ??= () => false;
   Element.prototype.scrollIntoView ??= () => {};
   api.mutateAsync.mockReset();
@@ -132,6 +135,64 @@ describe("the declared tool_choice-auto list", () => {
 
     expect(api.mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ autoToolChoiceModels: [] }),
+    );
+  });
+});
+
+// NT-019 phase 3: a provider lives at a scope. An area's administrator stores
+// it in the area they configure; the platform at the installation by default.
+describe("where a provider is stored", () => {
+  it("stores an area administrator's new provider in their area", async () => {
+    render(
+      <ScopeChoiceContext.Provider value={{ anyScope: false, configure: [{ company: "acme", area: "cx" }] }}>
+        <ProviderForm provider={null} onClose={vi.fn()} />
+      </ScopeChoiceContext.Provider>,
+    );
+    await userEvent.type(screen.getByLabelText("Nome"), "cx-llm");
+    await userEvent.type(screen.getByLabelText("Endereço"), "https://cx.example.com/v1");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: expect.objectContaining({ scopeKind: "area", company: "acme", area: "cx" }) }),
+    );
+  });
+
+  // A company's administrator reading one of its areas stores the provider
+  // there, not across the company: the key reaches no more than was asked.
+  it("starts a new provider in the area the console is reading", async () => {
+    useActiveScope.setState({ company: "acme", area: "cx" });
+    render(
+      <ScopeChoiceContext.Provider value={{ anyScope: false, configure: [{ company: "acme", area: "" }] }}>
+        <ProviderForm provider={null} onClose={vi.fn()} />
+      </ScopeChoiceContext.Provider>,
+    );
+    await userEvent.type(screen.getByLabelText("Nome"), "cx-llm");
+    await userEvent.type(screen.getByLabelText("Endereço"), "https://cx.example.com/v1");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: expect.objectContaining({ scopeKind: "area", company: "acme", area: "cx" }) }),
+    );
+  });
+
+  it("names the provider's scope, not a server's", () => {
+    render(
+      <ScopeChoiceContext.Provider value={{ anyScope: false, configure: [{ company: "acme", area: "cx" }] }}>
+        <ProviderForm provider={null} onClose={vi.fn()} />
+      </ScopeChoiceContext.Provider>,
+    );
+    expect(screen.getByText("Onde o provedor vale")).toBeInTheDocument();
+    expect(screen.queryByText("Onde o servidor vale")).not.toBeInTheDocument();
+  });
+
+  it("stores the platform's new provider at the installation by default", async () => {
+    render(<ProviderForm provider={null} onClose={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText("Nome"), "shared");
+    await userEvent.type(screen.getByLabelText("Endereço"), "https://api.example.com/v1");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: expect.objectContaining({ scopeKind: "installation" }) }),
     );
   });
 });
