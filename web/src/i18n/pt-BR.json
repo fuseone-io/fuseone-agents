@@ -1039,7 +1039,9 @@
     "finishedAnswerOnly": "Só anunciar términos que tragam a resposta",
     "finishedAnswerOnlyExplains": "Um término sem resposta não é anunciado aqui. O console continua registrando todos os runs; a instrução do agente decide quando há algo a dizer.",
     "formattedAnswers": "Formatar a resposta em blocos",
-    "formattedAnswersExplains": "Parágrafos e listas do texto do agente viram blocos separados no Slack. Só muda a aparência; o conteúdo é o mesmo, byte a byte."
+    "formattedAnswersExplains": "Parágrafos e listas do texto do agente viram blocos separados no Slack. Só muda a aparência; o conteúdo é o mesmo, byte a byte.",
+    "scopeKind": "Escopo da conexão",
+    "scopeHeld": "Onde a conexão vale"
   },
   "common": {
     "actions": "Ações",

@@ -36,7 +36,7 @@ export function ConversationFormFields({
   return (
     <PropertiesSheetBody className="space-y-4">
       <ConversationIdField form={form} channel={channel} existing={existing} />
-      <ConversationScopeField form={form} />
+      <ConversationScopeField form={form} channel={channel} />
       <ConversationWantsField form={form} />
       {!reportsOnly && <ConversationModeField form={form} mode={mode} />}
       {!startsNothing && (

@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { storedScope } from "@/features/integrations/api";
 import { api, unwrap } from "@/lib/api/client";
 import { ifMatch, revised, revisionReads } from "@/lib/api/revision";
+import type { components } from "@/lib/api/schema.gen";
 
 export const channelKeys = {
   all: ["channels"] as const,
@@ -51,16 +53,18 @@ export interface ChannelInput {
   enabled?: boolean;
   /** The revision this write answers; connecting a new one has none. */
   etag?: string;
+  /** Where the connection is stored (NT-019). Absent is the installation. */
+  scope?: Pick<components["schemas"]["Channel"], "scopeKind" | "company" | "area">;
 }
 
 export function useSaveChannel() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async ({ name, etag, ...body }: ChannelInput) =>
+    mutationFn: async ({ name, etag, scope, ...body }: ChannelInput) =>
       unwrap(
         await api.PUT("/admin/channels/{name}", {
           params: { path: { name }, header: ifMatch(etag) },
-          body,
+          body: { ...body, ...storedScope(scope ?? {}) },
         }),
       ),
     onSuccess: () =>

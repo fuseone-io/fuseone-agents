@@ -42,7 +42,11 @@ function stubApi(
             id: "usr_opsbot",
             display: "Ops Bot",
             kind: "local",
-            grants: [],
+            // company:write is authority over the installation only when it
+            // is held there (NT-019): a grant at "*" says so.
+            grants: (options.can ?? []).includes("company:write")
+              ? [{ company: "*", area: "", role: "admin" }]
+              : [],
             can: options.can ?? [],
           }
         : url.includes("/available")

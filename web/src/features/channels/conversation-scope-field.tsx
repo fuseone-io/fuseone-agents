@@ -15,6 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useChannels } from "@/features/channels/api";
+import { offeredScopes } from "@/features/channels/conversation-scope-options";
 import { useScopes } from "@/features/scope/api";
 import { useMe } from "@/features/session/api";
 import {
@@ -42,15 +44,19 @@ export { INSTALLATION_SCOPE };
  */
 export function ConversationScopeField({
   form,
+  channel,
 }: {
   form: UseFormReturn<ConversationValues>;
+  /** The connection the conversation is on, which bounds where it may be. */
+  channel: string;
 }) {
   const { t } = useTranslation();
   const { data: scopes } = useScopes();
   const { data: me } = useMe();
-  // Undefined is still loading; null is a session with no restrictions to
-  // apply, which is how the other fields here read it too.
-  const governs = me === null || Boolean(me?.can.includes("company:write"));
+  const { data: channels } = useChannels();
+  const connection = channels?.items?.find((c) => c.name === channel);
+  // What the connection carries and the caller configures (NT-019).
+  const offered = offeredScopes(scopes?.items ?? [], connection, me);
 
   return (
     <FormField
@@ -76,12 +82,12 @@ export function ConversationScopeField({
               </SelectTrigger>
             </FormControl>
             <SelectContent>
-              {governs && (
+              {offered.installation && (
                 <SelectItem value={INSTALLATION_SCOPE}>
                   {t("channels.installationScope")}
                 </SelectItem>
               )}
-              {(scopes?.items ?? []).map((s) => (
+              {offered.scopes.map((s) => (
                 <SelectItem
                   key={`${s.company}/${s.area}`}
                   value={`${s.company}/${s.area}`}

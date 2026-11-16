@@ -28,6 +28,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSaveChannel } from "@/features/channels/api";
+import {
+  channelScopeShape,
+  scopeIsComplete,
+  useChannelScopeDefaults,
+} from "@/features/channels/channel-scope";
+import { ScopeFields } from "@/features/integrations/scope/scope-fields";
 import { knownDelivery } from "@/features/channels/channel-model";
 import { UnknownConfiguration } from "@/features/channels/unknown-configuration";
 import { problemMessage } from "@/lib/api/problem-message";
@@ -35,15 +41,18 @@ import { isStale, type FormRevision } from "@/lib/api/revision";
 import { StaleNotice } from "@/components/shared/stale-notice";
 import type { components } from "@/lib/api/schema.gen";
 
-const schema = z.object({
-  name: z.string().min(1, "channels.needsName"),
-  kind: z.string().min(1, "channels.needsKind"),
-  workspace: z.string(),
-  deliveryMode: z.enum(["http", "socket"]),
-  token: z.string(),
-  appToken: z.string(),
-  signingSecret: z.string(),
-});
+const schema = scopeIsComplete(
+  z.object({
+    name: z.string().min(1, "channels.needsName"),
+    kind: z.string().min(1, "channels.needsKind"),
+    workspace: z.string(),
+    deliveryMode: z.enum(["http", "socket"]),
+    token: z.string(),
+    appToken: z.string(),
+    signingSecret: z.string(),
+    ...channelScopeShape,
+  }),
+);
 
 /**
  * What the credential is called, per vendor.
@@ -86,6 +95,7 @@ export function ChannelForm({
   // has, on a connection a newer one had put somewhere else.
   const stored = channel?.deliveryMode;
   const delivery = knownDelivery(stored) ? (stored ?? "http") : "http";
+  const scope = useChannelScopeDefaults(channel);
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
@@ -97,6 +107,7 @@ export function ChannelForm({
       token: "",
       appToken: "",
       signingSecret: "",
+      ...scope,
     },
   });
 
@@ -116,6 +127,7 @@ export function ChannelForm({
         token: values.token.trim() || undefined,
         appToken: values.appToken.trim() || undefined,
         signingSecret: values.signingSecret.trim() || undefined,
+        scope: { scopeKind: values.scopeKind, company: values.company, area: values.area },
         etag: revision?.etag,
       });
       toast.success(t("channels.saved"));
@@ -167,6 +179,10 @@ export function ChannelForm({
                   <FormMessage />
                 </FormItem>
               )}
+            />
+            <ScopeFields
+              editing={channel !== null}
+              labels={{ kind: "channels.scopeKind", held: "channels.scopeHeld" }}
             />
             <FormField
               control={form.control}

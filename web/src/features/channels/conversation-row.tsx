@@ -17,6 +17,8 @@ import {
   knownEvent,
   knownMode,
 } from "@/features/channels/conversation-form-model";
+import { configuresConversation } from "@/features/channels/conversation-scope-options";
+import { useMe } from "@/features/session/api";
 import { problemMessage } from "@/lib/api/problem-message";
 
 export function ConversationRow({
@@ -31,6 +33,8 @@ export function ConversationRow({
   const { t } = useTranslation();
   const test = useTestConversation();
   const remove = useDeleteConversation();
+  const { data: me } = useMe();
+  const configurable = configuresConversation(me, conversation.scope);
   // A conversation for the whole installation is stored as the company "*",
   // and a listing that printed that would show a company nobody has. The name
   // is for reading; the search still matches the stored value.
@@ -96,6 +100,8 @@ export function ConversationRow({
         {conversation.enabled ? t("channels.notTracked") : t("common.disabled")}
       </TableCell>
       <TableCell>
+        {/* Read where it is inherited, changed where it is configured (NT-019). */}
+        {configurable && (
         <div className="flex justify-end gap-1">
           <Button
             variant="ghost"
@@ -133,6 +139,7 @@ export function ConversationRow({
             <Trash2 className="size-4" />
           </Button>
         </div>
+        )}
       </TableCell>
     </TableRow>
   );

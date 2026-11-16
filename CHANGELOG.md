@@ -52,6 +52,12 @@ field" is a commit message.
     with 400. Bindings on the installation's connections stay the platform's.
   - The list of rooms a connection's bot is in is offered to whoever configures the
     connection.
+  - In the console, an area's administrator finds **Canais** in Integrations: their own
+    connections to edit, and the ones they inherit read-only, each saying where it is
+    stored. A new connection is stored in the area they configure. A conversation is
+    offered only the scopes its connection carries and the caller configures, and the
+    room for the whole installation only to whoever governs it, on the installation's
+    connection.
 
 ## [0.115.0] — 2026-11-16
 

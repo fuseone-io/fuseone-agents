@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ConversationList } from "@/features/channels/conversation-list";
 import { ChannelIdentityStrip } from "@/features/channels/channel-identity-strip";
+import { ScopeBadges } from "@/features/integrations/scope/scope-badges";
 import {
   channelHealth,
   channelNeedsAttention,
@@ -70,6 +71,7 @@ export function ChannelCard({
   const visibleRows = expanded || query.trim() !== "" ? rows : rows.slice(0, 6);
   const hidden = rows.length - visibleRows.length;
   const health = channelHealth(channel);
+  const editable = channel.editable !== false;
 
   return (
     <Card className="gap-0 overflow-hidden p-0">
@@ -100,6 +102,7 @@ export function ChannelCard({
                   ? t("channels.deliverySocket")
                   : t("channels.deliveryHttp")}
             </Badge>
+            <ScopeBadges row={channel} />
           </div>
           <p className="truncate text-xs text-muted-foreground">
             {t("channels.workspaceMeta", {
@@ -117,16 +120,21 @@ export function ChannelCard({
           <span className="size-1.5 rounded-full bg-current" aria-hidden />
           {t(`channels.health.${health.key}`)}
         </span>
-        <Button variant="outline" size="sm" onClick={onEdit}>
-          <Settings2 className="size-4" aria-hidden />
-          {t("common.edit")}
-        </Button>
+        {/* A connection the caller inherits is read, never changed (NT-019). */}
+        {editable && (
+          <Button variant="outline" size="sm" onClick={onEdit}>
+            <Settings2 className="size-4" aria-hidden />
+            {t("common.edit")}
+          </Button>
+        )}
       </div>
 
       {/* Only where an answer could arrive. Binding accounts on a channel that
           cannot verify what comes back would be configuring authority for a
           door that is shut. */}
-      {open && inboundReady && (
+      {/* Bindings are the connection's configurer's, and an inherited
+          connection carries none (NT-019). */}
+      {open && inboundReady && editable && (
         <>
           <ChannelIdentityStrip
             channel={channel.name}

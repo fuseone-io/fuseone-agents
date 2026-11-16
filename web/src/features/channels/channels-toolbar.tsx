@@ -16,7 +16,7 @@ export function ChannelsToolbar({
   view: ChannelView;
   onQuery: (value: string) => void;
   onView: (value: ChannelView) => void;
-  onAdd: () => void;
+  onAdd?: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -50,10 +50,12 @@ export function ChannelsToolbar({
           </TabsTrigger>
         </TabsList>
       </Tabs>
-      <Button size="sm" onClick={onAdd}>
-        <Plus className="size-4" aria-hidden />
-        {t("channels.newChannel")}
-      </Button>
+      {onAdd && (
+        <Button size="sm" onClick={onAdd}>
+          <Plus className="size-4" aria-hidden />
+          {t("channels.newChannel")}
+        </Button>
+      )}
     </div>
   );
 }

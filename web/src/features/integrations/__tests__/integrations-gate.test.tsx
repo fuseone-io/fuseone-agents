@@ -196,6 +196,16 @@ describe("integrations for the platform's auditor", () => {
     expect(screen.queryByRole("button", { name: "Novo" })).not.toBeInTheDocument();
   });
 
+  it("offer no new channel connection: the write would answer 403", async () => {
+    signedInAs(["tool:read"], ["tool:read"]);
+    openAt("/integrations/channels");
+
+    expect(
+      await screen.findByText("Nenhum canal conectado", {}, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Conectar canal" })).not.toBeInTheDocument();
+  });
+
   it("keep the catalogue readable, with no way to connect by address", async () => {
     signedInAs(["tool:read"], ["tool:read"]);
     openAt("/integrations/mcp");
@@ -234,7 +244,8 @@ describe("integrations for an administrator who configures an area's connectors"
     expect(screen.getAllByRole("button", { name: "Editar" })).toHaveLength(1);
   });
 
-  it.each(["/integrations/channels", "/integrations/egress"])(
+  // Channels are theirs too since NT-019 phase 4; the egress policies are not.
+  it.each(["/integrations/egress"])(
     "take them from %s, which is the platform's, to the connected servers",
     async (path) => {
       signedInAs([], areaAdmin);
@@ -269,9 +280,8 @@ describe("integrations for an administrator who configures an area's connectors"
     for (const section of ["Conectados", "Disponíveis", "Credenciais", "Provedores de modelo"]) {
       expect(screen.getByRole("link", { name: section }), section).toBeInTheDocument();
     }
-    for (const section of ["Canais", "Egress"]) {
-      expect(screen.queryByRole("link", { name: section }), section).not.toBeInTheDocument();
-    }
+    expect(screen.getByRole("link", { name: /^Canais/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Egress" })).not.toBeInTheDocument();
   });
 
   // Connecting a server starts at the catalogue for them too: the recipes
@@ -295,8 +305,9 @@ describe("integrations for an administrator who configures an area's connectors"
     ).toHaveAttribute("aria-current", "page");
   });
 
-  // Channels are the platform's, and would answer 403. The listing of MCP
-  // servers, the catalogue and their own credentials are theirs.
+  // The listings of MCP servers and channels answer them with their own and
+  // what they inherit (NT-019); the catalogue and their own credentials are
+  // theirs. The egress policies, the platform's alone, are never asked for.
   it("ask for none of the platform's lists", async () => {
     signedInAs([], areaAdmin);
     openAt("/integrations");
@@ -306,7 +317,9 @@ describe("integrations for an administrator who configures an area's connectors"
       new URL(input instanceof Request ? input.url : String(input), "http://console").pathname,
     );
     expect(asked.some((path) => path.endsWith("/admin/integrations"))).toBe(true);
-    expect(asked.filter((path) => path.endsWith("/admin/channels"))).toEqual([]);
+    expect(asked.filter((path) => path.endsWith("/mcp-egress-policies"))).toEqual([]);
+    // Their channels too, for the rail's count (NT-019 phase 4).
+    expect(asked.some((path) => path.endsWith("/admin/channels"))).toBe(true);
     for (const own of ["/admin/integrations/recipes", "/integrations/mcp-credentials"]) {
       expect(asked.some((path) => path.endsWith(own)), own).toBe(true);
     }
@@ -325,5 +338,21 @@ describe("integrations before the session answers", () => {
     expect(
       screen.queryByText("As integrações são configuradas pela administração da plataforma"),
     ).not.toBeInTheDocument();
+  });
+});
+
+// NT-019 phase 4: an area's administrator connects the area's own Slack app,
+// from the channels section of integrations.
+describe("channels for an area's administrator", () => {
+  it("open their channels, with the way to connect one", async () => {
+    signedInAs([], ["tool:read", "provider:write"]);
+    openAt("/integrations/channels");
+
+    expect(
+      await screen.findByText("Nenhum canal conectado", {}, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+    // Counted on the rail, which asks the listing they are now answered by.
+    expect(screen.getByRole("link", { name: "Canais 0" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Conectar canal" })).toBeInTheDocument();
   });
 });
