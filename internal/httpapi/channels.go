@@ -33,8 +33,8 @@ type ChannelAdmin interface {
 	DeleteConversation(ctx context.Context, ref admin.ConversationRef, by domain.UserID) error
 	Identities(ctx context.Context) ([]admin.ChannelIdentity, error)
 	SeenAccounts(ctx context.Context) ([]admin.ChannelAccountSeen, error)
-	BindIdentity(ctx context.Context, id admin.ChannelIdentity, by domain.UserID) error
-	UnbindIdentity(ctx context.Context, channelName, account string, by domain.UserID) error
+	BindIdentityIf(ctx context.Context, id admin.ChannelIdentity, by domain.UserID, allow func(settings.ScopeKind, domain.Scope) error) error
+	UnbindIdentityIf(ctx context.Context, channelName, account string, by domain.UserID, allow func(settings.ScopeKind, domain.Scope) error) error
 }
 
 // Announcer posts one message, for proving the wiring.
@@ -237,8 +237,7 @@ func (s *Server) DeleteChannel(
 func (s *Server) PutConversation(
 	ctx context.Context, req openapi.PutConversationRequestObject,
 ) (openapi.PutConversationResponseObject, error) {
-	caller, resp := s.configurer(ctx)
-	if resp != nil {
+	if resp := configuresSomewhere(ctx); resp != nil {
 		return openapi.PutConversation403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *resp,
 		}, nil
@@ -249,6 +248,15 @@ func (s *Server) PutConversation(
 	scope := domain.Scope{
 		Company: domain.CompanyID(req.Body.Company),
 		Area:    domain.AreaID(valueOr(req.Body.Area)),
+	}
+	// Written at the conversation's scope, by whoever configures there
+	// (NT-019). The connection it names is judged by the administration,
+	// under the connection's lock.
+	caller, resp := s.conversationConfigurer(ctx, scope)
+	if resp != nil {
+		return openapi.PutConversation403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *resp,
+		}, nil
 	}
 	/*
 		A room for the whole installation reads every company's runs into one
@@ -429,8 +437,7 @@ func (s *Server) refuseRunAsPrincipal(
 func (s *Server) DeleteConversation(
 	ctx context.Context, req openapi.DeleteConversationRequestObject,
 ) (openapi.DeleteConversationResponseObject, error) {
-	caller, resp := s.configurer(ctx)
-	if resp != nil {
+	if resp := configuresSomewhere(ctx); resp != nil {
 		return openapi.DeleteConversation403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *resp,
 		}, nil
@@ -444,6 +451,15 @@ func (s *Server) DeleteConversation(
 	scope, found := s.scopeOfConversation(ctx, req.Name, req.Conversation)
 	if !found {
 		return openapi.DeleteConversation204Response{}, nil
+	}
+	// Authorized at the scope it is stored at, and removed at that scope
+	// only: a conversation recreated elsewhere since is a different row, and
+	// this removal does not reach it.
+	caller, resp := s.conversationConfigurer(ctx, scope)
+	if resp != nil {
+		return openapi.DeleteConversation403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *resp,
+		}, nil
 	}
 	// The same authority the room needed to exist. Otherwise a company
 	// configurer silences the one room that hears what nobody else does.
@@ -670,7 +686,7 @@ operator what to do and "post failed" tells them to go and find out.
 func (s *Server) TestConversation(
 	ctx context.Context, req openapi.TestConversationRequestObject,
 ) (openapi.TestConversationResponseObject, error) {
-	if _, resp := s.configurer(ctx); resp != nil {
+	if resp := configuresSomewhere(ctx); resp != nil {
 		return openapi.TestConversation403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *resp,
 		}, nil
@@ -681,8 +697,16 @@ func (s *Server) TestConversation(
 
 	scope, found := s.scopeOfConversation(ctx, req.Name, req.Conversation)
 	if !found {
+		if _, resp := s.configurerAt(ctx, settings.ScopeInstallation, domain.Scope{}); resp != nil {
+			return openapi.TestConversation403ApplicationProblemPlusJSONResponse{ForbiddenApplicationProblemPlusJSONResponse: *resp}, nil
+		}
 		return openapi.TestConversation400ApplicationProblemPlusJSONResponse(
 			invalid("no such conversation is configured")), nil
+	}
+	if _, resp := s.conversationConfigurer(ctx, scope); resp != nil {
+		return openapi.TestConversation403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *resp,
+		}, nil
 	}
 
 	ref, err := s.announcer.Post(ctx,
@@ -723,13 +747,20 @@ of, the picker cannot offer somewhere the message would fail to arrive.
 func (s *Server) ListAvailableConversations(
 	ctx context.Context, req openapi.ListAvailableConversationsRequestObject,
 ) (openapi.ListAvailableConversationsResponseObject, error) {
-	if resp := s.refuse(ctx, permConfigure); resp != nil {
+	if resp := configuresSomewhere(ctx); resp != nil {
 		return openapi.ListAvailableConversations403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *resp,
 		}, nil
 	}
-	if s.channelListing == nil {
+	if s.channelListing == nil || s.channels == nil {
 		return nil, errNoAdministration
+	}
+	// The listing uses the connection's token, so it is for whoever
+	// configures the connection where it is stored (NT-019).
+	if resp := s.configuresConnection(ctx, req.Name); resp != nil {
+		return openapi.ListAvailableConversations403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *resp,
+		}, nil
 	}
 
 	found, err := s.channelListing.Conversations(ctx, req.Name)
@@ -761,8 +792,7 @@ func (s *Server) ListAvailableConversations(
 func (s *Server) BindChannelIdentity(
 	ctx context.Context, req openapi.BindChannelIdentityRequestObject,
 ) (openapi.BindChannelIdentityResponseObject, error) {
-	caller, resp := s.configurer(ctx)
-	if resp != nil {
+	if resp := configuresSomewhere(ctx); resp != nil {
 		return openapi.BindChannelIdentity403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *resp,
 		}, nil
@@ -770,13 +800,18 @@ func (s *Server) BindChannelIdentity(
 	if s.channels == nil || req.Body == nil {
 		return nil, errNoAdministration
 	}
+	caller := callerOf(ctx)
+	var refused *openapi.ForbiddenApplicationProblemPlusJSONResponse
 
-	err := s.channels.BindIdentity(ctx, admin.ChannelIdentity{
+	err := s.channels.BindIdentityIf(ctx, admin.ChannelIdentity{
 		Channel:   req.Name,
 		Account:   req.Account,
 		Principal: domain.UserID(req.Body.Principal),
 		Display:   s.displayOf(ctx, req.Body.Principal),
-	}, caller)
+	}, caller, s.bindingAllowed(ctx, domain.UserID(req.Body.Principal), &refused))
+	if refused != nil {
+		return openapi.BindChannelIdentity403ApplicationProblemPlusJSONResponse{ForbiddenApplicationProblemPlusJSONResponse: *refused}, nil
+	}
 	if err != nil {
 		return openapi.BindChannelIdentity400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
@@ -789,8 +824,7 @@ func (s *Server) BindChannelIdentity(
 func (s *Server) UnbindChannelIdentity(
 	ctx context.Context, req openapi.UnbindChannelIdentityRequestObject,
 ) (openapi.UnbindChannelIdentityResponseObject, error) {
-	caller, resp := s.configurer(ctx)
-	if resp != nil {
+	if resp := configuresSomewhere(ctx); resp != nil {
 		return openapi.UnbindChannelIdentity403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *resp,
 		}, nil
@@ -798,7 +832,13 @@ func (s *Server) UnbindChannelIdentity(
 	if s.channels == nil {
 		return nil, errNoAdministration
 	}
-	if err := s.channels.UnbindIdentity(ctx, req.Name, req.Account, caller); err != nil {
+	// Judged where the connection stands under its lock (NT-019).
+	var refused *openapi.ForbiddenApplicationProblemPlusJSONResponse
+	err := s.channels.UnbindIdentityIf(ctx, req.Name, req.Account, callerOf(ctx), s.connectionRefused(ctx, &refused))
+	if refused != nil {
+		return openapi.UnbindChannelIdentity403ApplicationProblemPlusJSONResponse{ForbiddenApplicationProblemPlusJSONResponse: *refused}, nil
+	}
+	if err != nil {
 		return nil, fmt.Errorf("unbind channel identity: %w", err)
 	}
 	return openapi.UnbindChannelIdentity204Response{}, nil
