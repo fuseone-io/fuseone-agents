@@ -449,7 +449,14 @@ any of them.
   connection's scope does not contain the conversation's own is neither posted to nor
   admitted from, however the row was written. A ticket already open is judged by its
   own scope as well: it outlives its connection, and a connection recreated under the
-  same name by another area meets every origin the old one left. The door refuses such a conversation
+  same name by another area meets every origin the old one left.
+- **An event is judged by the scope of the session that received it**, never by the
+  connection's row read again. A Socket Mode session is reconciled with its row every
+  thirty seconds, and an inbox row is consumed later still; in between the row may be
+  removed, or recreated at another scope. The HTTP door keeps the scope from the read
+  that verified the signature, a socket session keeps the scope it was opened with,
+  and the inbox stores it with the ask (migration `0112`). A row the previous binary
+  wrote is the installation's, the only place that binary looked. The door refuses such a conversation
   first; the runtime holds against a row that reached the store any other way.
 - **Channel identities**, the bindings of a person to their Slack user
   (`internal/admin/channel_identity.go:161`), stay stored at the installation: they
@@ -687,7 +694,7 @@ platform's trail shows every scope.
 | 1 | Connector instances: doors at the instance's scope, filtered listing, catalogue on `tool:read` | Writers only. The readers already check scope |
 | 2 | MCP servers and classification | Readers, then writers |
 | 3 | Model providers | Readers, then writers |
-| 4 | Channel connections | Readers, then writers. The readers' release finds a connection by name at any scope, checks the connection's scope at delivery, arrival and decisions, and lets a binding name a connection at any scope (migration `0111`, which replaces the `0100` triggers). The writers' release opens the connection doors at their scope, the 409, the filtered listing, bindings by the area's administrator and the console. Conversations change only their doors, like phase 1. Once a connection exists outside the installation, the readers' release is the rollback floor |
+| 4 | Channel connections | Readers, then writers. The readers' release finds a connection by name at any scope, checks the connection's scope at delivery, arrival and decisions, and lets a binding name a connection at any scope (migration `0111`, which replaces the `0100` triggers), and judges every arrival by the scope of the session that received it (migration `0112`). The writers' release opens the connection doors at their scope, the 409, the filtered listing, bindings by the area's administrator and the console. Conversations change only their doors, like phase 1. Once a connection exists outside the installation, the readers' release is the rollback floor |
 | 5 | Console: gate, scope field, inherited marks | With each writers' release, per kind |
 | 2b | Moving a server out of the installation: the door, its refusals, the console action | One release, after phase 2. Readers need nothing new: a moved server is an ordinary company or area row |
 
@@ -784,6 +791,10 @@ their own Jira, Elasticsearch or SQL from their own area.
   - Binding a person with no grant inside `acme/cx` on `acme/cx`'s connection is
     refused. The negative cases are a person whose only grant is at `acme/finance`, and
     one whose only grant is at `acme`: a grant over the area is not a grant inside it.
+  - An event received by a session opened at `acme/support`, after the connection's row
+    was removed, or recreated under the same name at `acme/finance`, reaches nothing of
+    `acme/finance`: no conversation, watch rule or ticket. The scope must travel from
+    the session through the inbox, and each hop is pinned by its own test.
   - With one installation connection and one area connection enabled, a direct message
     with no named connection is sent on the installation's.
   - Sabotage, per fence: drop the check and keep the others. Each test must name the
