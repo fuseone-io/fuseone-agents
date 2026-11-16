@@ -166,6 +166,21 @@ servers are stored: a platform-only door moves a server out of the installation,
 re-seals its secret under the new scope. See <a href="#moving-a-server-out-of-the-installation">Moving a server out of the
 installation</a>.</p>
 </li>
+<li>
+<p><strong>An area’s administrator binds people to the area’s own channel connection</strong>
+(decided by Kleber on 2026-11-16, when phase 4 was planned). Only people who hold a
+grant inside the connection’s scope may be bound there. Whoever owns a Slack app holds
+its signing secret, so they can forge any click or event on it as any account bound to
+it. Two fences keep that inside the area: a decision that arrives on a connection
+outside the installation only decides a run inside the connection’s scope, and an event
+on it only reaches conversations inside that scope. See <a href="#channels">Channels</a>.</p>
+</li>
+<li>
+<p><strong>A direct message with no named connection picks among the installation’s
+connections only</strong> (decided the same day). A connection of a company or an area is
+never chosen by default, so creating one does not leave the platform with two
+workspaces to choose between.</p>
+</li>
 </ul>
 <div class="sl-heading-wrapper level-h2"><h2 id="where-things-stand">Where things stand</h2><a class="sl-anchor-link" href="#where-things-stand"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Where things stand”</span></a></div>
 <p>All of these live in the one <code dir="auto">settings</code> table. Its primary key already carries a
@@ -624,18 +639,56 @@ the area’s. Prices (<code dir="auto">/admin/prices</code>) stay the platform�
 <div class="sl-heading-wrapper level-h3"><h3 id="channels">Channels</h3><a class="sl-anchor-link" href="#channels"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Channels”</span></a></div>
 <ul>
 <li>A channel connection is stored at the caller’s scope. Its secret is sealed in the row,
-and <code dir="auto">ChannelDoor.Secrets</code> reads it at that scope (<code dir="auto">internal/admin/channel_identity.go:444-448</code>).</li>
+and <code dir="auto">ChannelDoor.Secrets</code> reads it at that scope (<code dir="auto">internal/admin/channel_identity.go:444-448</code>).
+Every reader finds a connection by its name, which is unique across scopes (index
+<code dir="auto">0108</code>), and learns where it is stored: delivery (<code dir="auto">internal/channel/connect/connect.go:117</code>),
+the Socket Mode sweep (<code dir="auto">cmd/agentd/channel_socket.go:196</code>), the webhooks’ signing secret,
+and the read-back. A row at a scope the reader cannot judge is refused, never taken as
+the platform’s.</li>
+<li>A Slack connection names no URL, so it needs no egress policy: it reaches Slack’s API
+and nothing else.</li>
 <li><strong>A conversation names a connection whose scope contains its own.</strong> A conversation of
 <code dir="auto">acme/cx</code> may use the platform’s Slack connection or <code dir="auto">acme/cx</code>’s own, and never one of
 <code dir="auto">acme/finance</code>.</li>
 <li><strong>Inbound traffic</strong> finds the conversation by its unique name, as today. It is then
 dropped unless the connection it arrived on is the one the conversation names. An
 event cannot reach an area’s conversation through another area’s app.</li>
+<li><strong>Delivery and arrival both check the connection’s scope.</strong> A conversation whose
+connection’s scope does not contain the conversation’s own is neither posted to nor
+admitted from, however the row was written. A ticket already open is judged by its
+own scope as well: it outlives its connection, and a connection recreated under the
+same name by another area meets every origin the old one left. The door refuses such
+a conversation first; the runtime holds against a row that reached the store any
+other way.</li>
+<li><strong>An event is judged by the scope of the session that received it</strong>, never by the
+connection’s row read again. A Socket Mode session is reconciled with its row every
+thirty seconds, and an inbox row is consumed later still; in between the row may be
+removed, or recreated at another scope. The HTTP door keeps the scope from the read
+that verified the signature, a socket session keeps the scope it was opened with,
+and the inbox stores it with the ask (migration <code dir="auto">0112</code>). A row the previous binary
+wrote is the installation’s, the only place that binary looked. A session the door
+gave no scope reaches nothing, not even the installation’s conversations.</li>
+<li><strong>Channel identities</strong>, the bindings of a person to their Slack user
+(<code dir="auto">internal/admin/channel_identity.go:161</code>), stay stored at the installation: they
+belong to the person. On a connection of the installation, binding stays the
+platform’s, as today. On a connection of a company or an area:
+<ul>
+<li>binding and unbinding need <code dir="auto">provider:write</code> at the connection’s scope;</li>
+<li>only a person holding a grant inside the connection’s scope may be bound. Anybody
+else is refused 400, without saying who they are;</li>
+<li><strong>a decision that arrives on that connection only decides a run inside its scope.</strong>
+The person bound to the account acts there with the grants they hold inside the
+connection’s scope (<code dir="auto">Principal.Within</code>), so <code dir="auto">DecideApproval</code> refuses any other run
+with the console’s own 403. The connection’s owner can forge clicks as the people
+bound to it; this fence is what keeps that inside the area. The installation’s
+connections serve every scope and narrow nothing.</li>
+</ul>
+</li>
+<li><strong>Direct messages.</strong> With no connection named, the one enabled connection of the
+installation answers, as today (<code dir="auto">internal/channel/addressing.go:147-171</code>). A company’s
+or an area’s connection is never counted there.</li>
 <li><strong>What stays at the platform:</strong>
 <ul>
-<li><strong>Channel identities.</strong> These are the bindings of a person to their Slack user
-(<code dir="auto">internal/admin/channel_identity.go:161</code>), and they belong to the person, not to an
-area.</li>
 <li><strong>Installation-wide conversations</strong>, which need <code dir="auto">company:write</code> at the installation
 (<code dir="auto">internal/httpapi/channels.go:228-233</code>).</li>
 <li><strong>Choosing a <code dir="auto">runAs</code> user</strong>, which needs <code dir="auto">identity:write</code> (<code dir="auto">channels.go:361</code>).</li>
@@ -961,7 +1014,7 @@ platform’s trail shows every scope.</p>
 
 
 
-<table><thead><tr><th>#</th><th>What</th><th>Released as</th></tr></thead><tbody><tr><td>0</td><td>The unique index on names, with its duplicate check and the 409. The connector layer refusing one name configured twice. The Gate’s <code dir="auto">checkScope</code>, for every tool, with <code dir="auto">ToolScope</code> declared by every layer and the platform’s own tools anchored, and the built-in checks named on every decision</td><td>One release. MCP servers, providers and channel connections are the installation’s, which contains every run. Connector instances may already be stored at a company or area: a run reaching one outside its scope was already refused by the connector layer, and is now stopped earlier, by the Gate, as a recorded block. Its notes state that a binary below it answers 400 <code dir="auto">fuseone:not-stored</code> on a taken connector name</td></tr><tr><td>1</td><td>Connector instances: doors at the instance’s scope, filtered listing, catalogue on <code dir="auto">tool:read</code></td><td>Writers only. The readers already check scope</td></tr><tr><td>2</td><td>MCP servers and classification</td><td>Readers, then writers</td></tr><tr><td>3</td><td>Model providers</td><td>Readers, then writers</td></tr><tr><td>4</td><td>Channel connections</td><td>Readers, then writers. Conversations change only their doors, like phase 1</td></tr><tr><td>5</td><td>Console: gate, scope field, inherited marks</td><td>With each writers’ release, per kind</td></tr><tr><td>2b</td><td>Moving a server out of the installation: the door, its refusals, the console action</td><td>One release, after phase 2. Readers need nothing new: a moved server is an ordinary company or area row</td></tr></tbody></table>
+<table><thead><tr><th>#</th><th>What</th><th>Released as</th></tr></thead><tbody><tr><td>0</td><td>The unique index on names, with its duplicate check and the 409. The connector layer refusing one name configured twice. The Gate’s <code dir="auto">checkScope</code>, for every tool, with <code dir="auto">ToolScope</code> declared by every layer and the platform’s own tools anchored, and the built-in checks named on every decision</td><td>One release. MCP servers, providers and channel connections are the installation’s, which contains every run. Connector instances may already be stored at a company or area: a run reaching one outside its scope was already refused by the connector layer, and is now stopped earlier, by the Gate, as a recorded block. Its notes state that a binary below it answers 400 <code dir="auto">fuseone:not-stored</code> on a taken connector name</td></tr><tr><td>1</td><td>Connector instances: doors at the instance’s scope, filtered listing, catalogue on <code dir="auto">tool:read</code></td><td>Writers only. The readers already check scope</td></tr><tr><td>2</td><td>MCP servers and classification</td><td>Readers, then writers</td></tr><tr><td>3</td><td>Model providers</td><td>Readers, then writers</td></tr><tr><td>4</td><td>Channel connections</td><td>Readers, then writers. The readers’ release finds a connection by name at any scope, checks the connection’s scope at delivery, arrival and decisions, and lets a binding name a connection at any scope (migration <code dir="auto">0111</code>, which replaces the <code dir="auto">0100</code> triggers), and judges every arrival by the scope of the session that received it (migration <code dir="auto">0112</code>). The writers’ release opens the connection doors at their scope, the 409, the filtered listing, bindings by the area’s administrator and the console. Conversations change only their doors, like phase 1. Once a connection exists outside the installation, the readers’ release is the rollback floor</td></tr><tr><td>5</td><td>Console: gate, scope field, inherited marks</td><td>With each writers’ release, per kind</td></tr><tr><td>2b</td><td>Moving a server out of the installation: the door, its refusals, the console action</td><td>One release, after phase 2. Readers need nothing new: a moved server is an ordinary company or area row</td></tr></tbody></table>
 <p>Phase 1 is the smallest step to something an area administrator can use: connecting
 their own Jira, Elasticsearch or SQL from their own area.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="tests-that-must-exist">Tests that must exist</h2><a class="sl-anchor-link" href="#tests-that-must-exist"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Tests that must exist”</span></a></div>
@@ -1068,6 +1121,32 @@ must name the tool whose effect changed.</li>
 <li>
 <p><strong>Reveals read at the row’s scope.</strong> A reveal at the installation of an area server
 finds nothing, and opening an area row’s sealed value under another scope’s AAD fails.</p>
+</li>
+<li>
+<p><strong>Channels, per fence</strong> (phase 4).</p>
+<ul>
+<li>A conversation of <code dir="auto">acme/finance</code> planted on <code dir="auto">acme/cx</code>’s connection, bypassing the
+door, is neither posted to nor admitted from.</li>
+<li>A durable ticket of <code dir="auto">acme/finance</code> left at an origin on a connection name that an
+area later reuses is reached by nothing that arrives on the new connection: not a
+reply in its thread, not a reply in its review room, not a closing reaction. The
+fence judges the ticket’s own scope, because the room’s may be the new
+connection’s.</li>
+<li>A signed click on <code dir="auto">acme/cx</code>’s connection for a run of <code dir="auto">acme/finance</code> is refused and
+seals no decision, even from a bound person who could approve that run from the
+console.</li>
+<li>Binding a person with no grant inside <code dir="auto">acme/cx</code> on <code dir="auto">acme/cx</code>’s connection is
+refused. The negative cases are a person whose only grant is at <code dir="auto">acme/finance</code>, and
+one whose only grant is at <code dir="auto">acme</code>: a grant over the area is not a grant inside it.</li>
+<li>An event received by a session opened at <code dir="auto">acme/support</code>, after the connection’s row
+was removed, or recreated under the same name at <code dir="auto">acme/finance</code>, reaches nothing of
+<code dir="auto">acme/finance</code>: no conversation, watch rule or ticket. The scope must travel from
+the session through the inbox, and each hop is pinned by its own test.</li>
+<li>With one installation connection and one area connection enabled, a direct message
+with no named connection is sent on the installation’s.</li>
+<li>Sabotage, per fence: drop the check and keep the others. Each test must name the
+post, the admission or the decision it let through.</li>
+</ul>
 </li>
 <li>
 <p><strong>Against the previous binary.</strong> After the readers’ release, an area row is refused,
