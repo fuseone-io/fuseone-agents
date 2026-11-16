@@ -50,6 +50,20 @@ a release before any connection can be stored outside the installation. Two migr
   writes, and `0112` gives the asks it writes the installation's scope, the only one it
   verifies with.
 
+### Added
+
+- **A company or an area connects its own Slack app** (NT-019 phase 4, writers).
+  - `PUT /admin/channels/{name}` takes `scopeKind`, `company` and `area`, as a model
+    provider's write does. Whoever holds `provider:write` there writes, reads and removes
+    the connection; the platform's administration still governs every area.
+  - A connection's name is unique across scopes (409 `fuseone:integration-name-taken`).
+  - A connection is not stored where it would strand a conversation already attached to
+    its name: the write is refused with 400.
+  - The channels listing shows a configurer their own connections, editable, and the
+    ones they inherit, read-only, never a sibling area's. An inherited connection carries
+    only the conversations of the caller's scopes, and none of its bindings or seen
+    accounts.
+
 ### Changed
 
 - **A channel connection is read wherever it is stored.** Delivery, the Socket Mode

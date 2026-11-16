@@ -4230,6 +4230,15 @@ paths:
                     Absent leaves the inbound surface closed, which is the safe
                     reading of a channel nobody has switched it on for.
                 enabled: { type: boolean, default: true }
+                scopeKind:
+                  allOf: [{ $ref: '#/components/schemas/ConnectorScopeKind' }]
+                  description: >
+                    Where the connection is stored (NT-019, phase 4). Absent is the
+                    installation. A company's or an area's connection is written by
+                    whoever holds provider:write there, and carries only the
+                    conversations inside its scope.
+                company: { type: string }
+                area: { type: string }
       responses:
         '204':
           description: The channel is configured.
@@ -4238,6 +4247,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/NameTaken' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
     delete:
       tags: [admin]
@@ -8750,6 +8760,18 @@ components:
             Channel accounts this installation has seen interact with it.
             Convenience for binding only; it grants nothing.
           items: { $ref: '#/components/schemas/ChannelSeenAccount' }
+        scopeKind:
+          type: string
+          enum: [installation, company, area]
+          description: Where the connection is stored (NT-019).
+        company: { type: string }
+        area: { type: string }
+        editable:
+          type: boolean
+          description: >
+            Whether the caller may change or remove it. A connection listed because
+            the caller's area inherits it is not, and carries only the conversations
+            the caller may see, with no identities or seen accounts.
 
     ChannelIdentity:
       type: object

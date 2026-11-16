@@ -10,6 +10,7 @@ import (
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/spec"
 )
 
@@ -25,7 +26,7 @@ to an agent: the Gate decides effects after the run starts.
 // ChannelAdmin is channel configuration, declared here by the consumer.
 type ChannelAdmin interface {
 	List(ctx context.Context) ([]admin.Channel, error)
-	Named(ctx context.Context, name string) (admin.Channel, []admin.ChannelIdentity, error)
+	NamedIf(ctx context.Context, name string, allow func(settings.ScopeKind, domain.Scope) error) (admin.Channel, []admin.ChannelIdentity, error)
 	WriteChannel(ctx context.Context, w admin.ChannelWrite) (domain.Revision, error)
 	RemoveChannel(ctx context.Context, r admin.ChannelRemoval) error
 	PutConversation(ctx context.Context, channelName string, conv admin.Conversation, by domain.UserID) error
@@ -50,7 +51,7 @@ func (s *Server) WithChannels(channels ChannelAdmin, announcer Announcer) *Serve
 func (s *Server) ListChannels(
 	ctx context.Context, _ openapi.ListChannelsRequestObject,
 ) (openapi.ListChannelsResponseObject, error) {
-	if resp := s.refuse(ctx, permConfigure); resp != nil {
+	if resp := configuresSomewhere(ctx); resp != nil {
 		return openapi.ListChannels403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *resp,
 		}, nil
@@ -86,9 +87,12 @@ func (s *Server) ListChannels(
 		return nil, fmt.Errorf("list seen channel accounts: %w", err)
 	}
 
+	p, _ := auth.PrincipalFrom(ctx)
 	items := make([]openapi.Channel, 0, len(configured))
 	for _, c := range configured {
-		items = append(items, channelFrom(c, bound, seen))
+		if item, listed := channelListed(p, c, bound, seen); listed {
+			items = append(items, item)
+		}
 	}
 	return openapi.ListChannels200JSONResponse{Items: items, Kinds: kinds}, nil
 }
@@ -96,14 +100,27 @@ func (s *Server) ListChannels(
 func (s *Server) PutChannel(
 	ctx context.Context, req openapi.PutChannelRequestObject,
 ) (openapi.PutChannelResponseObject, error) {
-	caller, resp := s.configurer(ctx)
-	if resp != nil {
+	if resp := configuresSomewhere(ctx); resp != nil {
 		return openapi.PutChannel403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *resp,
 		}, nil
 	}
 	if s.channels == nil || req.Body == nil {
 		return nil, errNoAdministration
+	}
+	// Stored where the request names, written by whoever holds provider:write
+	// there or at the platform's administration (NT-019).
+	at, stored, err := connectorScopeOrInstallation(req.Body.ScopeKind, req.Body.Company, req.Body.Area)
+	if err != nil {
+		return openapi.PutChannel400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
+		}, nil
+	}
+	caller, resp := s.configurerAt(ctx, at, stored)
+	if resp != nil {
+		return openapi.PutChannel403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *resp,
+		}, nil
 	}
 	// Whether it is needed is not decided here. The administration takes the
 	// connection's lock, sees what is attached under it and refuses — so a room
@@ -135,6 +152,7 @@ func (s *Server) PutChannel(
 			Signing:  valueOr(req.Body.SigningSecret),
 		},
 		By: caller, Governs: ungoverned == nil, Expect: expect,
+		At: at, Stored: stored,
 	})
 	if stale, ok := staleFrom(err); ok {
 		return openapi.PutChannel412ApplicationProblemPlusJSONResponse{
@@ -142,6 +160,10 @@ func (s *Server) PutChannel(
 		}, nil
 	}
 	switch {
+	case errors.Is(err, settings.ErrNameTaken):
+		return openapi.PutChannel409ApplicationProblemPlusJSONResponse{
+			NameTakenApplicationProblemPlusJSONResponse: openapi.NameTakenApplicationProblemPlusJSONResponse(nameTaken()),
+		}, nil
 	case errors.Is(err, admin.ErrInstallationAuthority):
 		return openapi.PutChannel403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *ungoverned,
@@ -164,8 +186,7 @@ func (s *Server) PutChannel(
 func (s *Server) DeleteChannel(
 	ctx context.Context, req openapi.DeleteChannelRequestObject,
 ) (openapi.DeleteChannelResponseObject, error) {
-	caller, resp := s.configurer(ctx)
-	if resp != nil {
+	if resp := configuresSomewhere(ctx); resp != nil {
 		return openapi.DeleteChannel403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *resp,
 		}, nil
@@ -173,6 +194,7 @@ func (s *Server) DeleteChannel(
 	if s.channels == nil {
 		return nil, errNoAdministration
 	}
+	p, _ := auth.PrincipalFrom(ctx)
 	_, ungoverned := s.governs(ctx)
 	expect, err := domain.ParseIfMatch(req.Params.IfMatch)
 	if err != nil {
@@ -180,9 +202,22 @@ func (s *Server) DeleteChannel(
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
 		}, nil
 	}
+	// Authorized where the connection is stored as the removal finds it under
+	// its lock, never where it was read before nor where the caller says: a
+	// connection recreated elsewhere in between is not this caller's (NT-019).
+	var refused *openapi.ForbiddenApplicationProblemPlusJSONResponse
 	err = s.channels.RemoveChannel(ctx, admin.ChannelRemoval{
-		Name: req.Name, By: caller, Governs: ungoverned == nil, Expect: expect,
+		Name: req.Name, By: p.ID, Governs: ungoverned == nil, Expect: expect,
+		Allow: func(kind settings.ScopeKind, stored domain.Scope) error {
+			if _, refused = s.configurerAt(ctx, kind, stored); refused != nil {
+				return errMCPServerRefused
+			}
+			return nil
+		},
 	})
+	if refused != nil {
+		return openapi.DeleteChannel403ApplicationProblemPlusJSONResponse{ForbiddenApplicationProblemPlusJSONResponse: *refused}, nil
+	}
 	if stale, ok := staleFrom(err); ok {
 		return openapi.DeleteChannel412ApplicationProblemPlusJSONResponse{
 			PreconditionFailedApplicationProblemPlusJSONResponse: stale,

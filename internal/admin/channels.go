@@ -111,6 +111,9 @@ type Channel struct {
 	// Revision names this configuration, and is filled by the same read.
 	Revision      domain.Revision
 	Conversations []Conversation
+	// At and Stored are where the connection's row lives (NT-019).
+	At     settings.ScopeKind
+	Stored domain.Scope
 }
 
 // Conversation is one place, and the scope it speaks for.
@@ -156,7 +159,7 @@ func (c *ChannelFacts) List(ctx context.Context) ([]Channel, error) {
 		_ = json.Unmarshal(s.Value, &conn)
 		// Whether the inbound half is on, without revealing either secret. It
 		// needs the sealed value, so it is read here rather than inferred.
-		secret := c.channelSecretState(ctx, s.Name)
+		secret := c.channelSecretState(ctx, s)
 		out = append(out, Channel{
 			Name: s.Name, Kind: conn.Kind, Workspace: conn.Workspace,
 			// As stored, for the reason a conversation's mode is: read through
@@ -167,6 +170,7 @@ func (c *ChannelFacts) List(ctx context.Context) ([]Channel, error) {
 			Enabled:      s.Enabled, HasCredential: secret.BotToken,
 			HasSigning: secret.Signing, HasAppToken: secret.AppToken,
 			Conversations: conversationsOf(s.Name, conversations),
+			At:            s.ScopeKind, Stored: s.Scope,
 		})
 	}
 	return out, nil
@@ -181,9 +185,9 @@ type channelSecretState struct {
 // channelSecretState answers which sealed pieces exist, without exposing any
 // of them. A single HasSecret bit is no longer enough: posting, HTTP inbound
 // and Socket Mode are three different capabilities.
-func (c *ChannelFacts) channelSecretState(ctx context.Context, name string) channelSecretState {
-	held, err := c.settings.Reveal(ctx,
-		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
+func (c *ChannelFacts) channelSecretState(ctx context.Context, row settings.Setting) channelSecretState {
+	// At the row's own scope, which is what its secret is sealed under.
+	held, err := c.settings.Reveal(ctx, row.ScopeKind, row.Scope, channel.KindChannel, row.Name)
 	if err != nil {
 		return channelSecretState{}
 	}
@@ -297,6 +301,10 @@ type ChannelWrite struct {
 	Governs bool
 	// Expect is the precondition the write answers.
 	Expect domain.IfMatch
+	// At and Stored are where the connection is stored (NT-019). An empty At
+	// is the installation.
+	At     settings.ScopeKind
+	Stored domain.Scope
 }
 
 func (c *Channels) PutChannel(ctx context.Context, w ChannelWrite) error {
@@ -314,6 +322,10 @@ func (c *Channels) WriteChannel(ctx context.Context, w ChannelWrite) (domain.Rev
 		return "", fmt.Errorf("%w: %q", ErrUnknownDeliveryMode, ch.DeliveryMode)
 	}
 
+	at, stored, serves, err := connectionStoredAt(w.At, w.Stored)
+	if err != nil {
+		return "", err
+	}
 	mode := channel.StoredDeliveryMode(ch.DeliveryMode)
 	value, err := json.Marshal(channel.Connection{
 		Kind: ch.Kind, Workspace: ch.Workspace,
@@ -324,13 +336,21 @@ func (c *Channels) WriteChannel(ctx context.Context, w ChannelWrite) (domain.Rev
 	}
 
 	base := settings.Setting{
-		ScopeKind: settings.ScopeInstallation,
-		Kind:      channel.KindChannel, Name: ch.Name,
+		ScopeKind: at, Scope: stored,
+		Kind: channel.KindChannel, Name: ch.Name,
 		Value: value, Enabled: ch.Enabled, UpdatedBy: string(by),
 	}
 	precondition := &channelRevised{c: c}
 	guard := func(ctx context.Context, conn settings.DB) error {
+		// The name's lock first, then whether another scope holds it, before
+		// anything about this row is judged (NT-019).
 		if err := c.guardInstallationRoom(ctx, conn, ch.Name, w.Governs); err != nil {
+			return err
+		}
+		if err := nameOfKindHeldElsewhere(ctx, conn, channel.KindChannel, ch.Name, at, stored); err != nil {
+			return err
+		}
+		if err := c.refuseConversationsOutside(ctx, conn, ch.Name, serves); err != nil {
 			return err
 		}
 		if err := c.refuseStartingConversations(ctx, conn, ch.Name, ch.Kind); err != nil {
@@ -340,7 +360,7 @@ func (c *Channels) WriteChannel(ctx context.Context, w ChannelWrite) (domain.Rev
 	}
 	return writeRevised(ctx, c.pool, c.settings, folded{
 		guard: guard,
-		by:    by, scope: domain.Scope{},
+		by:    by, scope: trailScope(at, stored),
 		action: "channel.configured", target: ch.Name,
 		set:     base,
 		revised: precondition.of(w.Expect),
@@ -649,6 +669,11 @@ type ChannelRemoval struct {
 	By      domain.UserID
 	Governs bool
 	Expect  domain.IfMatch
+	// Allow judges the caller against where the connection is stored, read
+	// under its lock inside the removal and never taken from the caller: a
+	// scope read before could name a connection removed and recreated
+	// elsewhere since (NT-019). Nil allows every scope.
+	Allow func(settings.ScopeKind, domain.Scope) error
 }
 
 // RemoveChannel deletes a connection, if it is still at a revision the caller named.
@@ -663,20 +688,32 @@ func (c *Channels) RemoveChannel(ctx context.Context, r ChannelRemoval) error {
 	if err := c.guardInstallationRoom(ctx, tx, name, r.Governs); err != nil {
 		return err
 	}
+	// Where the connection is now, under its lock, judged before anything
+	// attached to its name is touched. A name no row holds is the
+	// installation's, as it always was.
+	at, stored, _, err := channelStoredAtOn(ctx, tx, name)
+	if err != nil {
+		return err
+	}
+	if r.Allow != nil {
+		if err := r.Allow(at, stored); err != nil {
+			return err
+		}
+	}
 	precondition := &channelRevised{c: c}
 	if err := precondition.read(ctx, tx, name); err != nil {
 		return err
 	}
 	if err := removalGuard(ctx, tx, c.settings, settings.Setting{
-		ScopeKind: settings.ScopeInstallation, Kind: channel.KindChannel, Name: name,
+		ScopeKind: at, Scope: stored, Kind: channel.KindChannel, Name: name,
 	}, precondition.of(r.Expect)); err != nil {
 		return err
 	}
-	stored, err := c.settings.ListTx(ctx, tx, channel.KindConversation)
+	rooms, err := c.settings.ListTx(ctx, tx, channel.KindConversation)
 	if err != nil {
 		return fmt.Errorf("admin: list conversations: %w", err)
 	}
-	for _, one := range conversationRows(name, stored) {
+	for _, one := range conversationRows(name, rooms) {
 		if err := c.settings.DeleteTx(ctx, tx, conversationScopeKind(one.conv.Scope),
 			one.conv.Scope, channel.KindConversation, one.name); err != nil {
 			return err
@@ -692,12 +729,11 @@ func (c *Channels) RemoveChannel(ctx context.Context, r ChannelRemoval) error {
 	if err := withdrawBindings(ctx, tx, name, by); err != nil {
 		return err
 	}
-	if err := c.settings.DeleteTx(ctx, tx, settings.ScopeInstallation,
-		domain.Scope{}, channel.KindChannel, name); err != nil {
+	if err := c.settings.DeleteTx(ctx, tx, at, stored, channel.KindChannel, name); err != nil {
 		return err
 	}
 	if err := Record(ctx, tx, Event{
-		Principal: by, Action: "channel.removed", Target: name,
+		Principal: by, Scope: trailScope(at, stored), Action: "channel.removed", Target: name,
 	}); err != nil {
 		return err
 	}

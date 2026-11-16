@@ -10,6 +10,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/spec"
 )
 
@@ -290,14 +291,24 @@ type channelSpy struct {
 	// has to keep true is that the answer travels.
 	governs bool
 	refuse  error
+	wrote   admin.ChannelWrite
+	removed admin.ChannelRemoval
 }
 
 func (c *channelSpy) List(context.Context) ([]admin.Channel, error) { return c.listed, nil }
 
-func (c *channelSpy) Named(_ context.Context, name string) (admin.Channel, []admin.ChannelIdentity, error) {
+func (c *channelSpy) NamedIf(
+	_ context.Context, name string, allow func(settings.ScopeKind, domain.Scope) error,
+) (admin.Channel, []admin.ChannelIdentity, error) {
 	for _, one := range c.listed {
 		if one.Name != name {
 			continue
+		}
+		if allow != nil {
+			kind, stored := channelAt(one)
+			if err := allow(kind, stored); err != nil {
+				return admin.Channel{}, nil, err
+			}
 		}
 		var bound []admin.ChannelIdentity
 		for _, id := range c.bound {
@@ -310,16 +321,32 @@ func (c *channelSpy) Named(_ context.Context, name string) (admin.Channel, []adm
 	return admin.Channel{}, nil, admin.ErrChannelUnknown
 }
 
+func (c *channelSpy) ChannelStoredAt(_ context.Context, name string) (settings.ScopeKind, domain.Scope, error) {
+	for _, one := range c.listed {
+		if one.Name == name && one.At != "" {
+			return one.At, one.Stored, nil
+		}
+	}
+	return settings.ScopeInstallation, domain.Scope{}, nil
+}
+
 func (c *channelSpy) WriteChannel(_ context.Context, w admin.ChannelWrite) (domain.Revision, error) {
-	c.putChannel, c.governs = w.Channel.Name, w.Governs
+	c.putChannel, c.governs, c.wrote = w.Channel.Name, w.Governs, w
 	if c.refuse != nil {
 		return "", c.refuse
 	}
 	return fakeRevision, nil
 }
 
-func (c *channelSpy) RemoveChannel(_ context.Context, r admin.ChannelRemoval) error {
-	c.deleted, c.governs = r.Name, r.Governs
+func (c *channelSpy) RemoveChannel(ctx context.Context, r admin.ChannelRemoval) error {
+	// Judged where the connection is stored, as the administration does.
+	if r.Allow != nil {
+		kind, stored, _ := c.ChannelStoredAt(ctx, r.Name)
+		if err := r.Allow(kind, stored); err != nil {
+			return err
+		}
+	}
+	c.deleted, c.governs, c.removed = r.Name, r.Governs, r
 	if c.refuse != nil {
 		return c.refuse
 	}

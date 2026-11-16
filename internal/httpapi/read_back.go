@@ -116,7 +116,7 @@ func (s *Server) GetModelProvider(ctx context.Context, req openapi.GetModelProvi
 }
 
 func (s *Server) GetChannel(ctx context.Context, req openapi.GetChannelRequestObject) (openapi.GetChannelResponseObject, error) {
-	if _, forbidden := s.configurer(ctx); forbidden != nil {
+	if forbidden := configuresSomewhere(ctx); forbidden != nil {
 		return openapi.GetChannel403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
 		}, nil
@@ -124,8 +124,24 @@ func (s *Server) GetChannel(ctx context.Context, req openapi.GetChannelRequestOb
 	if s.channels == nil {
 		return nil, errNoAdministration
 	}
-	found, bound, err := s.channels.Named(ctx, req.Name)
+	// Read back where it is stored, by whoever may write it there, judged on
+	// the row the answer is read from (NT-019).
+	var refused *openapi.ForbiddenApplicationProblemPlusJSONResponse
+	found, bound, err := s.channels.NamedIf(ctx, req.Name, func(kind settings.ScopeKind, stored domain.Scope) error {
+		if _, refused = s.configurerAt(ctx, kind, stored); refused != nil {
+			return errMCPServerRefused
+		}
+		return nil
+	})
+	if refused != nil {
+		return openapi.GetChannel403ApplicationProblemPlusJSONResponse{ForbiddenApplicationProblemPlusJSONResponse: *refused}, nil
+	}
 	if errors.Is(err, admin.ErrChannelUnknown) {
+		// A name no row holds is the installation's: whoever may not configure
+		// there is not told whether it exists.
+		if _, forbidden := s.configurerAt(ctx, settings.ScopeInstallation, domain.Scope{}); forbidden != nil {
+			return openapi.GetChannel403ApplicationProblemPlusJSONResponse{ForbiddenApplicationProblemPlusJSONResponse: *forbidden}, nil
+		}
 		return openapi.GetChannel404ApplicationProblemPlusJSONResponse{
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.Name),
 		}, nil
@@ -134,6 +150,9 @@ func (s *Server) GetChannel(ctx context.Context, req openapi.GetChannelRequestOb
 		return nil, fmt.Errorf("get channel: %w", err)
 	}
 	out := channelFrom(found, bound, nil)
+	kind, where := channelAt(found)
+	withChannelScope(&out, kind, where)
+	out.Editable = ptr(true)
 	out.SecretFingerprint = someString(found.SecretFingerprint)
 	// Left out, not empty. Who interacted changes with nobody having
 	// written anything, and an empty list would say nobody did.
