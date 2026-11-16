@@ -5122,6 +5122,15 @@ export interface components {
             updatedBy?: string;
             /** Format: date-time */
             updatedAt?: string;
+            /**
+             * @description Where the provider is stored (NT-019).
+             * @enum {string}
+             */
+            scopeKind?: "installation" | "company" | "area";
+            company?: string;
+            area?: string;
+            /** @description Whether the caller may change or remove it. A provider listed because the caller's area inherits it is not. */
+            editable?: boolean;
         };
         /**
          * @description The prose half of the interview. Every question that bears on what the
@@ -11234,6 +11243,10 @@ export interface operations {
                     autoToolChoiceModels?: string[];
                     /** @default true */
                     enabled?: boolean;
+                    /** @description Where the provider is stored (NT-019, phase 3). Absent is the installation. A company's or an area's provider is written by whoever holds provider:write there, and only its runs reach it. */
+                    scopeKind?: components["schemas"]["ConnectorScopeKind"];
+                    company?: string;
+                    area?: string;
                 };
             };
         };
@@ -11249,6 +11262,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["NameTaken"];
             412: components["responses"]["PreconditionFailed"];
         };
     };

@@ -58,3 +58,14 @@ func (r *Registry) Planner(providerName string, at domain.Scope, cfg Config, too
 	}
 	return r.plannerFrom(p, withAutoToolChoice(p, withPrice(p, cfg)), tools)
 }
+
+// FromEnvironment reports whether name is a provider the environment supplies:
+// registered here and claimed by no configuration. It is the installation's,
+// so no company or area may take the name (NT-019).
+func (r *Registry) FromEnvironment(name string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, held := r.providers[name]
+	_, claimed := r.configured[name]
+	return held && !claimed
+}

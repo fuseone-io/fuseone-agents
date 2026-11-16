@@ -471,6 +471,17 @@ func TestReadBack_modelProvider_putWhatGetAnsweredChangesNothing(t *testing.T) {
 		name: "a vendor whose client knows its own address",
 		path: base + "readback-vendor",
 		body: map[string]any{"kind": "anthropic"},
+	}, {
+		// NT-019 phase 3: an area's provider, named by where it is stored.
+		name: "an endpoint stored in an area",
+		path: base + "readback-area-llm", sealed: settings.KindModelProvider, key: "readback-area-llm",
+		body: map[string]any{
+			"scopeKind": "area", "company": "acme", "area": "cx",
+			"kind": "openai_compatible", "baseUrl": "https://models.example.test/v1",
+			"apiKey": "readback-area-llm-secret", "enabled": true,
+		},
+		writeOnly: map[string]string{"apiKey": "hasKey"},
+		secrets:   []string{"readback-area-llm-secret"},
 	}}
 	assertEveryAcceptedFieldIsWalked(t, base+"{name}", cases)
 	for _, c := range cases {

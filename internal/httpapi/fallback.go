@@ -18,6 +18,9 @@ import (
 type ProviderNames interface {
 	Configured(name string, at domain.Scope) bool
 	Usable(name string, at domain.Scope) bool
+	// FromEnvironment is a provider the environment supplies, which no
+	// company or area may take the name of (NT-019).
+	FromEnvironment(name string) bool
 }
 
 // WithProviderNames wires where a fallback provider is checked at publish.

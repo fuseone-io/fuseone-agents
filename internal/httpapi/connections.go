@@ -34,8 +34,7 @@ type Integrations interface {
 	MCPServerStoredAt(ctx context.Context, name string) (settings.ScopeKind, domain.Scope, error)
 	PersonalCredentials
 	MCPServerMover
-	Providers(ctx context.Context) ([]domain.ModelProvider, error)
-	ProviderNamed(ctx context.Context, name string) (domain.ModelProvider, error)
+	ProviderConfiguration
 	WriteMCPServer(ctx context.Context, w admin.MCPServerWrite) (domain.Revision, error)
 	MCPCredentials(ctx context.Context, name string) (domain.MCPCredentials, error)
 	RequestMCPProbe(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
@@ -46,8 +45,6 @@ type Integrations interface {
 	RequestMCPRediscovery(ctx context.Context, by domain.UserID, scope domain.Scope, name string) (int64, error)
 	MCPRediscovery(ctx context.Context, name string) (domain.MCPRediscoveryStatus, error)
 	RemoveMCPServer(ctx context.Context, r admin.Removal) error
-	WriteProvider(ctx context.Context, w admin.ProviderWrite) (domain.Revision, error)
-	RemoveProvider(ctx context.Context, r admin.Removal) error
 	// The platform's egress policies for servers outside the installation
 	// (NT-019).
 	PutMCPEgressPolicy(ctx context.Context, by domain.UserID, audit domain.Scope, p admin.MCPEgressPolicy) error
@@ -169,8 +166,17 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 	if err != nil {
 		return nil, fmt.Errorf("list providers: %w", err)
 	}
+	// Placed as the servers are (NT-019): a reader of the platform's lists
+	// every provider, a configurer elsewhere its own and what it inherits,
+	// each marked whether the caller may change it.
 	for _, p := range providers {
-		body.Providers = append(body.Providers, modelProviderConfig(p))
+		listed, editable := scopedRowListing(caller, p.Scope)
+		if !listed {
+			continue
+		}
+		config := modelProviderConfig(p)
+		config.Editable = ptr(editable)
+		body.Providers = append(body.Providers, config)
 	}
 	return body, nil
 }

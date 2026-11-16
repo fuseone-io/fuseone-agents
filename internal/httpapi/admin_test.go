@@ -107,6 +107,33 @@ func (f *fakeAdmin) ProviderNamed(_ context.Context, name string) (domain.ModelP
 	}
 	return domain.ModelProvider{}, admin.ErrProviderUnknown
 }
+
+// ProviderNamedIf asks allow at the provider's stored scope, as the real read
+// does; a provider with no scope is the installation's, as every real row
+// carries one.
+func (f *fakeAdmin) ProviderNamedIf(
+	ctx context.Context, name string, allow func(settings.ScopeKind, domain.Scope) error,
+) (domain.ModelProvider, error) {
+	provider, err := f.ProviderNamed(ctx, name)
+	if err != nil {
+		return provider, err
+	}
+	kind, stored := mcpServerStored(provider.Scope)
+	if allow != nil {
+		if err := allow(kind, stored); err != nil {
+			return domain.ModelProvider{}, err
+		}
+	}
+	return provider, nil
+}
+func (f *fakeAdmin) ProviderStoredAt(ctx context.Context, name string) (settings.ScopeKind, domain.Scope, error) {
+	provider, err := f.ProviderNamed(ctx, name)
+	if err != nil {
+		return settings.ScopeInstallation, domain.Scope{}, nil
+	}
+	kind, stored := mcpServerStored(provider.Scope)
+	return kind, stored, nil
+}
 func (f *fakeAdmin) Providers(context.Context) ([]domain.ModelProvider, error) {
 	return f.providers, f.err
 }

@@ -24,6 +24,8 @@ type etagCall struct {
 	// by is who is calling, and an administrator called usr_ana unless it says otherwise.
 	by   domain.UserID
 	role domain.Role
+	// at is where the caller's grant is held, the installation unless it says.
+	at domain.Scope
 }
 
 func (w *readBackWorld) call(t *testing.T, c etagCall) *httptest.ResponseRecorder {
@@ -45,11 +47,18 @@ func (w *readBackWorld) call(t *testing.T, c etagCall) *httptest.ResponseRecorde
 	}
 	req = req.WithContext(auth.WithPrincipal(req.Context(), domain.Principal{
 		ID: c.by, Kind: domain.PrincipalUser,
-		Grants: []domain.Grant{{Scope: domain.Scope{Company: domain.Installation}, Role: c.role}},
+		Grants: []domain.Grant{{Scope: grantAt(c.at), Role: c.role}},
 	}))
 	rec := httptest.NewRecorder()
 	w.route.ServeHTTP(rec, req)
 	return rec
+}
+
+func grantAt(at domain.Scope) domain.Scope {
+	if at == (domain.Scope{}) {
+		return domain.Scope{Company: domain.Installation}
+	}
+	return at
 }
 
 func aPolicyBody(name string) map[string]any {

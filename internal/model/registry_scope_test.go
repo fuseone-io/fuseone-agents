@@ -175,3 +175,17 @@ func TestCompleterAndCounter_reachWhatTheirScopeReaches(t *testing.T) {
 		t.Error("a count with no agent scope was built on acme/cx's provider")
 	}
 }
+
+// Only a provider the environment put there, and no configuration claims,
+// is the environment's (NT-019).
+func TestFromEnvironment_isWhatNoConfigurationClaims(t *testing.T) {
+	t.Parallel()
+	r := model.NewRegistry(nil)
+	_ = r.Register(model.Provider{Name: "from-env", Kind: model.KindAnthropic})
+	_ = r.Register(model.Provider{Name: "claimed", Kind: model.KindAnthropic})
+	r.SetConfigured(nil, model.Claim{Name: "claimed", Scope: installation})
+	if !r.FromEnvironment("from-env") || r.FromEnvironment("claimed") || r.FromEnvironment("nobody") {
+		t.Errorf("FromEnvironment = %v, %v, %v; want true, false, false",
+			r.FromEnvironment("from-env"), r.FromEnvironment("claimed"), r.FromEnvironment("nobody"))
+	}
+}

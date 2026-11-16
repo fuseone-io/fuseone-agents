@@ -63,7 +63,14 @@ func mcpListingCaller(ctx context.Context) (domain.Principal, bool) {
 
 // mcpServerListing places one configured server in the caller's listing.
 func mcpServerListing(p domain.Principal, srv domain.MCPServer) (listed, editable bool) {
-	kind, stored := mcpServerStored(srv.Scope)
+	return scopedRowListing(p, srv.Scope)
+}
+
+// scopedRowListing places one row of a scoped integration, by its runtime
+// scope, in the caller's listing: every row to the platform's reader, and to
+// anyone else their own and what they inherit (rule 4).
+func scopedRowListing(p domain.Principal, runtime domain.Scope) (listed, editable bool) {
+	kind, stored := mcpServerStored(runtime)
 	if p.Can(domain.PermToolRead, adminScope) {
 		return true, mayConfigure(p, kind, stored)
 	}

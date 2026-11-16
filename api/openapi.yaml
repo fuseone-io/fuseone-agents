@@ -4689,6 +4689,14 @@ paths:
                     from the first call, declared instead of learned from a
                     refusal a fallback-routing gateway would swallow.
                 enabled: { type: boolean, default: true }
+                scopeKind:
+                  allOf: [{ $ref: '#/components/schemas/ConnectorScopeKind' }]
+                  description: >
+                    Where the provider is stored (NT-019, phase 3). Absent is the
+                    installation. A company's or an area's provider is written by
+                    whoever holds provider:write there, and only its runs reach it.
+                company: { type: string }
+                area: { type: string }
       responses:
         '204':
           description: The provider is configured.
@@ -4697,6 +4705,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/NameTaken' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
     delete:
       tags: [admin]
@@ -8465,6 +8474,15 @@ components:
           description: Whether a credential is stored. The credential itself never leaves the vault through this API.
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
+        scopeKind:
+          type: string
+          enum: [installation, company, area]
+          description: Where the provider is stored (NT-019).
+        company: { type: string }
+        area: { type: string }
+        editable:
+          type: boolean
+          description: Whether the caller may change or remove it. A provider listed because the caller's area inherits it is not.
 
     InterviewAnswers:
       type: object
