@@ -29,7 +29,6 @@ type ChannelAdmin interface {
 	NamedIf(ctx context.Context, name string, allow func(settings.ScopeKind, domain.Scope) error) (admin.Channel, []admin.ChannelIdentity, error)
 	WriteChannel(ctx context.Context, w admin.ChannelWrite) (domain.Revision, error)
 	RemoveChannel(ctx context.Context, r admin.ChannelRemoval) error
-	ChannelStoredAt(ctx context.Context, name string) (settings.ScopeKind, domain.Scope, error)
 	PutConversation(ctx context.Context, channelName string, conv admin.Conversation, by domain.UserID) error
 	DeleteConversation(ctx context.Context, ref admin.ConversationRef, by domain.UserID) error
 	Identities(ctx context.Context) ([]admin.ChannelIdentity, error)
@@ -195,17 +194,7 @@ func (s *Server) DeleteChannel(
 	if s.channels == nil {
 		return nil, errNoAdministration
 	}
-	// Authorized where the connection is stored, never where the caller says.
-	at, stored, err := s.channels.ChannelStoredAt(ctx, req.Name)
-	if err != nil {
-		return nil, fmt.Errorf("find channel %s: %w", req.Name, err)
-	}
-	caller, resp := s.configurerAt(ctx, at, stored)
-	if resp != nil {
-		return openapi.DeleteChannel403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *resp,
-		}, nil
-	}
+	p, _ := auth.PrincipalFrom(ctx)
 	_, ungoverned := s.governs(ctx)
 	expect, err := domain.ParseIfMatch(req.Params.IfMatch)
 	if err != nil {
@@ -213,10 +202,22 @@ func (s *Server) DeleteChannel(
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
 		}, nil
 	}
+	// Authorized where the connection is stored as the removal finds it under
+	// its lock, never where it was read before nor where the caller says: a
+	// connection recreated elsewhere in between is not this caller's (NT-019).
+	var refused *openapi.ForbiddenApplicationProblemPlusJSONResponse
 	err = s.channels.RemoveChannel(ctx, admin.ChannelRemoval{
-		Name: req.Name, By: caller, Governs: ungoverned == nil, Expect: expect,
-		At: at, Stored: stored,
+		Name: req.Name, By: p.ID, Governs: ungoverned == nil, Expect: expect,
+		Allow: func(kind settings.ScopeKind, stored domain.Scope) error {
+			if _, refused = s.configurerAt(ctx, kind, stored); refused != nil {
+				return errMCPServerRefused
+			}
+			return nil
+		},
 	})
+	if refused != nil {
+		return openapi.DeleteChannel403ApplicationProblemPlusJSONResponse{ForbiddenApplicationProblemPlusJSONResponse: *refused}, nil
+	}
 	if stale, ok := staleFrom(err); ok {
 		return openapi.DeleteChannel412ApplicationProblemPlusJSONResponse{
 			PreconditionFailedApplicationProblemPlusJSONResponse: stale,

@@ -71,9 +71,7 @@ func TestRemoveChannel_atAnArea_removesThatRow(t *testing.T) {
 		t.Fatalf("WriteChannel: %v", err)
 	}
 
-	if err := channels.RemoveChannel(ctx, admin.ChannelRemoval{
-		Name: "cx-slack", By: "usr_ana", At: settings.ScopeArea, Stored: acmeCX,
-	}); err != nil {
+	if err := channels.RemoveChannel(ctx, admin.ChannelRemoval{Name: "cx-slack", By: "usr_ana"}); err != nil {
 		t.Fatalf("RemoveChannel: %v", err)
 	}
 	if held, known := door.Secrets(ctx, "cx-slack"); known {
@@ -155,4 +153,60 @@ func TestWriteChannel_aNameTakenWithAStaleIfMatch_isTakenFirst(t *testing.T) {
 	if _, err := channels.WriteChannel(ctx, w); !errors.Is(err, settings.ErrNameTaken) {
 		t.Fatalf("WriteChannel = %v, want the name taken before the stale revision", err)
 	}
+}
+
+var errNotYours = errors.New("not this caller's scope")
+
+/*
+A removal judges the connection as it stands under its lock, not as somebody
+read it before (NT-019, phase 4 writers). Between acme/cx's administrator
+reading where cx-slack lives and their removal arriving, the connection was
+removed and recreated by acme/finance, with a conversation and a binding of
+its own. The removal is refused, and finance's connection keeps both.
+*/
+func TestRemoveChannel_recreatedElsewhereSinceTheRead_removesNothing(t *testing.T) {
+	channels, _ := scopedChannelsWithStore(t)
+	ctx := context.Background()
+	finance := domain.Scope{Company: "acme", Area: "finance"}
+	if _, err := channels.WriteChannel(ctx, areaWrite("cx-slack", finance)); err != nil {
+		t.Fatalf("WriteChannel: %v", err)
+	}
+	if err := channels.PutConversation(ctx, "cx-slack", admin.Conversation{
+		ID: "C-fin", Enabled: true, Scope: finance,
+	}, "usr_fin"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	// A binding on finance's connection, as the schema already accepts it.
+	if _, err := openPool(t).Exec(ctx, oldBind, "cx-slack/U-fin"); err != nil {
+		t.Fatalf("bind: %v", err)
+	}
+
+	// What acme/cx's administrator read: the connection was theirs.
+	err := channels.RemoveChannel(ctx, admin.ChannelRemoval{
+		Name: "cx-slack", By: "usr_cx",
+		Allow: func(_ settings.ScopeKind, stored domain.Scope) error {
+			if stored != acmeCX {
+				return errNotYours
+			}
+			return nil
+		},
+	})
+	if !errors.Is(err, errNotYours) {
+		t.Fatalf("RemoveChannel = %v, want acme/cx's caller refused acme/finance's connection", err)
+	}
+	found, bound, err := channels.Named(ctx, "cx-slack")
+	if err != nil || found.Stored != finance || len(found.Conversations) != 1 || len(bound) != 1 {
+		t.Fatalf("after = %+v, %d bindings, %v; want finance's connection with its conversation and binding", found, len(bound), err)
+	}
+}
+
+func scopedChannelsWithStore(t *testing.T) (*admin.Channels, *settings.Store) {
+	t.Helper()
+	pool := freshPool(t)
+	v, err := vault.New(make([]byte, 32), "test")
+	if err != nil {
+		t.Fatalf("vault: %v", err)
+	}
+	store := settings.NewStore(pool, v)
+	return admin.NewChannels(pool, store, onlySlack{}), store
 }

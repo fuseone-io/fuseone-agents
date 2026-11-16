@@ -112,16 +112,16 @@ func TestDeleteChannel_isAuthorizedWhereTheConnectionIsStored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeleteChannel: %v", err)
 	}
-	if _, ok := resp.(openapi.DeleteChannel204Response); !ok || spy.removed.Stored != cxScope {
-		t.Fatalf("response = %T at %+v, want acme/cx's connection removed there", resp, spy.removed.Stored)
+	if _, ok := resp.(openapi.DeleteChannel204Response); !ok || spy.deleted != "cx-slack" {
+		t.Fatalf("response = %T, want acme/cx's connection removed", resp)
 	}
 
-	spy.removed = admin.ChannelRemoval{}
+	spy.deleted = ""
 	resp, err = s.DeleteChannel(asAreaAdmin(cxScope), openapi.DeleteChannelRequestObject{Name: "acme-slack"})
 	if err != nil {
 		t.Fatalf("DeleteChannel: %v", err)
 	}
-	if _, ok := resp.(openapi.DeleteChannel403ApplicationProblemPlusJSONResponse); !ok || spy.removed.Name != "" {
+	if _, ok := resp.(openapi.DeleteChannel403ApplicationProblemPlusJSONResponse); !ok || spy.deleted != "" {
 		t.Fatalf("response = %T, want the installation's connection refused", resp)
 	}
 }

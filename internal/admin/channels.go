@@ -669,19 +669,16 @@ type ChannelRemoval struct {
 	By      domain.UserID
 	Governs bool
 	Expect  domain.IfMatch
-	// At and Stored are where the connection is stored (NT-019). An empty At
-	// is the installation.
-	At     settings.ScopeKind
-	Stored domain.Scope
+	// Allow judges the caller against where the connection is stored, read
+	// under its lock inside the removal and never taken from the caller: a
+	// scope read before could name a connection removed and recreated
+	// elsewhere since (NT-019). Nil allows every scope.
+	Allow func(settings.ScopeKind, domain.Scope) error
 }
 
 // RemoveChannel deletes a connection, if it is still at a revision the caller named.
 func (c *Channels) RemoveChannel(ctx context.Context, r ChannelRemoval) error {
 	name, by := r.Name, r.By
-	at := r.At
-	if at == "" {
-		at = settings.ScopeInstallation
-	}
 	tx, err := c.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("admin: begin: %w", err)
@@ -691,20 +688,32 @@ func (c *Channels) RemoveChannel(ctx context.Context, r ChannelRemoval) error {
 	if err := c.guardInstallationRoom(ctx, tx, name, r.Governs); err != nil {
 		return err
 	}
+	// Where the connection is now, under its lock, judged before anything
+	// attached to its name is touched. A name no row holds is the
+	// installation's, as it always was.
+	at, stored, _, err := channelStoredAtOn(ctx, tx, name)
+	if err != nil {
+		return err
+	}
+	if r.Allow != nil {
+		if err := r.Allow(at, stored); err != nil {
+			return err
+		}
+	}
 	precondition := &channelRevised{c: c}
 	if err := precondition.read(ctx, tx, name); err != nil {
 		return err
 	}
 	if err := removalGuard(ctx, tx, c.settings, settings.Setting{
-		ScopeKind: at, Scope: r.Stored, Kind: channel.KindChannel, Name: name,
+		ScopeKind: at, Scope: stored, Kind: channel.KindChannel, Name: name,
 	}, precondition.of(r.Expect)); err != nil {
 		return err
 	}
-	stored, err := c.settings.ListTx(ctx, tx, channel.KindConversation)
+	rooms, err := c.settings.ListTx(ctx, tx, channel.KindConversation)
 	if err != nil {
 		return fmt.Errorf("admin: list conversations: %w", err)
 	}
-	for _, one := range conversationRows(name, stored) {
+	for _, one := range conversationRows(name, rooms) {
 		if err := c.settings.DeleteTx(ctx, tx, conversationScopeKind(one.conv.Scope),
 			one.conv.Scope, channel.KindConversation, one.name); err != nil {
 			return err
@@ -720,11 +729,11 @@ func (c *Channels) RemoveChannel(ctx context.Context, r ChannelRemoval) error {
 	if err := withdrawBindings(ctx, tx, name, by); err != nil {
 		return err
 	}
-	if err := c.settings.DeleteTx(ctx, tx, at, r.Stored, channel.KindChannel, name); err != nil {
+	if err := c.settings.DeleteTx(ctx, tx, at, stored, channel.KindChannel, name); err != nil {
 		return err
 	}
 	if err := Record(ctx, tx, Event{
-		Principal: by, Scope: trailScope(at, r.Stored), Action: "channel.removed", Target: name,
+		Principal: by, Scope: trailScope(at, stored), Action: "channel.removed", Target: name,
 	}); err != nil {
 		return err
 	}

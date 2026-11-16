@@ -338,7 +338,14 @@ func (c *channelSpy) WriteChannel(_ context.Context, w admin.ChannelWrite) (doma
 	return fakeRevision, nil
 }
 
-func (c *channelSpy) RemoveChannel(_ context.Context, r admin.ChannelRemoval) error {
+func (c *channelSpy) RemoveChannel(ctx context.Context, r admin.ChannelRemoval) error {
+	// Judged where the connection is stored, as the administration does.
+	if r.Allow != nil {
+		kind, stored, _ := c.ChannelStoredAt(ctx, r.Name)
+		if err := r.Allow(kind, stored); err != nil {
+			return err
+		}
+	}
 	c.deleted, c.governs, c.removed = r.Name, r.Governs, r
 	if c.refuse != nil {
 		return c.refuse

@@ -79,10 +79,3 @@ func channelStoredAtOn(
 	}
 	return settings.ScopeKind(k), domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}, true, nil
 }
-
-// ChannelStoredAt is where a connection's row lives, the installation's for a
-// name no row holds: where a door authorizes an act on it (NT-019).
-func (c *Channels) ChannelStoredAt(ctx context.Context, name string) (settings.ScopeKind, domain.Scope, error) {
-	kind, stored, _, err := channelStoredAtOn(ctx, c.pool, name)
-	return kind, stored, err
-}
