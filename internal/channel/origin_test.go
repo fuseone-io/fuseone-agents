@@ -1093,12 +1093,11 @@ func enabledChannel(t *testing.T, channels *admin.Channels, name string) bool {
 /*
 Which workspace the bot may speak from is installation-wide configuration.
 
-Where a connection is stored is part of what it is: they live at the
-installation, which is where the credential is sealed. A row left at a company
-or an area by a restore is not a second connection — but counted as one it makes
-a healthy installation look like it has two workspaces to choose between, and
-that is answered by telling nobody at all. A silent denial, produced by a row
-nothing else reads.
+A direct message with no named connection picks among the installation's own
+connections (NT-019, phase 4). A company's or an area's connection is a real
+connection, but not the platform's voice: counted, the first area to connect its
+own workspace would leave the installation with two to choose between, and that
+is answered by telling nobody at all.
 */
 func TestEnabledConnections_onlyTheInstallationsOwn(t *testing.T) {
 	store, channels, settingsStore := configuredChannelsWithStore(t)
@@ -1110,8 +1109,7 @@ func TestEnabledConnections_onlyTheInstallationsOwn(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("PutChannel: %v", err)
 	}
-	// The administration writes connections at the installation and nowhere
-	// else, so this is a restore, a migration, or a hand edit.
+	// An area's own connection, enabled.
 	if err := settingsStore.Put(t.Context(), settings.Setting{
 		ScopeKind: settings.ScopeArea,
 		Scope:     domain.Scope{Company: "acme", Area: "ops"},

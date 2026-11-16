@@ -229,6 +229,15 @@ func (r *TicketRoutes) admission(
 		value.Channel != candidate.Connection || value.Mode != ConversationTicket || value.Ticket == nil {
 		return ticketAdmission{}, false, nil
 	}
+	// The connection the ask arrived on carries only rooms inside its own
+	// scope: an area's app opens no other area's tickets (NT-019).
+	connection, err := r.settings.Named(ctx, KindChannel, candidate.Connection)
+	if err != nil {
+		return ticketAdmission{}, false, fmt.Errorf("channel: read ticket connection: %w", err)
+	}
+	if !carriersOf(connection).carries(candidate.Connection, set.Scope) {
+		return ticketAdmission{}, false, nil
+	}
 	compiled, err := r.matcher(name, set.UpdatedAt, *value.Ticket)
 	if err != nil {
 		return ticketAdmission{}, false, fmt.Errorf("channel: compile stored ticket route: %w", err)

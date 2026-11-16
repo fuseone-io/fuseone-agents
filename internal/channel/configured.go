@@ -419,6 +419,10 @@ func (c *Configured) For(ctx context.Context, scope domain.Scope) ([]Conversatio
 	if err != nil {
 		return nil, fmt.Errorf("channel: list conversations: %w", err)
 	}
+	connections, err := c.carriers(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	var out []Conversation
 	for _, s := range stored {
@@ -428,6 +432,11 @@ func (c *Configured) For(ctx context.Context, scope domain.Scope) ([]Conversatio
 		var v conversationValue
 		if err := json.Unmarshal(s.Value, &v); err != nil {
 			// One malformed row must not silence every other conversation.
+			continue
+		}
+		// A connection carries only the conversations inside its own scope:
+		// an area's app is never told about another area's runs (NT-019).
+		if !connections.carries(v.Channel, s.Scope) {
 			continue
 		}
 		id, legible := ConversationIDOf(v.KeyVersion, v.Channel, s.Name)
@@ -460,12 +469,12 @@ func (c *Configured) EnabledConnections(ctx context.Context) ([]string, error) {
 	}
 	var out []string
 	for _, s := range stored {
-		// Where a connection is stored is part of what it is: they are
-		// installation-wide, and the credential is sealed there. A row at a
-		// company or an area is not a second connection — it is something a
-		// restore or a hand edit left behind, and counting it would make a
-		// healthy installation look like it has two workspaces to choose
-		// between, which is answered by telling nobody.
+		// The installation's own, and no company's or area's (decided by
+		// Kleber on 2026-11-16, NT-019 phase 4). A direct message with no
+		// named connection is the platform speaking, and an area's app is not
+		// the platform's voice. Counted, the first area to connect its own
+		// workspace would leave the installation with two to choose between,
+		// which is answered by telling nobody.
 		if s.Enabled && s.ScopeKind == settings.ScopeInstallation && s.Scope == (domain.Scope{}) {
 			out = append(out, s.Name)
 		}
@@ -491,8 +500,12 @@ func (c *Configured) WatchFor(
 	if err != nil {
 		return WatchRule{}, false, fmt.Errorf("channel: list conversations: %w", err)
 	}
+	connections, err := c.carriers(ctx)
+	if err != nil {
+		return WatchRule{}, false, err
+	}
 
-	found := conversationsNamed(stored, channelName, id)
+	found := conversationsNamed(stored, connections, channelName, id)
 	// Every row for this conversation, and only then a decision. Answering
 	// from the first one found made row order decide which configuration was
 	// in force: the same pair Resolve reports as ambiguous started the agent
@@ -528,7 +541,7 @@ type storedConversation struct {
 // connection. Two of them is a configuration nobody can act on, and saying so
 // is the caller's job — the count is the answer here.
 func conversationsNamed(
-	stored []settings.Setting, channelName, id string,
+	stored []settings.Setting, connections carriers, channelName, id string,
 ) []storedConversation {
 	var found []storedConversation
 	for _, s := range stored {
@@ -550,6 +563,11 @@ func conversationsNamed(
 		if !legible || stored != id {
 			continue
 		}
+		// Arriving on a connection is arriving inside its scope: an event an
+		// area's app signed reaches only that area's conversations (NT-019).
+		if !connections.carries(v.Channel, s.Scope) {
+			continue
+		}
 		found = append(found, storedConversation{scope: s.Scope, value: v})
 	}
 	return found
@@ -566,7 +584,11 @@ func (c *Configured) IncludeThreadContext(
 	if err != nil {
 		return false, fmt.Errorf("channel: list conversations: %w", err)
 	}
-	for _, one := range conversationsNamed(stored, channelName, id) {
+	connections, err := c.carriers(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, one := range conversationsNamed(stored, connections, channelName, id) {
 		if !StartsFromMentions(one.value.Mode) {
 			continue
 		}

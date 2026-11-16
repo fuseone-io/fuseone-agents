@@ -84,6 +84,10 @@ func (c *Configured) Resolve(ctx context.Context, channel, id string) (Mapped, e
 	if err != nil {
 		return Mapped{}, fmt.Errorf("channel: list conversations: %w", err)
 	}
+	connections, err := c.carriers(ctx)
+	if err != nil {
+		return Mapped{}, err
+	}
 
 	// Collected by connection and id, which is one question and not two: the
 	// key carries both, and a row from before it did is named by the id alone
@@ -93,7 +97,7 @@ func (c *Configured) Resolve(ctx context.Context, channel, id string) (Mapped, e
 	// administrative, and not something a conversation's configuration may
 	// widen.
 	var found []Mapped
-	for _, one := range conversationsNamed(stored, channel, id) {
+	for _, one := range conversationsNamed(stored, connections, channel, id) {
 		// The mode as stored, not the normalised one. ConversationMode answers
 		// anything it does not recognise with "mentions", which is the right
 		// answer for a screen and the opposite of the right answer for
