@@ -447,7 +447,9 @@ any of them.
   event cannot reach an area's conversation through another area's app.
 - **Delivery and arrival both check the connection's scope.** A conversation whose
   connection's scope does not contain the conversation's own is neither posted to nor
-  admitted from, however the row was written. The door refuses such a conversation
+  admitted from, however the row was written. A ticket already open is judged by its
+  own scope as well: it outlives its connection, and a connection recreated under the
+  same name by another area meets every origin the old one left. The door refuses such a conversation
   first; the runtime holds against a row that reached the store any other way.
 - **Channel identities**, the bindings of a person to their Slack user
   (`internal/admin/channel_identity.go:161`), stay stored at the installation: they
@@ -685,7 +687,7 @@ platform's trail shows every scope.
 | 1 | Connector instances: doors at the instance's scope, filtered listing, catalogue on `tool:read` | Writers only. The readers already check scope |
 | 2 | MCP servers and classification | Readers, then writers |
 | 3 | Model providers | Readers, then writers |
-| 4 | Channel connections | Readers, then writers. The readers' release finds a connection by name at any scope, checks the connection's scope at delivery, arrival and decisions, and lets a binding name a connection at any scope (the `0100` triggers). The writers' release opens the connection doors at their scope, the 409, the filtered listing, bindings by the area's administrator and the console. Conversations change only their doors, like phase 1. Once a connection exists outside the installation, the readers' release is the rollback floor |
+| 4 | Channel connections | Readers, then writers. The readers' release finds a connection by name at any scope, checks the connection's scope at delivery, arrival and decisions, and lets a binding name a connection at any scope (migration `0111`, which replaces the `0100` triggers). The writers' release opens the connection doors at their scope, the 409, the filtered listing, bindings by the area's administrator and the console. Conversations change only their doors, like phase 1. Once a connection exists outside the installation, the readers' release is the rollback floor |
 | 5 | Console: gate, scope field, inherited marks | With each writers' release, per kind |
 | 2b | Moving a server out of the installation: the door, its refusals, the console action | One release, after phase 2. Readers need nothing new: a moved server is an ordinary company or area row |
 
@@ -771,6 +773,11 @@ their own Jira, Elasticsearch or SQL from their own area.
 - **Channels, per fence** (phase 4).
   - A conversation of `acme/finance` planted on `acme/cx`'s connection, bypassing the
     door, is neither posted to nor admitted from.
+  - A durable ticket of `acme/finance` left at an origin on a connection name that an
+    area later reuses is reached by nothing that arrives on the new connection: not a
+    reply in its thread, not a reply in its review room, not a closing reaction. The
+    fence judges the ticket's own scope, because the room's may be the new
+    connection's.
   - A signed click on `acme/cx`'s connection for a run of `acme/finance` is refused and
     seals no decision, even from a bound person who could approve that run from the
     console.
