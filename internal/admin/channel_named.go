@@ -35,11 +35,24 @@ connection that never existed: this one's address with conversations it does not
 have yet, or a removal that reads as a failure halfway through.
 */
 func (c *Channels) Named(ctx context.Context, name string) (Channel, []ChannelIdentity, error) {
+	return c.NamedIf(ctx, name, nil)
+}
+
+/*
+NamedIf is Named that asks first, with the row's scope in hand and inside the
+same snapshot, whether the caller may read it at all (NT-019). A caller refused
+the row is refused before its secret is opened, and the scope judged is the
+scope of the row answered: read apart, a connection moved between the two
+would be judged where it was and answered where it is.
+*/
+func (c *Channels) NamedIf(
+	ctx context.Context, name string, allow func(settings.ScopeKind, domain.Scope) error,
+) (Channel, []ChannelIdentity, error) {
 	var found Channel
 	var bound []ChannelIdentity
 	err := c.settings.ReadSnapshot(ctx, func(db settings.DB) error {
 		var err error
-		found, bound, err = c.namedOn(ctx, db, name)
+		found, bound, err = c.namedOn(ctx, db, name, allow)
 		return err
 	})
 	if err != nil {
@@ -48,8 +61,24 @@ func (c *Channels) Named(ctx context.Context, name string) (Channel, []ChannelId
 	return found, bound, nil
 }
 
-func (c *Channels) namedOn(ctx context.Context, db settings.DB, name string) (Channel, []ChannelIdentity, error) {
-	row, err := c.settings.RevealOn(ctx, db, settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
+func (c *Channels) namedOn(
+	ctx context.Context, db settings.DB, name string, allow func(settings.ScopeKind, domain.Scope) error,
+) (Channel, []ChannelIdentity, error) {
+	// By name, wherever it is stored, under its own scope (NT-019). One of no
+	// known scope is not answered.
+	at, stored, found, err := channelStoredAtOn(ctx, db, name)
+	if err != nil {
+		return Channel{}, nil, err
+	}
+	if _, known := channel.ConnectionScope(at, stored); !found || !known {
+		return Channel{}, nil, fmt.Errorf("%w: %s", ErrChannelUnknown, name)
+	}
+	if allow != nil {
+		if err := allow(at, stored); err != nil {
+			return Channel{}, nil, err
+		}
+	}
+	row, err := c.settings.RevealOn(ctx, db, at, stored, channel.KindChannel, name)
 	if errors.Is(err, settings.ErrNotFound) {
 		return Channel{}, nil, fmt.Errorf("%w: %s", ErrChannelUnknown, name)
 	}
@@ -74,6 +103,7 @@ func (c *Channels) namedOn(ctx context.Context, db settings.DB, name string) (Ch
 		SecretFingerprint: c.settings.Fingerprint(row, []byte(creds.Sealed())),
 		Revision:          c.revisionOf(row, held),
 		Conversations:     held.Conversations,
+		At:                at, Stored: stored,
 	}, held.Identities, nil
 }
 
