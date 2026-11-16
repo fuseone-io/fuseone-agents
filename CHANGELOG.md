@@ -54,6 +54,12 @@ field" is a commit message.
 - **A decision clicked on a company's or an area's connection decides only inside its
   scope.** The person bound to the account acts there with the grants they hold inside
   the connection's scope. The installation's connections are unchanged.
+- **An event is judged by the scope of the session that received it.** The HTTP door
+  keeps the scope from the read that verified the signature, a Socket Mode session the
+  scope it was opened with, and the inbox stores it with each ask (migration `0112`).
+  A connection removed or recreated at another scope before the next reconciliation
+  does not change what an event already received may reach. Asks the previous release
+  wrote are read as received at the installation, the only place it looked.
 - **The database keeps bindings with their connection wherever it is stored.** A
   binding may name a connection of any scope, and a connection with bindings can be
   neither removed nor moved to another scope (migration `0111`).
