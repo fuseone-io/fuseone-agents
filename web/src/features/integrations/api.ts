@@ -422,11 +422,14 @@ export function usePutProvider() {
       enabled: boolean;
       /** The revision this write answers; adding a provider has none. */
       etag?: string;
+      /** Where the provider is stored (NT-019). Absent is the installation. */
+      scope?: Pick<ModelProvider, "scopeKind" | "company" | "area">;
     }) =>
       unwrap(
         await api.PUT("/admin/integrations/providers/{name}", {
           params: { path: { name: input.name }, header: ifMatch(input.etag) },
           body: {
+            ...storedScope(input.scope ?? {}),
             kind: input.kind,
             baseUrl: input.baseUrl,
             models: input.models,

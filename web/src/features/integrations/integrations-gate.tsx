@@ -68,6 +68,7 @@ function ownScreen(pathname: string): "servers" | "credentials" | null {
   if (path === "/integrations/credentials") return "credentials";
   if (
     path === "/integrations" ||
+    path === "/integrations/providers" ||
     path.startsWith("/integrations/connectors") ||
     /^\/integrations\/mcp(\/[^/]+)?$/.test(path)
   ) {

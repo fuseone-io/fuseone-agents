@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
+import { ScopeFields } from "@/features/integrations/scope/scope-fields";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -56,7 +57,21 @@ const schema = z.object({
   autoToolChoiceModels: z.string(),
   apiKey: z.string(),
   enabled: z.boolean(),
-});
+  // Where it is stored (NT-019, phase 3): an area's administrator stores it
+  // in a scope they configure; the platform anywhere, the installation by
+  // default.
+  scopeKind: z.enum(["installation", "company", "area"]),
+  company: z.string(),
+  area: z.string(),
+})
+  .refine((v) => v.scopeKind === "installation" || v.company.trim() !== "", {
+    path: ["company"],
+    message: "connectors.companyRequired",
+  })
+  .refine((v) => v.scopeKind !== "area" || v.area.trim() !== "", {
+    path: ["area"],
+    message: "connectors.areaRequired",
+  });
 
 export function ProviderForm({
   provider,
@@ -84,6 +99,9 @@ export function ProviderForm({
       autoToolChoiceModels: (provider?.autoToolChoiceModels ?? []).join("\n"),
       apiKey: "",
       enabled: provider?.enabled ?? true,
+      scopeKind: provider?.scopeKind ?? "installation",
+      company: provider?.company ?? "",
+      area: provider?.area ?? "",
     },
   });
 
@@ -125,6 +143,7 @@ export function ProviderForm({
             : [],
         apiKey: values.apiKey || undefined,
         etag: revision?.etag,
+        scope: { scopeKind: values.scopeKind, company: values.company, area: values.area },
       });
       toast.success(t("integrations.saved", { name: values.name }));
       onClose();
@@ -154,6 +173,10 @@ export function ProviderForm({
             {stale && revision && (
               <StaleNotice onReload={revision.reload} reloading={revision.reloading} />
             )}
+            <ScopeFields
+              editing={provider !== null}
+              labels={{ kind: "integrations.scopeKind", held: "integrations.scopeHeld" }}
+            />
             <FormField
               control={form.control}
               name="name"

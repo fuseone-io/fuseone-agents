@@ -77,7 +77,14 @@ const sections: {
 ];
 
 /** What a configurer outside the platform opens (NT-019); providers and channels are the platform's. */
-const configurerSections: IntegrationSection[] = ["connected", "available", "connectors", "credentials"];
+const configurerSections: IntegrationSection[] = [
+  "connected",
+  "available",
+  "connectors",
+  "credentials",
+  // An area configures its own model providers since NT-019 phase 3.
+  "providers",
+];
 
 /**
  * The four jobs under integrations, with one side rail.

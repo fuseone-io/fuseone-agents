@@ -40,6 +40,9 @@ field" is a commit message.
     spend is that scope's.
   - A provider's name is unique across scopes (409 `fuseone:integration-name-taken`).
     No company or area may take the name of a provider the environment supplies.
+  - In the console, an area's administrator finds **Provedores de modelo** in
+    Integrations: their own providers to edit, and the ones they inherit read-only, each
+    saying where it is stored. A new provider is stored in the area they configure.
   - The integrations listing shows a configurer its own providers, editable, and the
     ones it inherits, read-only, never a sibling area's. Each provider says where it
     is stored.

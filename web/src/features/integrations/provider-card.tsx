@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { IntegrationCard } from "@/features/integrations/integration-card";
+import { ScopeBadges } from "@/features/integrations/scope/scope-badges";
 import { RevisedRemoveButton } from "@/components/shared/revised-remove-button";
 import {
   integrationKeys,
@@ -36,7 +37,10 @@ export function ProviderCard({
       description={provider.baseUrl || t("integrations.defaultEndpoint")}
       enabled={provider.enabled && provider.hasKey}
       observes={false}
+      tags={<ScopeBadges row={provider} />}
       action={
+        // A provider the caller inherits is read, never changed (NT-019).
+        provider.editable === false ? undefined : (
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" className="h-7" onClick={onEdit}>
             {t("agents.edit")}
@@ -73,6 +77,7 @@ export function ProviderCard({
             }
           />
         </div>
+        )
       }
     />
   );

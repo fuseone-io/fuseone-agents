@@ -186,6 +186,16 @@ describe("integrations for the platform's auditor", () => {
     expect(asked.filter((path) => path.endsWith("/mcp-egress-policies"))).toEqual([]);
   });
 
+  it("offer no new model provider: the write would answer 403", async () => {
+    signedInAs(["tool:read"], ["tool:read"]);
+    openAt("/integrations/providers");
+
+    expect(
+      await screen.findByText("Nenhum provedor configurado", {}, { timeout: LAZY_SCREEN }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Novo" })).not.toBeInTheDocument();
+  });
+
   it("keep the catalogue readable, with no way to connect by address", async () => {
     signedInAs(["tool:read"], ["tool:read"]);
     openAt("/integrations/mcp");
@@ -224,7 +234,7 @@ describe("integrations for an administrator who configures an area's connectors"
     expect(screen.getAllByRole("button", { name: "Editar" })).toHaveLength(1);
   });
 
-  it.each(["/integrations/providers", "/integrations/channels", "/integrations/egress"])(
+  it.each(["/integrations/channels", "/integrations/egress"])(
     "take them from %s, which is the platform's, to the connected servers",
     async (path) => {
       signedInAs([], areaAdmin);
@@ -256,10 +266,10 @@ describe("integrations for an administrator who configures an area's connectors"
     expect(
       await screen.findByRole("link", { name: "Connectors" }, { timeout: LAZY_SCREEN }),
     ).toBeInTheDocument();
-    for (const section of ["Conectados", "Disponíveis", "Credenciais"]) {
+    for (const section of ["Conectados", "Disponíveis", "Credenciais", "Provedores de modelo"]) {
       expect(screen.getByRole("link", { name: section }), section).toBeInTheDocument();
     }
-    for (const section of ["Provedores de modelo", "Canais", "Egress"]) {
+    for (const section of ["Canais", "Egress"]) {
       expect(screen.queryByRole("link", { name: section }), section).not.toBeInTheDocument();
     }
   });
