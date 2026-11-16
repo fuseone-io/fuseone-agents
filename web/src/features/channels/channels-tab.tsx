@@ -32,7 +32,7 @@ type ConversationDialog = {
  * here grants an agent any new ability. A channel is somewhere runs speak, and
  * nothing it says comes back.
  */
-export function ChannelsTab() {
+export function ChannelsTab({ canAdd = true }: { canAdd?: boolean }) {
   const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useChannels();
   const [editing, setEditing] = useState<Channel | null | undefined>(undefined);
@@ -55,7 +55,8 @@ export function ChannelsTab() {
           view={view}
           onQuery={setQuery}
           onView={setView}
-          onAdd={() => setEditing(null)}
+          // Offered only to whoever may connect one somewhere (NT-019).
+          onAdd={canAdd ? () => setEditing(null) : undefined}
         />
 
         {channels.length === 0 ? (

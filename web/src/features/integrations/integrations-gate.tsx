@@ -60,8 +60,8 @@ export function IntegrationsGate() {
 /**
  * Which access a screen outside the platform's needs: the connected servers,
  * the catalogue, a server's own page and the connectors are a configurer's;
- * the credentials, anyone's who reads tools. Providers and channels are the
- * platform's.
+ * the credentials, anyone's who reads tools. Providers and channels are a
+ * configurer's too, since NT-019 phases 3 and 4.
  */
 function ownScreen(pathname: string): "servers" | "credentials" | null {
   const path = pathname.replace(/\/+$/, "");
@@ -69,6 +69,7 @@ function ownScreen(pathname: string): "servers" | "credentials" | null {
   if (
     path === "/integrations" ||
     path === "/integrations/providers" ||
+    path === "/integrations/channels" ||
     path.startsWith("/integrations/connectors") ||
     /^\/integrations\/mcp(\/[^/]+)?$/.test(path)
   ) {

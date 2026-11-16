@@ -74,14 +74,13 @@ export function IntegrationsPage({
   const navigate = useNavigate();
   const { data: me } = useMe();
   const access = integrationAccess(me);
-  // Providers and channels are the platform's; MCP servers and connector
-  // instances are their own scope's (NT-019). An area's administrator asks
-  // for neither platform list, each of which would answer 403. The servers'
-  // listing answers them with their own and what they inherit; the catalogue
-  // and their own credentials are theirs to read.
+  // MCP servers, connector instances, providers and channels are their own
+  // scope's (NT-019). Each listing answers an area's administrator with their
+  // own and what they inherit; the catalogue and their own credentials are
+  // theirs to read.
   const integrations = useIntegrations(access.servers);
   const recipes = useRecipes(access.catalogue);
-  const channels = useChannels(access.platform);
+  const channels = useChannels(access.servers);
   const credentials = useMCPUserCredentials(access.credentials);
   // Asked whenever the connectors are offered, not only on their section:
   // the rail counts them from the moment the page opens.
@@ -263,7 +262,7 @@ export function IntegrationsPage({
         ) : section === "egress" ? (
           <EgressPoliciesPanel />
         ) : (
-          <ChannelsTab />
+          <ChannelsTab canAdd={access.createServer} />
         )}
       </IntegrationsShell>
 

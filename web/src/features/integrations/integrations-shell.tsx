@@ -76,7 +76,7 @@ const sections: {
   },
 ];
 
-/** What a configurer outside the platform opens (NT-019); providers and channels are the platform's. */
+/** What a configurer outside the platform opens (NT-019): everything but the egress policies. */
 const configurerSections: IntegrationSection[] = [
   "connected",
   "available",
@@ -84,6 +84,8 @@ const configurerSections: IntegrationSection[] = [
   "credentials",
   // An area configures its own model providers since NT-019 phase 3.
   "providers",
+  // And its own channel connections since phase 4.
+  "channels",
 ];
 
 /**
