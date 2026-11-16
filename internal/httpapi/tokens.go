@@ -14,7 +14,8 @@ import (
 // by the consumer, so the httpapi does not depend on how a provider is
 // reached.
 type Tokenisers interface {
-	Counter(provider string, cfg model.Config) (model.Counter, error)
+	// Counter is asked at the agent's scope (NT-019).
+	Counter(provider string, at domain.Scope, cfg model.Config) (model.Counter, error)
 }
 
 // WithTokenisers wires where an instruction's size is asked.
@@ -54,9 +55,14 @@ func (s *Server) CountInstructionTokens(
 		}, nil
 	}
 
+	at, refused := countScope(ctx, req.Body.Scope)
+	if refused != nil {
+		return refused, nil
+	}
+
 	answer := openapi.CountInstructionTokens200JSONResponse{Model: req.Body.Model}
 
-	counter, err := s.tokenisers.Counter(req.Body.Provider, model.Config{Model: req.Body.Model})
+	counter, err := s.tokenisers.Counter(req.Body.Provider, at, model.Config{Model: req.Body.Model})
 	if errors.Is(err, model.ErrNoTokeniser) {
 		// A state, not a failure: this provider has no counting endpoint.
 		// Answered as an answer, so the console can say "characters" and mean
@@ -77,4 +83,25 @@ func (s *Server) CountInstructionTokens(
 
 	answer.Counted, answer.Tokens = true, &tokens
 	return answer, nil
+}
+
+// countScope is the scope an instruction is counted at: the agent's, which the
+// caller must be able to publish in, since the count reaches a provider with
+// that scope's key; or, with none named, the installation's (NT-019).
+func countScope(ctx context.Context, raw *string) (domain.Scope, openapi.CountInstructionTokensResponseObject) {
+	if raw == nil || *raw == "" {
+		return domain.Scope{Company: domain.Installation}, nil
+	}
+	target, err := parseTarget(*raw)
+	if err != nil {
+		return domain.Scope{}, openapi.CountInstructionTokens400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
+		}
+	}
+	if err := auth.Require(ctx, domain.PermAgentPublish, target); err != nil {
+		return domain.Scope{}, openapi.CountInstructionTokens403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish, target),
+		}
+	}
+	return target, nil
 }

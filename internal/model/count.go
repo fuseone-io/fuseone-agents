@@ -36,13 +36,14 @@ type Counter interface {
 
 // Counter builds one for a configured provider, or reports that the provider
 // has no way to answer.
-func (r *Registry) Counter(providerName string, cfg Config) (Counter, error) {
+//
+// Asked at the agent's scope, it reaches what a run there would (NT-019): an
+// area's agent counts on the area's provider, and nobody else's key pays.
+func (r *Registry) Counter(providerName string, at domain.Scope, cfg Config) (Counter, error) {
 	r.mu.RLock()
 	p, ok := r.providers[providerName]
 	r.mu.RUnlock()
-	// The installation's alone: this runs as the platform, not as a run of an
-	// area, so an area's key never pays for it (NT-019).
-	if !ok || p.Scope != (domain.Scope{Company: domain.Installation}) {
+	if !ok || !p.Scope.Contains(at) {
 		return nil, fmt.Errorf("model: no provider named %q", providerName)
 	}
 	if p.Kind != KindAnthropic {

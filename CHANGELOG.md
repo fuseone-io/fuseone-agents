@@ -28,6 +28,16 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **An instruction's token count is asked of the provider the agent's runs reach.**
+  `POST /agents/instructions/tokens` takes the agent's `scope` (`company` or
+  `company/area`), which the caller must be able to publish in. An area's agent counts
+  on the area's provider. With no scope, only the installation's providers count, as in
+  0.113.0. The console sends the scope of the agent being edited.
+
 ## [0.113.0] — 2026-11-15
 
 NT-019 phase 3, the readers' release (#359, #360, #361), and a screen for the MCP egress

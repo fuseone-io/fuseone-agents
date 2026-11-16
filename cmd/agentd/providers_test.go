@@ -147,7 +147,7 @@ func TestApplyConfiguration_anAddressChangedWhileRunning_isWhereTheNextRequestGo
 		t.Fatalf("applyConfiguration again: %v", err)
 	}
 
-	counter, err := registry.Counter("anthropic", model.Config{Model: "anthropic-claude-sonnet-5"})
+	counter, err := registry.Counter("anthropic", domain.Scope{Company: domain.Installation}, model.Config{Model: "anthropic-claude-sonnet-5"})
 	if err != nil {
 		t.Fatalf("Counter: %v", err)
 	}

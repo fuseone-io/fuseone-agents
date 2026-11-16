@@ -26,12 +26,14 @@ export function useInstructionTokens(
   provider: string,
   model: string,
   instructions: string,
+  /** The agent's scope, so the provider a run there would reach counts it (NT-019). */
+  scope: string | undefined,
 ) {
   const settled = useSettled(instructions, SETTLES_AFTER_MS);
   const asked = settled.trim();
 
   const { data } = useQuery({
-    queryKey: ["instruction-tokens", provider, model, asked],
+    queryKey: ["instruction-tokens", provider, model, scope ?? "", asked],
     enabled: Boolean(provider && model && asked),
     staleTime: Infinity,
     // One attempt. A provider that is unreachable stays unreachable for the
@@ -41,7 +43,7 @@ export function useInstructionTokens(
     queryFn: async () =>
       unwrap(
         await api.POST("/agents/instructions/tokens", {
-          body: { provider, model, instructions: asked },
+          body: { provider, model, instructions: asked, ...(scope ? { scope } : {}) },
         }),
       ),
   });
