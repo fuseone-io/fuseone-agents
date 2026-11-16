@@ -214,6 +214,10 @@ func TestOrphanedBindingsMigration_takesOnlyBindingsWithNoConnection(t *testing.
 	if err != nil {
 		t.Fatalf("read migration: %v", err)
 	}
+	// 0100 replaces the binding triggers with its own, which 0111 later widened
+	// to connections of any scope. Put the schema back as migrated, or every
+	// test after this one in the package's database meets 0100's rules.
+	t.Cleanup(func() { reapply(t, pool, "../ledger/sql/0111_bindings_follow_connections_anywhere.sql") })
 	if _, err := pool.Exec(ctx, string(migration)); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -433,5 +437,18 @@ func TestBindIdentity_anAccountHoldingASlash_isRefused(t *testing.T) {
 
 	if !errors.Is(err, admin.ErrAccountSeparator) {
 		t.Fatalf("err = %v, want refused", err)
+	}
+}
+
+// reapply runs one migration's statements again: the ones written to be safe to
+// re-run, after a test applied an earlier one by hand.
+func reapply(t *testing.T, pool *pgxpool.Pool, path string) {
+	t.Helper()
+	migration, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if _, err := pool.Exec(context.Background(), string(migration)); err != nil {
+		t.Fatalf("reapply %s: %v", path, err)
 	}
 }

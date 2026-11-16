@@ -443,11 +443,15 @@ func (c *ChannelDoor) PrincipalFor(
 
 func (c *ChannelDoor) Secrets(
 	ctx context.Context, name string,
-) (channel.Credentials, bool) {
-	held, err := c.facts.settings.Reveal(ctx,
-		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
+) (channel.Held, bool) {
+	// By name, wherever the connection is stored, with the scope it serves:
+	// the door narrows a click to it (NT-019). One of no known scope is not
+	// known here, and its secret is never opened.
+	held, err := c.facts.settings.RevealNamedIf(ctx,
+		channel.KindChannel, name, channel.RefuseUnknownConnectionScope)
 	if err != nil || !held.Enabled {
-		return channel.Credentials{}, false
+		return channel.Held{}, false
 	}
-	return channel.ReadCredentials(held.Secret), true
+	serves, _ := channel.ConnectionScope(held.ScopeKind, held.Scope)
+	return channel.Held{Credentials: channel.ReadCredentials(held.Secret), Scope: serves}, true
 }

@@ -42,7 +42,7 @@ part of ours.
 // consumer.
 type Bindings interface {
 	PrincipalFor(ctx context.Context, channel, account string) (domain.UserID, bool, error)
-	Secrets(ctx context.Context, channel string) (channel.Credentials, bool)
+	Secrets(ctx context.Context, channel string) (channel.Held, bool)
 }
 
 // Directory loads a person the platform has already decided is this person.
@@ -126,14 +126,14 @@ func (h *ChannelHooks) slackInteraction(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	creds, known := h.bindings.Secrets(r.Context(), name)
+	held, known := h.bindings.Secrets(r.Context(), name)
 	if !known {
 		// Not "unauthorised": there is no such channel, and saying so is not a
 		// secret — the caller supplied the name.
 		http.Error(w, "no such channel", http.StatusNotFound)
 		return
 	}
-	if err := slack.Verify(r, body, creds.Signing, h.now()); err != nil {
+	if err := slack.Verify(r, body, held.Credentials.Signing, h.now()); err != nil {
 		// Logged and refused flatly. The reason belongs in the log, not in a
 		// reply to somebody who failed to prove who they are.
 		h.log.Warn("a channel interaction was refused", "channel", name, "err", err)
@@ -148,7 +148,7 @@ func (h *ChannelHooks) slackInteraction(w http.ResponseWriter, r *http.Request) 
 	}
 	h.markAccountSeen(r.Context(), name, action.User, "")
 
-	answer := h.decide(r.Context(), name, action)
+	answer := h.decide(r.Context(), held, name, action)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	// Slack replaces the message with whatever comes back, which is how the
 	// buttons stop being pressable once somebody has answered.
@@ -160,7 +160,7 @@ func (h *ChannelHooks) slackInteraction(w http.ResponseWriter, r *http.Request) 
 
 // decide resolves who pressed and takes the decision as them.
 func (h *ChannelHooks) decide(
-	ctx context.Context, name string, action slack.Interaction,
+	ctx context.Context, held channel.Held, name string, action slack.Interaction,
 ) slack.Answer {
 	principalID, bound, err := h.bindings.PrincipalFor(ctx, name, action.User)
 	if err != nil {
@@ -187,9 +187,15 @@ func (h *ChannelHooks) decide(
 		return slack.AnswerUnknown
 	}
 
+	// The person decides with what they hold inside the scope the connection
+	// serves, and nothing more (NT-019). Whoever owns an area's app holds its
+	// signing secret and can sign a click as any account bound to it; this is
+	// what keeps such a click inside the area. The installation's connection
+	// serves every scope and narrows nothing.
+	//
 	// From here it is the console's path, with the console's checks. Nothing
 	// below knows the decision arrived through a conversation.
-	as := auth.WithPrincipal(ctx, principal)
+	as := auth.WithPrincipal(ctx, principal.Within(held.Scope))
 	resp, err := h.api.DecideApproval(as, openapi.DecideApprovalRequestObject{
 		RunId: string(action.RunID),
 		Body: &openapi.DecideApprovalJSONRequestBody{

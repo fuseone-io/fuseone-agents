@@ -39,6 +39,11 @@ func (r *TicketRoutes) closing(
 	if err != nil {
 		return TicketIntent{}, false, fmt.Errorf("channel: find ticket to close: %w", err)
 	}
+	// The ticket's own scope, as for a reply: the room may be the connection's
+	// while the ticket was left by another area under the same name (NT-019).
+	if !candidate.via().carries(held.Scope) {
+		return TicketIntent{}, false, nil
+	}
 	admitted, ok, err := r.admission(ctx, candidate)
 	if err != nil || !ok {
 		return TicketIntent{}, false, err

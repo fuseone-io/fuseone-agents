@@ -30,8 +30,12 @@ is the piece most likely to be skipped for looking like plumbing.
 
 // Arrival is one ask, as it came off the wire.
 type Arrival struct {
-	Channel      string
-	Conversation string
+	Channel string
+	// ConnectionScope is the scope of the connection the event arrived on, as
+	// the door or the socket session that received it held it (NT-019). Zero
+	// carries nothing.
+	ConnectionScope domain.Scope
+	Conversation    string
 	// EventID is the sender's own identifier for this delivery. Theirs and not
 	// ours, because the sender is the only party who knows that two deliveries
 	// are the same delivery.
@@ -126,12 +130,14 @@ func (i *Inbox) Receive(ctx context.Context, a Arrival) (fresh bool, err error) 
 	tag, err := i.pool.Exec(ctx, `
 		insert into channel_inbox
 			(channel, conversation, event_id, message, asked_by, text, thread,
-			 agent, run_as, source, payload, digest, ticket_intent)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			 agent, run_as, source, payload, digest, ticket_intent,
+			 connection_company, connection_area)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		on conflict (channel, conversation, event_id) do nothing`,
 		a.Channel, a.Conversation, a.EventID, a.Message,
 		a.AskedBy, a.Text, a.Thread, a.Agent, a.RunAs, a.Source, a.Payload,
-		"sha256:"+hex.EncodeToString(sum[:8]), nullableJSON(ticketIntent))
+		"sha256:"+hex.EncodeToString(sum[:8]), nullableJSON(ticketIntent),
+		string(a.ConnectionScope.Company), string(a.ConnectionScope.Area))
 	if err != nil {
 		return false, fmt.Errorf("channel: receive %s: %w", a.EventID, err)
 	}
@@ -230,7 +236,8 @@ func (i *Inbox) claim(
 		          channel_inbox.run_as, channel_inbox.source,
 		          channel_inbox.payload, channel_inbox.ticket_intent,
 		          channel_inbox.detail, channel_inbox.run_id,
-		          channel_inbox.claim_attempts, channel_inbox.pending_notice`,
+		          channel_inbox.claim_attempts, channel_inbox.pending_notice,
+		          channel_inbox.connection_company, channel_inbox.connection_area`,
 		owner, lease.String(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("channel: claim from the inbox: %w", err)
@@ -247,7 +254,8 @@ func (i *Inbox) claim(
 		var pendingNotice string
 		if err := rows.Scan(&a.Channel, &a.Conversation, &a.EventID, &a.Message,
 			&a.AskedBy, &a.Text, &a.Thread, &a.Agent, &a.RunAs, &a.Source,
-			&a.Payload, &ticketIntent, &detail, &run, &claimAttempts, &pendingNotice); err != nil {
+			&a.Payload, &ticketIntent, &detail, &run, &claimAttempts, &pendingNotice,
+			&a.ConnectionScope.Company, &a.ConnectionScope.Area); err != nil {
 			return nil, err
 		}
 		if len(ticketIntent) > 0 {
@@ -440,3 +448,7 @@ func (i *Inbox) settle(ctx context.Context, c Claimed, s settled, at time.Time) 
 	}
 	return nil
 }
+
+// Via is the connection this arrival came through, with the scope it was
+// received under.
+func (a Arrival) Via() Via { return Via{Name: a.Channel, Scope: a.ConnectionScope} }

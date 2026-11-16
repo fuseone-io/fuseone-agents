@@ -115,7 +115,7 @@ published, so a catalogue that was away would leave somebody unanswered over a
 question already decided.
 */
 func (c *Consumer) mappingOf(ctx context.Context, a Claimed) (Mapped, Refusal, error) {
-	mapped, err := c.mapping.Resolve(ctx, a.Channel, a.Conversation)
+	mapped, err := c.mapping.Resolve(ctx, a.Via(), a.Conversation)
 	switch {
 	case errors.Is(err, ErrNoConversation), errors.Is(err, ErrAmbiguousConversation):
 		// Ambiguity is refused rather than resolved, and the person is told
@@ -435,7 +435,7 @@ func (c *Consumer) includeThreadContext(ctx context.Context, a Claimed) (bool, e
 	if c.threadPolicy == nil {
 		return false, nil
 	}
-	include, err := c.threadPolicy.IncludeThreadContext(ctx, a.Channel, a.Conversation)
+	include, err := c.threadPolicy.IncludeThreadContext(ctx, a.Via(), a.Conversation)
 	if err != nil {
 		return false, fmt.Errorf("channel: read thread context policy for %s: %w", a.Conversation, err)
 	}

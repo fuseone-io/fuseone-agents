@@ -166,3 +166,23 @@ func Delegate(human Principal, agent AgentID, envelope []Grant) Principal {
 		OnBehalfOf: human.ID,
 	}
 }
+
+/*
+Within is the principal acting with only the grants it holds inside scope.
+
+For a door whose caller can be forged within a scope, such as a channel
+connection an area owns: its owner holds the app's signing secret and can sign
+a click as any account bound to it. Narrowed, the person behind the account
+decides there with what they hold inside the area, never with a grant over it
+or beside it. The installation contains every scope, so it narrows nothing.
+*/
+func (p Principal) Within(scope Scope) Principal {
+	inside := make([]Grant, 0, len(p.Grants))
+	for _, g := range p.Grants {
+		if scope.Contains(g.Scope) {
+			inside = append(inside, g)
+		}
+	}
+	p.Grants = inside
+	return p
+}

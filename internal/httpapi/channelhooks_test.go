@@ -203,6 +203,9 @@ func principal(id string, role domain.Role, company, area string) domain.Princip
 
 type bindingSpy struct {
 	bound map[string]domain.UserID
+	// servesAt is the scope the connection serves; the zero value is the
+	// installation's, which serves every scope.
+	servesAt domain.Scope
 	// err is a store that was away, which is not an account nobody bound.
 	err error
 }
@@ -217,8 +220,15 @@ func (b *bindingSpy) PrincipalFor(
 	return id, ok, nil
 }
 
-func (b *bindingSpy) Secrets(context.Context, string) (channel.Credentials, bool) {
-	return channel.Credentials{Token: "xoxb-1", Signing: signingSecret}, true
+func (b *bindingSpy) Secrets(context.Context, string) (channel.Held, bool) {
+	scope := b.servesAt
+	if scope == (domain.Scope{}) {
+		scope = domain.Scope{Company: domain.Installation}
+	}
+	return channel.Held{
+		Credentials: channel.Credentials{Token: "xoxb-1", Signing: signingSecret},
+		Scope:       scope,
+	}, true
 }
 
 type directorySpy struct{ who domain.Principal }

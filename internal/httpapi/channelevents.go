@@ -78,12 +78,12 @@ func (h *ChannelHooks) slackEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	creds, known := h.bindings.Secrets(r.Context(), name)
+	held, known := h.bindings.Secrets(r.Context(), name)
 	if !known {
 		http.Error(w, "no such channel", http.StatusNotFound)
 		return
 	}
-	if err := slack.Verify(r, body, creds.Signing, h.now()); err != nil {
+	if err := slack.Verify(r, body, held.Credentials.Signing, h.now()); err != nil {
 		h.log.Warn("a channel event was refused", "channel", name, "err", err)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -130,8 +130,10 @@ func (h *ChannelHooks) slackEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Everything below is judged by the scope of the connection that verified
+	// this request, held from that one read (NT-019).
 	arrival := channel.Arrival{
-		Channel: name, Conversation: delivery.Conversation,
+		Channel: name, ConnectionScope: held.Scope, Conversation: delivery.Conversation,
 		EventID: delivery.EventID, Message: delivery.Message,
 		// Read here, where the vendor's shape is known, and stored as the
 		// platform's own. The consumer never learns what Slack looks like.
@@ -140,7 +142,7 @@ func (h *ChannelHooks) slackEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.tickets != nil {
 		intent, ok, err := h.tickets.Route(r.Context(), channel.TicketCandidate{
-			Connection: name, Conversation: delivery.Conversation,
+			Connection: name, ConnectionScope: held.Scope, Conversation: delivery.Conversation,
 			Message: delivery.Message, Thread: delivery.Thread,
 			Kind: delivery.Kind, Text: delivery.Text,
 			Reaction: delivery.Reaction, Source: delivery.Source,
@@ -166,7 +168,7 @@ func (h *ChannelHooks) slackEvent(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		rule, ok, err := h.rules.WatchFor(r.Context(), name, delivery.Conversation, delivery.Source)
+		rule, ok, err := h.rules.WatchFor(r.Context(), channel.Via{Name: name, Scope: held.Scope}, delivery.Conversation, delivery.Source)
 		if err != nil {
 			h.log.Error("could not read a watch rule", "channel", name, "err", err)
 			http.Error(w, "unavailable", http.StatusServiceUnavailable)

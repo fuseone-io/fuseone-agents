@@ -22,12 +22,15 @@ import (
 // to ticket routing. Kind is "message" or "mention"; no vendor envelope is
 // exposed past the Slack adapter.
 type TicketCandidate struct {
-	Connection   string
-	Conversation string
-	Message      string
-	Thread       string
-	Kind         string
-	Text         string
+	Connection string
+	// ConnectionScope is the scope the receiving session held the connection
+	// at (NT-019). Zero reaches no ticket.
+	ConnectionScope domain.Scope
+	Conversation    string
+	Message         string
+	Thread          string
+	Kind            string
+	Text            string
 	// Reaction is the emoji, when this candidate is one. Empty otherwise.
 	Reaction string
 	Source   Source
@@ -153,7 +156,7 @@ func (r *TicketRoutes) reply(
 	}
 	held, err := r.tickets.AtOrigin(ctx, thread)
 	if err == nil {
-		return TicketIntent{Key: held.Key}, true, nil
+		return r.reached(candidate, held, TicketIntent{Key: held.Key})
 	}
 	if !errors.Is(err, ticket.ErrNotFound) {
 		return TicketIntent{}, false, fmt.Errorf("channel: find ticket reply: %w", err)
@@ -162,7 +165,7 @@ func (r *TicketRoutes) reply(
 	// being written, which is a different index and the same durable identity.
 	held, err = r.tickets.AtReview(ctx, thread)
 	if err == nil {
-		return TicketIntent{Key: held.Key, Review: true}, true, nil
+		return r.reached(candidate, held, TicketIntent{Key: held.Key, Review: true})
 	}
 	if !errors.Is(err, ticket.ErrNotFound) {
 		return TicketIntent{}, false, fmt.Errorf("channel: find ticket review reply: %w", err)
@@ -229,9 +232,37 @@ func (r *TicketRoutes) admission(
 		value.Channel != candidate.Connection || value.Mode != ConversationTicket || value.Ticket == nil {
 		return ticketAdmission{}, false, nil
 	}
+	// The connection the ask arrived on carries only rooms inside its own
+	// scope: an area's app opens no other area's tickets (NT-019).
+	if !candidate.via().carries(set.Scope) {
+		return ticketAdmission{}, false, nil
+	}
 	compiled, err := r.matcher(name, set.UpdatedAt, *value.Ticket)
 	if err != nil {
 		return ticketAdmission{}, false, fmt.Errorf("channel: compile stored ticket route: %w", err)
 	}
 	return ticketAdmission{scope: set.Scope, value: value, compiled: compiled}, true, nil
 }
+
+/*
+reached answers with an existing ticket only if the connection the message
+arrived on carries the ticket's own scope (NT-019).
+
+The room's scope is not enough. A ticket outlives the connection it was opened
+on, so a connection recreated under the same name by another area meets every
+origin the old one left, and its owner can forge their identifiers. Judged by
+the ticket's scope against the session that received the message, such a
+message reaches nothing.
+*/
+func (r *TicketRoutes) reached(
+	candidate TicketCandidate, held ticket.Ticket, intent TicketIntent,
+) (TicketIntent, bool, error) {
+	if !candidate.via().carries(held.Scope) {
+		return TicketIntent{}, false, nil
+	}
+	return intent, true, nil
+}
+
+// via is the connection the candidate arrived on, with the scope the receiving
+// session held it at.
+func (c TicketCandidate) via() Via { return Via{Name: c.Connection, Scope: c.ConnectionScope} }

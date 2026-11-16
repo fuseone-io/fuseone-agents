@@ -250,7 +250,7 @@ func (r socketTicketRouter) Route(
 }
 
 func (r socketRules) WatchFor(
-	_ context.Context, _, _ string, source channel.Source,
+	_ context.Context, _ channel.Via, _ string, source channel.Source,
 ) (channel.WatchRule, bool, error) {
 	if !source.Matches([]string{r.source}) {
 		return channel.WatchRule{}, false, nil

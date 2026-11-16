@@ -33,7 +33,7 @@ func TestResolve_aConfiguredConversation_answersItsOwnScope(t *testing.T) {
 		t.Fatalf("PutConversation: %v", err)
 	}
 
-	got, err := store.Resolve(t.Context(), "acme-slack", "C07-ops")
+	got, err := store.Resolve(t.Context(), installed("acme-slack"), "C07-ops")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestResolve_aConversationSwitchedOff_isRefused(t *testing.T) {
 		t.Fatalf("PutConversation: %v", err)
 	}
 
-	if _, err := store.Resolve(t.Context(), "acme-slack", "C08-quiet"); !errors.Is(err, channel.ErrNoConversation) {
+	if _, err := store.Resolve(t.Context(), installed("acme-slack"), "C08-quiet"); !errors.Is(err, channel.ErrNoConversation) {
 		t.Errorf("err = %v, want ErrNoConversation", err)
 	}
 }
@@ -68,7 +68,7 @@ func TestResolve_aConversationSwitchedOff_isRefused(t *testing.T) {
 func TestResolve_aConversationNobodyConfigured_isRefused(t *testing.T) {
 	store, _ := configuredChannels(t)
 
-	_, err := store.Resolve(t.Context(), "acme-slack", "C99-nobody")
+	_, err := store.Resolve(t.Context(), installed("acme-slack"), "C99-nobody")
 	if !errors.Is(err, channel.ErrNoConversation) {
 		t.Errorf("err = %v, want ErrNoConversation", err)
 	}
@@ -87,7 +87,7 @@ func TestWatchFor_aConfiguredSourceAnswersTheAutomation(t *testing.T) {
 		t.Fatalf("PutConversation: %v", err)
 	}
 
-	rule, ok, err := store.WatchFor(t.Context(), "acme-slack", "C07-ops",
+	rule, ok, err := store.WatchFor(t.Context(), installed("acme-slack"), "C07-ops",
 		channel.Source{Bot: "B-alerts"})
 	if err != nil {
 		t.Fatalf("WatchFor: %v", err)
@@ -96,7 +96,7 @@ func TestWatchFor_aConfiguredSourceAnswersTheAutomation(t *testing.T) {
 		t.Fatalf("rule = %+v, ok = %v, want the configured automation", rule, ok)
 	}
 
-	_, ok, err = store.WatchFor(t.Context(), "acme-slack", "C07-ops",
+	_, ok, err = store.WatchFor(t.Context(), installed("acme-slack"), "C07-ops",
 		channel.Source{Bot: "B-other"})
 	if err != nil {
 		t.Fatalf("WatchFor other: %v", err)
@@ -145,7 +145,7 @@ func TestWatchFor_bothModeAlsoAnswersTheAutomation(t *testing.T) {
 		t.Fatalf("PutConversation: %v", err)
 	}
 
-	rule, ok, err := store.WatchFor(t.Context(), "acme-slack", "C07-ops",
+	rule, ok, err := store.WatchFor(t.Context(), installed("acme-slack"), "C07-ops",
 		channel.Source{Bot: "B-alerts"})
 	if err != nil {
 		t.Fatalf("WatchFor: %v", err)
@@ -154,7 +154,7 @@ func TestWatchFor_bothModeAlsoAnswersTheAutomation(t *testing.T) {
 		t.Fatalf("rule = %+v, ok = %v, want the configured automation", rule, ok)
 	}
 
-	include, err := store.IncludeThreadContext(t.Context(), "acme-slack", "C07-ops")
+	include, err := store.IncludeThreadContext(t.Context(), installed("acme-slack"), "C07-ops")
 	if err != nil {
 		t.Fatalf("IncludeThreadContext: %v", err)
 	}
@@ -182,14 +182,14 @@ func TestIncludeThreadContext_onlyMentionsConversationsCanChooseIt(t *testing.T)
 		t.Fatalf("PutConversation watch: %v", err)
 	}
 
-	include, err := store.IncludeThreadContext(t.Context(), "acme-slack", "C07-alerts")
+	include, err := store.IncludeThreadContext(t.Context(), installed("acme-slack"), "C07-alerts")
 	if err != nil {
 		t.Fatalf("IncludeThreadContext mentions: %v", err)
 	}
 	if !include {
 		t.Fatal("mentions conversation did not keep the thread context choice")
 	}
-	include, err = store.IncludeThreadContext(t.Context(), "acme-slack", "C08-watch")
+	include, err = store.IncludeThreadContext(t.Context(), installed("acme-slack"), "C08-watch")
 	if err != nil {
 		t.Fatalf("IncludeThreadContext watch: %v", err)
 	}
@@ -254,11 +254,11 @@ func TestResolve_theSameIdOnTwoConnections_resolvesSeparately(t *testing.T) {
 		}
 	}
 
-	slack, err := store.Resolve(t.Context(), "acme-slack", "SHARED-ID")
+	slack, err := store.Resolve(t.Context(), installed("acme-slack"), "SHARED-ID")
 	if err != nil {
 		t.Fatalf("Resolve slack: %v", err)
 	}
-	teams, err := store.Resolve(t.Context(), "acme-teams", "SHARED-ID")
+	teams, err := store.Resolve(t.Context(), installed("acme-teams"), "SHARED-ID")
 	if err != nil {
 		t.Fatalf("Resolve teams: %v", err)
 	}
@@ -328,7 +328,7 @@ func TestResolve_aConversationBoundToAnAgent_answersIt(t *testing.T) {
 		t.Fatalf("PutConversation: %v", err)
 	}
 
-	got, err := store.Resolve(t.Context(), "acme-slack", "C21-bound")
+	got, err := store.Resolve(t.Context(), installed("acme-slack"), "C21-bound")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -352,7 +352,7 @@ func TestResolve_aConversationNobodyBound_answersEmptyAndNoError(t *testing.T) {
 		t.Fatalf("PutConversation: %v", err)
 	}
 
-	got, err := store.Resolve(t.Context(), "acme-slack", "C22-unbound")
+	got, err := store.Resolve(t.Context(), installed("acme-slack"), "C22-unbound")
 	if err != nil || got.Agent != "" {
 		t.Errorf("Resolve = %+v, %v; want no agent and no error", got, err)
 	}
@@ -371,7 +371,7 @@ func TestResolve_theSameIdOnAnotherConnection_isNotThatBinding(t *testing.T) {
 		t.Fatalf("PutConversation slack: %v", err)
 	}
 
-	_, err := store.Resolve(t.Context(), "acme-teams", "C23-one-connection")
+	_, err := store.Resolve(t.Context(), installed("acme-teams"), "C23-one-connection")
 	if !errors.Is(err, channel.ErrNoConversation) {
 		t.Errorf("err = %v, want nothing resolved for another connection", err)
 	}
@@ -395,7 +395,7 @@ func TestResolve_aMentionsOnlyConversationBoundToAnAgent_answersIt(t *testing.T)
 		t.Fatalf("PutConversation: %v", err)
 	}
 
-	got, err := store.Resolve(t.Context(), "acme-slack", "C24-mentions-bound")
+	got, err := store.Resolve(t.Context(), installed("acme-slack"), "C24-mentions-bound")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -560,7 +560,7 @@ func TestResolve_aConversationForTheWholeInstallation_startsNothing(t *testing.T
 
 	installationConversation(t, settingsStore, "C40-everywhere", channel.ConversationMentions)
 
-	_, err := store.Resolve(t.Context(), "acme-slack", "C40-everywhere")
+	_, err := store.Resolve(t.Context(), installed("acme-slack"), "C40-everywhere")
 	if !errors.Is(err, channel.ErrAnnouncesOnly) {
 		t.Fatalf("err = %v, want ErrAnnouncesOnly", err)
 	}
@@ -578,7 +578,7 @@ func TestResolve_aConversationThatOnlyAnnounces_startsNothing(t *testing.T) {
 		t.Fatalf("PutConversation: %v", err)
 	}
 
-	_, err := store.Resolve(t.Context(), "acme-slack", "C41-quiet")
+	_, err := store.Resolve(t.Context(), installed("acme-slack"), "C41-quiet")
 	if !errors.Is(err, channel.ErrAnnouncesOnly) {
 		t.Fatalf("err = %v, want ErrAnnouncesOnly", err)
 	}
@@ -605,7 +605,7 @@ func TestResolve_theSameIdAtTheInstallationAndAtACompany_isAmbiguous(t *testing.
 		channel.ConversationMentions)
 	refusedConversationRow(t, settingsStore, "SHARED-EVERYWHERE")
 
-	if _, err := store.Resolve(t.Context(), "acme-slack", "SHARED-EVERYWHERE"); err != nil {
+	if _, err := store.Resolve(t.Context(), installed("acme-slack"), "SHARED-EVERYWHERE"); err != nil {
 		t.Fatalf("Resolve of the one row stored = %v", err)
 	}
 }
@@ -637,7 +637,7 @@ func TestWatchFor_aConversationForTheWholeInstallation_answersNoRule(t *testing.
 
 	installationConversation(t, settingsStore, "C42-watching", channel.ConversationWatch)
 
-	_, ok, err := store.WatchFor(t.Context(), "acme-slack", "C42-watching",
+	_, ok, err := store.WatchFor(t.Context(), installed("acme-slack"), "C42-watching",
 		channel.Source{Bot: "B-alerts"})
 	if err != nil {
 		t.Fatalf("WatchFor: %v", err)
@@ -666,7 +666,7 @@ func TestResolve_aModeThisVersionDoesNotKnow_startsNothing(t *testing.T) {
 	conversationRow(t, settingsStore, "C43-future", settings.ScopeArea,
 		domain.Scope{Company: "acme", Area: "ops"}, "a-future-mode")
 
-	_, err := store.Resolve(t.Context(), "acme-slack", "C43-future")
+	_, err := store.Resolve(t.Context(), installed("acme-slack"), "C43-future")
 	if !errors.Is(err, channel.ErrAnnouncesOnly) {
 		t.Fatalf("err = %v, want ErrAnnouncesOnly", err)
 	}
@@ -680,7 +680,7 @@ func TestWatchFor_aModeThisVersionDoesNotKnow_answersNoRule(t *testing.T) {
 	conversationRow(t, settingsStore, "C44-future", settings.ScopeArea,
 		domain.Scope{Company: "acme", Area: "ops"}, "a-future-mode")
 
-	_, ok, err := store.WatchFor(t.Context(), "acme-slack", "C44-future",
+	_, ok, err := store.WatchFor(t.Context(), installed("acme-slack"), "C44-future",
 		channel.Source{Bot: "B-alerts"})
 	if err != nil {
 		t.Fatalf("WatchFor: %v", err)
@@ -721,7 +721,7 @@ func TestPutConversation_theSameIdOnAnotherConnectionInOneScope_areTwo(t *testin
 		connection string
 		agent      domain.AgentID
 	}{{"workspace-a", "triagem"}, {"workspace-b", "cobranca"}} {
-		got, err := store.Resolve(t.Context(), one.connection, "C-SAME")
+		got, err := store.Resolve(t.Context(), installed(one.connection), "C-SAME")
 		if err != nil {
 			t.Fatalf("resolve on %s: %v", one.connection, err)
 		}
@@ -749,7 +749,7 @@ func TestPutConversation_theSameIdOnAnotherConnectionElsewhere_isAllowed(t *test
 		}, "usr_ana"); err != nil {
 			t.Fatalf("map %s: %v", one.connection, err)
 		}
-		got, err := store.Resolve(t.Context(), one.connection, "C-ELSEWHERE")
+		got, err := store.Resolve(t.Context(), installed(one.connection), "C-ELSEWHERE")
 		if err != nil {
 			t.Fatalf("resolve on %s: %v", one.connection, err)
 		}
@@ -781,7 +781,7 @@ func TestResolve_aRowKeyedByConnectionAndId_resolves(t *testing.T) {
 		t.Fatalf("write the row: %v", err)
 	}
 
-	got, err := store.Resolve(t.Context(), "acme-slack", "C-NEXT")
+	got, err := store.Resolve(t.Context(), installed("acme-slack"), "C-NEXT")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -821,7 +821,7 @@ func TestPutConversation_editingARowKeyedByConnectionAndId_keepsItsShape(t *test
 	}
 
 	// One row, and it is the edit that answers.
-	got, err := store.Resolve(t.Context(), "acme-slack", "C-KEPT")
+	got, err := store.Resolve(t.Context(), installed("acme-slack"), "C-KEPT")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -854,7 +854,7 @@ func TestPutConversation_aRowStoredUnderTheIdAlone_movesRatherThanDoubling(t *te
 
 	// One row: two would be refused as ambiguous, and this is the edit that
 	// answers.
-	got, err := store.Resolve(t.Context(), "acme-slack", "C-MOVES")
+	got, err := store.Resolve(t.Context(), installed("acme-slack"), "C-MOVES")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -882,7 +882,7 @@ func TestDeleteConversation_aRowStoredUnderTheIdAlone_isRemoved(t *testing.T) {
 	}, "usr_ana"); err != nil {
 		t.Fatalf("DeleteConversation: %v", err)
 	}
-	if _, err := store.Resolve(t.Context(), "acme-slack", "C-OLDER"); !errors.Is(
+	if _, err := store.Resolve(t.Context(), installed("acme-slack"), "C-OLDER"); !errors.Is(
 		err, channel.ErrNoConversation) {
 		t.Errorf("err = %v, want the conversation gone", err)
 	}
@@ -908,7 +908,7 @@ func TestWatchFor_theSameIdAtTwoScopes_answersNoRule(t *testing.T) {
 		channel.ConversationWatch)
 	refusedConversationRow(t, settingsStore, "SHARED-WATCHING")
 
-	if _, _, err := store.WatchFor(t.Context(), "acme-slack", "SHARED-WATCHING",
+	if _, _, err := store.WatchFor(t.Context(), installed("acme-slack"), "SHARED-WATCHING",
 		channel.Source{Bot: "B-alerts"}); err != nil {
 		t.Fatalf("WatchFor: %v", err)
 	}
@@ -1093,12 +1093,11 @@ func enabledChannel(t *testing.T, channels *admin.Channels, name string) bool {
 /*
 Which workspace the bot may speak from is installation-wide configuration.
 
-Where a connection is stored is part of what it is: they live at the
-installation, which is where the credential is sealed. A row left at a company
-or an area by a restore is not a second connection — but counted as one it makes
-a healthy installation look like it has two workspaces to choose between, and
-that is answered by telling nobody at all. A silent denial, produced by a row
-nothing else reads.
+A direct message with no named connection picks among the installation's own
+connections (NT-019, phase 4). A company's or an area's connection is a real
+connection, but not the platform's voice: counted, the first area to connect its
+own workspace would leave the installation with two to choose between, and that
+is answered by telling nobody at all.
 */
 func TestEnabledConnections_onlyTheInstallationsOwn(t *testing.T) {
 	store, channels, settingsStore := configuredChannelsWithStore(t)
@@ -1110,8 +1109,7 @@ func TestEnabledConnections_onlyTheInstallationsOwn(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("PutChannel: %v", err)
 	}
-	// The administration writes connections at the installation and nowhere
-	// else, so this is a restore, a migration, or a hand edit.
+	// An area's own connection, enabled.
 	if err := settingsStore.Put(t.Context(), settings.Setting{
 		ScopeKind: settings.ScopeArea,
 		Scope:     domain.Scope{Company: "acme", Area: "ops"},

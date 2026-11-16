@@ -419,6 +419,10 @@ func (c *Configured) For(ctx context.Context, scope domain.Scope) ([]Conversatio
 	if err != nil {
 		return nil, fmt.Errorf("channel: list conversations: %w", err)
 	}
+	connections, err := c.carriers(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	var out []Conversation
 	for _, s := range stored {
@@ -428,6 +432,11 @@ func (c *Configured) For(ctx context.Context, scope domain.Scope) ([]Conversatio
 		var v conversationValue
 		if err := json.Unmarshal(s.Value, &v); err != nil {
 			// One malformed row must not silence every other conversation.
+			continue
+		}
+		// A connection carries only the conversations inside its own scope:
+		// an area's app is never told about another area's runs (NT-019).
+		if !connections.carries(v.Channel, s.Scope) {
 			continue
 		}
 		id, legible := ConversationIDOf(v.KeyVersion, v.Channel, s.Name)
@@ -460,12 +469,12 @@ func (c *Configured) EnabledConnections(ctx context.Context) ([]string, error) {
 	}
 	var out []string
 	for _, s := range stored {
-		// Where a connection is stored is part of what it is: they are
-		// installation-wide, and the credential is sealed there. A row at a
-		// company or an area is not a second connection — it is something a
-		// restore or a hand edit left behind, and counting it would make a
-		// healthy installation look like it has two workspaces to choose
-		// between, which is answered by telling nobody.
+		// The installation's own, and no company's or area's (decided by
+		// Kleber on 2026-11-16, NT-019 phase 4). A direct message with no
+		// named connection is the platform speaking, and an area's app is not
+		// the platform's voice. Counted, the first area to connect its own
+		// workspace would leave the installation with two to choose between,
+		// which is answered by telling nobody.
 		if s.Enabled && s.ScopeKind == settings.ScopeInstallation && s.Scope == (domain.Scope{}) {
 			out = append(out, s.Name)
 		}
@@ -485,14 +494,13 @@ type WatchRule struct {
 // The source is a filter, not authority. The returned RunAs is the principal a
 // person configured beforehand; a Slack bot id never becomes a FuseOne user.
 func (c *Configured) WatchFor(
-	ctx context.Context, channelName, id string, source Source,
+	ctx context.Context, via Via, id string, source Source,
 ) (WatchRule, bool, error) {
 	stored, err := c.store.List(ctx, KindConversation)
 	if err != nil {
 		return WatchRule{}, false, fmt.Errorf("channel: list conversations: %w", err)
 	}
-
-	found := conversationsNamed(stored, channelName, id)
+	found := conversationsNamed(stored, via, id)
 	// Every row for this conversation, and only then a decision. Answering
 	// from the first one found made row order decide which configuration was
 	// in force: the same pair Resolve reports as ambiguous started the agent
@@ -528,7 +536,7 @@ type storedConversation struct {
 // connection. Two of them is a configuration nobody can act on, and saying so
 // is the caller's job — the count is the answer here.
 func conversationsNamed(
-	stored []settings.Setting, channelName, id string,
+	stored []settings.Setting, via Via, id string,
 ) []storedConversation {
 	var found []storedConversation
 	for _, s := range stored {
@@ -543,11 +551,17 @@ func conversationsNamed(
 			continue
 		}
 		// The connection first, then the id the row says it is for.
-		if v.Channel != channelName {
+		if v.Channel != via.Name {
 			continue
 		}
 		stored, legible := ConversationIDOf(v.KeyVersion, v.Channel, s.Name)
 		if !legible || stored != id {
+			continue
+		}
+		// Arriving on a connection is arriving inside the scope the receiving
+		// session held it at: an event an area's app signed reaches only that
+		// area's conversations (NT-019), whatever the row says by now.
+		if !via.carries(s.Scope) {
 			continue
 		}
 		found = append(found, storedConversation{scope: s.Scope, value: v})
@@ -560,13 +574,13 @@ func conversationsNamed(
 // to watched messages: those start from the message itself, while this option
 // covers a person replying to an existing alert thread with a mention.
 func (c *Configured) IncludeThreadContext(
-	ctx context.Context, channelName, id string,
+	ctx context.Context, via Via, id string,
 ) (bool, error) {
 	stored, err := c.store.List(ctx, KindConversation)
 	if err != nil {
 		return false, fmt.Errorf("channel: list conversations: %w", err)
 	}
-	for _, one := range conversationsNamed(stored, channelName, id) {
+	for _, one := range conversationsNamed(stored, via, id) {
 		if !StartsFromMentions(one.value.Mode) {
 			continue
 		}
