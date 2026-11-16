@@ -38,10 +38,14 @@ type Registry struct {
 	// touching what the environment put there beside it, and a name claimed
 	// and not built still answers only inside its scope.
 	configured map[string]domain.Scope
+	// environment is what the environment registered, kept apart from what
+	// is live: a console override replaces one while it lasts, and once
+	// removed the environment's answers again under its name (NT-019).
+	environment map[string]Provider
 }
 
 func NewRegistry(hc *http.Client) *Registry {
-	return &Registry{providers: make(map[string]Provider), http: hc}
+	return &Registry{providers: make(map[string]Provider), environment: make(map[string]Provider), http: hc}
 }
 
 // Register adds or replaces a provider.
@@ -62,6 +66,7 @@ func (r *Registry) Register(p Provider) error {
 	defer r.mu.Unlock()
 	p.Prices = clonePriceMap(p.Prices)
 	r.providers[p.Name] = p
+	r.environment[p.Name] = p
 	return nil
 }
 
@@ -122,7 +127,9 @@ func (r *Registry) SetConfigured(ps []Provider, claimed ...Claim) {
 	}
 	for name := range r.configured {
 		if _, still := taken[name]; !still {
-			delete(r.providers, name)
+			// An override removed: the environment's answers again, if it
+			// supplies the name.
+			r.restoreOrDrop(name)
 			changed = true
 		}
 	}

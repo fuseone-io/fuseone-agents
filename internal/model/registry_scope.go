@@ -62,10 +62,22 @@ func (r *Registry) Planner(providerName string, at domain.Scope, cfg Config, too
 // FromEnvironment reports whether name is a provider the environment supplies:
 // registered here and claimed by no configuration. It is the installation's,
 // so no company or area may take the name (NT-019).
+//
+// Remembered apart from what is live, so a console override of the name, and
+// its removal, do not make it forget the name is the environment's.
 func (r *Registry) FromEnvironment(name string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	_, held := r.providers[name]
-	_, claimed := r.configured[name]
-	return held && !claimed
+	_, supplied := r.environment[name]
+	return supplied
+}
+
+// restoreOrDrop puts the environment's provider back under a name the console
+// no longer configures, or drops the name. Called with the lock held.
+func (r *Registry) restoreOrDrop(name string) {
+	if p, supplied := r.environment[name]; supplied {
+		r.providers[name] = p
+		return
+	}
+	delete(r.providers, name)
 }
