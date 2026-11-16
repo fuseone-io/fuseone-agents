@@ -30,6 +30,31 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Every replica must run this release before a channel connection can be stored
+  outside the installation** (NT-019 phase 4, readers). An older replica reads a
+  connection at the installation only and does not check its scope. Once a connection
+  exists at a company or an area, this release is the rollback floor.
+- **Nothing changes for a channel today.** Every connection is still the installation's,
+  which carries every scope's conversations and narrows no decision.
+
+### Changed
+
+- **A channel connection is read wherever it is stored.** Delivery, the Socket Mode
+  sweep and the webhooks' signing secret find a connection by its name, which is unique
+  across scopes, and open it under its own scope. A connection at a scope this release
+  does not know is not opened.
+- **A connection reaches only conversations inside its scope.** On an area's connection,
+  another area's conversation, or the whole company's, is neither posted to nor admitted
+  from: no mention, no watched message, no ticket.
+- **A decision clicked on a company's or an area's connection decides only inside its
+  scope.** The person bound to the account acts there with the grants they hold inside
+  the connection's scope. The installation's connections are unchanged.
+- **The database keeps bindings with their connection wherever it is stored.** A
+  binding may name a connection of any scope, and a connection with bindings can be
+  neither removed nor moved to another scope (migration `0111`).
+
 ## [0.114.0] — 2026-11-15
 
 NT-019 phase 3, the writers' release (#363, #364, #365). A company or an area stores its
