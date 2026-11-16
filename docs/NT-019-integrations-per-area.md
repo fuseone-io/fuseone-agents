@@ -449,15 +449,17 @@ any of them.
   connection's scope does not contain the conversation's own is neither posted to nor
   admitted from, however the row was written. A ticket already open is judged by its
   own scope as well: it outlives its connection, and a connection recreated under the
-  same name by another area meets every origin the old one left.
+  same name by another area meets every origin the old one left. The door refuses such
+  a conversation first; the runtime holds against a row that reached the store any
+  other way.
 - **An event is judged by the scope of the session that received it**, never by the
   connection's row read again. A Socket Mode session is reconciled with its row every
   thirty seconds, and an inbox row is consumed later still; in between the row may be
   removed, or recreated at another scope. The HTTP door keeps the scope from the read
   that verified the signature, a socket session keeps the scope it was opened with,
   and the inbox stores it with the ask (migration `0112`). A row the previous binary
-  wrote is the installation's, the only place that binary looked. The door refuses such a conversation
-  first; the runtime holds against a row that reached the store any other way.
+  wrote is the installation's, the only place that binary looked. A session the door
+  gave no scope reaches nothing, not even the installation's conversations.
 - **Channel identities**, the bindings of a person to their Slack user
   (`internal/admin/channel_identity.go:161`), stay stored at the installation: they
   belong to the person. On a connection of the installation, binding stays the
