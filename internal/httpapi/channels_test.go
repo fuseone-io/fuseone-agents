@@ -56,7 +56,7 @@ func TestListChannels_neverHandsBackTheCredential(t *testing.T) {
 
 type listerSpy struct{ kinds []string }
 
-func (l *listerSpy) Conversations(context.Context, string) ([]channel.Available, error) {
+func (l *listerSpy) ConversationsIf(context.Context, string, func(settings.ScopeKind, domain.Scope) error) ([]channel.Available, error) {
 	return nil, nil
 }
 
@@ -293,6 +293,7 @@ type channelSpy struct {
 	refuse  error
 	wrote   admin.ChannelWrite
 	removed admin.ChannelRemoval
+	unbound string
 }
 
 func (c *channelSpy) List(context.Context) ([]admin.Channel, error) { return c.listed, nil }
@@ -372,8 +373,8 @@ type refusingPoster struct {
 	called bool
 }
 
-func (r *refusingPoster) Post(
-	context.Context, channel.Conversation, channel.Message,
+func (r *refusingPoster) PostIf(
+	context.Context, channel.Conversation, channel.Message, func(settings.ScopeKind, domain.Scope) error,
 ) (string, error) {
 	r.called = true
 	if r.err != nil {
@@ -390,14 +391,29 @@ func (c *channelSpy) SeenAccounts(context.Context) ([]admin.ChannelAccountSeen, 
 	return c.seen, nil
 }
 
-func (c *channelSpy) BindIdentity(
-	_ context.Context, id admin.ChannelIdentity, _ domain.UserID,
+func (c *channelSpy) BindIdentityIf(
+	ctx context.Context, id admin.ChannelIdentity, _ domain.UserID, allow func(settings.ScopeKind, domain.Scope) error,
 ) error {
+	if allow != nil {
+		kind, stored, _ := c.ChannelStoredAt(ctx, id.Channel)
+		if err := allow(kind, stored); err != nil {
+			return err
+		}
+	}
 	c.bound = append(c.bound, id)
 	return nil
 }
 
-func (c *channelSpy) UnbindIdentity(context.Context, string, string, domain.UserID) error {
+func (c *channelSpy) UnbindIdentityIf(
+	ctx context.Context, channelName, _ string, _ domain.UserID, allow func(settings.ScopeKind, domain.Scope) error,
+) error {
+	if allow != nil {
+		kind, stored, _ := c.ChannelStoredAt(ctx, channelName)
+		if err := allow(kind, stored); err != nil {
+			return err
+		}
+	}
+	c.unbound = channelName
 	return nil
 }
 

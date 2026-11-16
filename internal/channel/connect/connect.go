@@ -17,6 +17,7 @@ import (
 
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/slack"
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
 )
 
@@ -114,10 +115,24 @@ func (d *Drivers) Thread(
 }
 
 func (d *Drivers) driver(ctx context.Context, name string) (Driver, error) {
+	return d.driverIf(ctx, name, nil)
+}
+
+func (d *Drivers) driverIf(
+	ctx context.Context, name string, allow func(settings.ScopeKind, domain.Scope) error,
+) (Driver, error) {
 	// By name, wherever the connection is stored: the name is unique across
 	// scopes, and the row is opened under its own (NT-019). One of no known
-	// scope is not opened at all.
-	s, err := d.store.RevealNamedIf(ctx, channel.KindChannel, name, channel.RefuseUnknownConnectionScope)
+	// scope is not opened at all, and a caller allow refuses is not either.
+	s, err := d.store.RevealNamedIf(ctx, channel.KindChannel, name, func(kind settings.ScopeKind, at domain.Scope) error {
+		if err := channel.RefuseUnknownConnectionScope(kind, at); err != nil {
+			return err
+		}
+		if allow != nil {
+			return allow(kind, at)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, channel.WrapError(
 			channel.CodeConfigurationReadFailed,
@@ -199,10 +214,15 @@ than pretending the bot is in nothing.
 func (d *Drivers) Conversations(
 	ctx context.Context, name string,
 ) ([]channel.Available, error) {
-	driver, err := d.For(ctx, name)
+	driver, err := d.driver(ctx, name)
 	if err != nil {
 		return nil, err
 	}
+	return listed(driver, name, ctx)
+}
+
+// listed asks a driver what it can be pointed at, if it can say.
+func listed(driver Driver, name string, ctx context.Context) ([]channel.Available, error) {
 	lister, ok := driver.(interface {
 		Conversations(context.Context) ([]slack.Conversation, error)
 	})
@@ -219,4 +239,36 @@ func (d *Drivers) Conversations(
 		out = append(out, channel.Available{ID: c.ID, Name: c.Name, Private: c.Private})
 	}
 	return out, nil
+}
+
+/*
+ForIf is For that asks allow first, on the very row whose credential it opens
+(NT-019, phase 4 writers). One read finds the connection, judges where it is
+stored and opens its token, so the driver returned is the connection that was
+judged: one replaced since an earlier read is judged as itself.
+*/
+func (d *Drivers) ForIf(
+	ctx context.Context, name string, allow func(settings.ScopeKind, domain.Scope) error,
+) (channel.Poster, error) {
+	return d.driverIf(ctx, name, allow)
+}
+
+// PostIf posts one message through a connection judged by allow on the row
+// its credential is opened from.
+func (d *Drivers) PostIf(
+	ctx context.Context, c channel.Conversation, m channel.Message, allow func(settings.ScopeKind, domain.Scope) error,
+) (string, error) {
+	return channel.NewRouter(d).PostIf(ctx, c, m, allow)
+}
+
+// ConversationsIf is Conversations through a connection judged by allow on
+// the row its credential is opened from.
+func (d *Drivers) ConversationsIf(
+	ctx context.Context, name string, allow func(settings.ScopeKind, domain.Scope) error,
+) ([]channel.Available, error) {
+	driver, err := d.driverIf(ctx, name, allow)
+	if err != nil {
+		return nil, err
+	}
+	return listed(driver, name, ctx)
 }

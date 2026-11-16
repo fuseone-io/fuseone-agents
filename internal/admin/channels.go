@@ -543,6 +543,9 @@ func (c *Channels) PutConversation(
 	if err := c.refuseUnreachableConnection(ctx, tx, channelName, mode); err != nil {
 		return err
 	}
+	if err := refuseOutsideConnection(ctx, tx, channelName, conv.Scope); err != nil {
+		return err
+	}
 	// The uniqueness rules are checked here rather than before the
 	// transaction. Read outside it, two requests naming one conversation for
 	// two scopes both saw it unmapped and both stored — and a Slack channel

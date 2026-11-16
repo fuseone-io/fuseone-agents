@@ -116,6 +116,18 @@ func lockIdentity(ctx context.Context, conn settings.DB, key string) error {
 func (c *Channels) BindIdentity(
 	ctx context.Context, id ChannelIdentity, by domain.UserID,
 ) error {
+	return c.BindIdentityIf(ctx, id, by, nil)
+}
+
+/*
+BindIdentityIf is BindIdentity that asks allow first, with the connection's
+scope as it stands under the connection's lock (NT-019, phase 4 writers). The
+binding is stored at the installation, as every binding is: it belongs to the
+person. Who may make it depends on whose connection it is on.
+*/
+func (c *Channels) BindIdentityIf(
+	ctx context.Context, id ChannelIdentity, by domain.UserID, allow func(settings.ScopeKind, domain.Scope) error,
+) error {
 	switch {
 	case strings.TrimSpace(id.Account) == "":
 		return ErrNoAccount
@@ -142,15 +154,8 @@ func (c *Channels) BindIdentity(
 		if err := lockChannel(ctx, conn, id.Channel); err != nil {
 			return err
 		}
-		var exists bool
-		if err := conn.QueryRow(ctx, `
-			select exists (select 1 from settings
-				where scope_kind = $1 and kind = $2 and name = $3)`,
-			string(settings.ScopeInstallation), string(channel.KindChannel), id.Channel).Scan(&exists); err != nil {
-			return fmt.Errorf("admin: read the connection %s: %w", id.Channel, err)
-		}
-		if !exists {
-			return fmt.Errorf("%w: %s", ErrNoConnection, id.Channel)
+		if err := connectionAllowed(ctx, conn, id.Channel, allow); err != nil {
+			return err
 		}
 		return lockIdentity(ctx, conn, key)
 	}
@@ -209,12 +214,37 @@ the act is the withdrawal, not the number of rows it took.
 func (c *Channels) UnbindIdentity(
 	ctx context.Context, channelName, account string, by domain.UserID,
 ) error {
+	return c.UnbindIdentityIf(ctx, channelName, account, by, nil)
+}
+
+/*
+UnbindIdentityIf is UnbindIdentity that asks allow first, with the
+connection's scope as it stands under the connection's lock, taken before the
+binding's as a bind takes them (NT-019). A binding whose connection is gone is
+the installation's to remove.
+*/
+func (c *Channels) UnbindIdentityIf(
+	ctx context.Context, channelName, account string, by domain.UserID, allow func(settings.ScopeKind, domain.Scope) error,
+) error {
 	key := identityKey(channelName, account)
 	tx, err := c.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("admin: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := lockChannel(ctx, tx, channelName); err != nil {
+		return err
+	}
+	if allow != nil {
+		kind, stored, _, err := channelStoredAtOn(ctx, tx, channelName)
+		if err != nil {
+			return err
+		}
+		if err := allow(kind, stored); err != nil {
+			return err
+		}
+	}
 
 	// Under the binding's own lock, and the inventory is taken inside it.
 	// Read before the transaction it was a photograph: a bind landing between
