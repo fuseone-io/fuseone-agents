@@ -5181,6 +5181,8 @@ export interface components {
             /** @description The model the agent is configured to use. It comes back in the reply, so an answer read on its own says what counted it — a token count means nothing without the model that produced it. */
             model: string;
             instructions: string;
+            /** @description The agent's scope, `company` or `company/area` as stored (NT-019). The count asks the provider a run there would reach, and needs agent:publish there. Absent, only the installation's providers count. */
+            scope?: string;
         };
         InstructionTokens: {
             /**

@@ -235,7 +235,7 @@ func TestSetConfigured_anAddressEditedInTheConsole_isWhereTheRequestGoes(t *test
 		BaseURL: proxy.URL, APIKey: "from-the-console",
 	}})
 
-	counter, err := registry.Counter("anthropic", model.Config{Model: "anthropic-claude-sonnet-5"})
+	counter, err := registry.Counter("anthropic", installation, model.Config{Model: "anthropic-claude-sonnet-5"})
 	if err != nil {
 		t.Fatalf("Counter: %v", err)
 	}
@@ -400,7 +400,7 @@ func TestPlanner_aProviderWithNoCredential_doesNotBorrowTheVendorsFromTheEnviron
 		Name:  "litellm", Kind: model.KindAnthropic, BaseURL: proxy.URL,
 	}})
 
-	counter, err := registry.Counter("litellm", model.Config{Model: "anthropic-claude-sonnet-5"})
+	counter, err := registry.Counter("litellm", installation, model.Config{Model: "anthropic-claude-sonnet-5"})
 	if err != nil {
 		t.Fatalf("Counter: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestCounter_whileTheProtocolIsBeingChanged_neverPanics(t *testing.T) {
 	for range 400 {
 		// Either answer is correct. Neither may be a panic, and neither may be
 		// a counter built for a protocol that cannot answer.
-		if counter, err := registry.Counter("litellm", model.Config{Model: "m"}); err == nil && counter == nil {
+		if counter, err := registry.Counter("litellm", installation, model.Config{Model: "m"}); err == nil && counter == nil {
 			t.Fatal("a counter that is neither an error nor a counter")
 		}
 		if _, err := registry.Completer("litellm", model.Config{Model: "m"}); err != nil {

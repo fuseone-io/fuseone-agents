@@ -1,3 +1,4 @@
+import { agentTarget } from "@/features/agents/agent-target";
 import { useTranslation } from "react-i18next";
 import { ListOrdered } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ export function TabDefinition({
     draft.provider,
     draft.model,
     draft.instructions,
+    agentTarget(draft),
   );
   const conflicts = contradictions(
     draft.steps ?? [],

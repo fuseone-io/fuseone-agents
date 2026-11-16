@@ -144,10 +144,10 @@ func TestRegister_aProviderNamingNoScope_isTheInstallations(t *testing.T) {
 	}
 }
 
-// The authoring assistant and the token count run as the platform, not as a
-// run of an area: they reach the installation's providers alone, so an area's
-// key never pays for the platform's work.
-func TestCompleterAndCounter_reachOnlyTheInstallationsProviders(t *testing.T) {
+// The authoring assistant runs as the platform and reaches the installation's
+// providers alone. The token count is asked at the agent's scope and reaches
+// what a run there would (NT-019).
+func TestCompleterAndCounter_reachWhatTheirScopeReaches(t *testing.T) {
 	t.Parallel()
 
 	r := model.NewRegistry(nil)
@@ -159,13 +159,19 @@ func TestCompleterAndCounter_reachOnlyTheInstallationsProviders(t *testing.T) {
 	if _, err := r.Completer("shared", model.Config{Model: "m"}); err != nil {
 		t.Errorf("Completer(shared): %v", err)
 	}
-	if _, err := r.Counter("shared", model.Config{Model: "m"}); err != nil {
-		t.Errorf("Counter(shared): %v", err)
-	}
 	if _, err := r.Completer("cx-claude", model.Config{Model: "m"}); err == nil {
 		t.Error("the platform's assistant was built on acme/cx's provider")
 	}
-	if _, err := r.Counter("cx-claude", model.Config{Model: "m"}); err == nil {
-		t.Error("a token count was built on acme/cx's provider")
+	if _, err := r.Counter("cx-claude", cx, model.Config{Model: "m"}); err != nil {
+		t.Errorf("Counter(cx-claude) at acme/cx: %v", err)
+	}
+	if _, err := r.Counter("shared", cx, model.Config{Model: "m"}); err != nil {
+		t.Errorf("Counter(shared) at acme/cx: %v", err)
+	}
+	if _, err := r.Counter("cx-claude", finance, model.Config{Model: "m"}); err == nil {
+		t.Error("a count at acme/finance was built on acme/cx's provider")
+	}
+	if _, err := r.Counter("cx-claude", installation, model.Config{Model: "m"}); err == nil {
+		t.Error("a count with no agent scope was built on acme/cx's provider")
 	}
 }

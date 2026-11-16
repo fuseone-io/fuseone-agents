@@ -91,12 +91,12 @@ func countRequest(provider string) openapi.CountInstructionTokensRequestObject {
 
 type countsTo int64
 
-func (c countsTo) Counter(string, model.Config) (model.Counter, error) { return c, nil }
+func (c countsTo) Counter(string, domain.Scope, model.Config) (model.Counter, error) { return c, nil }
 
 func (c countsTo) Count(context.Context, string) (int64, error) { return int64(c), nil }
 
 type cannotCount struct{}
 
-func (cannotCount) Counter(name string, _ model.Config) (model.Counter, error) {
+func (cannotCount) Counter(name string, _ domain.Scope, _ model.Config) (model.Counter, error) {
 	return nil, fmt.Errorf("%s: %w", name, model.ErrNoTokeniser)
 }

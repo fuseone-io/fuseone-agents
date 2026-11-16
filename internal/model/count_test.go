@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/model"
 )
 
@@ -64,7 +65,7 @@ func TestCounter_aProviderThatCannotCount_saysSoRatherThanEstimating(t *testing.
 		t.Fatalf("register: %v", err)
 	}
 
-	_, err := registry.Counter("vllm", model.Config{Model: "llama-3"})
+	_, err := registry.Counter("vllm", domain.Scope{Company: domain.Installation}, model.Config{Model: "llama-3"})
 	if !errors.Is(err, model.ErrNoTokeniser) {
 		t.Fatalf("err = %v, want ErrNoTokeniser", err)
 	}
@@ -90,7 +91,7 @@ func counterAgainst(t *testing.T, answer string) (model.Counter, *map[string]any
 	}); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	counter, err := registry.Counter("anthropic", model.Config{Model: "claude-opus-5"})
+	counter, err := registry.Counter("anthropic", domain.Scope{Company: domain.Installation}, model.Config{Model: "claude-opus-5"})
 	if err != nil {
 		t.Fatalf("counter: %v", err)
 	}
