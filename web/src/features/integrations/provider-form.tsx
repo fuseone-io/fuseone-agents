@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { ScopeFields } from "@/features/integrations/scope/scope-fields";
+import { useActiveScope } from "@/features/scope/active-scope";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -38,6 +39,9 @@ import {
 import { problemMessage } from "@/lib/api/problem-message";
 import { isStale, type FormRevision } from "@/lib/api/revision";
 import { StaleNotice } from "@/components/shared/stale-notice";
+
+/** The company the active scope names for the installation itself. */
+const INSTALLATION_COMPANY = "*";
 
 const schema = z.object({
   name: z.string().min(1, "integrations.nameProvider"),
@@ -87,6 +91,13 @@ export function ProviderForm({
   const put = usePutProvider();
   const [stale, setStale] = useState(false);
   const presets = useIntegrations().data?.presets ?? [];
+  // A new provider starts in the scope the console is reading, as a new
+  // server does: a company's administrator reading one of its areas offers
+  // that area first, and the key reaches no more than was asked (NT-019).
+  const activeCompany = useActiveScope((state) => state.company);
+  const activeArea = useActiveScope((state) => state.area);
+  const reading =
+    activeCompany === INSTALLATION_COMPANY ? { company: "", area: "" } : { company: activeCompany, area: activeArea };
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -100,8 +111,8 @@ export function ProviderForm({
       apiKey: "",
       enabled: provider?.enabled ?? true,
       scopeKind: provider?.scopeKind ?? "installation",
-      company: provider?.company ?? "",
-      area: provider?.area ?? "",
+      company: provider ? (provider.company ?? "") : reading.company,
+      area: provider ? (provider.area ?? "") : reading.area,
     },
   });
 
@@ -175,7 +186,7 @@ export function ProviderForm({
             )}
             <ScopeFields
               editing={provider !== null}
-              labels={{ kind: "integrations.scopeKind", held: "integrations.scopeHeld" }}
+              labels={{ kind: "integrations.providerScopeKind", held: "integrations.providerScopeHeld" }}
             />
             <FormField
               control={form.control}
