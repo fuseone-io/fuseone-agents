@@ -47,7 +47,10 @@ field" is a commit message.
   does not know is not opened.
 - **A connection reaches only conversations inside its scope.** On an area's connection,
   another area's conversation, or the whole company's, is neither posted to nor admitted
-  from: no mention, no watched message, no ticket.
+  from: no mention, no watched message, no ticket. A ticket already open is judged by
+  its own scope too, so a connection recreated under an old name by another area reaches
+  none of the tickets the old one left: not by a reply, a reply in the review room, or a
+  closing reaction.
 - **A decision clicked on a company's or an area's connection decides only inside its
   scope.** The person bound to the account acts there with the grants they hold inside
   the connection's scope. The installation's connections are unchanged.
