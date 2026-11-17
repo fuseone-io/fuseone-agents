@@ -145,6 +145,18 @@ type frontmatter struct {
 
 // Parse reads one agent definition.
 func Parse(source string, data []byte) (Spec, error) {
+	s, err := parseFields(source, data)
+	if err != nil {
+		return Spec{}, err
+	}
+	if err := s.validate(); err != nil {
+		return Spec{}, fmt.Errorf("%s: %w", source, err)
+	}
+	return s, nil
+}
+
+// parseFields reads the file into a Spec without judging it.
+func parseFields(source string, data []byte) (Spec, error) {
 	front, body, err := split(data)
 	if err != nil {
 		return Spec{}, fmt.Errorf("%s: %w", source, err)
@@ -199,66 +211,7 @@ func Parse(source string, data []byte) (Spec, error) {
 	for _, t := range fm.Tools {
 		s.Tools = append(s.Tools, domain.ToolID(t))
 	}
-
-	if err := s.validate(); err != nil {
-		return Spec{}, fmt.Errorf("%s: %w", source, err)
-	}
 	return s, nil
-}
-
-// validate rejects a definition that cannot run safely.
-//
-// Everything checked here is something the platform cannot supply a sensible
-// default for. A missing budget is the sharp one: without a ceiling a runaway
-// agent bills until someone notices, so an unbudgeted agent does not publish
-// (PRD FO-02).
-func (s Spec) validate() error {
-	var problems []string
-
-	if s.ID == "" {
-		problems = append(problems, "id is required")
-	}
-	if s.Area == "" {
-		problems = append(problems, "area is required — it is the unit of cost attribution")
-	}
-	if s.Company != "" {
-		if err := domain.ValidCompanyID(string(s.Company)); err != nil {
-			problems = append(problems, fmt.Sprintf("company is invalid: %v", err))
-		}
-	}
-	if s.Instructions == "" {
-		problems = append(problems, "the body is the agent's instructions and cannot be empty")
-	}
-	if len(s.Tools) == 0 {
-		problems = append(problems, "tools is required; an agent with no capability pack can do nothing")
-	}
-	if s.Budget.Micros <= 0 && s.Budget.Steps <= 0 {
-		problems = append(problems, "budget needs at least a cost or step ceiling")
-	}
-	if s.Provider == "" {
-		problems = append(problems, "provider is required")
-	}
-	if s.CachePrefixTTL != "" && s.CachePrefixTTL != "5m" && s.CachePrefixTTL != "1h" {
-		problems = append(problems, "cache_prefix_ttl must be 5m or 1h; the provider sells no other window")
-	}
-	problems = append(problems, s.fallbackProblems()...)
-	problems = append(problems, triggerProblems(s.Triggers)...)
-	problems = append(problems, emitProblems(s.Emits)...)
-	problems = append(problems, stepProblems(s.Steps, s.Tools)...)
-	if err := s.Approvals.Validate(); err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalid, err)
-	}
-	if err := s.MemoryLearning.Validate(); err != nil {
-		problems = append(problems, err.Error())
-	}
-	if err := s.StandingApprovals.Validate(); err != nil {
-		problems = append(problems, err.Error())
-	}
-
-	if len(problems) > 0 {
-		return fmt.Errorf("%w: %s", ErrInvalid, strings.Join(problems, "; "))
-	}
-	return nil
 }
 
 // split separates the YAML frontmatter from the Markdown body.
