@@ -121,7 +121,16 @@ func (s *Server) GetAgent(ctx context.Context, req openapi.GetAgentRequestObject
 	} else if activity != nil {
 		out.Agent.Activity = activity
 	}
-	return openapi.GetAgent200JSONResponse(out), nil
+	reply := openapi.GetAgent200JSONResponse{Body: out}
+	// The tag of the state the writes judge, so only for the current version.
+	if req.Params.Version == nil || *req.Params.Version == "" {
+		retired, err := s.isRetired(ctx, wanted.ID)
+		if err != nil {
+			return nil, err
+		}
+		reply.Headers.ETag = ptr(string(domain.AgentRevision(wanted.VersionID, retired)))
+	}
+	return reply, nil
 }
 
 // activityOf reads how the agent has been doing, or nil when it never ran.

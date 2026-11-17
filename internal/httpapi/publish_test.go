@@ -70,6 +70,14 @@ func (p *publisher) Publish(_ context.Context, pub spec.Publication) (spec.Publi
 	if p.claim != nil {
 		return spec.Published{}, p.claim
 	}
+	// The guard, judged as spec.Publisher judges it under its lock. An API
+	// that published without one would skip the current scope's check.
+	if pub.Guard.Allow == nil {
+		return spec.Published{}, fmt.Errorf("publish %s without a guard", pub.Spec.ID)
+	}
+	if err := pub.Guard.Judge(p.found(pub.Spec.ID)); err != nil {
+		return spec.Published{}, fmt.Errorf("publish %s: %w", pub.Spec.ID, err)
+	}
 	p.refused = append(p.refused, pub.RefuseStages)
 	for _, refused := range pub.RefuseStages {
 		if refused == p.stage {
@@ -85,6 +93,19 @@ func (p *publisher) Publish(_ context.Context, pub spec.Publication) (spec.Publi
 	p.current = append(p.current, pub.Spec.Version)
 	p.latest[pub.Spec.ID] = pub.Spec
 	return judged, nil
+}
+
+// found is the agent as the guard sees it: its current version's scope and
+// tag, or nothing for an agent never published.
+func (p *publisher) found(agent domain.AgentID) spec.Found {
+	current, ok := p.latest[agent]
+	if !ok {
+		return spec.Found{}
+	}
+	return spec.Found{
+		Exists: true, Scope: domain.Scope{Company: current.Company, Area: current.Area},
+		Revision: domain.AgentRevision(current.Version, false),
+	}
 }
 
 func safePrefix(digest string) string {

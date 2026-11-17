@@ -62,7 +62,7 @@ func (s *State) retirement(ctx context.Context, agent domain.AgentID, guard Guar
 		if err != nil {
 			return err
 		}
-		if !locked.exists {
+		if !locked.Exists {
 			return fmt.Errorf("spec: %s: %w", agent, ErrAgentNotFound)
 		}
 		if _, err := tx.Exec(ctx, write, string(agent), string(by)); err != nil {

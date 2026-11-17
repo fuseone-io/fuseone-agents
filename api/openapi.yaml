@@ -558,7 +558,18 @@ paths:
           schema: { type: string }
       responses:
         '200':
-          description: The agent.
+          description: |
+            The agent. `ETag` names its current version and whether it is
+            retired, the two things publishing, retiring and restoring change,
+            and is what their `If-Match` compares. It is sent only when no
+            `version` is asked for: an older version is not the state those
+            writes judge.
+          headers:
+            ETag:
+              description: |
+                The agent's current state, as a strong validator. Opaque:
+                compare it, never parse it. Absent when `version` names one.
+              schema: { type: string }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentDetail' }
@@ -583,6 +594,12 @@ paths:
 
         An agent nobody has decided about is recorded as paused. Authoring
         never starts anything.
+
+        Under the agent's row lock, in the transaction that writes, the caller
+        must hold `agent:publish` where the agent lives now (404 otherwise),
+        and then `If-Match` or `If-None-Match: *` is judged (412). Both
+        headers are optional: without them the last publication wins, as
+        before. Sending both is a 400.
       parameters:
         - name: agentId
           in: path
@@ -603,6 +620,8 @@ paths:
             current, so a check made by an earlier read would leave a window
             between the read and the write.
           schema: { $ref: '#/components/schemas/Stage' }
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IfNoneMatchCreate'
         - name: company
           in: query
           required: false
@@ -637,6 +656,16 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: |
+            The agent exists where the caller may not publish. Moving an agent
+            needs `agent:publish` where it lives now as well as where the
+            definition sends it, and an agent the caller cannot reach answers
+            as one that does not exist, before any precondition is judged.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
         '413':
           description: A `.agent.md` larger than 2 MiB, the ceiling every request body has.
           content:
@@ -881,11 +910,16 @@ paths:
         that a schedule still fires is worse than one nobody retired, because
         now nobody is looking for it. Bringing one back leaves it stopped, for
         the opposite reason: restoring and starting are two decisions.
+
+        Judged under the agent's row lock, as a publication is: an agent the
+        caller may not publish where it lives is a 404, as one that does not
+        exist, before `If-Match` is judged (412).
       parameters:
         - name: agentId
           in: path
           required: true
           schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
         content:
@@ -897,9 +931,10 @@ paths:
                 retired: { type: boolean }
       responses:
         '204': { description: Recorded. }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
 
   /agents/{agentId}/runs:
     post:
@@ -5443,6 +5478,15 @@ components:
         weakens, since a compressing proxy marks the ETag it forwards W/. Any value
         on something that does not exist is refused, and one that does not parse is
         a 400. Without the header, the last write wins.
+      schema: { type: string }
+    IfNoneMatchCreate:
+      name: If-None-Match
+      in: header
+      required: false
+      description: |
+        `*` makes the write a creation: refused with a 412 if the resource
+        already exists. Any other value is a 400, never ignored. Without the
+        header, the write creates or replaces.
       schema: { type: string }
     ManualLocale:
       name: locale

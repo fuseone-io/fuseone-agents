@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	gocontext "context"
+	"fmt"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -57,7 +58,9 @@ func TestSetAgentRetired_withoutTheAuthorityToPublish_isRefused(t *testing.T) {
 	t.Parallel()
 
 	// Retiring decides whether this agent is still part of the estate, which
-	// is an authoring decision. An auditor reads what it did.
+	// is an authoring decision. An auditor reads what it did. Judged under the
+	// agent's lock, the refusal is the 404 of an agent the caller cannot write
+	// (NT-017 phase 1), so it reads the same as one that does not exist.
 	resp, err := retirable(t, &retirementSpy{}).SetAgentRetired(
 		inArea("cx", domain.RoleAuditor),
 		openapi.SetAgentRetiredRequestObject{
@@ -67,7 +70,7 @@ func TestSetAgentRetired_withoutTheAuthorityToPublish_isRefused(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetAgentRetired: %v", err)
 	}
-	if _, refused := resp.(openapi.SetAgentRetired403ApplicationProblemPlusJSONResponse); !refused {
+	if _, refused := resp.(openapi.SetAgentRetired404ApplicationProblemPlusJSONResponse); !refused {
 		t.Fatalf("response = %T, want a refusal", resp)
 	}
 }
@@ -102,12 +105,38 @@ type retirementSpy struct {
 	out               map[domain.AgentID]bool
 }
 
-func (r *retirementSpy) Retire(gocontext.Context, domain.AgentID, domain.UserID, spec.Guard) error {
+// judge is the guard as spec.State judges it, on triggerable's agent: triage
+// at v2 in acme/cx, retired when out says so.
+func (r *retirementSpy) judge(agent domain.AgentID, guard spec.Guard) error {
+	if guard.Allow == nil {
+		return fmt.Errorf("retire %s without a guard", agent)
+	}
+	found := spec.Found{}
+	if agent == "triage" {
+		found = spec.Found{Exists: true, Scope: domain.Scope{Company: "acme", Area: "cx"},
+			Revision: domain.AgentRevision("v2", r.out[agent])}
+	}
+	if err := guard.Judge(found); err != nil {
+		return fmt.Errorf("retire %s: %w", agent, err)
+	}
+	if !found.Exists {
+		return fmt.Errorf("retire %s: %w", agent, spec.ErrAgentNotFound)
+	}
+	return nil
+}
+
+func (r *retirementSpy) Retire(_ gocontext.Context, agent domain.AgentID, _ domain.UserID, guard spec.Guard) error {
+	if err := r.judge(agent, guard); err != nil {
+		return err
+	}
 	r.retired++
 	return nil
 }
 
-func (r *retirementSpy) Restore(gocontext.Context, domain.AgentID, domain.UserID, spec.Guard) error {
+func (r *retirementSpy) Restore(_ gocontext.Context, agent domain.AgentID, _ domain.UserID, guard spec.Guard) error {
+	if err := r.judge(agent, guard); err != nil {
+		return err
+	}
 	r.restored++
 	return nil
 }

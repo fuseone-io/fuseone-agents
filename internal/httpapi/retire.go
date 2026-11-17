@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/spec"
@@ -33,31 +32,44 @@ func (s *Server) WithRetirements(retirements Retirements) *Server {
 }
 
 // SetAgentRetired takes an agent out of circulation, or brings it back.
+//
+// Who may is judged by the store under the agent's lock, on the scope it lives
+// in then (NT-017 phase 1): the authority to publish. Retiring is an authoring
+// decision about whether this agent is still part of the estate, not an
+// operational one about whether it should be acting this afternoon — that is
+// pausing, and it asks for something else.
 func (s *Server) SetAgentRetired(
 	ctx context.Context, req openapi.SetAgentRetiredRequestObject,
 ) (openapi.SetAgentRetiredResponseObject, error) {
-	current, ok := s.currentAgent(ctx, domain.AgentID(req.AgentId))
-	if !ok || s.retirements == nil || req.Body == nil {
-		return openapi.SetAgentRetired404ApplicationProblemPlusJSONResponse{
-			NotFoundApplicationProblemPlusJSONResponse: notFound(req.AgentId),
+	absent := openapi.SetAgentRetired404ApplicationProblemPlusJSONResponse{
+		NotFoundApplicationProblemPlusJSONResponse: notFound(req.AgentId),
+	}
+	guard, bad := agentGuard(ctx, req.Params.IfMatch, nil)
+	if bad != "" {
+		return openapi.SetAgentRetired400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				invalid(bad)),
 		}, nil
 	}
-
-	// The authority to publish. Retiring is an authoring decision
-	// about whether this agent is still part of the estate, not an operational
-	// one about whether it should be acting this afternoon — that is pausing,
-	// and it asks for something else.
-	if err := auth.Require(ctx, domain.PermAgentPublish, current.Scope); err != nil {
-		return openapi.SetAgentRetired403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish, current.Scope),
-		}, nil
+	current, ok := s.currentAgent(ctx, domain.AgentID(req.AgentId))
+	if !ok || s.retirements == nil || req.Body == nil {
+		return absent, nil
 	}
 
 	act := s.retirements.Restore
 	if req.Body.Retired {
 		act = s.retirements.Retire
 	}
-	if err := act(ctx, current.ID, callerOf(ctx), spec.Guard{}); err != nil {
+	err := act(ctx, current.ID, callerOf(ctx), guard)
+	if agentAbsent(err) {
+		return absent, nil
+	}
+	if stale, ok := staleFrom(err); ok {
+		return openapi.SetAgentRetired412ApplicationProblemPlusJSONResponse{
+			PreconditionFailedApplicationProblemPlusJSONResponse: stale,
+		}, nil
+	}
+	if err != nil {
 		return nil, fmt.Errorf("set %s retired=%v: %w", req.AgentId, req.Body.Retired, err)
 	}
 	return openapi.SetAgentRetired204Response{}, nil

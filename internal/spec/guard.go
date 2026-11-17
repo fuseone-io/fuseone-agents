@@ -36,24 +36,25 @@ type Guard struct {
 	Absent bool
 }
 
-// lockedAgent is what the guard judges: whether the agent has a version, the
-// scope its current one lives in, and its tag.
-type lockedAgent struct {
-	exists   bool
-	scope    domain.Scope
-	revision domain.Revision
+// Found is what a guard judges: whether the agent has a version, the scope
+// its current one lives in, and its tag.
+type Found struct {
+	Exists   bool
+	Scope    domain.Scope
+	Revision domain.Revision
 }
 
-// judge applies the guard to the agent as the lock found it.
-func (g Guard) judge(a lockedAgent) error {
-	if a.exists && g.Allow != nil && !g.Allow(a.scope) {
+// Judge applies the guard to the agent as the lock found it. Exported so a
+// fake publisher judges exactly as this one does.
+func (g Guard) Judge(a Found) error {
+	if a.Exists && g.Allow != nil && !g.Allow(a.Scope) {
 		return ErrAgentNotFound
 	}
-	if g.Absent && a.exists {
-		return &domain.StaleError{Current: a.revision}
+	if g.Absent && a.Exists {
+		return &domain.StaleError{Current: a.Revision}
 	}
-	if !g.Expect.Allows(a.exists, a.revision) {
-		return &domain.StaleError{Current: a.revision}
+	if !g.Expect.Allows(a.Exists, a.Revision) {
+		return &domain.StaleError{Current: a.Revision}
 	}
 	return nil
 }
@@ -69,17 +70,17 @@ see what they committed, under read committed. The current version is chosen
 as every reader chooses it (Registry.Versions): the one somebody made
 current, else the newest published.
 */
-func lockAgent(ctx context.Context, tx pgx.Tx, agent domain.AgentID) (lockedAgent, error) {
+func lockAgent(ctx context.Context, tx pgx.Tx, agent domain.AgentID) (Found, error) {
 	if _, err := tx.Exec(ctx, `
 		insert into agent_state (agent_id, paused, changed_at) values ($1, true, now())
 		on conflict (agent_id) do nothing`, string(agent)); err != nil {
-		return lockedAgent{}, fmt.Errorf("spec: %s: ensure state: %w", agent, err)
+		return Found{}, fmt.Errorf("spec: %s: ensure state: %w", agent, err)
 	}
 	var retired bool
 	if err := tx.QueryRow(ctx, `
 		select retired_at is not null from agent_state where agent_id = $1 for update`,
 		string(agent)).Scan(&retired); err != nil {
-		return lockedAgent{}, fmt.Errorf("spec: %s: lock state: %w", agent, err)
+		return Found{}, fmt.Errorf("spec: %s: lock state: %w", agent, err)
 	}
 	var version, company, area string
 	err := tx.QueryRow(ctx, `
@@ -90,26 +91,26 @@ func lockAgent(ctx context.Context, tx pgx.Tx, agent domain.AgentID) (lockedAgen
 		order by (st.current_version = s.version_id) desc nulls last, s.published_at desc
 		limit 1`, string(agent)).Scan(&version, &company, &area)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return lockedAgent{}, nil
+		return Found{}, nil
 	}
 	if err != nil {
-		return lockedAgent{}, fmt.Errorf("spec: %s: read the current version: %w", agent, err)
+		return Found{}, fmt.Errorf("spec: %s: read the current version: %w", agent, err)
 	}
-	return lockedAgent{
-		exists:   true,
-		scope:    domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)},
-		revision: domain.AgentRevision(domain.VersionID(version), retired),
+	return Found{
+		Exists:   true,
+		Scope:    domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)},
+		Revision: domain.AgentRevision(domain.VersionID(version), retired),
 	}, nil
 }
 
 // guardAgent locks the agent and judges the guard, returning what it found.
-func guardAgent(ctx context.Context, tx pgx.Tx, agent domain.AgentID, g Guard) (lockedAgent, error) {
+func guardAgent(ctx context.Context, tx pgx.Tx, agent domain.AgentID, g Guard) (Found, error) {
 	locked, err := lockAgent(ctx, tx, agent)
 	if err != nil {
-		return lockedAgent{}, err
+		return Found{}, err
 	}
-	if err := g.judge(locked); err != nil {
-		return lockedAgent{}, fmt.Errorf("spec: %s: %w", agent, err)
+	if err := g.Judge(locked); err != nil {
+		return Found{}, fmt.Errorf("spec: %s: %w", agent, err)
 	}
 	return locked, nil
 }
