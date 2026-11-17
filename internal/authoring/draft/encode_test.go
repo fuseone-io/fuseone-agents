@@ -1,8 +1,11 @@
 package draft_test
 
 import (
+	"errors"
+	"reflect"
 	"testing"
 
+	"github.com/fuseone/agents/internal/authoring/blocks"
 	"github.com/fuseone/agents/internal/authoring/draft"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/spec"
@@ -72,5 +75,56 @@ func TestDigest_namesTheOperationAndItsPayload(t *testing.T) {
 	}
 	if len(a) != 64 {
 		t.Errorf("digest %q is not a hex SHA-256", a)
+	}
+}
+
+// A proposal's operation is read back from the body the content store
+// keeps: the same operation, digest for digest, for every kind there is.
+func TestParseBody_readsBackEveryOperationExactly(t *testing.T) {
+	t.Parallel()
+	examples := []draft.Operation{
+		draft.SetIdentity{Name: "T", Scope: domain.Scope{Company: "acme", Area: "ops"}},
+		draft.SetStandingApprovals{Policy: domain.StandingForbidden},
+		draft.SetModel{Provider: "openai", Model: "m", Effort: "high"},
+		draft.SetFallback{Pair: domain.ModelPair{Provider: "p", Model: "m"}},
+		draft.SetCachePrefixTTL{TTL: "1h"}, draft.SetReplyLocale{Locale: "en-US"},
+		draft.AddTool{Tool: "crm.lookup"}, draft.RemoveTool{Tool: "crm.reply"},
+		draft.SetBudget{Budget: domain.Budget{Micros: 1, Steps: 2}},
+		draft.SetTriggers{Triggers: []spec.Trigger{{Type: "webhook", Path: "gh", From: "github", Events: []string{"issues"}}}},
+		draft.SetMemoryLearning{Policy: domain.MemoryLearningPolicy{Mode: domain.MemoryLearningOff}},
+		draft.SetApprovalDelivery{Policy: domain.ApprovalPolicy{Direct: true, Notify: []domain.UserID{"usr_bia"}}},
+		draft.SetEmits{Emits: spec.Emits{{Event: "ticket.triaged", Artifacts: []string{"summary"}}}},
+		draft.AddStep{Step: spec.Step{Name: "Ler", Reaches: []domain.ToolID{"crm.lookup"}}},
+		draft.EditStep{Name: "Ler", Step: spec.Step{Name: "Ler bem"}}, draft.RemoveStep{Name: "Ler"},
+		draft.InsertBlock{At: 1, Type: blocks.Never, Text: "Prometer.", Locale: "pt-BR"},
+		draft.ReplaceBlock{ID: "b1", Text: "Triar.", Locale: "en-US"},
+		draft.RemoveBlock{ID: "b2"}, draft.MoveBlock{ID: "b1", To: 0},
+	}
+	if len(examples) != len(draft.Operations()) {
+		t.Fatalf("%d examples for %d operations; every kind must be read back", len(examples), len(draft.Operations()))
+	}
+	for _, op := range examples {
+		back, err := draft.ParseBody(draft.Body(op))
+		if err != nil {
+			t.Fatalf("%s: %v", op.Kind(), err)
+		}
+		// The same type, by value: a pointer would serialise the same and
+		// still be another operation to every type switch downstream.
+		if reflect.TypeOf(back) != reflect.TypeOf(op) || draft.Digest(back) != draft.Digest(op) {
+			t.Errorf("%s read back as %#v", op.Kind(), back)
+		}
+	}
+}
+
+func TestParseBody_somethingNotAnOperation_isRefused(t *testing.T) {
+	t.Parallel()
+	for name, body := range map[string]string{
+		"an unknown kind": `{"kind":"grant_admin","operation":{}}`,
+		"not json":        `kind=add_tool`,
+		"no kind":         `{"operation":{"Tool":"x"}}`,
+	} {
+		if _, err := draft.ParseBody([]byte(body)); !errors.Is(err, draft.ErrInvalidOperation) {
+			t.Errorf("%s: ParseBody = %v, want ErrInvalidOperation", name, err)
+		}
 	}
 }

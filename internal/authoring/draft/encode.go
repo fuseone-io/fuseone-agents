@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"github.com/fuseone/agents/internal/authoring/blocks"
 	"github.com/fuseone/agents/internal/spec"
@@ -84,4 +85,32 @@ func Body(op Operation) []byte {
 func Digest(op Operation) string {
 	sum := sha256.Sum256(Body(op))
 	return hex.EncodeToString(sum[:])
+}
+
+// ParseBody reads an operation back from its Body: what accepting a proposal
+// applies, loaded from the content store by the proposal's reference rather
+// than taken from whoever asks to accept it.
+func ParseBody(body []byte) (Operation, error) {
+	var head struct {
+		Kind      string          `json:"kind"`
+		Operation json.RawMessage `json:"operation"`
+	}
+	if err := json.Unmarshal(body, &head); err != nil {
+		return nil, fmt.Errorf("%w: a body that does not parse: %v", ErrInvalidOperation, err)
+	}
+	for _, known := range Operations() {
+		if known.Kind() != head.Kind {
+			continue
+		}
+		target := reflect.New(reflect.TypeOf(known))
+		if err := json.Unmarshal(head.Operation, target.Interface()); err != nil {
+			return nil, fmt.Errorf("%w: %s: %v", ErrInvalidOperation, head.Kind, err)
+		}
+		op, ok := target.Elem().Interface().(Operation)
+		if !ok {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidOperation, head.Kind)
+		}
+		return op, nil
+	}
+	return nil, fmt.Errorf("%w: %q is not an operation", ErrInvalidOperation, head.Kind)
 }
