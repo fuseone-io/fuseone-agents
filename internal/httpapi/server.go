@@ -104,6 +104,9 @@ type Server struct {
 	rates       Rates
 	pauses      Pauses
 	retirements Retirements
+	// drafts is the workbench's drafts (NT-018 1b). Optional: unwired, the
+	// draft routes answer as for an agent with no draft.
+	drafts      Drafts
 	definitions Definitions
 	// stops are the switches wider than one agent (PRD FO-06).
 	stops Stoppers

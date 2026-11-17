@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fuseone/agents/internal/authoring/drafts"
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/connect"
 	"github.com/fuseone/agents/internal/connectortools"
@@ -218,6 +219,9 @@ func serve(args []string) error {
 			// Taking an agent out of circulation, which is the only
 			// removal there is: nothing here deletes a version.
 			WithRetirements(spec.NewState(identity.pool)).
+			// The workbench's drafts (NT-018 1b): working state beside the
+			// versions, never one of them.
+			WithDrafts(drafts.NewStore(identity.pool)).
 			WithStops(admin.NewStops(identity.pool)).
 			WithMarks(admin.NewMarks(identity.pool)).
 			WithComposition(spec.NewRegistry(identity.pool)).
