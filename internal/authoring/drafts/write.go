@@ -141,6 +141,8 @@ type Application struct {
 	Caller    Caller
 	Validator draft.Validator
 	Now       time.Time
+	// kept is the accepted proposal's body, which the trail names.
+	kept *keptBody
 }
 
 /*
@@ -234,7 +236,7 @@ func (s *Store) update(ctx context.Context, tx pgx.Tx, r row, a Application, app
 		return Opened{}, fmt.Errorf("drafts: write %s: %w", a.Agent, err)
 	}
 	if err := s.appendTrail(ctx, tx, trailRow{
-		draftID: r.draftID, agent: a.Agent, action: a.Op.Kind(), body: draft.Body(a.Op),
+		draftID: r.draftID, agent: a.Agent, action: a.Op.Kind(), body: draft.Body(a.Op), kept: a.kept,
 		origin: a.Origin, revision: revision, by: a.Caller.By,
 	}); err != nil {
 		return Opened{}, err
