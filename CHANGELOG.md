@@ -30,10 +30,20 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.118.0] — 2026-11-17
+
+NT-018 delivery 1b (#378, #379, #380, #381): the workbench's draft, on the server and in
+the console. An agent's draft changes only by typed operations against its ETag, and the
+console works on it at `/agents/{id}/workbench`. Nothing in the workbench publishes yet.
+
 ### Upgrade notes
 
-- **Migration 0113 adds two tables and changes nothing that exists**: `agent_drafts` and
-  `agent_draft_trail`. Rolling back to 0.117.0 leaves them unread; no rollback floor.
+- **Migration 0113 only adds tables**: `agent_drafts` and the append-only
+  `agent_draft_trail`. No existing table, column, trigger or constraint changes, and a
+  draft never writes `agent_specs` or `agent_state`.
+- **No rollback floor.** Rolling back to 0.117.0 is safe: it does not read the new tables,
+  and drafts written meanwhile stay there unread, with their change bodies in the content
+  store under the installation's retention.
 
 ### Added
 
