@@ -811,7 +811,7 @@ paths:
           in: path
           required: true
           schema: { type: string }
-        - $ref: '#/components/parameters/IfNoneMatchCreate'
+        - $ref: '#/components/parameters/IfNoneMatchCreateRequired'
       requestBody:
         required: false
         content:
@@ -848,7 +848,7 @@ paths:
           in: path
           required: true
           schema: { type: string }
-        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IfMatchRequired'
       responses:
         '204': { description: Discarded. }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -878,7 +878,7 @@ paths:
           in: path
           required: true
           schema: { type: string }
-        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IfMatchRequired'
       requestBody:
         required: true
         content:
@@ -5612,6 +5612,26 @@ components:
         weakens, since a compressing proxy marks the ETag it forwards W/. Any value
         on something that does not exist is refused, and one that does not parse is
         a 400. Without the header, the last write wins.
+      schema: { type: string }
+    IfMatchRequired:
+      name: If-Match
+      in: header
+      required: true
+      description: |
+        The ETag the caller read. Required: every change names the state it
+        read, and without it the request is a 400, never applied. Refused with
+        a 412, carrying the current ETag, unless the resource is still at one
+        of these revisions; `*` means it exists at all. A weak tag matches the
+        revision it weakens.
+      schema: { type: string }
+    IfNoneMatchCreateRequired:
+      name: If-None-Match
+      in: header
+      required: true
+      description: |
+        `*`, and only `*`: the write creates the resource, and is refused with
+        a 412 carrying its ETag if it exists. Without it, or with any other
+        value, the request is a 400.
       schema: { type: string }
     IfNoneMatchCreate:
       name: If-None-Match

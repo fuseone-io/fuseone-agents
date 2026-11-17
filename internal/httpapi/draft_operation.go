@@ -40,6 +40,7 @@ func (s *Server) ApplyDraftOperation(
 		Agent: domain.AgentID(req.AgentId), Op: op, Origin: draft.FromControl, Expect: expect,
 		Caller: draftCaller(ctx), Validator: draft.Validator{Checker: s.checker()}, Now: clockOr(s.clock).Now(),
 	})
+	var denied *drafts.ForbiddenError
 	if stale, ok := staleFrom(err); ok {
 		return openapi.ApplyDraftOperation412ApplicationProblemPlusJSONResponse{PreconditionFailedApplicationProblemPlusJSONResponse: stale}, nil
 	}
@@ -50,10 +51,9 @@ func (s *Server) ApplyDraftOperation(
 		}, nil
 	case errors.Is(err, drafts.ErrNotFound):
 		return absent, nil
-	case errors.Is(err, drafts.ErrForbidden):
-		id, _ := op.(draft.SetIdentity)
+	case errors.As(err, &denied):
 		return openapi.ApplyDraftOperation403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish, id.Scope),
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish, denied.Scope),
 		}, nil
 	case invalidDraftChange(err):
 		return bad(err.Error()), nil

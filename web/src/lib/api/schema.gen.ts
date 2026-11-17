@@ -7041,6 +7041,20 @@ export interface components {
          */
         IfMatch: string;
         /**
+         * @description The ETag the caller read. Required: every change names the state it
+         *     read, and without it the request is a 400, never applied. Refused with
+         *     a 412, carrying the current ETag, unless the resource is still at one
+         *     of these revisions; `*` means it exists at all. A weak tag matches the
+         *     revision it weakens.
+         */
+        IfMatchRequired: string;
+        /**
+         * @description `*`, and only `*`: the write creates the resource, and is refused with
+         *     a 412 carrying its ETag if it exists. Without it, or with any other
+         *     value, the request is a 400.
+         */
+        IfNoneMatchCreateRequired: string;
+        /**
          * @description `*` makes the write a creation: refused with a 412 if the resource
          *     already exists. Any other value is a 400, never ignored. Without the
          *     header, the write creates or replaces.
@@ -7826,13 +7840,13 @@ export interface operations {
     createAgentDraft: {
         parameters: {
             query?: never;
-            header?: {
+            header: {
                 /**
-                 * @description `*` makes the write a creation: refused with a 412 if the resource
-                 *     already exists. Any other value is a 400, never ignored. Without the
-                 *     header, the write creates or replaces.
+                 * @description `*`, and only `*`: the write creates the resource, and is refused with
+                 *     a 412 carrying its ETag if it exists. Without it, or with any other
+                 *     value, the request is a 400.
                  */
-                "If-None-Match"?: components["parameters"]["IfNoneMatchCreate"];
+                "If-None-Match": components["parameters"]["IfNoneMatchCreateRequired"];
             };
             path: {
                 agentId: string;
@@ -7874,15 +7888,15 @@ export interface operations {
     discardAgentDraft: {
         parameters: {
             query?: never;
-            header?: {
+            header: {
                 /**
-                 * @description Refuses the write with a 412 unless the resource is still at one of these
-                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
-                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
-                 *     on something that does not exist is refused, and one that does not parse is
-                 *     a 400. Without the header, the last write wins.
+                 * @description The ETag the caller read. Required: every change names the state it
+                 *     read, and without it the request is a 400, never applied. Refused with
+                 *     a 412, carrying the current ETag, unless the resource is still at one
+                 *     of these revisions; `*` means it exists at all. A weak tag matches the
+                 *     revision it weakens.
                  */
-                "If-Match"?: components["parameters"]["IfMatch"];
+                "If-Match": components["parameters"]["IfMatchRequired"];
             };
             path: {
                 agentId: string;
@@ -7907,15 +7921,15 @@ export interface operations {
     applyDraftOperation: {
         parameters: {
             query?: never;
-            header?: {
+            header: {
                 /**
-                 * @description Refuses the write with a 412 unless the resource is still at one of these
-                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
-                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
-                 *     on something that does not exist is refused, and one that does not parse is
-                 *     a 400. Without the header, the last write wins.
+                 * @description The ETag the caller read. Required: every change names the state it
+                 *     read, and without it the request is a 400, never applied. Refused with
+                 *     a 412, carrying the current ETag, unless the resource is still at one
+                 *     of these revisions; `*` means it exists at all. A weak tag matches the
+                 *     revision it weakens.
                  */
-                "If-Match"?: components["parameters"]["IfMatch"];
+                "If-Match": components["parameters"]["IfMatchRequired"];
             };
             path: {
                 agentId: string;

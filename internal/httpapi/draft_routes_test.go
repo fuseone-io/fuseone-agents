@@ -87,7 +87,7 @@ func TestCreateAgentDraft_handsTheStoreTheCallersAuthority(t *testing.T) {
 	t.Parallel()
 	stub := &draftStub{opened: someDraft()}
 	resp, err := draftServer(stub).CreateAgentDraft(inArea("cx", domain.RoleAuthor), openapi.CreateAgentDraftRequestObject{
-		AgentId: "triage", Params: openapi.CreateAgentDraftParams{IfNoneMatch: ptr("*")},
+		AgentId: "triage", Params: openapi.CreateAgentDraftParams{IfNoneMatch: "*"},
 		Body: &openapi.DraftIdentity{Name: "Triagem", Company: "acme", Area: "cx"},
 	})
 	if err != nil {
@@ -114,7 +114,7 @@ func TestApplyDraftOperation_aBlockOperation_isRefusedBeforeTheStore(t *testing.
 	} {
 		stub := &draftStub{opened: someDraft()}
 		resp, err := draftServer(stub).ApplyDraftOperation(inArea("cx", domain.RoleAuthor), openapi.ApplyDraftOperationRequestObject{
-			AgentId: "triage", Params: openapi.ApplyDraftOperationParams{IfMatch: ptr(`"v1-draft"`)},
+			AgentId: "triage", Params: openapi.ApplyDraftOperationParams{IfMatch: `"v1-draft"`},
 			Body: &openapi.DraftOperation{Kind: kind},
 		})
 		if err != nil {
@@ -170,7 +170,7 @@ func TestApplyDraftOperation_eachKind_becomesItsOperation(t *testing.T) {
 		stub := &draftStub{opened: someDraft()}
 		body := tc.body
 		if _, err := draftServer(stub).ApplyDraftOperation(inArea("cx", domain.RoleAuthor), openapi.ApplyDraftOperationRequestObject{
-			AgentId: "triage", Params: openapi.ApplyDraftOperationParams{IfMatch: ptr(`"v1-draft"`)}, Body: &body,
+			AgentId: "triage", Params: openapi.ApplyDraftOperationParams{IfMatch: `"v1-draft"`}, Body: &body,
 		}); err != nil {
 			t.Fatalf("%s: %v", tc.body.Kind, err)
 		}
@@ -192,7 +192,7 @@ func TestApplyDraftOperation_refusals_answerAsTheContractSays(t *testing.T) {
 		want string
 	}{
 		"not found":            {drafts.ErrNotFound, "404"},
-		"forbidden":            {drafts.ErrForbidden, "403"},
+		"forbidden":            {&drafts.ForbiddenError{Scope: domain.Scope{Company: "acme", Area: "ops"}}, "403"},
 		"stale":                {&domain.StaleError{Current: `"v1-now"`}, "412"},
 		"refused":              {draft.ErrRefused, "400"},
 		"invalid":              {draft.ErrInvalidOperation, "400"},
@@ -203,7 +203,7 @@ func TestApplyDraftOperation_refusals_answerAsTheContractSays(t *testing.T) {
 	for name, tc := range cases {
 		stub := &draftStub{err: tc.err}
 		resp, err := draftServer(stub).ApplyDraftOperation(inArea("cx", domain.RoleAuthor), openapi.ApplyDraftOperationRequestObject{
-			AgentId: "triage", Params: openapi.ApplyDraftOperationParams{IfMatch: ptr(`"v1-draft"`)},
+			AgentId: "triage", Params: openapi.ApplyDraftOperationParams{IfMatch: `"v1-draft"`},
 			Body: &openapi.DraftOperation{Kind: openapi.AddTool, Tool: ptr("crm.lookup")},
 		})
 		if err != nil {
@@ -235,7 +235,7 @@ func TestCreateAgentDraft_anIdentityForAPublishedAgent_isAConflict(t *testing.T)
 	t.Parallel()
 	stub := &draftStub{err: drafts.ErrAgentExists}
 	resp, err := draftServer(stub).CreateAgentDraft(inArea("cx", domain.RoleAuthor), openapi.CreateAgentDraftRequestObject{
-		AgentId: "triage", Params: openapi.CreateAgentDraftParams{IfNoneMatch: ptr("*")},
+		AgentId: "triage", Params: openapi.CreateAgentDraftParams{IfNoneMatch: "*"},
 		Body: &openapi.DraftIdentity{Name: "Triagem", Company: "acme", Area: "cx"},
 	})
 	if err != nil {
@@ -287,7 +287,7 @@ func TestApplyDraftOperation_validatesWithTheInstallationsChecks(t *testing.T) {
 	stub := &draftStub{opened: someDraft()}
 	server := draftServer(stub).WithAdministration(nil, publishFlowTools(), nil)
 	if _, err := server.ApplyDraftOperation(inArea("cx", domain.RoleAuthor), openapi.ApplyDraftOperationRequestObject{
-		AgentId: "triage", Params: openapi.ApplyDraftOperationParams{IfMatch: ptr(`"v1-draft"`)},
+		AgentId: "triage", Params: openapi.ApplyDraftOperationParams{IfMatch: `"v1-draft"`},
 		Body: &openapi.DraftOperation{Kind: openapi.AddTool, Tool: ptr("crm.lokup")},
 	}); err != nil {
 		t.Fatalf("ApplyDraftOperation: %v", err)

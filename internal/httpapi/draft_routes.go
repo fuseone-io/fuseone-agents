@@ -65,7 +65,7 @@ func (s *Server) GetAgentDraft(
 func (s *Server) CreateAgentDraft(
 	ctx context.Context, req openapi.CreateAgentDraftRequestObject,
 ) (openapi.CreateAgentDraftResponseObject, error) {
-	absent, err := domain.ParseIfNoneMatch(req.Params.IfNoneMatch)
+	absent, err := domain.ParseIfNoneMatch(&req.Params.IfNoneMatch)
 	if err != nil || !absent {
 		return openapi.CreateAgentDraft400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
@@ -85,23 +85,24 @@ func (s *Server) CreateAgentDraft(
 	}
 	opened, err := s.drafts.Create(ctx, domain.AgentID(req.AgentId), identity, draftCaller(ctx))
 	if err != nil {
-		return createRefused(req.AgentId, identity, err)
+		return createRefused(req.AgentId, err)
 	}
 	return openapi.CreateAgentDraft201JSONResponse{
 		Body: draftView(opened), Headers: openapi.CreateAgentDraft201ResponseHeaders{ETag: string(opened.Revision)},
 	}, nil
 }
 
-func createRefused(agent string, identity *drafts.Identity, err error) (openapi.CreateAgentDraftResponseObject, error) {
+func createRefused(agent string, err error) (openapi.CreateAgentDraftResponseObject, error) {
+	var denied *drafts.ForbiddenError
 	if stale, ok := staleFrom(err); ok {
 		return openapi.CreateAgentDraft412ApplicationProblemPlusJSONResponse{PreconditionFailedApplicationProblemPlusJSONResponse: stale}, nil
 	}
 	switch {
 	case errors.Is(err, drafts.ErrNotFound):
 		return openapi.CreateAgentDraft404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: notFound(agent)}, nil
-	case errors.Is(err, drafts.ErrForbidden) && identity != nil:
+	case errors.As(err, &denied):
 		return openapi.CreateAgentDraft403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish, identity.Scope),
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish, denied.Scope),
 		}, nil
 	case errors.Is(err, drafts.ErrAgentExists):
 		return openapi.CreateAgentDraft409ApplicationProblemPlusJSONResponse(
@@ -155,12 +156,14 @@ func (s *Server) DiscardAgentDraft(
 	return openapi.DiscardAgentDraft204Response{}, nil
 }
 
-// requiredIfMatch reads an If-Match every change to a draft must carry.
-func requiredIfMatch(header *string) (domain.IfMatch, string) {
-	if header == nil {
+// requiredIfMatch reads an If-Match every change to a draft must carry. The
+// contract makes the header required, so the router refuses its absence; an
+// empty one is refused here as the same mistake.
+func requiredIfMatch(header string) (domain.IfMatch, string) {
+	if header == "" {
 		return domain.IfMatch{}, "a change to a draft names the ETag it read, in If-Match"
 	}
-	expect, err := domain.ParseIfMatch(header)
+	expect, err := domain.ParseIfMatch(&header)
 	if err != nil {
 		return domain.IfMatch{}, err.Error()
 	}
