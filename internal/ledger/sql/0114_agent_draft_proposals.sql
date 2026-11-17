@@ -33,7 +33,14 @@ create table agent_draft_proposals (
     author         text        not null,
     -- The draft's ETag the model read: accepting it against any other is a 412.
     draft_revision text        not null,
-    kind           text        not null,
+    -- The one discriminator left once the body is erased, so only the kinds
+    -- there are (draft.Operations).
+    kind           text        not null check (kind in (
+        'set_identity', 'set_standing_approvals', 'set_model', 'set_fallback',
+        'set_cache_prefix_ttl', 'set_reply_locale', 'add_tool', 'remove_tool',
+        'set_budget', 'set_triggers', 'set_memory_learning', 'set_approval_delivery',
+        'set_emits', 'add_step', 'edit_step', 'remove_step',
+        'insert_block', 'replace_block', 'remove_block', 'move_block')),
     digest         text        not null,
     body_ref       text        not null,
     -- Validated when proposed, as an operation by proposal: an invalid one is

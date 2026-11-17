@@ -110,9 +110,9 @@ func (s *Store) Propose(ctx context.Context, p Proposing) (Proposal, error) {
 		if err != nil {
 			return err
 		}
-		refusal := ""
-		if _, err := p.Validator.Validate(ctx, d, p.Op, draft.FromProposal, p.Now); err != nil {
-			refusal = err.Error()
+		refusal, err := verdictOf(p.Validator.Validate(ctx, d, p.Op, draft.FromProposal, p.Now))
+		if err != nil {
+			return err
 		}
 		out, err = s.record(ctx, tx, r, p, refusal)
 		return err
@@ -172,4 +172,22 @@ func threadOf(ctx context.Context, tx pgx.Tx, draftID string, agent domain.Agent
 		return "", fmt.Errorf("drafts: read the thread: %w", err)
 	}
 	return thread, nil
+}
+
+/*
+verdictOf reads a validation's answer as a proposal's verdict. Only what the
+validator decides about the operation makes a proposal invalid; an error that
+kept it from deciding at all — a catalogue that could not be read — is not a
+verdict, and is returned, so nothing is recorded and the turn can try again.
+*/
+func verdictOf(_ draft.Applied, err error) (string, error) {
+	switch {
+	case err == nil:
+		return "", nil
+	case errors.Is(err, draft.ErrRefused), errors.Is(err, draft.ErrInvalidOperation),
+		errors.Is(err, draft.ErrHumanOnly), errors.Is(err, draft.ErrConversationOnly),
+		errors.Is(err, draft.ErrTooLarge):
+		return err.Error(), nil
+	}
+	return "", err
 }

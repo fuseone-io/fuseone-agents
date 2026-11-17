@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,6 +14,7 @@ import (
 	"github.com/fuseone/agents/internal/authoring/draft"
 	"github.com/fuseone/agents/internal/authoring/drafts"
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/publishable"
 	"github.com/fuseone/agents/internal/testdb"
 )
 
@@ -321,5 +323,86 @@ func assertRefused(t *testing.T, pool *pgxpool.Pool, statement string, arg any) 
 	var pg *pgconn.PgError
 	if !errors.As(err, &pg) || pg.Code != "23001" {
 		t.Errorf("%s = %v, want restrict_violation", statement, err)
+	}
+}
+
+/*
+Reading a thread locks nothing, so it never stands in a decision's way nor
+waits behind one. It used to lock the draft and then each proposal while a
+decision locked the proposal and then the draft, and Postgres broke the
+deadlock by aborting one of them. With the draft's row held by a writer, the
+reading still finishes; and a decision, which takes the draft first and the
+proposal second like every path, goes through once the writer lets go.
+*/
+func TestProposals_whileTheDraftIsHeld_readsWithoutWaitingAndTheDecisionFollows(t *testing.T) {
+	pool := testdb.Pool(t)
+	store := drafts.NewStore(pool)
+	agent := uniqueAgent(t)
+	o := openedWithBlocks(t, store, agent)
+	p := propose(t, store, agent, "usr_ana", o.Revision, draft.AddTool{Tool: "crm.lookup"})
+	holder, err := pool.Begin(t.Context())
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = holder.Rollback(context.Background()) }()
+	if _, err := holder.Exec(t.Context(), `select 1 from agent_drafts where agent_id = $1 for update`, string(agent)); err != nil {
+		t.Fatalf("hold the draft: %v", err)
+	}
+
+	read, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	if mine, err := store.Proposals(read, agent, as("usr_ana", cx)); err != nil || len(mine) != 1 {
+		t.Fatalf("Proposals while the draft is held = %d (%v), want it read without waiting", len(mine), err)
+	}
+	if err := holder.Rollback(t.Context()); err != nil {
+		t.Fatalf("release: %v", err)
+	}
+	if _, err := accept(t, store, agent, p.ID, as("usr_ana", cx)); err != nil {
+		t.Fatalf("Accept after the writer let go = %v", err)
+	}
+}
+
+type failingCatalogue struct{}
+
+func (failingCatalogue) Tools(context.Context) ([]domain.ToolEntry, error) {
+	return nil, errors.New("catalogue unreachable")
+}
+
+// A validation that could not run is not a verdict: the proposal is not
+// kept as invalid, and the caller is told, so the turn can try again.
+func TestPropose_aValidationThatCouldNotRun_recordsNothing(t *testing.T) {
+	pool := testdb.Pool(t)
+	store := drafts.NewStore(pool)
+	agent := uniqueAgent(t)
+	o := openedWithBlocks(t, store, agent)
+	broken := draft.Validator{Checker: publishable.Checker{Tools: failingCatalogue{}}}
+
+	_, err := store.Propose(t.Context(), drafts.Proposing{Agent: agent, Op: draft.AddTool{Tool: "crm.lookup"},
+		Read: o.Revision, Caller: as("usr_ana", cx), Validator: broken, Now: now})
+	if err == nil || errors.Is(err, draft.ErrRefused) {
+		t.Fatalf("Propose = %v, want the operational error itself", err)
+	}
+	if mine, err := store.Proposals(t.Context(), agent, as("usr_ana", cx)); err != nil || len(mine) != 0 {
+		t.Errorf("thread = %d proposals (%v), want none recorded", len(mine), err)
+	}
+}
+
+// The kind is the one discriminator left once a body is erased, so the table
+// holds only the kinds there are.
+func TestProposals_aKindThereIsNot_isRefusedByTheTable(t *testing.T) {
+	pool := testdb.Pool(t)
+	store := drafts.NewStore(pool)
+	agent := uniqueAgent(t)
+	o := openedWithBlocks(t, store, agent)
+	p := propose(t, store, agent, "usr_ana", o.Revision, draft.AddTool{Tool: "crm.lookup"})
+
+	_, err := pool.Exec(t.Context(), `
+		insert into agent_draft_proposals (thread_id, seq, draft_id, agent_id, author, draft_revision,
+			kind, digest, body_ref, valid, created_at)
+		values ($1::uuid, 99, $2::uuid, $3, 'usr_ana', 'r', 'grant_admin', 'd', 'ref', true, now())`,
+		p.Thread, p.Draft, string(agent))
+	var pg *pgconn.PgError
+	if !errors.As(err, &pg) || pg.Code != "23514" {
+		t.Fatalf("insert of an unknown kind = %v, want check_violation", err)
 	}
 }

@@ -206,11 +206,16 @@ func destinationAllowed(d draft.Draft, from domain.Scope, a Application) error {
 
 // lockReachable locks the draft's row and judges contract 5 on it.
 func (s *Store) lockReachable(ctx context.Context, tx pgx.Tx, agent domain.AgentID, c Caller) (row, error) {
+	return s.reachableRow(ctx, tx, agent, c, true)
+}
+
+// reachableRow reads the draft's row, locked or not, and judges contract 5.
+func (s *Store) reachableRow(ctx context.Context, tx pgx.Tx, agent domain.AgentID, c Caller, lock bool) (row, error) {
 	current, published, err := spec.CurrentIn(ctx, tx, agent)
 	if err != nil {
 		return row{}, err
 	}
-	r, found, err := readRow(ctx, tx, agent, true)
+	r, found, err := readRow(ctx, tx, agent, lock)
 	if err != nil {
 		return row{}, err
 	}

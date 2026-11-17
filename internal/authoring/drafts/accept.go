@@ -28,16 +28,19 @@ type stored struct {
 	digest string
 }
 
-func readProposal(ctx context.Context, tx pgx.Tx, agent domain.AgentID, id string) (stored, bool, error) {
+func readProposal(ctx context.Context, tx pgx.Tx, agent domain.AgentID, id string, lock bool) (stored, bool, error) {
 	var p stored
 	var read string
-	err := tx.QueryRow(ctx, `
+	query := `
 		select p.proposal_id::text, p.thread_id::text, p.draft_id::text, p.author, p.draft_revision,
 		       p.kind, p.valid, p.digest, p.body_ref, p.created_at, coalesce(d.decision, '')
 		from agent_draft_proposals p
 		left join agent_draft_proposal_decisions d on d.proposal_id = p.proposal_id
-		where p.proposal_id::text = $1 and p.agent_id = $2
-		for update of p`, id, string(agent)).Scan(
+		where p.proposal_id::text = $1 and p.agent_id = $2`
+	if lock {
+		query += ` for update of p`
+	}
+	err := tx.QueryRow(ctx, query, id, string(agent)).Scan(
 		&p.ID, &p.Thread, &p.Draft, &p.Author, &read, &p.Kind, &p.Valid, &p.digest, &p.BodyRef, &p.At, &p.Decision)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return stored{}, false, nil
@@ -142,9 +145,19 @@ func (s *Store) Reject(ctx context.Context, agent domain.AgentID, id string, c C
 	})
 }
 
-// lockDecidable locks a proposal its caller may decide, and the draft.
+/*
+lockDecidable locks the draft, then a proposal its caller may decide.
+
+The draft's row first, then the proposal's, as every path takes them: a
+decision that locked the proposal before the draft deadlocked against a
+reading of the thread that held the draft.
+*/
 func (s *Store) lockDecidable(ctx context.Context, tx pgx.Tx, agent domain.AgentID, id string, c Caller) (stored, row, error) {
-	p, found, err := readProposal(ctx, tx, agent, id)
+	r, err := s.lockReachable(ctx, tx, agent, c)
+	if err != nil {
+		return stored{}, row{}, err
+	}
+	p, found, err := readProposal(ctx, tx, agent, id, true)
 	if err != nil {
 		return stored{}, row{}, err
 	}
@@ -152,10 +165,6 @@ func (s *Store) lockDecidable(ctx context.Context, tx pgx.Tx, agent domain.Agent
 	// each author's own, and a proposal is decided only by whose turn made it.
 	if !found || p.Author != c.By {
 		return stored{}, row{}, ErrNotFound
-	}
-	r, err := s.lockReachable(ctx, tx, agent, c)
-	if err != nil {
-		return stored{}, row{}, err
 	}
 	if p.Decision != "" {
 		return stored{}, row{}, ErrDecided
@@ -173,11 +182,12 @@ func decide(ctx context.Context, tx pgx.Tx, id, decision string, revision domain
 }
 
 // Proposals is the caller's own thread over the agent's draft, oldest first,
-// each with its operation and reason when the body is still kept.
+// each with its operation and reason when the body is still kept. A reading:
+// it locks nothing, so it never stands in a decision's way.
 func (s *Store) Proposals(ctx context.Context, agent domain.AgentID, c Caller) ([]Proposal, error) {
 	var out []Proposal
 	err := s.within(ctx, func(tx pgx.Tx) error {
-		r, err := s.lockReachable(ctx, tx, agent, c)
+		r, err := s.reachableRow(ctx, tx, agent, c, false)
 		if err != nil {
 			return err
 		}
@@ -186,7 +196,7 @@ func (s *Store) Proposals(ctx context.Context, agent domain.AgentID, c Caller) (
 			return err
 		}
 		for _, id := range ids {
-			p, _, err := readProposal(ctx, tx, agent, id)
+			p, _, err := readProposal(ctx, tx, agent, id, false)
 			if err != nil {
 				return err
 			}
