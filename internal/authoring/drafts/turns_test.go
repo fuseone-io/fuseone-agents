@@ -98,7 +98,7 @@ func TestBeginTurn_aKeyAlreadySettled_replaysTheStoredTurn(t *testing.T) {
 	agent := uniqueAgent(t)
 	o := openedWithBlocks(t, store, agent)
 	first := mustBegin(t, store, agent, "usr_ana", "k1", o.Revision, 300)
-	if _, err := store.SettleTurn(t.Context(), drafts.Settlement{Turn: first.ID, Cost: 120, Reply: "Proponho duas ferramentas."}); err != nil {
+	if _, err := store.SettleTurn(t.Context(), drafts.Settlement{Agent: agent, Caller: as("usr_ana", cx), Turn: first.ID, Cost: 120, Reply: "Proponho duas ferramentas."}); err != nil {
 		t.Fatalf("SettleTurn: %v", err)
 	}
 
@@ -208,12 +208,12 @@ func TestSettleTurn_theRealCostReplacesTheReservation(t *testing.T) {
 	if got := spent(t, store) - base; got != 300 {
 		t.Fatalf("in progress counts %d, want the reservation", got)
 	}
-	settled, err := store.SettleTurn(t.Context(), drafts.Settlement{Turn: done.ID, Cost: 120, Reply: "Pronto."})
-	if err != nil || settled.State != drafts.TurnDone {
+	settled, err := store.SettleTurn(t.Context(), drafts.Settlement{Agent: agent, Caller: as("usr_ana", cx), Turn: done.ID, Cost: 120, Reply: "Pronto."})
+	if err != nil || settled.Turn.State != drafts.TurnDone {
 		t.Fatalf("SettleTurn = %+v (%v)", settled, err)
 	}
 	failed := mustBegin(t, store, agent, "usr_ana", "k2", o.Revision, 300)
-	if _, err := store.SettleTurn(t.Context(), drafts.Settlement{Turn: failed.ID, Cost: 40, Failed: true}); err != nil {
+	if _, err := store.SettleTurn(t.Context(), drafts.Settlement{Agent: agent, Caller: as("usr_ana", cx), Turn: failed.ID, Cost: 40, Failed: true}); err != nil {
 		t.Fatalf("SettleTurn(failed): %v", err)
 	}
 	if got := spent(t, store) - base; got != 160 {
@@ -242,14 +242,12 @@ func TestEraseThread_erasesWhatWasSaidAndLeavesNothingToAccept(t *testing.T) {
 	agent := uniqueAgent(t)
 	o := openedWithBlocks(t, store, agent)
 	turn := mustBegin(t, store, agent, "usr_ana", "k1", o.Revision, 100)
-	if _, err := store.SettleTurn(t.Context(), drafts.Settlement{Turn: turn.ID, Cost: 10, Reply: "Proponho."}); err != nil {
-		t.Fatalf("SettleTurn: %v", err)
+	settled, err := store.SettleTurn(t.Context(), drafts.Settlement{Agent: agent, Caller: as("usr_ana", cx), Turn: turn.ID,
+		Cost: 10, Reply: "Proponho.", Ops: []draft.Operation{draft.AddTool{Tool: "crm.lookup"}}, Validator: validator, Now: now})
+	if err != nil || len(settled.Proposals) != 1 {
+		t.Fatalf("SettleTurn = %+v (%v), want one proposal", settled, err)
 	}
-	p, err := store.Propose(t.Context(), drafts.Proposing{Agent: agent, Turn: turn.ID, Op: draft.AddTool{Tool: "crm.lookup"},
-		Read: o.Revision, Caller: as("usr_ana", cx), Validator: validator, Now: now})
-	if err != nil {
-		t.Fatalf("Propose: %v", err)
-	}
+	p := settled.Proposals[0]
 
 	if err := store.EraseThread(t.Context(), agent, as("usr_bia", cx)); err != nil {
 		t.Fatalf("EraseThread by an author with no thread: %v", err)

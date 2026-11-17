@@ -36,16 +36,23 @@ func (d *draftStub) BeginTurn(_ context.Context, b drafts.Beginning) (drafts.Sta
 	return drafts.Started{Turn: drafts.Turn{ID: "t-1", Key: b.Key, Read: b.Read, State: drafts.TurnInProgress, Reserved: b.Reserve}}, nil
 }
 
-func (d *draftStub) SettleTurn(_ context.Context, s drafts.Settlement) (drafts.Turn, error) {
+func (d *draftStub) ReplayTurn(context.Context, drafts.Replaying) (drafts.Started, bool, error) {
+	if d.stored == nil {
+		return drafts.Started{}, false, nil
+	}
+	return drafts.Started{Turn: *d.stored, Replayed: true}, true, nil
+}
+
+func (d *draftStub) SettleTurn(_ context.Context, s drafts.Settlement) (drafts.Settled, error) {
 	state := drafts.TurnDone
 	if s.Failed {
 		state = drafts.TurnFailed
 	}
-	return drafts.Turn{ID: s.Turn, Key: "k1", Read: d.opened.Revision, State: state, Cost: s.Cost, Reply: s.Reply}, nil
-}
-
-func (d *draftStub) Propose(_ context.Context, p drafts.Proposing) (drafts.Proposal, error) {
-	return drafts.Proposal{ID: "p-1", Read: p.Read, Valid: true}, nil
+	out := drafts.Settled{Turn: drafts.Turn{ID: s.Turn, Key: "k1", Read: d.opened.Revision, State: state, Cost: s.Cost, Reply: s.Reply}}
+	for range s.Ops {
+		out.Proposals = append(out.Proposals, drafts.Proposal{ID: "p-1", Valid: true})
+	}
+	return out, nil
 }
 
 func (d *draftStub) EraseThread(_ context.Context, _ domain.AgentID, c drafts.Caller) error {
@@ -140,6 +147,24 @@ func TestSendDraftTurn_offersTheScopesToolsAndProvidersOnly(t *testing.T) {
 	}
 	if !strings.Contains(models.prompt, `"anthropic"`) || strings.Contains(models.prompt, `"local-llm"`) {
 		t.Errorf("providers offered beyond the scope's:\n%s", models.prompt)
+	}
+}
+
+// A key already stored answers what was stored before anything about a new
+// turn is judged: the assistant switched off since does not hide it.
+func TestSendDraftTurn_aStoredKey_isAnsweredEvenWithTheAssistantOff(t *testing.T) {
+	t.Parallel()
+	off := turnChoice
+	off.Enabled = false
+	stub := &draftStub{opened: someDraft(), stored: &drafts.Turn{ID: "t-0", Key: "k1", State: drafts.TurnDone, Cost: 25}}
+	models := &turnModelsStub{priced: true}
+
+	resp := sendTurn(t, turnServer(stub, models, off), "Ajude.")
+	if got, ok := resp.(openapi.SendDraftTurn200JSONResponse); !ok || got.TurnId != "t-0" || got.CostMicros != 25 {
+		t.Fatalf("response = %#v, want the stored turn", resp)
+	}
+	if len(stub.begun) != 0 || len(models.asked) != 0 {
+		t.Errorf("a stored key began %d turns and built %d models", len(stub.begun), len(models.asked))
 	}
 }
 

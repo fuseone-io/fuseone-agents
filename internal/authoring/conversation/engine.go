@@ -18,9 +18,9 @@ import (
 type Store interface {
 	Get(ctx context.Context, agent domain.AgentID, c drafts.Caller) (drafts.Opened, error)
 	Turns(ctx context.Context, agent domain.AgentID, c drafts.Caller) ([]drafts.Turn, error)
+	ReplayTurn(ctx context.Context, r drafts.Replaying) (drafts.Started, bool, error)
 	BeginTurn(ctx context.Context, b drafts.Beginning) (drafts.Started, error)
-	SettleTurn(ctx context.Context, s drafts.Settlement) (drafts.Turn, error)
-	Propose(ctx context.Context, p drafts.Proposing) (drafts.Proposal, error)
+	SettleTurn(ctx context.Context, s drafts.Settlement) (drafts.Settled, error)
 }
 
 // Engine runs turns: the store, the installation's model for authoring, its
@@ -47,9 +47,10 @@ type Request struct {
 	Now     time.Time
 }
 
-// Result is a turn and what it proposed: proposals past the cap or that the
-// model's answer did not carry as operations are Dropped; those made against
-// a draft that moved during the call are Stale. Both are counted, never kept.
+// Result is a turn and what it proposed: proposals past the cap, that the
+// model's answer did not carry as operations, or of a thread erased during
+// the call are Dropped; those made against a draft that moved during the call
+// are Stale. Both are counted, never kept.
 type Result struct {
 	Turn      drafts.Turn
 	Replayed  bool
@@ -61,11 +62,12 @@ type Result struct {
 /*
 Run is one turn (NT-018 phase 3, contracts 7 and 8).
 
-The prompt is built and its worst case reserved before the model is called,
-in a short transaction, so a refusal costs nothing and nothing is locked while
-the model thinks. A key already used answers what was stored. Whatever the
-model answers, the turn settles at what the call cost; its proposals are bound
-to the ETag the prompt was built from, and dropped if the draft moved since.
+A key already stored answers what was stored, before anything else is
+judged. Otherwise the prompt is built and its worst case reserved before the
+model is called, in a short transaction, so a refusal costs nothing and
+nothing is locked while the model thinks. What the model answers is stored
+whole, the reply and every proposal with the turn's real cost, or the turn
+fails at that cost: it is never done with part of its answer.
 */
 func (e Engine) Run(ctx context.Context, r Request) (Result, error) {
 	if strings.TrimSpace(r.Message) == "" {
@@ -73,6 +75,9 @@ func (e Engine) Run(ctx context.Context, r Request) (Result, error) {
 	}
 	if len(r.Message) > MaxMessageBytes {
 		return Result{}, fmt.Errorf("%w: a message of %d bytes, at most %d", ErrTurnTooLarge, len(r.Message), MaxMessageBytes)
+	}
+	if replayed, found, err := e.Replay(ctx, r); err != nil || found {
+		return replayed, err
 	}
 	prompt, read, reserve, err := e.prepare(ctx, r)
 	if err != nil {
@@ -87,17 +92,31 @@ func (e Engine) Run(ctx context.Context, r Request) (Result, error) {
 	}
 	completion, err := e.Completer.Complete(ctx, prompt)
 	if err != nil {
-		return e.fail(ctx, started.Turn, completion, err)
+		return e.fail(ctx, r, started.Turn, completion, err)
 	}
 	answer, err := ReadReply(completion.Text)
 	if err != nil {
-		return e.fail(ctx, started.Turn, completion, err)
+		return e.fail(ctx, r, started.Turn, completion, err)
 	}
-	turn, err := e.Store.SettleTurn(ctx, drafts.Settlement{Turn: started.Turn.ID, Cost: completion.Cost.Micros, Reply: answer.Text})
+	settled, err := e.Store.SettleTurn(ctx, drafts.Settlement{
+		Agent: r.Agent, Caller: r.Caller, Turn: started.Turn.ID, Cost: completion.Cost.Micros, Reply: answer.Text,
+		Ops: answer.Proposals, Validator: e.Validator, Now: r.Now,
+	})
 	if err != nil {
-		return Result{Turn: started.Turn}, err
+		return e.fail(ctx, r, started.Turn, completion, err)
 	}
-	return e.propose(ctx, r, turn, answer)
+	return Result{Turn: settled.Turn, Proposals: settled.Proposals, Stale: settled.Stale,
+		Dropped: answer.Dropped + settled.Withheld}, nil
+}
+
+// Replay answers the turn the request's key already names, if any. It needs
+// only the store: a stored turn is answered even where no new one could run.
+func (e Engine) Replay(ctx context.Context, r Request) (Result, bool, error) {
+	started, found, err := e.Store.ReplayTurn(ctx, drafts.Replaying{Agent: r.Agent, Key: r.Key, Caller: r.Caller})
+	if err != nil || !found {
+		return Result{}, false, err
+	}
+	return Result{Turn: started.Turn, Replayed: true}, true, nil
 }
 
 // prepare reads the draft and the window, renders the prompt and prices its
@@ -127,35 +146,15 @@ func (e Engine) prepare(ctx context.Context, r Request) (string, domain.Revision
 	return prompt, opened.Revision, reserve, err
 }
 
-// fail settles a turn the model failed, or whose answer could not be read, at
-// what the call cost, and returns why.
-func (e Engine) fail(ctx context.Context, turn drafts.Turn, c model.Completion, cause error) (Result, error) {
-	settled, err := e.Store.SettleTurn(ctx, drafts.Settlement{Turn: turn.ID, Cost: c.Cost.Micros, Failed: true})
+// fail settles a turn the model failed, whose answer could not be read, or
+// whose answer could not be stored, at what the call cost, and returns why.
+// Settled failed, it keeps none of the answer.
+func (e Engine) fail(ctx context.Context, r Request, turn drafts.Turn, c model.Completion, cause error) (Result, error) {
+	settled, err := e.Store.SettleTurn(ctx, drafts.Settlement{
+		Agent: r.Agent, Caller: r.Caller, Turn: turn.ID, Cost: c.Cost.Micros, Failed: true,
+	})
 	if err != nil {
 		return Result{Turn: turn}, errors.Join(cause, err)
 	}
-	return Result{Turn: settled}, cause
-}
-
-// propose records the answer's operations against the ETag the prompt was
-// built from. One the draft moved past is stale and dropped; any other
-// refusal is the store's to report.
-func (e Engine) propose(ctx context.Context, r Request, turn drafts.Turn, answer Reply) (Result, error) {
-	out := Result{Turn: turn, Dropped: answer.Dropped}
-	for _, op := range answer.Proposals {
-		p, err := e.Store.Propose(ctx, drafts.Proposing{
-			Agent: r.Agent, Turn: turn.ID, Op: op, Read: turn.Read,
-			Caller: r.Caller, Validator: e.Validator, Now: r.Now,
-		})
-		var stale *domain.StaleError
-		switch {
-		case errors.As(err, &stale):
-			out.Stale++
-			continue
-		case err != nil:
-			return out, err
-		}
-		out.Proposals = append(out.Proposals, p)
-	}
-	return out, nil
+	return Result{Turn: settled.Turn}, cause
 }

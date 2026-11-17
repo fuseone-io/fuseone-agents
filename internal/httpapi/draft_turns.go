@@ -48,14 +48,23 @@ func (s *Server) SendDraftTurn(
 		return openapi.SendDraftTurn404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: notFound(req.AgentId)}, nil
 	}
 	agent := domain.AgentID(req.AgentId)
+	turn := conversation.Request{
+		Agent: agent, Key: req.Body.Key, Message: req.Body.Message, Pasted: valueOr(req.Body.Pasted),
+		Locale: valueOr(req.Body.Locale), Caller: draftCaller(ctx), Now: clockOr(s.clock).Now(),
+	}
+	// A stored key is answered before the assistant, its price or the
+	// catalogue are asked anything: what was stored does not depend on them.
+	if replayed, found, err := (conversation.Engine{Store: s.drafts}).Replay(ctx, turn); err != nil || found {
+		if found {
+			return openapi.SendDraftTurn200JSONResponse(turnView(replayed)), nil
+		}
+		return turnRefused(req.AgentId, err)
+	}
 	engine, err := s.turnEngine(ctx, agent)
 	if err != nil {
 		return turnRefused(req.AgentId, err)
 	}
-	result, err := engine.Run(ctx, conversation.Request{
-		Agent: agent, Key: req.Body.Key, Message: req.Body.Message, Pasted: valueOr(req.Body.Pasted),
-		Locale: valueOr(req.Body.Locale), Caller: draftCaller(ctx), Now: clockOr(s.clock).Now(),
-	})
+	result, err := engine.Run(ctx, turn)
 	// A turn that was recorded is answered, failed or not: the money left,
 	// and the person reads what happened to their message.
 	if err == nil || result.Turn.State == drafts.TurnFailed {

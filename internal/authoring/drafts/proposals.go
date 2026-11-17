@@ -55,9 +55,7 @@ type Proposal struct {
 // Proposing is one operation the model proposes, for the author whose turn
 // it was.
 type Proposing struct {
-	Agent domain.AgentID
-	// Turn is the turn that proposed it; empty for none.
-	Turn      string
+	Agent     domain.AgentID
 	Op        draft.Operation
 	Read      domain.Revision
 	Caller    Caller
@@ -116,13 +114,14 @@ func (s *Store) Propose(ctx context.Context, p Proposing) (Proposal, error) {
 		if err != nil {
 			return err
 		}
-		out, err = s.record(ctx, tx, r, p, refusal)
+		out, err = s.record(ctx, tx, r, p, refusal, "")
 		return err
 	})
 	return out, err
 }
 
-func (s *Store) record(ctx context.Context, tx pgx.Tx, r row, p Proposing, refusal string) (Proposal, error) {
+// record keeps one proposal; turn is the turn that proposed it, empty for none.
+func (s *Store) record(ctx context.Context, tx pgx.Tx, r row, p Proposing, refusal, turn string) (Proposal, error) {
 	thread, err := threadOf(ctx, tx, r.draftID, p.Agent, p.Caller.By)
 	if err != nil {
 		return Proposal{}, err
@@ -152,7 +151,7 @@ func (s *Store) record(ctx context.Context, tx pgx.Tx, r row, p Proposing, refus
 		values ($1::uuid, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, now(), nullif($11, '')::uuid)
 		returning proposal_id::text, created_at`,
 		thread, seq, r.draftID, string(p.Agent), string(p.Caller.By), string(p.Read),
-		p.Op.Kind(), hex.EncodeToString(sum[:]), ref, out.Valid, p.Turn).Scan(&out.ID, &out.At)
+		p.Op.Kind(), hex.EncodeToString(sum[:]), ref, out.Valid, turn).Scan(&out.ID, &out.At)
 	if err != nil {
 		return Proposal{}, fmt.Errorf("drafts: record the proposal: %w", err)
 	}

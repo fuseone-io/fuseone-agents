@@ -84,14 +84,6 @@ type Started struct {
 	Replayed bool
 }
 
-// Settlement is what a turn's call came back with.
-type Settlement struct {
-	Turn   string
-	Cost   int64
-	Reply  string
-	Failed bool
-}
-
 // BeginTurn reserves and records a turn, or answers the one its key names.
 func (s *Store) BeginTurn(ctx context.Context, b Beginning) (Started, error) {
 	if b.DailyMicros <= 0 {
@@ -114,6 +106,9 @@ func (s *Store) BeginTurn(ctx context.Context, b Beginning) (Started, error) {
 		if r.revision != b.Read {
 			return &domain.StaleError{Current: r.revision}
 		}
+		if err := lapse(ctx, tx, thread); err != nil {
+			return err
+		}
 		if err := withinCeiling(ctx, tx, b.Reserve, b.DailyMicros); err != nil {
 			return err
 		}
@@ -128,7 +123,9 @@ func (s *Store) BeginTurn(ctx context.Context, b Beginning) (Started, error) {
 // unknown if its lease ran out before it was stored, or ErrTurnInFlight while
 // it is still within its lease.
 func (s *Store) byKey(ctx context.Context, tx pgx.Tx, thread, key string) (Started, bool, error) {
-	turn, found, err := readTurn(ctx, tx, `thread_id = $1::uuid and idempotency_key = $2`, thread, key)
+	// Locked first, judged second: a settlement holding the row is waited
+	// for, and what it wrote is what is read.
+	turn, found, err := readTurn(ctx, tx, `thread_id = $1::uuid and idempotency_key = $2 for update`, thread, key)
 	if err != nil || !found {
 		return Started{}, false, err
 	}
@@ -136,7 +133,8 @@ func (s *Store) byKey(ctx context.Context, tx pgx.Tx, thread, key string) (Start
 		var expired bool
 		if err := tx.QueryRow(ctx, `
 			update agent_draft_turns set state = 'unknown'
-			where turn_id = $1::uuid and lease_until < now() returning true`, turn.ID).Scan(&expired); err != nil {
+			where turn_id = $1::uuid and state = 'in_progress' and lease_until < now() returning true`,
+			turn.ID).Scan(&expired); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return Started{}, false, ErrTurnInFlight
 			}
@@ -145,6 +143,28 @@ func (s *Store) byKey(ctx context.Context, tx pgx.Tx, thread, key string) (Start
 		turn.State = TurnUnknown
 	}
 	return Started{Turn: turn, Replayed: true}, true, nil
+}
+
+// lapse makes unknown the thread's turn in progress whose lease ran out, so
+// it holds the thread no longer, whatever key comes next. Locked first,
+// judged second, like byKey.
+func lapse(ctx context.Context, tx pgx.Tx, thread string) error {
+	var id string
+	err := tx.QueryRow(ctx, `
+		select turn_id::text from agent_draft_turns where thread_id = $1::uuid and state = 'in_progress' for update`,
+		thread).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("drafts: read the turn in progress: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		update agent_draft_turns set state = 'unknown'
+		where turn_id = $1::uuid and state = 'in_progress' and lease_until < now()`, id); err != nil {
+		return fmt.Errorf("drafts: judge the turn's lease: %w", err)
+	}
+	return nil
 }
 
 // withinCeiling judges a reservation against what the day already holds,
@@ -193,40 +213,6 @@ func (s *Store) insertTurn(ctx context.Context, tx pgx.Tx, r row, thread string,
 // proposals in the content store: the thread owns all three, and the seq is
 // what makes each reference its own.
 func turnContentSeq(turn int64, part int64) int64 { return 1_000_000 + turn*2 + part }
-
-// SettleTurn replaces a turn's reservation with what its call really cost,
-// and keeps the reply. A turn made unknown by a retry while the call was on
-// its way settles too: the real cost is the better figure.
-func (s *Store) SettleTurn(ctx context.Context, st Settlement) (Turn, error) {
-	var out Turn
-	err := s.within(ctx, func(tx pgx.Tx) error {
-		turn, found, err := readTurn(ctx, tx, `turn_id = $1::uuid for update`, st.Turn)
-		if err != nil || !found {
-			return firstOrErr(err, ErrNotFound)
-		}
-		if turn.State != TurnInProgress && turn.State != TurnUnknown {
-			return fmt.Errorf("drafts: turn %s is %s already", turn.ID, turn.State)
-		}
-		state, ref := TurnDone, ""
-		if st.Failed {
-			state = TurnFailed
-		}
-		if st.Reply != "" {
-			if ref, err = s.content.RestoreForTx(ctx, tx, "authoring", turn.Thread,
-				turnContentSeq(int64(turn.Seq), 1), []byte(st.Reply)); err != nil {
-				return fmt.Errorf("drafts: keep the reply: %w", err)
-			}
-		}
-		if _, err := tx.Exec(ctx, `
-			update agent_draft_turns set state = $2, cost_micros = $3, reply_ref = $4, settled_at = now()
-			where turn_id = $1::uuid`, turn.ID, state, st.Cost, ref); err != nil {
-			return fmt.Errorf("drafts: settle the turn: %w", err)
-		}
-		out, _, err = readTurn(ctx, tx, `turn_id = $1::uuid`, turn.ID)
-		return err
-	})
-	return out, err
-}
 
 /*
 SpentToday is what authoring holds against today's ceiling: the confirmed cost

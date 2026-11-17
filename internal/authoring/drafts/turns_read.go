@@ -16,10 +16,10 @@ func readTurn(ctx context.Context, tx pgx.Tx, where string, args ...any) (Turn, 
 	var read string
 	err := tx.QueryRow(ctx, `
 		select turn_id::text, thread_id::text, idempotency_key, seq, draft_revision, state,
-		       reserved_micros, cost_micros, pasted, created_at, message_ref, reply_ref
+		       reserved_micros, cost_micros, pasted, created_at, message_ref, reply_ref, erased
 		from agent_draft_turns where `+where, args...).Scan(
 		&t.ID, &t.Thread, &t.Key, &t.Seq, &read, &t.State, &t.Reserved, &t.Cost, &t.Pasted, &t.At,
-		&t.messageRef, &t.replyRef)
+		&t.messageRef, &t.replyRef, &t.Erased)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Turn{}, false, nil
 	}
@@ -77,7 +77,7 @@ func readSaid(ctx context.Context, tx pgx.Tx, id string) (Turn, error) {
 	if err != nil {
 		return Turn{}, err
 	}
-	turn.Message, turn.Erased = string(message), !kept
+	turn.Message, turn.Erased = string(message), turn.Erased || !kept
 	if turn.replyRef != "" {
 		reply, _, err := body(ctx, tx, turn.replyRef)
 		if err != nil {
@@ -91,7 +91,8 @@ func readSaid(ctx context.Context, tx pgx.Tx, id string) (Turn, error) {
 /*
 EraseThread erases what was said in the caller's own thread over the draft:
 every message, reply and proposal body the thread owns in the content store,
-in one transaction. The turns, proposals and decisions stay, as references to
+in one transaction, and every turn of it fenced, so a call still on its way
+brings nothing back into it. The turns, proposals and decisions stay, as references to
 nothing, and a proposal whose body is gone can never be accepted. An author
 with no thread has nothing to erase.
 */
@@ -109,6 +110,11 @@ func (s *Store) EraseThread(ctx context.Context, agent domain.AgentID, c Caller)
 		}
 		if err != nil {
 			return fmt.Errorf("drafts: find the thread: %w", err)
+		}
+		// The fence first: a call still on its way when the thread is erased
+		// settles behind the draft's lock, reads it, and keeps nothing.
+		if _, err := tx.Exec(ctx, `update agent_draft_turns set erased = true where thread_id = $1::uuid`, thread); err != nil {
+			return fmt.Errorf("drafts: fence the thread's turns: %w", err)
 		}
 		_, err = s.content.EraseOwnersTx(ctx, tx, "authoring", []string{thread}, "thread erased")
 		return err

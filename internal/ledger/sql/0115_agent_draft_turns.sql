@@ -32,6 +32,9 @@ create table agent_draft_turns (
     -- The author marked the message as pasted: informs the proposal's card,
     -- fences nothing.
     pasted          boolean     not null,
+    -- The author erased the thread: what the turn's call brings back after
+    -- that is never stored.
+    erased          boolean     not null default false,
     created_at      timestamptz not null,
     settled_at      timestamptz,
     unique (thread_id, idempotency_key),
