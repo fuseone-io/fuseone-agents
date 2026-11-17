@@ -27,6 +27,9 @@ type Drafts interface {
 	Create(ctx context.Context, agent domain.AgentID, identity *drafts.Identity, c drafts.Caller) (drafts.Opened, error)
 	Apply(ctx context.Context, a drafts.Application) (drafts.Opened, error)
 	Discard(ctx context.Context, agent domain.AgentID, expect domain.IfMatch, c drafts.Caller) error
+	Proposals(ctx context.Context, agent domain.AgentID, c drafts.Caller) ([]drafts.Proposal, error)
+	Accept(ctx context.Context, a drafts.Acceptance) (drafts.Opened, error)
+	Reject(ctx context.Context, agent domain.AgentID, id string, c drafts.Caller) error
 }
 
 // WithDrafts wires the workbench's drafts.

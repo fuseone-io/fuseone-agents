@@ -32,7 +32,8 @@ func TestMigrate_upgradeTo0113_addsTheDraftTablesAndChangesNothingElse(t *testin
 		t.Fatalf("the previous binary's write before the upgrade: %v", err)
 	}
 
-	if err := ledger.Migrate(ctx, pool); err != nil {
+	// Through 0113 alone: a later migration's tables are its own test's.
+	if err := ledger.MigrateThrough(ctx, pool, "0113_agent_drafts"); err != nil {
 		t.Fatalf("upgrade: %v", err)
 	}
 

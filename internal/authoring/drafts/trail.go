@@ -17,7 +17,11 @@ type trailRow struct {
 	agent   domain.AgentID
 	action  string
 	// body is what the change said; nil for a discard, which says nothing.
-	body     []byte
+	body []byte
+	// kept is a body already in the content store, an accepted proposal's:
+	// the trail names it rather than storing a copy, so erasing the thread
+	// the proposal came from reaches the trail's body too.
+	kept     *keptBody
 	origin   draft.Origin
 	revision domain.Revision
 	by       domain.UserID
@@ -64,7 +68,10 @@ func (s *Store) appendTrail(ctx context.Context, tx pgx.Tx, t trailRow) error {
 		return fmt.Errorf("drafts: trail of %s: %w", t.agent, err)
 	}
 	var digest, ref string
-	if t.body != nil {
+	switch {
+	case t.kept != nil:
+		digest, ref = t.kept.digest, t.kept.ref
+	case t.body != nil:
 		if len(t.body) > draft.MaxDefinitionBytes {
 			return fmt.Errorf("%w: a change of %d bytes", draft.ErrTooLarge, len(t.body))
 		}

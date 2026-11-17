@@ -899,6 +899,107 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
 
+  /agents/{agentId}/draft/proposals:
+    get:
+      tags: [agents]
+      operationId: listDraftProposals
+      summary: The caller's own thread of proposals over the draft
+      description: |
+        One thread per author over the shared draft (NT-018 phase 3): each
+        person reads only the proposals the model made in their own turns,
+        oldest first, with what each said and how it was decided. Reaching it
+        needs what reaching the draft needs; without it, 404.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The caller's thread.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/DraftProposal' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /agents/{agentId}/draft/proposals/{proposalId}/accept:
+    post:
+      tags: [agents]
+      operationId: acceptDraftProposal
+      summary: Apply one proposal, by its id
+      description: |
+        The only way a proposal changes the draft (contract 3). The request
+        carries nothing but the id: the server loads the proposal it stored,
+        and applies its operation as an accepted proposal, block operations
+        included. In order: the proposal is the caller's own, in their thread,
+        and the draft is reachable (404); it was not decided already (409); it
+        was valid when proposed (400); the scope it moves the draft to (403);
+        the draft is still the one, at the ETag, the model read (412, with the
+        current ETag); then the operation, validated again on the draft as it
+        is now.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: proposalId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The draft the accepted proposal left.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentDraft' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The proposal was accepted or rejected already.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
+  /agents/{agentId}/draft/proposals/{proposalId}/reject:
+    post:
+      tags: [agents]
+      operationId: rejectDraftProposal
+      summary: Decide against one proposal
+      description: |
+        Final, by the proposal's author; the draft is untouched. 404 for a
+        proposal that is not the caller's, or a draft out of reach; 409 for
+        one already decided.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: proposalId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Rejected. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The proposal was accepted or rejected already.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /agents/{agentId}/flow:
     post:
       tags: [agents]
@@ -9787,6 +9888,54 @@ components:
           items:
             type: string
             enum: [instructions, tools, budget, provider]
+    DraftProposal:
+      type: object
+      required: [proposalId, kind, valid, readRevision, createdAt]
+      properties:
+        proposalId: { type: string }
+        kind:
+          type: string
+          description: |
+            The operation's kind, as in DraftOperation: the one discriminator
+            left once retention or erasing the thread took the body.
+          enum:
+            - set_identity
+            - set_standing_approvals
+            - set_model
+            - set_fallback
+            - set_cache_prefix_ttl
+            - set_reply_locale
+            - add_tool
+            - remove_tool
+            - set_budget
+            - set_triggers
+            - set_memory_learning
+            - set_approval_delivery
+            - set_emits
+            - add_step
+            - edit_step
+            - remove_step
+            - insert_block
+            - replace_block
+            - remove_block
+            - move_block
+        operation:
+          allOf: [{ $ref: '#/components/schemas/DraftOperation' }]
+          description: What it proposes. Absent once retention or erasing the thread took its body.
+        valid:
+          type: boolean
+          description: Whether it was valid when proposed; an invalid proposal can never be accepted.
+        refusal:
+          type: string
+          description: Why it is invalid, in the validator's words.
+        decision:
+          type: string
+          enum: [accepted, rejected]
+          description: Absent while it waits.
+        readRevision:
+          type: string
+          description: The draft's ETag the model read; accepting it against another is a 412.
+        createdAt: { type: string, format: date-time }
     DraftBlock:
       type: object
       required: [id, kind, text]
@@ -9869,6 +10018,25 @@ components:
           items: { $ref: '#/components/schemas/AgentEvent' }
         step: { $ref: '#/components/schemas/AgentStep' }
         stepName: { type: string }
+        blockId:
+          type: string
+          description: The block a replace, remove or move names.
+        blockKind:
+          type: string
+          enum: [prose, objective, howToAct, whenToStop, never, howToReply]
+          description: The kind of block an insert adds.
+        at:
+          type: integer
+          description: Where an insert puts its block.
+        to:
+          type: integer
+          description: Where a move puts its block.
+        text:
+          type: string
+          description: The text an insert or replace writes.
+        locale:
+          type: string
+          description: The locale an inserted or changed block's label is written in.
     AgentDetail:
       type: object
       required: [agent, versions]

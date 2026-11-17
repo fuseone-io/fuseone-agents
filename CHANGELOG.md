@@ -30,6 +30,27 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Migration 0114 only adds tables**: `agent_draft_threads`, and the append-only
+  `agent_draft_proposals` and `agent_draft_proposal_decisions`. Nothing that exists
+  changes. No rollback floor: 0.118.0 does not read them.
+
+### Added
+
+- **The conversation's proposals, and their acceptance** (NT-018 phase 3, first part).
+  Nothing makes a proposal yet; the model's turns come next.
+  - Each author has one thread over the shared draft. A proposal is bound to its author,
+    its thread, the draft and the draft's ETag the model read. It is validated when made
+    and kept either way: an invalid one carries its reason and can never be accepted.
+  - `GET /agents/{agentId}/draft/proposals` reads the caller's own thread.
+    `POST …/proposals/{proposalId}/accept` takes only the id and applies the stored
+    operation, block operations included; against a draft that moved since, it answers
+    412 with the current ETag. `…/reject` decides against. Only the proposal's author
+    decides it, once.
+  - A proposal's body lives in the content store, owned by its thread, under the
+    installation's retention; the accepted operation's trail row names that same body.
+
 ## [0.118.0] — 2026-11-17
 
 NT-018 delivery 1b (#378, #379, #380, #381): the workbench's draft, on the server and in

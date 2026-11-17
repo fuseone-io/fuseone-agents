@@ -141,6 +141,8 @@ type Application struct {
 	Caller    Caller
 	Validator draft.Validator
 	Now       time.Time
+	// kept is the accepted proposal's body, which the trail names.
+	kept *keptBody
 }
 
 /*
@@ -204,11 +206,16 @@ func destinationAllowed(d draft.Draft, from domain.Scope, a Application) error {
 
 // lockReachable locks the draft's row and judges contract 5 on it.
 func (s *Store) lockReachable(ctx context.Context, tx pgx.Tx, agent domain.AgentID, c Caller) (row, error) {
+	return s.reachableRow(ctx, tx, agent, c, true)
+}
+
+// reachableRow reads the draft's row, locked or not, and judges contract 5.
+func (s *Store) reachableRow(ctx context.Context, tx pgx.Tx, agent domain.AgentID, c Caller, lock bool) (row, error) {
 	current, published, err := spec.CurrentIn(ctx, tx, agent)
 	if err != nil {
 		return row{}, err
 	}
-	r, found, err := readRow(ctx, tx, agent, true)
+	r, found, err := readRow(ctx, tx, agent, lock)
 	if err != nil {
 		return row{}, err
 	}
@@ -234,7 +241,7 @@ func (s *Store) update(ctx context.Context, tx pgx.Tx, r row, a Application, app
 		return Opened{}, fmt.Errorf("drafts: write %s: %w", a.Agent, err)
 	}
 	if err := s.appendTrail(ctx, tx, trailRow{
-		draftID: r.draftID, agent: a.Agent, action: a.Op.Kind(), body: draft.Body(a.Op),
+		draftID: r.draftID, agent: a.Agent, action: a.Op.Kind(), body: draft.Body(a.Op), kept: a.kept,
 		origin: a.Origin, revision: revision, by: a.Caller.By,
 	}); err != nil {
 		return Opened{}, err

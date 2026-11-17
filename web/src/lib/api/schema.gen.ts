@@ -544,6 +544,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/draft/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller's own thread of proposals over the draft
+         * @description One thread per author over the shared draft (NT-018 phase 3): each
+         *     person reads only the proposals the model made in their own turns,
+         *     oldest first, with what each said and how it was decided. Reaching it
+         *     needs what reaching the draft needs; without it, 404.
+         */
+        get: operations["listDraftProposals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/draft/proposals/{proposalId}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply one proposal, by its id
+         * @description The only way a proposal changes the draft (contract 3). The request
+         *     carries nothing but the id: the server loads the proposal it stored,
+         *     and applies its operation as an accepted proposal, block operations
+         *     included. In order: the proposal is the caller's own, in their thread,
+         *     and the draft is reachable (404); it was not decided already (409); it
+         *     was valid when proposed (400); the scope it moves the draft to (403);
+         *     the draft is still the one, at the ETag, the model read (412, with the
+         *     current ETag); then the operation, validated again on the draft as it
+         *     is now.
+         */
+        post: operations["acceptDraftProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/draft/proposals/{proposalId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide against one proposal
+         * @description Final, by the proposal's author; the draft is untouched. 404 for a
+         *     proposal that is not the caller's, or a draft out of reach; 409 for
+         *     one already decided.
+         */
+        post: operations["rejectDraftProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/flow": {
         parameters: {
             query?: never;
@@ -5961,6 +6034,30 @@ export interface components {
             /** @description What publication still needs and the draft lacks. */
             missing: ("instructions" | "tools" | "budget" | "provider")[];
         };
+        DraftProposal: {
+            proposalId: string;
+            /**
+             * @description The operation's kind, as in DraftOperation: the one discriminator
+             *     left once retention or erasing the thread took the body.
+             * @enum {string}
+             */
+            kind: "set_identity" | "set_standing_approvals" | "set_model" | "set_fallback" | "set_cache_prefix_ttl" | "set_reply_locale" | "add_tool" | "remove_tool" | "set_budget" | "set_triggers" | "set_memory_learning" | "set_approval_delivery" | "set_emits" | "add_step" | "edit_step" | "remove_step" | "insert_block" | "replace_block" | "remove_block" | "move_block";
+            /** @description What it proposes. Absent once retention or erasing the thread took its body. */
+            operation?: components["schemas"]["DraftOperation"];
+            /** @description Whether it was valid when proposed; an invalid proposal can never be accepted. */
+            valid: boolean;
+            /** @description Why it is invalid, in the validator's words. */
+            refusal?: string;
+            /**
+             * @description Absent while it waits.
+             * @enum {string}
+             */
+            decision?: "accepted" | "rejected";
+            /** @description The draft's ETag the model read; accepting it against another is a 412. */
+            readRevision: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
         DraftBlock: {
             /** @description Stable for the draft's life; what a block operation names. */
             id: string;
@@ -6009,6 +6106,21 @@ export interface components {
             emits?: components["schemas"]["AgentEvent"][];
             step?: components["schemas"]["AgentStep"];
             stepName?: string;
+            /** @description The block a replace, remove or move names. */
+            blockId?: string;
+            /**
+             * @description The kind of block an insert adds.
+             * @enum {string}
+             */
+            blockKind?: "prose" | "objective" | "howToAct" | "whenToStop" | "never" | "howToReply";
+            /** @description Where an insert puts its block. */
+            at?: number;
+            /** @description Where a move puts its block. */
+            to?: number;
+            /** @description The text an insert or replace writes. */
+            text?: string;
+            /** @description The locale an inserted or changed block's label is written in. */
+            locale?: string;
         };
         AgentDetail: {
             agent: components["schemas"]["Agent"];
@@ -7958,6 +8070,102 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    listDraftProposals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's thread. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["DraftProposal"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    acceptDraftProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                proposalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The draft the accepted proposal left. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDraft"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The proposal was accepted or rejected already. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    rejectDraftProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                proposalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rejected. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description The proposal was accepted or rejected already. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     checkDataFlow: {
