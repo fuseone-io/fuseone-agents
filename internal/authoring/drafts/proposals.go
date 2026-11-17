@@ -38,6 +38,9 @@ type Proposal struct {
 	ID, Thread, Draft string
 	Agent             domain.AgentID
 	Author            domain.UserID
+	// Kind is the operation's kind, kept on the row: known even once the
+	// body that says the rest was erased.
+	Kind string
 	// Read is the draft's ETag the model read when it proposed this.
 	Read    domain.Revision
 	Op      draft.Operation
@@ -138,7 +141,7 @@ func (s *Store) record(ctx context.Context, tx pgx.Tx, r row, p Proposing, refus
 	}
 	sum := sha256.Sum256(body)
 	out := Proposal{
-		Thread: thread, Draft: r.draftID, Agent: p.Agent, Author: p.Caller.By, Read: p.Read,
+		Thread: thread, Draft: r.draftID, Agent: p.Agent, Author: p.Caller.By, Read: p.Read, Kind: p.Op.Kind(),
 		Op: p.Op, Valid: refusal == "", Refusal: refusal, BodyRef: ref,
 	}
 	err = tx.QueryRow(ctx, `

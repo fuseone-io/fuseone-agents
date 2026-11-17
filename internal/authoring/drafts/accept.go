@@ -33,12 +33,12 @@ func readProposal(ctx context.Context, tx pgx.Tx, agent domain.AgentID, id strin
 	var read string
 	err := tx.QueryRow(ctx, `
 		select p.proposal_id::text, p.thread_id::text, p.draft_id::text, p.author, p.draft_revision,
-		       p.valid, p.digest, p.body_ref, p.created_at, coalesce(d.decision, '')
+		       p.kind, p.valid, p.digest, p.body_ref, p.created_at, coalesce(d.decision, '')
 		from agent_draft_proposals p
 		left join agent_draft_proposal_decisions d on d.proposal_id = p.proposal_id
 		where p.proposal_id::text = $1 and p.agent_id = $2
 		for update of p`, id, string(agent)).Scan(
-		&p.ID, &p.Thread, &p.Draft, &p.Author, &read, &p.Valid, &p.digest, &p.BodyRef, &p.At, &p.Decision)
+		&p.ID, &p.Thread, &p.Draft, &p.Author, &read, &p.Kind, &p.Valid, &p.digest, &p.BodyRef, &p.At, &p.Decision)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return stored{}, false, nil
 	}

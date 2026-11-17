@@ -26,11 +26,14 @@ becomes an operation, and how each refusal answers.
 
 // draftStub answers what it is told and records what it was asked.
 type draftStub struct {
-	err     error
-	opened  drafts.Opened
-	applied []drafts.Application
-	created []*drafts.Identity
-	callers []drafts.Caller
+	err       error
+	opened    drafts.Opened
+	applied   []drafts.Application
+	created   []*drafts.Identity
+	callers   []drafts.Caller
+	proposals []drafts.Proposal
+	accepted  []drafts.Acceptance
+	rejected  []string
 }
 
 func (d *draftStub) Get(_ context.Context, _ domain.AgentID, c drafts.Caller) (drafts.Opened, error) {
