@@ -223,4 +223,23 @@ describe("the workbench conversation", () => {
     expect(within(card).queryByRole("button", { name: "Aceitar" })).not.toBeInTheDocument();
   });
 
+  it("reads a settled turn's proposals without being reopened", async () => {
+    let reads = 0;
+    world({
+      [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Ajude.", state: reads++ === 0 ? "in_progress" : "done" }], conversation: "open" } }),
+      [`GET ${PROPOSALS}`]: () => ({ body: { items: reads > 1 ? [blockProposal] : [] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    expect(await screen.findByRole("article", { name: "Reescrever um bloco" }, { timeout: 5000 })).toBeInTheDocument();
+  });
+
+  // Read before the turns, the proposals could miss a turn that settles in
+  // between, and nothing would read them again.
+  it("reads the proposals only once the turns have answered", async () => {
+    const calls = world({ [`GET ${TURNS}`]: () => "hang" });
+    openAt("/agents/triagem/workbench");
+    await screen.findByRole("heading", { name: "triagem" });
+    await new Promise((settle) => setTimeout(settle, 300));
+    expect(calls.some((c) => c.path === PROPOSALS)).toBe(false);
+  });
 });

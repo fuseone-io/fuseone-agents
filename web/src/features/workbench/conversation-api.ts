@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
 import type { DraftProposal, DraftTurn } from "@/lib/api/client";
 import { revised } from "@/lib/api/revision";
@@ -38,11 +38,29 @@ export function useTurns(agentId: string) {
   });
 }
 
-export function useProposals(agentId: string) {
+/**
+ * The turns that have settled, as one value: it changes whenever a turn
+ * settles, including an unknown one settling late. Undefined before the
+ * turns are read.
+ */
+export function settledOf(turns: DraftTurn[] | undefined): string | undefined {
+  return turns?.filter((t) => t.state !== "in_progress").map((t) => `${t.turnId}:${t.state}`).join(",");
+}
+
+/**
+ * The thread's proposals, read only after its turns and again whenever one
+ * settles. A turn's proposals are stored with its settlement, in the same
+ * transaction, so a read made after seeing the turn settled holds them all:
+ * neither a reload nor a lost answer leaves a settled turn without its cards.
+ */
+export function useProposals(agentId: string, settled: string | undefined) {
   return useQuery({
-    queryKey: conversationKeys.proposals(agentId),
+    queryKey: [...conversationKeys.proposals(agentId), settled ?? ""] as const,
     queryFn: async (): Promise<DraftProposal[]> =>
       unwrap(await api.GET("/agents/{agentId}/draft/proposals", { params: { path: { agentId } } })).items,
+    enabled: settled !== undefined,
+    // The cards already shown stay while the next read is on its way.
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -7,7 +7,7 @@ import { Section } from "@/features/policies/section";
 import { ConversationComposer } from "@/features/workbench/conversation-composer";
 import { ConversationErase } from "@/features/workbench/conversation-erase";
 import { ConversationTurn } from "@/features/workbench/conversation-turn";
-import { useProposals, useTurns } from "@/features/workbench/conversation-api";
+import { settledOf, useProposals, useTurns } from "@/features/workbench/conversation-api";
 import { useComposer } from "@/features/workbench/use-composer";
 import { useDecide } from "@/features/workbench/use-decide";
 import type { RevisedDraft } from "@/features/workbench/api";
@@ -40,7 +40,7 @@ export function WorkbenchConversation({
 }) {
   const { t } = useTranslation();
   const turns = useTurns(agentId);
-  const proposals = useProposals(agentId);
+  const proposals = useProposals(agentId, settledOf(turns.data?.items));
   const composer = useComposer(agentId);
   const decide = useDecide(agentId, onDraft);
   const items = turns.data?.items ?? [];
