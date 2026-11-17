@@ -8,7 +8,6 @@ import (
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/flow"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/spec"
 )
@@ -86,38 +85,14 @@ func (s *Server) PublishAgent(
 		}, nil
 	}
 
-	// Before the version is written, because a schedule nobody can parse
-	// would otherwise be published, reported as saved, and never fire.
-	if bad := unparseableSchedule(published, clockOr(s.clock).Now()); bad != "" {
-		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
-			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				invalid(fmt.Sprintf("the schedule %q is not one this platform can read", bad))),
-		}, nil
-	}
-	if detail := s.unconfiguredPair(published); detail != "" {
-		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
-			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				invalid(detail)),
-		}, nil
-	}
-
-	// One read of the catalogue for both checks, so a classification landing
-	// mid-publish cannot leave them judging different catalogues.
-	catalogue, err := s.rulingsFor(ctx, specScope(published))
+	detail, err := s.checker().Check(ctx, published, clockOr(s.clock).Now())
 	if err != nil {
 		return nil, err
 	}
-	if unoffered := s.unofferedTools(published, catalogue); len(unoffered) > 0 {
+	if detail != "" {
 		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				invalid(unofferedToolsDetail(unoffered))),
-		}, nil
-	}
-
-	if blocked := blockingStaticFlows(published, catalogue); len(blocked) > 0 {
-		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
-			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				invalid(staticFlowBlockDetail(blocked))),
+				invalid(detail)),
 		}, nil
 	}
 
@@ -250,29 +225,6 @@ func publishScope(
 		}
 	}
 	return target, false
-}
-
-func blockingStaticFlows(draft spec.Spec, catalogue ruled) []flow.Path {
-	finding := flow.Check(draft.Tools, envelopesOf(draft), catalogue)
-	var out []flow.Path
-	for _, path := range finding.Paths {
-		if path.BlocksPublication() {
-			out = append(out, path)
-		}
-	}
-	return out
-}
-
-func staticFlowBlockDetail(paths []flow.Path) string {
-	first := paths[0]
-	detail := fmt.Sprintf(
-		"untrusted data can reach non-reversible tool %s (%s) from %s",
-		first.To, first.Effect, first.From,
-	)
-	if len(paths) > 1 {
-		detail = fmt.Sprintf("%s and %d more path(s)", detail, len(paths)-1)
-	}
-	return detail
 }
 
 // agentVersions is which versions already exist, so publishing can report

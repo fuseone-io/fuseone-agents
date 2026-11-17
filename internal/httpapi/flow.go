@@ -2,12 +2,11 @@ package httpapi
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/flow"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
-	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/publishable"
 )
 
 /*
@@ -41,66 +40,19 @@ func (s *Server) CheckDataFlow(ctx context.Context, req openapi.CheckDataFlowReq
 		}, nil
 	}
 
-	catalogue, err := s.rulingsFor(ctx, specScope(draft))
+	catalogue, err := s.checker().Rulings(ctx, publishable.ScopeOf(draft))
 	if err != nil {
 		return nil, err
 	}
 
-	finding := flow.Check(draft.Tools, envelopesOf(draft), catalogue)
+	finding := flow.Check(draft.Tools, publishable.Envelopes(draft), catalogue)
 	return openapi.CheckDataFlow200JSONResponse(findingFrom(finding)), nil
 }
 
-// envelopesOf hands the checker the steps as data. The flow package cannot
-// import the one that parses definitions — dependencies point inward.
-func envelopesOf(draft spec.Spec) []flow.Envelope {
-	out := make([]flow.Envelope, 0, len(draft.Steps))
-	for _, step := range draft.Steps {
-		out = append(out, flow.Envelope{Name: step.Name, Reaches: step.Reaches})
-	}
-	return out
-}
-
-func specScope(draft spec.Spec) domain.Scope {
-	return domain.Scope{Company: draft.Company, Area: draft.Area}
-}
-
-// catalogue is what the Curator has ruled about each tool.
-type ruled map[domain.ToolID]domain.ToolEntry
-
-func (r ruled) Effect(tool domain.ToolID) (domain.Effect, bool) {
-	entry, ok := r[tool]
-	if !ok || !entry.Effect.Valid() {
-		return domain.EffectUnknown, false
-	}
-	return entry.Effect, true
-}
-
-func (r ruled) Untrusted(tool domain.ToolID) bool { return r[tool].Untrusted }
-
-// rulings is the catalogue with what the Curator decided about each tool. The
-// assistant's own catalogue next door needs only the names, which is why there
-// are two: one answers "what may I mention", this one answers "what does it do".
-func (s *Server) rulingsFor(ctx context.Context, scope domain.Scope) (ruled, error) {
-	if s.tools == nil {
-		return ruled{}, nil
-	}
-	entries, err := s.tools.Tools(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("tool catalogue: %w", err)
-	}
-	// Only the tools usable from the agent's scope (NT-019 Enforcement): a
-	// connector instance's and an MCP server's alike. One out of it is not
-	// offered, so publishing an agent naming it is refused, and the Gate
-	// still stops a run that reaches one (checkScope). Every entry carries
-	// its server's runtime scope (placeTools), the installation's by default.
-	out := make(ruled, len(entries))
-	for _, entry := range entries {
-		if !entry.Scope.Contains(scope) {
-			continue
-		}
-		out[entry.ID] = entry
-	}
-	return out, nil
+// checker is the publication's judgement of a definition against this
+// installation, shared by every way of publishing (NT-018, contract 6).
+func (s *Server) checker() publishable.Checker {
+	return publishable.Checker{Providers: s.providerNames, Tools: s.tools}
 }
 
 func findingFrom(f flow.Finding) openapi.FlowFinding {
