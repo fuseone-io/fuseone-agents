@@ -19,6 +19,12 @@ export const InterviewPage = lazy(() =>
 export const AgentEditorPage = lazy(() =>
   import("@/features/agents/agent-editor-page").then((m) => ({ default: m.AgentEditorPage })),
 );
+export const WorkbenchPage = lazy(() =>
+  import("@/features/workbench/workbench-page").then((m) => ({ default: m.WorkbenchPage })),
+);
+export const WorkbenchNewPage = lazy(() =>
+  import("@/features/workbench/workbench-new-page").then((m) => ({ default: m.WorkbenchNewPage })),
+);
 export const AgentDetailPage = lazy(() =>
   import("@/features/agents/agent-detail-page").then((m) => ({ default: m.AgentDetailPage })),
 );

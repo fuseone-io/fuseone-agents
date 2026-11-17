@@ -27,7 +27,9 @@ export default function ConsoleRoutes() {
           <Route path="/agents" element={<P.AgentsPage />} />
           <Route path="/agents/interview" element={<P.InterviewPage />} />
           <Route path="/agents/new" element={<P.AgentEditorPage />} />
+          <Route path="/agents/workbench" element={<P.WorkbenchNewPage />} />
           <Route path="/agents/:agentId" element={<P.AgentDetailPage />} />
+          <Route path="/agents/:agentId/workbench" element={<P.WorkbenchPage />} />
           <Route path="/agents/:agentId/edit" element={<P.AgentEditorPage />} />
           <Route path="/agents/:agentId/simulate" element={<P.SimulationPage />} />
           <Route path="/agents/:agentId/experiments" element={<P.ExperimentsPage />} />

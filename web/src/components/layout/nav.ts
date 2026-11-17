@@ -244,6 +244,7 @@ const SUB_TITLES: Record<string, Record<string, string>> = {
     new: "agents.newAgent",
     interview: "interview.title",
     edit: "agents.edit",
+    workbench: "workbench.title",
   },
   policies: {
     new: "policies.newPolicy",

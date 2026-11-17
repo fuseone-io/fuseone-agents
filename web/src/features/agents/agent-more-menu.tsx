@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { Archive, Ellipsis, FlaskConical, Pause, TestTubes } from "lucide-react";
+import { Archive, Ellipsis, FlaskConical, NotebookPen, Pause, TestTubes } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +59,12 @@ export function AgentMoreMenu({
             </Link>
           </DropdownMenuItem>
         )}
+        <DropdownMenuItem asChild>
+          <Link to={`/agents/${agentId}/workbench`}>
+            <NotebookPen className="size-4" aria-hidden />
+            {t("workbench.openWorkbench")}
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link to={`/agents/${agentId}/experiments`}>
             <TestTubes className="size-4" aria-hidden />
