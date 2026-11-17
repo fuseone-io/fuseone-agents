@@ -18,6 +18,10 @@ export function WorkbenchPage() {
   if (draft.data) {
     return (
       <WorkbenchPanel
+        // One panel per draft: another agent, or a draft opened again,
+        // starts from what its own draft holds, never from edits made on
+        // the one before.
+        key={`${agentId}:${draft.data.body.draftId}`}
         agentId={agentId}
         draft={draft.data}
         reread={async () => {

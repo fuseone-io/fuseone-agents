@@ -1,4 +1,5 @@
 import { screen, waitFor } from "@testing-library/react";
+import { Link } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "@/i18n";
@@ -206,5 +207,40 @@ describe("the workbench in English", () => {
     expect(await screen.findByText("Difference from the published version")).toBeInTheDocument();
     expect(screen.getByText("Still needed before publishing")).toBeInTheDocument();
     expect(screen.getByText("Tools")).toBeInTheDocument();
+  });
+});
+
+describe("the workbench panel, between agents and during a save", () => {
+  beforeAll(polyfillPointer);
+  beforeEach(() => setLocale("pt-BR"));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows another agent's own draft, not the edits left on the one before", async () => {
+    serve({
+      "GET /agents/a/draft": () => ({ body: { ...draftOf({ name: "Agente A" }), agentId: "a", draftId: "da" }, etag: '"a1"' }),
+      "GET /agents/b/draft": () => ({ body: { ...draftOf({ name: "Agente B" }), agentId: "b", draftId: "db" }, etag: '"b1"' }),
+    });
+    openAt("/agents/b/workbench", <><Link to="/agents/a/workbench">ir para a</Link><Link to="/agents/b/workbench">ir para b</Link></>);
+    await screen.findByRole("heading", { name: "b" });
+    await userEvent.click(screen.getByRole("link", { name: "ir para a" }));
+    await rename("Edição de A");
+    await userEvent.click(screen.getByRole("link", { name: "ir para b" }));
+    await screen.findByRole("heading", { name: "b" });
+    expect(screen.getByLabelText(/^Nome/)).toHaveValue("Agente B");
+  });
+
+  it("keeps an edit made while a save was on its way", async () => {
+    let answer: (reply: { body: unknown; etag: string }) => void = () => {};
+    serve({
+      [`GET ${DRAFT}`]: () => ({ body: draftOf(), etag: '"e1"' }),
+      [`POST ${OPS}`]: () => new Promise((resolve) => (answer = resolve)),
+    });
+    openAt("/agents/triagem/workbench");
+    await rename("Primeira");
+    await userEvent.click(screen.getByRole("button", { name: /Salvar no rascunho/ }));
+    await rename("Segunda");
+    answer({ body: draftOf({ name: "Primeira" }), etag: '"e2"' });
+    await screen.findByRole("button", { name: /Salvar no rascunho · 1 alteração/ });
+    expect(screen.getByLabelText(/^Nome/)).toHaveValue("Segunda");
   });
 });

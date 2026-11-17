@@ -38,3 +38,17 @@ describe("saving a draft", () => {
     expect(result.current.state).toBe("stale");
   });
 });
+
+describe("a save that lands in part", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("counts what landed before the refusal", async () => {
+    let n = 0;
+    serve({ [`POST ${OPS}`]: () => (++n === 1 ? { body: draftOf(), etag: '"e2"' } : { status: 412, etag: '"e3"' }) });
+    const { result } = renderHook(() => useSaveDraft("triagem"), { wrapper });
+    const steps = [{ kind: "add_tool", tool: "crm.reply" }, { kind: "set_reply_locale", replyLocale: "en-US" }] as const;
+    await act(() => result.current.save({ body: draftOf(), etag: '"e1"' }, [...steps], { draft: () => {}, error: () => {} }));
+    expect(result.current.state).toBe("stale");
+    expect(result.current.landed).toEqual({ landed: 1, total: 2 });
+  });
+});

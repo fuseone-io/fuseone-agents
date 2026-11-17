@@ -15,7 +15,7 @@ type Def = AgentDefinition;
 type Step = NonNullable<Def["steps"]>[number];
 
 /** Compared by value: what the wire would carry, absent and empty alike. */
-function same(a: unknown, b: unknown): boolean {
+export function same(a: unknown, b: unknown): boolean {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
 

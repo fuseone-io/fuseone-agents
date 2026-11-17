@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -15,7 +16,7 @@ or by an empty list for any other read. Nothing of the panel is mocked.
 
 export type Call = { method: string; path: string; headers: Headers; body: unknown };
 export type Reply = { status?: number; body?: unknown; etag?: string } | "hang";
-export type Routes = Record<string, (call: Call, calls: Call[]) => Reply>;
+export type Routes = Record<string, (call: Call, calls: Call[]) => Reply | Promise<Reply>>;
 
 export function serve(routes: Routes): Call[] {
   const calls: Call[] = [];
@@ -32,7 +33,7 @@ export function serve(routes: Routes): Call[] {
       };
       calls.push(call);
       const route = routes[`${call.method} ${call.path}`];
-      const reply = route ? route(call, calls) : call.method === "GET" ? { body: { items: [] } } : { status: 404 };
+      const reply = route ? await route(call, calls) : call.method === "GET" ? { body: { items: [] } } : { status: 404 };
       if (reply === "hang") return new Promise<Response>(() => {});
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (reply.etag) headers.ETag = reply.etag;
@@ -44,13 +45,14 @@ export function serve(routes: Routes): Call[] {
   return calls;
 }
 
-export function openAt(path: string) {
+export function openAt(path: string, around?: ReactNode) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
+        {around}
         <Routes>
           <Route path="/agents/workbench" element={<WorkbenchNewPage />} />
           <Route path="/agents/:agentId/workbench" element={<WorkbenchPage />} />

@@ -20,14 +20,18 @@ export function useWorkbench(agentId: string, draft: RevisedDraft, reread: Rerea
   const local = edits.local ?? draft.body.definition;
   const pending = operationsFor(draft.body.definition, local, edits.touched);
 
-  const save = () =>
+  const save = () => {
+    // What this save was computed from: answered, these values are the
+    // server's, and anything typed after this moment stays unsaved.
+    const sent = local;
     void saving.save(draft, pending, {
       draft: (next, last) => {
-        edits.takeIn(next.body.definition, last);
+        edits.takeIn(next.body.definition, last ? sent : undefined);
         if (last) toast.success(t("workbench.saved"));
       },
       error: (error) => toast.error(problemMessage(error, t)),
     });
+  };
 
   /**
    * Reads the draft again and keeps every unsaved edit over it. A draft still
@@ -36,9 +40,9 @@ export function useWorkbench(agentId: string, draft: RevisedDraft, reread: Rerea
   const reload = async () => {
     const next = await reread();
     if (!next) return;
-    edits.takeIn(next.body.definition, false);
+    edits.takeIn(next.body.definition);
     saving.settle();
   };
 
-  return { local, patch: edits.patch, pending, save, reload, state: saving.state };
+  return { local, patch: edits.patch, pending, save, reload, state: saving.state, landed: saving.landed };
 }

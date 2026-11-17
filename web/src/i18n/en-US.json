@@ -3480,6 +3480,8 @@
     "instructionsNote": "The instructions change only through the workbench's conversation, which arrives in a later delivery. Here they are read-only.",
     "instructionsEmpty": "No instructions yet.",
     "againstPublished": "Difference from the published version",
-    "openWorkbench": "Open in the workbench"
+    "openWorkbench": "Open in the workbench",
+    "stalePartial": "{{landed}} of {{total}} changes were saved; the rest were not, because the draft changed while you were saving. Reading it again brings the current version and keeps the rest over it.",
+    "gonePartial": "{{landed}} of {{total}} changes were saved before the draft stopped being available. The rest stay on screen, unsaved."
   }
 }

@@ -43,13 +43,17 @@ export function WorkbenchPanel({
       >
         <WorkbenchDiscard agentId={agentId} etag={draft.etag} />
         <Button size="sm" onClick={bench.save} disabled={count === 0 || bench.state === "saving"}>
-          <Save className="size-4" />
-          {count === 0
-            ? t("workbench.nothingToSave")
-            : `${t("workbench.save")} · ${t("workbench.saveCount", { count })}`}
+          <Save className="size-4" aria-hidden />
+          {/* The icon alone on a phone, where the header holds two actions
+              beside the breadcrumb; the words stay the button's name. */}
+          <span className="sr-only sm:not-sr-only">
+            {count === 0
+              ? t("workbench.nothingToSave")
+              : `${t("workbench.save")} · ${t("workbench.saveCount", { count })}`}
+          </span>
         </Button>
       </PageHeader>
-      <WorkbenchNotice state={bench.state} onReread={() => void bench.reload()} />
+      <WorkbenchNotice state={bench.state} landed={bench.landed} onReread={() => void bench.reload()} />
       <WorkbenchMissing missing={draft.body.missing} />
       <WorkbenchFields agentId={agentId} local={bench.local} patch={bench.patch} />
       <WorkbenchInstructions
