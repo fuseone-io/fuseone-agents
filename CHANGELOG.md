@@ -35,11 +35,32 @@ field" is a commit message.
 - **Migration 0114 only adds tables**: `agent_draft_threads`, and the append-only
   `agent_draft_proposals` and `agent_draft_proposal_decisions`. Nothing that exists
   changes. No rollback floor: 0.118.0 does not read them.
+- **Migration 0115 only adds**: the table `agent_draft_turns` and a nullable `turn_id`
+  column on `agent_draft_proposals`. No rollback floor: 0.118.0 reads neither.
 
 ### Added
 
+- **The conversation's turns** (NT-018 phase 3, second part). The model now proposes;
+  nothing in the console sends a turn yet.
+  - `POST /agents/{agentId}/draft/turns` sends one message of the caller's own thread to
+    the installation's authoring model. The model reads the whole draft, its blocks,
+    what publication still needs and what the draft's scope offers, never a secret or an
+    address; what it answers becomes proposals, which only the author's acceptance
+    applies. Proposals made against a draft that moved while the model was thinking are
+    dropped and counted.
+  - A turn carries an idempotency key: sent again, it answers what was stored and calls
+    nobody. One turn at a time per thread.
+  - Its worst case is reserved against the day's authoring ceiling before the model is
+    called, at the model's configured price: an unpriced model, a turn whose input alone
+    is over the per-turn ceiling, and a day the reservation does not fit are refused
+    before any call. The real cost settles it, failed or not. A turn whose call outlived
+    its lease becomes unknown: never called again, its reservation kept against the day
+    and shown as kept, never recorded as a cost.
+  - `GET /agents/{agentId}/draft/turns` reads the caller's own transcript, with what
+    each turn reserved, cost or kept. `DELETE /agents/{agentId}/draft/thread` erases what
+    was said in it, messages, replies and proposals' bodies; the figures stay.
+
 - **The conversation's proposals, and their acceptance** (NT-018 phase 3, first part).
-  Nothing makes a proposal yet; the model's turns come next.
   - Each author has one thread over the shared draft. A proposal is bound to its author,
     its thread, the draft and the draft's ETag the model read. It is validated when made
     and kept either way: an invalid one carries its reason and can never be accepted.
@@ -50,6 +71,12 @@ field" is a commit message.
     decides it, once.
   - A proposal's body lives in the content store, owned by its thread, under the
     installation's retention; the accepted operation's trail row names that same body.
+
+### Changed
+
+- **An authoring call to an OpenAI-compatible provider now sends its output cap**, as a
+  run's planner always has: the interview's at the platform's default, a turn's at 4,096
+  tokens. Before, the provider's own default applied.
 
 ## [0.118.0] — 2026-11-17
 
