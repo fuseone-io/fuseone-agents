@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { useAgent } from "@/features/agents/agent-detail-api";
+import { WorkbenchConversation } from "@/features/workbench/workbench-conversation";
 import { WorkbenchDiscard } from "@/features/workbench/workbench-discard";
 import { WorkbenchFields } from "@/features/workbench/workbench-fields";
 import { WorkbenchInstructions } from "@/features/workbench/workbench-instructions";
@@ -17,7 +18,8 @@ import type { RevisedDraft } from "@/features/workbench/api";
  *
  * Every change goes to the draft, under its ETag, and nothing here publishes:
  * the agent in production stays as it is. The one action is saving; the
- * instructions are read against the published version and never edited here.
+ * instructions are read against the published version and change only by a
+ * proposal of the conversation its author accepts.
  */
 export function WorkbenchPanel({
   agentId,
@@ -54,12 +56,21 @@ export function WorkbenchPanel({
         </Button>
       </PageHeader>
       <WorkbenchNotice state={bench.state} landed={bench.landed} onReread={() => void bench.reload()} />
-      <WorkbenchMissing missing={draft.body.missing} />
-      <WorkbenchFields agentId={agentId} local={bench.local} patch={bench.patch} />
-      <WorkbenchInstructions
-        now={draft.body.definition.instructions}
-        published={published.data?.instructions}
-      />
+      {/* The conversation on the left and the workspace on the right, as in
+          NT-018's mockup; on a narrow screen the workspace wraps below it. */}
+      <div className="flex flex-wrap items-start gap-6">
+        <div className="min-w-0 flex-[1_1_400px]">
+          <WorkbenchConversation agentId={agentId} blocks={draft.body.blocks} onDraft={bench.adopt} />
+        </div>
+        <div className="flex min-w-0 flex-[999_1_600px] flex-col gap-6">
+          <WorkbenchMissing missing={draft.body.missing} />
+          <WorkbenchFields agentId={agentId} local={bench.local} patch={bench.patch} />
+          <WorkbenchInstructions
+            now={draft.body.definition.instructions}
+            published={published.data?.instructions}
+          />
+        </div>
+      </div>
     </div>
   );
 }

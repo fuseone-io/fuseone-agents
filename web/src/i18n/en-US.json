@@ -2580,7 +2580,12 @@
     "standing-forbidden": "{{detail}}'s definition forbids standing approvals: every approval it asks for waits for a person. Change that on the agent, not here.",
     "source-input-erased": "The input this run was recorded with was erased or has expired, so no run was opened. It cannot be brought back.",
     "no-master-key": "This webhook comes from GitHub and the installation has no master key (FUSEONE_MASTER_KEY). Without it the key could only be stored in the clear, so the webhook stays closed until the master key is configured.",
-    "revision-missing": "The server answered without the revision a save has to answer, so nothing can be saved here. Try again; if it persists, the server needs looking at."
+    "revision-missing": "The server answered without the revision a save has to answer, so nothing can be saved here. Try again; if it persists, the server needs looking at.",
+    "conversation-off": "The authoring assistant is switched off in this installation.",
+    "conversation-unpriced": "The assistant's model has no configured price, so a turn cannot be reserved.",
+    "conversation-spent": "This turn does not fit what is left of today's authoring ceiling.",
+    "turn-in-flight": "Another turn of this conversation is still on its way. Wait for its answer.",
+    "turn-too-large": "The message, or the draft with it, is larger than a turn may be."
   },
   "retention": {
     "byDefault": "default, nobody chose it",
@@ -3477,11 +3482,71 @@
       "provider": "Model provider"
     },
     "instructionsTitle": "Instructions",
-    "instructionsNote": "The instructions change only through the workbench's conversation, which arrives in a later delivery. Here they are read-only.",
+    "instructionsNote": "The instructions change only through proposals of the conversation that you accept. Here they are read-only.",
     "instructionsEmpty": "No instructions yet.",
     "againstPublished": "Difference from the published version",
     "openWorkbench": "Open in the workbench",
     "stalePartial": "{{landed}} of {{total}} changes were saved; the rest were not, because the draft changed while you were saving. Reading it again brings the current version and keeps the rest over it.",
-    "gonePartial": "{{landed}} of {{total}} changes were saved before the draft stopped being available. The rest stay on screen, unsaved."
+    "gonePartial": "{{landed}} of {{total}} changes were saved before the draft stopped being available. The rest stay on screen, unsaved.",
+    "conversation": {
+      "title": "Conversation",
+      "hint": "Only you see it",
+      "message": "Message to the assistant",
+      "placeholder": "Describe what the agent should do, or ask to improve the instructions.",
+      "untrusted": "Ctrl+Enter sends. Pasted text is marked, and the assistant treats it as data.",
+      "send": "Send",
+      "pasted": "Pasted",
+      "emptyTitle": "No conversation yet",
+      "emptyHint": "Describe the process the agent will handle. The assistant reads the whole draft and answers with proposals you accept or reject.",
+      "failed": "The assistant did not answer",
+      "unknown": "Result unknown: the call ran past its lease before it was recorded, and will not be repeated",
+      "kept": "{{cost}} reserved, kept against today's ceiling",
+      "erased": "Message erased",
+      "invalid": "Invalid",
+      "decision": {
+        "accepted": "Accepted",
+        "rejected": "Rejected"
+      },
+      "proposalErased": "This proposal's content was erased.",
+      "moveTo": "Moves the block to position {{at}}.",
+      "accept": "Accept",
+      "reject": "Reject",
+      "applied": "Proposal applied to the draft",
+      "staleProposal": "This proposal was made over an earlier version of the draft",
+      "erase": "Erase conversation",
+      "eraseTitle": "Erase this conversation?",
+      "eraseBody": "The messages, the replies and the proposals' content stop existing. The draft and the recorded costs stay.",
+      "eraseConfirm": "Erase",
+      "erasedToast": "Conversation erased",
+      "closed": {
+        "off": "The authoring assistant is switched off in this installation",
+        "unpriced": "The assistant's model has no configured price",
+        "spent": "Today's authoring ceiling has been reached"
+      },
+      "closedHint": "The draft stays editable through its fields. The instructions change only through the conversation.",
+      "humanOnly": "Name, scope and standing approvals are a person's own decisions, never the assistant's. Change them through the fields."
+    },
+    "proposalKind": {
+      "set_identity": "Change name or scope",
+      "set_standing_approvals": "Change standing approvals",
+      "set_model": "Change the model",
+      "set_fallback": "Change the fallback model",
+      "set_cache_prefix_ttl": "Change the prefix cache",
+      "set_reply_locale": "Change the reply language",
+      "add_tool": "Add a tool",
+      "remove_tool": "Remove a tool",
+      "set_budget": "Change the ceiling",
+      "set_triggers": "Change the triggers",
+      "set_memory_learning": "Change memory learning",
+      "set_approval_delivery": "Change approval delivery",
+      "set_emits": "Change the emitted events",
+      "add_step": "Add a step",
+      "edit_step": "Change a step",
+      "remove_step": "Remove a step",
+      "insert_block": "Insert a block",
+      "replace_block": "Rewrite a block",
+      "remove_block": "Remove a block",
+      "move_block": "Move a block"
+    }
   }
 }
