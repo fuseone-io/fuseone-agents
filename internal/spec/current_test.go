@@ -69,8 +69,13 @@ func TestShareEventGraph_waitsForAPublicationInFlight(t *testing.T) {
 				finished <- err
 				return
 			}
-			defer func() { _ = tx.Rollback(ctx) }()
-			finished <- spec.ShareEventGraph(ctx, tx)
+			// Rolled back before it reports, so the test never returns, and
+			// closes the connection, while this goroutine still uses it.
+			shared := spec.ShareEventGraph(ctx, tx)
+			if err := tx.Rollback(ctx); err != nil && shared == nil {
+				shared = err
+			}
+			finished <- shared
 		}()
 		waitForBackendLockWait(t, pool, "nt018-share-graph", finished)
 	})
