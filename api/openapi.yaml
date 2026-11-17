@@ -10058,6 +10058,12 @@ components:
         turnId:
           type: string
           description: The conversation's turn that proposed it.
+        reason:
+          type: string
+          description: |
+            The model's sentence on why it proposes this: text the model wrote,
+            to read as such. Absent when it gave none, or once retention or
+            erasing the thread took it.
         instructionsAfter:
           type: string
           description: |

@@ -6134,6 +6134,12 @@ export interface components {
             /** @description The conversation's turn that proposed it. */
             turnId?: string;
             /**
+             * @description The model's sentence on why it proposes this: text the model wrote,
+             *     to read as such. Absent when it gave none, or once retention or
+             *     erasing the thread took it.
+             */
+            reason?: string;
+            /**
              * @description For a block operation, the draft's whole instructions as accepting
              *     it now would leave them, rendered as accepting renders them: a new
              *     or changed block under the label of its locale, at its position.

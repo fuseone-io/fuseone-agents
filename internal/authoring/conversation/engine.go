@@ -100,7 +100,7 @@ func (e Engine) Run(ctx context.Context, r Request) (Result, error) {
 	}
 	settled, err := e.Store.SettleTurn(ctx, drafts.Settlement{
 		Agent: r.Agent, Caller: r.Caller, Turn: started.Turn.ID, Cost: completion.Cost.Micros, Reply: answer.Text,
-		Ops: answer.Proposals, Validator: e.Validator, Now: r.Now,
+		Proposed: answer.Proposals, Validator: e.Validator, Now: r.Now,
 	})
 	if err != nil {
 		return e.fail(ctx, r, started.Turn, completion, err)

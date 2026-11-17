@@ -34,7 +34,7 @@ func readProposal(ctx context.Context, tx pgx.Tx, agent domain.AgentID, id strin
 	query := `
 		select p.proposal_id::text, p.thread_id::text, p.draft_id::text, p.author, p.draft_revision,
 		       p.kind, p.valid, p.digest, p.body_ref, p.created_at, coalesce(d.decision, ''),
-		       coalesce(p.turn_id::text, '')
+		       coalesce(p.turn_id::text, ''), p.reason_ref
 		from agent_draft_proposals p
 		left join agent_draft_proposal_decisions d on d.proposal_id = p.proposal_id
 		where p.proposal_id::text = $1 and p.agent_id = $2`
@@ -42,7 +42,7 @@ func readProposal(ctx context.Context, tx pgx.Tx, agent domain.AgentID, id strin
 		query += ` for update of p`
 	}
 	err := tx.QueryRow(ctx, query, id, string(agent)).Scan(
-		&p.ID, &p.Thread, &p.Draft, &p.Author, &read, &p.Kind, &p.Valid, &p.digest, &p.BodyRef, &p.At, &p.Decision, &p.Turn)
+		&p.ID, &p.Thread, &p.Draft, &p.Author, &read, &p.Kind, &p.Valid, &p.digest, &p.BodyRef, &p.At, &p.Decision, &p.Turn, &p.reasonRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return stored{}, false, nil
 	}
@@ -206,6 +206,13 @@ func (s *Store) Proposals(ctx context.Context, agent domain.AgentID, c Caller) (
 			} else if found {
 				p.Op, _ = draft.ParseBody(data)
 				p.Refusal = refusalOf(data)
+			}
+			if p.reasonRef != "" {
+				reason, _, err := body(ctx, tx, p.reasonRef)
+				if err != nil {
+					return err
+				}
+				p.Reason = string(reason)
 			}
 			out = append(out, p.Proposal)
 		}

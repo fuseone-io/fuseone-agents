@@ -110,12 +110,12 @@ func Window(turns []drafts.Turn) []drafts.Turn {
 // how many it proposed that could not be read or went past the cap.
 type Reply struct {
 	Text      string
-	Proposals []draft.Operation
+	Proposals []drafts.Proposed
 	Dropped   int
 }
 
 // ReadReply reads the answer's JSON object: {"reply": text, "proposals":
-// [operation bodies]}. Proposals past MaxProposalsPerTurn, and any that is not
+// [operation bodies, each with an optional "reason"]}. Proposals past MaxProposalsPerTurn, and any that is not
 // an operation, are dropped and counted.
 func ReadReply(text string) (Reply, error) {
 	start, end := strings.Index(text, "{"), strings.LastIndex(text, "}")
@@ -131,12 +131,29 @@ func ReadReply(text string) (Reply, error) {
 	}
 	out := Reply{Text: raw.Reply}
 	for _, body := range raw.Proposals {
-		op, err := draft.ParseBody(body)
-		if err != nil || len(out.Proposals) == MaxProposalsPerTurn {
+		proposed, ok := readProposal(body)
+		if !ok || len(out.Proposals) == MaxProposalsPerTurn {
 			out.Dropped++
 			continue
 		}
-		out.Proposals = append(out.Proposals, op)
+		out.Proposals = append(out.Proposals, proposed)
 	}
 	return out, nil
+}
+
+// readProposal is one proposal of an answer: an operation as ParseBody reads
+// it, and the model's reason beside it. A reason over MaxReasonBytes drops
+// the proposal rather than being cut: a cut reason can say the opposite.
+func readProposal(body json.RawMessage) (drafts.Proposed, bool) {
+	op, err := draft.ParseBody(body)
+	if err != nil {
+		return drafts.Proposed{}, false
+	}
+	var said struct {
+		Reason string `json:"reason"`
+	}
+	if json.Unmarshal(body, &said) != nil || len(said.Reason) > MaxReasonBytes {
+		return drafts.Proposed{}, false
+	}
+	return drafts.Proposed{Op: op, Reason: strings.TrimSpace(said.Reason)}, true
 }

@@ -48,6 +48,10 @@ type Proposal struct {
 	Refusal string
 	// Turn is the conversation's turn that proposed it; empty for none.
 	Turn string
+	// Reason is the model's sentence on why, read from the content store;
+	// empty for none, or once retention or erasing the thread took it.
+	Reason    string
+	reasonRef string
 	// Decision is accepted, rejected, or empty while it waits.
 	Decision string
 	BodyRef  string
@@ -116,14 +120,22 @@ func (s *Store) Propose(ctx context.Context, p Proposing) (Proposal, error) {
 		if err != nil {
 			return err
 		}
-		out, err = s.record(ctx, tx, r, p, refusal, "")
+		out, err = s.record(ctx, tx, r, p, refusal, said{})
 		return err
 	})
 	return out, err
 }
 
-// record keeps one proposal; turn is the turn that proposed it, empty for none.
-func (s *Store) record(ctx context.Context, tx pgx.Tx, r row, p Proposing, refusal, turn string) (Proposal, error) {
+// said is where a proposal came from in the conversation: its turn and the
+// model's reason, both empty for a proposal no turn made.
+type said struct{ turn, reason string }
+
+// reasonContentSeq keeps a proposal's reason apart from its body in the
+// content store: the thread owns both, and the seq makes each reference its own.
+func reasonContentSeq(seq int64) int64 { return 2_000_000 + seq }
+
+// record keeps one proposal.
+func (s *Store) record(ctx context.Context, tx pgx.Tx, r row, p Proposing, refusal string, from said) (Proposal, error) {
 	thread, err := threadOf(ctx, tx, r.draftID, p.Agent, p.Caller.By)
 	if err != nil {
 		return Proposal{}, err
@@ -142,18 +154,24 @@ func (s *Store) record(ctx context.Context, tx pgx.Tx, r row, p Proposing, refus
 	if err != nil {
 		return Proposal{}, fmt.Errorf("drafts: keep the proposal: %w", err)
 	}
+	reasonRef := ""
+	if from.reason != "" {
+		if reasonRef, err = s.content.RestoreForTx(ctx, tx, "authoring", thread, reasonContentSeq(seq), []byte(from.reason)); err != nil {
+			return Proposal{}, fmt.Errorf("drafts: keep the proposal's reason: %w", err)
+		}
+	}
 	sum := sha256.Sum256(body)
 	out := Proposal{
 		Thread: thread, Draft: r.draftID, Agent: p.Agent, Author: p.Caller.By, Read: p.Read, Kind: p.Op.Kind(),
-		Op: p.Op, Valid: refusal == "", Refusal: refusal, BodyRef: ref, Turn: turn,
+		Op: p.Op, Valid: refusal == "", Refusal: refusal, BodyRef: ref, Turn: from.turn, Reason: from.reason,
 	}
 	err = tx.QueryRow(ctx, `
 		insert into agent_draft_proposals (thread_id, seq, draft_id, agent_id, author, draft_revision,
-			kind, digest, body_ref, valid, created_at, turn_id)
-		values ($1::uuid, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, now(), nullif($11, '')::uuid)
+			kind, digest, body_ref, valid, created_at, turn_id, reason_ref)
+		values ($1::uuid, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, now(), nullif($11, '')::uuid, $12)
 		returning proposal_id::text, created_at`,
 		thread, seq, r.draftID, string(p.Agent), string(p.Caller.By), string(p.Read),
-		p.Op.Kind(), hex.EncodeToString(sum[:]), ref, out.Valid, turn).Scan(&out.ID, &out.At)
+		p.Op.Kind(), hex.EncodeToString(sum[:]), ref, out.Valid, from.turn, reasonRef).Scan(&out.ID, &out.At)
 	if err != nil {
 		return Proposal{}, fmt.Errorf("drafts: record the proposal: %w", err)
 	}

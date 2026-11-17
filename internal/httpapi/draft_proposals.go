@@ -160,5 +160,8 @@ func proposalView(p drafts.Proposal) openapi.DraftProposal {
 	if p.Turn != "" {
 		out.TurnId = ptr(p.Turn)
 	}
+	if p.Reason != "" {
+		out.Reason = ptr(p.Reason)
+	}
 	return out
 }

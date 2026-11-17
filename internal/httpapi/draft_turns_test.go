@@ -49,7 +49,7 @@ func (d *draftStub) SettleTurn(_ context.Context, s drafts.Settlement) (drafts.S
 		state = drafts.TurnFailed
 	}
 	out := drafts.Settled{Turn: drafts.Turn{ID: s.Turn, Key: "k1", Read: d.opened.Revision, State: state, Cost: s.Cost, Reply: s.Reply}}
-	for range s.Ops {
+	for range s.Proposed {
 		out.Proposals = append(out.Proposals, drafts.Proposal{ID: "p-1", Valid: true})
 	}
 	return out, nil

@@ -45,7 +45,7 @@ type answeringModel struct {
 
 func (m *answeringModel) serve(t *testing.T) string {
 	t.Helper()
-	answer := `{"reply":"Sugiro responder em inglês.","proposals":[{"kind":"set_reply_locale","operation":{"Locale":"en-US"}}]}`
+	answer := `{"reply":"Sugiro responder em inglês.","proposals":[{"kind":"set_reply_locale","operation":{"Locale":"en-US"},"reason":"Os clientes escrevem em inglês."}]}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Model     string `json:"model"`
@@ -121,8 +121,9 @@ func TestTurnRoute_aTurnReachesTheProviderItNamesAndSettlesAtWhatItCost(t *testi
 
 	var proposals struct{ Items []openapi.DraftProposal }
 	decode(t, route.do(t, ana, http.MethodGet, "/api/v1/agents/"+agent+"/draft/proposals", nil, nil), &proposals)
-	if len(proposals.Items) != 1 || proposals.Items[0].Kind != "set_reply_locale" || valueOf(proposals.Items[0].TurnId) != first.TurnId {
-		t.Errorf("Ana's proposals = %+v, want the turn's one, naming it", proposals.Items)
+	if len(proposals.Items) != 1 || proposals.Items[0].Kind != "set_reply_locale" || valueOf(proposals.Items[0].TurnId) != first.TurnId ||
+		valueOf(proposals.Items[0].Reason) != "Os clientes escrevem em inglês." {
+		t.Errorf("Ana's proposals = %+v, want the turn's one, naming it, with its reason", proposals.Items)
 	}
 
 	var thread struct {

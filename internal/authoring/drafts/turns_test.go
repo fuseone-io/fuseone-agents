@@ -243,7 +243,7 @@ func TestEraseThread_erasesWhatWasSaidAndLeavesNothingToAccept(t *testing.T) {
 	o := openedWithBlocks(t, store, agent)
 	turn := mustBegin(t, store, agent, "usr_ana", "k1", o.Revision, 100)
 	settled, err := store.SettleTurn(t.Context(), drafts.Settlement{Agent: agent, Caller: as("usr_ana", cx), Turn: turn.ID,
-		Cost: 10, Reply: "Proponho.", Ops: []draft.Operation{draft.AddTool{Tool: "crm.lookup"}}, Validator: validator, Now: now})
+		Cost: 10, Reply: "Proponho.", Proposed: []drafts.Proposed{{Op: draft.AddTool{Tool: "crm.lookup"}}}, Validator: validator, Now: now})
 	if err != nil || len(settled.Proposals) != 1 {
 		t.Fatalf("SettleTurn = %+v (%v), want one proposal", settled, err)
 	}
