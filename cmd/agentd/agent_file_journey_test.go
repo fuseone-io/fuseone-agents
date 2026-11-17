@@ -59,6 +59,19 @@ func TestPublishRoute_anAgentFileWhoseCompanyTheQueryContradicts_isRefused(t *te
 	}
 }
 
+// `?company=` sent empty names no company. With none in the file either, the
+// wire answers the 400 for an absent company, not a 403 for an empty scope.
+func TestPublishRoute_anAgentFileWithAnEmptyQueryCompany_isRefusedAsAbsent(t *testing.T) {
+	route := cycleRoute(t)
+	agent := fmt.Sprintf("nt018-file-%d", time.Now().UnixNano())
+
+	rec := route.publishFile(t, agent, agentFileFor(agent, ""), "")
+
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "company is required") {
+		t.Fatalf("PUT file = %d: %s; want the 400 naming the absent company", rec.Code, rec.Body)
+	}
+}
+
 func agentFileFor(agent, company string) string {
 	front := "---\nid: " + agent + "\nname: " + agent + "\narea: factory\n"
 	if company != "" {

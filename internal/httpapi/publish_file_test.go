@@ -99,6 +99,14 @@ func TestPublishAgentFile_companyOrIdTheRequestCannotAgreeOn_isRefused(t *testin
 		want    string
 	}{
 		{name: "company in neither", id: "triage", file: agentFile(""), want: "company"},
+		// Sent empty, the query names no company: absent in both is still a
+		// 400 before authorisation, never a 403 for an empty scope.
+		{name: "an empty query and none in the file", id: "triage", file: agentFile(""),
+			company: ptr(""), want: "company"},
+		{name: "a blank query and none in the file", id: "triage", file: agentFile(""),
+			company: ptr("  "), want: "company"},
+		{name: "an empty query beside the file's company", id: "triage", file: agentFile("acme"),
+			company: ptr(""), want: "company"},
 		{name: "frontmatter and query disagree", id: "triage", file: agentFile("acme"),
 			company: ptr("globex"), want: "company"},
 		{name: "the file names another agent", id: "billing", file: agentFile("acme"), want: "triage"},
@@ -122,20 +130,36 @@ func TestPublishAgentFile_companyOrIdTheRequestCannotAgreeOn_isRefused(t *testin
 }
 
 // The query names the file's company. Sent with the fields too, it has to say
-// what the body says, or one request would name two companies.
+// what the body says, or one request would name two companies; sent empty, it
+// names none, whichever format it comes beside.
 func TestPublishAgent_queryCompanyOtherThanTheBody_isRefused(t *testing.T) {
 	t.Parallel()
-	pub := newPublisher()
-	resp, err := publishServer(t, pub).PublishAgent(inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{
-			AgentId: "triage", JSONBody: definition(nil),
-			Params: openapi.PublishAgentParams{Company: ptr("globex")},
-		})
-	if err != nil {
-		t.Fatalf("PublishAgent: %v", err)
+	cases := []struct {
+		name  string
+		query string
+		body  string
+	}{
+		{name: "another company", query: "globex", body: "acme"},
+		{name: "empty, beside an empty body", query: "", body: ""},
+		{name: "blank, beside an empty body", query: " ", body: ""},
 	}
-	if _, ok := resp.(openapi.PublishAgent400ApplicationProblemPlusJSONResponse); !ok || len(pub.published) != 0 {
-		t.Fatalf("response = %T (%d published), want 400 and nothing written", resp, len(pub.published))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			pub := newPublisher()
+			resp, err := publishServer(t, pub).PublishAgent(inArea("cx", domain.RoleAuthor),
+				openapi.PublishAgentRequestObject{
+					AgentId:  "triage",
+					JSONBody: definition(func(d *openapi.AgentDefinition) { d.Company = tc.body }),
+					Params:   openapi.PublishAgentParams{Company: ptr(tc.query)},
+				})
+			if err != nil {
+				t.Fatalf("PublishAgent: %v", err)
+			}
+			if _, ok := resp.(openapi.PublishAgent400ApplicationProblemPlusJSONResponse); !ok || len(pub.published) != 0 {
+				t.Fatalf("response = %T (%d published), want 400 and nothing written", resp, len(pub.published))
+			}
+		})
 	}
 }
 

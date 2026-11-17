@@ -7472,8 +7472,9 @@ export interface operations {
                  * @description The company the agent belongs to, for a definition sent as the
                  *     file. A `.agent.md` kept in git usually leaves it out of the
                  *     frontmatter, because the same file may be published into more than
-                 *     one installation. Absent from both is refused, and so is a value
-                 *     that disagrees with the one the file or the JSON body declares.
+                 *     one installation. Absent from both is refused, and so are an empty
+                 *     or blank value and a value that disagrees with the one the file or
+                 *     the JSON body declares, all before authorisation.
                  */
                 company?: string;
             };

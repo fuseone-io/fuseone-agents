@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -26,6 +27,14 @@ inside it; what that parse can refuse is what the sender wrote, never anything
 this installation holds.
 */
 func draftOf(req openapi.PublishAgentRequestObject) (spec.Spec, openapi.PublishAgentResponseObject) {
+	// Sent empty, the query names no company. Refused here, before either
+	// format, so it never reaches authorisation as an empty scope (a 403 that
+	// would hide the 400 contract 9 promises).
+	if q := req.Params.Company; q != nil && strings.TrimSpace(*q) == "" {
+		return spec.Spec{}, publishInvalid(
+			"the agent's company is required: ?company= was sent empty; " +
+				"declare company in the frontmatter or name it in the query")
+	}
 	switch {
 	case req.JSONBody != nil:
 		draft, err := draftOfFields(req.AgentId, *req.JSONBody)
