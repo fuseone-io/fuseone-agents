@@ -255,3 +255,38 @@ func TestListDraftProposals_aBlockProposalCarriesTheInstructionsItWouldLeave(t *
 		}
 	}
 }
+
+// A tool proposal carries the effect the catalogue rules for the tool in the
+// draft's stored scope, the one accepting is judged in, never a scope the
+// console has not saved: unknown for a tool nobody ruled on there, and
+// nothing once decided or when the catalogue cannot be read.
+func TestListDraftProposals_aToolProposalCarriesItsRuledEffect(t *testing.T) {
+	t.Parallel()
+	opened := someDraft()
+	stub := &draftStub{opened: opened, proposals: []drafts.Proposal{
+		{ID: "ruled", Read: opened.Revision, Valid: true, Op: draft.AddTool{Tool: "pay.refund"}},
+		{ID: "unruled", Read: opened.Revision, Valid: true, Op: draft.AddTool{Tool: "crm.unknown"}},
+		{ID: "decided", Read: opened.Revision, Valid: true, Decision: "accepted", Op: draft.AddTool{Tool: "pay.refund"}},
+	}}
+	catalogue := &fakeTools{entries: []domain.ToolEntry{
+		{ID: "pay.refund", Effect: domain.EffectFinancial, OnSurface: true, Scope: domain.Scope{Company: "acme"}},
+	}}
+	effects := func(tools Tools) map[string]string {
+		resp, err := draftServer(stub).WithAdministration(nil, tools, nil).ListDraftProposals(inArea("cx", domain.RoleAuthor),
+			openapi.ListDraftProposalsRequestObject{AgentId: "triage"})
+		if err != nil {
+			t.Fatalf("ListDraftProposals: %v", err)
+		}
+		out := map[string]string{}
+		for _, p := range resp.(openapi.ListDraftProposals200JSONResponse).Items {
+			out[p.ProposalId] = string(valueOr(p.ToolEffect))
+		}
+		return out
+	}
+	if got := effects(catalogue); got["ruled"] != "financial" || got["unruled"] != "unknown" || got["decided"] != "" {
+		t.Errorf("effects = %v", got)
+	}
+	if got := effects(&fakeTools{err: errors.New("catalogue down")}); got["ruled"] != "" {
+		t.Errorf("an unreadable catalogue still says %q", got["ruled"])
+	}
+}

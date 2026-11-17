@@ -6140,6 +6140,15 @@ export interface components {
              */
             reason?: string;
             /**
+             * @description For a tool proposal, the effect the catalogue rules for the tool in
+             *     the draft's stored scope, the scope accepting it is judged in:
+             *     `unknown` for a tool nobody ruled on there. Present only while it
+             *     waits and is valid, and only when the catalogue could be read; a
+             *     client offers no acceptance without it.
+             * @enum {string}
+             */
+            toolEffect?: "unknown" | "read" | "write" | "destructive" | "financial";
+            /**
              * @description For a block operation, the draft's whole instructions as accepting
              *     it now would leave them, rendered as accepting renders them: a new
              *     or changed block under the label of its locale, at its position.

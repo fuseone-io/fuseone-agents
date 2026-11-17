@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 
 	"github.com/fuseone/agents/internal/authoring/draft"
 	"github.com/fuseone/agents/internal/authoring/drafts"
@@ -42,11 +43,15 @@ func (s *Server) ListDraftProposals(
 	if err != nil {
 		return nil, err
 	}
+	effects := s.proposedToolEffects(ctx, opened, found)
 	items := make([]openapi.DraftProposal, 0, len(found))
 	for _, p := range found {
 		view := proposalView(p)
 		if after, ok := instructionsAfter(opened, p); ok {
 			view.InstructionsAfter = ptr(after)
+		}
+		if effect, ok := effects(p); ok {
+			view.ToolEffect = ptr(openapi.DraftProposalToolEffect(effect))
 		}
 		items = append(items, view)
 	}
@@ -69,6 +74,45 @@ func instructionsAfter(opened drafts.Opened, p drafts.Proposal) (string, bool) {
 		return "", false
 	}
 	return next.Definition().Instructions, true
+}
+
+/*
+proposedToolEffects answers, for a waiting valid tool proposal, the effect the
+catalogue rules for its tool in the draft's stored scope: the scope accepting
+is judged in, never one a console has not saved. A tool nobody ruled on there
+is unknown. The catalogue is read once, and only when a proposal needs it;
+read or not, the list is answered, and without an effect a client offers no
+acceptance.
+*/
+func (s *Server) proposedToolEffects(ctx context.Context, opened drafts.Opened, found []drafts.Proposal) func(drafts.Proposal) (string, bool) {
+	none := func(drafts.Proposal) (string, bool) { return "", false }
+	toolOf := func(p drafts.Proposal) (domain.ToolID, bool) {
+		if !p.Valid || p.Decision != "" {
+			return "", false
+		}
+		switch op := p.Op.(type) {
+		case draft.AddTool:
+			return op.Tool, true
+		case draft.RemoveTool:
+			return op.Tool, true
+		}
+		return "", false
+	}
+	if !slices.ContainsFunc(found, func(p drafts.Proposal) bool { _, ok := toolOf(p); return ok }) {
+		return none
+	}
+	rulings, err := s.checker().Rulings(ctx, domain.Scope{Company: opened.Draft.Spec.Company, Area: opened.Draft.Spec.Area})
+	if err != nil {
+		return none
+	}
+	return func(p drafts.Proposal) (string, bool) {
+		tool, ok := toolOf(p)
+		if !ok {
+			return "", false
+		}
+		effect, _ := rulings.Effect(tool)
+		return effect.String(), true
+	}
 }
 
 func isBlockKind(kind string) bool {

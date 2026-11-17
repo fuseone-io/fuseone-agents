@@ -10064,6 +10064,15 @@ components:
             The model's sentence on why it proposes this: text the model wrote,
             to read as such. Absent when it gave none, or once retention or
             erasing the thread took it.
+        toolEffect:
+          type: string
+          enum: [unknown, read, write, destructive, financial]
+          description: |
+            For a tool proposal, the effect the catalogue rules for the tool in
+            the draft's stored scope, the scope accepting it is judged in:
+            `unknown` for a tool nobody ruled on there. Present only while it
+            waits and is valid, and only when the catalogue could be read; a
+            client offers no acceptance without it.
         instructionsAfter:
           type: string
           description: |
