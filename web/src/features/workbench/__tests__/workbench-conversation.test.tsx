@@ -233,6 +233,13 @@ describe("the workbench conversation", () => {
     expect(await screen.findByRole("article", { name: "Reescrever um bloco" }, { timeout: 5000 })).toBeInTheDocument();
   });
 
+  it("breaks a long unbroken message instead of widening the screen", async () => {
+    const url = `https://example.com/${"a".repeat(300)}`;
+    world({ [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: url, reply: url }], conversation: "open" } }) });
+    openAt("/agents/triagem/workbench");
+    for (const text of await screen.findAllByText(url)) expect(text).toHaveClass("wrap-anywhere");
+  });
+
   // Read before the turns, the proposals could miss a turn that settles in
   // between, and nothing would read them again.
   it("reads the proposals only once the turns have answered", async () => {

@@ -75,7 +75,7 @@ export function WorkbenchConversation({
             ))}
             {composer.pending && (
               <li className="flex flex-col gap-2">
-                <p className="self-end whitespace-pre-wrap rounded-lg bg-muted px-3 py-2 text-sm">{composer.pending}</p>
+                <p className="self-end whitespace-pre-wrap wrap-anywhere rounded-lg bg-muted px-3 py-2 text-sm">{composer.pending}</p>
                 <Skeleton className="h-4 w-2/3" />
               </li>
             )}

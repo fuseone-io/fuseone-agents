@@ -12,7 +12,7 @@ function Answer({ turn }: { turn: DraftTurn }) {
   if (turn.state === "in_progress") return <Skeleton className="h-4 w-2/3" />;
   if (turn.state === "failed") return <p className="text-sm text-muted-foreground">{t("workbench.conversation.failed")}</p>;
   if (turn.state === "unknown") return <p className="text-sm text-muted-foreground">{t("workbench.conversation.unknown")}</p>;
-  return turn.reply ? <p className="whitespace-pre-wrap text-sm">{turn.reply}</p> : null;
+  return turn.reply ? <p className="whitespace-pre-wrap wrap-anywhere text-sm">{turn.reply}</p> : null;
 }
 
 /**
@@ -38,11 +38,11 @@ export function ConversationTurn({
 
   return (
     <li className="flex flex-col gap-2">
-      <div className="flex flex-col gap-1 self-end rounded-lg bg-muted px-3 py-2 sm:max-w-[85%]">
+      <div className="flex min-w-0 max-w-full flex-col gap-1 self-end rounded-lg bg-muted px-3 py-2 sm:max-w-[85%]">
         {turn.erased ? (
           <p className="text-sm text-muted-foreground">{t("workbench.conversation.erased")}</p>
         ) : (
-          <p className="whitespace-pre-wrap text-sm">{turn.message}</p>
+          <p className="whitespace-pre-wrap wrap-anywhere text-sm">{turn.message}</p>
         )}
         {turn.pasted && <Badge variant="outline" className="self-start">{t("workbench.conversation.pasted")}</Badge>}
       </div>
