@@ -37,8 +37,15 @@ field" is a commit message.
 
 ### Added
 
-- **The workbench's draft, through the API** (NT-018 1b). Nothing in the console uses it
-  yet; the panel comes next.
+- **The workbench's draft, through the API and the console** (NT-018 1b).
+  - The console works on it at `/agents/{id}/workbench`, reached from the agent's menu,
+    and a new agent is born at `/agents/workbench` from its identifier, name and area.
+    The panel edits the draft's fields with the editor's own sections and saves them as
+    the draft's operations, each under the ETag the previous answer named. The
+    instructions are read-only, shown against the published version. Nothing there
+    publishes; the form editor is unchanged and still publishes as before.
+  - When somebody else changed the draft first, or the draft is gone, the panel keeps
+    what the person typed; reading the draft again keeps the unsaved edits over it.
   - `POST /agents/{agentId}/draft` with `If-None-Match: *` opens an agent's draft: from a
     name, company and area for an agent that does not exist yet, or from the current
     version of a published one, untouched. A draft writes no version and no agent state,
