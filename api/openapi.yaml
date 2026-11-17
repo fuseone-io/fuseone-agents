@@ -1036,6 +1036,17 @@ paths:
                   conversation:
                     type: string
                     enum: [open, off, unpriced, spent]
+                  spentMicros:
+                    type: integer
+                    format: int64
+                    description: |
+                      What authoring holds against today's ceiling, installation-wide:
+                      confirmed costs, and reservations in progress or kept for an
+                      unknown result. Absent while the assistant is off.
+                  dailyMicros:
+                    type: integer
+                    format: int64
+                    description: Today's authoring ceiling. Absent while the assistant is off.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
     post:

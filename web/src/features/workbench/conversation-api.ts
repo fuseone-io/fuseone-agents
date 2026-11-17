@@ -19,7 +19,8 @@ export const conversationKeys = {
 /** Whether a turn could be sent now, or why not. */
 export type Conversation = "open" | "off" | "unpriced" | "spent";
 
-export type Transcript = { items: DraftTurn[]; conversation: Conversation };
+/** The transcript, whether a turn could be sent, and what the day holds against its ceiling. */
+export type Transcript = { items: DraftTurn[]; conversation: Conversation; spentMicros?: number; dailyMicros?: number };
 
 /** How often a turn on its way is read again, until it settles. */
 const SETTLING_MS = 2_000;
@@ -31,7 +32,12 @@ export function useTurns(agentId: string) {
       const body = unwrap(await api.GET("/agents/{agentId}/draft/turns", { params: { path: { agentId } } }));
       // An answer that does not say is read as closed: a conversation is
       // offered only when the server says it is open.
-      return { items: body.items, conversation: body.conversation ?? "off" };
+      return {
+        items: body.items,
+        conversation: body.conversation ?? "off",
+        spentMicros: body.spentMicros,
+        dailyMicros: body.dailyMicros,
+      };
     },
     refetchInterval: (query) =>
       query.state.data?.items.some((t) => t.state === "in_progress") ? SETTLING_MS : false,

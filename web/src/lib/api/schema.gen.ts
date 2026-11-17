@@ -8322,6 +8322,18 @@ export interface operations {
                         items: components["schemas"]["DraftTurn"][];
                         /** @enum {string} */
                         conversation: "open" | "off" | "unpriced" | "spent";
+                        /**
+                         * Format: int64
+                         * @description What authoring holds against today's ceiling, installation-wide:
+                         *     confirmed costs, and reservations in progress or kept for an
+                         *     unknown result. Absent while the assistant is off.
+                         */
+                        spentMicros?: number;
+                        /**
+                         * Format: int64
+                         * @description Today's authoring ceiling. Absent while the assistant is off.
+                         */
+                        dailyMicros?: number;
                     };
                 };
             };

@@ -3552,6 +3552,8 @@
       "remove_block": "Remover um bloco",
       "move_block": "Mover um bloco"
     },
-    "untouchedProduction": "Nada aqui toca produção"
+    "untouchedProduction": "Nada aqui toca produção",
+    "authoringToday": "Autoria hoje:",
+    "authoringOf": "{{spent}} de {{daily}}"
   }
 }

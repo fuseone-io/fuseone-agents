@@ -3552,6 +3552,8 @@
       "remove_block": "Remove a block",
       "move_block": "Move a block"
     },
-    "untouchedProduction": "Nothing here touches production"
+    "untouchedProduction": "Nothing here touches production",
+    "authoringToday": "Authoring today:",
+    "authoringOf": "{{spent}} of {{daily}}"
   }
 }

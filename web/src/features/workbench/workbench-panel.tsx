@@ -6,6 +6,7 @@ import { PAGE_ICONS } from "@/components/layout/nav";
 import { useAgent } from "@/features/agents/agent-detail-api";
 import { ShieldCheck } from "lucide-react";
 import { agentTarget } from "@/features/agents/agent-target";
+import { AuthoringToday } from "@/features/workbench/authoring-today";
 import { WorkbenchConversation } from "@/features/workbench/workbench-conversation";
 import { WorkbenchDiscard } from "@/features/workbench/workbench-discard";
 import { WorkbenchFields } from "@/features/workbench/workbench-fields";
@@ -45,6 +46,7 @@ export function WorkbenchPanel({
         title={agentId}
         description={t("workbench.description", { agent: bench.local.name || agentId })}
       >
+        <AuthoringToday agentId={agentId} />
         <WorkbenchDiscard agentId={agentId} etag={draft.etag} />
         <Button size="sm" onClick={bench.save} disabled={count === 0 || bench.state === "saving"}>
           <Save className="size-4" aria-hidden />

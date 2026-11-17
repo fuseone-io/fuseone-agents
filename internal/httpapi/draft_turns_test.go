@@ -304,3 +304,22 @@ func TestListDraftTurns_saysWhetherTheConversationIsOpen(t *testing.T) {
 		}
 	}
 }
+
+// The transcript says what the day holds against its ceiling, the figures the
+// console's "authoring today" reads; nothing while the assistant is off.
+func TestListDraftTurns_saysWhatTheDayHoldsAgainstItsCeiling(t *testing.T) {
+	t.Parallel()
+	off := turnChoice
+	off.Enabled = false
+	on := turnServer(&draftStub{opened: someDraft()}, &turnModelsStub{priced: true}, turnChoice).WithAssistants(nil, spendStub{today: 310_000})
+	resp, err := on.ListDraftTurns(inArea("cx", domain.RoleAuthor), openapi.ListDraftTurnsRequestObject{AgentId: "triage"})
+	got, ok := resp.(openapi.ListDraftTurns200JSONResponse)
+	if err != nil || !ok || valueOr(got.SpentMicros) != 310_000 || valueOr(got.DailyMicros) != 5_000_000 {
+		t.Fatalf("ListDraftTurns = %#v (%v), want 310000 of 5000000", resp, err)
+	}
+	closed := turnServer(&draftStub{opened: someDraft()}, &turnModelsStub{priced: true}, off).WithAssistants(nil, spendStub{today: 310_000})
+	resp, _ = closed.ListDraftTurns(inArea("cx", domain.RoleAuthor), openapi.ListDraftTurnsRequestObject{AgentId: "triage"})
+	if got := resp.(openapi.ListDraftTurns200JSONResponse); got.SpentMicros != nil || got.DailyMicros != nil {
+		t.Errorf("assistant off still says %v of %v", got.SpentMicros, got.DailyMicros)
+	}
+}

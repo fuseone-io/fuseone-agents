@@ -189,11 +189,13 @@ func (s *Server) ListDraftTurns(
 	for _, t := range turns {
 		items = append(items, turnView(conversation.Result{Turn: t}))
 	}
-	state, err := s.conversationState(ctx)
+	now, err := s.conversationNow(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return openapi.ListDraftTurns200JSONResponse{Items: items, Conversation: state}, nil
+	return openapi.ListDraftTurns200JSONResponse{
+		Items: items, Conversation: now.state, SpentMicros: now.spent, DailyMicros: now.daily,
+	}, nil
 }
 
 // EraseDraftThread erases what was said in the caller's own conversation.

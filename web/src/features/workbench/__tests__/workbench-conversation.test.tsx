@@ -322,4 +322,11 @@ describe("the workbench conversation", () => {
     openAt("/agents/triagem/workbench");
     expect(await screen.findByText("Nada aqui toca produção")).toBeInTheDocument();
   });
+
+  it("says in the header what authoring holds today against its ceiling", async () => {
+    world({ [`GET ${TURNS}`]: () => ({ body: { items: [], conversation: "open", spentMicros: 310_000, dailyMicros: 5_000_000 } }) });
+    openAt("/agents/triagem/workbench");
+    const today = await screen.findByText(/Autoria hoje/);
+    expect(today.parentElement).toHaveTextContent(/0,31.*5,00/);
+  });
 });
