@@ -11,7 +11,7 @@ import { isStale } from "@/lib/api/revision";
  * draft it made, which the panel takes in under the person's unsaved edits;
  * one made over an older draft is refused, and says so.
  */
-export function useDecide(agentId: string, onDraft: (draft: RevisedDraft) => void): Decide {
+export function useDecide(agentId: string, onDraft: (draft: RevisedDraft) => void, reread: () => void): Decide {
   const { t } = useTranslation();
   const accepting = useAcceptProposal(agentId);
   const rejecting = useRejectProposal(agentId);
@@ -20,6 +20,7 @@ export function useDecide(agentId: string, onDraft: (draft: RevisedDraft) => voi
 
   return {
     busy: accepting.isPending || rejecting.isPending,
+    reread,
     accept: (id) =>
       accepting.mutate(id, {
         onSuccess: (draft) => {

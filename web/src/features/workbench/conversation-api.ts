@@ -59,6 +59,17 @@ export function settledOf(turns: DraftTurn[] | undefined): string | undefined {
  * transaction, so a read made after seeing the turn settled holds them all:
  * neither a reload nor a lost answer leaves a settled turn without its cards.
  */
+/** How often a proposal waiting for its tool's effect is read again. */
+const EFFECT_RETRY_MS = 3_000;
+
+/**
+ * A tool proposal still to decide whose effect the server could not rule:
+ * it is not offered until it is, so it is read again until then.
+ */
+export function awaitsEffect(p: DraftProposal): boolean {
+  return (p.kind === "add_tool" || p.kind === "remove_tool") && p.valid && !p.decision && p.toolEffect === undefined;
+}
+
 export function useProposals(agentId: string, settled: string | undefined) {
   return useQuery({
     queryKey: [...conversationKeys.proposals(agentId), settled ?? ""] as const,
@@ -67,6 +78,8 @@ export function useProposals(agentId: string, settled: string | undefined) {
     enabled: settled !== undefined,
     // The cards already shown stay while the next read is on its way.
     placeholderData: keepPreviousData,
+    // A catalogue that could not be read is a moment, not an answer.
+    refetchInterval: (query) => (query.state.data?.some(awaitsEffect) ? EFFECT_RETRY_MS : false),
   });
 }
 

@@ -43,7 +43,7 @@ export function WorkbenchConversation({
   const turns = useTurns(agentId);
   const proposals = useProposals(agentId, settledOf(turns.data?.items));
   const composer = useComposer(agentId);
-  const decide = useDecide(agentId, onDraft);
+  const decide = useDecide(agentId, onDraft, () => void proposals.refetch());
   const items = turns.data?.items ?? [];
   const state = turns.data?.conversation;
   const grouped = byTurn(proposals.data);

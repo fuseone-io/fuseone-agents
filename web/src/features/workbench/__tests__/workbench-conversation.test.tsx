@@ -330,6 +330,43 @@ describe("the workbench conversation", () => {
     const card = await screen.findByRole("article", { name: "Adicionar uma ferramenta" });
     expect(within(card).getByText(/efeito desta ferramenta/)).toBeInTheDocument();
     expect(within(card).queryByRole("button", { name: "Aceitar" })).not.toBeInTheDocument();
+    // Rejecting changes nothing in the draft: it needs no effect.
+    expect(within(card).getByRole("button", { name: "Recusar" })).toBeEnabled();
+  });
+
+  it("reads a missing effect again when asked, and then offers the proposal", async () => {
+    let reads = 0;
+    const tool = { ...blockProposal, kind: "add_tool", operation: { kind: "add_tool", tool: "pagamentos.reembolsar" }, instructionsAfter: undefined };
+    world({
+      [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Reembolsos." }], conversation: "open" } }),
+      [`GET ${PROPOSALS}`]: () => ({ body: { items: [++reads === 1 ? tool : { ...tool, toolEffect: "financial" }] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const card = await screen.findByRole("article", { name: "Adicionar uma ferramenta" });
+    await userEvent.click(within(card).getByRole("button", { name: "Ler o efeito de novo" }));
+    expect(await within(card).findByRole("button", { name: "Aceitar" })).toBeInTheDocument();
+  });
+
+  it("reads a missing effect again on its own, without being asked", async () => {
+    let reads = 0;
+    const tool = { ...blockProposal, kind: "add_tool", operation: { kind: "add_tool", tool: "pagamentos.reembolsar" }, instructionsAfter: undefined };
+    world({
+      [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Reembolsos." }], conversation: "open" } }),
+      [`GET ${PROPOSALS}`]: () => ({ body: { items: [++reads === 1 ? tool : { ...tool, toolEffect: "financial" }] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    expect(await screen.findByRole("button", { name: "Aceitar" }, { timeout: 6000 })).toBeInTheDocument();
+  });
+
+  it("lets a proposal made over an older draft be rejected", async () => {
+    const older = { ...blockProposal, instructionsAfter: undefined };
+    world({
+      [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Ajuste." }], conversation: "open" } }),
+      [`GET ${PROPOSALS}`]: () => ({ body: { items: [older] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const card = await screen.findByRole("article", { name: "Reescrever um bloco" });
+    expect(within(card).getByRole("button", { name: "Recusar" })).toBeEnabled();
   });
 
   it("says that nothing in the workspace touches production", async () => {

@@ -1,9 +1,10 @@
 import { useTranslation } from "react-i18next";
-import { Check, X } from "lucide-react";
+import { Check, RefreshCw, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Mono } from "@/components/shared/mono";
 import { EffectBadge } from "@/features/admin/effect-badge";
+import { awaitsEffect } from "@/features/workbench/conversation-api";
 import { proposalChange } from "@/features/workbench/proposal-change";
 import type { DraftProposal } from "@/lib/api/client";
 
@@ -23,10 +24,9 @@ function unshown(proposal: DraftProposal): string {
 /** What a card reads its proposal against: the draft's instructions now. */
 export type Reading = { instructions: string };
 
-const TOOL_KINDS = new Set(["add_tool", "remove_tool"]);
 
-/** What a card can do with its proposal, and whether a decision is on its way. */
-export type Decide = { accept: (id: string) => void; reject: (id: string) => void; busy: boolean };
+/** What a card can do with its proposal, whether a decision is on its way, and how to read the proposals again. */
+export type Decide = { accept: (id: string) => void; reject: (id: string) => void; busy: boolean; reread: () => void };
 
 /**
  * One proposal of the model, for its author to decide. Nothing it shows is
@@ -50,7 +50,7 @@ export function ProposalCard({
   // Ruled by the server in the draft's stored scope, the one accepting is
   // judged in: a tool proposal without it is not offered.
   const effect = proposal.toolEffect;
-  const unruled = TOOL_KINDS.has(proposal.kind) && effect === undefined;
+  const unruled = awaitsEffect(proposal);
   const pending = proposal.valid && !proposal.decision;
   const waiting = pending && change !== undefined && !unruled;
 
@@ -70,7 +70,7 @@ export function ProposalCard({
         ((pending || !proposal.operation) && (
           <p className="text-xs text-muted-foreground">{t(unshown(proposal))}</p>
         ))}
-      {change !== undefined && pending && unruled && (
+      {change !== undefined && unruled && (
         <p className="text-xs text-muted-foreground">{t("workbench.conversation.effectUnknown")}</p>
       )}
       {/* The validator's words are machine text; a human-only kind gets this
@@ -80,18 +80,28 @@ export function ProposalCard({
       ) : (
         proposal.refusal && <Mono dim className="text-xs">{proposal.refusal}</Mono>
       )}
-      {waiting && (
+      {/* Rejecting changes nothing in the draft, so it needs nothing shown;
+          accepting needs the whole change on the card. */}
+      {pending && (
         <div className="flex flex-wrap gap-2">
           {/* Not the primary colour: the panel's one primary action is saving,
               and a turn can carry several proposals at once. */}
-          <Button size="sm" variant="secondary" onClick={() => decide.accept(proposal.proposalId)} disabled={decide.busy}>
-            <Check className="size-4" aria-hidden />
-            {t("workbench.conversation.accept")}
-          </Button>
+          {waiting && (
+            <Button size="sm" variant="secondary" onClick={() => decide.accept(proposal.proposalId)} disabled={decide.busy}>
+              <Check className="size-4" aria-hidden />
+              {t("workbench.conversation.accept")}
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={() => decide.reject(proposal.proposalId)} disabled={decide.busy}>
             <X className="size-4" aria-hidden />
             {t("workbench.conversation.reject")}
           </Button>
+          {unruled && (
+            <Button size="sm" variant="ghost" onClick={decide.reread}>
+              <RefreshCw className="size-4" aria-hidden />
+              {t("workbench.conversation.rereadEffect")}
+            </Button>
+          )}
         </div>
       )}
     </article>
