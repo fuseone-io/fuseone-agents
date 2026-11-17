@@ -54,7 +54,9 @@ export function ToolGroupRows({
             <li
               key={tool.toolId}
               className={cn(
-                "grid grid-cols-[24px_1fr_120px_1fr] items-center gap-3 border-b border-border-subtle py-2 last:border-0",
+                // Two rows on a phone, the effect and the verdict under the
+                // name; one row of four columns from sm up.
+                "grid grid-cols-[24px_minmax(0,1fr)] items-center gap-x-3 gap-y-1 border-b border-border-subtle py-2 last:border-0 sm:grid-cols-[24px_1fr_120px_1fr]",
                 // Visible but unavailable, never hidden: an author has to be
                 // able to see that a policy denies something rather than
                 // wonder where it went.
@@ -95,20 +97,22 @@ export function ToolGroupRows({
                 )}
               </div>
 
-              <EffectBadge effect={tool.effect} />
+              <div className="col-start-2 flex min-w-0 items-center gap-3 sm:contents">
+                <EffectBadge effect={tool.effect} />
 
-              <div className="flex min-w-0 items-center justify-end gap-1.5">
-                {rule.because && (
-                  <Mono dim className="truncate text-2xs">
-                    {rule.because}
-                  </Mono>
-                )}
-                {/* An icon beside the word, never instead of it: the three
-                    outcomes have to be told apart without relying on colour. */}
-                <RuleGlyph kind={rule.kind} />
-                <span className={cn("truncate text-xs", RULE_TONE[rule.kind])}>
-                  {t(rule.label, rule.labelValues)}
-                </span>
+                <div className="flex min-w-0 items-center gap-1.5 sm:justify-end">
+                  {rule.because && (
+                    <Mono dim className="truncate text-2xs">
+                      {rule.because}
+                    </Mono>
+                  )}
+                  {/* An icon beside the word, never instead of it: the three
+                      outcomes have to be told apart without relying on colour. */}
+                  <RuleGlyph kind={rule.kind} />
+                  <span className={cn("truncate text-xs", RULE_TONE[rule.kind])}>
+                    {t(rule.label, rule.labelValues)}
+                  </span>
+                </div>
               </div>
             </li>
           );

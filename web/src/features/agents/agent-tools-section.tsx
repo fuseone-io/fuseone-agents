@@ -137,7 +137,12 @@ export function AgentToolsSection({
                   return (
                     <TabsTrigger key={option} value={option}>
                       <Icon aria-hidden />
-                      {t(`agents.filter.${option}`)}
+                      {/* The icon alone on a phone, where four labels do
+                          not fit one row; the label stays the trigger's
+                          name for anyone reading by ear. */}
+                      <span className="sr-only sm:not-sr-only">
+                        {t(`agents.filter.${option}`)}
+                      </span>
                     </TabsTrigger>
                   );
                 })}
@@ -179,7 +184,9 @@ export function AgentToolsSection({
           clipped the other against the edge. */}
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-border px-5 py-3">
         <p className="text-xs">{t("agents.toolTally", counted)}</p>
-        <p className="min-w-0 flex-1 text-2xs text-muted-foreground">
+        {/* Its own line on a phone: beside the tally it became a column a
+            few words wide and very tall. */}
+        <p className="min-w-0 basis-full text-2xs text-muted-foreground sm:basis-0 sm:flex-1">
           {t("agents.rightColumnIsPolicy")}
         </p>
       </div>
