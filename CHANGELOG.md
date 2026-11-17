@@ -56,15 +56,16 @@ field" is a commit message.
     conversation says why before anybody writes, and the draft stays editable through
     its fields.
   - Each proposal carries the model's one-sentence reason, kept in the content store under
-    the thread's retention and erased with it; a tool proposal shows the effect its
-    scope's catalogue rules for it; a block proposal shows the instructions accepting it
+    the thread's retention and erased with it; a tool proposal shows the effect the
+    catalogue rules for it in the draft's stored scope, and is not offered without it; a
+    block proposal shows the instructions accepting it
     would leave, as they will be written, or, made over an older draft, offers nothing to
     accept.
   - The header says what authoring holds today against its ceiling.
   - `GET /agents/{agentId}/draft/turns` now says whether the conversation is open and,
     while the assistant is on, the day's spend and ceiling; a turn's refusals carry their
-    own problem codes; a proposal names its turn, carries its reason and, for a block,
-    `instructionsAfter`.
+    own problem codes; a proposal names its turn, carries its reason and, for a tool,
+    `toolEffect` or, for a block, `instructionsAfter`.
   - Nothing here publishes yet.
 
 - **The conversation's turns** (NT-018 phase 3, second part). The model now proposes.
