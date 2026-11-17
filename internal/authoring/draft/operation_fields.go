@@ -18,6 +18,11 @@ func (SetIdentity) Kind() string     { return "set_identity" }
 func (SetIdentity) Class() Class     { return Human }
 func (SetIdentity) Fields() []string { return []string{"name", "company", "area"} }
 func (o SetIdentity) apply(d *Draft) error {
+	// A whole scope, company and area: the workbench's draft always names
+	// both, even though a file may leave its company to the query.
+	if !o.Scope.Valid() {
+		return invalidOp(o.Kind(), "scope %s names no company or no area", o.Scope)
+	}
 	d.Spec.Name, d.Spec.Company, d.Spec.Area = o.Name, o.Scope.Company, o.Scope.Area
 	return nil
 }
@@ -125,7 +130,7 @@ func (SetTriggers) Kind() string     { return "set_triggers" }
 func (SetTriggers) Class() Class     { return Shared }
 func (SetTriggers) Fields() []string { return []string{"triggers"} }
 func (o SetTriggers) apply(d *Draft) error {
-	d.Spec.Triggers = slices.Clone(o.Triggers)
+	d.Spec.Triggers = cloneTriggers(o.Triggers)
 	return nil
 }
 
@@ -159,6 +164,6 @@ func (SetEmits) Kind() string     { return "set_emits" }
 func (SetEmits) Class() Class     { return Shared }
 func (SetEmits) Fields() []string { return []string{"emits"} }
 func (o SetEmits) apply(d *Draft) error {
-	d.Spec.Emits = slices.Clone(o.Emits)
+	d.Spec.Emits = cloneEmits(o.Emits)
 	return nil
 }

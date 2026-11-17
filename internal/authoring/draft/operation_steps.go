@@ -20,7 +20,7 @@ func (o AddStep) apply(d *Draft) error {
 	if o.Step.Name == "" || stepIndex(d, o.Step.Name) >= 0 {
 		return invalidOp(o.Kind(), "step %q is unnamed or already declared", o.Step.Name)
 	}
-	d.Spec.Steps = append(d.Spec.Steps, o.Step)
+	d.Spec.Steps = append(d.Spec.Steps, cloneStep(o.Step))
 	return nil
 }
 
@@ -38,7 +38,7 @@ func (o EditStep) apply(d *Draft) error {
 	if i < 0 || o.Step.Name == "" || (o.Step.Name != o.Name && stepIndex(d, o.Step.Name) >= 0) {
 		return invalidOp(o.Kind(), "no step %q, or %q is taken", o.Name, o.Step.Name)
 	}
-	d.Spec.Steps[i] = o.Step
+	d.Spec.Steps[i] = cloneStep(o.Step)
 	return nil
 }
 

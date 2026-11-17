@@ -282,3 +282,90 @@ func TestValidate_neverChangesTheDraftItWasGiven(t *testing.T) {
 		t.Fatalf("the original's tools became %v", got)
 	}
 }
+
+// The workbench's draft always names a whole scope, company and area. The
+// generic file parser does not require a company (a file may take it from
+// the query); the draft does.
+func TestValidate_anIdentityWithoutAWholeScope_isRefused(t *testing.T) {
+	t.Parallel()
+	for name, scope := range map[string]domain.Scope{
+		"no company": {Area: "cx"},
+		"no area":    {Company: "acme"},
+	} {
+		op := draft.SetIdentity{Name: "Triagem", Scope: scope}
+		if _, err := apply(t, complete(t), op, draft.FromControl); !errors.Is(err, draft.ErrInvalidOperation) {
+			t.Errorf("%s: Validate = %v, want ErrInvalidOperation", name, err)
+		}
+	}
+	noCompany := draft.New("triage", "Triagem", domain.Scope{Area: "cx"})
+	if _, err := apply(t, noCompany, draft.AddTool{Tool: "crm.lookup"}, draft.FromControl); !errors.Is(err, draft.ErrRefused) {
+		t.Errorf("an operation on a draft with no company = %v, want ErrRefused", err)
+	}
+}
+
+/*
+A validated draft shares nothing with the operation that made it, nor with
+the draft it came from. A caller changing the operation's payload after
+Validate, or the next draft, would otherwise change a draft already judged,
+without judging it again.
+*/
+func TestValidate_aValidatedDraft_sharesNoNestedSliceWithItsOperationOrItsOrigin(t *testing.T) {
+	t.Parallel()
+	reaches := []domain.ToolID{"crm.lookup"}
+	events := []string{"issues"}
+	artifacts := []string{"summary"}
+	added, err := apply(t, complete(t), draft.AddStep{Step: spec.Step{Name: "Look", Reaches: reaches}}, draft.FromControl)
+	if err != nil {
+		t.Fatalf("add_step: %v", err)
+	}
+	d := added.Draft
+	for _, op := range []draft.Operation{
+		draft.SetTriggers{Triggers: []spec.Trigger{{Type: "event", Event: "ticket.opened"}}},
+		draft.SetEmits{Emits: spec.Emits{{Event: "ticket.triaged", Artifacts: artifacts}}},
+	} {
+		got, err := apply(t, d, op, draft.FromControl)
+		if err != nil {
+			t.Fatalf("%s: %v", op.Kind(), err)
+		}
+		d = got.Draft
+	}
+	edited, err := apply(t, d, draft.EditStep{Name: "Look", Step: spec.Step{Name: "Look", Reaches: reaches}}, draft.FromControl)
+	if err != nil {
+		t.Fatalf("edit_step: %v", err)
+	}
+	webhook, err := apply(t, edited.Draft, draft.SetTriggers{Triggers: []spec.Trigger{
+		{Type: "webhook", Path: "gh", From: "github", Events: events},
+	}}, draft.FromControl)
+	if err != nil {
+		t.Fatalf("set_triggers: %v", err)
+	}
+	reaches[0], events[0], artifacts[0] = "crm.delete", "push", "secrets"
+
+	if r := added.Draft.Spec.Steps[0].Reaches[0]; r != "crm.lookup" {
+		t.Errorf("the add_step payload reached the draft: reaches %s", r)
+	}
+	if r := edited.Draft.Spec.Steps[0].Reaches[0]; r != "crm.lookup" {
+		t.Errorf("the edit_step payload reached the draft: reaches %s", r)
+	}
+	if e := webhook.Draft.Spec.Triggers[0].Events[0]; e != "issues" {
+		t.Errorf("the set_triggers payload reached the draft: events %s", e)
+	}
+	if a := d.Spec.Emits[0].Artifacts[0]; a != "summary" {
+		t.Errorf("the set_emits payload reached the draft: artifacts %s", a)
+	}
+
+	// And the next draft shares nothing with the one it came from.
+	next, err := apply(t, webhook.Draft, draft.SetReplyLocale{Locale: "en-US"}, draft.FromControl)
+	if err != nil {
+		t.Fatalf("set_reply_locale: %v", err)
+	}
+	next.Draft.Spec.Triggers[0].Events[0] = "push"
+	next.Draft.Spec.Steps[0].Reaches[0] = "crm.delete"
+	next.Draft.Spec.Emits[0].Artifacts[0] = "secrets"
+	if webhook.Draft.Spec.Triggers[0].Events[0] != "issues" || webhook.Draft.Spec.Steps[0].Reaches[0] != "crm.lookup" {
+		t.Error("changing the next draft changed the one it came from")
+	}
+	if webhook.Draft.Spec.Emits[0].Artifacts[0] != "summary" {
+		t.Error("changing the next draft changed the emits of the one it came from")
+	}
+}

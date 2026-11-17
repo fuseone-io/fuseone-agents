@@ -54,6 +54,9 @@ func (v Validator) Validate(ctx context.Context, d Draft, op Operation, origin O
 	if err := op.apply(&next); err != nil {
 		return Applied{}, err
 	}
+	if scope := publishable.ScopeOf(next.Spec); !scope.Valid() {
+		return Applied{}, fmt.Errorf("%w: a draft names its company and its area, and this one is %s", ErrRefused, scope)
+	}
 	rendered, err := spec.Render(next.Definition())
 	if err != nil {
 		return Applied{}, fmt.Errorf("draft: render: %w", err)

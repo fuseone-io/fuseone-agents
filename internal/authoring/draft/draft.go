@@ -52,19 +52,48 @@ func (d Draft) Definition() spec.Spec {
 	return s
 }
 
-// clone is a copy that shares no slice with the original, so an operation on
-// it never changes the draft it was applied to.
+// clone is a copy that shares no slice with the original, nested ones
+// included, so an operation on it never changes the draft it was applied to.
 func (d Draft) clone() Draft {
 	out := d
 	s := &out.Spec
 	s.Tools = slices.Clone(s.Tools)
-	s.Triggers = slices.Clone(s.Triggers)
-	s.Emits = slices.Clone(s.Emits)
-	s.Steps = slices.Clone(s.Steps)
-	for i := range s.Steps {
-		s.Steps[i].Reaches = slices.Clone(s.Steps[i].Reaches)
-	}
+	s.Triggers = cloneTriggers(s.Triggers)
+	s.Emits = cloneEmits(s.Emits)
+	s.Steps = cloneSteps(s.Steps)
 	s.Approvals.Notify = slices.Clone(s.Approvals.Notify)
 	out.Blocks = slices.Clone(d.Blocks)
+	return out
+}
+
+// The copies below are what an operation stores too: a payload kept by
+// reference would let its caller change a draft after it was judged.
+
+func cloneStep(step spec.Step) spec.Step {
+	step.Reaches = slices.Clone(step.Reaches)
+	return step
+}
+
+func cloneSteps(steps []spec.Step) []spec.Step {
+	out := slices.Clone(steps)
+	for i := range out {
+		out[i] = cloneStep(out[i])
+	}
+	return out
+}
+
+func cloneTriggers(triggers []spec.Trigger) []spec.Trigger {
+	out := slices.Clone(triggers)
+	for i := range out {
+		out[i].Events = slices.Clone(out[i].Events)
+	}
+	return out
+}
+
+func cloneEmits(emits spec.Emits) spec.Emits {
+	out := slices.Clone(emits)
+	for i := range out {
+		out[i].Artifacts = slices.Clone(out[i].Artifacts)
+	}
 	return out
 }
