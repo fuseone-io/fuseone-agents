@@ -30,6 +30,14 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.119.0] — 2026-11-17
+
+NT-018 phase 3 (#383, #384, #385): the workbench conversation. Each author talks to the
+installation's authoring assistant about the shared draft; the model only proposes, and a
+proposal changes the draft only when its author accepts it. Turns are idempotent, one at a
+time per thread, and reserved against the day's authoring ceiling before the model is
+called. Nothing in the workbench publishes yet.
+
 ### Upgrade notes
 
 - **Migration 0114 only adds tables**: `agent_draft_threads`, and the append-only
@@ -40,6 +48,9 @@ field" is a commit message.
 - **Migration 0116 only adds** the column `agent_draft_proposals.reason_ref`, a reference
   to each proposal's reason in the content store. No rollback floor: 0.118.0 does not
   read it.
+- **No rollback floor.** Rolling back to 0.118.0 is safe: it reads none of the tables or
+  columns 0114 to 0116 add, and threads, turns and proposals written meanwhile stay there
+  unread, with what was said in the content store under the installation's retention.
 
 ### Added
 
