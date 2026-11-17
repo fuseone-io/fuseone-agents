@@ -3528,7 +3528,8 @@
         "editsStep": "Muda a etapa “{{step}}” para:"
       },
       "unshowable": "Não é possível mostrar o que esta proposta muda, então ela não pode ser aceita.",
-      "staleBlock": "Esta proposta foi feita sobre uma versão anterior do rascunho, então não pode mais ser aceita. Peça de novo ao assistente."
+      "staleBlock": "Esta proposta foi feita sobre uma versão anterior do rascunho, então não pode mais ser aceita. Peça de novo ao assistente.",
+      "effectUnknown": "O efeito desta ferramenta não pôde ser lido agora, então ela ainda não pode ser aceita. Tente de novo em instantes."
     },
     "proposalKind": {
       "set_identity": "Mudar nome ou escopo",

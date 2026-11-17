@@ -3528,7 +3528,8 @@
         "editsStep": "Changes the step “{{step}}” to:"
       },
       "unshowable": "What this proposal changes cannot be shown, so it cannot be accepted.",
-      "staleBlock": "This proposal was made over an earlier version of the draft, so it can no longer be accepted. Ask the assistant again."
+      "staleBlock": "This proposal was made over an earlier version of the draft, so it can no longer be accepted. Ask the assistant again.",
+      "effectUnknown": "This tool's effect could not be read just now, so it cannot be accepted yet. Try again in a moment."
     },
     "proposalKind": {
       "set_identity": "Change name or scope",

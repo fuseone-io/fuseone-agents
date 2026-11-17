@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Mono } from "@/components/shared/mono";
 import { EffectBadge } from "@/features/admin/effect-badge";
-import type { ToolEffect } from "@/features/admin/api";
 import { proposalChange } from "@/features/workbench/proposal-change";
 import type { DraftProposal } from "@/lib/api/client";
 
@@ -21,8 +20,10 @@ function unshown(proposal: DraftProposal): string {
   return "workbench.conversation.unshowable";
 }
 
-/** What a card reads its proposal against: the draft's instructions now, and the effect the catalogue rules for each tool. */
-export type Reading = { instructions: string; effects: ReadonlyMap<string, ToolEffect> };
+/** What a card reads its proposal against: the draft's instructions now. */
+export type Reading = { instructions: string };
+
+const TOOL_KINDS = new Set(["add_tool", "remove_tool"]);
 
 /** What a card can do with its proposal, and whether a decision is on its way. */
 export type Decide = { accept: (id: string) => void; reject: (id: string) => void; busy: boolean };
@@ -46,9 +47,12 @@ export function ProposalCard({
   // Offered only when what it would change is on the card: an operation
   // erased, or one that does not carry what its kind needs, is not.
   const change = proposalChange(proposal, reading.instructions, t);
-  const effect = proposal.operation?.tool ? reading.effects.get(proposal.operation.tool) : undefined;
+  // Ruled by the server in the draft's stored scope, the one accepting is
+  // judged in: a tool proposal without it is not offered.
+  const effect = proposal.toolEffect;
+  const unruled = TOOL_KINDS.has(proposal.kind) && effect === undefined;
   const pending = proposal.valid && !proposal.decision;
-  const waiting = pending && change !== undefined;
+  const waiting = pending && change !== undefined && !unruled;
 
   return (
     <article aria-label={kind} className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3">
@@ -66,6 +70,9 @@ export function ProposalCard({
         ((pending || !proposal.operation) && (
           <p className="text-xs text-muted-foreground">{t(unshown(proposal))}</p>
         ))}
+      {change !== undefined && pending && unruled && (
+        <p className="text-xs text-muted-foreground">{t("workbench.conversation.effectUnknown")}</p>
+      )}
       {/* The validator's words are machine text; a human-only kind gets this
           console's own sentence, since that refusal is the rule, not a fault. */}
       {!proposal.valid && HUMAN_ONLY.has(proposal.kind) ? (

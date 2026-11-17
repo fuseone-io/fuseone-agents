@@ -5,7 +5,6 @@ import { PageHeader } from "@/components/shared/page-header";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { useAgent } from "@/features/agents/agent-detail-api";
 import { ShieldCheck } from "lucide-react";
-import { agentTarget } from "@/features/agents/agent-target";
 import { AuthoringToday } from "@/features/workbench/authoring-today";
 import { WorkbenchConversation } from "@/features/workbench/workbench-conversation";
 import { WorkbenchDiscard } from "@/features/workbench/workbench-discard";
@@ -67,7 +66,6 @@ export function WorkbenchPanel({
           <WorkbenchConversation
             agentId={agentId}
             instructions={draft.body.definition.instructions}
-            target={agentTarget(bench.local) ?? ""}
             onDraft={bench.adopt}
           />
         </div>

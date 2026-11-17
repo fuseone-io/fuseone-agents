@@ -158,7 +158,7 @@ describe("the workbench conversation", () => {
   });
 
   it("takes an accepted field proposal into the panel, under what the person has not saved", async () => {
-    const tool = { ...blockProposal, kind: "add_tool", operation: { kind: "add_tool", tool: "crm.refund" } };
+    const tool = { ...blockProposal, kind: "add_tool", operation: { kind: "add_tool", tool: "crm.refund" }, toolEffect: "read" };
     world({
       [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Reembolso." }], conversation: "open" } }),
       [`GET ${PROPOSALS}`]: () => ({ body: { items: [tool] } }),
@@ -306,15 +306,30 @@ describe("the workbench conversation", () => {
   });
 
   it("shows a tool proposal with the effect the catalogue rules for it", async () => {
-    const tool = { ...blockProposal, kind: "add_tool", operation: { kind: "add_tool", tool: "pagamentos.reembolsar" }, instructionsAfter: undefined };
+    // The effect the server ruled in the draft's stored scope, whatever the
+    // panel's unsaved scope or its own catalogue would say.
+    const tool = { ...blockProposal, kind: "add_tool", operation: { kind: "add_tool", tool: "pagamentos.reembolsar" }, toolEffect: "financial", instructionsAfter: undefined };
     world({
       [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Reembolsos." }], conversation: "open" } }),
       [`GET ${PROPOSALS}`]: () => ({ body: { items: [tool] } }),
-      "GET /admin/tools": () => ({ body: { items: [{ toolId: "pagamentos.reembolsar", server: "pay", effect: "financial", untrusted: false }] } }),
+      "GET /admin/tools": () => ({ body: { items: [{ toolId: "pagamentos.reembolsar", server: "pay", effect: "read", untrusted: false }] } }),
     });
     openAt("/agents/triagem/workbench");
     const card = await screen.findByRole("article", { name: "Adicionar uma ferramenta" });
     expect(await within(card).findByText("financeiro")).toBeInTheDocument();
+    expect(within(card).queryByText("leitura")).not.toBeInTheDocument();
+  });
+
+  it("offers nothing to accept for a tool proposal whose effect is not known", async () => {
+    const tool = { ...blockProposal, kind: "add_tool", operation: { kind: "add_tool", tool: "pagamentos.reembolsar" }, instructionsAfter: undefined };
+    world({
+      [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Reembolsos." }], conversation: "open" } }),
+      [`GET ${PROPOSALS}`]: () => ({ body: { items: [tool] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const card = await screen.findByRole("article", { name: "Adicionar uma ferramenta" });
+    expect(within(card).getByText(/efeito desta ferramenta/)).toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: "Aceitar" })).not.toBeInTheDocument();
   });
 
   it("says that nothing in the workspace touches production", async () => {

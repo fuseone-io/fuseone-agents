@@ -10,7 +10,6 @@ import { ConversationTurn } from "@/features/workbench/conversation-turn";
 import { settledOf, useProposals, useTurns } from "@/features/workbench/conversation-api";
 import { useComposer } from "@/features/workbench/use-composer";
 import { useDecide } from "@/features/workbench/use-decide";
-import { useTools } from "@/features/admin/api";
 import type { RevisedDraft } from "@/features/workbench/api";
 import type { DraftProposal } from "@/lib/api/client";
 
@@ -33,14 +32,11 @@ function byTurn(proposals: DraftProposal[] = []): Map<string, DraftProposal[]> {
 export function WorkbenchConversation({
   agentId,
   instructions,
-  target,
   onDraft,
 }: {
   agentId: string;
   /** The draft's instructions now, which block proposals are read against. */
   instructions: string;
-  /** The draft's scope, whose catalogue rules each tool's effect. */
-  target: string;
   onDraft: (draft: RevisedDraft) => void;
 }) {
   const { t } = useTranslation();
@@ -51,11 +47,7 @@ export function WorkbenchConversation({
   const items = turns.data?.items ?? [];
   const state = turns.data?.conversation;
   const grouped = byTurn(proposals.data);
-  const tools = useTools(target !== "", target);
-  const reading = {
-    instructions,
-    effects: new Map((tools.data?.items ?? []).map((tool) => [tool.toolId, tool.effect] as const)),
-  };
+  const reading = { instructions };
 
   return (
     <Section
