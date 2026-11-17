@@ -40,8 +40,23 @@ field" is a commit message.
 
 ### Added
 
-- **The conversation's turns** (NT-018 phase 3, second part). The model now proposes;
-  nothing in the console sends a turn yet.
+- **The workbench conversation, in the console** (NT-018 phase 3, third part). At
+  `/agents/{id}/workbench` the author's own conversation sits on the left and the draft
+  on the right.
+  - The assistant reads the whole draft and answers with proposals, each a card to
+    accept or reject; a block's shows its difference against the block as the draft
+    holds it now. Accepting changes the draft, and keeps the author's unsaved edits over
+    it; a proposal made over an older draft says so.
+  - A message sent again after no answer is the same turn, never a second call. Pasted
+    text is marked.
+  - With the assistant off, its model unpriced or the day's ceiling spent, the
+    conversation says why before anybody writes, and the draft stays editable through
+    its fields.
+  - `GET /agents/{agentId}/draft/turns` now says whether the conversation is open; a
+    turn's refusals carry their own problem codes; a proposal names its turn.
+  - Nothing here publishes yet.
+
+- **The conversation's turns** (NT-018 phase 3, second part). The model now proposes.
   - `POST /agents/{agentId}/draft/turns` sends one message of the caller's own thread to
     the installation's authoring model. The model reads the whole draft, its blocks,
     what publication still needs and what the draft's scope offers, never a secret or an
