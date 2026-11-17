@@ -34,11 +34,49 @@ func (s *Server) ListDraftProposals(
 	if err != nil {
 		return nil, err
 	}
+	// The draft as it is now, for what accepting a block proposal would leave.
+	opened, err := s.drafts.Get(ctx, domain.AgentID(req.AgentId), draftCaller(ctx))
+	if errors.Is(err, drafts.ErrNotFound) {
+		return absent, nil
+	}
+	if err != nil {
+		return nil, err
+	}
 	items := make([]openapi.DraftProposal, 0, len(found))
 	for _, p := range found {
-		items = append(items, proposalView(p))
+		view := proposalView(p)
+		if after, ok := instructionsAfter(opened, p); ok {
+			view.InstructionsAfter = ptr(after)
+		}
+		items = append(items, view)
 	}
 	return openapi.ListDraftProposals200JSONResponse{Items: items}, nil
+}
+
+/*
+instructionsAfter is what accepting a block proposal now would leave of the
+instructions, rendered by the codec accepting uses, so the card shows the
+effect and not a guess at it: the label a new or rewritten block takes in its
+locale, its position, the block a move takes. Only for a proposal that could
+be accepted now; any other would be refused, and shows nothing to accept.
+*/
+func instructionsAfter(opened drafts.Opened, p drafts.Proposal) (string, bool) {
+	if p.Op == nil || !isBlockKind(p.Op.Kind()) || !p.Valid || p.Decision != "" || p.Read != opened.Revision {
+		return "", false
+	}
+	next, err := draft.Preview(opened.Draft, p.Op)
+	if err != nil {
+		return "", false
+	}
+	return next.Definition().Instructions, true
+}
+
+func isBlockKind(kind string) bool {
+	switch kind {
+	case "insert_block", "replace_block", "remove_block", "move_block":
+		return true
+	}
+	return false
 }
 
 // AcceptDraftProposal applies one proposal, by its id alone.

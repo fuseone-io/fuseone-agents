@@ -6133,6 +6133,14 @@ export interface components {
             decision?: "accepted" | "rejected";
             /** @description The conversation's turn that proposed it. */
             turnId?: string;
+            /**
+             * @description For a block operation, the draft's whole instructions as accepting
+             *     it now would leave them, rendered as accepting renders them: a new
+             *     or changed block under the label of its locale, at its position.
+             *     Present only while the proposal can be accepted, waiting, valid,
+             *     and made against the draft's current ETag.
+             */
+            instructionsAfter?: string;
             /** @description The draft's ETag the model read; accepting it against another is a 412. */
             readRevision: string;
             /** Format: date-time */

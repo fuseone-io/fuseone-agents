@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -215,5 +216,42 @@ func TestAcceptDraftProposal_validatesWithTheInstallationsChecks(t *testing.T) {
 	if _, err := a.Validator.Validate(context.Background(), someDraft().Draft, draft.AddTool{Tool: "crm.lokup"},
 		draft.FromProposal, a.Now); !errors.Is(err, draft.ErrRefused) {
 		t.Fatalf("the route's validator = %v, want the tool refused", err)
+	}
+}
+
+// A block proposal carries the instructions accepting it now would leave,
+// rendered by the codec accepting uses: a new block under its locale's label
+// at its position, a rewritten one under the label of the operation's locale.
+// Only while it could be accepted: waiting, valid, and against the draft's
+// current ETag.
+func TestListDraftProposals_aBlockProposalCarriesTheInstructionsItWouldLeave(t *testing.T) {
+	t.Parallel()
+	opened := someDraft()
+	first := opened.Draft.Blocks[0].ID
+	stub := &draftStub{opened: opened, proposals: []drafts.Proposal{
+		{ID: "insert", Read: opened.Revision, Valid: true, Op: draft.InsertBlock{At: 1, Type: blocks.Never, Text: "Prometer prazo.", Locale: "pt-BR"}},
+		{ID: "retitle", Read: opened.Revision, Valid: true, Op: draft.ReplaceBlock{ID: first, Text: "Triage.", Locale: "en-US"}},
+		{ID: "stale", Read: `"older"`, Valid: true, Op: draft.InsertBlock{At: 0, Type: blocks.Never, Text: "x", Locale: "pt-BR"}},
+		{ID: "decided", Read: opened.Revision, Valid: true, Decision: "rejected", Op: draft.RemoveBlock{ID: first}},
+		{ID: "field", Read: opened.Revision, Valid: true, Op: draft.AddTool{Tool: "crm.lookup"}},
+	}}
+	resp, err := draftServer(stub).ListDraftProposals(inArea("cx", domain.RoleAuthor), openapi.ListDraftProposalsRequestObject{AgentId: "triage"})
+	if err != nil {
+		t.Fatalf("ListDraftProposals: %v", err)
+	}
+	after := map[string]string{}
+	for _, p := range resp.(openapi.ListDraftProposals200JSONResponse).Items {
+		after[p.ProposalId] = valueOr(p.InstructionsAfter)
+	}
+	if got := after["insert"]; !strings.Contains(got, "Objetivo\nTriar.") || !strings.HasSuffix(got, "Nunca\nPrometer prazo.") {
+		t.Errorf("insert leaves %q, want the never block under its label, after the objective", got)
+	}
+	if got := after["retitle"]; !strings.HasPrefix(got, "Purpose\nTriage.") {
+		t.Errorf("retitle leaves %q, want the block under the operation's locale's label", got)
+	}
+	for _, id := range []string{"stale", "decided", "field"} {
+		if after[id] != "" {
+			t.Errorf("%s carries instructions %q, want none", id, after[id])
+		}
 	}
 }
