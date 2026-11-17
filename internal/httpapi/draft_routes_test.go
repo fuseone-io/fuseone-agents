@@ -34,6 +34,9 @@ type draftStub struct {
 	proposals []drafts.Proposal
 	accepted  []drafts.Acceptance
 	rejected  []string
+	turns     []drafts.Turn
+	begun     []drafts.Beginning
+	beginErr  error
 }
 
 func (d *draftStub) Get(_ context.Context, _ domain.AgentID, c drafts.Caller) (drafts.Opened, error) {

@@ -222,6 +222,9 @@ func serve(args []string) error {
 			// The workbench's drafts (NT-018 1b): working state beside the
 			// versions, never one of them.
 			WithDrafts(drafts.NewStore(identity.pool)).
+			// The workbench's conversation (NT-018 phase 3): the same
+			// registry, for the model, its price and a scope's providers.
+			WithTurnModels(providers).
 			WithStops(admin.NewStops(identity.pool)).
 			WithMarks(admin.NewMarks(identity.pool)).
 			WithComposition(spec.NewRegistry(identity.pool)).

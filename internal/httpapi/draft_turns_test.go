@@ -1,0 +1,241 @@
+package httpapi
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/fuseone/agents/internal/authoring"
+	"github.com/fuseone/agents/internal/authoring/conversation"
+	"github.com/fuseone/agents/internal/authoring/drafts"
+	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/model"
+)
+
+/*
+The conversation's routes (NT-018 phase 3, contracts 7 and 8). The engine and
+the store decide the turn, against Postgres in their own tests and in the
+journey; these pin what the route decides: which model, price and ceiling a
+turn runs with, what the scope offers it, and how each refusal answers.
+*/
+
+func (d *draftStub) Turns(_ context.Context, _ domain.AgentID, c drafts.Caller) ([]drafts.Turn, error) {
+	d.callers = append(d.callers, c)
+	return d.turns, d.err
+}
+
+func (d *draftStub) BeginTurn(_ context.Context, b drafts.Beginning) (drafts.Started, error) {
+	d.begun = append(d.begun, b)
+	if d.beginErr != nil {
+		return drafts.Started{}, d.beginErr
+	}
+	return drafts.Started{Turn: drafts.Turn{ID: "t-1", Key: b.Key, Read: b.Read, State: drafts.TurnInProgress, Reserved: b.Reserve}}, nil
+}
+
+func (d *draftStub) SettleTurn(_ context.Context, s drafts.Settlement) (drafts.Turn, error) {
+	state := drafts.TurnDone
+	if s.Failed {
+		state = drafts.TurnFailed
+	}
+	return drafts.Turn{ID: s.Turn, Key: "k1", Read: d.opened.Revision, State: state, Cost: s.Cost, Reply: s.Reply}, nil
+}
+
+func (d *draftStub) Propose(_ context.Context, p drafts.Proposing) (drafts.Proposal, error) {
+	return drafts.Proposal{ID: "p-1", Read: p.Read, Valid: true}, nil
+}
+
+func (d *draftStub) EraseThread(_ context.Context, _ domain.AgentID, c drafts.Caller) error {
+	d.callers = append(d.callers, c)
+	return d.err
+}
+
+// turnModelsStub is the registry: one provider configured in one area, and a
+// model that answers what it is told and keeps what it was configured with.
+type turnModelsStub struct {
+	reply  string
+	err    error
+	priced bool
+	asked  []model.Config
+	prompt string
+}
+
+func (m *turnModelsStub) Completer(_ string, cfg model.Config) (model.Completer, error) {
+	m.asked = append(m.asked, cfg)
+	return m, nil
+}
+
+func (m *turnModelsStub) Complete(_ context.Context, prompt string) (model.Completion, error) {
+	m.prompt = prompt
+	return model.Completion{Text: m.reply, Cost: domain.Cost{Micros: 40}}, m.err
+}
+
+func (m *turnModelsStub) PriceFor(string, string) (model.Prices, bool, error) {
+	return model.Prices{InputMicros: 3_000_000, OutputMicros: 15_000_000}, m.priced, nil
+}
+
+func (m *turnModelsStub) Names() []string { return []string{"anthropic", "local-llm"} }
+
+func (m *turnModelsStub) Configured(name string, at domain.Scope) bool {
+	return name == "anthropic" && at.Area == "cx"
+}
+
+var turnChoice = authoring.Choice{Provider: "anthropic", Model: "claude-x", DailyMicros: 5_000_000, Enabled: true}
+
+func turnServer(stub *draftStub, models *turnModelsStub, choice authoring.Choice) *Server {
+	tools := &fakeTools{entries: []domain.ToolEntry{
+		{ID: "crm.lookup", OnSurface: true, Scope: domain.Scope{Company: "acme"}},
+		{ID: "crm.archived", Scope: domain.Scope{Company: "acme"}},
+		{ID: "billing.refund", OnSurface: true, Scope: domain.Scope{Company: "acme"}},
+	}}
+	return NewServer(ledger.NewMemory(), "test").WithDrafts(stub).
+		WithAdministration(nil, tools, nil).
+		WithAuthoring(interviewAuthoring{choice: choice}).
+		WithTurnModels(models)
+}
+
+func sendTurn(t *testing.T, s *Server, message string) openapi.SendDraftTurnResponseObject {
+	t.Helper()
+	resp, err := s.SendDraftTurn(inArea("cx", domain.RoleAuthor), openapi.SendDraftTurnRequestObject{
+		AgentId: "triage", Body: &openapi.DraftTurnRequest{Key: "k1", Message: message},
+	})
+	if err != nil {
+		t.Fatalf("SendDraftTurn: %v", err)
+	}
+	return resp
+}
+
+func TestSendDraftTurn_runsWithTheChosenModelItsOutputCapAndTheDaysCeiling(t *testing.T) {
+	t.Parallel()
+	stub := &draftStub{opened: someDraft()}
+	models := &turnModelsStub{reply: `{"reply":"Pronto.","proposals":[]}`, priced: true}
+
+	resp := sendTurn(t, turnServer(stub, models, turnChoice), "Ajude.")
+	got, ok := resp.(openapi.SendDraftTurn200JSONResponse)
+	if !ok || got.State != openapi.DraftTurnStateDone || got.CostMicros != 40 || valueOr(got.Reply) != "Pronto." {
+		t.Fatalf("response = %#v, want the turn done at its cost", resp)
+	}
+	if len(models.asked) != 1 || models.asked[0].Model != "claude-x" || models.asked[0].MaxTokens != conversation.MaxOutputTokens {
+		t.Errorf("model configured as %+v", models.asked)
+	}
+	b := stub.begun[0]
+	if b.DailyMicros != 5_000_000 || b.Read != `"v1-draft"` || b.Caller.By != "usr_ana" || b.Reserve <= 0 {
+		t.Errorf("turn begun as %+v", b)
+	}
+}
+
+// The scope offers its tools on the installation's surface, sorted so the
+// same draft renders the same prompt, and only the providers configured there.
+func TestSendDraftTurn_offersTheScopesToolsAndProvidersOnly(t *testing.T) {
+	t.Parallel()
+	models := &turnModelsStub{reply: `{"reply":"x","proposals":[]}`, priced: true}
+	sendTurn(t, turnServer(&draftStub{opened: someDraft()}, models, turnChoice), "Ajude.")
+
+	refund, lookup := strings.Index(models.prompt, `"billing.refund"`), strings.Index(models.prompt, `"crm.lookup"`)
+	if refund < 0 || lookup < refund || strings.Contains(models.prompt, "crm.archived") {
+		t.Errorf("tools offered out of order or off the surface:\n%s", models.prompt)
+	}
+	if !strings.Contains(models.prompt, `"anthropic"`) || strings.Contains(models.prompt, `"local-llm"`) {
+		t.Errorf("providers offered beyond the scope's:\n%s", models.prompt)
+	}
+}
+
+// A model that failed still recorded and settled the turn: answered, as
+// failed, never as an error the person cannot read.
+func TestSendDraftTurn_aFailedModel_answersTheTurnAsFailed(t *testing.T) {
+	t.Parallel()
+	models := &turnModelsStub{err: errors.New("upstream unavailable"), priced: true}
+	resp := sendTurn(t, turnServer(&draftStub{opened: someDraft()}, models, turnChoice), "Ajude.")
+	if got, ok := resp.(openapi.SendDraftTurn200JSONResponse); !ok || got.State != openapi.DraftTurnStateFailed || got.CostMicros != 40 {
+		t.Fatalf("response = %#v, want 200 failed at its cost", resp)
+	}
+}
+
+func TestSendDraftTurn_refusals_answerBeforeOrWithoutTheCall(t *testing.T) {
+	t.Parallel()
+	off := turnChoice
+	off.Enabled = false
+	for name, tc := range map[string]struct {
+		choice   authoring.Choice
+		priced   bool
+		message  string
+		getErr   error
+		beginErr error
+		check    func(openapi.SendDraftTurnResponseObject) bool
+	}{
+		"assistant off": {choice: off, priced: true, message: "x", check: is409},
+		"no price":      {choice: turnChoice, message: "x", check: is409},
+		"over the day":  {choice: turnChoice, priced: true, message: "x", beginErr: drafts.ErrOverCeiling, check: is409},
+		"in flight":     {choice: turnChoice, priced: true, message: "x", beginErr: drafts.ErrTurnInFlight, check: is409},
+		"empty":         {choice: turnChoice, priced: true, message: "  ", check: is400},
+		"too large":     {choice: turnChoice, priced: true, message: strings.Repeat("x", conversation.MaxMessageBytes+1), check: is400},
+		"unreachable":   {choice: turnChoice, priced: true, message: "x", getErr: drafts.ErrNotFound, check: is404},
+		"draft moved": {choice: turnChoice, priced: true, message: "x",
+			beginErr: &domain.StaleError{Current: `"v2-draft"`}, check: is412},
+	} {
+		stub := &draftStub{opened: someDraft(), err: tc.getErr, beginErr: tc.beginErr}
+		models := &turnModelsStub{reply: `{"reply":"x","proposals":[]}`, priced: tc.priced}
+		resp := sendTurn(t, turnServer(stub, models, tc.choice), tc.message)
+		if !tc.check(resp) || models.prompt != "" {
+			t.Errorf("%s: response = %#v, model called: %v", name, resp, models.prompt != "")
+		}
+	}
+}
+
+func is400(r openapi.SendDraftTurnResponseObject) bool {
+	_, ok := r.(openapi.SendDraftTurn400ApplicationProblemPlusJSONResponse)
+	return ok
+}
+
+func is404(r openapi.SendDraftTurnResponseObject) bool {
+	_, ok := r.(openapi.SendDraftTurn404ApplicationProblemPlusJSONResponse)
+	return ok
+}
+
+func is409(r openapi.SendDraftTurnResponseObject) bool {
+	_, ok := r.(openapi.SendDraftTurn409ApplicationProblemPlusJSONResponse)
+	return ok
+}
+
+func is412(r openapi.SendDraftTurnResponseObject) bool {
+	_, ok := r.(openapi.SendDraftTurn412ApplicationProblemPlusJSONResponse)
+	return ok
+}
+
+// An unknown turn's reservation is kept against the ceiling and said so; a
+// settled turn keeps nothing.
+func TestListDraftTurns_saysWhatAnUnknownTurnKeeps(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2026, 11, 17, 10, 0, 0, 0, time.UTC)
+	stub := &draftStub{turns: []drafts.Turn{
+		{ID: "t-1", Key: "k1", State: drafts.TurnDone, Reserved: 900, Cost: 40, Message: "Oi", Reply: "Olá", At: at},
+		{ID: "t-2", Key: "k2", State: drafts.TurnUnknown, Reserved: 900, Erased: true, At: at},
+	}}
+	resp, err := draftServer(stub).ListDraftTurns(inArea("cx", domain.RoleAuthor), openapi.ListDraftTurnsRequestObject{AgentId: "triage"})
+	if err != nil {
+		t.Fatalf("ListDraftTurns: %v", err)
+	}
+	items := resp.(openapi.ListDraftTurns200JSONResponse).Items
+	if items[0].KeptMicros != nil || valueOr(items[0].Message) != "Oi" {
+		t.Errorf("settled turn = %+v", items[0])
+	}
+	if valueOr(items[1].KeptMicros) != 900 || !items[1].Erased || items[1].Message != nil {
+		t.Errorf("unknown turn = %+v, want 900 kept and its words erased", items[1])
+	}
+}
+
+func TestEraseDraftThread_answersEachOutcome(t *testing.T) {
+	t.Parallel()
+	for err, want := range map[error]string{nil: "204", drafts.ErrNotFound: "404"} {
+		resp, got := draftServer(&draftStub{err: err}).EraseDraftThread(inArea("cx", domain.RoleAuthor),
+			openapi.EraseDraftThreadRequestObject{AgentId: "triage"})
+		_, is204 := resp.(openapi.EraseDraftThread204Response)
+		_, is404 := resp.(openapi.EraseDraftThread404ApplicationProblemPlusJSONResponse)
+		if got != nil || (want == "204") != is204 || (want == "404") != is404 {
+			t.Errorf("erase with %v = %T (%v), want %s", err, resp, got, want)
+		}
+	}
+}
