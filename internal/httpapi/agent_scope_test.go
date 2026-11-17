@@ -63,7 +63,8 @@ func TestGetAgent_theHistory_listsOnlyVersionsTheReaderMayRead(t *testing.T) {
 	for _, move := range [][2]string{{"finance", "cx"}, {"cx", "finance"}} {
 		resp := getAgentAs(t, movedAgent(move[0], move[1]), move[1], "")
 
-		got, ok := resp.(openapi.GetAgent200JSONResponse)
+		reply, ok := resp.(openapi.GetAgent200JSONResponse)
+		got := reply.Body
 		if !ok {
 			t.Fatalf("moved %s → %s: read as %T, want the current version", move[0], move[1], resp)
 		}

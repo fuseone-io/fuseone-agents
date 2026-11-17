@@ -398,6 +398,12 @@ export interface paths {
          *
          *     An agent nobody has decided about is recorded as paused. Authoring
          *     never starts anything.
+         *
+         *     Under the agent's row lock, in the transaction that writes, the caller
+         *     must hold `agent:publish` where the agent lives now (404 otherwise),
+         *     and then `If-Match` or `If-None-Match: *` is judged (412). Both
+         *     headers are optional: without them the last publication wins, as
+         *     before. Sending both is a 400.
          */
         put: operations["publishAgent"];
         post?: never;
@@ -578,6 +584,10 @@ export interface paths {
          *     that a schedule still fires is worse than one nobody retired, because
          *     now nobody is looking for it. Bringing one back leaves it stopped, for
          *     the opposite reason: restoring and starting are two decisions.
+         *
+         *     Judged under the agent's row lock, as a publication is: an agent the
+         *     caller may not publish where it lives is a 404, as one that does not
+         *     exist, before `If-Match` is judged (412).
          */
         put: operations["setAgentRetired"];
         post?: never;
@@ -6896,6 +6906,12 @@ export interface components {
          */
         IfMatch: string;
         /**
+         * @description `*` makes the write a creation: refused with a 412 if the resource
+         *     already exists. Any other value is a 400, never ignored. Without the
+         *     header, the write creates or replaces.
+         */
+        IfNoneMatchCreate: string;
+        /**
          * @description Which translation to read. An unknown locale falls back rather than
          *     failing: a reader whose browser asks for something the manual does not
          *     have should get the manual, not an error.
@@ -7439,9 +7455,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The agent. */
+            /**
+             * @description The agent. `ETag` names its current version and whether it is
+             *     retired, the two things publishing, retiring and restoring change,
+             *     and is what their `If-Match` compares. It is sent only when no
+             *     `version` is asked for: an older version is not the state those
+             *     writes judge.
+             */
             200: {
                 headers: {
+                    /**
+                     * @description The agent's current state, as a strong validator. Opaque:
+                     *     compare it, never parse it. Absent when `version` names one.
+                     */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -7478,7 +7505,22 @@ export interface operations {
                  */
                 company?: string;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+                /**
+                 * @description `*` makes the write a creation: refused with a 412 if the resource
+                 *     already exists. Any other value is a 400, never ignored. Without the
+                 *     header, the write creates or replaces.
+                 */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchCreate"];
+            };
             path: {
                 agentId: string;
             };
@@ -7512,6 +7554,20 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             /**
+             * @description The agent exists where the caller may not publish. Moving an agent
+             *     needs `agent:publish` where it lives now as well as where the
+             *     definition sends it, and an agent the caller cannot reach answers
+             *     as one that does not exist, before any precondition is judged.
+             */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /**
              * @description Nothing was written: no version, and the current version unchanged.
              *     The problem type says why:
              *
@@ -7536,6 +7592,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            412: components["responses"]["PreconditionFailed"];
             /** @description A `.agent.md` larger than 2 MiB, the ceiling every request body has. */
             413: {
                 headers: {
@@ -7719,7 +7776,16 @@ export interface operations {
     setAgentRetired: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 agentId: string;
             };
@@ -7740,9 +7806,10 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     startRun: {

@@ -56,6 +56,10 @@ type Publication struct {
 	// agent runs whatever version is current. So the stage is judged here,
 	// under the agent's row lock, in the transaction that writes the version.
 	RefuseStages []domain.Stage
+
+	// Guard is judged under the agent's row lock, before anything else about
+	// the agent (NT-017 phase 1).
+	Guard Guard
 }
 
 // Published is what a publication found on the way: the event cycles the
@@ -88,6 +92,11 @@ func (p *Publisher) Publish(ctx context.Context, pub Publication) (Published, er
 
 	if err := lockEventGraph(ctx, tx); err != nil {
 		return Published{}, fmt.Errorf("spec: publish %s: %w", pub.Spec.ID, err)
+	}
+	// Before anything else about the agent, the claim included: a collision
+	// answered to a caller who may not reach the agent would say it exists.
+	if _, err := guardAgent(ctx, tx, pub.Spec.ID, pub.Guard); err != nil {
+		return Published{}, err
 	}
 	// Before anything is judged: a judgement of these bytes means nothing if
 	// the id they would be published under already names others.

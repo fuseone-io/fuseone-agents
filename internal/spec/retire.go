@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/fuseone/agents/internal/domain"
 )
 
@@ -25,35 +27,49 @@ runs, and a line in the trail saying who retired it.
 // Both, and not just the flag: an agent the screen says is gone that a
 // schedule still fires is worse than one nobody retired, because now nobody
 // is looking for it.
-func (s *State) Retire(ctx context.Context, agent domain.AgentID, by domain.UserID) error {
-	_, err := s.pool.Exec(ctx, `
-		insert into agent_state (agent_id, paused, retired_at, retired_by, changed_at, changed_by)
-		values ($1, true, now(), $2, now(), $2)
-		on conflict (agent_id) do update set
+func (s *State) Retire(ctx context.Context, agent domain.AgentID, by domain.UserID, guard Guard) error {
+	return s.retirement(ctx, agent, guard, `
+		update agent_state set
 			paused = true,
-			retired_at = now(), retired_by = excluded.retired_by,
-			changed_at = now(), changed_by = excluded.changed_by`,
-		string(agent), string(by))
-	if err != nil {
-		return fmt.Errorf("spec: retire %s: %w", agent, err)
-	}
-	return nil
+			retired_at = now(), retired_by = $2,
+			changed_at = now(), changed_by = $2
+		where agent_id = $1`, by)
 }
 
 // Restore brings an agent back, stopped.
 //
 // Stopped and never running: bringing an agent back and deciding it should
 // act are two decisions, and doing both at once starts one nobody looked at.
-func (s *State) Restore(ctx context.Context, agent domain.AgentID, by domain.UserID) error {
-	_, err := s.pool.Exec(ctx, `
+func (s *State) Restore(ctx context.Context, agent domain.AgentID, by domain.UserID, guard Guard) error {
+	return s.retirement(ctx, agent, guard, `
 		update agent_state set
 			retired_at = null, retired_by = '',
 			paused = true, changed_at = now(), changed_by = $2
-		where agent_id = $1`, string(agent), string(by))
-	if err != nil {
-		return fmt.Errorf("spec: restore %s: %w", agent, err)
-	}
-	return nil
+		where agent_id = $1`, by)
+}
+
+/*
+retirement writes a retirement or a restore under the guard.
+
+Under the event graph's lock, then the agent's row, as a publication takes
+them: one order for every writer, and a publication and a retirement of the
+same agent serialised, so a tag judged here is the tag the other left. An
+agent with no version is not there to retire.
+*/
+func (s *State) retirement(ctx context.Context, agent domain.AgentID, guard Guard, write string, by domain.UserID) error {
+	return underEventGraphLock(ctx, s.pool, func(tx pgx.Tx) error {
+		locked, err := guardAgent(ctx, tx, agent, guard)
+		if err != nil {
+			return err
+		}
+		if !locked.Exists {
+			return fmt.Errorf("spec: %s: %w", agent, ErrAgentNotFound)
+		}
+		if _, err := tx.Exec(ctx, write, string(agent), string(by)); err != nil {
+			return fmt.Errorf("spec: retirement of %s: %w", agent, err)
+		}
+		return nil
+	})
 }
 
 // Retired reports which agents are out of circulation.

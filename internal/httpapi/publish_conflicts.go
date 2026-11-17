@@ -28,3 +28,18 @@ func publicationConflict(err error) (openapi.PublishAgent409ApplicationProblemPl
 	}
 	return openapi.PublishAgent409ApplicationProblemPlusJSONResponse{}, false
 }
+
+// publicationRefused is a publication the store refused for a reason the
+// caller can act on: the guard's 404 or 412, or a 409.
+func publicationRefused(agent string, err error) (openapi.PublishAgentResponseObject, bool) {
+	if agentAbsent(err) {
+		return openapi.PublishAgent404ApplicationProblemPlusJSONResponse(
+			refusal(http.StatusNotFound, CodeNotFound, "Not found", agent)), true
+	}
+	if stale, ok := staleFrom(err); ok {
+		return openapi.PublishAgent412ApplicationProblemPlusJSONResponse{
+			PreconditionFailedApplicationProblemPlusJSONResponse: stale,
+		}, true
+	}
+	return publicationConflict(err)
+}

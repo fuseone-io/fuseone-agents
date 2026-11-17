@@ -51,7 +51,8 @@ func TestGetAgent_withoutAVersion_readsTheNewestPublished(t *testing.T) {
 		t.Fatalf("GetAgent: %v", err)
 	}
 
-	got, ok := resp.(openapi.GetAgent200JSONResponse)
+	reply, ok := resp.(openapi.GetAgent200JSONResponse)
+	got := reply.Body
 	if !ok {
 		t.Fatalf("response = %T, want the agent", resp)
 	}
@@ -80,7 +81,7 @@ func TestGetAgent_namingAVersion_readsThatOne(t *testing.T) {
 		t.Fatalf("GetAgent: %v", err)
 	}
 
-	got := resp.(openapi.GetAgent200JSONResponse)
+	got := resp.(openapi.GetAgent200JSONResponse).Body
 	if got.Agent.VersionId != "v1" || *got.Instructions != "responda o cliente" {
 		t.Errorf("read %q, want v1's own text", got.Agent.VersionId)
 	}
@@ -166,7 +167,7 @@ func TestGetAgent_eventContextIsReturnedWithTheVersion(t *testing.T) {
 		t.Fatalf("GetAgent: %v", err)
 	}
 
-	got := resp.(openapi.GetAgent200JSONResponse)
+	got := resp.(openapi.GetAgent200JSONResponse).Body
 	if got.Emits == nil || len(*got.Emits) != 1 {
 		t.Fatalf("emits = %+v, want the declared event", got.Emits)
 	}
@@ -194,7 +195,7 @@ func TestGetAgent_reportsWhetherItIsRunning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAgent: %v", err)
 	}
-	got := resp.(openapi.GetAgent200JSONResponse)
+	got := resp.(openapi.GetAgent200JSONResponse).Body
 	if got.Agent.Paused == nil || *got.Agent.Paused {
 		t.Errorf("paused = %v, want it reported as running", got.Agent.Paused)
 	}
@@ -212,7 +213,7 @@ func TestGetAgent_nobodyEverDecided_readsAsStopped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAgent: %v", err)
 	}
-	got := resp.(openapi.GetAgent200JSONResponse)
+	got := resp.(openapi.GetAgent200JSONResponse).Body
 	if got.Agent.Paused == nil || !*got.Agent.Paused {
 		t.Errorf("paused = %v, want it reported as stopped", got.Agent.Paused)
 	}
@@ -247,7 +248,7 @@ func TestGetAgent_theApprovalPolicyIsReturnedWithTheVersion(t *testing.T) {
 		t.Fatalf("GetAgent: %v", err)
 	}
 
-	got := resp.(openapi.GetAgent200JSONResponse)
+	got := resp.(openapi.GetAgent200JSONResponse).Body
 	if got.Approvals == nil || got.Approvals.Direct == nil || !*got.Approvals.Direct {
 		t.Fatalf("approvals = %+v, want the owner's request back", got.Approvals)
 	}
@@ -268,7 +269,7 @@ func TestGetAgent_anAgentThatAskedForNothing_carriesNoPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAgent: %v", err)
 	}
-	if got := resp.(openapi.GetAgent200JSONResponse); got.Approvals != nil {
+	if got := resp.(openapi.GetAgent200JSONResponse).Body; got.Approvals != nil {
 		t.Errorf("approvals = %+v, want nothing", got.Approvals)
 	}
 }

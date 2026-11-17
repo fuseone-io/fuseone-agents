@@ -61,6 +61,10 @@ func (s *Server) WithPublisher(p Publisher) *Server {
 func (s *Server) PublishAgent(
 	ctx context.Context, req openapi.PublishAgentRequestObject,
 ) (openapi.PublishAgentResponseObject, error) {
+	guard, bad := agentGuard(ctx, req.Params.IfMatch, req.Params.IfNoneMatch)
+	if bad != "" {
+		return publishInvalid(bad), nil
+	}
 	draft, problem := draftOf(req)
 	if problem != nil {
 		return problem, nil
@@ -100,8 +104,9 @@ func (s *Server) PublishAgent(
 	judged, err := s.publisher.Publish(ctx, spec.Publication{
 		Spec: published, By: callerOf(ctx), Company: scope.Company,
 		RefuseStages: refusedStages(req.Params.RefuseIfStage),
+		Guard:        guard,
 	})
-	if refused, ok := publicationConflict(err); ok {
+	if refused, ok := publicationRefused(req.AgentId, err); ok {
 		return refused, nil
 	}
 	if err != nil {
