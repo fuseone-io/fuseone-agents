@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 
 	"github.com/fuseone/agents/internal/authoring/draft"
 	"github.com/fuseone/agents/internal/authoring/drafts"
@@ -34,11 +35,92 @@ func (s *Server) ListDraftProposals(
 	if err != nil {
 		return nil, err
 	}
+	// The draft as it is now, for what accepting a block proposal would leave.
+	opened, err := s.drafts.Get(ctx, domain.AgentID(req.AgentId), draftCaller(ctx))
+	if errors.Is(err, drafts.ErrNotFound) {
+		return absent, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	effects := s.proposedToolEffects(ctx, opened, found)
 	items := make([]openapi.DraftProposal, 0, len(found))
 	for _, p := range found {
-		items = append(items, proposalView(p))
+		view := proposalView(p)
+		if after, ok := instructionsAfter(opened, p); ok {
+			view.InstructionsAfter = ptr(after)
+		}
+		if effect, ok := effects(p); ok {
+			view.ToolEffect = ptr(openapi.DraftProposalToolEffect(effect))
+		}
+		items = append(items, view)
 	}
 	return openapi.ListDraftProposals200JSONResponse{Items: items}, nil
+}
+
+/*
+instructionsAfter is what accepting a block proposal now would leave of the
+instructions, rendered by the codec accepting uses, so the card shows the
+effect and not a guess at it: the label a new or rewritten block takes in its
+locale, its position, the block a move takes. Only for a proposal that could
+be accepted now; any other would be refused, and shows nothing to accept.
+*/
+func instructionsAfter(opened drafts.Opened, p drafts.Proposal) (string, bool) {
+	if p.Op == nil || !isBlockKind(p.Op.Kind()) || !p.Valid || p.Decision != "" || p.Read != opened.Revision {
+		return "", false
+	}
+	next, err := draft.Preview(opened.Draft, p.Op)
+	if err != nil {
+		return "", false
+	}
+	return next.Definition().Instructions, true
+}
+
+/*
+proposedToolEffects answers, for a waiting valid tool proposal, the effect the
+catalogue rules for its tool in the draft's stored scope: the scope accepting
+is judged in, never one a console has not saved. A tool nobody ruled on there
+is unknown. The catalogue is read once, and only when a proposal needs it;
+read or not, the list is answered, and without an effect a client offers no
+acceptance.
+*/
+func (s *Server) proposedToolEffects(ctx context.Context, opened drafts.Opened, found []drafts.Proposal) func(drafts.Proposal) (string, bool) {
+	none := func(drafts.Proposal) (string, bool) { return "", false }
+	toolOf := func(p drafts.Proposal) (domain.ToolID, bool) {
+		if !p.Valid || p.Decision != "" {
+			return "", false
+		}
+		switch op := p.Op.(type) {
+		case draft.AddTool:
+			return op.Tool, true
+		case draft.RemoveTool:
+			return op.Tool, true
+		}
+		return "", false
+	}
+	if !slices.ContainsFunc(found, func(p drafts.Proposal) bool { _, ok := toolOf(p); return ok }) {
+		return none
+	}
+	rulings, err := s.checker().Rulings(ctx, domain.Scope{Company: opened.Draft.Spec.Company, Area: opened.Draft.Spec.Area})
+	if err != nil {
+		return none
+	}
+	return func(p drafts.Proposal) (string, bool) {
+		tool, ok := toolOf(p)
+		if !ok {
+			return "", false
+		}
+		effect, _ := rulings.Effect(tool)
+		return effect.String(), true
+	}
+}
+
+func isBlockKind(kind string) bool {
+	switch kind {
+	case "insert_block", "replace_block", "remove_block", "move_block":
+		return true
+	}
+	return false
 }
 
 // AcceptDraftProposal applies one proposal, by its id alone.
@@ -118,6 +200,12 @@ func proposalView(p drafts.Proposal) openapi.DraftProposal {
 	}
 	if p.Decision != "" {
 		out.Decision = ptr(openapi.DraftProposalDecision(p.Decision))
+	}
+	if p.Turn != "" {
+		out.TurnId = ptr(p.Turn)
+	}
+	if p.Reason != "" {
+		out.Reason = ptr(p.Reason)
 	}
 	return out
 }

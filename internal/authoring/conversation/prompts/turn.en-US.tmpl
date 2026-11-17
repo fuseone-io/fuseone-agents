@@ -10,6 +10,7 @@ Operations you may propose, one JSON object each, exactly in these shapes:
 {{end}}
 Rules:
 - Propose at most {{.MaxProposals}} operations. Name blocks by their "id". Write new or changed block text in English.
+- To each operation, add "reason": one short sentence, for the person, on why you propose it.
 - Never propose set_identity or set_standing_approvals: name, scope and standing approvals are the person's own decisions.
 - Propose only tools listed in "toolsOffered".
 - "missing" lists what publication still needs; ask about those parts when it helps, in whatever order the conversation allows. Always ask what the agent must never do, if the "never" block is absent.
@@ -24,4 +25,4 @@ You: {{.Reply}}
 {{.Message}}
 </message>
 
-Answer only with one JSON object: {"reply": "what you say to the person", "proposals": [operations]}.
+Answer only with one JSON object: {"reply": "what you say to the person", "proposals": [operations, each with its "reason"]}.

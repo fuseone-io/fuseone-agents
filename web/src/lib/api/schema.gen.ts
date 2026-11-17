@@ -629,6 +629,13 @@ export interface paths {
          * @description Oldest first, with what was said while it is kept and what each turn
          *     reserved and cost. Only the caller's own thread; without what reaching
          *     the draft needs, 404.
+         *
+         *     `conversation` says whether a turn could be sent now: `open`, or
+         *     closed because the installation's assistant is `off`, its model has
+         *     no configured price (`unpriced`), or the day's authoring ceiling is
+         *     `spent`. Open is not a promise: a turn whose reservation does not fit
+         *     what is left of the day is still refused when sent. Closed, the draft
+         *     stays editable through its own operations.
          */
         get: operations["listDraftTurns"];
         put?: never;
@@ -642,10 +649,12 @@ export interface paths {
          *
          *     Refused before anything is reserved or called: an empty message, or
          *     one over 16 KiB, or a turn whose input alone costs more than a turn
-         *     may (400); a model with no configured price, an assistant switched
-         *     off, a reservation that does not fit the day (409); another turn in
-         *     progress in this thread (409); a draft that moved while the turn was
-         *     prepared (412).
+         *     may (400, `fuseone:turn-too-large` for the size); a model with no
+         *     configured price (409, `fuseone:conversation-unpriced`), an assistant
+         *     switched off (409, `fuseone:conversation-off`), a reservation that
+         *     does not fit the day (409, `fuseone:conversation-spent`); another turn
+         *     in progress in this thread (409, `fuseone:turn-in-flight`); a draft
+         *     that moved while the turn was prepared (412).
          *
          *     Idempotent by `key`: a key already used answers the turn it named,
          *     without calling the model again; one whose turn ran past its lease
@@ -6122,6 +6131,31 @@ export interface components {
              * @enum {string}
              */
             decision?: "accepted" | "rejected";
+            /** @description The conversation's turn that proposed it. */
+            turnId?: string;
+            /**
+             * @description The model's sentence on why it proposes this: text the model wrote,
+             *     to read as such. Absent when it gave none, or once retention or
+             *     erasing the thread took it.
+             */
+            reason?: string;
+            /**
+             * @description For a tool proposal, the effect the catalogue rules for the tool in
+             *     the draft's stored scope, the scope accepting it is judged in:
+             *     `unknown` for a tool nobody ruled on there. Present only while it
+             *     waits and is valid, and only when the catalogue could be read; a
+             *     client offers no acceptance without it.
+             * @enum {string}
+             */
+            toolEffect?: "unknown" | "read" | "write" | "destructive" | "financial";
+            /**
+             * @description For a block operation, the draft's whole instructions as accepting
+             *     it now would leave them, rendered as accepting renders them: a new
+             *     or changed block under the label of its locale, at its position.
+             *     Present only while the proposal can be accepted, waiting, valid,
+             *     and made against the draft's current ETag.
+             */
+            instructionsAfter?: string;
             /** @description The draft's ETag the model read; accepting it against another is a 412. */
             readRevision: string;
             /** Format: date-time */
@@ -8301,6 +8335,20 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["DraftTurn"][];
+                        /** @enum {string} */
+                        conversation: "open" | "off" | "unpriced" | "spent";
+                        /**
+                         * Format: int64
+                         * @description What authoring holds against today's ceiling, installation-wide:
+                         *     confirmed costs, and reservations in progress or kept for an
+                         *     unknown result. Absent while the assistant is off.
+                         */
+                        spentMicros?: number;
+                        /**
+                         * Format: int64
+                         * @description Today's authoring ceiling. Absent while the assistant is off.
+                         */
+                        dailyMicros?: number;
                     };
                 };
             };

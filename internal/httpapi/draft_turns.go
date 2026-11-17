@@ -132,21 +132,40 @@ func (s *Server) offerFor(ctx context.Context, scope domain.Scope) (conversation
 	return offer, nil
 }
 
+// turnRefusals are the refusals a turn meets before its call, each with the
+// status and the code the console chooses its words by.
+var turnRefusals = []struct {
+	err    error
+	status int
+	code   Code
+}{
+	{conversation.ErrEmptyMessage, http.StatusBadRequest, CodeInvalidInput},
+	{conversation.ErrTurnTooLarge, http.StatusBadRequest, CodeTurnTooLarge},
+	{authoring.ErrDisabled, http.StatusConflict, CodeConversationOff},
+	{drafts.ErrNoCeiling, http.StatusConflict, CodeConversationOff},
+	{conversation.ErrNoPrice, http.StatusConflict, CodeConversationUnpriced},
+	{drafts.ErrOverCeiling, http.StatusConflict, CodeConversationSpent},
+	{drafts.ErrTurnInFlight, http.StatusConflict, CodeTurnInFlight},
+}
+
 func turnRefused(agent string, err error) (openapi.SendDraftTurnResponseObject, error) {
 	if stale, ok := staleFrom(err); ok {
 		return openapi.SendDraftTurn412ApplicationProblemPlusJSONResponse{PreconditionFailedApplicationProblemPlusJSONResponse: stale}, nil
 	}
-	switch {
-	case errors.Is(err, drafts.ErrNotFound):
+	if errors.Is(err, drafts.ErrNotFound) {
 		return openapi.SendDraftTurn404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: notFound(agent)}, nil
-	case errors.Is(err, conversation.ErrEmptyMessage), errors.Is(err, conversation.ErrTurnTooLarge):
-		return openapi.SendDraftTurn400ApplicationProblemPlusJSONResponse{
-			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
-		}, nil
-	case errors.Is(err, conversation.ErrNoPrice), errors.Is(err, drafts.ErrOverCeiling), errors.Is(err, drafts.ErrNoCeiling),
-		errors.Is(err, drafts.ErrTurnInFlight), errors.Is(err, authoring.ErrDisabled):
-		return openapi.SendDraftTurn409ApplicationProblemPlusJSONResponse(
-			refusal(http.StatusConflict, CodeConflict, "Turn refused", err.Error())), nil
+	}
+	for _, r := range turnRefusals {
+		if !errors.Is(err, r.err) {
+			continue
+		}
+		problem := refusal(r.status, r.code, "Turn refused", err.Error())
+		if r.status == http.StatusBadRequest {
+			return openapi.SendDraftTurn400ApplicationProblemPlusJSONResponse{
+				BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(problem),
+			}, nil
+		}
+		return openapi.SendDraftTurn409ApplicationProblemPlusJSONResponse(problem), nil
 	}
 	return nil, err
 }
@@ -170,7 +189,13 @@ func (s *Server) ListDraftTurns(
 	for _, t := range turns {
 		items = append(items, turnView(conversation.Result{Turn: t}))
 	}
-	return openapi.ListDraftTurns200JSONResponse{Items: items}, nil
+	now, err := s.conversationNow(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return openapi.ListDraftTurns200JSONResponse{
+		Items: items, Conversation: now.state, SpentMicros: now.spent, DailyMicros: now.daily,
+	}, nil
 }
 
 // EraseDraftThread erases what was said in the caller's own conversation.

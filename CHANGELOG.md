@@ -37,11 +37,38 @@ field" is a commit message.
   changes. No rollback floor: 0.118.0 does not read them.
 - **Migration 0115 only adds**: the table `agent_draft_turns` and a nullable `turn_id`
   column on `agent_draft_proposals`. No rollback floor: 0.118.0 reads neither.
+- **Migration 0116 only adds** the column `agent_draft_proposals.reason_ref`, a reference
+  to each proposal's reason in the content store. No rollback floor: 0.118.0 does not
+  read it.
 
 ### Added
 
-- **The conversation's turns** (NT-018 phase 3, second part). The model now proposes;
-  nothing in the console sends a turn yet.
+- **The workbench conversation, in the console** (NT-018 phase 3, third part). At
+  `/agents/{id}/workbench` the author's own conversation sits on the left and the draft
+  on the right.
+  - The assistant reads the whole draft and answers with proposals, each a card to
+    accept or reject; a block's shows its difference against the block as the draft
+    holds it now. Accepting changes the draft, and keeps the author's unsaved edits over
+    it; a proposal made over an older draft says so.
+  - A message sent again after no answer is the same turn, never a second call. Pasted
+    text is marked.
+  - With the assistant off, its model unpriced or the day's ceiling spent, the
+    conversation says why before anybody writes, and the draft stays editable through
+    its fields.
+  - Each proposal carries the model's one-sentence reason, kept in the content store under
+    the thread's retention and erased with it; a tool proposal shows the effect the
+    catalogue rules for it in the draft's stored scope, and is not offered without it; a
+    block proposal shows the instructions accepting it
+    would leave, as they will be written, or, made over an older draft, offers nothing to
+    accept.
+  - The header says what authoring holds today against its ceiling.
+  - `GET /agents/{agentId}/draft/turns` now says whether the conversation is open and,
+    while the assistant is on, the day's spend and ceiling; a turn's refusals carry their
+    own problem codes; a proposal names its turn, carries its reason and, for a tool,
+    `toolEffect` or, for a block, `instructionsAfter`.
+  - Nothing here publishes yet.
+
+- **The conversation's turns** (NT-018 phase 3, second part). The model now proposes.
   - `POST /agents/{agentId}/draft/turns` sends one message of the caller's own thread to
     the installation's authoring model. The model reads the whole draft, its blocks,
     what publication still needs and what the draft's scope offers, never a secret or an

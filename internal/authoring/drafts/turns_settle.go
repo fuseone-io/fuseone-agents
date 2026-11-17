@@ -31,11 +31,18 @@ type Settlement struct {
 	Cost   int64
 	Reply  string
 	Failed bool
-	// Ops are the answer's operations, proposed against the ETag the turn
-	// read; Validator and Now judge them as operations by proposal.
-	Ops       []draft.Operation
+	// Proposed are the answer's operations, each with the model's reason,
+	// proposed against the ETag the turn read; Validator and Now judge them as
+	// operations by proposal.
+	Proposed  []Proposed
 	Validator draft.Validator
 	Now       time.Time
+}
+
+// Proposed is one operation the model proposed, and its sentence on why.
+type Proposed struct {
+	Op     draft.Operation
+	Reason string
 }
 
 // Settled is a settled turn and what it proposed. Stale counts operations
@@ -87,7 +94,7 @@ func (s *Store) SettleTurn(ctx context.Context, st Settlement) (Settled, error) 
 // and answers the reply's reference.
 func (s *Store) keepWhatWasSaid(ctx context.Context, tx pgx.Tx, r row, turn Turn, st Settlement) (Settled, string, error) {
 	if turn.Erased {
-		return Settled{Withheld: len(st.Ops)}, "", nil
+		return Settled{Withheld: len(st.Proposed)}, "", nil
 	}
 	ref := ""
 	if st.Reply != "" {
@@ -97,23 +104,24 @@ func (s *Store) keepWhatWasSaid(ctx context.Context, tx pgx.Tx, r row, turn Turn
 			return Settled{}, "", fmt.Errorf("drafts: keep the reply: %w", err)
 		}
 	}
-	if len(st.Ops) == 0 {
+	if len(st.Proposed) == 0 {
 		return Settled{}, ref, nil
 	}
 	if r.revision != turn.Read {
-		return Settled{Stale: len(st.Ops)}, ref, nil
+		return Settled{Stale: len(st.Proposed)}, ref, nil
 	}
 	d, err := draft.Decode(r.stored)
 	if err != nil {
 		return Settled{}, "", err
 	}
 	var out Settled
-	for _, op := range st.Ops {
-		refusal, err := verdictOf(st.Validator.Validate(ctx, d, op, draft.FromProposal, st.Now))
+	for _, proposed := range st.Proposed {
+		refusal, err := verdictOf(st.Validator.Validate(ctx, d, proposed.Op, draft.FromProposal, st.Now))
 		if err != nil {
 			return Settled{}, "", err
 		}
-		p, err := s.record(ctx, tx, r, Proposing{Agent: st.Agent, Op: op, Read: turn.Read, Caller: st.Caller}, refusal, turn.ID)
+		p, err := s.record(ctx, tx, r, Proposing{Agent: st.Agent, Op: proposed.Op, Read: turn.Read, Caller: st.Caller},
+			refusal, said{turn: turn.ID, reason: proposed.Reason})
 		if err != nil {
 			return Settled{}, "", err
 		}

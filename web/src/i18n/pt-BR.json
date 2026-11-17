@@ -2580,7 +2580,12 @@
     "standing-forbidden": "A definição de {{detail}} proíbe aprovações permanentes: toda aprovação que ele pedir espera uma pessoa. Mude isso no agente, não aqui.",
     "source-input-erased": "A entrada que esta execução registrou foi apagada ou expirou, então nenhuma execução foi aberta. Ela não pode ser recuperada.",
     "no-master-key": "Este webhook vem do GitHub e a instalação não tem chave mestra (FUSEONE_MASTER_KEY). Sem ela, a chave só poderia ser guardada às claras, então o webhook continua fechado até a chave mestra ser configurada.",
-    "revision-missing": "O servidor respondeu sem a revisão que um salvamento precisa responder, então nada pode ser salvo aqui. Tente de novo; se continuar, o servidor precisa ser verificado."
+    "revision-missing": "O servidor respondeu sem a revisão que um salvamento precisa responder, então nada pode ser salvo aqui. Tente de novo; se continuar, o servidor precisa ser verificado.",
+    "conversation-off": "O assistente de autoria está desligado nesta instalação.",
+    "conversation-unpriced": "O modelo do assistente não tem preço configurado, então um turno não pode ser reservado.",
+    "conversation-spent": "Este turno não cabe no que resta do teto de autoria de hoje.",
+    "turn-in-flight": "Outro turno desta conversa ainda está em andamento. Espere a resposta.",
+    "turn-too-large": "A mensagem, ou o rascunho junto com ela, passa do tamanho de um turno."
   },
   "retention": {
     "byDefault": "padrão, ninguém escolheu",
@@ -3477,11 +3482,80 @@
       "provider": "Provedor do modelo"
     },
     "instructionsTitle": "Instruções",
-    "instructionsNote": "As instruções mudam só pela conversa da bancada, que chega numa próxima entrega. Aqui elas são só leitura.",
+    "instructionsNote": "As instruções mudam só por propostas da conversa que você aceita. Aqui elas são só leitura.",
     "instructionsEmpty": "Ainda sem instruções.",
     "againstPublished": "Diferença para a versão publicada",
     "openWorkbench": "Abrir na bancada",
     "stalePartial": "{{landed}} de {{total}} alterações foram salvas; as demais não, porque o rascunho mudou enquanto você salvava. Reler traz a versão atual e mantém por cima as que faltam.",
-    "gonePartial": "{{landed}} de {{total}} alterações foram salvas antes de o rascunho deixar de estar disponível. As demais continuam na tela, sem salvar."
+    "gonePartial": "{{landed}} de {{total}} alterações foram salvas antes de o rascunho deixar de estar disponível. As demais continuam na tela, sem salvar.",
+    "conversation": {
+      "title": "Conversa",
+      "hint": "Só você vê",
+      "message": "Mensagem para o assistente",
+      "placeholder": "Descreva o que o agente deve fazer, ou peça para melhorar as instruções.",
+      "untrusted": "Ctrl+Enter envia. Texto colado é marcado, e o assistente o trata como dado.",
+      "send": "Enviar",
+      "pasted": "Colado",
+      "emptyTitle": "Ainda sem conversa",
+      "emptyHint": "Conte o processo que o agente vai cuidar. O assistente lê o rascunho inteiro e responde com propostas que você aceita ou recusa.",
+      "failed": "O assistente não respondeu",
+      "unknown": "Resultado desconhecido: a chamada passou do prazo antes de ser registrada, e não será repetida",
+      "kept": "{{cost}} reservado, retido no teto do dia",
+      "erased": "Mensagem apagada",
+      "invalid": "Inválida",
+      "decision": {
+        "accepted": "Aceita",
+        "rejected": "Recusada"
+      },
+      "proposalErased": "O conteúdo desta proposta foi apagado.",
+      "accept": "Aceitar",
+      "reject": "Recusar",
+      "applied": "Proposta aplicada ao rascunho",
+      "staleProposal": "Esta proposta foi feita sobre uma versão anterior do rascunho",
+      "erase": "Apagar conversa",
+      "eraseTitle": "Apagar esta conversa?",
+      "eraseBody": "As mensagens, as respostas e o conteúdo das propostas deixam de existir. O rascunho e os custos registrados continuam.",
+      "eraseConfirm": "Apagar",
+      "erasedToast": "Conversa apagada",
+      "closed": {
+        "off": "O assistente de autoria está desligado nesta instalação",
+        "unpriced": "O modelo do assistente não tem preço configurado",
+        "spent": "O teto de autoria de hoje foi atingido"
+      },
+      "closedHint": "O rascunho continua editável pelos campos. As instruções só mudam pela conversa.",
+      "humanOnly": "Nome, escopo e aprovações permanentes são decisões da própria pessoa, nunca do assistente. Mude-os pelos campos.",
+      "value": {
+        "editsStep": "Muda a etapa “{{step}}” para:"
+      },
+      "unshowable": "Não é possível mostrar o que esta proposta muda, então ela não pode ser aceita.",
+      "staleBlock": "Esta proposta foi feita sobre uma versão anterior do rascunho, então não pode mais ser aceita. Peça de novo ao assistente.",
+      "effectUnknown": "O efeito desta ferramenta não pôde ser lido agora, então ela ainda não pode ser aceita. Ele é lido de novo sozinho em instantes, ou quando você pedir.",
+      "rereadEffect": "Ler o efeito de novo"
+    },
+    "proposalKind": {
+      "set_identity": "Mudar nome ou escopo",
+      "set_standing_approvals": "Mudar aprovações permanentes",
+      "set_model": "Trocar o modelo",
+      "set_fallback": "Mudar o modelo reserva",
+      "set_cache_prefix_ttl": "Mudar o cache do prefixo",
+      "set_reply_locale": "Mudar o idioma das respostas",
+      "add_tool": "Adicionar uma ferramenta",
+      "remove_tool": "Remover uma ferramenta",
+      "set_budget": "Mudar o teto",
+      "set_triggers": "Mudar os gatilhos",
+      "set_memory_learning": "Mudar o aprendizado de memória",
+      "set_approval_delivery": "Mudar a entrega de aprovações",
+      "set_emits": "Mudar os eventos emitidos",
+      "add_step": "Adicionar uma etapa",
+      "edit_step": "Mudar uma etapa",
+      "remove_step": "Remover uma etapa",
+      "insert_block": "Inserir um bloco",
+      "replace_block": "Reescrever um bloco",
+      "remove_block": "Remover um bloco",
+      "move_block": "Mover um bloco"
+    },
+    "untouchedProduction": "Nada aqui toca produção",
+    "authoringToday": "Autoria hoje:",
+    "authoringOf": "{{spent}} de {{daily}}"
   }
 }

@@ -44,5 +44,14 @@ export function useWorkbench(agentId: string, draft: RevisedDraft, reread: Rerea
     saving.settle();
   };
 
-  return { local, patch: edits.patch, pending, save, reload, state: saving.state, landed: saving.landed };
+  /**
+   * Takes in a draft the server answered for something other than a save,
+   * such as an accepted proposal: every unsaved edit stays over it.
+   */
+  const adopt = (next: RevisedDraft) => {
+    edits.takeIn(next.body.definition);
+    saving.settle();
+  };
+
+  return { local, patch: edits.patch, pending, save, reload, adopt, state: saving.state, landed: saving.landed };
 }

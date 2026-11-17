@@ -157,3 +157,34 @@ func TestPrompt_putsTheMessageInsideItsMarkers(t *testing.T) {
 		t.Fatalf("the message is not inside its markers, or the paste is not said:\n%s", got)
 	}
 }
+
+// Each proposal may say why, in a sentence the card shows beside it. A reason
+// longer than a card holds drops its proposal rather than being cut: a cut
+// reason can say the opposite of the whole one.
+func TestReadReply_readsEachProposalsReason(t *testing.T) {
+	t.Parallel()
+	long := strings.Repeat("x", conversation.MaxReasonBytes+1)
+	text := `{"reply":"Sugiro.","proposals":[` +
+		`{"kind":"add_tool","operation":{"Tool":"crm.lookup"},"reason":"Confirmar a compra antes de reembolsar."},` +
+		`{"kind":"add_tool","operation":{"Tool":"crm.refund"}},` +
+		`{"kind":"add_tool","operation":{"Tool":"crm.other"},"reason":"` + long + `"}]}`
+
+	got, err := conversation.ReadReply(text)
+	if err != nil {
+		t.Fatalf("ReadReply: %v", err)
+	}
+	if len(got.Proposals) != 2 || got.Proposals[0].Reason != "Confirmar a compra antes de reembolsar." || got.Proposals[1].Reason != "" || got.Dropped != 1 {
+		t.Fatalf("proposals %+v, %d dropped; want two, the first with its reason, and the long one dropped", got.Proposals, got.Dropped)
+	}
+}
+
+// The prompt asks, in both locales, for each proposal's reason beside it.
+func TestPrompt_asksForEachProposalsReason(t *testing.T) {
+	t.Parallel()
+	for _, locale := range []string{"pt-BR", "en-US"} {
+		got, err := conversation.Prompt(locale, "{}", nil, "Oi", false)
+		if err != nil || !strings.Contains(got, `"reason"`) {
+			t.Errorf("%s: prompt does not ask for a reason (%v)", locale, err)
+		}
+	}
+}

@@ -25,6 +25,8 @@ const (
 	MaxOutputTokens int64 = 4096
 	// MaxProposalsPerTurn bounds what one answer may propose.
 	MaxProposalsPerTurn = 8
+	// MaxReasonBytes bounds a proposal's reason: one sentence beside a card.
+	MaxReasonBytes = 500
 	// MaxTurnMicros refuses a turn whose input alone costs more than this.
 	MaxTurnMicros int64 = 2_000_000
 	// Lease is how long a turn may stay in progress before a retry of its

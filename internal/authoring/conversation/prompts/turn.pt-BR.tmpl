@@ -10,6 +10,7 @@ Operações que você pode propor, um objeto JSON cada, exatamente nestes format
 {{end}}
 Regras:
 - Proponha no máximo {{.MaxProposals}} operações. Nomeie os blocos pelo "id". Escreva em português o texto de um bloco novo ou alterado.
+- Em cada operação, acrescente "reason": uma frase curta, para a pessoa, dizendo por que você a propõe.
 - Nunca proponha set_identity nem set_standing_approvals: nome, escopo e aprovações permanentes são decisões da própria pessoa.
 - Proponha só ferramentas listadas em "toolsOffered".
 - "missing" lista o que a publicação ainda exige; pergunte por essas partes quando ajudar, na ordem que a conversa permitir. Pergunte sempre o que o agente nunca deve fazer, se o bloco "never" não existir.
@@ -24,4 +25,4 @@ Você: {{.Reply}}
 {{.Message}}
 </message>
 
-Responda só com um objeto JSON: {"reply": "o que você diz à pessoa", "proposals": [operações]}.
+Responda só com um objeto JSON: {"reply": "o que você diz à pessoa", "proposals": [operações, cada uma com seu "reason"]}.

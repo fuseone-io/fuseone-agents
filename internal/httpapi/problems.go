@@ -114,6 +114,15 @@ const (
 	CodePersonIsYou       Code = "fuseone:person-is-you"
 	CodePersonRemoved     Code = "fuseone:person-removed"
 	CodeLastAdministrator Code = "fuseone:last-administrator"
+	// The workbench conversation's refusals (NT-018 phase 3). Separate codes
+	// because the console says different things: the assistant is off, its
+	// model has no price, the day's ceiling is spent, another turn is on its
+	// way, or the message is too long.
+	CodeConversationOff      Code = "fuseone:conversation-off"
+	CodeConversationUnpriced Code = "fuseone:conversation-unpriced"
+	CodeConversationSpent    Code = "fuseone:conversation-spent"
+	CodeTurnInFlight         Code = "fuseone:turn-in-flight"
+	CodeTurnTooLarge         Code = "fuseone:turn-too-large"
 )
 
 /*
