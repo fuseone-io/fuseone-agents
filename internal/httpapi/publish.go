@@ -61,12 +61,15 @@ func (s *Server) WithPublisher(p Publisher) *Server {
 func (s *Server) PublishAgent(
 	ctx context.Context, req openapi.PublishAgentRequestObject,
 ) (openapi.PublishAgentResponseObject, error) {
+	draft, problem := draftOf(req)
+	if problem != nil {
+		return problem, nil
+	}
 	// Publishing into an area needs the right to publish into the exact
 	// company/area pair the author chose. Area identifiers are scoped by
 	// company; inferring the company from the first matching grant is how an
 	// editor showing acme/platform can publish default/platform.
-	scope, allowed := publishScope(ctx,
-		domain.CompanyID(req.Body.Company), domain.AreaID(req.Body.Area))
+	scope, allowed := publishScope(ctx, draft.Company, draft.Area)
 	if !allowed {
 		return openapi.PublishAgent403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish, scope),
@@ -76,12 +79,9 @@ func (s *Server) PublishAgent(
 		return nil, errNoAdministration
 	}
 
-	definition, published, err := renderAndParse(req.AgentId, *req.Body)
+	definition, published, err := canonical(draft)
 	if err != nil {
-		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
-			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				invalid(err.Error())),
-		}, nil
+		return publishInvalid(err.Error()), nil
 	}
 
 	detail, err := s.checker().Check(ctx, published, clockOr(s.clock).Now())
@@ -89,10 +89,7 @@ func (s *Server) PublishAgent(
 		return nil, err
 	}
 	if detail != "" {
-		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
-			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				invalid(detail)),
-		}, nil
+		return publishInvalid(detail), nil
 	}
 
 	before, err := s.agentVersions(ctx, domain.AgentID(req.AgentId))

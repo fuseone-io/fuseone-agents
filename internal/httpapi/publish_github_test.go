@@ -51,7 +51,7 @@ func TestPublishAgent_aGitHubWebhook_isReconciledWithItsSourceAndEvents(t *testi
 		inArea("cx", domain.RoleAuthor),
 		openapi.PublishAgentRequestObject{
 			AgentId: "triage",
-			Body: definition(func(d *openapi.AgentDefinition) {
+			JSONBody: definition(func(d *openapi.AgentDefinition) {
 				d.Triggers = &[]openapi.AgentTrigger{githubTrigger()}
 			}),
 		},

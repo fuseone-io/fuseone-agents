@@ -12,8 +12,18 @@ import (
 // specification. Both directions, because the file is the artefact and the
 // version is its digest.
 func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, error) {
+	draft, err := draftOfFields(id, in)
+	if err != nil {
+		return nil, spec.Spec{}, err
+	}
+	return canonical(draft)
+}
+
+// draftOfFields is the specification the form's fields describe, not yet
+// rendered nor validated.
+func draftOfFields(id string, in openapi.AgentDefinition) (spec.Spec, error) {
 	if id == "" {
-		return nil, spec.Spec{}, errors.New("um agente precisa de um identificador")
+		return spec.Spec{}, errors.New("um agente precisa de um identificador")
 	}
 
 	draft := spec.Spec{
@@ -43,7 +53,12 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 		draft.Triggers = append(draft.Triggers, specTrigger(t))
 	}
 	draft.Steps = stepsOf(in.Steps)
+	return draft, nil
+}
 
+// canonical renders a draft to the file and parses the file back: the bytes
+// a version is the digest of, whichever format the draft arrived in.
+func canonical(draft spec.Spec) ([]byte, spec.Spec, error) {
 	rendered, err := spec.Render(draft)
 	if err != nil {
 		return nil, spec.Spec{}, err

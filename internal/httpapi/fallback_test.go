@@ -32,7 +32,7 @@ func TestPublishAgent_fallbackSurvivesTheConsolePath(t *testing.T) {
 
 	_, err := publishServer(t, pub).WithProviderNames(configuredProviders{"openai": true, "backup": true}).
 		PublishAgent(inArea("cx", domain.RoleAuthor), openapi.PublishAgentRequestObject{
-			AgentId: "triage", Body: definition(withFallbackPair("backup", "backup-model")),
+			AgentId: "triage", JSONBody: definition(withFallbackPair("backup", "backup-model")),
 		})
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)
@@ -52,7 +52,7 @@ func TestPublishAgent_aFallbackProviderNobodyConfigured_isRefused(t *testing.T) 
 	// is the outage it exists for.
 	resp, err := publishServer(t, pub).WithProviderNames(configuredProviders{"openai": true}).
 		PublishAgent(inArea("cx", domain.RoleAuthor), openapi.PublishAgentRequestObject{
-			AgentId: "triage", Body: definition(withFallbackPair("backup", "backup-model")),
+			AgentId: "triage", JSONBody: definition(withFallbackPair("backup", "backup-model")),
 		})
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)
@@ -75,7 +75,7 @@ func TestPublishAgent_aFallbackIdenticalToTheDeclaredPair_isRefused(t *testing.T
 
 	resp, err := publishServer(t, pub).WithProviderNames(configuredProviders{"openai": true}).
 		PublishAgent(inArea("cx", domain.RoleAuthor), openapi.PublishAgentRequestObject{
-			AgentId: "triage", Body: definition(withFallbackPair("openai", "gpt-test")),
+			AgentId: "triage", JSONBody: definition(withFallbackPair("openai", "gpt-test")),
 		})
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)

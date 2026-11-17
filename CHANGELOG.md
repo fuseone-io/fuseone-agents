@@ -30,6 +30,18 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **An agent publishes from its `.agent.md` file** (NT-018, delivery B).
+  `PUT /agents/{agentId}/versions` accepts `text/markdown` beside the JSON fields. The
+  file publishes the same version the equivalent fields do: it is rendered to the
+  canonical form before its digest is taken, so comments, key order and blank lines in
+  the file never make a second version. The company comes from the frontmatter or from
+  `?company=`, for a file kept for several installations. Refused with 400 when the
+  company is in neither or the two disagree, and when the file's `id` is not the one in
+  the path. Every check the JSON publication runs applies to the file as well, with the
+  same answer. A file over 2 MiB is refused with 413.
+
 ## [0.116.0] — 2026-11-16
 
 NT-019 phase 4, the writers' release (#369, #370, #371). A company or an area connects its

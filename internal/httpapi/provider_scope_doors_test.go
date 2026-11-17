@@ -36,7 +36,7 @@ func TestPublishAgent_aFallbackConfiguredOnlyForAnotherArea_isRefused(t *testing
 	})
 	resp, err := publishServer(t, pub).WithProviderNames(reg).
 		PublishAgent(inArea("cx", domain.RoleAuthor), openapi.PublishAgentRequestObject{
-			AgentId: "triage", Body: definition(withFallbackPair("backup", "backup-model")),
+			AgentId: "triage", JSONBody: definition(withFallbackPair("backup", "backup-model")),
 		})
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)
@@ -52,7 +52,7 @@ func TestPublishAgent_aFallbackOfTheAgentsCompany_isPublished(t *testing.T) {
 	reg := providersAt(t, map[string]domain.Scope{"openai": installationScope, "backup": {Company: "acme"}})
 	if _, err := publishServer(t, pub).WithProviderNames(reg).
 		PublishAgent(inArea("cx", domain.RoleAuthor), openapi.PublishAgentRequestObject{
-			AgentId: "triage", Body: definition(withFallbackPair("backup", "backup-model")),
+			AgentId: "triage", JSONBody: definition(withFallbackPair("backup", "backup-model")),
 		}); err != nil || len(pub.published) != 1 {
 		t.Fatalf("PublishAgent = %v, published %d; want the company's fallback accepted", err, len(pub.published))
 	}

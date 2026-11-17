@@ -142,7 +142,7 @@ func (w *experimentWorld) publish(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 	resp, err := w.server.PublishAgent(author(t.Context()),
-		openapi.PublishAgentRequestObject{AgentId: string(w.agent), Body: &definition})
+		openapi.PublishAgentRequestObject{AgentId: string(w.agent), JSONBody: &definition})
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)
 	}

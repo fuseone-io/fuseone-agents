@@ -364,7 +364,7 @@ func (j *factoryJourney) ruling(tool openapi.Tool) *openapi.ClassifyToolJSONRequ
 func (j *factoryJourney) publish(t *testing.T, reference spec.Spec) openapi.PublishAgentResponseObject {
 	t.Helper()
 	resp, err := j.api.PublishAgent(installer(t), openapi.PublishAgentRequestObject{
-		AgentId: string(reference.ID), Body: studioForm(reference),
+		AgentId: string(reference.ID), JSONBody: studioForm(reference),
 	})
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)

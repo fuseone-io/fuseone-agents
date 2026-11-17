@@ -603,11 +603,30 @@ paths:
             current, so a check made by an earlier read would leave a window
             between the read and the write.
           schema: { $ref: '#/components/schemas/Stage' }
+        - name: company
+          in: query
+          required: false
+          description: |
+            The company the agent belongs to, for a definition sent as the
+            file. A `.agent.md` kept in git usually leaves it out of the
+            frontmatter, because the same file may be published into more than
+            one installation. Absent from both is refused, and so is a value
+            that disagrees with the one the file or the JSON body declares.
+          schema: { type: string }
       requestBody:
         required: true
+        description: |
+          The definition as fields (`application/json`) or as the file itself
+          (`text/markdown`, an `.agent.md`: YAML frontmatter and the
+          instructions as the body). Both reach the same version: the file is
+          parsed, rendered and parsed again exactly as the fields are, so a
+          definition sent one way and then the other publishes once. The
+          file's `id` must be the one in the path.
         content:
           application/json:
             schema: { $ref: '#/components/schemas/AgentDefinition' }
+          text/markdown:
+            schema: { type: string }
       responses:
         '200':
           description: The published version.
@@ -617,6 +636,11 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '413':
+          description: A `.agent.md` larger than 2 MiB, the ceiling every request body has.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '409':
           description: |
             Nothing was written: no version, and the current version unchanged.

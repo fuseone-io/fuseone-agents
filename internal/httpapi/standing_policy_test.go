@@ -28,7 +28,7 @@ func TestPublishAgent_standingApprovalsSurviveTheConsolePath(t *testing.T) {
 			t.Parallel()
 			pub := newPublisher()
 			_, err := publishServer(t, pub).PublishAgent(inArea("cx", domain.RoleAuthor),
-				openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(withStandingApprovals(wire))})
+				openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(withStandingApprovals(wire))})
 			if err != nil {
 				t.Fatalf("PublishAgent: %v", err)
 			}
@@ -44,7 +44,7 @@ func TestPublishAgent_aStandingApprovalsValueNobodyKnows_isRefused(t *testing.T)
 	pub := newPublisher()
 
 	resp, err := publishServer(t, pub).PublishAgent(inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(withStandingApprovals("sometimes"))})
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(withStandingApprovals("sometimes"))})
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)
 	}
