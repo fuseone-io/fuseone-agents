@@ -60,6 +60,8 @@ export function ProposalCard({
           <Badge variant="outline">{t(`workbench.conversation.decision.${proposal.decision}`)}</Badge>
         )}
       </div>
+      {/* The model's words: shown as written, read as a claim to check. */}
+      {proposal.reason && <p className="text-sm text-muted-foreground wrap-anywhere">{proposal.reason}</p>}
       {change ??
         ((pending || !proposal.operation) && (
           <p className="text-xs text-muted-foreground">{t(unshown(proposal))}</p>

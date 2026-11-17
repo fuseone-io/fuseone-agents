@@ -329,4 +329,15 @@ describe("the workbench conversation", () => {
     const today = await screen.findByText(/Autoria hoje/);
     expect(today.parentElement).toHaveTextContent(/0,31.*5,00/);
   });
+
+  it("shows the model's reason beside its proposal", async () => {
+    const tool = { ...blockProposal, kind: "add_tool", operation: { kind: "add_tool", tool: "erp.buscar_pedido" }, reason: "Confirmar a compra antes de reembolsar.", instructionsAfter: undefined };
+    world({
+      [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Reembolsos." }], conversation: "open" } }),
+      [`GET ${PROPOSALS}`]: () => ({ body: { items: [tool] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const card = await screen.findByRole("article", { name: "Adicionar uma ferramenta" });
+    expect(within(card).getByText("Confirmar a compra antes de reembolsar.")).toBeInTheDocument();
+  });
 });
