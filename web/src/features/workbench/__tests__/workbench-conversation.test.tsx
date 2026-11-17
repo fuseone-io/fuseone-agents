@@ -392,4 +392,20 @@ describe("the workbench conversation", () => {
     const card = await screen.findByRole("article", { name: "Adicionar uma ferramenta" });
     expect(within(card).getByText("Confirmar a compra antes de reembolsar.")).toBeInTheDocument();
   });
+
+  // Its body taken by retention or erasure, no read will ever bring its
+  // effect back: it is not read again, and only rejecting is offered.
+  it("does not wait for the effect of a proposal whose body was erased", async () => {
+    const erased = { ...blockProposal, kind: "add_tool", operation: undefined, instructionsAfter: undefined };
+    const calls = world({
+      [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Reembolsos." }], conversation: "open" } }),
+      [`GET ${PROPOSALS}`]: () => ({ body: { items: [erased] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const card = await screen.findByRole("article", { name: "Adicionar uma ferramenta" });
+    expect(within(card).queryByRole("button", { name: "Ler o efeito de novo" })).not.toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Recusar" })).toBeEnabled();
+    await new Promise((settle) => setTimeout(settle, 3_500));
+    expect(calls.filter((c) => c.path === PROPOSALS)).toHaveLength(1);
+  });
 });

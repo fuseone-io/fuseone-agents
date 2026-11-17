@@ -64,10 +64,19 @@ const EFFECT_RETRY_MS = 3_000;
 
 /**
  * A tool proposal still to decide whose effect the server could not rule:
- * it is not offered until it is, so it is read again until then.
+ * it is not offered until it is, so it is read again until then. Only while
+ * its operation and tool are still there: a body taken by retention or
+ * erasure will never bring an effect back, and waiting for one would read
+ * forever.
  */
 export function awaitsEffect(p: DraftProposal): boolean {
-  return (p.kind === "add_tool" || p.kind === "remove_tool") && p.valid && !p.decision && p.toolEffect === undefined;
+  return (
+    (p.kind === "add_tool" || p.kind === "remove_tool") &&
+    Boolean(p.operation?.tool) &&
+    p.valid &&
+    !p.decision &&
+    p.toolEffect === undefined
+  );
 }
 
 export function useProposals(agentId: string, settled: string | undefined) {
