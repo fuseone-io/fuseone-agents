@@ -147,8 +147,9 @@ type Application struct {
 Apply applies one operation to a draft, under its row's lock.
 
 In order: If-Match is required; who may reach the draft, on its scope and on
-where the agent lives now (404); for set_identity, the scope it moves to
-(403); the tag (412); then the operation, validated over the canonical form.
+where the agent lives now (404); the scope the operation moves it to, derived
+with no check that depends on it (403); the tag (412); then the operation,
+validated over the canonical form.
 Nothing is written unless all of it holds.
 */
 func (s *Store) Apply(ctx context.Context, a Application) (Opened, error) {
@@ -161,27 +162,44 @@ func (s *Store) Apply(ctx context.Context, a Application) (Opened, error) {
 		if err != nil {
 			return err
 		}
-		if !a.Expect.Allows(true, r.revision) {
-			return &domain.StaleError{Current: r.revision}
-		}
 		d, err := draft.Decode(r.stored)
 		if err != nil {
 			return err
 		}
+		// The scope the operation leaves, derived without a check that
+		// depends on it and judged before them and before the tag: a caller
+		// moving a draft where it may not publish learns nothing there.
+		// Whatever operation and form: judged on the result, not the type.
+		if err := destinationAllowed(d, r.scope, a); err != nil {
+			return err
+		}
+		if !a.Expect.Allows(true, r.revision) {
+			return &domain.StaleError{Current: r.revision}
+		}
+		// Validate applies the same operation to the same copy, so the
+		// draft it returns is in the scope destinationAllowed judged.
 		applied, err := a.Validator.Validate(ctx, d, a.Op, a.Origin, a.Now)
 		if err != nil {
 			return err
-		}
-		// Judged on the scope the operation leaves, whatever operation it
-		// is and whatever form it came in: a draft never moves to a scope
-		// the caller may not publish into.
-		if moved := scopeOf(applied.Draft); moved != r.scope && !a.Caller.Allow(moved) {
-			return &ForbiddenError{Scope: moved}
 		}
 		out, err = s.update(ctx, tx, r, a, applied)
 		return err
 	})
 	return out, err
+}
+
+// destinationAllowed refuses an operation that would move the draft to a
+// scope the caller may not publish into. An operation that cannot apply moves
+// nothing; Validate reports why, after the tag.
+func destinationAllowed(d draft.Draft, from domain.Scope, a Application) error {
+	preview, err := draft.Preview(d, a.Op)
+	if err != nil {
+		return nil
+	}
+	if moved := scopeOf(preview); moved != from && !a.Caller.Allow(moved) {
+		return &ForbiddenError{Scope: moved}
+	}
+	return nil
 }
 
 // lockReachable locks the draft's row and judges contract 5 on it.

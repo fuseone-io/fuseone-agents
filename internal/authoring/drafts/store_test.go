@@ -557,3 +557,53 @@ func TestApplyAndCreate_keepTheBodyOfEveryChange(t *testing.T) {
 		t.Fatalf("bodies for %v, want the creation and the operation", actions)
 	}
 }
+
+// scoped is a provider configured in one scope only.
+type scoped struct {
+	name  string
+	scope domain.Scope
+}
+
+func (p scoped) Configured(name string, at domain.Scope) bool { return name == p.name && at == p.scope }
+
+/*
+A move to a scope the caller may not publish into is a 403, and nothing about
+that scope's configuration is told first: the destination is derived from the
+operation alone and judged before the checks that depend on it, and before the
+draft's tag (404, 403, 412, then the operation).
+*/
+func TestApply_aMoveTheCallerMayNotMake_isForbiddenBeforeAnythingAboutTheDestination(t *testing.T) {
+	pool := testdb.Pool(t)
+	store := drafts.NewStore(pool)
+	agent := uniqueAgent(t)
+	opened, err := store.Create(t.Context(), agent, &drafts.Identity{Name: "Triagem", Scope: cx}, in(cx))
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	inCx := draft.Validator{Checker: publishable.Checker{Providers: scoped{"openai", cx}}}
+	withModel, err := store.Apply(t.Context(), drafts.Application{
+		Agent: agent, Op: draft.SetModel{Provider: "openai", Model: "m"}, Origin: draft.FromControl,
+		Expect: ifMatch(t, opened.Revision), Caller: in(cx), Validator: inCx, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("set_model in cx: %v", err)
+	}
+
+	for name, expect := range map[string]domain.IfMatch{
+		"with the current tag": ifMatch(t, withModel.Revision),
+		"with a stale tag":     ifMatch(t, opened.Revision),
+	} {
+		for form, op := range map[string]draft.Operation{
+			"by value":   draft.SetIdentity{Name: "T", Scope: ops},
+			"by pointer": &draft.SetIdentity{Name: "T", Scope: ops},
+		} {
+			_, err := store.Apply(t.Context(), drafts.Application{
+				Agent: agent, Op: op, Origin: draft.FromControl, Expect: expect,
+				Caller: in(cx), Validator: inCx, Now: now,
+			})
+			if !errors.Is(err, drafts.ErrForbidden) {
+				t.Errorf("%s, %s: Apply = %v, want ErrForbidden and nothing about ops", name, form, err)
+			}
+		}
+	}
+}

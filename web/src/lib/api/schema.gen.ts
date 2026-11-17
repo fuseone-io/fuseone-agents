@@ -527,7 +527,8 @@ export interface paths {
          * @description One typed operation on one field (NT-018, contract 1), against the
          *     draft's `ETag`; `If-Match` is required. Under the draft's lock, in
          *     order: who may reach the draft, on its scope and where the agent lives
-         *     now (404); for `set_identity`, the scope it moves to (403); the tag
+         *     now (404); the scope the operation moves the draft to, derived from the
+         *     operation alone and judged before anything about that scope (403); the tag
          *     (412); then the operation, validated over the canonical form with the
          *     checks a publication runs (400 with the publication's own words).
          *

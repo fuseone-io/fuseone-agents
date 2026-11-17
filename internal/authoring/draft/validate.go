@@ -77,3 +77,15 @@ func (v Validator) Validate(ctx context.Context, d Draft, op Operation, origin O
 	}
 	return Applied{Draft: next, Missing: missing}, nil
 }
+
+// Preview is the draft an operation would leave, applied to a copy with no
+// check that depends on the installation: what a caller is allowed to learn
+// before it is authorised for the scope the operation moves the draft to.
+// Validate applies the same operation, so its draft is this one.
+func Preview(d Draft, op Operation) (Draft, error) {
+	next := d.clone()
+	if err := op.apply(&next); err != nil {
+		return Draft{}, err
+	}
+	return next, nil
+}
