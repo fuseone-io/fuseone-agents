@@ -73,11 +73,14 @@ func birth(
 		return draft.Draft{}, "", ErrAgentExists
 	case published:
 		return draft.Draft{}, "", ErrNotFound
-	case !identity.Scope.Valid():
-		return draft.Draft{}, "", fmt.Errorf("%w: scope %s names no company or no area",
-			draft.ErrInvalidOperation, identity.Scope)
-	case !c.Allow(identity.Scope):
-		return draft.Draft{}, "", ErrForbidden
+	}
+	// What publication would refuse as a scope is refused here, as a
+	// request error, before the table's constraint could be the one to.
+	if err := draft.ValidScope(identity.Scope); err != nil {
+		return draft.Draft{}, "", fmt.Errorf("%w: %v", draft.ErrInvalidOperation, err)
+	}
+	if !c.Allow(identity.Scope) {
+		return draft.Draft{}, "", &ForbiddenError{Scope: identity.Scope}
 	}
 	return draft.New(agent, identity.Name, identity.Scope), "", nil
 }
@@ -120,7 +123,10 @@ func (s *Store) insert(ctx context.Context, tx pgx.Tx, in insertion, lost func(r
 		}
 		return Opened{}, lost(r)
 	}
-	if err := appendTrail(ctx, tx, trailRow{draftID, in.agent, "create", "", draft.FromControl, revision, in.by}); err != nil {
+	if err := s.appendTrail(ctx, tx, trailRow{
+		draftID: draftID, agent: in.agent, action: "create", body: creationBody(in),
+		origin: draft.FromControl, revision: revision, by: in.by,
+	}); err != nil {
 		return Opened{}, err
 	}
 	return opened(in.agent, row{draftID: draftID, scope: scope, stored: st, base: string(in.base), revision: revision}, in.d)
@@ -155,9 +161,6 @@ func (s *Store) Apply(ctx context.Context, a Application) (Opened, error) {
 		if err != nil {
 			return err
 		}
-		if id, ok := a.Op.(draft.SetIdentity); ok && id.Scope.Valid() && !a.Caller.Allow(id.Scope) {
-			return ErrForbidden
-		}
 		if !a.Expect.Allows(true, r.revision) {
 			return &domain.StaleError{Current: r.revision}
 		}
@@ -168,6 +171,12 @@ func (s *Store) Apply(ctx context.Context, a Application) (Opened, error) {
 		applied, err := a.Validator.Validate(ctx, d, a.Op, a.Origin, a.Now)
 		if err != nil {
 			return err
+		}
+		// Judged on the scope the operation leaves, whatever operation it
+		// is and whatever form it came in: a draft never moves to a scope
+		// the caller may not publish into.
+		if moved := scopeOf(applied.Draft); moved != r.scope && !a.Caller.Allow(moved) {
+			return &ForbiddenError{Scope: moved}
 		}
 		out, err = s.update(ctx, tx, r, a, applied)
 		return err
@@ -206,8 +215,9 @@ func (s *Store) update(ctx context.Context, tx pgx.Tx, r row, a Application, app
 		string(revision), string(a.Caller.By)); err != nil {
 		return Opened{}, fmt.Errorf("drafts: write %s: %w", a.Agent, err)
 	}
-	if err := appendTrail(ctx, tx, trailRow{
-		r.draftID, a.Agent, a.Op.Kind(), draft.Digest(a.Op), a.Origin, revision, a.Caller.By,
+	if err := s.appendTrail(ctx, tx, trailRow{
+		draftID: r.draftID, agent: a.Agent, action: a.Op.Kind(), body: draft.Body(a.Op),
+		origin: a.Origin, revision: revision, by: a.Caller.By,
 	}); err != nil {
 		return Opened{}, err
 	}
@@ -233,36 +243,9 @@ func (s *Store) Discard(ctx context.Context, agent domain.AgentID, expect domain
 		if _, err := tx.Exec(ctx, `delete from agent_drafts where agent_id = $1`, string(agent)); err != nil {
 			return fmt.Errorf("drafts: discard %s: %w", agent, err)
 		}
-		return appendTrail(ctx, tx, trailRow{r.draftID, agent, "discard", "", draft.FromControl, r.revision, c.By})
+		return s.appendTrail(ctx, tx, trailRow{
+			draftID: r.draftID, agent: agent, action: "discard",
+			origin: draft.FromControl, revision: r.revision, by: c.By,
+		})
 	})
-}
-
-type trailRow struct {
-	draftID  string
-	agent    domain.AgentID
-	action   string
-	digest   string
-	origin   draft.Origin
-	revision domain.Revision
-	by       domain.UserID
-}
-
-func originName(o draft.Origin) string {
-	if o == draft.FromProposal {
-		return "proposal"
-	}
-	return "control"
-}
-
-// appendTrail writes the next row of a draft's trail. The draft's row lock
-// serialises writers of one draft, so the next seq is read safely.
-func appendTrail(ctx context.Context, tx pgx.Tx, t trailRow) error {
-	if _, err := tx.Exec(ctx, `
-		insert into agent_draft_trail (draft_id, seq, agent_id, action, digest, origin, revision, by_user, at)
-		select $1::uuid, coalesce(max(seq), 0) + 1, $2, $3, $4, $5, $6, $7, now()
-		from agent_draft_trail where draft_id = $1::uuid`,
-		t.draftID, string(t.agent), t.action, t.digest, originName(t.origin), string(t.revision), string(t.by)); err != nil {
-		return fmt.Errorf("drafts: trail of %s: %w", t.agent, err)
-	}
-	return nil
 }

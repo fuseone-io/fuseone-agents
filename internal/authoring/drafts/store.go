@@ -21,6 +21,7 @@ import (
 
 	"github.com/fuseone/agents/internal/authoring/draft"
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/spec"
 )
 
@@ -28,7 +29,8 @@ var (
 	// ErrNotFound is no draft, or one the caller may not reach: on the
 	// draft's scope or where its agent lives now. The two answer the same.
 	ErrNotFound = errors.New("drafts: no such draft")
-	// ErrForbidden is a scope the caller chose and may not publish into.
+	// ErrForbidden is a scope the caller chose and may not publish into; a
+	// ForbiddenError says which.
 	ErrForbidden = errors.New("drafts: the caller may not publish into that scope")
 	// ErrAgentExists is an identity given for an agent already published:
 	// its draft opens from its current version, with no identity.
@@ -37,6 +39,12 @@ var (
 	// operation on a draft names the state it read.
 	ErrPreconditionRequired = errors.New("drafts: a change to a draft needs If-Match")
 )
+
+// ForbiddenError is ErrForbidden for one scope.
+type ForbiddenError struct{ Scope domain.Scope }
+
+func (e *ForbiddenError) Error() string        { return fmt.Sprintf("%v: %s", ErrForbidden, e.Scope) }
+func (e *ForbiddenError) Is(target error) bool { return target == ErrForbidden }
 
 // Caller is who writes, and the scopes they may publish into.
 type Caller struct {
@@ -62,9 +70,16 @@ type Opened struct {
 }
 
 // Store reads and writes drafts.
-type Store struct{ pool *pgxpool.Pool }
+type Store struct {
+	pool *pgxpool.Pool
+	// content keeps what each change said, exactly: the size is judged
+	// before anything is written, so nothing is ever truncated.
+	content *ledger.Content
+}
 
-func NewStore(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
+func NewStore(pool *pgxpool.Pool) *Store {
+	return &Store{pool: pool, content: ledger.NewContent(pool).WithLimit(0)}
+}
 
 // row is a draft's row, read under its lock.
 type row struct {

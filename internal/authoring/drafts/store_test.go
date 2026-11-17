@@ -180,6 +180,12 @@ func TestCreate_refusals(t *testing.T) {
 		{"a published agent out of reach", published, nil, in(ops), drafts.ErrNotFound},
 		{"a scope the caller may not publish into", uniqueAgent(t), &drafts.Identity{Name: "X", Scope: ops}, in(cx), drafts.ErrForbidden},
 		{"a scope that is not whole", uniqueAgent(t), &drafts.Identity{Name: "X", Scope: domain.Scope{Area: "cx"}}, in(cx), draft.ErrInvalidOperation},
+		// What publication would refuse as a company is refused at birth,
+		// as a request error, never left to the table's constraint.
+		{"the installation as a company", uniqueAgent(t), &drafts.Identity{Name: "X", Scope: domain.Scope{Company: "*", Area: "cx"}},
+			in(domain.Scope{Company: "*", Area: "cx"}), draft.ErrInvalidOperation},
+		{"a company publication refuses", uniqueAgent(t), &drafts.Identity{Name: "X", Scope: domain.Scope{Company: "ACME", Area: "cx"}},
+			in(domain.Scope{Company: "ACME", Area: "cx"}), draft.ErrInvalidOperation},
 		{"a draft out of reach", drafted, &drafts.Identity{Name: "X", Scope: ops}, in(ops), drafts.ErrNotFound},
 	}
 	for _, tc := range cases {
@@ -472,5 +478,82 @@ func TestDrafts_aRowWithoutAWholeScope_isRefusedByTheTable(t *testing.T) {
 		if !errors.As(err, &pg) || pg.Code != "23514" {
 			t.Errorf("scope %v = %v, want check_violation", scope, err)
 		}
+	}
+}
+
+// Every operation that moves the draft needs the scope it moves to, whatever
+// form it takes: the judgement is on the scope the operation leaves, not on
+// the operation's type.
+func TestApply_aMoveInAnyForm_needsTheDestination(t *testing.T) {
+	pool := testdb.Pool(t)
+	store := drafts.NewStore(pool)
+	agent := uniqueAgent(t)
+	opened, err := store.Create(t.Context(), agent, &drafts.Identity{Name: "Triagem", Scope: cx}, in(cx))
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	for name, op := range map[string]draft.Operation{
+		"by value":   draft.SetIdentity{Name: "T", Scope: ops},
+		"by pointer": &draft.SetIdentity{Name: "T", Scope: ops},
+	} {
+		_, err := store.Apply(t.Context(), drafts.Application{
+			Agent: agent, Op: op, Origin: draft.FromControl, Expect: ifMatch(t, opened.Revision),
+			Caller: in(cx), Validator: validator, Now: now,
+		})
+		if !errors.Is(err, drafts.ErrForbidden) {
+			t.Errorf("%s: Apply = %v, want ErrForbidden", name, err)
+		}
+	}
+	if reread, err := store.Get(t.Context(), agent, in(cx)); err != nil || reread.Draft.Spec.Area != "cx" {
+		t.Fatalf("the draft moved: %+v (%v)", reread.Draft.Spec, err)
+	}
+}
+
+// Every change keeps its body, exactly, in the content store under the
+// authoring owner and in the same transaction: the trail holds its reference
+// and digest, and the body is what the digest names.
+func TestApplyAndCreate_keepTheBodyOfEveryChange(t *testing.T) {
+	pool := testdb.Pool(t)
+	store := drafts.NewStore(pool)
+	agent := uniqueAgent(t)
+	opened, err := store.Create(t.Context(), agent, &drafts.Identity{Name: "Triagem", Scope: cx}, in(cx))
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := store.Apply(t.Context(), drafts.Application{
+		Agent: agent, Op: draft.SetReplyLocale{Locale: "en-US"}, Origin: draft.FromControl,
+		Expect: ifMatch(t, opened.Revision), Caller: in(cx), Validator: validator, Now: now,
+	}); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	rows, err := pool.Query(t.Context(), `
+		select t.action, t.digest, c.owner_kind, c.digest, c.bytes, c.truncated
+		from agent_draft_trail t join run_content c on c.ref = t.body_ref
+		where t.agent_id = $1 order by t.seq`, string(agent))
+	if err != nil {
+		t.Fatalf("read the bodies: %v", err)
+	}
+	defer rows.Close()
+	var actions []string
+	for rows.Next() {
+		var action, digest, owner, contentDigest string
+		var body []byte
+		var truncated bool
+		if err := rows.Scan(&action, &digest, &owner, &contentDigest, &body, &truncated); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		actions = append(actions, action)
+		if owner != "authoring" || truncated || digest != contentDigest {
+			t.Errorf("%s: owner %s, truncated %v, trail digest %s, content digest %s", action, owner, truncated, digest, contentDigest)
+		}
+		if action == "set_reply_locale" && !strings.Contains(string(body), "en-US") {
+			t.Errorf("the body kept is %s", body)
+		}
+		if action == "create" && !strings.Contains(string(body), "Triagem") {
+			t.Errorf("the creation's body is %s", body)
+		}
+	}
+	if strings.Join(actions, ",") != "create,set_reply_locale" {
+		t.Fatalf("bodies for %v, want the creation and the operation", actions)
 	}
 }

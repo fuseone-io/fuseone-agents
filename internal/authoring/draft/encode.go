@@ -64,15 +64,24 @@ func Decode(st Stored) (Draft, error) {
 	return d, nil
 }
 
-// Digest is the SHA-256 of an operation's kind and payload, in hex: what the
-// trail keeps of it, since a trail row holds no free text.
-func Digest(op Operation) string {
-	payload, err := json.Marshal(op)
+// Body is what an operation said, as the content store keeps it: its kind
+// and its payload. The trail holds only Body's digest and a reference to it.
+func Body(op Operation) []byte {
+	body, err := json.Marshal(struct {
+		Kind      string    `json:"kind"`
+		Operation Operation `json:"operation"`
+	}{op.Kind(), op})
 	if err != nil {
-		// Every operation is plain data; a payload that does not encode is
-		// a programming error the digest must still not hide.
-		payload = []byte(fmt.Sprintf("%#v", op))
+		// Every operation is plain data; one that does not encode is a
+		// programming error the body must still not hide.
+		return []byte(fmt.Sprintf(`{"kind":%q,"unencodable":%q}`, op.Kind(), fmt.Sprintf("%#v", op)))
 	}
-	sum := sha256.Sum256(append([]byte(op.Kind()+"\n"), payload...))
+	return body
+}
+
+// Digest is the SHA-256 of an operation's Body, in hex: what the trail keeps
+// of it, since a trail row holds no free text.
+func Digest(op Operation) string {
+	sum := sha256.Sum256(Body(op))
 	return hex.EncodeToString(sum[:])
 }

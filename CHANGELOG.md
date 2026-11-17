@@ -48,7 +48,8 @@ field" is a commit message.
     publication runs. The instructions change only through the conversation, so block
     operations are refused here. `GET` reads the draft; `DELETE` discards it.
   - Reaching a draft needs `agent:publish` on its scope and, for a published agent, where
-    it lives now. Every change leaves a row of ids and digests in an append-only trail.
+    it lives now. Every change leaves a row of ids and digests in an append-only trail,
+    and its body, exactly, in the content store under the installation's retention.
 
 ## [0.117.0] — 2026-11-17
 

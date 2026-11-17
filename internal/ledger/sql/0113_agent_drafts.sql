@@ -33,17 +33,21 @@ create table agent_drafts (
         check (company_id <> '' and company_id <> '*' and area_id <> '')
 );
 
--- Every change to a draft, in order. Ids and digests only: the rows are
--- immutable, and an immutable row holds no free text. What an operation said
--- is its digest; the draft itself holds what it left.
+-- Every change to a draft, in order. Ids, references and digests only: the
+-- rows are immutable, and an immutable row holds no free text. What a change
+-- said lives in run_content under owner kind 'authoring', written in the same
+-- transaction and exactly, so the installation's retention and erasure reach
+-- it; the row keeps its reference and digest.
 create table agent_draft_trail (
     draft_id  uuid        not null,
     seq       integer     not null,
     agent_id  text        not null,
     -- create, discard, or the operation's kind.
     action    text        not null,
-    -- The operation's SHA-256, or empty for create and discard.
+    -- The SHA-256 of the change's body, or empty for a discard.
     digest    text        not null default '',
+    -- The body's reference in run_content, or empty for a discard.
+    body_ref  text        not null default '',
     -- control or proposal.
     origin    text        not null,
     -- The draft's ETag once the change was applied.
