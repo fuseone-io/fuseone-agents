@@ -64,3 +64,7 @@ func currentVersionIn(
 	scope := domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
 	return domain.VersionID(version), scope, true, nil
 }
+
+// EventGraphLockKey is the event graph's advisory key, for a test that holds
+// the graph to make writers that take it overlap.
+const EventGraphLockKey = eventGraphLock
