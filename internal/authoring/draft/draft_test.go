@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -369,5 +370,56 @@ func TestValidate_aValidatedDraft_sharesNoNestedSliceWithItsOperationOrItsOrigin
 	}
 	if webhook.Draft.Spec.Emits[0].Artifacts[0] != "summary" {
 		t.Error("changing the next draft changed the emits of the one it came from")
+	}
+}
+
+// Every place that names an operation's kind names the same ones: the
+// contract's two enums and the proposals table's check, against the
+// operations there are. A kind added in one place alone fails here.
+func TestKinds_theContractAndTheTableNameEveryOperationAndNoOther(t *testing.T) {
+	t.Parallel()
+	var want []string
+	for _, op := range draft.Operations() {
+		want = append(want, op.Kind())
+	}
+	slices.Sort(want)
+
+	data, err := os.ReadFile("../../../api/openapi.yaml")
+	if err != nil {
+		t.Fatalf("read the contract: %v", err)
+	}
+	var contract struct {
+		Components struct {
+			Schemas map[string]struct {
+				Properties map[string]struct {
+					Enum []string `yaml:"enum"`
+				} `yaml:"properties"`
+			} `yaml:"schemas"`
+		} `yaml:"components"`
+	}
+	if err := yaml.Unmarshal(data, &contract); err != nil {
+		t.Fatalf("parse the contract: %v", err)
+	}
+	for _, schema := range []string{"DraftOperation", "DraftProposal"} {
+		got := slices.Sorted(slices.Values(contract.Components.Schemas[schema].Properties["kind"].Enum))
+		if !slices.Equal(got, want) {
+			t.Errorf("%s.kind enum = %v, want %v", schema, got, want)
+		}
+	}
+
+	sql, err := os.ReadFile("../../ledger/sql/0114_agent_draft_proposals.sql")
+	if err != nil {
+		t.Fatalf("read 0114: %v", err)
+	}
+	check := regexp.MustCompile(`(?s)kind\s+text\s+not null check \(kind in \((.*?)\)\)`).FindSubmatch(sql)
+	if check == nil {
+		t.Fatal("0114 has no check on the proposal's kind")
+	}
+	got := slices.Sorted(slices.Values(regexp.MustCompile(`'([a-z_]+)'`).FindAllString(string(check[1]), -1)))
+	for i := range got {
+		got[i] = strings.Trim(got[i], "'")
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("0114's check = %v, want %v", got, want)
 	}
 }

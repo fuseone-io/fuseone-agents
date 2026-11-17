@@ -72,7 +72,7 @@ the public route never applies one (contract 3).
 */
 func operationOf(in openapi.DraftOperation) (draft.Operation, error) {
 	switch in.Kind {
-	case openapi.InsertBlock, openapi.ReplaceBlock, openapi.RemoveBlock, openapi.MoveBlock:
+	case openapi.DraftOperationKindInsertBlock, openapi.DraftOperationKindReplaceBlock, openapi.DraftOperationKindRemoveBlock, openapi.DraftOperationKindMoveBlock:
 		return nil, errBlockByHand
 	}
 	if build, ok := fieldOperations[in.Kind]; ok {
@@ -82,58 +82,58 @@ func operationOf(in openapi.DraftOperation) (draft.Operation, error) {
 }
 
 var fieldOperations = map[openapi.DraftOperationKind]func(openapi.DraftOperation) draft.Operation{
-	openapi.SetIdentity: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindSetIdentity: func(in openapi.DraftOperation) draft.Operation {
 		return draft.SetIdentity{Name: valueOr(in.Name), Scope: domain.Scope{
 			Company: domain.CompanyID(valueOr(in.Company)), Area: domain.AreaID(valueOr(in.Area)),
 		}}
 	},
-	openapi.SetStandingApprovals: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindSetStandingApprovals: func(in openapi.DraftOperation) draft.Operation {
 		return draft.SetStandingApprovals{Policy: standingOf(in.StandingApprovals)}
 	},
-	openapi.SetModel: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindSetModel: func(in openapi.DraftOperation) draft.Operation {
 		return draft.SetModel{Provider: valueOr(in.Provider), Model: valueOr(in.Model), Effort: valueOr(in.Effort)}
 	},
-	openapi.SetFallback: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindSetFallback: func(in openapi.DraftOperation) draft.Operation {
 		return draft.SetFallback{Pair: pairOf(in.Fallback)}
 	},
-	openapi.SetCachePrefixTtl: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindSetCachePrefixTtl: func(in openapi.DraftOperation) draft.Operation {
 		return draft.SetCachePrefixTTL{TTL: valueOr(in.CachePrefixTtl)}
 	},
-	openapi.SetReplyLocale: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindSetReplyLocale: func(in openapi.DraftOperation) draft.Operation {
 		return draft.SetReplyLocale{Locale: valueOr(in.ReplyLocale)}
 	},
-	openapi.AddTool: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindAddTool: func(in openapi.DraftOperation) draft.Operation {
 		return draft.AddTool{Tool: domain.ToolID(valueOr(in.Tool))}
 	},
-	openapi.RemoveTool: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindRemoveTool: func(in openapi.DraftOperation) draft.Operation {
 		return draft.RemoveTool{Tool: domain.ToolID(valueOr(in.Tool))}
 	},
-	openapi.SetBudget: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindSetBudget: func(in openapi.DraftOperation) draft.Operation {
 		return draft.SetBudget{Budget: budgetOf(in.Budget)}
 	},
-	openapi.SetTriggers: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindSetTriggers: func(in openapi.DraftOperation) draft.Operation {
 		var triggers []spec.Trigger
 		for _, t := range valueOr(in.Triggers) {
 			triggers = append(triggers, specTrigger(t))
 		}
 		return draft.SetTriggers{Triggers: triggers}
 	},
-	openapi.SetMemoryLearning: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindSetMemoryLearning: func(in openapi.DraftOperation) draft.Operation {
 		return draft.SetMemoryLearning{Policy: memoryLearningOf(in.MemoryLearning)}
 	},
-	openapi.SetApprovalDelivery: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindSetApprovalDelivery: func(in openapi.DraftOperation) draft.Operation {
 		return draft.SetApprovalDelivery{Policy: approvalsOf(in.Approvals)}
 	},
-	openapi.SetEmits: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindSetEmits: func(in openapi.DraftOperation) draft.Operation {
 		return draft.SetEmits{Emits: emitsOf(in.Emits)}
 	},
-	openapi.AddStep: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindAddStep: func(in openapi.DraftOperation) draft.Operation {
 		return draft.AddStep{Step: stepOf(in.Step)}
 	},
-	openapi.EditStep: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindEditStep: func(in openapi.DraftOperation) draft.Operation {
 		return draft.EditStep{Name: valueOr(in.StepName), Step: stepOf(in.Step)}
 	},
-	openapi.RemoveStep: func(in openapi.DraftOperation) draft.Operation {
+	openapi.DraftOperationKindRemoveStep: func(in openapi.DraftOperation) draft.Operation {
 		return draft.RemoveStep{Name: valueOr(in.StepName)}
 	},
 }

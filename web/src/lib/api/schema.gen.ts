@@ -6036,8 +6036,12 @@ export interface components {
         };
         DraftProposal: {
             proposalId: string;
-            /** @description The operation's kind, as in DraftOperation. */
-            kind: string;
+            /**
+             * @description The operation's kind, as in DraftOperation: the one discriminator
+             *     left once retention or erasing the thread took the body.
+             * @enum {string}
+             */
+            kind: "set_identity" | "set_standing_approvals" | "set_model" | "set_fallback" | "set_cache_prefix_ttl" | "set_reply_locale" | "add_tool" | "remove_tool" | "set_budget" | "set_triggers" | "set_memory_learning" | "set_approval_delivery" | "set_emits" | "add_step" | "edit_step" | "remove_step" | "insert_block" | "replace_block" | "remove_block" | "move_block";
             /** @description What it proposes. Absent once retention or erasing the thread took its body. */
             operation?: components["schemas"]["DraftOperation"];
             /** @description Whether it was valid when proposed; an invalid proposal can never be accepted. */

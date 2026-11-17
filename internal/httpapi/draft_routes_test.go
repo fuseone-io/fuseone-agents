@@ -113,7 +113,7 @@ func TestCreateAgentDraft_handsTheStoreTheCallersAuthority(t *testing.T) {
 func TestApplyDraftOperation_aBlockOperation_isRefusedBeforeTheStore(t *testing.T) {
 	t.Parallel()
 	for _, kind := range []openapi.DraftOperationKind{
-		openapi.InsertBlock, openapi.ReplaceBlock, openapi.RemoveBlock, openapi.MoveBlock,
+		openapi.DraftOperationKindInsertBlock, openapi.DraftOperationKindReplaceBlock, openapi.DraftOperationKindRemoveBlock, openapi.DraftOperationKindMoveBlock,
 	} {
 		stub := &draftStub{opened: someDraft()}
 		resp, err := draftServer(stub).ApplyDraftOperation(inArea("cx", domain.RoleAuthor), openapi.ApplyDraftOperationRequestObject{
@@ -139,7 +139,7 @@ func TestApplyDraftOperation_withoutIfMatch_isRefusedBeforeTheStore(t *testing.T
 	t.Parallel()
 	stub := &draftStub{opened: someDraft()}
 	resp, err := draftServer(stub).ApplyDraftOperation(inArea("cx", domain.RoleAuthor), openapi.ApplyDraftOperationRequestObject{
-		AgentId: "triage", Body: &openapi.DraftOperation{Kind: openapi.AddTool, Tool: ptr("crm.lookup")},
+		AgentId: "triage", Body: &openapi.DraftOperation{Kind: openapi.DraftOperationKindAddTool, Tool: ptr("crm.lookup")},
 	})
 	if err != nil {
 		t.Fatalf("ApplyDraftOperation: %v", err)
@@ -157,16 +157,16 @@ func TestApplyDraftOperation_eachKind_becomesItsOperation(t *testing.T) {
 		body openapi.DraftOperation
 		want draft.Operation
 	}{
-		{openapi.DraftOperation{Kind: openapi.SetIdentity, Name: ptr("T"), Company: ptr("acme"), Area: ptr("ops")},
+		{openapi.DraftOperation{Kind: openapi.DraftOperationKindSetIdentity, Name: ptr("T"), Company: ptr("acme"), Area: ptr("ops")},
 			draft.SetIdentity{Name: "T", Scope: domain.Scope{Company: "acme", Area: "ops"}}},
-		{openapi.DraftOperation{Kind: openapi.SetModel, Provider: ptr("openai"), Model: ptr("m"), Effort: ptr("high")},
+		{openapi.DraftOperation{Kind: openapi.DraftOperationKindSetModel, Provider: ptr("openai"), Model: ptr("m"), Effort: ptr("high")},
 			draft.SetModel{Provider: "openai", Model: "m", Effort: "high"}},
-		{openapi.DraftOperation{Kind: openapi.SetFallback}, draft.SetFallback{}},
-		{openapi.DraftOperation{Kind: openapi.SetReplyLocale, ReplyLocale: ptr("en-US"), Tool: ptr("ignored")},
+		{openapi.DraftOperation{Kind: openapi.DraftOperationKindSetFallback}, draft.SetFallback{}},
+		{openapi.DraftOperation{Kind: openapi.DraftOperationKindSetReplyLocale, ReplyLocale: ptr("en-US"), Tool: ptr("ignored")},
 			draft.SetReplyLocale{Locale: "en-US"}},
-		{openapi.DraftOperation{Kind: openapi.AddTool, Tool: ptr("crm.lookup")}, draft.AddTool{Tool: "crm.lookup"}},
-		{openapi.DraftOperation{Kind: openapi.RemoveStep, StepName: ptr("Look")}, draft.RemoveStep{Name: "Look"}},
-		{openapi.DraftOperation{Kind: openapi.SetStandingApprovals, StandingApprovals: ptr(openapi.StandingPolicy("forbidden"))},
+		{openapi.DraftOperation{Kind: openapi.DraftOperationKindAddTool, Tool: ptr("crm.lookup")}, draft.AddTool{Tool: "crm.lookup"}},
+		{openapi.DraftOperation{Kind: openapi.DraftOperationKindRemoveStep, StepName: ptr("Look")}, draft.RemoveStep{Name: "Look"}},
+		{openapi.DraftOperation{Kind: openapi.DraftOperationKindSetStandingApprovals, StandingApprovals: ptr(openapi.StandingPolicy("forbidden"))},
 			draft.SetStandingApprovals{Policy: domain.StandingForbidden}},
 	}
 	for _, tc := range cases {
@@ -207,7 +207,7 @@ func TestApplyDraftOperation_refusals_answerAsTheContractSays(t *testing.T) {
 		stub := &draftStub{err: tc.err}
 		resp, err := draftServer(stub).ApplyDraftOperation(inArea("cx", domain.RoleAuthor), openapi.ApplyDraftOperationRequestObject{
 			AgentId: "triage", Params: openapi.ApplyDraftOperationParams{IfMatch: `"v1-draft"`},
-			Body: &openapi.DraftOperation{Kind: openapi.AddTool, Tool: ptr("crm.lookup")},
+			Body: &openapi.DraftOperation{Kind: openapi.DraftOperationKindAddTool, Tool: ptr("crm.lookup")},
 		})
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -291,7 +291,7 @@ func TestApplyDraftOperation_validatesWithTheInstallationsChecks(t *testing.T) {
 	server := draftServer(stub).WithAdministration(nil, publishFlowTools(), nil)
 	if _, err := server.ApplyDraftOperation(inArea("cx", domain.RoleAuthor), openapi.ApplyDraftOperationRequestObject{
 		AgentId: "triage", Params: openapi.ApplyDraftOperationParams{IfMatch: `"v1-draft"`},
-		Body: &openapi.DraftOperation{Kind: openapi.AddTool, Tool: ptr("crm.lokup")},
+		Body: &openapi.DraftOperation{Kind: openapi.DraftOperationKindAddTool, Tool: ptr("crm.lokup")},
 	}); err != nil {
 		t.Fatalf("ApplyDraftOperation: %v", err)
 	}

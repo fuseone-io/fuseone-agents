@@ -106,10 +106,10 @@ func (s *Server) RejectDraftProposal(
 
 func proposalView(p drafts.Proposal) openapi.DraftProposal {
 	out := openapi.DraftProposal{
-		ProposalId: p.ID, Kind: p.Kind, Valid: p.Valid, ReadRevision: string(p.Read), CreatedAt: p.At,
+		ProposalId: p.ID, Kind: openapi.DraftProposalKind(p.Kind), Valid: p.Valid, ReadRevision: string(p.Read), CreatedAt: p.At,
 	}
 	if p.Op != nil {
-		out.Kind = p.Op.Kind()
+		out.Kind = openapi.DraftProposalKind(p.Op.Kind())
 		op := operationView(p.Op)
 		out.Operation = &op
 	}
