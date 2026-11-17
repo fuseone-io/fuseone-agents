@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,7 +39,10 @@ export function WorkbenchDiscard({ agentId, etag }: { agentId: string; etag: str
     <AlertDialog>
       <AlertDialogTrigger asChild>
         <Button variant="outline" size="sm" disabled={discard.isPending}>
-          {t("workbench.discard")}
+          <Trash2 className="size-4" aria-hidden />
+          {/* The icon alone on a phone, as the save beside it: in Portuguese
+              the words pushed the header's own controls off the screen. */}
+          <span className="sr-only sm:not-sr-only">{t("workbench.discard")}</span>
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>

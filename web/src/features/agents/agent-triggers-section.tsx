@@ -60,7 +60,9 @@ export function AgentTriggersSection({
         </div>
       )}
 
-      <div className="flex gap-2">
+      {/* Wraps: four buttons do not fit a phone's width, and the section
+          clips what overflows it rather than scrolling. */}
+      <div className="flex flex-wrap gap-2">
         {TRIGGER_KINDS.map((kind) => (
           <Button
             key={kind}
