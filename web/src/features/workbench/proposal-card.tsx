@@ -3,7 +3,7 @@ import { Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Mono } from "@/components/shared/mono";
-import { ProposalChange } from "@/features/workbench/proposal-change";
+import { proposalChange } from "@/features/workbench/proposal-change";
 import type { DraftBlock, DraftProposal } from "@/lib/api/client";
 
 /** Kinds only a person decides: the model proposing one is always refused. */
@@ -28,7 +28,10 @@ export function ProposalCard({
 }) {
   const { t } = useTranslation();
   const kind = t(`workbench.proposalKind.${proposal.kind}`);
-  const waiting = proposal.valid && !proposal.decision && proposal.operation !== undefined;
+  // Offered only when what it would change is on the card: an operation
+  // erased, or one that does not carry what its kind needs, is not.
+  const change = proposal.operation ? proposalChange(proposal.operation, blocks, t) : undefined;
+  const waiting = proposal.valid && !proposal.decision && change !== undefined;
 
   return (
     <article aria-label={kind} className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3">
@@ -39,10 +42,10 @@ export function ProposalCard({
           <Badge variant="outline">{t(`workbench.conversation.decision.${proposal.decision}`)}</Badge>
         )}
       </div>
-      {proposal.operation ? (
-        <ProposalChange operation={proposal.operation} blocks={blocks} />
-      ) : (
-        <p className="text-xs text-muted-foreground">{t("workbench.conversation.proposalErased")}</p>
+      {change ?? (
+        <p className="text-xs text-muted-foreground">
+          {t(proposal.operation ? "workbench.conversation.unshowable" : "workbench.conversation.proposalErased")}
+        </p>
       )}
       {/* The validator's words are machine text; a human-only kind gets this
           console's own sentence, since that refusal is the rule, not a fault. */}

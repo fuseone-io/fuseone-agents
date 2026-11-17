@@ -3524,7 +3524,11 @@
         "spent": "Today's authoring ceiling has been reached"
       },
       "closedHint": "The draft stays editable through its fields. The instructions change only through the conversation.",
-      "humanOnly": "Name, scope and standing approvals are a person's own decisions, never the assistant's. Change them through the fields."
+      "humanOnly": "Name, scope and standing approvals are a person's own decisions, never the assistant's. Change them through the fields.",
+      "value": {
+        "editsStep": "Changes the step “{{step}}” to:"
+      },
+      "unshowable": "What this proposal changes cannot be shown, so it cannot be accepted."
     },
     "proposalKind": {
       "set_identity": "Change name or scope",

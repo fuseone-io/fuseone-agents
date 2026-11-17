@@ -1,40 +1,30 @@
-import { useTranslation } from "react-i18next";
-import { Mono } from "@/components/shared/mono";
+import type { ReactNode } from "react";
+import type { TFunction } from "i18next";
 import { InstructionsDiffView } from "@/features/agents/instructions-diff-view";
+import { fieldValue } from "@/features/workbench/proposal-value";
 import type { DraftBlock, DraftOperation } from "@/lib/api/client";
 
 /**
- * What a proposal would change, read before it is accepted. A block's is its
- * difference against the block as the draft holds it now; any other's is the
- * value it sets, by name.
+ * What a proposal would change, read before it is accepted, or undefined when
+ * it cannot be shown. A block's is its difference against the block as the
+ * draft holds it now; any other's is the value it sets.
  */
-export function ProposalChange({ operation, blocks }: { operation: DraftOperation; blocks: DraftBlock[] }) {
-  const { t } = useTranslation();
-  const block = blocks.find((b) => b.id === operation.blockId);
-  const heading = (b?: { label?: string }) => (b?.label ? `${b.label}\n` : "");
-
-  switch (operation.kind) {
+export function proposalChange(op: DraftOperation, blocks: DraftBlock[], t: TFunction): ReactNode | undefined {
+  const block = blocks.find((b) => b.id === op.blockId);
+  const heading = block?.label ? `${block.label}\n` : "";
+  switch (op.kind) {
     case "insert_block":
-      return <InstructionsDiffView was="" now={operation.text ?? ""} />;
+      return op.text ? <InstructionsDiffView was="" now={op.text} /> : undefined;
     case "replace_block":
-      return <InstructionsDiffView was={`${heading(block)}${block?.text ?? ""}`} now={`${heading(block)}${operation.text ?? ""}`} />;
+      return block && op.text !== undefined
+        ? <InstructionsDiffView was={`${heading}${block.text}`} now={`${heading}${op.text}`} />
+        : undefined;
     case "remove_block":
-      return <InstructionsDiffView was={`${heading(block)}${block?.text ?? ""}`} now="" />;
+      return block ? <InstructionsDiffView was={`${heading}${block.text}`} now="" /> : undefined;
     case "move_block":
-      return <p className="text-sm">{t("workbench.conversation.moveTo", { at: (operation.to ?? 0) + 1 })}</p>;
+      return block && op.to !== undefined
+        ? <p className="text-sm">{t("workbench.conversation.moveTo", { at: op.to + 1 })}</p>
+        : undefined;
   }
-  const value = summaryOf(operation);
-  return value ? <Mono className="text-sm">{value}</Mono> : null;
-}
-
-/** The value a field operation sets, as one line, or nothing to show. */
-function summaryOf(op: DraftOperation): string {
-  if (op.tool) return op.tool;
-  if (op.model) return [op.provider, op.model, op.effort].filter(Boolean).join(" · ");
-  if (op.replyLocale) return op.replyLocale;
-  if (op.cachePrefixTtl) return op.cachePrefixTtl;
-  if (op.stepName) return op.stepName;
-  if (op.step) return op.step.name;
-  if (op.fallback) return `${op.fallback.provider} · ${op.fallback.model}`;
-  return "";
+  return fieldValue(op, t);
 }

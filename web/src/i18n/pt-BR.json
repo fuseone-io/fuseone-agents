@@ -3524,7 +3524,11 @@
         "spent": "O teto de autoria de hoje foi atingido"
       },
       "closedHint": "O rascunho continua editável pelos campos. As instruções só mudam pela conversa.",
-      "humanOnly": "Nome, escopo e aprovações permanentes são decisões da própria pessoa, nunca do assistente. Mude-os pelos campos."
+      "humanOnly": "Nome, escopo e aprovações permanentes são decisões da própria pessoa, nunca do assistente. Mude-os pelos campos.",
+      "value": {
+        "editsStep": "Muda a etapa “{{step}}” para:"
+      },
+      "unshowable": "Não é possível mostrar o que esta proposta muda, então ela não pode ser aceita."
     },
     "proposalKind": {
       "set_identity": "Mudar nome ou escopo",

@@ -187,4 +187,40 @@ describe("the workbench conversation", () => {
     expect(within(card).getByText(/decisões da própria pessoa/)).toBeInTheDocument();
     expect(within(card).queryByRole("button", { name: "Aceitar" })).not.toBeInTheDocument();
   });
+
+  it.each([
+    ["set_budget", { budget: { micros: 250_000, steps: 30 } }, /"steps": 30/],
+    ["set_triggers", { triggers: [{ type: "cron", schedule: "0 9 * * 1-5" }] }, /0 9 \* \* 1-5/],
+    ["set_memory_learning", { memoryLearning: { mode: "off" } }, /"mode": "off"/],
+    ["set_approval_delivery", { approvals: { direct: true } }, /"direct": true/],
+    ["set_emits", { emits: [{ event: "ticket.triaged" }] }, /ticket\.triaged/],
+    ["edit_step", { stepName: "Buscar", step: { name: "Buscar o cliente" } }, /Buscar o cliente/],
+    ["set_fallback", {}, /Sem fallback/],
+    ["set_reply_locale", { replyLocale: "" }, /Sem fixação/],
+    ["set_cache_prefix_ttl", { cachePrefixTtl: "" }, /Padrão do provedor/],
+  ])("shows what a %s proposal sets before it can be accepted", async (kind, fields, shown) => {
+    const proposal = { ...blockProposal, kind, operation: { kind, ...fields } };
+    world({
+      [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Ajuste." }], conversation: "open" } }),
+      [`GET ${PROPOSALS}`]: () => ({ body: { items: [proposal] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const card = await screen.findByRole("article");
+    // The card's whole text: a JSON value is coloured in pieces.
+    expect(card).toHaveTextContent(shown);
+    expect(within(card).getByRole("button", { name: "Aceitar" })).toBeInTheDocument();
+  });
+
+  it("offers nothing to accept when it cannot show what a proposal sets", async () => {
+    const proposal = { ...blockProposal, kind: "set_budget", operation: { kind: "set_budget" } };
+    world({
+      [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Ajuste." }], conversation: "open" } }),
+      [`GET ${PROPOSALS}`]: () => ({ body: { items: [proposal] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const card = await screen.findByRole("article", { name: "Mudar o teto" });
+    expect(within(card).getByText(/não é possível mostrar/i)).toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: "Aceitar" })).not.toBeInTheDocument();
+  });
+
 });
