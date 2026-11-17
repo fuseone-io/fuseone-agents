@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fuseone/agents/internal/authoring/draft"
 	"github.com/fuseone/agents/internal/authoring/drafts"
 	"github.com/fuseone/agents/internal/testdb"
 )
@@ -65,5 +66,24 @@ func TestBeginTurn_aLapsedTurn_doesNotHoldTheThreadAgainstANewKey(t *testing.T) 
 	var state string
 	if err := pool.QueryRow(t.Context(), `select state from agent_draft_turns where turn_id = $1`, lapsed.ID).Scan(&state); err != nil || state != drafts.TurnUnknown {
 		t.Errorf("the lapsed turn is %q (%v), want unknown, its reservation kept", state, err)
+	}
+}
+
+// A turn's proposals say which turn made them, so the conversation shows each
+// under the message that asked for it.
+func TestProposals_nameTheTurnThatMadeThem(t *testing.T) {
+	pool := testdb.Pool(t)
+	store := drafts.NewStore(pool)
+	agent := uniqueAgent(t)
+	o := openedWithBlocks(t, store, agent)
+	turn := mustBegin(t, store, agent, "usr_ana", "k1", o.Revision, 100)
+	if _, err := store.SettleTurn(t.Context(), drafts.Settlement{Agent: agent, Caller: as("usr_ana", cx), Turn: turn.ID,
+		Cost: 10, Ops: []draft.Operation{draft.AddTool{Tool: "crm.lookup"}}, Validator: validator, Now: now}); err != nil {
+		t.Fatalf("SettleTurn: %v", err)
+	}
+
+	listed, err := store.Proposals(t.Context(), agent, as("usr_ana", cx))
+	if err != nil || len(listed) != 1 || listed[0].Turn != turn.ID {
+		t.Fatalf("proposals = %+v (%v), want one naming turn %s", listed, err, turn.ID)
 	}
 }

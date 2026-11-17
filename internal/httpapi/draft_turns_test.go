@@ -191,12 +191,12 @@ func TestSendDraftTurn_refusals_answerBeforeOrWithoutTheCall(t *testing.T) {
 		beginErr error
 		check    func(openapi.SendDraftTurnResponseObject) bool
 	}{
-		"assistant off": {choice: off, priced: true, message: "x", check: is409},
-		"no price":      {choice: turnChoice, message: "x", check: is409},
-		"over the day":  {choice: turnChoice, priced: true, message: "x", beginErr: drafts.ErrOverCeiling, check: is409},
-		"in flight":     {choice: turnChoice, priced: true, message: "x", beginErr: drafts.ErrTurnInFlight, check: is409},
-		"empty":         {choice: turnChoice, priced: true, message: "  ", check: is400},
-		"too large":     {choice: turnChoice, priced: true, message: strings.Repeat("x", conversation.MaxMessageBytes+1), check: is400},
+		"assistant off": {choice: off, priced: true, message: "x", check: is409(CodeConversationOff)},
+		"no price":      {choice: turnChoice, message: "x", check: is409(CodeConversationUnpriced)},
+		"over the day":  {choice: turnChoice, priced: true, message: "x", beginErr: drafts.ErrOverCeiling, check: is409(CodeConversationSpent)},
+		"in flight":     {choice: turnChoice, priced: true, message: "x", beginErr: drafts.ErrTurnInFlight, check: is409(CodeTurnInFlight)},
+		"empty":         {choice: turnChoice, priced: true, message: "  ", check: is400(CodeInvalidInput)},
+		"too large":     {choice: turnChoice, priced: true, message: strings.Repeat("x", conversation.MaxMessageBytes+1), check: is400(CodeTurnTooLarge)},
 		"unreachable":   {choice: turnChoice, priced: true, message: "x", getErr: drafts.ErrNotFound, check: is404},
 		"draft moved": {choice: turnChoice, priced: true, message: "x",
 			beginErr: &domain.StaleError{Current: `"v2-draft"`}, check: is412},
@@ -210,9 +210,13 @@ func TestSendDraftTurn_refusals_answerBeforeOrWithoutTheCall(t *testing.T) {
 	}
 }
 
-func is400(r openapi.SendDraftTurnResponseObject) bool {
-	_, ok := r.(openapi.SendDraftTurn400ApplicationProblemPlusJSONResponse)
-	return ok
+// is400 and is409 answer whether a refusal carries the code the console
+// chooses its words by.
+func is400(code Code) func(openapi.SendDraftTurnResponseObject) bool {
+	return func(r openapi.SendDraftTurnResponseObject) bool {
+		got, ok := r.(openapi.SendDraftTurn400ApplicationProblemPlusJSONResponse)
+		return ok && valueOr(got.Type) == string(code)
+	}
 }
 
 func is404(r openapi.SendDraftTurnResponseObject) bool {
@@ -220,9 +224,11 @@ func is404(r openapi.SendDraftTurnResponseObject) bool {
 	return ok
 }
 
-func is409(r openapi.SendDraftTurnResponseObject) bool {
-	_, ok := r.(openapi.SendDraftTurn409ApplicationProblemPlusJSONResponse)
-	return ok
+func is409(code Code) func(openapi.SendDraftTurnResponseObject) bool {
+	return func(r openapi.SendDraftTurnResponseObject) bool {
+		got, ok := r.(openapi.SendDraftTurn409ApplicationProblemPlusJSONResponse)
+		return ok && valueOr(got.Type) == string(code)
+	}
 }
 
 func is412(r openapi.SendDraftTurnResponseObject) bool {
@@ -261,6 +267,40 @@ func TestEraseDraftThread_answersEachOutcome(t *testing.T) {
 		_, is404 := resp.(openapi.EraseDraftThread404ApplicationProblemPlusJSONResponse)
 		if got != nil || (want == "204") != is204 || (want == "404") != is404 {
 			t.Errorf("erase with %v = %T (%v), want %s", err, resp, got, want)
+		}
+	}
+}
+
+// spendStub is what authoring already spent today.
+type spendStub struct{ today int64 }
+
+func (s spendStub) SpentToday(context.Context) (int64, error) { return s.today, nil }
+func (spendStub) RecordSpend(context.Context, domain.Cost, domain.UserID) error {
+	return nil
+}
+
+// The transcript says whether a turn could be sent now, and why not, so the
+// console closes the conversation before the person writes into it.
+func TestListDraftTurns_saysWhetherTheConversationIsOpen(t *testing.T) {
+	t.Parallel()
+	off := turnChoice
+	off.Enabled = false
+	for want, tc := range map[openapi.ListDraftTurns200JSONResponseBodyConversation]struct {
+		choice authoring.Choice
+		priced bool
+		spent  int64
+	}{
+		openapi.ListDraftTurns200JSONResponseBodyConversationOpen:     {choice: turnChoice, priced: true, spent: 4_999_999},
+		openapi.ListDraftTurns200JSONResponseBodyConversationOff:      {choice: off, priced: true},
+		openapi.ListDraftTurns200JSONResponseBodyConversationUnpriced: {choice: turnChoice},
+		openapi.ListDraftTurns200JSONResponseBodyConversationSpent:    {choice: turnChoice, priced: true, spent: 5_000_000},
+	} {
+		s := turnServer(&draftStub{opened: someDraft()}, &turnModelsStub{priced: tc.priced}, tc.choice).
+			WithAssistants(nil, spendStub{today: tc.spent})
+		resp, err := s.ListDraftTurns(inArea("cx", domain.RoleAuthor), openapi.ListDraftTurnsRequestObject{AgentId: "triage"})
+		got, ok := resp.(openapi.ListDraftTurns200JSONResponse)
+		if err != nil || !ok || got.Conversation != want {
+			t.Errorf("%s: ListDraftTurns = %#v (%v)", want, resp, err)
 		}
 	}
 }

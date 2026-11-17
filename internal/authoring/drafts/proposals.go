@@ -46,6 +46,8 @@ type Proposal struct {
 	Op      draft.Operation
 	Valid   bool
 	Refusal string
+	// Turn is the conversation's turn that proposed it; empty for none.
+	Turn string
 	// Decision is accepted, rejected, or empty while it waits.
 	Decision string
 	BodyRef  string
@@ -143,7 +145,7 @@ func (s *Store) record(ctx context.Context, tx pgx.Tx, r row, p Proposing, refus
 	sum := sha256.Sum256(body)
 	out := Proposal{
 		Thread: thread, Draft: r.draftID, Agent: p.Agent, Author: p.Caller.By, Read: p.Read, Kind: p.Op.Kind(),
-		Op: p.Op, Valid: refusal == "", Refusal: refusal, BodyRef: ref,
+		Op: p.Op, Valid: refusal == "", Refusal: refusal, BodyRef: ref, Turn: turn,
 	}
 	err = tx.QueryRow(ctx, `
 		insert into agent_draft_proposals (thread_id, seq, draft_id, agent_id, author, draft_revision,

@@ -121,14 +121,17 @@ func TestTurnRoute_aTurnReachesTheProviderItNamesAndSettlesAtWhatItCost(t *testi
 
 	var proposals struct{ Items []openapi.DraftProposal }
 	decode(t, route.do(t, ana, http.MethodGet, "/api/v1/agents/"+agent+"/draft/proposals", nil, nil), &proposals)
-	if len(proposals.Items) != 1 || proposals.Items[0].Kind != "set_reply_locale" {
-		t.Errorf("Ana's proposals = %+v, want the turn's one", proposals.Items)
+	if len(proposals.Items) != 1 || proposals.Items[0].Kind != "set_reply_locale" || valueOf(proposals.Items[0].TurnId) != first.TurnId {
+		t.Errorf("Ana's proposals = %+v, want the turn's one, naming it", proposals.Items)
 	}
 
-	var thread struct{ Items []openapi.DraftTurn }
+	var thread struct {
+		Items        []openapi.DraftTurn
+		Conversation string
+	}
 	decode(t, route.do(t, bia, http.MethodGet, turnsPath, nil, nil), &thread)
-	if len(thread.Items) != 0 {
-		t.Errorf("Bia reads %d of Ana's turns", len(thread.Items))
+	if len(thread.Items) != 0 || thread.Conversation != "open" {
+		t.Errorf("Bia reads %d of Ana's turns, the conversation %q", len(thread.Items), thread.Conversation)
 	}
 	wantStatus(t, "erase", route.do(t, ana, http.MethodDelete, "/api/v1/agents/"+agent+"/draft/thread", nil, nil), http.StatusNoContent)
 	decode(t, route.do(t, ana, http.MethodGet, turnsPath, nil, nil), &thread)
@@ -138,4 +141,11 @@ func TestTurnRoute_aTurnReachesTheProviderItNamesAndSettlesAtWhatItCost(t *testi
 	if strings.Contains(fmt.Sprint(thread.Items), "Responda os clientes") {
 		t.Error("the message survived its erasure")
 	}
+}
+
+func valueOf(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }

@@ -629,6 +629,13 @@ export interface paths {
          * @description Oldest first, with what was said while it is kept and what each turn
          *     reserved and cost. Only the caller's own thread; without what reaching
          *     the draft needs, 404.
+         *
+         *     `conversation` says whether a turn could be sent now: `open`, or
+         *     closed because the installation's assistant is `off`, its model has
+         *     no configured price (`unpriced`), or the day's authoring ceiling is
+         *     `spent`. Open is not a promise: a turn whose reservation does not fit
+         *     what is left of the day is still refused when sent. Closed, the draft
+         *     stays editable through its own operations.
          */
         get: operations["listDraftTurns"];
         put?: never;
@@ -642,10 +649,12 @@ export interface paths {
          *
          *     Refused before anything is reserved or called: an empty message, or
          *     one over 16 KiB, or a turn whose input alone costs more than a turn
-         *     may (400); a model with no configured price, an assistant switched
-         *     off, a reservation that does not fit the day (409); another turn in
-         *     progress in this thread (409); a draft that moved while the turn was
-         *     prepared (412).
+         *     may (400, `fuseone:turn-too-large` for the size); a model with no
+         *     configured price (409, `fuseone:conversation-unpriced`), an assistant
+         *     switched off (409, `fuseone:conversation-off`), a reservation that
+         *     does not fit the day (409, `fuseone:conversation-spent`); another turn
+         *     in progress in this thread (409, `fuseone:turn-in-flight`); a draft
+         *     that moved while the turn was prepared (412).
          *
          *     Idempotent by `key`: a key already used answers the turn it named,
          *     without calling the model again; one whose turn ran past its lease
@@ -6122,6 +6131,8 @@ export interface components {
              * @enum {string}
              */
             decision?: "accepted" | "rejected";
+            /** @description The conversation's turn that proposed it. */
+            turnId?: string;
             /** @description The draft's ETag the model read; accepting it against another is a 412. */
             readRevision: string;
             /** Format: date-time */
@@ -8301,6 +8312,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["DraftTurn"][];
+                        /** @enum {string} */
+                        conversation: "open" | "off" | "unpriced" | "spent";
                     };
                 };
             };

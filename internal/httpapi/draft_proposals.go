@@ -119,5 +119,8 @@ func proposalView(p drafts.Proposal) openapi.DraftProposal {
 	if p.Decision != "" {
 		out.Decision = ptr(openapi.DraftProposalDecision(p.Decision))
 	}
+	if p.Turn != "" {
+		out.TurnId = ptr(p.Turn)
+	}
 	return out
 }
