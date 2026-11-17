@@ -304,4 +304,22 @@ describe("the workbench conversation", () => {
     // A move: some label leaves one place and lands in another.
     if (!added) expect(ins.filter((line) => line && del.includes(line)).some((line) => /^(Nunca|Objetivo)$/.test(line!))).toBe(true);
   });
+
+  it("shows a tool proposal with the effect the catalogue rules for it", async () => {
+    const tool = { ...blockProposal, kind: "add_tool", operation: { kind: "add_tool", tool: "pagamentos.reembolsar" }, instructionsAfter: undefined };
+    world({
+      [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Reembolsos." }], conversation: "open" } }),
+      [`GET ${PROPOSALS}`]: () => ({ body: { items: [tool] } }),
+      "GET /admin/tools": () => ({ body: { items: [{ toolId: "pagamentos.reembolsar", server: "pay", effect: "financial", untrusted: false }] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const card = await screen.findByRole("article", { name: "Adicionar uma ferramenta" });
+    expect(await within(card).findByText("financeiro")).toBeInTheDocument();
+  });
+
+  it("says that nothing in the workspace touches production", async () => {
+    world();
+    openAt("/agents/triagem/workbench");
+    expect(await screen.findByText("Nada aqui toca produção")).toBeInTheDocument();
+  });
 });

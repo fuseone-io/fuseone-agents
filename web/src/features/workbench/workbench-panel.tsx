@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { useAgent } from "@/features/agents/agent-detail-api";
+import { ShieldCheck } from "lucide-react";
+import { agentTarget } from "@/features/agents/agent-target";
 import { WorkbenchConversation } from "@/features/workbench/workbench-conversation";
 import { WorkbenchDiscard } from "@/features/workbench/workbench-discard";
 import { WorkbenchFields } from "@/features/workbench/workbench-fields";
@@ -60,9 +62,18 @@ export function WorkbenchPanel({
           NT-018's mockup; on a narrow screen the workspace wraps below it. */}
       <div className="flex flex-wrap items-start gap-6">
         <div className="min-w-0 flex-[1_1_400px]">
-          <WorkbenchConversation agentId={agentId} instructions={draft.body.definition.instructions} onDraft={bench.adopt} />
+          <WorkbenchConversation
+            agentId={agentId}
+            instructions={draft.body.definition.instructions}
+            target={agentTarget(bench.local) ?? ""}
+            onDraft={bench.adopt}
+          />
         </div>
         <div className="flex min-w-0 flex-[999_1_600px] flex-col gap-6">
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <ShieldCheck className="size-4" aria-hidden />
+            {t("workbench.untouchedProduction")}
+          </p>
           <WorkbenchMissing missing={draft.body.missing} />
           <WorkbenchFields agentId={agentId} local={bench.local} patch={bench.patch} />
           <WorkbenchInstructions

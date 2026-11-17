@@ -3,6 +3,8 @@ import { Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Mono } from "@/components/shared/mono";
+import { EffectBadge } from "@/features/admin/effect-badge";
+import type { ToolEffect } from "@/features/admin/api";
 import { proposalChange } from "@/features/workbench/proposal-change";
 import type { DraftProposal } from "@/lib/api/client";
 
@@ -19,6 +21,9 @@ function unshown(proposal: DraftProposal): string {
   return "workbench.conversation.unshowable";
 }
 
+/** What a card reads its proposal against: the draft's instructions now, and the effect the catalogue rules for each tool. */
+export type Reading = { instructions: string; effects: ReadonlyMap<string, ToolEffect> };
+
 /** What a card can do with its proposal, and whether a decision is on its way. */
 export type Decide = { accept: (id: string) => void; reject: (id: string) => void; busy: boolean };
 
@@ -29,19 +34,19 @@ export type Decide = { accept: (id: string) => void; reject: (id: string) => voi
  */
 export function ProposalCard({
   proposal,
-  instructions,
+  reading,
   decide,
 }: {
   proposal: DraftProposal;
-  /** The draft's instructions now, which a block proposal is read against. */
-  instructions: string;
+  reading: Reading;
   decide: Decide;
 }) {
   const { t } = useTranslation();
   const kind = t(`workbench.proposalKind.${proposal.kind}`);
   // Offered only when what it would change is on the card: an operation
   // erased, or one that does not carry what its kind needs, is not.
-  const change = proposalChange(proposal, instructions, t);
+  const change = proposalChange(proposal, reading.instructions, t);
+  const effect = proposal.operation?.tool ? reading.effects.get(proposal.operation.tool) : undefined;
   const pending = proposal.valid && !proposal.decision;
   const waiting = pending && change !== undefined;
 
@@ -49,6 +54,7 @@ export function ProposalCard({
     <article aria-label={kind} className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">{kind}</span>
+        {effect && <EffectBadge effect={effect} />}
         {!proposal.valid && <Badge variant="destructive">{t("workbench.conversation.invalid")}</Badge>}
         {proposal.decision && (
           <Badge variant="outline">{t(`workbench.conversation.decision.${proposal.decision}`)}</Badge>

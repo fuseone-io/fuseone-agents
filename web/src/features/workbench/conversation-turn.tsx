@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Mono } from "@/components/shared/mono";
-import { ProposalCard, type Decide } from "@/features/workbench/proposal-card";
+import { ProposalCard, type Decide, type Reading } from "@/features/workbench/proposal-card";
 import type { DraftProposal, DraftTurn } from "@/lib/api/client";
 import { formatMicros } from "@/lib/format";
 
@@ -23,12 +23,12 @@ function Answer({ turn }: { turn: DraftTurn }) {
 export function ConversationTurn({
   turn,
   proposals,
-  instructions,
+  reading,
   decide,
 }: {
   turn: DraftTurn;
   proposals: DraftProposal[];
-  instructions: string;
+  reading: Reading;
   decide: Decide;
 }) {
   const { t } = useTranslation();
@@ -51,7 +51,7 @@ export function ConversationTurn({
       {proposals.length > 0 && (
         <div className="flex flex-col gap-2">
           {proposals.map((p) => (
-            <ProposalCard key={p.proposalId} proposal={p} instructions={instructions} decide={decide} />
+            <ProposalCard key={p.proposalId} proposal={p} reading={reading} decide={decide} />
           ))}
         </div>
       )}

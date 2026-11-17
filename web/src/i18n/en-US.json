@@ -3551,6 +3551,7 @@
       "replace_block": "Rewrite a block",
       "remove_block": "Remove a block",
       "move_block": "Move a block"
-    }
+    },
+    "untouchedProduction": "Nothing here touches production"
   }
 }
