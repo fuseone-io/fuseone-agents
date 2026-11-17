@@ -30,6 +30,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.117.0] — 2026-11-17
+
+NT-018 deliveries B and 1a (#375, #376): an agent publishes from its `.agent.md` file, and
+it gets an entity-tag that publishing, retiring and restoring honour, judged under the
+agent's row lock. No migration.
+
 ### Upgrade notes
 
 - **Publishing an agent needs `agent:publish` where the agent lives now, as well as where
@@ -64,8 +70,8 @@ field" is a commit message.
   canonical form before its digest is taken, so comments, key order and blank lines in
   the file never make a second version. The company comes from the frontmatter or from
   `?company=`, for a file kept for several installations. Refused with 400 when the
-  company is in neither or the two disagree, and when the file's `id` is not the one in
-  the path. Every check the JSON publication runs applies to the file as well, with the
+  company is in neither, when `?company=` is sent empty, when the two disagree, and when
+  the file's `id` is not the one in the path. Every check the JSON publication runs applies to the file as well, with the
   same answer. A file over 2 MiB is refused with 413.
 
 ## [0.116.0] — 2026-11-16
