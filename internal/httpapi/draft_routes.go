@@ -30,6 +30,13 @@ type Drafts interface {
 	Proposals(ctx context.Context, agent domain.AgentID, c drafts.Caller) ([]drafts.Proposal, error)
 	Accept(ctx context.Context, a drafts.Acceptance) (drafts.Opened, error)
 	Reject(ctx context.Context, agent domain.AgentID, id string, c drafts.Caller) error
+	// What a turn needs from the store (conversation.Store), and the thread's
+	// own reading and erasure.
+	Turns(ctx context.Context, agent domain.AgentID, c drafts.Caller) ([]drafts.Turn, error)
+	ReplayTurn(ctx context.Context, r drafts.Replaying) (drafts.Started, bool, error)
+	BeginTurn(ctx context.Context, b drafts.Beginning) (drafts.Started, error)
+	SettleTurn(ctx context.Context, s drafts.Settlement) (drafts.Settled, error)
+	EraseThread(ctx context.Context, agent domain.AgentID, c drafts.Caller) error
 }
 
 // WithDrafts wires the workbench's drafts.

@@ -88,6 +88,18 @@ func reservedConn(ctx context.Context, t testing.TB, dsn string) *pgx.Conn {
 // for them, so no writer outlives the test.
 func (c *Contention) Overlap(t testing.TB, hold string, args []any, writes []func() error) []error {
 	t.Helper()
+	return c.overlap(t, hold, args, writes, false)
+}
+
+// OverlapCommitting is Overlap with the hold committed rather than rolled back: the
+// writers wake to what the hold wrote, the way they would behind a write that won.
+func (c *Contention) OverlapCommitting(t testing.TB, hold string, args []any, writes []func() error) []error {
+	t.Helper()
+	return c.overlap(t, hold, args, writes, true)
+}
+
+func (c *Contention) overlap(t testing.TB, hold string, args []any, writes []func() error, commit bool) []error {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), contentionWait)
 	defer cancel()
 
@@ -121,7 +133,11 @@ func (c *Contention) Overlap(t testing.TB, hold string, args []any, writes []fun
 	}()
 
 	waitErr := c.waitForWriters(ctx, len(writes))
-	if err := tx.Rollback(ctx); err != nil && waitErr == nil {
+	release := tx.Rollback
+	if commit && waitErr == nil {
+		release = tx.Commit
+	}
+	if err := release(ctx); err != nil && waitErr == nil {
 		waitErr = fmt.Errorf("release the hold: %w", err)
 	}
 	select {

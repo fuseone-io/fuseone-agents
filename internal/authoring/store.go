@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/authoring/drafts"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
 )
@@ -194,19 +195,13 @@ func (s *Store) RecordSpend(ctx context.Context, cost domain.Cost, by domain.Use
 	return tx.Commit(ctx)
 }
 
-// SpentToday is what authoring has cost since midnight.
+// SpentToday is what authoring holds against today's ceiling.
 //
 // Bounded to the day because a ceiling that counted every day since the
 // installation started would stop the assistant for good after one busy
 // afternoon, which is a different product decision than the one anybody made.
+// One figure for the interview and the workbench's conversation alike: what
+// both have confirmed, and what the conversation reserved or kept (drafts).
 func (s *Store) SpentToday(ctx context.Context) (int64, error) {
-	var micros int64
-	err := s.pool.QueryRow(ctx, `
-        select coalesce(sum((detail->>'micros')::bigint), 0)
-        from admin_events
-        where action = 'authoring.spent' and at >= date_trunc('day', now())`).Scan(&micros)
-	if err != nil {
-		return 0, fmt.Errorf("authoring: read spend: %w", err)
-	}
-	return micros, nil
+	return drafts.SpentToday(ctx, s.pool)
 }

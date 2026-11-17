@@ -71,12 +71,18 @@ type openAICompleter struct{ *OpenAICompatible }
 
 func (o *openAICompleter) Complete(ctx context.Context, prompt string) (Completion, error) {
 	var out chatResponse
-	err := o.post(ctx, "/chat/completions", map[string]any{
+	body := map[string]any{
 		"model": o.cfg.Model,
 		// No tools offered. The assistant is being asked to read prose and
 		// answer in JSON; a tool list here would invite it to act.
 		"messages": []map[string]string{{"role": "user", "content": prompt}},
-	}, &out)
+	}
+	// The cap reaches the provider: a caller that reserved a call's worst
+	// case priced it, and a provider never told could answer past it.
+	if o.cfg.MaxTokens > 0 {
+		body["max_tokens"] = o.cfg.MaxTokens
+	}
+	err := o.post(ctx, "/chat/completions", body, &out)
 	if err != nil {
 		return Completion{}, err
 	}

@@ -22,7 +22,8 @@ func TestMigrate_upgradeTo0114_addsTheConversationTablesAndChangesNothingElse(t 
 	}
 	before := schemaShape(ctx, t, pool)
 
-	if err := ledger.Migrate(ctx, pool); err != nil {
+	// Through 0114 alone: a later migration's changes are its own test's.
+	if err := ledger.MigrateThrough(ctx, pool, "0114_agent_draft_proposals"); err != nil {
 		t.Fatalf("upgrade: %v", err)
 	}
 

@@ -617,6 +617,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/draft/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller's own conversation over the draft
+         * @description Oldest first, with what was said while it is kept and what each turn
+         *     reserved and cost. Only the caller's own thread; without what reaching
+         *     the draft needs, 404.
+         */
+        get: operations["listDraftTurns"];
+        put?: never;
+        /**
+         * Send one message to the workbench's assistant
+         * @description One turn (NT-018 phase 3, contracts 7 and 8). The worst case is
+         *     reserved against the day's authoring ceiling before the model is
+         *     called: the draft's projection, the conversation window and the
+         *     message, every byte counted as a token, plus the maximum answer, at
+         *     the model's configured price.
+         *
+         *     Refused before anything is reserved or called: an empty message, or
+         *     one over 16 KiB, or a turn whose input alone costs more than a turn
+         *     may (400); a model with no configured price, an assistant switched
+         *     off, a reservation that does not fit the day (409); another turn in
+         *     progress in this thread (409); a draft that moved while the turn was
+         *     prepared (412).
+         *
+         *     Idempotent by `key`: a key already used answers the turn it named,
+         *     without calling the model again; one whose turn ran past its lease
+         *     before it was stored answers it as `unknown`, its reservation kept
+         *     against the day's ceiling. A turn the model failed, or whose answer
+         *     could not be read, answers 200 as `failed`, settled at what it cost.
+         *
+         *     The model only proposes. What it proposes is in the caller's thread
+         *     (`GET …/draft/proposals`), bound to the draft's ETag it read.
+         */
+        post: operations["sendDraftTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/draft/thread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Erase what was said in the caller's own conversation
+         * @description Every message, answer and proposal body of the caller's thread over
+         *     the draft, in one transaction. The turns and proposals stay as
+         *     references to nothing; a proposal whose body is gone can never be
+         *     accepted. The draft's values are not changed by this call.
+         */
+        delete: operations["eraseDraftThread"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/flow": {
         parameters: {
             query?: never;
@@ -6058,6 +6127,51 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        DraftTurnRequest: {
+            /** @description The turn's idempotency key, chosen by the client; the same key never calls the model twice. */
+            key: string;
+            message: string;
+            /** @description The person marked the message as pasted content. It informs, and fences nothing. */
+            pasted?: boolean;
+            /** @description The language the assistant answers in; pt-BR by default. */
+            locale?: string;
+        };
+        DraftTurn: {
+            turnId: string;
+            key: string;
+            /** @enum {string} */
+            state: "in_progress" | "done" | "failed" | "unknown";
+            /** @description Absent once retention or erasing the thread took it. */
+            message?: string;
+            reply?: string;
+            erased: boolean;
+            pasted: boolean;
+            /** @description The draft's ETag the turn read; its proposals name it. */
+            readRevision: string;
+            /**
+             * Format: int64
+             * @description The worst case set aside before the call.
+             */
+            reservedMicros: number;
+            /**
+             * Format: int64
+             * @description What the call really cost, once settled.
+             */
+            costMicros: number;
+            /**
+             * Format: int64
+             * @description The reservation kept against the day's ceiling for an unknown turn; never recorded as a cost.
+             */
+            keptMicros?: number;
+            /** @description The proposals this turn recorded, on the answer to sending it. */
+            proposals?: string[];
+            /** @description Proposals the answer carried past the cap or not as operations. */
+            dropped?: number;
+            /** @description Proposals made against a draft that moved during the call. */
+            stale?: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
         DraftBlock: {
             /** @description Stable for the draft's life; what a block operation names. */
             id: string;
@@ -8166,6 +8280,93 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    listDraftTurns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's conversation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["DraftTurn"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    sendDraftTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftTurnRequest"];
+            };
+        };
+        responses: {
+            /** @description The turn, done, failed or unknown. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftTurn"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description Another turn is in progress, the day's ceiling does not fit it, the assistant is off, or the model has no price. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    eraseDraftThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Erased */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     checkDataFlow: {
