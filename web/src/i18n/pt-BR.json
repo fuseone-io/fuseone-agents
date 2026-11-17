@@ -3508,7 +3508,6 @@
         "rejected": "Recusada"
       },
       "proposalErased": "O conteúdo desta proposta foi apagado.",
-      "moveTo": "Move o bloco para a posição {{at}}.",
       "accept": "Aceitar",
       "reject": "Recusar",
       "applied": "Proposta aplicada ao rascunho",
@@ -3528,7 +3527,8 @@
       "value": {
         "editsStep": "Muda a etapa “{{step}}” para:"
       },
-      "unshowable": "Não é possível mostrar o que esta proposta muda, então ela não pode ser aceita."
+      "unshowable": "Não é possível mostrar o que esta proposta muda, então ela não pode ser aceita.",
+      "staleBlock": "Esta proposta foi feita sobre uma versão anterior do rascunho, então não pode mais ser aceita. Peça de novo ao assistente."
     },
     "proposalKind": {
       "set_identity": "Mudar nome ou escopo",

@@ -11,7 +11,7 @@ import { settledOf, useProposals, useTurns } from "@/features/workbench/conversa
 import { useComposer } from "@/features/workbench/use-composer";
 import { useDecide } from "@/features/workbench/use-decide";
 import type { RevisedDraft } from "@/features/workbench/api";
-import type { DraftBlock, DraftProposal } from "@/lib/api/client";
+import type { DraftProposal } from "@/lib/api/client";
 
 /** The proposals of each turn, by the turn that made them. */
 function byTurn(proposals: DraftProposal[] = []): Map<string, DraftProposal[]> {
@@ -31,11 +31,12 @@ function byTurn(proposals: DraftProposal[] = []): Map<string, DraftProposal[]> {
  */
 export function WorkbenchConversation({
   agentId,
-  blocks,
+  instructions,
   onDraft,
 }: {
   agentId: string;
-  blocks: DraftBlock[];
+  /** The draft's instructions now, which block proposals are read against. */
+  instructions: string;
   onDraft: (draft: RevisedDraft) => void;
 }) {
   const { t } = useTranslation();
@@ -71,7 +72,7 @@ export function WorkbenchConversation({
         ) : (
           <ol className="flex flex-col gap-6">
             {items.map((turn) => (
-              <ConversationTurn key={turn.turnId} turn={turn} proposals={grouped.get(turn.turnId) ?? []} blocks={blocks} decide={decide} />
+              <ConversationTurn key={turn.turnId} turn={turn} proposals={grouped.get(turn.turnId) ?? []} instructions={instructions} decide={decide} />
             ))}
             {composer.pending && (
               <li className="flex flex-col gap-2">

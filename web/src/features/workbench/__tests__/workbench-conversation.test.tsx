@@ -27,7 +27,8 @@ const posts = (calls: Call[], path: string) => calls.filter((c) => c.method === 
 
 const turn = { turnId: "t-1", key: "k", state: "done", erased: false, pasted: false, readRevision: '"e1"', reservedMicros: 90_000, costMicros: 4_500, createdAt: "2026-11-17T12:00:00Z" };
 const blockProposal = { proposalId: "p-1", turnId: "t-1", kind: "replace_block", valid: true, readRevision: '"e1"', createdAt: "2026-11-17T12:00:01Z",
-  operation: { kind: "replace_block", blockId: "b1", text: "Triar, responder e encerrar.", locale: "pt-BR" } };
+  operation: { kind: "replace_block", blockId: "b1", text: "Triar, responder e encerrar.", locale: "pt-BR" },
+  instructionsAfter: "Objetivo\nTriar, responder e encerrar." };
 
 function world(over: Routes = {}, conversation = "open") {
   // The thread holds what a send answered, as the server's would.
@@ -248,5 +249,59 @@ describe("the workbench conversation", () => {
     await screen.findByRole("heading", { name: "triagem" });
     await new Promise((settle) => setTimeout(settle, 300));
     expect(calls.some((c) => c.path === PROPOSALS)).toBe(false);
+  });
+
+  it.each([
+    ["insert_block", { blockKind: "never", at: 1, text: "Prometer prazo.", locale: "pt-BR" }, "Objetivo\nTriar e responder.\n\nNunca\nPrometer prazo.", /Nunca/],
+    ["replace_block", { blockId: "b1", text: "Triage and answer.", locale: "en-US" }, "Purpose\nTriage and answer.", /Purpose/],
+    ["move_block", { blockId: "b2", to: 0 }, "Nunca\nPrometer prazo.\n\nObjetivo\nTriar e responder.", /Nunca/],
+    ["insert_block", { blockKind: "never", at: 0, text: "Prometer prazo.", locale: "en-US" }, "Never\nPrometer prazo.\n\nObjetivo\nTriar e responder.", /Never/],
+  ])("shows a %s proposal as the instructions accepting it would leave", async (kind, fields, after, shown) => {
+    const proposal = { ...blockProposal, kind, operation: { kind, ...fields }, instructionsAfter: after };
+    world({
+      [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Ajuste." }], conversation: "open" } }),
+      [`GET ${PROPOSALS}`]: () => ({ body: { items: [proposal] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const card = await screen.findByRole("article");
+    await waitFor(() => expect(card).toHaveTextContent(shown));
+    expect(within(card).getByRole("button", { name: "Aceitar" })).toBeInTheDocument();
+  });
+
+  it("offers nothing to accept for a block proposal made over an older draft", async () => {
+    // Made over an older draft: the server sends no effect for it.
+    const older = { ...blockProposal, instructionsAfter: undefined };
+    world({
+      [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Ajuste." }], conversation: "open" } }),
+      [`GET ${PROPOSALS}`]: () => ({ body: { items: [older] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const card = await screen.findByRole("article", { name: "Reescrever um bloco" });
+    expect(within(card).getByText(/versão anterior do rascunho/)).toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: "Aceitar" })).not.toBeInTheDocument();
+  });
+
+  // Swapping two blocks is one effect however a line diff tells it: a block
+  // leaves one place and lands in another. The retitle shows the label as it
+  // will be written, not in the reader's language.
+  it.each([
+    ["move_block", { blockId: "b2", to: 0 }, "Nunca\nPrometer prazo.\n\nObjetivo\nTriar.", undefined, undefined],
+    ["replace_block", { blockId: "b1", text: "Triage.", locale: "en-US" }, "Purpose\nTriage.\n\nNunca\nPrometer prazo.", "Purpose", "Objetivo"],
+  ])("marks what a %s proposal moves or rewrites, as it will be written", async (kind, fields, after, added, removed) => {
+    const proposal = { ...blockProposal, kind, operation: { kind, ...fields }, instructionsAfter: after };
+    world({
+      [`GET ${DRAFT}`]: () => ({ body: draftOf({ instructions: "Objetivo\nTriar.\n\nNunca\nPrometer prazo." }), etag: '"e1"' }),
+      [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Ajuste." }], conversation: "open" } }),
+      [`GET ${PROPOSALS}`]: () => ({ body: { items: [proposal] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const card = await screen.findByRole("article");
+    await waitFor(() => expect(card.querySelector("ins")).not.toBeNull());
+    const ins = [...card.querySelectorAll("ins")].map((e) => e.textContent);
+    const del = [...card.querySelectorAll("del")].map((e) => e.textContent);
+    if (added) expect(ins).toContain(added);
+    if (removed) expect(del).toContain(removed);
+    // A move: some label leaves one place and lands in another.
+    if (!added) expect(ins.filter((line) => line && del.includes(line)).some((line) => /^(Nunca|Objetivo)$/.test(line!))).toBe(true);
   });
 });

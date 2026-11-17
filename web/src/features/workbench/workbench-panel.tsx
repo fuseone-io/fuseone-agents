@@ -60,7 +60,7 @@ export function WorkbenchPanel({
           NT-018's mockup; on a narrow screen the workspace wraps below it. */}
       <div className="flex flex-wrap items-start gap-6">
         <div className="min-w-0 flex-[1_1_400px]">
-          <WorkbenchConversation agentId={agentId} blocks={draft.body.blocks} onDraft={bench.adopt} />
+          <WorkbenchConversation agentId={agentId} instructions={draft.body.definition.instructions} onDraft={bench.adopt} />
         </div>
         <div className="flex min-w-0 flex-[999_1_600px] flex-col gap-6">
           <WorkbenchMissing missing={draft.body.missing} />

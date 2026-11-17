@@ -3508,7 +3508,6 @@
         "rejected": "Rejected"
       },
       "proposalErased": "This proposal's content was erased.",
-      "moveTo": "Moves the block to position {{at}}.",
       "accept": "Accept",
       "reject": "Reject",
       "applied": "Proposal applied to the draft",
@@ -3528,7 +3527,8 @@
       "value": {
         "editsStep": "Changes the step “{{step}}” to:"
       },
-      "unshowable": "What this proposal changes cannot be shown, so it cannot be accepted."
+      "unshowable": "What this proposal changes cannot be shown, so it cannot be accepted.",
+      "staleBlock": "This proposal was made over an earlier version of the draft, so it can no longer be accepted. Ask the assistant again."
     },
     "proposalKind": {
       "set_identity": "Change name or scope",

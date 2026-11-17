@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Mono } from "@/components/shared/mono";
 import { ProposalCard, type Decide } from "@/features/workbench/proposal-card";
-import type { DraftBlock, DraftProposal, DraftTurn } from "@/lib/api/client";
+import type { DraftProposal, DraftTurn } from "@/lib/api/client";
 import { formatMicros } from "@/lib/format";
 
 /** The model's side of a turn: its reply, or what happened instead. */
@@ -23,12 +23,12 @@ function Answer({ turn }: { turn: DraftTurn }) {
 export function ConversationTurn({
   turn,
   proposals,
-  blocks,
+  instructions,
   decide,
 }: {
   turn: DraftTurn;
   proposals: DraftProposal[];
-  blocks: DraftBlock[];
+  instructions: string;
   decide: Decide;
 }) {
   const { t } = useTranslation();
@@ -51,7 +51,7 @@ export function ConversationTurn({
       {proposals.length > 0 && (
         <div className="flex flex-col gap-2">
           {proposals.map((p) => (
-            <ProposalCard key={p.proposalId} proposal={p} blocks={blocks} decide={decide} />
+            <ProposalCard key={p.proposalId} proposal={p} instructions={instructions} decide={decide} />
           ))}
         </div>
       )}

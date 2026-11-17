@@ -4,10 +4,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Mono } from "@/components/shared/mono";
 import { proposalChange } from "@/features/workbench/proposal-change";
-import type { DraftBlock, DraftProposal } from "@/lib/api/client";
+import type { DraftProposal } from "@/lib/api/client";
 
 /** Kinds only a person decides: the model proposing one is always refused. */
 const HUMAN_ONLY = new Set(["set_identity", "set_standing_approvals"]);
+
+/** Why a proposal's change is not on its card. */
+function unshown(proposal: DraftProposal): string {
+  if (!proposal.operation) return "workbench.conversation.proposalErased";
+  // A block proposal comes with its effect only against the draft's current
+  // ETag: without it, it was made over an older draft, and accepting it
+  // would be refused.
+  if (proposal.kind.endsWith("_block")) return "workbench.conversation.staleBlock";
+  return "workbench.conversation.unshowable";
+}
 
 /** What a card can do with its proposal, and whether a decision is on its way. */
 export type Decide = { accept: (id: string) => void; reject: (id: string) => void; busy: boolean };
@@ -19,19 +29,21 @@ export type Decide = { accept: (id: string) => void; reject: (id: string) => voi
  */
 export function ProposalCard({
   proposal,
-  blocks,
+  instructions,
   decide,
 }: {
   proposal: DraftProposal;
-  blocks: DraftBlock[];
+  /** The draft's instructions now, which a block proposal is read against. */
+  instructions: string;
   decide: Decide;
 }) {
   const { t } = useTranslation();
   const kind = t(`workbench.proposalKind.${proposal.kind}`);
   // Offered only when what it would change is on the card: an operation
   // erased, or one that does not carry what its kind needs, is not.
-  const change = proposal.operation ? proposalChange(proposal.operation, blocks, t) : undefined;
-  const waiting = proposal.valid && !proposal.decision && change !== undefined;
+  const change = proposalChange(proposal, instructions, t);
+  const pending = proposal.valid && !proposal.decision;
+  const waiting = pending && change !== undefined;
 
   return (
     <article aria-label={kind} className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3">
@@ -42,11 +54,10 @@ export function ProposalCard({
           <Badge variant="outline">{t(`workbench.conversation.decision.${proposal.decision}`)}</Badge>
         )}
       </div>
-      {change ?? (
-        <p className="text-xs text-muted-foreground">
-          {t(proposal.operation ? "workbench.conversation.unshowable" : "workbench.conversation.proposalErased")}
-        </p>
-      )}
+      {change ??
+        ((pending || !proposal.operation) && (
+          <p className="text-xs text-muted-foreground">{t(unshown(proposal))}</p>
+        ))}
       {/* The validator's words are machine text; a human-only kind gets this
           console's own sentence, since that refusal is the rule, not a fault. */}
       {!proposal.valid && HUMAN_ONLY.has(proposal.kind) ? (
