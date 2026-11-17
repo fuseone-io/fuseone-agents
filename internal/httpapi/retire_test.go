@@ -7,6 +7,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/spec"
 )
 
 /*
@@ -101,12 +102,12 @@ type retirementSpy struct {
 	out               map[domain.AgentID]bool
 }
 
-func (r *retirementSpy) Retire(gocontext.Context, domain.AgentID, domain.UserID) error {
+func (r *retirementSpy) Retire(gocontext.Context, domain.AgentID, domain.UserID, spec.Guard) error {
 	r.retired++
 	return nil
 }
 
-func (r *retirementSpy) Restore(gocontext.Context, domain.AgentID, domain.UserID) error {
+func (r *retirementSpy) Restore(gocontext.Context, domain.AgentID, domain.UserID, spec.Guard) error {
 	r.restored++
 	return nil
 }

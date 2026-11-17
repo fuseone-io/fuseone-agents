@@ -190,7 +190,18 @@ func TestStateWithoutAVersion_afterEnforcement_isStillWritten(t *testing.T) {
 			return st.SetStage(ctx, a, domain.StageAutonomous, "usr_ops")
 		}},
 		{"ensure paused", "ensured", func(a domain.AgentID) error { return st.EnsurePaused(ctx, a, "usr_ops") }},
-		{"retire", "retired", func(a domain.AgentID) error { return st.Retire(ctx, a, "usr_ops") }},
+		// Retirement's own row write. A guarded retirement now refuses an
+		// agent with no version (agent_guard_test.go), so the row it writes
+		// is written here as it writes it.
+		{"retire", "retired", func(a domain.AgentID) error {
+			_, err := pool.Exec(ctx, `
+				insert into agent_state (agent_id, paused, retired_at, retired_by, changed_at, changed_by)
+				values ($1, true, now(), $2, now(), $2)
+				on conflict (agent_id) do update set
+					paused = true, retired_at = now(), retired_by = excluded.retired_by,
+					changed_at = now(), changed_by = excluded.changed_by`, string(a), "usr_ops")
+			return err
+		}},
 		// refuseStage's state row, written before the version exists.
 		{"publish under a stage rule", "guarded", func(a domain.AgentID) error {
 			s := published(t, definition)

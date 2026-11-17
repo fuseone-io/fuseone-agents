@@ -23,7 +23,7 @@ func TestRetire_theAgentLeavesTheListingAndKeepsItsRuns(t *testing.T) {
 	state, registry := retirable(t)
 	ctx := t.Context()
 
-	if err := state.Retire(ctx, "triage", "usr_ana"); err != nil {
+	if err := state.Retire(ctx, "triage", "usr_ana", spec.Guard{}); err != nil {
 		t.Fatalf("Retire: %v", err)
 	}
 
@@ -52,7 +52,7 @@ func TestRetire_alsoStopsIt(t *testing.T) {
 	if err := state.SetPaused(ctx, "triage", false, "usr_ana", now()); err != nil {
 		t.Fatalf("SetPaused: %v", err)
 	}
-	if err := state.Retire(ctx, "triage", "usr_ana"); err != nil {
+	if err := state.Retire(ctx, "triage", "usr_ana", spec.Guard{}); err != nil {
 		t.Fatalf("Retire: %v", err)
 	}
 
@@ -69,10 +69,10 @@ func TestRestore_bringsItBackStopped(t *testing.T) {
 	state, _ := retirable(t)
 	ctx := t.Context()
 
-	if err := state.Retire(ctx, "triage", "usr_ana"); err != nil {
+	if err := state.Retire(ctx, "triage", "usr_ana", spec.Guard{}); err != nil {
 		t.Fatalf("Retire: %v", err)
 	}
-	if err := state.Restore(ctx, "triage", "usr_ana"); err != nil {
+	if err := state.Restore(ctx, "triage", "usr_ana", spec.Guard{}); err != nil {
 		t.Fatalf("Restore: %v", err)
 	}
 

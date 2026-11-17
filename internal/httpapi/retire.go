@@ -7,6 +7,7 @@ import (
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/spec"
 )
 
 /*
@@ -20,8 +21,8 @@ that stops appearing on every screen without taking its history with it.
 
 // Retirements takes agents out of circulation, declared here by the consumer.
 type Retirements interface {
-	Retire(ctx context.Context, agent domain.AgentID, by domain.UserID) error
-	Restore(ctx context.Context, agent domain.AgentID, by domain.UserID) error
+	Retire(ctx context.Context, agent domain.AgentID, by domain.UserID, guard spec.Guard) error
+	Restore(ctx context.Context, agent domain.AgentID, by domain.UserID, guard spec.Guard) error
 	Retired(ctx context.Context) (map[domain.AgentID]bool, error)
 }
 
@@ -56,7 +57,7 @@ func (s *Server) SetAgentRetired(
 	if req.Body.Retired {
 		act = s.retirements.Retire
 	}
-	if err := act(ctx, current.ID, callerOf(ctx)); err != nil {
+	if err := act(ctx, current.ID, callerOf(ctx), spec.Guard{}); err != nil {
 		return nil, fmt.Errorf("set %s retired=%v: %w", req.AgentId, req.Body.Retired, err)
 	}
 	return openapi.SetAgentRetired204Response{}, nil
