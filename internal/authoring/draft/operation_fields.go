@@ -1,6 +1,7 @@
 package draft
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -20,8 +21,8 @@ func (SetIdentity) Fields() []string { return []string{"name", "company", "area"
 func (o SetIdentity) apply(d *Draft) error {
 	// A whole scope, company and area: the workbench's draft always names
 	// both, even though a file may leave its company to the query.
-	if !o.Scope.Valid() {
-		return invalidOp(o.Kind(), "scope %s names no company or no area", o.Scope)
+	if err := ValidScope(o.Scope); err != nil {
+		return invalidOp(o.Kind(), "%v", err)
 	}
 	d.Spec.Name, d.Spec.Company, d.Spec.Area = o.Name, o.Scope.Company, o.Scope.Area
 	return nil
@@ -165,5 +166,17 @@ func (SetEmits) Class() Class     { return Shared }
 func (SetEmits) Fields() []string { return []string{"emits"} }
 func (o SetEmits) apply(d *Draft) error {
 	d.Spec.Emits = cloneEmits(o.Emits)
+	return nil
+}
+
+// ValidScope is a scope a draft may name: a company publication accepts, and
+// an area. The installation is no company here.
+func ValidScope(scope domain.Scope) error {
+	if !scope.Valid() {
+		return fmt.Errorf("scope %s names no company or no area", scope)
+	}
+	if err := domain.ValidCompanyID(string(scope.Company)); err != nil {
+		return err
+	}
 	return nil
 }

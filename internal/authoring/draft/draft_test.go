@@ -289,8 +289,10 @@ func TestValidate_neverChangesTheDraftItWasGiven(t *testing.T) {
 func TestValidate_anIdentityWithoutAWholeScope_isRefused(t *testing.T) {
 	t.Parallel()
 	for name, scope := range map[string]domain.Scope{
-		"no company": {Area: "cx"},
-		"no area":    {Company: "acme"},
+		"no company":                    {Area: "cx"},
+		"no area":                       {Company: "acme"},
+		"a company publication refuses": {Company: "ACME", Area: "cx"},
+		"the installation":              {Company: "*", Area: "cx"},
 	} {
 		op := draft.SetIdentity{Name: "Triagem", Scope: scope}
 		if _, err := apply(t, complete(t), op, draft.FromControl); !errors.Is(err, draft.ErrInvalidOperation) {
