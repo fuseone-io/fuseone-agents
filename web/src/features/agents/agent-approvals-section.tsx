@@ -96,7 +96,9 @@ export function AgentApprovalsSection({
               setNotify(notify.includes(id) ? notify : [...notify, id])
             }
           >
-            <SelectTrigger id="approvals-notify">
+            {/* Never wider than its card: the longest choice outgrew a
+                phone's width and was clipped by the section. */}
+            <SelectTrigger id="approvals-notify" className="max-w-full">
               <SelectValue placeholder={t("agents.approvalsNotifyAnyone")} />
             </SelectTrigger>
             <SelectContent>

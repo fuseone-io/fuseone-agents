@@ -36,7 +36,9 @@ export function TriggerRow({
   const field = fieldOf(kind);
 
   return (
-    <div className="flex items-start gap-2">
+    // On a phone the field takes a line of its own under the kind: beside a
+    // 160px select and the remove button it was a few characters wide.
+    <div className="flex flex-wrap items-start gap-2 sm:flex-nowrap">
       <Select
         value={kind}
         onValueChange={(next) =>
@@ -46,7 +48,7 @@ export function TriggerRow({
           onChange(emptyTrigger(next as TriggerKind))
         }
       >
-        <SelectTrigger className="w-40 shrink-0">
+        <SelectTrigger className="min-w-0 flex-1 sm:w-40 sm:flex-none sm:shrink-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -62,7 +64,7 @@ export function TriggerRow({
           conversation of this agent's scope may start it, and which
           conversations belong to which scope is administrative. An input here
           would be the author choosing who may start their own agent. */}
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <div className="order-last flex min-w-0 basis-full flex-col gap-1 sm:order-none sm:basis-0 sm:flex-1">
         {field === undefined ? (
           <p className="text-xs text-muted-foreground">
             {t("agents.triggerChannelExplains")}
