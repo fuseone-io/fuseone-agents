@@ -49,7 +49,10 @@ field" is a commit message.
     applies. Proposals made against a draft that moved while the model was thinking are
     dropped and counted.
   - A turn carries an idempotency key: sent again, it answers what was stored and calls
-    nobody. One turn at a time per thread.
+    nobody, even after the assistant, its price or the catalogue changed. One turn at a
+    time per thread; a turn whose lease ran out holds the thread no longer.
+  - What the model answers is stored whole, its reply and every proposal with the turn's
+    real cost, or the turn fails at that cost: it is never done with part of its answer.
   - Its worst case is reserved against the day's authoring ceiling before the model is
     called, at the model's configured price: an unpriced model, a turn whose input alone
     is over the per-turn ceiling, and a day the reservation does not fit are refused
@@ -58,7 +61,8 @@ field" is a commit message.
     and shown as kept, never recorded as a cost.
   - `GET /agents/{agentId}/draft/turns` reads the caller's own transcript, with what
     each turn reserved, cost or kept. `DELETE /agents/{agentId}/draft/thread` erases what
-    was said in it, messages, replies and proposals' bodies; the figures stay.
+    was said in it, messages, replies and proposals' bodies; the figures stay. A call still
+    on its way when the thread is erased brings nothing back into it.
 
 - **The conversation's proposals, and their acceptance** (NT-018 phase 3, first part).
   - Each author has one thread over the shared draft. A proposal is bound to its author,
