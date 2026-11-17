@@ -30,7 +30,33 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Publishing an agent needs `agent:publish` where the agent lives now, as well as where
+  the definition sends it.** A caller who held only the destination used to move the
+  agent there; that publication now answers 404, as for an agent that does not exist.
+  Review scripts that republish agents into another area under a narrower grant.
+- **Retiring or restoring an agent the caller may not publish answers 404, no longer
+  403**, so the answer never says the agent exists. Both are judged under the agent's
+  row lock, on the scope it lives in at that moment.
+- **Every replica must run this release before a client relies on the agent's
+  `If-Match` or `If-None-Match`.** An older replica ignores both headers and publishes.
+  The console does not send them yet; it starts with the workbench, after this release
+  is on every replica.
+
 ### Added
+
+- **An agent has an entity-tag, and its writes honour it** (NT-018 1a, NT-017 phase 1).
+  - `GET /agents/{agentId}` answers `ETag`, naming the current version and whether the
+    agent is retired. It is left out when `version` asks for another one.
+  - `PUT /agents/{agentId}/versions` takes `If-Match`, and `If-None-Match: *` to create an
+    agent only if it does not exist yet. `PUT /agents/{agentId}/retired` takes `If-Match`.
+    A stale tag answers 412 with the current `ETag`. Both headers at once, or one that does
+    not parse, is a 400.
+  - Both are optional: a client that sends neither publishes, retires and restores as
+    before. An identical publish leaves the tag where it was.
+  - Each is judged in the transaction that writes, after the agent's row is locked, so a
+    publication or retirement committed while the write waited is seen.
 
 - **An agent publishes from its `.agent.md` file** (NT-018, delivery B).
   `PUT /agents/{agentId}/versions` accepts `text/markdown` beside the JSON fields. The
