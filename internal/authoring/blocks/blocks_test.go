@@ -275,3 +275,24 @@ func TestInsert_anEmptyBlock_writesNoLoneHeading(t *testing.T) {
 		t.Fatalf("got %q, want the empty block left out", got)
 	}
 }
+
+/*
+Parse is linear in its input. A draft holds up to 2 MiB, and an instruction of
+many short lines must not cost the replica memory quadratic in its length: an
+early Parse copied the whole fragment again for every line, and 32 KiB of
+short lines allocated 283 MiB.
+
+Not parallel, so the measurement counts this parse alone.
+*/
+func TestParse_manyShortLines_allocatesLinearlyInTheInput(t *testing.T) {
+	text := "Objetivo\n" + strings.Repeat("x\n", 128<<10) + "Nunca\nPrometer."
+	result := testing.Benchmark(func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			blocks.Parse(text)
+		}
+	})
+	if got, limit := result.AllocedBytesPerOp(), int64(4*len(text)); got > limit {
+		t.Fatalf("Parse of %d bytes allocated %d bytes, want at most %d", len(text), got, limit)
+	}
+}

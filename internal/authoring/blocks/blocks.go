@@ -84,35 +84,42 @@ func LabelOf(kind Kind, locale string) string {
 
 // Parse reads instructions, as spec.Parse leaves them, into blocks whose raw
 // fragments concatenate back to the same bytes.
+//
+// Every fragment and body is a slice of the input, located by offsets, so the
+// cost is linear in its length: a draft holds up to 2 MiB, and copying a
+// fragment again for each of its lines made a document of short lines
+// quadratic.
 func Parse(instructions string) []Block {
 	var out []Block
-	var current *Block
-	var body strings.Builder
-	flush := func() {
-		if current == nil {
+	// start is where the open block's fragment begins, body where its text
+	// does; -1 is no open block.
+	start, body := -1, -1
+	var open Block
+	finish := func(end int) {
+		if start < 0 {
 			return
 		}
-		current.Text = strings.TrimSpace(body.String())
-		out = append(out, *current)
-		body.Reset()
+		open.Raw = instructions[start:end]
+		open.Text = strings.TrimSpace(instructions[body:end])
+		out = append(out, open)
 	}
-	for _, line := range strings.SplitAfter(instructions, "\n") {
-		if line == "" {
-			continue
+	for at := 0; at < len(instructions); {
+		end := len(instructions)
+		if nl := strings.IndexByte(instructions[at:], '\n'); nl >= 0 {
+			end = at + nl + 1
 		}
-		heading := strings.TrimSpace(line)
+		heading := strings.TrimSpace(instructions[at:end])
 		if kind, ok := labelled(heading); ok {
-			flush()
-			current = &Block{ID: idOf(len(out) + 1), Kind: kind, Label: heading, Raw: line}
-			continue
+			finish(at)
+			open = Block{ID: idOf(len(out) + 1), Kind: kind, Label: heading}
+			start, body = at, end
+		} else if start < 0 {
+			open = Block{ID: idOf(1), Kind: Prose}
+			start, body = at, at
 		}
-		if current == nil {
-			current = &Block{ID: idOf(1), Kind: Prose}
-		}
-		current.Raw += line
-		body.WriteString(line)
+		at = end
 	}
-	flush()
+	finish(len(instructions))
 	return out
 }
 
