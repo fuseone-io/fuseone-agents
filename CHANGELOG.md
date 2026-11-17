@@ -30,6 +30,26 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Migration 0113 adds two tables and changes nothing that exists**: `agent_drafts` and
+  `agent_draft_trail`. Rolling back to 0.117.0 leaves them unread; no rollback floor.
+
+### Added
+
+- **The workbench's draft, through the API** (NT-018 1b). Nothing in the console uses it
+  yet; the panel comes next.
+  - `POST /agents/{agentId}/draft` with `If-None-Match: *` opens an agent's draft: from a
+    name, company and area for an agent that does not exist yet, or from the current
+    version of a published one, untouched. A draft writes no version and no agent state,
+    so it is invisible to publication, listings and runs.
+  - `POST /agents/{agentId}/draft/operations` changes one field by a typed operation,
+    against the draft's `ETag` (`If-Match` required), validated with the checks a
+    publication runs. The instructions change only through the conversation, so block
+    operations are refused here. `GET` reads the draft; `DELETE` discards it.
+  - Reaching a draft needs `agent:publish` on its scope and, for a published agent, where
+    it lives now. Every change leaves a row of ids and digests in an append-only trail.
+
 ## [0.117.0] — 2026-11-17
 
 NT-018 deliveries B and 1a (#375, #376): an agent publishes from its `.agent.md` file, and
