@@ -22,7 +22,7 @@ func publishOn(t *testing.T, reg ProviderNames) (openapi.PublishAgentResponseObj
 	pub := newPublisher()
 	resp, err := publishServer(t, pub).WithProviderNames(reg).
 		PublishAgent(inArea("cx", domain.RoleAuthor), openapi.PublishAgentRequestObject{
-			AgentId: "triage", Body: definition(func(*openapi.AgentDefinition) {}),
+			AgentId: "triage", JSONBody: definition(func(*openapi.AgentDefinition) {}),
 		})
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)

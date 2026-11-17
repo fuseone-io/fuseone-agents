@@ -19,7 +19,7 @@ func TestPublishAgent_theVersionCarriesTheDigestOfItsRenderedBytes(t *testing.T)
 	t.Parallel()
 	pub := newPublisher()
 	if _, err := publishServer(t, pub).PublishAgent(inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(nil)}); err != nil {
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(nil)}); err != nil {
 		t.Fatalf("PublishAgent: %v", err)
 	}
 	if len(pub.published) != 1 {
@@ -46,7 +46,7 @@ func TestPublishAgent_aVersionIdThatCannotBeClaimed_answersConflictWithItsCode(t
 			pub.claim = fmt.Errorf("%w: triage@v1", one.refusal)
 
 			resp, err := publishServer(t, pub).PublishAgent(inArea("cx", domain.RoleAuthor),
-				openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(nil)})
+				openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(nil)})
 			if err != nil {
 				t.Fatalf("PublishAgent: %v", err)
 			}

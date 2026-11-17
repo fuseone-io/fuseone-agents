@@ -7468,6 +7468,15 @@ export interface operations {
                  *     between the read and the write.
                  */
                 refuseIfStage?: components["schemas"]["Stage"];
+                /**
+                 * @description The company the agent belongs to, for a definition sent as the
+                 *     file. A `.agent.md` kept in git usually leaves it out of the
+                 *     frontmatter, because the same file may be published into more than
+                 *     one installation. Absent from both is refused, and so are an empty
+                 *     or blank value and a value that disagrees with the one the file or
+                 *     the JSON body declares, all before authorisation.
+                 */
+                company?: string;
             };
             header?: never;
             path: {
@@ -7475,9 +7484,18 @@ export interface operations {
             };
             cookie?: never;
         };
+        /**
+         * @description The definition as fields (`application/json`) or as the file itself
+         *     (`text/markdown`, an `.agent.md`: YAML frontmatter and the
+         *     instructions as the body). Both reach the same version: the file is
+         *     parsed, rendered and parsed again exactly as the fields are, so a
+         *     definition sent one way and then the other publishes once. The
+         *     file's `id` must be the one in the path.
+         */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AgentDefinition"];
+                "text/markdown": string;
             };
         };
         responses: {
@@ -7511,6 +7529,15 @@ export interface operations {
              *     definition is changed again.
              */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description A `.agent.md` larger than 2 MiB, the ceiling every request body has. */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

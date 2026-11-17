@@ -33,7 +33,7 @@ func TestPublishAgent_stepReaches_mustStayInsideThePack(t *testing.T) {
 			pub := newPublisher()
 			resp, err := publishServer(t, pub).PublishAgent(
 				inArea("cx", domain.RoleAuthor),
-				openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+				openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(func(d *openapi.AgentDefinition) {
 					d.Tools = &[]string{"crm.lookup", string(domain.ToolMemoryFind)}
 					d.Steps = &[]openapi.AgentStep{{Name: "Look up", Reaches: &tc.reaches}}
 				})},
@@ -99,7 +99,7 @@ func TestPublishAgent_toolTheCatalogueDoesNotKnow_isRefused(t *testing.T) {
 					Scope: domain.Scope{Company: "acme"}})
 			resp, err := publishServer(t, pub).WithAdministration(nil, catalogue, nil).PublishAgent(
 				inArea("cx", domain.RoleAuthor),
-				openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+				openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(func(d *openapi.AgentDefinition) {
 					d.Tools = &tc.tools
 					d.Steps = &[]openapi.AgentStep{{Name: "Look up", Reaches: &[]string{tc.tools[0]}}}
 				})},

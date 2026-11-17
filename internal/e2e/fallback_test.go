@@ -50,7 +50,7 @@ func publishThroughTheRoute(t *testing.T, server *httpapi.Server, agent, body st
 		ID: "usr_ana", Kind: domain.PrincipalUser,
 		Grants: []domain.Grant{{Scope: domain.Scope{Company: "acme", Area: "cx"}, Role: domain.RoleAuthor}},
 	})
-	resp, err := server.PublishAgent(author, openapi.PublishAgentRequestObject{AgentId: agent, Body: &definition})
+	resp, err := server.PublishAgent(author, openapi.PublishAgentRequestObject{AgentId: agent, JSONBody: &definition})
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)
 	}

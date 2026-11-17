@@ -148,7 +148,7 @@ func TestPublishAgent_writesTheVersionAndRecordsItPaused(t *testing.T) {
 
 	resp, err := publishServer(t, pub).PublishAgent(
 		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(nil)},
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(nil)},
 	)
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)
@@ -180,7 +180,7 @@ func TestPublishAgent_refuseIfStage_reachesThePublicationUnderItsLock(t *testing
 
 	if _, err := publishServer(t, pub).PublishAgent(inArea("cx", domain.RoleAuthor),
 		openapi.PublishAgentRequestObject{
-			AgentId: "triage", Body: definition(nil),
+			AgentId: "triage", JSONBody: definition(nil),
 			Params: openapi.PublishAgentParams{RefuseIfStage: &refuse},
 		}); err != nil {
 		t.Fatalf("PublishAgent: %v", err)
@@ -198,7 +198,7 @@ func TestPublishAgent_agentStandsAtTheRefusedStage_answersStageRefusedAndRecords
 
 	resp, err := publishServer(t, pub).PublishAgent(inArea("cx", domain.RoleAuthor),
 		openapi.PublishAgentRequestObject{
-			AgentId: "triage", Body: definition(nil),
+			AgentId: "triage", JSONBody: definition(nil),
 			Params: openapi.PublishAgentParams{RefuseIfStage: &refuse},
 		})
 	if err != nil {
@@ -226,7 +226,7 @@ func TestPublishAgent_usesTheCompanyTheAuthorChose(t *testing.T) {
 
 	resp, err := publishServer(t, pub).PublishAgent(
 		ctx,
-		openapi.PublishAgentRequestObject{AgentId: "troubleshooting-sre", Body: definition(func(d *openapi.AgentDefinition) {
+		openapi.PublishAgentRequestObject{AgentId: "troubleshooting-sre", JSONBody: definition(func(d *openapi.AgentDefinition) {
 			d.Company = "acme"
 			d.Area = "platform"
 		})},
@@ -250,7 +250,7 @@ func TestPublishAgent_refusesTheInstallationSentinelAsAnAgentCompany(t *testing.
 
 	resp, err := publishServer(t, newPublisher()).PublishAgent(
 		asInstallation(domain.RoleAdmin),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(func(d *openapi.AgentDefinition) {
 			d.Company = string(domain.Installation)
 			d.Area = "platform"
 		})},
@@ -297,7 +297,7 @@ func TestPublishAgent_eventContextSurvivesTheConsolePath(t *testing.T) {
 
 	_, err := publishServer(t, pub).PublishAgent(
 		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(func(d *openapi.AgentDefinition) {
 			d.Emits = &[]openapi.AgentEvent{{
 				Event: "incident.triaged", Context: ptr("incident"),
 				Artifacts: &[]string{"triage_summary", "suspected_cause"},
@@ -325,7 +325,7 @@ func TestPublishAgent_returnsTheFileItPublished(t *testing.T) {
 	// writes files can open them here. Neither direction is a migration.
 	resp, err := publishServer(t, newPublisher()).PublishAgent(
 		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(nil)},
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(nil)},
 	)
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)
@@ -351,12 +351,12 @@ func TestPublishAgent_theSameDefinitionTwice_makesNoSecondVersion(t *testing.T) 
 	server := publishServer(t, pub)
 
 	first, err := server.PublishAgent(inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(nil)})
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(nil)})
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)
 	}
 	second, err := server.PublishAgent(inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(nil)})
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(nil)})
 	if err != nil {
 		t.Fatalf("PublishAgent again: %v", err)
 	}
@@ -378,8 +378,8 @@ func TestPublishAgent_aDefinitionAFileWouldRefuse_isRefusedHere(t *testing.T) {
 	resp, err := publishServer(t, newPublisher()).PublishAgent(
 		inArea("cx", domain.RoleAuthor),
 		openapi.PublishAgentRequestObject{
-			AgentId: "triage",
-			Body:    definition(func(d *openapi.AgentDefinition) { d.Instructions = "" }),
+			AgentId:  "triage",
+			JSONBody: definition(func(d *openapi.AgentDefinition) { d.Instructions = "" }),
 		},
 	)
 	if err != nil {
@@ -395,7 +395,7 @@ func TestPublishAgent_withoutThePermission_isRefused(t *testing.T) {
 
 	resp, err := publishServer(t, newPublisher()).PublishAgent(
 		inArea("cx", domain.RoleApprover),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(nil)},
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(nil)},
 	)
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)
@@ -412,7 +412,7 @@ func TestPublishAgent_republishingAStartedAgent_leavesItStarted(t *testing.T) {
 
 	resp, err := publishServer(t, pub).PublishAgent(
 		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(nil)},
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(nil)},
 	)
 	if err != nil {
 		t.Fatalf("PublishAgent: %v", err)
@@ -470,7 +470,7 @@ func TestPublishAgent_withDeclaredSteps_keepsThem(t *testing.T) {
 
 	if _, err := publishServer(t, pub).PublishAgent(
 		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: body},
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: body},
 	); err != nil {
 		t.Fatalf("PublishAgent: %v", err)
 	}
@@ -512,7 +512,7 @@ func TestPublishAgent_declaresACronTrigger_scheduleIsReconciled(t *testing.T) {
 		inArea("cx", domain.RoleAuthor),
 		openapi.PublishAgentRequestObject{
 			AgentId: "triage",
-			Body: definition(func(d *openapi.AgentDefinition) {
+			JSONBody: definition(func(d *openapi.AgentDefinition) {
 				d.Triggers = &[]openapi.AgentTrigger{
 					{Type: "cron", Schedule: ptr("0 7 * * 1-5")},
 				}
@@ -535,7 +535,7 @@ func TestPublishAgent_declaresNoTrigger_reconcilesToNothing(t *testing.T) {
 
 	if _, err := publishServer(t, newPublisher()).WithSchedules(moments).PublishAgent(
 		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(nil)},
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(nil)},
 	); err != nil {
 		t.Fatalf("PublishAgent: %v", err)
 	}
@@ -556,7 +556,7 @@ func TestPublishAgent_scheduleNobodyCanParse_isRefusedBeforePublishing(t *testin
 		inArea("cx", domain.RoleAuthor),
 		openapi.PublishAgentRequestObject{
 			AgentId: "triage",
-			Body: definition(func(d *openapi.AgentDefinition) {
+			JSONBody: definition(func(d *openapi.AgentDefinition) {
 				d.Triggers = &[]openapi.AgentTrigger{
 					{Type: "cron", Schedule: ptr("toda segunda de manhã")},
 				}
@@ -581,7 +581,7 @@ func TestPublishAgent_refusesUntrustedDataToANonReversibleTool(t *testing.T) {
 
 	resp, err := server.PublishAgent(
 		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(func(d *openapi.AgentDefinition) {
 			d.Tools = &[]string{"crm.lookup", "pay.refund"}
 		})},
 	)
@@ -609,7 +609,7 @@ func TestPublishAgent_allowsUntrustedDataToAReversibleWrite(t *testing.T) {
 
 	resp, err := server.PublishAgent(
 		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(func(d *openapi.AgentDefinition) {
 			d.Tools = &[]string{"crm.lookup", "crm.reply"}
 		})},
 	)
@@ -631,7 +631,7 @@ func TestPublishAgent_allowsNonReversibleToolBeforeTheUntrustedRead(t *testing.T
 
 	resp, err := server.PublishAgent(
 		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(func(d *openapi.AgentDefinition) {
 			d.Tools = &[]string{"crm.lookup", "pay.refund"}
 			d.Steps = &[]openapi.AgentStep{
 				{Name: "Refund before reading", Reaches: ptr([]string{"pay.refund"})},
@@ -746,7 +746,7 @@ func TestPublishAgent_withAnApprovalPolicy_keepsIt(t *testing.T) {
 
 	if _, err := publishServer(t, pub).PublishAgent(
 		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: body},
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: body},
 	); err != nil {
 		t.Fatalf("PublishAgent: %v", err)
 	}
@@ -781,7 +781,7 @@ func TestPublishAgent_withoutAnApprovalPolicy_publishesNone(t *testing.T) {
 
 	if _, err := publishServer(t, pub).PublishAgent(
 		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(nil)},
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(nil)},
 	); err != nil {
 		t.Fatalf("PublishAgent: %v", err)
 	}
@@ -796,7 +796,7 @@ func TestPublishAgent_replyLocaleSurvivesTheConsolePath(t *testing.T) {
 
 	_, err := publishServer(t, pub).PublishAgent(
 		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(func(d *openapi.AgentDefinition) {
 			d.ReplyLocale = ptr("pt-BR")
 		})},
 	)
@@ -815,7 +815,7 @@ func TestPublishAgent_cachePrefixTTLSurvivesTheConsolePath(t *testing.T) {
 
 	_, err := publishServer(t, pub).PublishAgent(
 		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(func(d *openapi.AgentDefinition) {
 			d.CachePrefixTtl = ptr("1h")
 		})},
 	)

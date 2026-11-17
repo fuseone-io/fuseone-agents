@@ -61,7 +61,7 @@ func tryPublishBy(
 	caller context.Context, s *Server, agent string, body *openapi.PublishAgentJSONRequestBody,
 ) (openapi.AgentPublished, error) {
 	resp, err := s.PublishAgent(caller,
-		openapi.PublishAgentRequestObject{AgentId: agent, Body: body})
+		openapi.PublishAgentRequestObject{AgentId: agent, JSONBody: body})
 	if err != nil {
 		return openapi.AgentPublished{}, fmt.Errorf("PublishAgent %s: %w", agent, err)
 	}
