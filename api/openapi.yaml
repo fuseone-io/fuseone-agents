@@ -764,6 +764,141 @@ paths:
                     items: { $ref: '#/components/schemas/EventEdge' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /agents/{agentId}/draft:
+    get:
+      tags: [agents]
+      operationId: getAgentDraft
+      summary: The agent's draft in the workbench
+      description: |
+        One draft per agent, shared by its authors (NT-018). Reading it needs
+        `agent:publish` on the draft's scope and, for an agent already
+        published, where it lives now; without both it is a 404, as for an
+        agent with no draft. `ETag` is what every change to the draft names.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The draft.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentDraft' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [agents]
+      operationId: createAgentDraft
+      summary: Open the agent's draft
+      description: |
+        Requires `If-None-Match: *`: a draft is opened once, and an agent
+        that has one answers 412 with its `ETag`.
+
+        For an agent that does not exist yet, the body is the human step of
+        its birth: name, company and area, judged on that scope (403 when
+        the caller may not publish there). The identifier is then immutable.
+        For a published agent the body is left out, and the draft opens from
+        its current version, untouched (404 when the caller may not publish
+        where it lives). An identity sent for a published agent is a 409.
+
+        A draft is invisible to publication, listings and runs: it writes no
+        version and no agent state.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfNoneMatchCreateRequired'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DraftIdentity' }
+      responses:
+        '201':
+          description: The draft, opened.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentDraft' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The agent is already published; open its draft without an identity.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      tags: [agents]
+      operationId: discardAgentDraft
+      summary: Discard the agent's draft
+      description: |
+        Against the `ETag` the caller read; `If-Match` is required. The trail
+        of what changed the draft stays. The published agent, if any, is
+        untouched.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatchRequired'
+      responses:
+        '204': { description: Discarded. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
+  /agents/{agentId}/draft/operations:
+    post:
+      tags: [agents]
+      operationId: applyDraftOperation
+      summary: Change one field of the draft
+      description: |
+        One typed operation on one field (NT-018, contract 1), against the
+        draft's `ETag`; `If-Match` is required. Under the draft's lock, in
+        order: who may reach the draft, on its scope and where the agent lives
+        now (404); the scope the operation moves the draft to, derived from the
+        operation alone and judged before anything about that scope (403); the tag
+        (412); then the operation, validated over the canonical form with the
+        checks a publication runs (400 with the publication's own words).
+
+        The instructions change only through an accepted proposal of the
+        conversation, so every block operation is refused here with 400
+        (contract 3). Leaving a field out of the body never clears it: an
+        operation touches only its own field.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatchRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DraftOperation' }
+      responses:
+        '200':
+          description: The draft the operation left.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentDraft' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
   /agents/{agentId}/flow:
     post:
       tags: [agents]
@@ -5479,6 +5614,26 @@ components:
         on something that does not exist is refused, and one that does not parse is
         a 400. Without the header, the last write wins.
       schema: { type: string }
+    IfMatchRequired:
+      name: If-Match
+      in: header
+      required: true
+      description: |
+        The ETag the caller read. Required: every change names the state it
+        read, and without it the request is a 400, never applied. Refused with
+        a 412, carrying the current ETag, unless the resource is still at one
+        of these revisions; `*` means it exists at all. A weak tag matches the
+        revision it weakens.
+      schema: { type: string }
+    IfNoneMatchCreateRequired:
+      name: If-None-Match
+      in: header
+      required: true
+      description: |
+        `*`, and only `*`: the write creates the resource, and is refused with
+        a 412 carrying its ETag if it exists. Without it, or with any other
+        value, the request is a 400.
+      schema: { type: string }
     IfNoneMatchCreate:
       name: If-None-Match
       in: header
@@ -9609,6 +9764,111 @@ components:
           type: integer
           description: How many hops from its root an event chain may reach.
 
+    AgentDraft:
+      type: object
+      required: [agentId, draftId, definition, blocks, missing]
+      properties:
+        agentId: { type: string }
+        draftId:
+          type: string
+          description: This draft; one discarded and opened again is another.
+        baseVersionId:
+          type: string
+          description: The version the draft opened from. Absent for an agent that did not exist.
+        definition:
+          allOf: [{ $ref: '#/components/schemas/AgentDefinition' }]
+          description: The whole definition, its instructions rendered from the blocks.
+        blocks:
+          type: array
+          items: { $ref: '#/components/schemas/DraftBlock' }
+        missing:
+          type: array
+          description: What publication still needs and the draft lacks.
+          items:
+            type: string
+            enum: [instructions, tools, budget, provider]
+    DraftBlock:
+      type: object
+      required: [id, kind, text]
+      properties:
+        id:
+          type: string
+          description: Stable for the draft's life; what a block operation names.
+        kind:
+          type: string
+          enum: [prose, objective, howToAct, whenToStop, never, howToReply]
+        label:
+          type: string
+          description: The heading the block is written under, as written. Absent for prose.
+        text: { type: string }
+    DraftIdentity:
+      type: object
+      required: [name, company, area]
+      properties:
+        name: { type: string }
+        company: { type: string }
+        area: { type: string }
+    DraftOperation:
+      type: object
+      description: |
+        One operation: `kind` names it, and only the fields it reads are
+        looked at. `set_identity` reads name, company and area;
+        `set_standing_approvals` standingApprovals; `set_model` provider,
+        model and effort; `set_fallback` fallback (absent declares none);
+        `set_cache_prefix_ttl` cachePrefixTtl; `set_reply_locale`
+        replyLocale; `add_tool` and `remove_tool` tool; `set_budget` budget;
+        `set_triggers` triggers; `set_memory_learning` memoryLearning;
+        `set_approval_delivery` approvals; `set_emits` emits; `add_step` step;
+        `edit_step` stepName and step; `remove_step` stepName. The block
+        kinds are listed so a client can recognise them, and are refused
+        here.
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum:
+            - set_identity
+            - set_standing_approvals
+            - set_model
+            - set_fallback
+            - set_cache_prefix_ttl
+            - set_reply_locale
+            - add_tool
+            - remove_tool
+            - set_budget
+            - set_triggers
+            - set_memory_learning
+            - set_approval_delivery
+            - set_emits
+            - add_step
+            - edit_step
+            - remove_step
+            - insert_block
+            - replace_block
+            - remove_block
+            - move_block
+        name: { type: string }
+        company: { type: string }
+        area: { type: string }
+        standingApprovals: { $ref: '#/components/schemas/StandingPolicy' }
+        provider: { type: string }
+        model: { type: string }
+        effort: { type: string }
+        fallback: { $ref: '#/components/schemas/ModelPair' }
+        cachePrefixTtl: { type: string }
+        replyLocale: { type: string }
+        tool: { type: string }
+        budget: { $ref: '#/components/schemas/Budget' }
+        triggers:
+          type: array
+          items: { $ref: '#/components/schemas/AgentTrigger' }
+        memoryLearning: { $ref: '#/components/schemas/MemoryLearningPolicy' }
+        approvals: { $ref: '#/components/schemas/ApprovalPolicy' }
+        emits:
+          type: array
+          items: { $ref: '#/components/schemas/AgentEvent' }
+        step: { $ref: '#/components/schemas/AgentStep' }
+        stepName: { type: string }
     AgentDetail:
       type: object
       required: [agent, versions]

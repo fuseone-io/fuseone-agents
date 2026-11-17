@@ -82,24 +82,13 @@ func lockAgent(ctx context.Context, tx pgx.Tx, agent domain.AgentID) (Found, err
 		string(agent)).Scan(&retired); err != nil {
 		return Found{}, fmt.Errorf("spec: %s: lock state: %w", agent, err)
 	}
-	var version, company, area string
-	err := tx.QueryRow(ctx, `
-		select s.version_id, s.company_id, s.area_id
-		from agent_specs s
-		left join agent_state st on st.agent_id = s.agent_id
-		where s.agent_id = $1
-		order by (st.current_version = s.version_id) desc nulls last, s.published_at desc
-		limit 1`, string(agent)).Scan(&version, &company, &area)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Found{}, nil
-	}
-	if err != nil {
-		return Found{}, fmt.Errorf("spec: %s: read the current version: %w", agent, err)
+	version, scope, found, err := currentVersionIn(ctx, tx, agent)
+	if err != nil || !found {
+		return Found{}, err
 	}
 	return Found{
-		Exists:   true,
-		Scope:    domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)},
-		Revision: domain.AgentRevision(domain.VersionID(version), retired),
+		Exists: true, Scope: scope,
+		Revision: domain.AgentRevision(version, retired),
 	}, nil
 }
 

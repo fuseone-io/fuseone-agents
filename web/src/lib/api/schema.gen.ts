@@ -469,6 +469,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The agent's draft in the workbench
+         * @description One draft per agent, shared by its authors (NT-018). Reading it needs
+         *     `agent:publish` on the draft's scope and, for an agent already
+         *     published, where it lives now; without both it is a 404, as for an
+         *     agent with no draft. `ETag` is what every change to the draft names.
+         */
+        get: operations["getAgentDraft"];
+        put?: never;
+        /**
+         * Open the agent's draft
+         * @description Requires `If-None-Match: *`: a draft is opened once, and an agent
+         *     that has one answers 412 with its `ETag`.
+         *
+         *     For an agent that does not exist yet, the body is the human step of
+         *     its birth: name, company and area, judged on that scope (403 when
+         *     the caller may not publish there). The identifier is then immutable.
+         *     For a published agent the body is left out, and the draft opens from
+         *     its current version, untouched (404 when the caller may not publish
+         *     where it lives). An identity sent for a published agent is a 409.
+         *
+         *     A draft is invisible to publication, listings and runs: it writes no
+         *     version and no agent state.
+         */
+        post: operations["createAgentDraft"];
+        /**
+         * Discard the agent's draft
+         * @description Against the `ETag` the caller read; `If-Match` is required. The trail
+         *     of what changed the draft stays. The published agent, if any, is
+         *     untouched.
+         */
+        delete: operations["discardAgentDraft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/draft/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change one field of the draft
+         * @description One typed operation on one field (NT-018, contract 1), against the
+         *     draft's `ETag`; `If-Match` is required. Under the draft's lock, in
+         *     order: who may reach the draft, on its scope and where the agent lives
+         *     now (404); the scope the operation moves the draft to, derived from the
+         *     operation alone and judged before anything about that scope (403); the tag
+         *     (412); then the operation, validated over the canonical form with the
+         *     checks a publication runs (400 with the publication's own words).
+         *
+         *     The instructions change only through an accepted proposal of the
+         *     conversation, so every block operation is refused here with 400
+         *     (contract 3). Leaving a field out of the body never clears it: an
+         *     operation touches only its own field.
+         */
+        post: operations["applyDraftOperation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/flow": {
         parameters: {
             query?: never;
@@ -5874,6 +5949,67 @@ export interface components {
             /** @description How many hops from its root an event chain may reach. */
             hopLimit: number;
         };
+        AgentDraft: {
+            agentId: string;
+            /** @description This draft; one discarded and opened again is another. */
+            draftId: string;
+            /** @description The version the draft opened from. Absent for an agent that did not exist. */
+            baseVersionId?: string;
+            /** @description The whole definition, its instructions rendered from the blocks. */
+            definition: components["schemas"]["AgentDefinition"];
+            blocks: components["schemas"]["DraftBlock"][];
+            /** @description What publication still needs and the draft lacks. */
+            missing: ("instructions" | "tools" | "budget" | "provider")[];
+        };
+        DraftBlock: {
+            /** @description Stable for the draft's life; what a block operation names. */
+            id: string;
+            /** @enum {string} */
+            kind: "prose" | "objective" | "howToAct" | "whenToStop" | "never" | "howToReply";
+            /** @description The heading the block is written under, as written. Absent for prose. */
+            label?: string;
+            text: string;
+        };
+        DraftIdentity: {
+            name: string;
+            company: string;
+            area: string;
+        };
+        /**
+         * @description One operation: `kind` names it, and only the fields it reads are
+         *     looked at. `set_identity` reads name, company and area;
+         *     `set_standing_approvals` standingApprovals; `set_model` provider,
+         *     model and effort; `set_fallback` fallback (absent declares none);
+         *     `set_cache_prefix_ttl` cachePrefixTtl; `set_reply_locale`
+         *     replyLocale; `add_tool` and `remove_tool` tool; `set_budget` budget;
+         *     `set_triggers` triggers; `set_memory_learning` memoryLearning;
+         *     `set_approval_delivery` approvals; `set_emits` emits; `add_step` step;
+         *     `edit_step` stepName and step; `remove_step` stepName. The block
+         *     kinds are listed so a client can recognise them, and are refused
+         *     here.
+         */
+        DraftOperation: {
+            /** @enum {string} */
+            kind: "set_identity" | "set_standing_approvals" | "set_model" | "set_fallback" | "set_cache_prefix_ttl" | "set_reply_locale" | "add_tool" | "remove_tool" | "set_budget" | "set_triggers" | "set_memory_learning" | "set_approval_delivery" | "set_emits" | "add_step" | "edit_step" | "remove_step" | "insert_block" | "replace_block" | "remove_block" | "move_block";
+            name?: string;
+            company?: string;
+            area?: string;
+            standingApprovals?: components["schemas"]["StandingPolicy"];
+            provider?: string;
+            model?: string;
+            effort?: string;
+            fallback?: components["schemas"]["ModelPair"];
+            cachePrefixTtl?: string;
+            replyLocale?: string;
+            tool?: string;
+            budget?: components["schemas"]["Budget"];
+            triggers?: components["schemas"]["AgentTrigger"][];
+            memoryLearning?: components["schemas"]["MemoryLearningPolicy"];
+            approvals?: components["schemas"]["ApprovalPolicy"];
+            emits?: components["schemas"]["AgentEvent"][];
+            step?: components["schemas"]["AgentStep"];
+            stepName?: string;
+        };
         AgentDetail: {
             agent: components["schemas"]["Agent"];
             /**
@@ -6906,6 +7042,20 @@ export interface components {
          */
         IfMatch: string;
         /**
+         * @description The ETag the caller read. Required: every change names the state it
+         *     read, and without it the request is a 400, never applied. Refused with
+         *     a 412, carrying the current ETag, unless the resource is still at one
+         *     of these revisions; `*` means it exists at all. A weak tag matches the
+         *     revision it weakens.
+         */
+        IfMatchRequired: string;
+        /**
+         * @description `*`, and only `*`: the write creates the resource, and is refused with
+         *     a 412 carrying its ETag if it exists. Without it, or with any other
+         *     value, the request is a 400.
+         */
+        IfNoneMatchCreateRequired: string;
+        /**
          * @description `*` makes the write a creation: refused with a 412 if the resource
          *     already exists. Any other value is a 400, never ignored. Without the
          *     header, the write creates or replaces.
@@ -7661,6 +7811,153 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getAgentDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The draft. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDraft"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createAgentDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description `*`, and only `*`: the write creates the resource, and is refused with
+                 *     a 412 carrying its ETag if it exists. Without it, or with any other
+                 *     value, the request is a 400.
+                 */
+                "If-None-Match": components["parameters"]["IfNoneMatchCreateRequired"];
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DraftIdentity"];
+            };
+        };
+        responses: {
+            /** @description The draft, opened. */
+            201: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDraft"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The agent is already published; open its draft without an identity. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    discardAgentDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description The ETag the caller read. Required: every change names the state it
+                 *     read, and without it the request is a 400, never applied. Refused with
+                 *     a 412, carrying the current ETag, unless the resource is still at one
+                 *     of these revisions; `*` means it exists at all. A weak tag matches the
+                 *     revision it weakens.
+                 */
+                "If-Match": components["parameters"]["IfMatchRequired"];
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Discarded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    applyDraftOperation: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description The ETag the caller read. Required: every change names the state it
+                 *     read, and without it the request is a 400, never applied. Refused with
+                 *     a 412, carrying the current ETag, unless the resource is still at one
+                 *     of these revisions; `*` means it exists at all. A weak tag matches the
+                 *     revision it weakens.
+                 */
+                "If-Match": components["parameters"]["IfMatchRequired"];
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftOperation"];
+            };
+        };
+        responses: {
+            /** @description The draft the operation left. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDraft"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     checkDataFlow: {
