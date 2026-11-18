@@ -27,7 +27,7 @@ export function WorkbenchNoDraft({ agentId }: { agentId: string }) {
       <div className="flex flex-col items-center gap-4">
         <EmptyState title={t("workbench.noAgentTitle")} hint={t("workbench.noAgentHint")} />
         <Button asChild variant="outline">
-          <Link to="/agents/workbench">{t("workbench.newAgent")}</Link>
+          <Link to="/agents/new">{t("workbench.newAgent")}</Link>
         </Button>
       </div>
     );

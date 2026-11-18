@@ -445,8 +445,13 @@ paths:
     post:
       operationId: suggestInterviewAnswers
       tags: [agents]
+      deprecated: true
       summary: Suggest answers from a free description
       description: |
+        **Deprecated** (NT-018, delivery R): the guided interview left the
+        console, which no longer calls this; it leaves in a later release,
+        announced in the changelog. Agents are authored in the workbench.
+
         Reads the author's free description and proposes values for the fixed
         interview fields. The model does not choose questions, tools or steps
         here: it only fills the schema the platform already owns, and the
@@ -923,6 +928,9 @@ paths:
         block is refused (400, `fuseone:publish-needs-never`), as activation
         will. The JSON API, the `.agent.md` file and Terraform publish without
         it.
+
+        A version that closes an event cycle is published, and the answer
+        names the cycle in `eventCycleWarning`, as `publishAgent` does.
       parameters:
         - name: agentId
           in: path
@@ -947,6 +955,7 @@ paths:
                     description: False when the draft was the current version already.
                   paused: { type: boolean }
                   draft: { $ref: '#/components/schemas/AgentDraft' }
+                  eventCycleWarning: { $ref: '#/components/schemas/EventCycleWarning' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }

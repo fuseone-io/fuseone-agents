@@ -25,12 +25,14 @@ export default function ConsoleRoutes() {
           <Route path="/" element={<Navigate to="/overview" replace />} />
           <Route path="/overview" element={<P.OverviewPage />} />
           <Route path="/agents" element={<P.AgentsPage />} />
-          <Route path="/agents/interview" element={<P.InterviewPage />} />
-          <Route path="/agents/new" element={<P.AgentEditorPage />} />
-          <Route path="/agents/workbench" element={<P.WorkbenchNewPage />} />
+          {/* Creating and editing an agent go through the workbench (NT-018,
+              delivery R); the old doors lead there, for links already shared. */}
+          <Route path="/agents/interview" element={<Navigate to="/agents/new" replace />} />
+          <Route path="/agents/new" element={<P.WorkbenchNewPage />} />
+          <Route path="/agents/workbench" element={<Navigate to="/agents/new" replace />} />
           <Route path="/agents/:agentId" element={<P.AgentDetailPage />} />
           <Route path="/agents/:agentId/workbench" element={<P.WorkbenchPage />} />
-          <Route path="/agents/:agentId/edit" element={<P.AgentEditorPage />} />
+          <Route path="/agents/:agentId/edit" element={<P.AgentEditRedirect />} />
           <Route path="/agents/:agentId/simulate" element={<P.SimulationPage />} />
           <Route path="/agents/:agentId/experiments" element={<P.ExperimentsPage />} />
           <Route path="/runs" element={<P.RunsPage />} />

@@ -1,7 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { Mono } from "@/components/shared/mono";
 import { SummaryFact, SummarySection } from "@/features/workbench/summary-section";
+import { SummaryFindings } from "@/features/workbench/summary-findings";
 import { SummaryInstructions } from "@/features/workbench/summary-instructions";
+import { SummaryTokens } from "@/features/workbench/summary-tokens";
 import { SummaryTools } from "@/features/workbench/summary-tools";
 import { WorkbenchMissing } from "@/features/workbench/workbench-missing";
 import type { FieldPart } from "@/features/workbench/workbench-field-part";
@@ -19,12 +21,15 @@ export function WorkbenchDraftSummary({
   local,
   published,
   onEdit,
+  patch,
 }: {
   draft: AgentDraft;
   local: AgentDefinition;
   /** The published instructions, when there is a published version. */
   published?: string;
   onEdit: (part: FieldPart) => void;
+  /** For the one field a finding fixes in place: enabling a tool it names. */
+  patch: (over: Partial<AgentDefinition>) => void;
 }) {
   const { t } = useTranslation();
   const none = t("workbench.summary.none");
@@ -60,8 +65,21 @@ export function WorkbenchDraftSummary({
           </SummaryFact>
         </dl>
       </SummarySection>
+      <SummarySection title={t("workbench.parts.steps")} onEdit={() => onEdit("steps")}>
+        {(local.steps ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("workbench.summary.noSteps")}</p>
+        ) : (
+          <ol className="flex flex-col gap-1 text-sm">
+            {(local.steps ?? []).map((step, at) => (
+              <li key={`${at}:${step.name}`}>{step.name}</li>
+            ))}
+          </ol>
+        )}
+      </SummarySection>
       <SummarySection title={t("workbench.instructionsTitle")}>
         <p className="text-xs text-muted-foreground">{t("workbench.instructionsNote")}</p>
+        <SummaryTokens local={local} />
+        <SummaryFindings local={local} patch={patch} />
         <SummaryInstructions now={draft.definition.instructions} published={published} />
       </SummarySection>
     </div>

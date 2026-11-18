@@ -13,17 +13,14 @@ export const OverviewPage = lazy(() =>
 export const AgentsPage = lazy(() =>
   import("@/features/agents/agents-page").then((m) => ({ default: m.AgentsPage })),
 );
-export const InterviewPage = lazy(() =>
-  import("@/features/agents/interview-page").then((m) => ({ default: m.InterviewPage })),
-);
-export const AgentEditorPage = lazy(() =>
-  import("@/features/agents/agent-editor-page").then((m) => ({ default: m.AgentEditorPage })),
-);
-export const WorkbenchPage = lazy(() =>
-  import("@/features/workbench/workbench-page").then((m) => ({ default: m.WorkbenchPage })),
+export const AgentEditRedirect = lazy(() =>
+  import("@/features/workbench/agent-edit-redirect").then((m) => ({ default: m.AgentEditRedirect })),
 );
 export const WorkbenchNewPage = lazy(() =>
   import("@/features/workbench/workbench-new-page").then((m) => ({ default: m.WorkbenchNewPage })),
+);
+export const WorkbenchPage = lazy(() =>
+  import("@/features/workbench/workbench-page").then((m) => ({ default: m.WorkbenchPage })),
 );
 export const AgentDetailPage = lazy(() =>
   import("@/features/agents/agent-detail-page").then((m) => ({ default: m.AgentDetailPage })),

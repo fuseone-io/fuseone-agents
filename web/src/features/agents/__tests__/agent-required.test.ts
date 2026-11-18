@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BLANK } from "@/features/agents/agent-draft";
+import { BLANK } from "@/features/agents/__tests__/blank-definition";
 import {
   agentRequirementMarked,
   agentRequirements,

@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "@/i18n";
@@ -57,5 +57,54 @@ describe("the workbench layout", () => {
     await userEvent.keyboard("{Escape}");
     await userEvent.click(screen.getByRole("button", { name: "Editar gatilhos e governança" }));
     expect(await screen.findByRole("dialog", { name: "Gatilhos e governança" })).toBeInTheDocument();
+  });
+
+  it("opens the steps in their own panel", async () => {
+    world();
+    openAt("/agents/triagem/workbench");
+    await userEvent.click(await screen.findByRole("button", { name: "Editar etapas" }));
+    expect(await screen.findByRole("dialog", { name: "Etapas" })).toBeInTheDocument();
+  });
+
+  // The instructions' lint, moved from the old editor: a tool they name that
+  // the agent does not hold, enabled in place.
+  it("says when the instructions name a tool the agent does not hold, and enables it", async () => {
+    serve({
+      [`GET ${DRAFT}`]: () => ({ body: draftOf({ instructions: "Objetivo\nUse crm.refund para devolver." }), etag: '"e1"' }),
+      [`GET ${DRAFT}/turns`]: () => ({ body: { items: [], conversation: "open" } }),
+      "GET /admin/tools": () => ({ body: { items: [{ toolId: "crm.refund", server: "crm", effect: "read", untrusted: false }] } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const summary = await screen.findByRole("tabpanel", { name: "Rascunho" });
+    expect(await within(summary).findByText(/Este agente não tem habilitada/)).toBeInTheDocument();
+    await userEvent.click(within(summary).getByRole("button", { name: "Habilitar a ferramenta" }));
+    expect(screen.getByRole("button", { name: /Salvar no rascunho · 1 alteração/ })).toBeInTheDocument();
+  });
+
+  it("says how large the instructions are, as the agent's model counts them", async () => {
+    const calls = serve({
+      [`GET ${DRAFT}`]: () => ({ body: draftOf(), etag: '"e1"' }),
+      [`GET ${DRAFT}/turns`]: () => ({ body: { items: [], conversation: "open" } }),
+      "POST /agents/instructions/tokens": () => ({ body: { counted: true, tokens: 1234 } }),
+    });
+    openAt("/agents/triagem/workbench");
+    // Counted once the instructions settle, as the old editor counted them.
+    const summary = await screen.findByRole("tabpanel", { name: "Rascunho" });
+    await waitFor(() => expect(summary).toHaveTextContent(/1\.?234 tokens/), { timeout: 3000 });
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toContain("POST /agents/instructions/tokens");
+  });
+
+  // Several providers count nothing: the size is then in the unit measured,
+  // characters, said as characters, never printed as tokens.
+  it("says how many characters the instructions are when the provider counts no tokens", async () => {
+    serve({
+      [`GET ${DRAFT}`]: () => ({ body: draftOf({ instructions: "  Objetivo\nTriar.  " }), etag: '"e1"' }),
+      [`GET ${DRAFT}/turns`]: () => ({ body: { items: [], conversation: "open" } }),
+      "POST /agents/instructions/tokens": () => ({ body: { counted: false } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const summary = await screen.findByRole("tabpanel", { name: "Rascunho" });
+    await waitFor(() => expect(summary).toHaveTextContent("15 caracteres"), { timeout: 3000 });
+    expect(summary).not.toHaveTextContent(/tokens/);
   });
 });

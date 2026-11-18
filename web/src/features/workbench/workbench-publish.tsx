@@ -15,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { isCurrentSnapshot, usePublishDraft, workbenchKeys, type RevisedDraft } from "@/features/workbench/api";
+import { eventCycleMessage } from "@/features/agents/event-cycle-warning";
+import { currentLocale } from "@/i18n";
 import { problemMessage } from "@/lib/api/problem-message";
 
 /**
@@ -47,6 +49,10 @@ export function WorkbenchPublish({
           onPublished(published.draft);
         }
         toast.success(t(published.paused ? "workbench.publishedPaused" : "workbench.publishedLive", { version: published.versionId }));
+        // A second toast, kept until dismissed: the version was written either
+        // way, and a loop it closes deserves to be read, not to fade (#227).
+        const cycle = eventCycleMessage(published.eventCycleWarning, t, currentLocale());
+        if (cycle) toast.warning(cycle, { duration: Infinity });
       },
       onError: (error) => toast.error(problemMessage(error, t)),
     });

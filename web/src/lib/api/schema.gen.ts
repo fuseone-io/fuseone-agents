@@ -294,7 +294,12 @@ export interface paths {
         put?: never;
         /**
          * Suggest answers from a free description
-         * @description Reads the author's free description and proposes values for the fixed
+         * @deprecated
+         * @description **Deprecated** (NT-018, delivery R): the guided interview left the
+         *     console, which no longer calls this; it leaves in a later release,
+         *     announced in the changelog. Agents are authored in the workbench.
+         *
+         *     Reads the author's free description and proposes values for the fixed
          *     interview fields. The model does not choose questions, tools or steps
          *     here: it only fills the schema the platform already owns, and the
          *     author still reviews the answers before the draft is generated.
@@ -573,6 +578,9 @@ export interface paths {
          *     block is refused (400, `fuseone:publish-needs-never`), as activation
          *     will. The JSON API, the `.agent.md` file and Terraform publish without
          *     it.
+         *
+         *     A version that closes an event cycle is published, and the answer
+         *     names the cycle in `eventCycleWarning`, as `publishAgent` does.
          */
         post: operations["publishAgentDraft"];
         delete?: never;
@@ -8291,6 +8299,7 @@ export interface operations {
                         created: boolean;
                         paused: boolean;
                         draft: components["schemas"]["AgentDraft"];
+                        eventCycleWarning?: components["schemas"]["EventCycleWarning"];
                     };
                 };
             };

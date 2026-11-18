@@ -252,7 +252,7 @@ describe("the agent overview", () => {
 
     expect(
       screen.getByRole("link", { name: "Continue: Capability pack" }),
-    ).toHaveAttribute("href", "/agents/troubleshooting-devops/edit");
+    ).toHaveAttribute("href", "/agents/troubleshooting-devops/workbench");
     expect(screen.getByRole("link", { name: "Simulate" })).toHaveAttribute(
       "href",
       "/agents/troubleshooting-devops/simulate",

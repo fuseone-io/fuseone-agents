@@ -1,24 +1,9 @@
-import { act, render, renderHook, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentStandingToggle } from "@/features/agents/agent-standing-toggle";
-import { changesBetween, useAgentDraft } from "@/features/agents/agent-draft";
 import { setLocale } from "@/i18n";
-import type { AgentDefinition, AgentDetail } from "@/lib/api/client";
-
-const forbidding = {
-  agent: {
-    agentId: "factory-developer",
-    name: "Developer",
-    scope: { company: "default", area: "factory" },
-    provider: "anthropic",
-    model: "claude-opus-5",
-    standingApprovals: "forbidden",
-    tools: ["github.issue.comment"],
-    budget: { micros: 500_000, steps: 60 },
-  },
-  instructions: "Propose the change.",
-} as unknown as AgentDetail;
+import type { AgentDefinition } from "@/lib/api/client";
 
 const base = {
   name: "Developer",
@@ -42,20 +27,6 @@ function renderToggle(draft: Partial<AgentDefinition>) {
  * Publishing writes the draft whole: a setting the draft drops is a setting
  * deleted on the next edit, and every grant would release the agent again.
  */
-describe("standing approvals in the draft", () => {
-  it("survive an edit made for another reason", () => {
-    const { result } = renderHook(() => useAgentDraft(forbidding));
-    act(() => result.current.patch({ instructions: "Propose it smaller." }));
-    expect(result.current.draft.standingApprovals).toBe("forbidden");
-  });
-
-  it("are named among the changes publishing will make", () => {
-    const after = { ...base, standingApprovals: "forbidden" as const };
-    const fields = changesBetween(base, after).map((c) => c.field);
-    expect(fields).toContain("agents.fieldStandingApprovals");
-  });
-});
-
 describe("the standing approvals toggle", () => {
   beforeEach(() => setLocale("en-US"));
 

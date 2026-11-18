@@ -3566,7 +3566,8 @@
     "parts": {
       "identity": "Identity and model",
       "tools": "Tools",
-      "governance": "Triggers and governance"
+      "governance": "Triggers and governance",
+      "steps": "Steps"
     },
     "edit": "Edit",
     "editPart": "Edit {{part}}",
@@ -3586,7 +3587,9 @@
       "triggerCount_zero": "None: it runs only when somebody asks",
       "triggerCount_one": "{{count}} trigger",
       "triggerCount_other": "{{count}} triggers",
-      "noTools": "None yet. Accept the conversation's proposals, or edit."
+      "noTools": "None yet. Accept the conversation's proposals, or edit.",
+      "noSteps": "No steps: the agent acts in one go.",
+      "refusedHint": "Ask the assistant to take the sentence out, or keep it if it explains the rule to the reader."
     },
     "publish": "Publish",
     "publishTitle": "Publish this draft?",
