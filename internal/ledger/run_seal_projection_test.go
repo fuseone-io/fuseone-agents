@@ -24,7 +24,7 @@ func TestAppend_aCandidateRunStart_projectsItsSealAndThread(t *testing.T) {
 		Scope: domain.Scope{Company: "c", Area: "a"}, AgentID: "ag", VersionID: "v",
 		At: time.Now(), IdemKey: string(run) + ":1",
 		Payload: []byte(`{"trigger":"simulation","simulated":true,"experiment":"exp_1",` +
-			`"seal":"` + seal + `","authoring_thread":"` + thread + `"}`),
+			`"seal_id":"` + seal + `","authoring_thread":"` + thread + `"}`),
 	}, {
 		RunID: run, Seq: 2, Kind: domain.StepRunFinished,
 		Scope: domain.Scope{Company: "c", Area: "a"}, AgentID: "ag", VersionID: "v",
@@ -66,3 +66,4 @@ func TestAppend_anOrdinaryRunStart_hasNoSeal(t *testing.T) {
 		t.Fatalf("ordinary run projected seal null=%v thread null=%v", sealNull, threadNull)
 	}
 }
+

@@ -38,7 +38,7 @@ func startedFactsOf(s domain.Step) startedFacts {
 		out.ticketKey = string(started.Ticket.Ref.Key)
 		out.ticketRevision = started.Ticket.Ref.Revision
 	}
-	out.seal = uuidOrNil(started.Seal)
+	out.seal = uuidOrNil(started.SealID)
 	out.thread = uuidOrNil(started.AuthoringThread)
 	return out
 }
