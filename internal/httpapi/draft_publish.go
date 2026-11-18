@@ -66,7 +66,7 @@ func (s *Server) PublishAgentDraft(
 	if err != nil {
 		return nil, err
 	}
-	return s.draftPublished(ctx, agent, published, scope, created)
+	return s.draftPublished(ctx, opened, published, scope, created)
 }
 
 /*
@@ -128,21 +128,27 @@ func (s *Server) publishDraft(ctx context.Context, o drafts.Opened, published sp
 	return !before[published.Version], err
 }
 
+/*
+draftPublished answers a publication that committed. The draft is answered as
+it was published, based on the new version, not read again: the commit
+judged its ETag and set its base, and a discard landing after the commit must
+not turn a version already in production into an error the person cannot
+retry.
+*/
 func (s *Server) draftPublished(
-	ctx context.Context, agent domain.AgentID, published spec.Spec, scope domain.Scope, created bool,
+	ctx context.Context, published drafts.Opened, version spec.Spec, scope domain.Scope, created bool,
 ) (openapi.PublishAgentDraftResponseObject, error) {
-	paused, err := s.afterPublication(ctx, published, scope)
+	paused, err := s.afterPublication(ctx, version, scope)
 	if err != nil {
 		return nil, err
 	}
-	after, err := s.drafts.Get(ctx, agent, draftCaller(ctx))
-	if err != nil {
-		return nil, err
-	}
+	after := published
+	after.BaseVersion = version.Version
+	agent := published.Agent
 	out := openapi.PublishAgentDraft200JSONResponse{
 		Headers: openapi.PublishAgentDraft200ResponseHeaders{ETag: string(after.Revision)},
 	}
-	out.Body.AgentId, out.Body.VersionId = string(agent), string(published.Version)
+	out.Body.AgentId, out.Body.VersionId = string(agent), string(version.Version)
 	out.Body.Created, out.Body.Paused, out.Body.Draft = created, paused, draftView(after)
 	return out, nil
 }
