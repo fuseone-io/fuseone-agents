@@ -35,8 +35,10 @@ field" is a commit message.
 - **NT-018 phase 2, release 2a, teaches readers the candidate shape.** Migration 0118 adds
   the insert-only `agent_seals` and `agent_seal_sources`, and `runs.seal_id` and
   `runs.authoring_thread`; 0119 indexes the two columns concurrently, so appends to `runs`
-  carry on while it builds. Nothing writes a seal yet: release 2b, which does, must wait for
-  this release on every replica. No rollback floor.
+  carry on while it builds, and 0120 indexes `agent_seals.draft_id`. Nothing writes a seal
+  yet: release 2b, which does, must wait for this release on every replica. No rollback
+  floor here; release 2b will set its floor at this release, because only this release and
+  later reach seals when a thread or a subject is erased.
 
 ### Added
 
