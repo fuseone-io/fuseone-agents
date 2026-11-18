@@ -56,6 +56,13 @@ field" is a commit message.
   longer holds the value. Erasing a thread also erases its rehearsals' content. When a seal
   ages out of the retention window, the sweep fences its agent and erases its derived runs'
   content, however recent.
+- `GET /agents/{agentId}/candidates` lists the caller's candidate seals, newest first (at
+  most 200), and `GET /agents/{agentId}/candidates/{version}` reads a candidate's sealed text
+  from the newest seal that still checks out, naming the seal it read. Each seal is seen
+  only with `agent:publish` on its own sealed scope, never where the agent lives now; a
+  version already published is not a candidate. Every seal the caller may see being
+  unreadable is 409 `fuseone:candidate-unreadable`; anything else they may not see is 404.
+  Until release 2b writes seals, the list is empty.
 
 ## [0.122.0] — 2026-11-18
 
