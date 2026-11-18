@@ -578,6 +578,9 @@ export interface paths {
          *     block is refused (400, `fuseone:publish-needs-never`), as activation
          *     will. The JSON API, the `.agent.md` file and Terraform publish without
          *     it.
+         *
+         *     A version that closes an event cycle is published, and the answer
+         *     names the cycle in `eventCycleWarning`, as `publishAgent` does.
          */
         post: operations["publishAgentDraft"];
         delete?: never;
@@ -8296,6 +8299,7 @@ export interface operations {
                         created: boolean;
                         paused: boolean;
                         draft: components["schemas"]["AgentDraft"];
+                        eventCycleWarning?: components["schemas"]["EventCycleWarning"];
                     };
                 };
             };

@@ -928,6 +928,9 @@ paths:
         block is refused (400, `fuseone:publish-needs-never`), as activation
         will. The JSON API, the `.agent.md` file and Terraform publish without
         it.
+
+        A version that closes an event cycle is published, and the answer
+        names the cycle in `eventCycleWarning`, as `publishAgent` does.
       parameters:
         - name: agentId
           in: path
@@ -952,6 +955,7 @@ paths:
                     description: False when the draft was the current version already.
                   paused: { type: boolean }
                   draft: { $ref: '#/components/schemas/AgentDraft' }
+                  eventCycleWarning: { $ref: '#/components/schemas/EventCycleWarning' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }

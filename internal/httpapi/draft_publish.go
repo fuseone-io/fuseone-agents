@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/authoring/blocks"
 	"github.com/fuseone/agents/internal/authoring/drafts"
 	"github.com/fuseone/agents/internal/domain"
@@ -59,14 +60,14 @@ func (s *Server) PublishAgentDraft(
 	if refusal != nil || err != nil {
 		return refusal, err
 	}
-	created, err := s.publishDraft(ctx, opened, published, scope)
+	outcome, err := s.publishDraft(ctx, opened, published, scope)
 	if refused, ok := draftPublicationRefused(req.AgentId, err); ok {
 		return refused, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return s.draftPublished(ctx, opened, published, scope, created)
+	return s.draftPublished(ctx, opened, outcome)
 }
 
 /*
@@ -96,12 +97,23 @@ func (s *Server) publishable(ctx context.Context, o drafts.Opened) (spec.Spec, d
 	return published, scope, nil, nil
 }
 
-// publishDraft runs the publication with the draft's condition inside it,
-// and answers whether the version is new.
-func (s *Server) publishDraft(ctx context.Context, o drafts.Opened, published spec.Spec, scope domain.Scope) (bool, error) {
+// draftOutcome is a publication from the workbench that committed.
+type draftOutcome struct {
+	version spec.Spec
+	scope   domain.Scope
+	// judged is what the publication found in the event graph as it committed.
+	judged  spec.Published
+	created bool
+}
+
+// publishDraft runs the publication with the draft's condition inside it.
+func (s *Server) publishDraft(
+	ctx context.Context, o drafts.Opened, published spec.Spec, scope domain.Scope,
+) (draftOutcome, error) {
+	out := draftOutcome{version: published, scope: scope}
 	before, err := s.agentVersions(ctx, o.Agent)
 	if err != nil {
-		return false, err
+		return out, err
 	}
 	guard := spec.Guard{Allow: mayPublishAt(ctx), Absent: o.BaseVersion == ""}
 	if !guard.Absent {
@@ -109,11 +121,11 @@ func (s *Server) publishDraft(ctx context.Context, o drafts.Opened, published sp
 		// elsewhere since is not overwritten.
 		based := string(domain.AgentRevision(o.BaseVersion, false))
 		if guard.Expect, err = domain.ParseIfMatch(&based); err != nil {
-			return false, err
+			return out, err
 		}
 	}
 	condition := s.drafts.WithinPublication(drafts.Publishing{Agent: o.Agent, Expect: o.Revision, Caller: draftCaller(ctx)})
-	_, err = s.publisher.Publish(ctx, spec.Publication{
+	out.judged, err = s.publisher.Publish(ctx, spec.Publication{
 		Spec: published, By: callerOf(ctx), Company: scope.Company, Guard: guard,
 		Within: func(ctx context.Context, tx pgx.Tx, version domain.VersionID) error {
 			var stale *domain.StaleError
@@ -125,7 +137,8 @@ func (s *Server) publishDraft(ctx context.Context, o drafts.Opened, published sp
 			return nil
 		},
 	})
-	return !before[published.Version], err
+	out.created = !before[published.Version]
+	return out, err
 }
 
 /*
@@ -133,12 +146,14 @@ draftPublished answers a publication that committed. The draft is answered as
 it was published, based on the new version, not read again: the commit
 judged its ETag and set its base, and a discard landing after the commit must
 not turn a version already in production into an error the person cannot
-retry.
+retry. The event cycles the version closes are told as the form's publication
+tells them (#227), from the graph the commit judged.
 */
 func (s *Server) draftPublished(
-	ctx context.Context, published drafts.Opened, version spec.Spec, scope domain.Scope, created bool,
+	ctx context.Context, published drafts.Opened, o draftOutcome,
 ) (openapi.PublishAgentDraftResponseObject, error) {
-	paused, err := s.afterPublication(ctx, version, scope)
+	version := o.version
+	paused, err := s.afterPublication(ctx, version, o.scope)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +164,8 @@ func (s *Server) draftPublished(
 		Headers: openapi.PublishAgentDraft200ResponseHeaders{ETag: string(after.Revision)},
 	}
 	out.Body.AgentId, out.Body.VersionId = string(agent), string(version.Version)
-	out.Body.Created, out.Body.Paused, out.Body.Draft = created, paused, draftView(after)
+	out.Body.Created, out.Body.Paused, out.Body.Draft = o.created, paused, draftView(after)
+	out.Body.EventCycleWarning = eventCycleWarning(o.judged, auth.VisibleScopes(ctx, domain.PermAgentRead))
 	return out, nil
 }
 
