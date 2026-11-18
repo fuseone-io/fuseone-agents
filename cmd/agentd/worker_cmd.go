@@ -187,6 +187,9 @@ func (p *workerParts) pools(
 		// a missing wire, and a very loud one.
 		stages := spec.NewState(p.configPool)
 		w, sim = w.WithStages(stages), sim.WithStages(stages)
+		// Only the simulation pool reads seals: a candidate never opens a real run,
+		// and the real pool fails any run that names one (NT-018 phase 2).
+		sim = sim.WithCandidates(specs.Candidates(spec.NewSealRows(p.configPool), deps.Content))
 	}
 	if p.budgets != nil {
 		if spender, ok := p.store.(spendReader); ok {
