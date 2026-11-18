@@ -30,6 +30,14 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A real agent's draft fits a workbench turn.** A draft with tens of kilobytes of
+  instructions was refused as "larger than a turn may be": what the model is shown of
+  the draft was indented, HTML-escaped and bounded at 64 KiB. It is now compact, keeps
+  the author's text as written, and is bounded at 256 KiB, whose input still costs well
+  under the per-turn ceiling at a frontier model's price.
+
 ## [0.119.0] — 2026-11-17
 
 NT-018 phase 3 (#383, #384, #385): the workbench conversation. Each author talks to the

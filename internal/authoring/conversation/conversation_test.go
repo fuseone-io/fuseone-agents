@@ -2,6 +2,7 @@ package conversation_test
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -186,5 +187,53 @@ func TestPrompt_asksForEachProposalsReason(t *testing.T) {
 		if err != nil || !strings.Contains(got, `"reason"`) {
 			t.Errorf("%s: prompt does not ask for a reason (%v)", locale, err)
 		}
+	}
+}
+
+/*
+A real agent fits a turn: tens of kilobytes of instructions written with
+"<", ">" and "&", and a scope offering hundreds of tools with descriptions.
+Found in production, where a 42 KB draft was refused as larger than a turn:
+the projection was indented and HTML-escaped, and bounded at 64 KiB.
+*/
+func TestProject_aRealSizedDraftAndCatalogue_fitsATurnAndIsWrittenLiterally(t *testing.T) {
+	t.Parallel()
+	d := draft.New("sentinel", "Sentinela", domain.Scope{Company: "acme", Area: "sec"})
+	var text strings.Builder
+	for _, label := range []string{"Objetivo", "Como agir", "Quando parar", "Nunca", "Como responder"} {
+		text.WriteString(label + "\n" + strings.Repeat("Se o alerta tiver severidade >= 7 & origem <externa>, escale.\n", 135) + "\n")
+	}
+	d.Blocks = blocks.Parse(text.String())
+	var offer conversation.Offer
+	for i := 0; i < 300; i++ {
+		offer.Tools = append(offer.Tools, domain.ToolEntry{ID: domain.ToolID(fmt.Sprintf("siem.tool_%03d", i)), Effect: domain.EffectRead,
+			Description: strings.Repeat("Consulta eventos do SIEM por janela de tempo. ", 3)})
+	}
+
+	projection, err := conversation.Project(d, []string{"tools"}, offer)
+	if err != nil {
+		t.Fatalf("Project: %v", err)
+	}
+	if !strings.Contains(projection, "severidade >= 7 & origem <externa>") {
+		t.Error("the projection escaped the author's text")
+	}
+	prompt, err := conversation.Prompt("pt-BR", projection, nil, "Revise as instruções.", false)
+	if err != nil {
+		t.Fatalf("Prompt: %v", err)
+	}
+	if _, err := conversation.Reserve(prompt, price, true); err != nil {
+		t.Errorf("Reserve(%d bytes) = %v, want it to fit a turn", len(prompt), err)
+	}
+}
+
+// The bounds agree with the ceiling: a turn with every bound full, at the
+// test's frontier price, still fits MaxTurnMicros. Raising one bound without
+// the other fails here, not in front of an author.
+func TestBounds_theWorstCaseInputFitsTheTurnCeiling(t *testing.T) {
+	t.Parallel()
+	const template = 8 << 10
+	worst := strings.Repeat("x", conversation.MaxProjectionBytes+conversation.WindowBytes+conversation.MaxMessageBytes+template)
+	if _, err := conversation.Reserve(worst, price, true); err != nil {
+		t.Fatalf("Reserve(worst case) = %v", err)
 	}
 }
