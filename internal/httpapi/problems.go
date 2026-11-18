@@ -51,6 +51,10 @@ const (
 	// rather than a sentence: an agent leaves Draft by being simulated, and
 	// the useful reply is the way to do that.
 	CodeNotSimulated Code = "fuseone:not-simulated"
+	// CodeSimulatedRun is a person's decision on a simulated run: nothing it
+	// held will ever happen, and a real approval on it would be a record of
+	// a decision about nothing (NT-018 phase 0).
+	CodeSimulatedRun Code = "fuseone:simulated-run"
 	// CodeSourceInputErased is a run that cannot be opened from a recorded
 	// one because the recorded input was erased or aged out (#16). Its own
 	// code because the console says something specific: the content is gone

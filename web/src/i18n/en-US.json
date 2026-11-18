@@ -2569,6 +2569,7 @@
     "not-signed-in": "Your session has ended. Sign in again.",
     "precondition-failed": "Somebody changed this since it was read, so nothing was saved. Read it again and decide with what is there now.",
     "not-simulated": "An agent leaves Draft by being run against occurrences that already happened. Simulate it first.",
+    "simulated-run": "A simulated run never acts, so none of its approvals is decided.",
     "not-stored": "It could not be saved: {{detail}}",
     "saved-not-reachable": "Saved, but nobody can sign in with it yet: {{detail}}",
     "sign-in-failed": "Sign-in failed: {{detail}}",
