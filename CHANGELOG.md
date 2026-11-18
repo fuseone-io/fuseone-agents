@@ -30,6 +30,22 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **Publishing from the workbench** (NT-018, contracts 4, 5 and 10). "Publicar", in the
+  workbench's header, makes the saved draft the agent's next version through the usual
+  publication, its fences and its claim included; an agent nobody started stays paused,
+  and the draft stays, based on the new version.
+  - `POST /agents/{agentId}/draft/publish`, with the draft's `If-Match`. In one
+    transaction: the agent must still be at the version the draft was based on
+    (412 `fuseone:agent-moved` otherwise), the draft must be the one read (412), and the
+    caller must hold `agent:publish` in the agent's current scope and the draft's (404
+    otherwise).
+  - Until candidates exist, a draft whose instructions have no "never" block is refused
+    (400 `fuseone:publish-needs-never`). The JSON API, the `.agent.md` file and Terraform
+    publish without it.
+  - Publishing waits for unsaved edits to be saved: what is published is the saved draft.
+
 ## [0.119.2] — 2026-11-18
 
 The workbench laid out as NT-018's design draws it (#388): the conversation and the

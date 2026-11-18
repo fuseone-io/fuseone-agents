@@ -2585,7 +2585,9 @@
     "conversation-unpriced": "The assistant's model has no configured price, so a turn cannot be reserved.",
     "conversation-spent": "This turn does not fit what is left of today's authoring ceiling.",
     "turn-in-flight": "Another turn of this conversation is still on its way. Wait for its answer.",
-    "turn-too-large": "The message, or the draft with it, is larger than a turn may be."
+    "turn-too-large": "The message, or the draft with it, is larger than a turn may be.",
+    "publish-needs-never": "Say in the instructions what the agent must never do before publishing: ask the assistant for a \"Never\" block.",
+    "agent-moved": "The agent was published another way after this draft was opened. Discard the draft and open another on the current version."
   },
   "retention": {
     "byDefault": "default, nobody chose it",
@@ -3585,6 +3587,13 @@
       "triggerCount_one": "{{count}} trigger",
       "triggerCount_other": "{{count}} triggers",
       "noTools": "None yet. Accept the conversation's proposals, or edit."
-    }
+    },
+    "publish": "Publish",
+    "publishTitle": "Publish this draft?",
+    "publishBody": "The saved draft becomes the agent's next version, through the usual publication, with its fences and its claim. An agent nobody started stays paused. The draft stays, based on the new version.",
+    "publishConfirm": "Publish version",
+    "publishedPaused": "Published as {{version}}, paused",
+    "publishedLive": "Published as {{version}}, running",
+    "saveBeforePublish": "Save your changes before publishing: what is published is the saved draft."
   }
 }

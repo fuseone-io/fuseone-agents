@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { agentKeys } from "@/features/agents/api";
 import { ApiError, api, unwrap } from "@/lib/api/client";
 import type { AgentDraft, DraftIdentity, DraftOperation } from "@/lib/api/client";
 import { revised, revisionReads, type Revised } from "@/lib/api/revision";
@@ -12,6 +13,7 @@ is not here, only the draft.
 export const workbenchKeys = {
   all: ["workbench"] as const,
   draft: (agentId: string) => [...workbenchKeys.all, "draft", agentId] as const,
+  publish: (agentId: string) => [...workbenchKeys.all, "publish", agentId] as const,
 };
 
 export type RevisedDraft = Revised<AgentDraft>;
@@ -86,4 +88,48 @@ export function useDiscardDraft() {
     onSuccess: (_, { agentId }) =>
       queryClient.removeQueries({ queryKey: workbenchKeys.draft(agentId) }),
   });
+}
+
+/** What publishing the draft answered: the version, and the draft based on it. */
+export type DraftPublished = { versionId: string; created: boolean; paused: boolean; draft: RevisedDraft };
+
+/** Whether a publication's snapshot is still the draft on screen: nothing was written over it since it was sent. */
+export function isCurrentSnapshot(cached: RevisedDraft | undefined, published: DraftPublished): boolean {
+  return cached?.etag === published.draft.etag;
+}
+
+/**
+ * Publishes the saved draft under the ETag the panel holds (NT-018, contract
+ * 4). The draft stays, based on the version it became.
+ */
+export function usePublishDraft(agentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: workbenchKeys.publish(agentId),
+    mutationFn: async (etag: string): Promise<DraftPublished> => {
+      const answer = revised(
+        await api.POST("/agents/{agentId}/draft/publish", {
+          params: { path: { agentId }, header: { "If-Match": etag } },
+        }),
+      );
+      const { versionId, created, paused, draft } = answer.body;
+      return { versionId, created, paused, draft: { body: draft, etag: answer.etag } };
+    },
+    onSuccess: (published, sent) => {
+      // The snapshot is the draft at the ETag sent. A save or an accepted
+      // proposal that landed while the publication was answering is newer:
+      // it stays, and only its base moves, which leaves its ETag as it is.
+      queryClient.setQueryData<RevisedDraft>(workbenchKeys.draft(agentId), (cached) =>
+        cached && cached.etag !== sent
+          ? { ...cached, body: { ...cached.body, baseVersionId: published.versionId } }
+          : published.draft,
+      );
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all });
+    },
+  });
+}
+
+/** Whether the agent's draft is being published right now. */
+export function useIsPublishing(agentId: string): boolean {
+  return useIsMutating({ mutationKey: workbenchKeys.publish(agentId) }) > 0;
 }

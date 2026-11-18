@@ -14,7 +14,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { useDiscardDraft } from "@/features/workbench/api";
+import { useDiscardDraft, useIsPublishing } from "@/features/workbench/api";
 import { problemMessage } from "@/lib/api/problem-message";
 
 /** Discards the draft against the ETag the panel holds, after asking. */
@@ -22,6 +22,9 @@ export function WorkbenchDiscard({ agentId, etag }: { agentId: string; etag: str
   const { t } = useTranslation();
   const navigate = useNavigate();
   const discard = useDiscardDraft();
+  // Held while a publication is on its way: discarded under it, the draft the
+  // person reads would no longer exist.
+  const publishing = useIsPublishing(agentId);
 
   const confirm = () =>
     discard.mutate(
@@ -38,7 +41,7 @@ export function WorkbenchDiscard({ agentId, etag }: { agentId: string; etag: str
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={discard.isPending}>
+        <Button variant="outline" size="sm" disabled={discard.isPending || publishing}>
           <Trash2 className="size-4" aria-hidden />
           {/* The icon alone on a phone, as the save beside it: in Portuguese
               the words pushed the header's own controls off the screen. */}

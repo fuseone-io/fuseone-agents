@@ -544,6 +544,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/draft/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish the draft as the agent's next version
+         * @description Publishing from the workbench (NT-018, contracts 4, 5 and 10). The
+         *     draft becomes the agent's next version through the ordinary
+         *     publication, its fences and its claim included, and the draft stays,
+         *     based on that version.
+         *
+         *     In one transaction: the agent's ETag, which must still be the one the
+         *     draft was based on (none for an agent the draft creates); the draft's
+         *     ETag, which must be the `If-Match` sent; and both scopes, the agent's
+         *     current one and the draft's, for `agent:publish`. A draft that moved
+         *     answers 412 with its ETag (`fuseone:precondition-failed`); an agent
+         *     that moved since the draft was based on it answers 412 with
+         *     `fuseone:agent-moved`, and the draft must be opened again on the
+         *     current version. Without either scope, 404.
+         *
+         *     Until candidates exist, a draft whose instructions have no `never`
+         *     block is refused (400, `fuseone:publish-needs-never`), as activation
+         *     will. The JSON API, the `.agent.md` file and Terraform publish without
+         *     it.
+         */
+        post: operations["publishAgentDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/draft/proposals": {
         parameters: {
             query?: never;
@@ -8216,6 +8253,49 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    publishAgentDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description The ETag the caller read. Required: every change names the state it
+                 *     read, and without it the request is a 400, never applied. Refused with
+                 *     a 412, carrying the current ETag, unless the resource is still at one
+                 *     of these revisions; `*` means it exists at all. A weak tag matches the
+                 *     revision it weakens.
+                 */
+                "If-Match": components["parameters"]["IfMatchRequired"];
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published; the draft, based on the new version. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        agentId: string;
+                        versionId: string;
+                        /** @description False when the draft was the current version already. */
+                        created: boolean;
+                        paused: boolean;
+                        draft: components["schemas"]["AgentDraft"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             412: components["responses"]["PreconditionFailed"];
         };
