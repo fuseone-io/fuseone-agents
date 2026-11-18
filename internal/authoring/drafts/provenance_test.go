@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/authoring/blocks"
 	"github.com/fuseone/agents/internal/authoring/draft"
@@ -285,6 +286,45 @@ func TestProvenance_newWriterBackfillsManualValuesBeforeSourcingItsChange(t *tes
 	}
 }
 
+func TestProvenance_newWriterBackfillsAProposalValueWhoseLegacySourceLooksManual(t *testing.T) {
+	pool := testdb.Pool(t)
+	store := drafts.NewStore(pool)
+	agent := uniqueAgent(t)
+	o := openedWithBlocks(t, store, agent)
+	o = applyControl(t, store, agent, o.Revision, draft.SetReplyLocale{Locale: "pt-BR"})
+	manualSeq, _ := sourceOf(t, pool, o.DraftID, "replyLocale")
+	manual := o
+	p := propose(t, store, agent, "usr_ana", o.Revision, draft.SetReplyLocale{Locale: "en-US"})
+	if _, err := accept(t, store, agent, p.ID, as("usr_ana", cx)); err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+	staleReplyLocaleSource(t, pool, manual, manualSeq)
+	o = applyControl(t, store, agent, mustGet(t, store, agent).Revision,
+		draft.AddTool{Tool: "crm.manual-after-old-writer"})
+	if err := store.EraseThread(t.Context(), agent, as("usr_ana", cx)); err != nil {
+		t.Fatalf("EraseThread: %v", err)
+	}
+	got := mustGet(t, store, agent)
+	if got.Draft.Spec.ReplyLocale != "" ||
+		!slices.Equal(got.Draft.Spec.Tools, []domain.ToolID{"crm.manual-after-old-writer"}) {
+		t.Fatalf("after erasure: locale=%q tools=%v", got.Draft.Spec.ReplyLocale, got.Draft.Spec.Tools)
+	}
+}
+
+func staleReplyLocaleSource(t *testing.T, pool *pgxpool.Pool, manual drafts.Opened, seq int64) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `
+		update agent_draft_sources set trail_seq = $2
+		where draft_id = $1::uuid and part = 'replyLocale'`, manual.DraftID, seq); err != nil {
+		t.Fatalf("restore the legacy locale source: %v", err)
+	}
+	if _, err := pool.Exec(t.Context(), `
+		update agent_drafts set sources_revision = $2, sources_seq = $3
+		where draft_id = $1::uuid`, manual.DraftID, string(manual.Revision), seq); err != nil {
+		t.Fatalf("restore the legacy source stamp: %v", err)
+	}
+}
+
 func TestEraseThread_removesAcceptedSentinelFromTranscriptBodyAndDraftValue(t *testing.T) {
 	pool := testdb.Pool(t)
 	store := drafts.NewStore(pool)
@@ -473,6 +513,51 @@ func TestSubjectErasure_onlyReachesTheTurnThatReferencesTheRun(t *testing.T) {
 	turns, err := store.Turns(t.Context(), agent, as("usr_ana", cx))
 	if err != nil || len(turns) != 2 || !turns[0].Erased || turns[1].Erased || turns[1].Reply != "keep me" {
 		t.Fatalf("turns after subject erasure = %+v (%v)", turns, err)
+	}
+}
+
+func TestSubjectErasure_staleMapDoesNotTrustAProposalValueWithAnOldManualSource(t *testing.T) {
+	pool := testdb.Pool(t)
+	store := drafts.NewStore(pool)
+	agent := uniqueAgent(t)
+	o := openedWithBlocks(t, store, agent)
+	o = applyControl(t, store, agent, o.Revision, draft.SetReplyLocale{Locale: "pt-BR"})
+	manualSeq, _ := sourceOf(t, pool, o.DraftID, "replyLocale")
+	manual := o
+	turn := mustBegin(t, store, agent, "usr_ana", "subject-stale", o.Revision, 100)
+	settled, err := store.SettleTurn(t.Context(), drafts.Settlement{
+		Agent: agent, Caller: as("usr_ana", cx), Turn: turn.ID, Cost: 10, Reply: "proposal",
+		Proposed: []drafts.Proposed{{Op: draft.SetReplyLocale{Locale: "en-US"}}}, Validator: validator, Now: now,
+	})
+	if err != nil || len(settled.Proposals) != 1 {
+		t.Fatalf("SettleTurn = %+v (%v)", settled, err)
+	}
+	if _, err := accept(t, store, agent, settled.Proposals[0].ID, as("usr_ana", cx)); err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+	staleReplyLocaleSource(t, pool, manual, manualSeq)
+	if _, err := pool.Exec(t.Context(),
+		`update agent_draft_turns set referenced_run = 'run_subject_stale' where turn_id = $1::uuid`, turn.ID); err != nil {
+		t.Fatalf("reference run: %v", err)
+	}
+	eraseReferencedRun(t, store, pool, "run_subject_stale")
+	if got := mustGet(t, store, agent).Draft.Spec.ReplyLocale; got != "" {
+		t.Fatalf("reply locale after subject erasure = %q, want empty", got)
+	}
+}
+
+func eraseReferencedRun(t *testing.T, store *drafts.Store, pool *pgxpool.Pool, run domain.RunID) {
+	t.Helper()
+	tx, err := pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.EraseReferencedRunsTx(t.Context(), tx, []domain.RunID{run}, "usr_admin"); err != nil {
+		_ = tx.Rollback(t.Context())
+		t.Fatalf("EraseReferencedRunsTx: %v", err)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatalf("commit: %v", err)
 	}
 }
 
