@@ -58,10 +58,8 @@ create trigger agent_seal_sources_permanent
 
 -- A run opened on a candidate, and the authoring thread it came from, as its
 -- run_started step says. Erasing a seal or a thread follows these to the
--- runs derived from it.
+-- runs derived from it. Adding a nullable column without a default does not
+-- rewrite the table; the indexes are built concurrently by 0119.
 alter table runs
     add column seal_id          uuid,
     add column authoring_thread uuid;
-create index runs_seal_idx on runs (seal_id) where seal_id is not null;
-create index runs_authoring_thread_idx on runs (authoring_thread)
-    where authoring_thread is not null;
