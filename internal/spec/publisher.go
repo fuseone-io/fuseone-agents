@@ -60,6 +60,12 @@ type Publication struct {
 	// Guard is judged under the agent's row lock, before anything else about
 	// the agent (NT-017 phase 1).
 	Guard Guard
+
+	// Within, when set, runs in the publication's transaction once the
+	// version is current and before the commit: under the event graph's lock
+	// and the agent's row, so what must move with the version moves in the
+	// same commit (NT-018, contract 4). An error undoes the publication.
+	Within func(ctx context.Context, tx pgx.Tx, version domain.VersionID) error
 }
 
 // Published is what a publication found on the way: the event cycles the
@@ -110,10 +116,7 @@ func (p *Publisher) Publish(ctx context.Context, pub Publication) (Published, er
 	if err != nil {
 		return Published{}, err
 	}
-	if err := publishOn(ctx, tx, pub.Spec, pub.By, pub.Company); err != nil {
-		return Published{}, err
-	}
-	if err := makeCurrentOn(ctx, tx, pub.Spec.ID, pub.Spec.Version); err != nil {
+	if err := writeOn(ctx, tx, pub); err != nil {
 		return Published{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -201,4 +204,19 @@ func inCompany(s Spec, company domain.CompanyID) Spec {
 		s.Company = company
 	}
 	return s
+}
+
+// writeOn writes the version, makes it current and runs the publication's own
+// condition, all in tx.
+func writeOn(ctx context.Context, tx pgx.Tx, pub Publication) error {
+	if err := publishOn(ctx, tx, pub.Spec, pub.By, pub.Company); err != nil {
+		return err
+	}
+	if err := makeCurrentOn(ctx, tx, pub.Spec.ID, pub.Spec.Version); err != nil {
+		return err
+	}
+	if pub.Within == nil {
+		return nil
+	}
+	return pub.Within(ctx, tx, pub.Spec.Version)
 }
