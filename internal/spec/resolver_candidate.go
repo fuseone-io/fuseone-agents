@@ -54,5 +54,5 @@ func (c *Candidates) ResolveCandidate(
 	if started.ExperimentConfig != nil {
 		config = *started.ExperimentConfig
 	}
-	return c.resolver.resolveDefinition(sealed, claim, config)
+	return c.resolver.resolveDefinition(sealed.Spec, claim, config)
 }
