@@ -44,7 +44,7 @@ func openSpecPool(t *testing.T) *pgxpool.Pool {
 	// version that no longer existed — the fixture outliving the rows it
 	// pointed at.
 	if _, err := pool.Exec(context.Background(),
-		`truncate agent_specs; truncate agent_state; truncate agent_version_digests`); err != nil {
+		`truncate agent_specs; truncate agent_state; truncate agent_seal_sources, agent_seals, agent_version_digests`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 	return pool
