@@ -1,6 +1,7 @@
 package conversation
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -79,10 +80,16 @@ func Project(d draft.Draft, missing []string, offer Offer) (string, error) {
 	for _, t := range offer.Tools {
 		out.Tools = append(out.Tools, projectedTool{ID: string(t.ID), Effect: t.Effect.String(), Description: t.Description})
 	}
-	encoded, err := json.MarshalIndent(out, "", " ")
-	if err != nil {
+	// Compact, and the author's text as written: indentation and HTML
+	// escaping ("<" as six bytes) only spend the turn's budget, and a real
+	// agent's instructions are full of both.
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(out); err != nil {
 		return "", fmt.Errorf("conversation: encode the projection: %w", err)
 	}
+	encoded := bytes.TrimRight(buf.Bytes(), "\n")
 	if len(encoded) > MaxProjectionBytes {
 		return "", fmt.Errorf("%w: the draft's projection is %d bytes, at most %d", ErrTurnTooLarge, len(encoded), MaxProjectionBytes)
 	}

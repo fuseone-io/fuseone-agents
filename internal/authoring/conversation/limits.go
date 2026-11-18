@@ -16,8 +16,10 @@ import (
 const (
 	// MaxMessageBytes is the most one message may hold.
 	MaxMessageBytes = 16 << 10
-	// MaxProjectionBytes is the most the draft's projection may take.
-	MaxProjectionBytes = 64 << 10
+	// MaxProjectionBytes is the most the draft's projection may take: room
+	// for a real agent's instructions and a scope's catalogue, whose input
+	// still costs well under MaxTurnMicros at a frontier model's price.
+	MaxProjectionBytes = 256 << 10
 	// WindowTurns and WindowBytes bound the conversation sent with a turn.
 	WindowTurns = 10
 	WindowBytes = 32 << 10
