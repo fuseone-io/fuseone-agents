@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { agentKeys } from "@/features/agents/api";
 import { ApiError, api, unwrap } from "@/lib/api/client";
 import type { AgentDraft, DraftIdentity, DraftOperation } from "@/lib/api/client";
@@ -13,6 +13,7 @@ is not here, only the draft.
 export const workbenchKeys = {
   all: ["workbench"] as const,
   draft: (agentId: string) => [...workbenchKeys.all, "draft", agentId] as const,
+  publish: (agentId: string) => [...workbenchKeys.all, "publish", agentId] as const,
 };
 
 export type RevisedDraft = Revised<AgentDraft>;
@@ -99,6 +100,7 @@ export type DraftPublished = { versionId: string; created: boolean; paused: bool
 export function usePublishDraft(agentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: workbenchKeys.publish(agentId),
     mutationFn: async (etag: string): Promise<DraftPublished> => {
       const answer = revised(
         await api.POST("/agents/{agentId}/draft/publish", {
@@ -113,4 +115,9 @@ export function usePublishDraft(agentId: string) {
       void queryClient.invalidateQueries({ queryKey: agentKeys.all });
     },
   });
+}
+
+/** Whether the agent's draft is being published right now. */
+export function useIsPublishing(agentId: string): boolean {
+  return useIsMutating({ mutationKey: workbenchKeys.publish(agentId) }) > 0;
 }

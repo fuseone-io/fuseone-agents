@@ -58,4 +58,13 @@ describe("publishing from the workbench", () => {
     await publishConfirmed();
     expect(await screen.findByText(new RegExp(said))).toBeInTheDocument();
   });
+
+  // A discard landing while the publication is on its way would leave the
+  // person reading a draft that no longer exists.
+  it("holds the discard while a publication is on its way", async () => {
+    world(() => "hang");
+    openAt("/agents/triagem/workbench");
+    await publishConfirmed();
+    expect(await screen.findByRole("button", { name: "Descartar rascunho" })).toBeDisabled();
+  });
 });
