@@ -93,4 +93,18 @@ describe("the workbench layout", () => {
     await waitFor(() => expect(summary).toHaveTextContent(/1\.?234 tokens/), { timeout: 3000 });
     expect(calls.map((c) => `${c.method} ${c.path}`)).toContain("POST /agents/instructions/tokens");
   });
+
+  // Several providers count nothing: the size is then in the unit measured,
+  // characters, said as characters, never printed as tokens.
+  it("says how many characters the instructions are when the provider counts no tokens", async () => {
+    serve({
+      [`GET ${DRAFT}`]: () => ({ body: draftOf({ instructions: "  Objetivo\nTriar.  " }), etag: '"e1"' }),
+      [`GET ${DRAFT}/turns`]: () => ({ body: { items: [], conversation: "open" } }),
+      "POST /agents/instructions/tokens": () => ({ body: { counted: false } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const summary = await screen.findByRole("tabpanel", { name: "Rascunho" });
+    await waitFor(() => expect(summary).toHaveTextContent("15 caracteres"), { timeout: 3000 });
+    expect(summary).not.toHaveTextContent(/tokens/);
+  });
 });

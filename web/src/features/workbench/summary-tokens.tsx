@@ -5,13 +5,18 @@ import { useInstructionTokens } from "@/features/agents/instruction-tokens-api";
 import type { AgentDefinition } from "@/lib/api/client";
 
 /**
- * How large the instructions are, counted by the agent's own provider and
- * model. Nothing while nothing could count them: characters printed as
- * tokens would be a number that means something else.
+ * How large the instructions are, in whichever unit was measured. Tokens
+ * belong to the model that will read them, so they are the agent's own
+ * provider's count; where that provider counts nothing, this says characters
+ * and means characters. Characters printed as tokens would be a wrong number
+ * in the one place somebody goes to size a prompt.
  */
 export function SummaryTokens({ local }: { local: AgentDefinition }) {
   const { t } = useTranslation();
   const tokens = useInstructionTokens(local.provider, local.model, local.instructions, agentTarget(local));
-  if (tokens === undefined) return null;
-  return <Mono dim className="text-xs">{t("agents.tokensCounted", { count: tokens })}</Mono>;
+  const size =
+    tokens !== undefined
+      ? t("agents.tokensCounted", { count: tokens })
+      : t("agents.charactersCounted", { count: local.instructions.trim().length });
+  return <Mono dim className="text-xs">{size}</Mono>;
 }
