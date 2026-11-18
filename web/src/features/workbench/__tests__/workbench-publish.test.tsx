@@ -4,6 +4,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { setLocale } from "@/i18n";
 import { draftOf, openAt, polyfillPointer, serve, type Reply } from "@/features/workbench/__tests__/workbench-fixtures";
 
+const OPS = "/agents/triagem/draft/operations";
+
 /*
 Publishing from the workbench (NT-018, contracts 4 and 10): the saved draft
 becomes the agent's next version, under the draft's ETag, after the person
@@ -66,5 +68,33 @@ describe("publishing from the workbench", () => {
     openAt("/agents/triagem/workbench");
     await publishConfirmed();
     expect(await screen.findByRole("button", { name: "Descartar rascunho" })).toBeDisabled();
+  });
+
+  // A save that lands while the publication is answering is newer than the
+  // snapshot the publication answers with: it stays on screen and in the
+  // cache, and only the base moves.
+  it("keeps a draft saved while the publication was answering", async () => {
+    let answer: (reply: Reply) => void = () => {};
+    const calls = serve({
+      [`GET ${DRAFT}`]: () => ({ body: draftOf(), etag: '"e1"' }),
+      [`GET ${DRAFT}/turns`]: () => ({ body: { items: [], conversation: "open" } }),
+      [`POST ${PUBLISH}`]: () => new Promise<Reply>((resolve) => (answer = resolve)),
+      [`POST ${OPS}`]: () => ({ body: draftOf({ name: "Triagem nova" }), etag: '"e2"' }),
+    });
+    openAt("/agents/triagem/workbench");
+    await publishConfirmed();
+    await userEvent.click(await screen.findByRole("button", { name: "Editar identidade e modelo" }));
+    await userEvent.type(within(await screen.findByRole("dialog")).getByLabelText(/^Nome/), " nova");
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("button", { name: /Salvar no rascunho/ }));
+    await screen.findByText("Rascunho salvo");
+    answer({ body: { agentId: "triagem", versionId: "v2abc", created: true, paused: true, draft: draftOf({}, "v2abc") }, etag: '"e1"' });
+    await screen.findByText("Publicado como v2abc, pausado");
+    expect(screen.getByRole("tabpanel", { name: "Rascunho" })).toHaveTextContent("Triagem nova");
+    await userEvent.click(screen.getByRole("button", { name: "Editar identidade e modelo" }));
+    await userEvent.type(within(await screen.findByRole("dialog")).getByLabelText(/^Nome/), "!");
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("button", { name: /Salvar no rascunho/ }));
+    expect(calls.filter((c) => c.path === OPS).at(-1)?.headers.get("If-Match")).toBe('"e2"');
   });
 });

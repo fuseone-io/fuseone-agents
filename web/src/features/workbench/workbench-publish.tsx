@@ -13,7 +13,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { usePublishDraft, type RevisedDraft } from "@/features/workbench/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { isCurrentSnapshot, usePublishDraft, workbenchKeys, type RevisedDraft } from "@/features/workbench/api";
 import { problemMessage } from "@/lib/api/problem-message";
 
 /**
@@ -35,11 +36,16 @@ export function WorkbenchPublish({
 }) {
   const { t } = useTranslation();
   const publishing = usePublishDraft(agentId);
+  const queryClient = useQueryClient();
 
   const confirm = () =>
     publishing.mutate(draft.etag, {
       onSuccess: (published) => {
-        onPublished(published.draft);
+        // Taken in only when nothing newer was written while it answered: the
+        // panel already holds that newer draft, and its own base was moved.
+        if (isCurrentSnapshot(queryClient.getQueryData(workbenchKeys.draft(agentId)), published)) {
+          onPublished(published.draft);
+        }
         toast.success(t(published.paused ? "workbench.publishedPaused" : "workbench.publishedLive", { version: published.versionId }));
       },
       onError: (error) => toast.error(problemMessage(error, t)),

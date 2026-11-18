@@ -93,6 +93,11 @@ export function useDiscardDraft() {
 /** What publishing the draft answered: the version, and the draft based on it. */
 export type DraftPublished = { versionId: string; created: boolean; paused: boolean; draft: RevisedDraft };
 
+/** Whether a publication's snapshot is still the draft on screen: nothing was written over it since it was sent. */
+export function isCurrentSnapshot(cached: RevisedDraft | undefined, published: DraftPublished): boolean {
+  return cached?.etag === published.draft.etag;
+}
+
 /**
  * Publishes the saved draft under the ETag the panel holds (NT-018, contract
  * 4). The draft stays, based on the version it became.
@@ -110,8 +115,15 @@ export function usePublishDraft(agentId: string) {
       const { versionId, created, paused, draft } = answer.body;
       return { versionId, created, paused, draft: { body: draft, etag: answer.etag } };
     },
-    onSuccess: (published) => {
-      queryClient.setQueryData(workbenchKeys.draft(agentId), published.draft);
+    onSuccess: (published, sent) => {
+      // The snapshot is the draft at the ETag sent. A save or an accepted
+      // proposal that landed while the publication was answering is newer:
+      // it stays, and only its base moves, which leaves its ETag as it is.
+      queryClient.setQueryData<RevisedDraft>(workbenchKeys.draft(agentId), (cached) =>
+        cached && cached.etag !== sent
+          ? { ...cached, body: { ...cached.body, baseVersionId: published.versionId } }
+          : published.draft,
+      );
       void queryClient.invalidateQueries({ queryKey: agentKeys.all });
     },
   });
