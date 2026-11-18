@@ -1,6 +1,7 @@
 package ledger_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -67,3 +68,49 @@ func TestAppend_anOrdinaryRunStart_hasNoSeal(t *testing.T) {
 	}
 }
 
+// The origin is written with run_started or not at all (NT-018, "Tests that
+// must exist"): the append fails after the step's insert, at the projection,
+// and neither the step nor the origin may be left behind.
+func TestAppend_projectionFailsAfterTheStepInsert_leavesNeitherStepNorOrigin(t *testing.T) {
+	pool := testdb.Pool(t)
+	run := "atomic_" + time.Now().Format("150405.000000000")
+	ctx := t.Context()
+	if _, err := pool.Exec(ctx, `
+		create or replace function refuse_projection_for_test() returns trigger
+		language plpgsql as 'begin
+			if new.run_id like ''atomic\_%'' then
+				raise exception ''projection refused for %'', new.run_id;
+			end if;
+			return new;
+		end';
+		create trigger refuse_projection_for_test before insert on runs
+			for each row execute function refuse_projection_for_test()`); err != nil {
+		t.Fatalf("install the failure: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := pool.Exec(context.Background(),
+			`drop trigger if exists refuse_projection_for_test on runs`); err != nil {
+			t.Errorf("remove the failure: %v", err)
+		}
+	})
+
+	_, err := ledger.NewPostgres(pool).Append(ctx, domain.Step{
+		RunID: domain.RunID(run), Seq: 1, Kind: domain.StepRunStarted,
+		Scope: domain.Scope{Company: "c", Area: "a"}, AgentID: "ag", VersionID: "v",
+		At: time.Now(), IdemKey: run + ":1",
+		Payload: []byte(`{"trigger":"simulation","simulated":true,"experiment":"exp_1",` +
+			`"seal_id":"0b7c3e52-8a43-4b55-9a3f-0d6a3c5f9e11"}`),
+	})
+	if err == nil {
+		t.Fatal("append succeeded although its projection was refused")
+	}
+	var steps, runs int
+	if err := pool.QueryRow(ctx, `
+		select (select count(*) from run_steps where run_id = $1),
+		       (select count(*) from runs where run_id = $1)`, run).Scan(&steps, &runs); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if steps != 0 || runs != 0 {
+		t.Fatalf("after a refused projection: %d steps and %d runs left behind", steps, runs)
+	}
+}
