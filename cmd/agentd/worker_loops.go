@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/authoring/drafts"
 	"github.com/fuseone/agents/internal/autonomy"
 	"github.com/fuseone/agents/internal/budget"
 	"github.com/fuseone/agents/internal/engine"
@@ -43,6 +44,7 @@ func (p *workerParts) startLoops(
 	// One per process: its fence holds connections outside the pool, and that budget
 	// only means something while there is one of it.
 	corpus := regression.NewStore(p.configPool)
+	go repairDraftProvenance(ctx, drafts.NewStore(p.configPool).WithCorpusFence(corpus))
 	if p.native != nil && p.settings != nil {
 		go p.watchConnectors(ctx)
 	}

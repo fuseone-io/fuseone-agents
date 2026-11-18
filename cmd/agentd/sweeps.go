@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/authoring/drafts"
 	"github.com/fuseone/agents/internal/finops"
 
 	"github.com/fuseone/agents/internal/budget"
@@ -61,6 +62,36 @@ func sweepSpend(ctx context.Context, spend *finops.Spend) {
 // minute for no benefit. The first one runs at start-up so an installation
 // that was down past its window does not wait a day to honour it.
 const retentionSweep = 24 * time.Hour
+
+// provenanceRepairSweep is deliberately frequent during a mixed rollout: an
+// old replica can make a source map stale, and an erasure performed before
+// this release needs to be reconciled. A clean pass is an indexed no-op.
+const provenanceRepairSweep = time.Minute
+
+func repairDraftProvenance(ctx context.Context, store *drafts.Store) {
+	ticker := time.NewTicker(provenanceRepairSweep)
+	defer ticker.Stop()
+	first := true
+	for {
+		repaired, err := store.RepairProvenance(ctx)
+		if repaired > 0 {
+			slog.Info("draft provenance repaired", "drafts", repaired)
+		}
+		if err != nil {
+			slog.Error("draft provenance repair failed", "err", err)
+		} else {
+			if first {
+				slog.Info("draft provenance repair pass complete")
+			}
+			first = false
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
 
 // sweepContent erases what is past its retention window, for ever, until its
 // context is cancelled.
