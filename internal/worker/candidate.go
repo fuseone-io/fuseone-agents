@@ -75,23 +75,33 @@ func (w *Worker) failRun(ctx context.Context, claim domain.Claim, failed domain.
 			AgentID: claim.AgentID, VersionID: claim.VersionID,
 			OnBehalfOf: claim.OnBehalfOf, At: w.deps.Clock.Now(), Payload: payload,
 		}); err != nil {
-		if errors.Is(err, domain.ErrLeaseLost) {
-			w.log.Warn("lease lost before failing the run; leaving it to its successor",
-				"run", claim.RunID)
-			return nil
-		}
-		if errors.Is(err, domain.ErrHeadMoved) {
-			// Somebody acted on the run after this failure was decided, an
-			// abandonment most importantly. Their act stands; the lease goes
-			// back clean so the run is picked up as it is now.
-			w.log.Warn("the run moved before failing it; standing down", "run", claim.RunID)
-			return w.release(ctx, claim, domain.ClaimOutcome{})
-		}
-		// Released anyway, as a parking is: a run left leased because its
-		// failure could not be written waits out the whole lease, and the next
-		// turn reaches the same refusal and writes it then.
-		w.log.Error("could not record the candidate failure", "run", claim.RunID, "err", err)
-		return w.release(ctx, claim, domain.ClaimOutcome{Err: err})
+		return w.failureUnwritten(ctx, claim, err)
 	}
 	return w.release(ctx, claim, domain.ClaimOutcome{})
+}
+
+// failureUnwritten is a candidate failure that could not be appended: left to
+// the successor when the lease is gone, handed back when the run moved, and
+// otherwise supervised like any other fault.
+func (w *Worker) failureUnwritten(ctx context.Context, claim domain.Claim, err error) error {
+	if errors.Is(err, domain.ErrLeaseLost) {
+		w.log.Warn("lease lost before failing the run; leaving it to its successor",
+			"run", claim.RunID)
+		return nil
+	}
+	if errors.Is(err, domain.ErrHeadMoved) {
+		// Somebody acted on the run after this failure was decided, an
+		// abandonment most importantly. Their act stands; the lease goes
+		// back clean so the run is picked up as it is now.
+		w.log.Warn("the run moved before failing it; standing down", "run", claim.RunID)
+		return w.release(ctx, claim, domain.ClaimOutcome{})
+	}
+	// Supervised like any other fault: backed off and counted, so a store
+	// that keeps refusing the write is not retried in a tight loop, and the
+	// run parks once its attempts run out.
+	w.log.Error("could not record the candidate failure", "run", claim.RunID, "err", err)
+	if outcome := w.failure(claim, err); !outcome.Parked {
+		return w.release(ctx, claim, outcome)
+	}
+	return w.park(ctx, claim, err, parkedReasonFor(err))
 }

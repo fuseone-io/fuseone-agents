@@ -215,10 +215,12 @@ func (l racingLedger) AppendIfLeaseAndHead(
 type releasingQueue struct {
 	Queue
 	released []domain.RunID
+	outcomes []domain.ClaimOutcome
 }
 
 func (q *releasingQueue) Release(ctx context.Context, run domain.RunID, outcome domain.ClaimOutcome) error {
 	q.released = append(q.released, run)
+	q.outcomes = append(q.outcomes, outcome)
 	return q.Queue.Release(ctx, run, outcome)
 }
 
@@ -263,4 +265,58 @@ func TestTurn_aCandidateFailureThatLosesItsRace_releasesTheRunUnlessTheLeaseIsGo
 			}
 		})
 	}
+}
+
+// A failure that cannot be written goes through the same supervision as any other fault:
+// backed off, not reclaimed at once, and parked once the attempts run out. Released with no
+// delay and never counted, a store that keeps refusing the write would be retried in a
+// tight loop for ever.
+func TestTurn_aCandidateFailureThatCannotBeWritten_backsOffAndParksWhenExhausted(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)
+	turnWith := func(t *testing.T, maxAttempts int) (*ledger.Memory, *releasingQueue) {
+		t.Helper()
+		store := ledger.NewMemory()
+		openSimulated(t, store, domain.RunStartedPayload{
+			Trigger: "simulation", Simulated: true, Simulation: "exp-1", Case: "case-1",
+			Experiment: "exp-1", SealID: testSeal,
+		})
+		queue := &releasingQueue{Queue: store.Simulations()}
+		clock := frozenClock{t: now}
+		deps := engine.Deps{
+			Ledger:  racingLedger{Memory: store, err: errors.New("connection reset")},
+			Content: engine.NewMemoryContent(), Gate: gate.New(), Tools: noTools{},
+			Catalog: emptyCatalog{}, Clock: clock,
+		}
+		specs := &experimentSpecs{planner: &flakyPlanner{}}
+		w := New(Config{Owner: "w-sim", MaxAttempts: maxAttempts}, queue, deps, specs, clock,
+			slog.New(slog.DiscardHandler)).WithStages(stageIs(domain.StageDraft)).WithExperiments(specs)
+		if _, err := w.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil {
+			t.Fatalf("turn: %v", err)
+		}
+		if len(queue.outcomes) != 1 {
+			t.Fatalf("released %d times, want once", len(queue.outcomes))
+		}
+		return store, queue
+	}
+
+	t.Run("an attempt left backs off", func(t *testing.T) {
+		t.Parallel()
+		_, queue := turnWith(t, 5)
+		got := queue.outcomes[0]
+		if got.Parked || !got.NextAttemptAt.After(now) || got.Err == nil {
+			t.Errorf("outcome parked=%v next=%v err=%v; want a counted failure retried later",
+				got.Parked, got.NextAttemptAt, got.Err)
+		}
+	})
+	t.Run("the last attempt parks", func(t *testing.T) {
+		t.Parallel()
+		store, queue := turnWith(t, 1)
+		if !queue.outcomes[0].Parked {
+			t.Errorf("outcome %+v, want the run parked", queue.outcomes[0])
+		}
+		if got := parkReason(t, store); got != "attempts_exhausted" {
+			t.Errorf("parked as %q, want attempts_exhausted", got)
+		}
+	})
 }
