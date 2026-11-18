@@ -30,6 +30,29 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Changed
+
+- **Agents are created and edited in the workbench** (NT-018, delivery R). "Novo agente"
+  opens the workbench's first step (identifier, name and area), then the conversation,
+  the draft and "Publicar". The "Agente guiado" button is gone. `/agents/new` is the
+  workbench, and `/agents/{id}/edit`, `/agents/interview` and `/agents/workbench` lead
+  to it, so a link already shared still lands somewhere.
+- The workbench gains what the form had and it lacked: the agent's **steps**, edited in a
+  side panel; the instructions' **findings** (a tool they name that a policy refuses, or
+  one the agent does not hold, enabled in place); and their **size in tokens**, counted
+  by the agent's model.
+
+### Removed
+
+- The console's agent form, its tabs, the instruction block editor, the template gallery
+  and the guided interview.
+
+### Deprecated
+
+- `POST /agents/interview/suggestions` (`suggestInterviewAnswers`): the console no longer
+  calls it, and it leaves in a later release. `POST /agents/interview` stays: the
+  workbench's steps panel still asks it to propose a step.
+
 ## [0.120.0] — 2026-11-18
 
 Publishing from the workbench (#391): the saved draft becomes the agent's next version
