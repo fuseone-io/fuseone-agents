@@ -43,6 +43,11 @@ field" is a commit message.
 - `run_started` knows a `seal_id` and an `authoring_thread`, and the runs projection keeps them,
   so erasure can follow a candidate or a workbench thread to the runs derived from it.
   Nothing writes them yet.
+- The simulation pool runs a candidate: an experiment's or a rehearsal's simulated run whose
+  opening names a `seal_id` plans that seal's bytes, checked against the version's claim,
+  agent and sealed scope on every turn. Any other run naming a seal, and a seal that is
+  erased or does not match, ends failed with `fuseone:candidate-unreadable` without calling
+  a model, never falling back to another seal or to the published version.
 
 ## [0.122.0] — 2026-11-18
 
