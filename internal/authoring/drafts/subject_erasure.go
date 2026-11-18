@@ -94,6 +94,12 @@ func (s *Store) eraseDraftRunReferences(ctx context.Context, tx pgx.Tx, in subje
 	if err != nil {
 		return 0, err
 	}
+	sealed, err := s.eraseSealsReachedTx(ctx, tx, sealReach{
+		draftID: r.draftID, proposals: proposals, reason: "subject",
+	})
+	if err != nil {
+		return 0, err
+	}
 	d, err := draft.Decode(r.stored)
 	if err != nil {
 		return 0, err
@@ -104,9 +110,10 @@ func (s *Store) eraseDraftRunReferences(ctx context.Context, tx pgx.Tx, in subje
 	}
 	names, err := affectedProposalParts(ctx, tx, sourceLookup{r.draftID, parts, proposals})
 	if err != nil || len(names) == 0 {
-		return 0, err
+		return sealed, err
 	}
-	return s.eraseDraftPartsTx(ctx, tx, draftPartErasure{in.agent, r, d, names, in.by})
+	n, err := s.eraseDraftPartsTx(ctx, tx, draftPartErasure{in.agent, r, d, names, in.by})
+	return sealed + n, err
 }
 
 func proposalsForRuns(ctx context.Context, tx pgx.Tx, draftID string, runs []string) ([]string, error) {
