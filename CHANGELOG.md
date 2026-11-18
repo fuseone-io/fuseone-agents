@@ -30,6 +30,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.119.2] — 2026-11-18
+
+The workbench laid out as NT-018's design draws it (#388): the conversation and the
+workspace side by side, each scrolling on its own, the draft as a summary in a tab whose
+parts open their controls in a side panel. Console only: no migration, no rollback floor.
+
 ### Changed
 
 - **The workbench is laid out as its design draws it.** The conversation and the
