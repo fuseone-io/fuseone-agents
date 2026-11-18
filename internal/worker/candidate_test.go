@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"testing"
@@ -190,5 +191,76 @@ func TestTurn_anUnreadableCandidate_failsWithoutPlanning(t *testing.T) {
 	}
 	if got := failedCode(t, store); got != CodeCandidateUnreadable {
 		t.Errorf("code = %q, want %q", got, CodeCandidateUnreadable)
+	}
+}
+
+// racingLedger is a ledger where something else lands on the run between the head the
+// failure was decided against and its append: a person's abandonment, most importantly.
+type racingLedger struct {
+	*ledger.Memory
+	err error
+}
+
+func (l racingLedger) AppendIfLeaseAndHead(
+	ctx context.Context, epoch int64, head domain.StepRef, s domain.Step,
+) (domain.Step, error) {
+	if s.Kind == domain.StepFailed {
+		return domain.Step{}, l.err
+	}
+	return l.Memory.AppendIfLeaseAndHead(ctx, epoch, head, s)
+}
+
+// releasingQueue records every release, so a test can tell a lease handed back from one
+// left to expire.
+type releasingQueue struct {
+	Queue
+	released []domain.RunID
+}
+
+func (q *releasingQueue) Release(ctx context.Context, run domain.RunID, outcome domain.ClaimOutcome) error {
+	q.released = append(q.released, run)
+	return q.Queue.Release(ctx, run, outcome)
+}
+
+// A failure that loses its race hands the lease back, as a parking does: only a lost lease
+// leaves it to the successor. Left leased, the run waits out the whole lease before the
+// abandonment that moved it can be compensated.
+func TestTurn_aCandidateFailureThatLosesItsRace_releasesTheRunUnlessTheLeaseIsGone(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		err         error
+		wantRelease bool
+	}{
+		{"the head moved", domain.ErrHeadMoved, true},
+		{"the store failed", errors.New("connection reset"), true},
+		{"the lease was lost", domain.ErrLeaseLost, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			store := ledger.NewMemory()
+			openSimulated(t, store, domain.RunStartedPayload{
+				Trigger: "simulation", Simulated: true, Simulation: "exp-1", Case: "case-1",
+				Experiment: "exp-1", SealID: testSeal,
+			})
+			queue := &releasingQueue{Queue: store.Simulations()}
+			clock := frozenClock{t: time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)}
+			deps := engine.Deps{
+				Ledger: racingLedger{Memory: store, err: c.err}, Content: engine.NewMemoryContent(),
+				Gate: gate.New(), Tools: noTools{}, Catalog: emptyCatalog{}, Clock: clock,
+			}
+			specs := &experimentSpecs{planner: &flakyPlanner{}}
+			w := New(Config{Owner: "w-sim"}, queue, deps, specs, clock, slog.New(slog.DiscardHandler)).
+				WithStages(stageIs(domain.StageDraft)).WithExperiments(specs)
+
+			if _, err := w.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil {
+				t.Fatalf("turn: %v", err)
+			}
+
+			if released := len(queue.released) == 1; released != c.wantRelease {
+				t.Errorf("released %v, want released=%v", queue.released, c.wantRelease)
+			}
+		})
 	}
 }

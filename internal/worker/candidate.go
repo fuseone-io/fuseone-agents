@@ -75,11 +75,23 @@ func (w *Worker) failRun(ctx context.Context, claim domain.Claim, failed domain.
 			AgentID: claim.AgentID, VersionID: claim.VersionID,
 			OnBehalfOf: claim.OnBehalfOf, At: w.deps.Clock.Now(), Payload: payload,
 		}); err != nil {
-		if errors.Is(err, domain.ErrLeaseLost) || errors.Is(err, domain.ErrHeadMoved) {
-			w.log.Warn("the run moved before failing it; leaving it to its owner", "run", claim.RunID)
+		if errors.Is(err, domain.ErrLeaseLost) {
+			w.log.Warn("lease lost before failing the run; leaving it to its successor",
+				"run", claim.RunID)
 			return nil
 		}
-		return fmt.Errorf("fail %s: %w", claim.RunID, err)
+		if errors.Is(err, domain.ErrHeadMoved) {
+			// Somebody acted on the run after this failure was decided, an
+			// abandonment most importantly. Their act stands; the lease goes
+			// back clean so the run is picked up as it is now.
+			w.log.Warn("the run moved before failing it; standing down", "run", claim.RunID)
+			return w.release(ctx, claim, domain.ClaimOutcome{})
+		}
+		// Released anyway, as a parking is: a run left leased because its
+		// failure could not be written waits out the whole lease, and the next
+		// turn reaches the same refusal and writes it then.
+		w.log.Error("could not record the candidate failure", "run", claim.RunID, "err", err)
+		return w.release(ctx, claim, domain.ClaimOutcome{Err: err})
 	}
 	return w.release(ctx, claim, domain.ClaimOutcome{})
 }
