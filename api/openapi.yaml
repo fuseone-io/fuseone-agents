@@ -961,6 +961,83 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
 
+  /agents/{agentId}/candidates:
+    get:
+      tags: [agents]
+      operationId: listAgentCandidates
+      summary: The candidate seals of an agent the caller may see
+      description: |
+        A candidate is a version sealed from the draft and not yet published
+        (NT-018 phase 2). Each seal is authorised on its own sealed scope, with
+        `agent:publish`: a candidate is unpublished work, so `agent:read` is not
+        enough. Seals outside every scope the caller may publish in are left
+        out, and so is every seal of a version that is already published.
+
+        At most the 200 newest seals the caller may see, newest first. Nothing
+        writes seals until release 2b, so until then the list is empty.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The caller's candidate seals, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 200
+                    items: { $ref: '#/components/schemas/CandidateSeal' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /agents/{agentId}/candidates/{version}:
+    get:
+      tags: [agents]
+      operationId: getAgentCandidate
+      summary: A candidate's sealed text
+      description: |
+        The sealed definition, byte for byte, from the newest seal of the
+        version that the caller may see (`agent:publish` on its sealed scope)
+        and whose bytes still match the version's claim, agent and sealed
+        scope. The answer names the seal it read. It is for display: a run
+        stays pinned to the seal it opened with, whatever this answers.
+
+        No seal the caller may see, or a version that is already published, is
+        404, as for a version that does not exist. Seals the caller may see
+        whose bytes are all erased or do not match are 409
+        `fuseone:candidate-unreadable`; a caller who may see none of them gets
+        the 404.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The candidate.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Candidate' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            `fuseone:candidate-unreadable`: every seal of the version the caller
+            may see was erased, aged out, or no longer matches its claim. Seal
+            the draft again to make a new candidate.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /agents/{agentId}/draft/proposals:
     get:
       tags: [agents]
@@ -10076,6 +10153,35 @@ components:
           items:
             type: string
             enum: [instructions, tools, budget, provider]
+    CandidateSeal:
+      type: object
+      required: [version, sealId, company, area, sealedBy, sealedAt]
+      properties:
+        version: { type: string }
+        sealId: { type: string }
+        company:
+          type: string
+          description: The sealed scope's company, as the sealed text names it.
+        area:
+          type: string
+          description: The sealed scope's area, as the sealed text names it.
+        sealedBy: { type: string }
+        sealedAt: { type: string, format: date-time }
+    Candidate:
+      type: object
+      required: [version, sealId, company, area, sealedBy, sealedAt, definition]
+      properties:
+        version: { type: string }
+        sealId:
+          type: string
+          description: The seal this answer was read from.
+        company: { type: string }
+        area: { type: string }
+        sealedBy: { type: string }
+        sealedAt: { type: string, format: date-time }
+        definition:
+          type: string
+          description: The sealed `.agent.md`, exactly the bytes the version's digest covers.
     DraftProposal:
       type: object
       required: [proposalId, kind, valid, readRevision, createdAt]
