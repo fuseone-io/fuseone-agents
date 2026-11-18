@@ -30,6 +30,14 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.122.0] — 2026-11-18
+
+Simulations stop touching real approvals (NT-018 phase 0, #395): they no longer spend
+standing grants, and a simulated run's approval cannot be decided. Workbench drafts record
+the source of each value, so erasing a conversation removes what it wrote (NT-018 phase 2,
+delivery P, #396). Migration 0117 is additive and sets no rollback floor: 0.121.0 runs on it,
+leaving the source map stale for this release to repair.
+
 ### Upgrade notes
 
 - **NT-018 phase 2, delivery P, must finish before candidate readers are deployed.**
