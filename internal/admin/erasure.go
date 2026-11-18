@@ -22,13 +22,25 @@ type Content interface {
 	ErasePastTx(ctx context.Context, tx pgx.Tx, before time.Time, reason string) (int, error)
 }
 
+// AuthoringEraser reaches workbench turns that explicitly cite a run. It is
+// called inside the subject-erasure transaction while its corpus fence is held.
+type AuthoringEraser interface {
+	EraseReferencedRunsTx(context.Context, pgx.Tx, []domain.RunID, domain.UserID) (int, error)
+}
+
 // Erasures performs and records the two ways content goes.
 type Erasures struct {
 	pool      *pgxpool.Pool
 	content   Content
 	retention *Retention
 	fence     CorpusFence
+	authoring AuthoringEraser
 	clock     func() time.Time
+}
+
+func (e *Erasures) WithAuthoring(authoring AuthoringEraser) *Erasures {
+	e.authoring = authoring
+	return e
 }
 
 // NewErasures needs the fence: without it, something copying a corpus could undo an
@@ -101,6 +113,13 @@ func (e *Erasures) eraseSubject(
 		return 0, err
 	}
 	erased += corpus.objects
+	if e.authoring != nil {
+		authored, err := e.authoring.EraseReferencedRunsTx(ctx, tx, request.runs, request.by)
+		if err != nil {
+			return 0, fmt.Errorf("admin: erase authoring references: %w", err)
+		}
+		erased += authored
+	}
 	memoryRecords, err := e.markMemorySourcesErased(ctx, tx, request.runs, request.by, e.clock())
 	if err != nil {
 		return 0, err

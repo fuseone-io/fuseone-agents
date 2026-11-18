@@ -2,6 +2,7 @@ package admin_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -16,6 +17,15 @@ import (
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/vault"
 )
+
+type failingAuthoringErasure struct{ called bool }
+
+func (f *failingAuthoringErasure) EraseReferencedRunsTx(
+	context.Context, pgx.Tx, []domain.RunID, domain.UserID,
+) (int, error) {
+	f.called = true
+	return 0, errors.New("authoring erasure failed")
+}
 
 func erasuresFor(t *testing.T, now func() time.Time) (*admin.Erasures, *ledger.Content) {
 	t.Helper()
@@ -294,6 +304,26 @@ func TestForSubject_erasesTheRunsItWasGivenAndNoOthers(t *testing.T) {
 	// in the other direction.
 	if _, err := content.Get(ctx, theirs); err != nil {
 		t.Errorf("Get(theirs) = %v, want it untouched", err)
+	}
+}
+
+func TestForSubject_authoringFailureRollsBackTheWholeRequest(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	authoring := &failingAuthoringErasure{}
+	erasures.WithAuthoring(authoring)
+	ref, err := content.Put(t.Context(), "run-authoring-rollback", 1, []byte("must stay"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := erasures.ForSubject(t.Context(), "usr_ana", domain.Scope{},
+		[]domain.RunID{"run-authoring-rollback"}, "subject"); err == nil {
+		t.Fatal("ForSubject succeeded despite the authoring failure")
+	}
+	if !authoring.called {
+		t.Fatal("authoring erasure was not called")
+	}
+	if got, err := content.Get(t.Context(), ref); err != nil || string(got) != "must stay" {
+		t.Fatalf("content after rollback = %q, %v", got, err)
 	}
 }
 

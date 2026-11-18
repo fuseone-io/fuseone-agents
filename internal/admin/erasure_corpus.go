@@ -34,6 +34,8 @@ func (e *Erasures) agentsOf(ctx context.Context, runs []string) ([]domain.AgentI
 		union
 		select agent_id from regression_cases where from_run = any($1::text[])
 		union
+		select agent_id from agent_draft_turns where referenced_run = any($1::text[])
+		union
 		select d.agent_id from dataset_version_cases v
 		join datasets d on d.dataset_id = v.dataset_id
 		where v.from_run = any($1::text[])`, runs)
