@@ -30,6 +30,15 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Changed
+
+- **The workbench is laid out as its design draws it.** The conversation and the
+  workspace fill the screen side by side, each scrolling on its own, and the page itself
+  no longer scrolls. The workspace is in tabs; its draft tab is a compact summary
+  (identity and model, tools with their effects, triggers and governance, instructions
+  against the published version), and each part opens its manual controls in a side
+  panel. On a phone, the conversation and the workspace are two tabs.
+
 ## [0.119.1] — 2026-11-18
 
 The workbench conversation could not take a turn on a real agent: a draft with tens of
