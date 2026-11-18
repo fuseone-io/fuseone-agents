@@ -35,7 +35,7 @@ field" is a commit message.
 Agents are created and edited in the workbench (NT-018, delivery R, #393): "Novo agente"
 opens its first step, every edit link leads to it, and the form, the guided interview and
 the block editor leave the console, after the workbench gained their steps, findings, size
-and event-cycle warning first. No migration, no rollback floor: rolling back to 0.120.0
+and event-cycle warning. No migration, no rollback floor: rolling back to 0.120.0
 brings the form back.
 
 ### Changed
