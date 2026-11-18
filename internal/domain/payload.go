@@ -52,6 +52,11 @@ type RunStartedPayload struct {
 	// Judge marks a judge run and names the judgment it belongs to (NT-016). Known to
 	// every reader and worker one release before anything writes it.
 	Judge *JudgeOpening `json:"judge,omitempty"`
+	// Rehearsal marks a live rehearsal: a simulated run of a candidate on one case
+	// the author typed (NT-018). It carries everything a battery run does, so this
+	// mark is what keeps it from counting as one. Known to every reader one release
+	// before anything writes it.
+	Rehearsal bool `json:"rehearsal,omitempty"`
 
 	// Origin is where the ask came from, when it came from a conversation.
 	Origin *RunOrigin `json:"origin,omitempty"`
@@ -553,4 +558,15 @@ type RunFinishedPayload struct {
 	// EventsWithheld says this run's declared events will not be published,
 	// and why — so a listener that never started has a recorded reason (#203).
 	EventsWithheld *EventsWithheld `json:"events_withheld,omitempty"`
+}
+
+/*
+NotEvidence is whether a simulated run, opened like a battery run, says nothing
+about the agent as it is: an experiment may have run it on a model it would never
+use (NT-015), and a rehearsal is one case the author typed, run on a candidate
+(NT-018). Neither lets an agent leave Draft, counts as a battery, or resets the
+clock the drift sweep reads.
+*/
+func (p RunStartedPayload) NotEvidence() bool {
+	return p.Experiment != "" || p.Rehearsal
 }

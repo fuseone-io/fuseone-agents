@@ -45,11 +45,17 @@ It drops whatever tool layer it was handed. That is the property the whole
 feature rests on: there is no argument, no flag and no second constructor by
 which a run marked simulated could reach a real system.
 
+It drops the standing approvals too. A grant is a real authority with a daily
+ceiling: asking it spends one of its uses and writes a real approval in its
+owner's name. A simulated run parks for a person where the grant would have
+released the real one, and the Gate's verdict is recorded either way.
+
 Everything else is the production collaborator — the same Gate, the same
 ledger, the same clock, the same planner. A simulation that decided differently
 would answer a question nobody asked.
 */
 func Deps(deps engine.Deps) engine.Deps {
 	deps.Tools = DryTools{}
+	deps.Standing = nil
 	return deps
 }

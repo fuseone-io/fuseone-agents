@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/fuseone/agents/internal/auth"
@@ -101,6 +103,10 @@ func (s *Server) DecideApproval(ctx context.Context, req openapi.DecideApprovalR
 		return openapi.DecideApproval403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermApprovalAct, state.Scope),
 		}, nil
+	}
+
+	if refused, err := simulatedDecision(steps); refused != nil || err != nil {
+		return refused, err
 	}
 
 	// The standing-approval prefix is the engine's. A person's note that
@@ -218,4 +224,26 @@ func decidedAt(steps []domain.Step, now time.Time) time.Time {
 		return last
 	}
 	return now
+}
+
+/*
+simulatedDecision refuses a person's decision on a simulated run (NT-018
+phase 0). A simulated run never acts, so nothing it holds is anybody's to
+release: a decision on it would be a real approval about nothing, in the
+trail every audit reads. An opening with no payload is a real run's, as
+every run's was before payloads were written.
+*/
+func simulatedDecision(steps []domain.Step) (openapi.DecideApprovalResponseObject, error) {
+	if len(steps) == 0 || steps[0].Kind != domain.StepRunStarted || len(steps[0].Payload) == 0 {
+		return nil, nil
+	}
+	var started domain.RunStartedPayload
+	if err := json.Unmarshal(steps[0].Payload, &started); err != nil {
+		return nil, fmt.Errorf("read run %s opening: %w", steps[0].RunID, err)
+	}
+	if !started.Simulated {
+		return nil, nil
+	}
+	return openapi.DecideApproval409ApplicationProblemPlusJSONResponse(refusal(http.StatusConflict,
+		CodeSimulatedRun, "Simulated run", "a simulated run never acts, so its approvals are not decided")), nil
 }

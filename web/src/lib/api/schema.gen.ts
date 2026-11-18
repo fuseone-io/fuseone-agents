@@ -9687,7 +9687,11 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            /** @description The run has no pending approval, or it already expired. */
+            /**
+             * @description The run has no pending approval, or it already expired. A
+             *     simulated run answers `fuseone:simulated-run`: it never acts, so
+             *     nothing it holds is decided.
+             */
             409: {
                 headers: {
                     [name: string]: unknown;

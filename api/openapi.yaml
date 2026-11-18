@@ -2486,7 +2486,10 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: The run has no pending approval, or it already expired.
+          description: |
+            The run has no pending approval, or it already expired. A
+            simulated run answers `fuseone:simulated-run`: it never acts, so
+            nothing it holds is decided.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
