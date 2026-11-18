@@ -3556,6 +3556,35 @@
     },
     "untouchedProduction": "Nada aqui toca produção",
     "authoringToday": "Autoria hoje:",
-    "authoringOf": "{{spent}} de {{daily}}"
+    "authoringOf": "{{spent}} de {{daily}}",
+    "workspace": "Espaço de trabalho",
+    "tabs": {
+      "draft": "Rascunho"
+    },
+    "parts": {
+      "identity": "Identidade e modelo",
+      "tools": "Ferramentas",
+      "governance": "Gatilhos e governança"
+    },
+    "edit": "Editar",
+    "editPart": "Editar {{part}}",
+    "done": "Concluir",
+    "editNote": "As mudanças ficam no rascunho quando você salva. Fechar este painel não descarta nada.",
+    "summary": {
+      "none": "—",
+      "againstPublished": "Comparado com a versão publicada.",
+      "neverPublished": "Agente novo, ainda não publicado.",
+      "name": "Nome",
+      "scope": "Escopo",
+      "model": "Modelo",
+      "budget": "Teto por execução",
+      "steps_one": "{{count}} passo",
+      "steps_other": "{{count}} passos",
+      "triggers": "Gatilhos",
+      "triggerCount_zero": "Nenhum: só roda quando alguém pede",
+      "triggerCount_one": "{{count}} gatilho",
+      "triggerCount_other": "{{count}} gatilhos",
+      "noTools": "Nenhuma ainda. Aceite as propostas da conversa, ou edite."
+    }
   }
 }

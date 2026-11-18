@@ -166,14 +166,17 @@ describe("the workbench conversation", () => {
       "GET /admin/tools": () => ({ body: { items: ["crm.lookup", "crm.refund"].map((toolId) => ({ toolId, server: "crm", effect: "read", untrusted: false })) } }),
     });
     openAt("/agents/triagem/workbench");
-    const name = await screen.findByLabelText(/^Nome/);
+    await userEvent.click(await screen.findByRole("button", { name: "Editar identidade e modelo" }));
+    const name = within(await screen.findByRole("dialog")).getByLabelText(/^Nome/);
     await userEvent.clear(name);
     await userEvent.type(name, "Triagem nova");
+    await userEvent.keyboard("{Escape}");
     await userEvent.click(await screen.findByRole("button", { name: "Aceitar" }));
     await screen.findByText("Proposta aplicada ao rascunho");
-    // The field, not only the card: granted now, and the unsaved name kept.
-    await waitFor(() => expect(screen.getByRole("checkbox", { name: /crm\.refund/ })).toBeChecked());
-    expect(screen.getByLabelText(/^Nome/)).toHaveValue("Triagem nova");
+    // The draft, not only the card: granted now, and the unsaved name kept.
+    const summary = screen.getByRole("tabpanel", { name: "Rascunho" });
+    await waitFor(() => expect(within(summary).getByText("crm.refund")).toBeInTheDocument());
+    expect(summary).toHaveTextContent("Triagem nova");
   });
 
   it("shows a proposal only a person may decide as refused, with nothing to accept", async () => {
@@ -378,8 +381,11 @@ describe("the workbench conversation", () => {
   it("says in the header what authoring holds today against its ceiling", async () => {
     world({ [`GET ${TURNS}`]: () => ({ body: { items: [], conversation: "open", spentMicros: 310_000, dailyMicros: 5_000_000 } }) });
     openAt("/agents/triagem/workbench");
-    const today = await screen.findByText(/Autoria hoje/);
-    expect(today.parentElement).toHaveTextContent(/0,31.*5,00/);
+    // One in the page's header, one in the conversation's for a phone; CSS
+    // shows one of them.
+    const today = await screen.findAllByText(/Autoria hoje/);
+    for (const label of today) expect(label.parentElement).toHaveTextContent(/0,31.*5,00/);
+    expect(today).toHaveLength(2);
   });
 
   it("shows the model's reason beside its proposal", async () => {

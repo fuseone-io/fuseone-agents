@@ -3556,6 +3556,35 @@
     },
     "untouchedProduction": "Nothing here touches production",
     "authoringToday": "Authoring today:",
-    "authoringOf": "{{spent}} of {{daily}}"
+    "authoringOf": "{{spent}} of {{daily}}",
+    "workspace": "Workspace",
+    "tabs": {
+      "draft": "Draft"
+    },
+    "parts": {
+      "identity": "Identity and model",
+      "tools": "Tools",
+      "governance": "Triggers and governance"
+    },
+    "edit": "Edit",
+    "editPart": "Edit {{part}}",
+    "done": "Done",
+    "editNote": "Changes reach the draft when you save. Closing this panel discards nothing.",
+    "summary": {
+      "none": "—",
+      "againstPublished": "Compared with the published version.",
+      "neverPublished": "A new agent, not published yet.",
+      "name": "Name",
+      "scope": "Scope",
+      "model": "Model",
+      "budget": "Ceiling per run",
+      "steps_one": "{{count}} step",
+      "steps_other": "{{count}} steps",
+      "triggers": "Triggers",
+      "triggerCount_zero": "None: it runs only when somebody asks",
+      "triggerCount_one": "{{count}} trigger",
+      "triggerCount_other": "{{count}} triggers",
+      "noTools": "None yet. Accept the conversation's proposals, or edit."
+    }
   }
 }
