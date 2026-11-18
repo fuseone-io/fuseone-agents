@@ -41,6 +41,17 @@ describe("publishing from the workbench", () => {
     expect(calls.find((c) => c.path === PUBLISH)?.headers.get("If-Match")).toBe('"e1"');
   });
 
+  // The workbench is the console's only door to publishing: a cycle it did
+  // not tell would be published in silence (#227).
+  it("says which event cycle the published version closes", async () => {
+    const eventCycleWarning = { cycles: [["triagem", "revisor"]], hopLimit: 8, truncated: false };
+    world(() => ({ body: { agentId: "triagem", versionId: "v2abc", created: true, paused: true, draft: draftOf({}, "v2abc"), eventCycleWarning }, etag: '"e1"' }));
+    openAt("/agents/triagem/workbench");
+    await publishConfirmed();
+    expect(await screen.findByText(/fecham um ciclo: triagem → revisor → triagem/)).toBeInTheDocument();
+    expect(screen.getByText("Publicado como v2abc, pausado")).toBeInTheDocument();
+  });
+
   it("waits for unsaved edits to be saved first", async () => {
     world(() => ({ status: 500 }));
     openAt("/agents/triagem/workbench");

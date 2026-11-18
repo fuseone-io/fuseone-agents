@@ -3,6 +3,7 @@ import { agentKeys } from "@/features/agents/api";
 import { ApiError, api, unwrap } from "@/lib/api/client";
 import type { AgentDraft, DraftIdentity, DraftOperation } from "@/lib/api/client";
 import { revised, revisionReads, type Revised } from "@/lib/api/revision";
+import type { EventCycleWarning } from "@/features/agents/event-cycle-warning";
 
 /*
 The workbench's draft (NT-018 1b). Every write names the ETag it read, and
@@ -90,8 +91,14 @@ export function useDiscardDraft() {
   });
 }
 
-/** What publishing the draft answered: the version, and the draft based on it. */
-export type DraftPublished = { versionId: string; created: boolean; paused: boolean; draft: RevisedDraft };
+/** What publishing the draft answered: the version, the draft based on it, and any event cycle the version closes. */
+export type DraftPublished = {
+  versionId: string;
+  created: boolean;
+  paused: boolean;
+  draft: RevisedDraft;
+  eventCycleWarning?: EventCycleWarning;
+};
 
 /** Whether a publication's snapshot is still the draft on screen: nothing was written over it since it was sent. */
 export function isCurrentSnapshot(cached: RevisedDraft | undefined, published: DraftPublished): boolean {
@@ -112,8 +119,8 @@ export function usePublishDraft(agentId: string) {
           params: { path: { agentId }, header: { "If-Match": etag } },
         }),
       );
-      const { versionId, created, paused, draft } = answer.body;
-      return { versionId, created, paused, draft: { body: draft, etag: answer.etag } };
+      const { versionId, created, paused, draft, eventCycleWarning } = answer.body;
+      return { versionId, created, paused, eventCycleWarning, draft: { body: draft, etag: answer.etag } };
     },
     onSuccess: (published, sent) => {
       // The snapshot is the draft at the ETag sent. A save or an accepted
