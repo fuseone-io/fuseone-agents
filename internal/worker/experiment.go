@@ -32,6 +32,9 @@ An experiment with no configuration is the version as published too, fallback an
 
 A judge run is never resolved as the version it judges (NT-016), in either pool: it parks,
 whatever else its opening carries. See judgeRefusal.
+
+A run whose opening names a seal is pinned to that seal (NT-018 phase 2), and never falls
+back to the published version: see resolveCandidate.
 */
 func (w *Worker) resolve(ctx context.Context, claim domain.Claim) (Resolution, error) {
 	// Every pool reads the opening, the real one included: the judge mark is checked
@@ -43,6 +46,9 @@ func (w *Worker) resolve(ctx context.Context, claim domain.Claim) (Resolution, e
 	}
 	if started.Judge != nil {
 		return w.resolveJudge(ctx, claim, started)
+	}
+	if started.SealID != "" {
+		return w.resolveCandidate(ctx, claim, started)
 	}
 	if w.experiments == nil {
 		return w.specs.Resolve(ctx, claim)
