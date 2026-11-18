@@ -32,6 +32,11 @@ field" is a commit message.
 
 ### Upgrade notes
 
+- **NT-018 phase 2, delivery P, must finish before candidate readers are deployed.**
+  Migration 0117 adds the draft's per-value source map and nullable run reference on
+  authoring turns. It has no rollback floor: an older replica leaves the source stamp
+  stale, and a newer one treats conversation-capable values conservatively. Deploy this
+  release to every replica and let the provenance repair complete one pass before 2a.
 - A simulated run no longer uses standing approvals. Where a grant covered a write, the
   simulation now stops waiting for approval, as it would with no grant; the Gate's verdict
   is still recorded, so a battery's expectations read the same. It no longer spends the
@@ -39,6 +44,11 @@ field" is a commit message.
 
 ### Fixed
 
+- **Erasing a workbench conversation left values it had written in the draft.** Accepted
+  proposal values now carry their source. Erasing a thread removes only current values
+  sourced from that thread (and values whose source cannot be proved), advances the draft's
+  ETag, and preserves values overwritten manually. Subject erasure follows a turn's run
+  reference without erasing its neighbours in the same thread.
 - **A simulation spent standing grants.** A battery or experiment whose write a standing
   grant covered used one of the grant's daily uses and recorded a real approval in the
   owner's name. A large battery could use up the day's releases and leave production runs
