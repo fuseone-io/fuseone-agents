@@ -15,7 +15,7 @@ export function ConversationComposer({ composer, open }: { composer: Composer; o
   const blocked = !open || composer.sending;
 
   return (
-    <div className="flex flex-col gap-2 border-t border-border p-4">
+    <div className="flex flex-col gap-2 p-4">
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor="conversation-message">{t("workbench.conversation.message")}</Label>
         {composer.pasted && <Badge variant="outline">{t("workbench.conversation.pasted")}</Badge>}

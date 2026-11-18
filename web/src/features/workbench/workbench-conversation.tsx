@@ -1,9 +1,11 @@
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { MessagesSquare } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/shared/states";
-import { Section } from "@/features/policies/section";
+import { AuthoringToday } from "@/features/workbench/authoring-today";
+import { WorkbenchPane } from "@/features/workbench/workbench-pane";
 import { ConversationComposer } from "@/features/workbench/conversation-composer";
 import { ConversationErase } from "@/features/workbench/conversation-erase";
 import { ConversationTurn } from "@/features/workbench/conversation-turn";
@@ -48,14 +50,28 @@ export function WorkbenchConversation({
   const state = turns.data?.conversation;
   const grouped = byTurn(proposals.data);
   const reading = { instructions };
+  const end = useRef<HTMLDivElement>(null);
+  // A block body: the browser's scrollIntoView now returns a promise, and an
+  // effect that returns anything but a clean-up function breaks the tree.
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: "end" });
+  }, [items.length, composer.pending, proposals.data?.length]);
 
   return (
-    <Section
-      icon={MessagesSquare}
-      title={t("workbench.conversation.title")}
-      hint={t("workbench.conversation.hint")}
-      action={<ConversationErase agentId={agentId} disabled={items.length === 0} />}
-      flush
+    <WorkbenchPane
+      label={t("workbench.conversation.title")}
+      header={
+        <div className="flex items-center gap-2.5 px-4 py-3">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <MessagesSquare className="size-3.5" aria-hidden />
+          </span>
+          <h2 className="text-sm font-medium">{t("workbench.conversation.title")}</h2>
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{t("workbench.conversation.hint")}</span>
+          <AuthoringToday agentId={agentId} className="sm:hidden" />
+          <ConversationErase agentId={agentId} disabled={items.length === 0} />
+        </div>
+      }
+      footer={<ConversationComposer composer={composer} open={state === "open"} />}
     >
       <div className="flex flex-col gap-4 p-4">
         {state && state !== "open" && (
@@ -83,8 +99,9 @@ export function WorkbenchConversation({
             )}
           </ol>
         )}
+        {/* The newest turn in view, as a conversation reads. */}
+        <div ref={end} />
       </div>
-      <ConversationComposer composer={composer} open={state === "open"} />
-    </Section>
+    </WorkbenchPane>
   );
 }

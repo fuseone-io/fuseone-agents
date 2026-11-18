@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { Link } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,11 +25,16 @@ const DRAFT = "/agents/triagem/draft";
 const OPS = "/agents/triagem/draft/operations";
 const ops = (calls: Call[]) => calls.filter((c) => c.method === "POST" && c.path === OPS);
 
-async function rename(to: string) {
-  const name = await screen.findByLabelText(/^Nome/);
-  await userEvent.clear(name);
+/** Renames the agent in the identity's side panel, and closes it. */
+async function rename(to: string, append = false) {
+  await userEvent.click(await screen.findByRole("button", { name: /Editar identidade e modelo|Edit identity and model/ }));
+  const name = within(await screen.findByRole("dialog")).getByLabelText(/^(Nome|Name)/);
+  if (!append) await userEvent.clear(name);
   await userEvent.type(name, to);
+  await userEvent.keyboard("{Escape}");
 }
+
+const summary = () => screen.getByRole("tabpanel", { name: /Rascunho|Draft/ });
 
 describe("the workbench panel", () => {
   beforeAll(polyfillPointer);
@@ -101,10 +106,10 @@ describe("the workbench panel", () => {
     await rename("Triagem nova");
     await userEvent.click(screen.getByRole("button", { name: /Salvar no rascunho/ }));
     expect(await screen.findByText("O rascunho mudou desde que você o leu")).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Nome/)).toHaveValue("Triagem nova");
+    expect(summary()).toHaveTextContent("Triagem nova");
     await userEvent.click(screen.getByRole("button", { name: /Reler o rascunho/ }));
     await waitFor(() => expect(screen.queryByText("O rascunho mudou desde que você o leu")).toBeNull());
-    expect(screen.getByLabelText(/^Nome/)).toHaveValue("Triagem nova");
+    expect(summary()).toHaveTextContent("Triagem nova");
     await userEvent.click(screen.getByRole("button", { name: /Salvar no rascunho/ }));
     await waitFor(() => expect(ops(calls).at(-1)?.headers.get("If-Match")).toBe('"e2"'));
   });
@@ -122,7 +127,7 @@ describe("the workbench panel", () => {
     await userEvent.click(screen.getByRole("button", { name: /Tentar de novo/ }));
     await waitFor(() => expect(reads).toBeGreaterThan(1));
     expect(screen.getByText("Este rascunho não está mais disponível")).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Nome/)).toHaveValue("Triagem nova");
+    expect(summary()).toHaveTextContent("Triagem nova");
   });
 
   it("reads the instructions against the published version, and never publishes", async () => {
@@ -191,8 +196,7 @@ describe("the workbench in English", () => {
       [`POST ${OPS}`]: () => ({ status: 412, etag: '"e2"' }),
     });
     openAt("/agents/triagem/workbench");
-    const name = await screen.findByLabelText(/^Name/);
-    await userEvent.type(name, " v2");
+    await rename(" v2", true);
     await userEvent.click(screen.getByRole("button", { name: /Save to draft · 1 change/ }));
     expect(await screen.findByText("The draft changed since you read it")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Read the draft again/ })).toBeInTheDocument();
@@ -206,7 +210,7 @@ describe("the workbench in English", () => {
     openAt("/agents/triagem/workbench");
     expect(await screen.findByText("Difference from the published version")).toBeInTheDocument();
     expect(screen.getByText("Still needed before publishing")).toBeInTheDocument();
-    expect(screen.getByText("Tools")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tools" })).toBeInTheDocument();
   });
 });
 
@@ -226,7 +230,8 @@ describe("the workbench panel, between agents and during a save", () => {
     await rename("Edição de A");
     await userEvent.click(screen.getByRole("link", { name: "ir para b" }));
     await screen.findByRole("heading", { name: "b" });
-    expect(screen.getByLabelText(/^Nome/)).toHaveValue("Agente B");
+    expect(summary()).toHaveTextContent("Agente B");
+    expect(summary()).not.toHaveTextContent("Edição de A");
   });
 
   it("keeps an edit made while a save was on its way", async () => {
@@ -241,6 +246,6 @@ describe("the workbench panel, between agents and during a save", () => {
     await rename("Segunda");
     answer({ body: draftOf({ name: "Primeira" }), etag: '"e2"' });
     await screen.findByRole("button", { name: /Salvar no rascunho · 1 alteração/ });
-    expect(screen.getByLabelText(/^Nome/)).toHaveValue("Segunda");
+    expect(summary()).toHaveTextContent("Segunda");
   });
 });

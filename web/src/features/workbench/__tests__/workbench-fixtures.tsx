@@ -111,5 +111,8 @@ export function polyfillPointer() {
   Element.prototype.hasPointerCapture ??= () => false;
   Element.prototype.setPointerCapture ??= () => {};
   Element.prototype.releasePointerCapture ??= () => {};
-  Element.prototype.scrollIntoView ??= () => {};
+  // As current Chrome does: scrollIntoView answers a promise, which an effect
+  // must not return.
+  // Assigned, not ??=: the global setup already gives one that answers nothing.
+  Element.prototype.scrollIntoView = (() => Promise.resolve()) as unknown as Element["scrollIntoView"];
 }
