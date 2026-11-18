@@ -30,6 +30,13 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.120.0] — 2026-11-18
+
+Publishing from the workbench (#391): the saved draft becomes the agent's next version
+through the usual publication, judged with the draft's and the agent's ETags in one
+transaction. No migration, no rollback floor: rolling back to 0.119.2 removes the route
+and leaves drafts as they are.
+
 ### Added
 
 - **Publishing from the workbench** (NT-018, contracts 4, 5 and 10). "Publicar", in the
