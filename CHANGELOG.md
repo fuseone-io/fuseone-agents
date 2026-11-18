@@ -39,8 +39,11 @@ field" is a commit message.
   to it, so a link already shared still lands somewhere.
 - The workbench gains what the form had and it lacked: the agent's **steps**, edited in a
   side panel; the instructions' **findings** (a tool they name that a policy refuses, or
-  one the agent does not hold, enabled in place); and their **size in tokens**, counted
-  by the agent's model.
+  one the agent does not hold, enabled in place); and their **size**, in tokens counted
+  by the agent's model, or in characters where that provider counts none.
+- Publishing from the workbench says which **event cycle** the version closes, as the
+  form did (#227): `POST /agents/{id}/draft/publish` answers `eventCycleWarning`, and the
+  console shows it until dismissed.
 
 ### Removed
 
