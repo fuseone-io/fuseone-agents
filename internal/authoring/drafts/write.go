@@ -123,13 +123,30 @@ func (s *Store) insert(ctx context.Context, tx pgx.Tx, in insertion, lost func(r
 		}
 		return Opened{}, lost(r)
 	}
-	if err := s.appendTrail(ctx, tx, trailRow{
+	seq, err := s.appendTrail(ctx, tx, trailRow{
 		draftID: draftID, agent: in.agent, action: "create", body: creationBody(in),
 		origin: draft.FromControl, revision: revision, by: in.by,
-	}); err != nil {
+	})
+	if err != nil {
 		return Opened{}, err
 	}
-	return opened(in.agent, row{draftID: draftID, scope: scope, stored: st, base: string(in.base), revision: revision}, in.d)
+	parts := semanticParts(in.d)
+	names := partNames(parts)
+	if err := writeTrailProvenance(ctx, tx, trailProvenance{draftID: draftID, seq: seq, parts: names}); err != nil {
+		return Opened{}, err
+	}
+	for _, name := range names {
+		if err := setSource(ctx, tx, sourcePosition{draftID, name, seq}); err != nil {
+			return Opened{}, err
+		}
+	}
+	if err := stampSources(ctx, tx, sourceStamp{draftID, revision, seq}); err != nil {
+		return Opened{}, err
+	}
+	return opened(in.agent, row{
+		draftID: draftID, scope: scope, stored: st, base: string(in.base), revision: revision,
+		sources: revision, sourcesSeq: seq, lastTrailSeq: seq,
+	}, in.d)
 }
 
 // Application is one operation on a draft.
@@ -143,6 +160,9 @@ type Application struct {
 	Now       time.Time
 	// kept is the accepted proposal's body, which the trail names.
 	kept *keptBody
+	// proposal is the accepted proposal whose body kept names. Empty for a
+	// control operation.
+	proposal string
 }
 
 /*
@@ -223,54 +243,4 @@ func (s *Store) reachableRow(ctx context.Context, tx pgx.Tx, agent domain.AgentI
 		return row{}, ErrNotFound
 	}
 	return r, nil
-}
-
-func (s *Store) update(ctx context.Context, tx pgx.Tx, r row, a Application, applied draft.Applied) (Opened, error) {
-	st, err := draft.Encode(applied.Draft)
-	if err != nil {
-		return Opened{}, err
-	}
-	revision := revisionOf(r.draftID, st)
-	scope := domain.Scope{Company: applied.Draft.Spec.Company, Area: applied.Draft.Spec.Area}
-	if _, err := tx.Exec(ctx, `
-		update agent_drafts set company_id = $2, area_id = $3, definition = $4, blocks = $5,
-			revision = $6, updated_by = $7, updated_at = now()
-		where agent_id = $1`,
-		string(a.Agent), string(scope.Company), string(scope.Area), st.Definition, st.Blocks,
-		string(revision), string(a.Caller.By)); err != nil {
-		return Opened{}, fmt.Errorf("drafts: write %s: %w", a.Agent, err)
-	}
-	if err := s.appendTrail(ctx, tx, trailRow{
-		draftID: r.draftID, agent: a.Agent, action: a.Op.Kind(), body: draft.Body(a.Op), kept: a.kept,
-		origin: a.Origin, revision: revision, by: a.Caller.By,
-	}); err != nil {
-		return Opened{}, err
-	}
-	return Opened{
-		Agent: a.Agent, DraftID: r.draftID, Draft: applied.Draft, Missing: applied.Missing,
-		Revision: revision, BaseVersion: domain.VersionID(r.base),
-	}, nil
-}
-
-// Discard removes a draft, against the tag the caller read. Its trail stays.
-func (s *Store) Discard(ctx context.Context, agent domain.AgentID, expect domain.IfMatch, c Caller) error {
-	if !expect.Present() {
-		return ErrPreconditionRequired
-	}
-	return s.within(ctx, func(tx pgx.Tx) error {
-		r, err := s.lockReachable(ctx, tx, agent, c)
-		if err != nil {
-			return err
-		}
-		if !expect.Allows(true, r.revision) {
-			return &domain.StaleError{Current: r.revision}
-		}
-		if _, err := tx.Exec(ctx, `delete from agent_drafts where agent_id = $1`, string(agent)); err != nil {
-			return fmt.Errorf("drafts: discard %s: %w", agent, err)
-		}
-		return s.appendTrail(ctx, tx, trailRow{
-			draftID: r.draftID, agent: agent, action: "discard",
-			origin: draft.FromControl, revision: r.revision, by: c.By,
-		})
-	})
 }

@@ -16,7 +16,7 @@ type trailRow struct {
 	draftID string
 	agent   domain.AgentID
 	action  string
-	// body is what the change said; nil for a discard, which says nothing.
+	// body is what the change said; nil for a discard or erasure, which says nothing.
 	body []byte
 	// kept is a body already in the content store, an accepted proposal's:
 	// the trail names it rather than storing a copy, so erasing the thread
@@ -60,12 +60,12 @@ so it is never truncated. The installation's retention and erasure reach it
 there; the immutable row keeps only its reference and digest. The draft's row
 lock serialises writers of one draft, so the next seq is read safely.
 */
-func (s *Store) appendTrail(ctx context.Context, tx pgx.Tx, t trailRow) error {
+func (s *Store) appendTrail(ctx context.Context, tx pgx.Tx, t trailRow) (int64, error) {
 	var seq int64
 	if err := tx.QueryRow(ctx, `
 		select coalesce(max(seq), 0) + 1 from agent_draft_trail where draft_id = $1::uuid`,
 		t.draftID).Scan(&seq); err != nil {
-		return fmt.Errorf("drafts: trail of %s: %w", t.agent, err)
+		return 0, fmt.Errorf("drafts: trail of %s: %w", t.agent, err)
 	}
 	var digest, ref string
 	switch {
@@ -73,13 +73,13 @@ func (s *Store) appendTrail(ctx context.Context, tx pgx.Tx, t trailRow) error {
 		digest, ref = t.kept.digest, t.kept.ref
 	case t.body != nil:
 		if len(t.body) > draft.MaxDefinitionBytes {
-			return fmt.Errorf("%w: a change of %d bytes", draft.ErrTooLarge, len(t.body))
+			return 0, fmt.Errorf("%w: a change of %d bytes", draft.ErrTooLarge, len(t.body))
 		}
 		sum := sha256.Sum256(t.body)
 		digest = hex.EncodeToString(sum[:])
 		stored, err := s.content.RestoreForTx(ctx, tx, "authoring", t.draftID, seq, t.body)
 		if err != nil {
-			return fmt.Errorf("drafts: keep the body of %s: %w", t.agent, err)
+			return 0, fmt.Errorf("drafts: keep the body of %s: %w", t.agent, err)
 		}
 		ref = stored
 	}
@@ -88,7 +88,7 @@ func (s *Store) appendTrail(ctx context.Context, tx pgx.Tx, t trailRow) error {
 		values ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, now())`,
 		t.draftID, seq, string(t.agent), t.action, digest, ref, originName(t.origin),
 		string(t.revision), string(t.by)); err != nil {
-		return fmt.Errorf("drafts: trail of %s: %w", t.agent, err)
+		return 0, fmt.Errorf("drafts: trail of %s: %w", t.agent, err)
 	}
-	return nil
+	return seq, nil
 }

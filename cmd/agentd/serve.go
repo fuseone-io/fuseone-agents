@@ -101,6 +101,7 @@ func serve(args []string) error {
 		// One per process: its fence holds connections outside the pool, and that
 		// budget only means something while there is one of it.
 		corpus := regression.NewStore(identity.pool)
+		draftStore := drafts.NewStore(identity.pool).WithCorpusFence(corpus)
 		curator := admin.NewCurator(identity.pool)
 
 		// The vault is optional here and required in the worker. This process
@@ -189,7 +190,7 @@ func serve(args []string) error {
 			WithRetention(
 				admin.NewRetention(identity.pool, store),
 				admin.NewErasures(identity.pool, ledger.NewContent(identity.pool),
-					admin.NewRetention(identity.pool, store), corpus),
+					admin.NewRetention(identity.pool, store), corpus).WithAuthoring(draftStore),
 			).
 			WithWebhooks(webhooksWith(identity.pool, masterVault)).
 			// Where a published cron trigger becomes a moment the worker
@@ -221,7 +222,7 @@ func serve(args []string) error {
 			WithRetirements(spec.NewState(identity.pool)).
 			// The workbench's drafts (NT-018 1b): working state beside the
 			// versions, never one of them.
-			WithDrafts(drafts.NewStore(identity.pool)).
+			WithDrafts(draftStore).
 			// The workbench's conversation (NT-018 phase 3): the same
 			// registry, for the model, its price and a scope's providers.
 			WithTurnModels(providers).
