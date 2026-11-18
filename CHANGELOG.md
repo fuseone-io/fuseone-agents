@@ -48,6 +48,12 @@ field" is a commit message.
   agent and sealed scope on every turn. Any other run naming a seal, and a seal that is
   erased or does not match, ends failed with `fuseone:candidate-unreadable` without calling
   a model, never falling back to another seal or to the published version.
+- Erasure reaches candidates. Erasing a workbench thread, or a subject whose run a turn
+  cites, erases every seal that copied a value from it (or a value whose source could not be
+  proved) and the content of every run derived from those seals, even when the draft no
+  longer holds the value. Erasing a thread also erases its rehearsals' content. When a seal
+  ages out of the retention window, the sweep fences its agent and erases its derived runs'
+  content, however recent.
 
 ## [0.122.0] — 2026-11-18
 
