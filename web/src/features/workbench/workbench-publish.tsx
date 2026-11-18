@@ -1,0 +1,68 @@
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+import { Rocket } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { usePublishDraft, type RevisedDraft } from "@/features/workbench/api";
+import { problemMessage } from "@/lib/api/problem-message";
+
+/**
+ * Publishes the saved draft as the agent's next version (NT-018, contracts 4
+ * and 10), after asking. The primary action once there is nothing to save:
+ * what is published is the draft as stored, never unsaved edits.
+ */
+export function WorkbenchPublish({
+  agentId,
+  draft,
+  unsaved,
+  onPublished,
+}: {
+  agentId: string;
+  draft: RevisedDraft;
+  /** Edits not saved yet: publishing waits for them. */
+  unsaved: boolean;
+  onPublished: (draft: RevisedDraft) => void;
+}) {
+  const { t } = useTranslation();
+  const publishing = usePublishDraft(agentId);
+
+  const confirm = () =>
+    publishing.mutate(draft.etag, {
+      onSuccess: (published) => {
+        onPublished(published.draft);
+        toast.success(t(published.paused ? "workbench.publishedPaused" : "workbench.publishedLive", { version: published.versionId }));
+      },
+      onError: (error) => toast.error(problemMessage(error, t)),
+    });
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="sm" variant={unsaved ? "outline" : "default"} disabled={unsaved || publishing.isPending}>
+          <Rocket className="size-4" aria-hidden />
+          <span className="sr-only sm:not-sr-only">{t("workbench.publish")}</span>
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("workbench.publishTitle")}</AlertDialogTitle>
+          <AlertDialogDescription>{t("workbench.publishBody")}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+          <AlertDialogAction onClick={confirm}>{t("workbench.publishConfirm")}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}

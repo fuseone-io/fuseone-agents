@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { agentKeys } from "@/features/agents/api";
 import { ApiError, api, unwrap } from "@/lib/api/client";
 import type { AgentDraft, DraftIdentity, DraftOperation } from "@/lib/api/client";
 import { revised, revisionReads, type Revised } from "@/lib/api/revision";
@@ -85,5 +86,31 @@ export function useDiscardDraft() {
       ),
     onSuccess: (_, { agentId }) =>
       queryClient.removeQueries({ queryKey: workbenchKeys.draft(agentId) }),
+  });
+}
+
+/** What publishing the draft answered: the version, and the draft based on it. */
+export type DraftPublished = { versionId: string; created: boolean; paused: boolean; draft: RevisedDraft };
+
+/**
+ * Publishes the saved draft under the ETag the panel holds (NT-018, contract
+ * 4). The draft stays, based on the version it became.
+ */
+export function usePublishDraft(agentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (etag: string): Promise<DraftPublished> => {
+      const answer = revised(
+        await api.POST("/agents/{agentId}/draft/publish", {
+          params: { path: { agentId }, header: { "If-Match": etag } },
+        }),
+      );
+      const { versionId, created, paused, draft } = answer.body;
+      return { versionId, created, paused, draft: { body: draft, etag: answer.etag } };
+    },
+    onSuccess: (published) => {
+      queryClient.setQueryData(workbenchKeys.draft(agentId), published.draft);
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all });
+    },
   });
 }

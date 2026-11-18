@@ -130,7 +130,9 @@ describe("the workbench panel", () => {
     expect(summary()).toHaveTextContent("Triagem nova");
   });
 
-  it("reads the instructions against the published version, and never publishes", async () => {
+  // Publishing is the workbench's own door now (NT-018, contract 4); the
+  // instructions still have no field of their own.
+  it("reads the instructions against the published version, with no field to edit them", async () => {
     serve({
       [`GET ${DRAFT}`]: () => ({ body: draftOf(), etag: '"e1"' }),
       "GET /agents/triagem": () => ({ body: PUBLISHED }),
@@ -139,7 +141,6 @@ describe("the workbench panel", () => {
     expect(await screen.findByText("Diferença para a versão publicada")).toBeInTheDocument();
     expect(await screen.findByText("responder", { exact: false, selector: "ins" })).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /Instruções/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Publicar/ })).toBeNull();
   });
 });
 

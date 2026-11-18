@@ -2585,7 +2585,9 @@
     "conversation-unpriced": "O modelo do assistente não tem preço configurado, então um turno não pode ser reservado.",
     "conversation-spent": "Este turno não cabe no que resta do teto de autoria de hoje.",
     "turn-in-flight": "Outro turno desta conversa ainda está em andamento. Espere a resposta.",
-    "turn-too-large": "A mensagem, ou o rascunho junto com ela, passa do tamanho de um turno."
+    "turn-too-large": "A mensagem, ou o rascunho junto com ela, passa do tamanho de um turno.",
+    "publish-needs-never": "Diga nas instruções o que o agente nunca deve fazer antes de publicar: peça ao assistente um bloco \"Nunca\".",
+    "agent-moved": "O agente foi publicado por outro caminho depois que este rascunho foi aberto. Descarte o rascunho e abra outro sobre a versão atual."
   },
   "retention": {
     "byDefault": "padrão, ninguém escolheu",
@@ -3585,6 +3587,13 @@
       "triggerCount_one": "{{count}} gatilho",
       "triggerCount_other": "{{count}} gatilhos",
       "noTools": "Nenhuma ainda. Aceite as propostas da conversa, ou edite."
-    }
+    },
+    "publish": "Publicar",
+    "publishTitle": "Publicar este rascunho?",
+    "publishBody": "O rascunho salvo vira a próxima versão do agente, pela publicação de sempre, com as cercas e o claim. Um agente que ninguém iniciou continua pausado. O rascunho fica, baseado na versão nova.",
+    "publishConfirm": "Publicar versão",
+    "publishedPaused": "Publicado como {{version}}, pausado",
+    "publishedLive": "Publicado como {{version}}, em execução",
+    "saveBeforePublish": "Salve as alterações antes de publicar: o que se publica é o rascunho salvo."
   }
 }
