@@ -3566,7 +3566,8 @@
     "parts": {
       "identity": "Identidade e modelo",
       "tools": "Ferramentas",
-      "governance": "Gatilhos e governança"
+      "governance": "Gatilhos e governança",
+      "steps": "Etapas"
     },
     "edit": "Editar",
     "editPart": "Editar {{part}}",
@@ -3586,7 +3587,9 @@
       "triggerCount_zero": "Nenhum: só roda quando alguém pede",
       "triggerCount_one": "{{count}} gatilho",
       "triggerCount_other": "{{count}} gatilhos",
-      "noTools": "Nenhuma ainda. Aceite as propostas da conversa, ou edite."
+      "noTools": "Nenhuma ainda. Aceite as propostas da conversa, ou edite.",
+      "noSteps": "Sem etapas: o agente age num passo só.",
+      "refusedHint": "Peça ao assistente para tirar a frase, ou mantenha se ela explica a regra a quem lê."
     },
     "publish": "Publicar",
     "publishTitle": "Publicar este rascunho?",

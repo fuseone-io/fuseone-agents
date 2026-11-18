@@ -1,13 +1,14 @@
 import { AgentBasicsSection } from "@/features/agents/agent-basics-section";
 import { AgentToolsSection } from "@/features/agents/agent-tools-section";
 import { TabGovernance } from "@/features/agents/tab-governance";
+import { TabSteps } from "@/features/agents/tab-steps";
 import { agentTarget } from "@/features/agents/agent-target";
 import { useTools } from "@/features/admin/api";
 import { usePolicies } from "@/features/policies/api";
 import type { AgentDefinition } from "@/lib/api/client";
 
 /** The parts of the draft a person edits by hand, each in its own side panel. */
-export type FieldPart = "identity" | "tools" | "governance";
+export type FieldPart = "identity" | "tools" | "governance" | "steps";
 
 /**
  * One part of the draft's manual controls, with the editor's own sections:
@@ -26,7 +27,7 @@ export function WorkbenchFieldPart({
   local: AgentDefinition;
   patch: (over: Partial<AgentDefinition>) => void;
 }) {
-  const tools = useTools(part === "tools" && local.company !== "", agentTarget(local));
+  const tools = useTools((part === "tools" || part === "steps") && local.company !== "", agentTarget(local));
   const policies = usePolicies();
 
   if (part === "identity") {
@@ -40,6 +41,11 @@ export function WorkbenchFieldPart({
         granted={local.tools ?? []}
         patch={patch}
       />
+    );
+  }
+  if (part === "steps") {
+    return (
+      <TabSteps draft={local} patch={patch} catalogue={tools.data?.items ?? []} policies={policies.data?.items ?? []} />
     );
   }
   return <TabGovernance draft={local} patch={patch} />;

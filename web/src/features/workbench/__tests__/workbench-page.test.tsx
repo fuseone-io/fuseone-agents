@@ -77,7 +77,7 @@ describe("the workbench panel", () => {
     serve({ [`GET ${DRAFT}`]: () => ({ status: 404 }), "GET /agents/triagem": () => ({ status: 404 }) });
     openAt("/agents/triagem/workbench");
     expect(await screen.findByText("Nenhum agente ou rascunho com este identificador")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Criar agente na bancada/ })).toHaveAttribute("href", "/agents/workbench");
+    expect(screen.getByRole("link", { name: /Criar agente na bancada/ })).toHaveAttribute("href", "/agents/new");
   });
 
   it("saves each change under the ETag the last answer named", async () => {

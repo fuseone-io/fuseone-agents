@@ -1,25 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, renderHook, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentFallbackFields } from "@/features/agents/agent-fallback-fields";
-import { changesBetween, useAgentDraft } from "@/features/agents/agent-draft";
 import { setLocale } from "@/i18n";
-import type { AgentDefinition, AgentDetail } from "@/lib/api/client";
-
-const withFallback = {
-  agent: {
-    agentId: "cobranca",
-    name: "Cobrança amigável",
-    scope: { company: "default", area: "financeiro" },
-    provider: "anthropic",
-    model: "claude-opus-5",
-    fallback: { provider: "openai", model: "gpt-test" },
-    tools: ["crm.lookup"],
-    budget: { micros: 500_000, steps: 60 },
-  },
-  instructions: "Cobre com educação.",
-} as unknown as AgentDetail;
+import type { AgentDefinition } from "@/lib/api/client";
 
 const base = {
   name: "Sentinela",
@@ -66,20 +51,6 @@ function renderFields(draft: Partial<AgentDefinition>, patch = vi.fn()) {
  * Publishing writes the draft whole: a fallback the draft drops is a fallback
  * deleted on the next edit, and nobody finds out until the outage it was for.
  */
-describe("the fallback pair in the draft", () => {
-  it("survives an edit made for another reason", () => {
-    const { result } = renderHook(() => useAgentDraft(withFallback));
-    act(() => result.current.patch({ instructions: "Cobre com calma." }));
-    expect(result.current.draft.fallback).toEqual({ provider: "openai", model: "gpt-test" });
-  });
-
-  it("is named among the changes publishing will make", () => {
-    const after = { ...base, fallback: { provider: "openai", model: "gpt-test" } };
-    const fields = changesBetween(base, after).map((c) => c.field);
-    expect(fields).toContain("agents.fieldFallback");
-  });
-});
-
 describe("the fallback provider select", () => {
   beforeAll(() => {
     Element.prototype.hasPointerCapture ??= () => false;

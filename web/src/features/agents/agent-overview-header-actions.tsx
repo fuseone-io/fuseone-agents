@@ -32,7 +32,7 @@ export function HeaderActions({
   return (
     <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
       <Button variant="ghost" size="sm" asChild className="h-9">
-        <Link to={`/agents/${agent.agentId}/edit`}>
+        <Link to={`/agents/${agent.agentId}/workbench`}>
           <Pencil className="size-4" aria-hidden />
           {t("agents.edit")}
         </Link>

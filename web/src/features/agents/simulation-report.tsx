@@ -182,7 +182,7 @@ export function SimulationReportView({
             </div>
           </dl>
           <Button asChild variant="outline" size="sm">
-            <Link to={`/agents/${agentId}/edit`}>
+            <Link to={`/agents/${agentId}/workbench`}>
               <Pencil className="size-4" aria-hidden />
               {t("simulation.fixInstructions")}
             </Link>

@@ -145,7 +145,7 @@ export function publishedAgentGuideSteps(
       bodyKey: tools.bodyKey,
       bodyValues: tools.bodyValues,
       done: tools.done,
-      to: `/agents/${agent.agentId}/edit`,
+      to: `/agents/${agent.agentId}/workbench`,
     },
     {
       id: "governance",
@@ -153,7 +153,7 @@ export function publishedAgentGuideSteps(
       bodyKey: governance.bodyKey,
       bodyValues: governance.bodyValues,
       done: governance.done,
-      to: `/agents/${agent.agentId}/edit`,
+      to: `/agents/${agent.agentId}/workbench`,
     },
     {
       id: "simulation",

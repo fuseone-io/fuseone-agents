@@ -47,7 +47,7 @@ export function WorkbenchWorkspace({
         }
       >
         <TabsContent value="draft">
-          <WorkbenchDraftSummary draft={draft} local={local} published={published.data?.instructions} onEdit={setPart} />
+          <WorkbenchDraftSummary draft={draft} local={local} published={published.data?.instructions} onEdit={setPart} patch={patch} />
         </TabsContent>
       </WorkbenchPane>
       <WorkbenchEditSheet part={part} onClose={() => setPart(undefined)} editing={{ agentId, local, patch }} />

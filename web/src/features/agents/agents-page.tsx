@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { usePreferences, useTab } from "@/features/preferences/use-preferences";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Bot, History, MessagesSquare, Plus } from "lucide-react";
+import { Bot, History, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { LoadMore } from "@/components/shared/load-more";
@@ -72,12 +72,6 @@ export function AgentsPage() {
         title={t("nav.agents")}
         description={t("agents.subtitle")}
       >
-        <Button size="sm" variant="outline" asChild>
-          <Link to="/agents/interview">
-            <MessagesSquare className="size-4" aria-hidden />
-            {t("agents.guidedAgent")}
-          </Link>
-        </Button>
         <Button size="sm" asChild>
           <Link to="/agents/new">
             <Plus className="size-4" aria-hidden />

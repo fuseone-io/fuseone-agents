@@ -56,7 +56,7 @@ export function AgentActionBar({ agent }: { agent: Agent }) {
       <span className="flex-1" />
 
       <Button variant="ghost" size="sm" asChild className="h-9">
-        <Link to={`/agents/${agent.agentId}/edit`}>
+        <Link to={`/agents/${agent.agentId}/workbench`}>
           <Pencil className="size-4" aria-hidden />
           {t("agents.edit")}
         </Link>
