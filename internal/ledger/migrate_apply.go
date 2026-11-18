@@ -77,6 +77,9 @@ func applyOne(ctx context.Context, conn migrator, version string, body []byte, d
 	if _, err := tx.Exec(ctx, string(body)); err != nil {
 		return fmt.Errorf("apply %s: %w", version, err)
 	}
+	if err := applyDataMigration(ctx, tx, version); err != nil {
+		return fmt.Errorf("apply %s data: %w", version, err)
+	}
 	if err := recordMigration(ctx, tx, version, digest); err != nil {
 		return err
 	}

@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -32,6 +33,21 @@ a pool connection while waiting for one, so there is no cycle to wait in.
 type fence struct {
 	config *pgx.ConnConfig
 	slots  chan struct{}
+}
+
+// CorpusFence is the corpus lock without the regression-case store around it.
+// Components that can erase authored material use this same database lock, but
+// do not need permission to read or write regression cases.
+type CorpusFence struct{ fence *fence }
+
+func NewCorpusFence(pool *pgxpool.Pool) *CorpusFence {
+	return &CorpusFence{fence: newFence(pool.Config().ConnConfig)}
+}
+
+func (f *CorpusFence) Exclusive(
+	ctx context.Context, agents []domain.AgentID, inside func(context.Context) error,
+) error {
+	return f.fence.enter(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`, agents, inside)
 }
 
 func newFence(config *pgx.ConnConfig) *fence {

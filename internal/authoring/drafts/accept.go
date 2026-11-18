@@ -121,6 +121,7 @@ func applicationOf(ctx context.Context, tx pgx.Tx, p stored, r row, a Acceptance
 	apply := Application{
 		Agent: a.Agent, Op: op, Origin: draft.FromProposal, Caller: a.Caller,
 		Validator: a.Validator, Now: a.Now, kept: &keptBody{ref: p.BodyRef, digest: p.digest},
+		proposal: p.ID,
 	}
 	d, err := draft.Decode(r.stored)
 	if err != nil {

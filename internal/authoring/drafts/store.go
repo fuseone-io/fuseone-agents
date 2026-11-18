@@ -22,6 +22,7 @@ import (
 	"github.com/fuseone/agents/internal/authoring/draft"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/regression"
 	"github.com/fuseone/agents/internal/spec"
 )
 
@@ -75,31 +76,56 @@ type Store struct {
 	// content keeps what each change said, exactly: the size is judged
 	// before anything is written, so nothing is ever truncated.
 	content *ledger.Content
+	fence   interface {
+		Exclusive(context.Context, []domain.AgentID, func(context.Context) error) error
+	}
 }
 
 func NewStore(pool *pgxpool.Pool) *Store {
-	return &Store{pool: pool, content: ledger.NewContent(pool).WithLimit(0)}
+	return &Store{
+		pool: pool, content: ledger.NewContent(pool).WithLimit(0),
+		fence: regression.NewCorpusFence(pool),
+	}
+}
+
+// WithCorpusFence shares the process's bounded fence connection budget with
+// the regression corpus. The database advisory lock is the same either way.
+func (s *Store) WithCorpusFence(fence interface {
+	Exclusive(context.Context, []domain.AgentID, func(context.Context) error) error
+}) *Store {
+	s.fence = fence
+	return s
 }
 
 // row is a draft's row, read under its lock.
 type row struct {
-	draftID  string
-	scope    domain.Scope
-	stored   draft.Stored
-	base     string
-	revision domain.Revision
+	draftID      string
+	scope        domain.Scope
+	stored       draft.Stored
+	base         string
+	revision     domain.Revision
+	sources      domain.Revision
+	sourcesSeq   int64
+	lastTrailSeq int64
+}
+
+func (r row) sourcesCurrent() bool {
+	return r.sources == r.revision && r.sourcesSeq == r.lastTrailSeq
 }
 
 func readRow(ctx context.Context, tx pgx.Tx, agent domain.AgentID, lock bool) (row, bool, error) {
-	query := `select draft_id::text, company_id, area_id, definition, blocks, base_version, revision
-		from agent_drafts where agent_id = $1`
+	query := `select d.draft_id::text, d.company_id, d.area_id, d.definition, d.blocks,
+		       d.base_version, d.revision, d.sources_revision, d.sources_seq,
+		       coalesce((select max(t.seq) from agent_draft_trail t where t.draft_id = d.draft_id), 0)
+		from agent_drafts d where d.agent_id = $1`
 	if lock {
 		query += ` for update`
 	}
 	var r row
-	var company, area, revision string
+	var company, area, revision, sourcesRevision string
 	err := tx.QueryRow(ctx, query, string(agent)).Scan(
-		&r.draftID, &company, &area, &r.stored.Definition, &r.stored.Blocks, &r.base, &revision)
+		&r.draftID, &company, &area, &r.stored.Definition, &r.stored.Blocks, &r.base, &revision,
+		&sourcesRevision, &r.sourcesSeq, &r.lastTrailSeq)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return row{}, false, nil
 	}
@@ -108,6 +134,7 @@ func readRow(ctx context.Context, tx pgx.Tx, agent domain.AgentID, lock bool) (r
 	}
 	r.scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
 	r.revision = domain.Revision(revision)
+	r.sources = domain.Revision(sourcesRevision)
 	return r, true, nil
 }
 
