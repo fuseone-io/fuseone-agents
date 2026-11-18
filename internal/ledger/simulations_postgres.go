@@ -52,7 +52,8 @@ person and record that somebody asked for it, and it cannot know they thought
 about it. Claiming otherwise in a check would be worse than the gap.
 
 An experiment does not count (NT-015): the agent has to be simulated as it is, and an
-experiment may have run it on a model it would never use.
+experiment may have run it on a model it would never use. Nor does a rehearsal
+(NT-018): one case the author typed, run on a candidate.
 */
 func (p *Postgres) HasSimulation(ctx context.Context, agent domain.AgentID) (bool, error) {
 	var exists bool
@@ -62,6 +63,7 @@ func (p *Postgres) HasSimulation(ctx context.Context, agent domain.AgentID) (boo
 			join run_steps s on s.run_id = r.run_id and s.seq = 1 and s.kind = 'run_started'
 			where r.agent_id = $1 and r.simulated
 			  and coalesce(s.payload->>'experiment', '') = ''
+			  and not s.payload @> '{"rehearsal": true}'
 		)`, string(agent)).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("ledger: read simulations of %s: %w", agent, err)
@@ -76,13 +78,14 @@ Derived from the runs rather than tracked beside them, like everything else
 here: a simulation is exactly the set of runs that name it, and a table
 recording it could disagree with them.
 
-Simulated corpus runs only. A real run is not a rehearsal, and an ad-hoc
+Simulated corpus runs only. A real run is not a simulation, and an ad-hoc
 simulation is not evidence about the saved corpus. Counting either one would
 let an agent be started on the strength of something the corpus never checked.
 
 An experiment replays the same cases and is not a battery either, whatever its
 configuration (NT-015): counted, it would be the evidence the start gate and the drift
-sweep read about this version, and the clock that decides when a real battery runs.
+sweep read about this version, and the clock that decides when a real battery runs. A
+rehearsal (NT-018) names a simulation and a case too, and is excluded the same way.
 */
 func (p *Postgres) Batteries(
 	ctx context.Context, agent domain.AgentID, version domain.VersionID, limit int,
@@ -101,6 +104,7 @@ func (p *Postgres) Batteries(
 		      and s.kind = 'run_started'
 		      and coalesce(s.payload->>'case', '') <> ''
 		      and coalesce(s.payload->>'experiment', '') = ''
+		      and not s.payload @> '{"rehearsal": true}'
 		  )
 		group by r.simulation
 		order by opened desc, r.simulation desc
@@ -157,6 +161,7 @@ func (p *Postgres) LastBatteryAt(
 		      and s.kind = 'run_started'
 		      and coalesce(s.payload->>'case', '') <> ''
 		      and coalesce(s.payload->>'experiment', '') = ''
+		      and not s.payload @> '{"rehearsal": true}'
 		  )`,
 		string(agent), string(version)).Scan(&at)
 
