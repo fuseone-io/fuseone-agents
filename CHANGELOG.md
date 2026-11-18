@@ -30,6 +30,30 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- A simulated run no longer uses standing approvals. Where a grant covered a write, the
+  simulation now stops waiting for approval, as it would with no grant; the Gate's verdict
+  is still recorded, so a battery's expectations read the same. It no longer spends the
+  grant's daily uses or records an approval in its owner's name.
+
+### Fixed
+
+- **A simulation spent standing grants.** A battery or experiment whose write a standing
+  grant covered used one of the grant's daily uses and recorded a real approval in the
+  owner's name. A large battery could use up the day's releases and leave production runs
+  waiting for a person.
+- **An approval could be decided on a simulated run.** `POST /runs/{id}/approvals` now
+  answers 409 `fuseone:simulated-run` and records nothing. Simulated runs were already
+  hidden from the inbox; this closes the direct call.
+
+### Added
+
+- `run_started` knows a `rehearsal` mark, and a rehearsal never counts as a battery, as the
+  simulation that lets an agent leave Draft, or as the drift sweep's last battery (NT-018
+  phase 0). Nothing writes it yet: this release must run on every replica before the one
+  that opens the first rehearsal.
+
 ## [0.121.0] — 2026-11-18
 
 Agents are created and edited in the workbench (NT-018, delivery R, #393): "Novo agente"
