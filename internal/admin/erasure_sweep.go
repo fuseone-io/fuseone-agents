@@ -50,7 +50,7 @@ func (e *Erasures) Sweep(ctx context.Context) (int, error) {
 	var total int
 	err = e.fence.Exclusive(ctx, fencedAgents(copies, seals), func(ctx context.Context) error {
 		var err error
-		total, err = e.sweepPast(ctx, window, before)
+		total, err = e.sweepPast(ctx, sweepBounds{window, before, seals})
 		return err
 	})
 	if err != nil {
@@ -59,21 +59,29 @@ func (e *Erasures) Sweep(ctx context.Context) (int, error) {
 	return total, nil
 }
 
-func (e *Erasures) sweepPast(ctx context.Context, window time.Duration, before time.Time) (int, error) {
+// sweepBounds is what one sweep may take: content older than before, and derived runs of
+// the seals of sealAgents, the agents it fenced for them.
+type sweepBounds struct {
+	window     time.Duration
+	before     time.Time
+	sealAgents []domain.AgentID
+}
+
+func (e *Erasures) sweepPast(ctx context.Context, bounds sweepBounds) (int, error) {
 	tx, err := e.pool.Begin(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("admin: begin retention sweep: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	counts, err := e.eraseExpired(ctx, tx, before)
+	counts, err := e.eraseExpired(ctx, tx, bounds)
 	if err != nil {
 		return 0, err
 	}
 	if counts.total() == 0 {
 		return 0, nil
 	}
-	if err := recordSweep(ctx, tx, counts, window); err != nil {
+	if err := recordSweep(ctx, tx, counts, bounds.window); err != nil {
 		return 0, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -96,36 +104,36 @@ func (e *Erasures) retentionBoundary(ctx context.Context) (time.Duration, time.T
 }
 
 func (e *Erasures) eraseExpired(
-	ctx context.Context, tx pgx.Tx, before time.Time,
+	ctx context.Context, tx pgx.Tx, bounds sweepBounds,
 ) (sweepCounts, error) {
 	var counts sweepCounts
-	replays, replayed, err := eraseExpiredReplays(ctx, tx, before)
+	replays, replayed, err := eraseExpiredReplays(ctx, tx, bounds.before)
 	if err != nil {
 		return sweepCounts{}, err
 	}
 	counts.corpusReplays = replays
-	expectations, err := eraseExpectationsOfExpired(ctx, tx, before)
+	expectations, err := eraseExpectationsOfExpired(ctx, tx, bounds.before)
 	if err != nil {
 		return sweepCounts{}, err
 	}
-	derived, err := e.eraseRunsOfExpiredSeals(ctx, tx, before)
+	derived, err := e.eraseRunsOfExpiredSeals(ctx, tx, bounds.before, bounds.sealAgents)
 	if err != nil {
 		return sweepCounts{}, err
 	}
-	counts.objects, err = e.content.ErasePastTx(ctx, tx, before, "retention")
+	counts.objects, err = e.content.ErasePastTx(ctx, tx, bounds.before, "retention")
 	if err != nil {
 		return sweepCounts{}, err
 	}
 	counts.objects += replayed + expectations + derived
-	counts.channelRecords, err = e.eraseChannelOperationalRows(ctx, tx, before)
+	counts.channelRecords, err = e.eraseChannelOperationalRows(ctx, tx, bounds.before)
 	if err != nil {
 		return sweepCounts{}, err
 	}
-	counts.egressRecords, err = e.eraseEgressOperationalRows(ctx, tx, before)
+	counts.egressRecords, err = e.eraseEgressOperationalRows(ctx, tx, bounds.before)
 	if err != nil {
 		return sweepCounts{}, err
 	}
-	counts.memoryRecords, err = e.eraseMemoryRows(ctx, tx, before)
+	counts.memoryRecords, err = e.eraseMemoryRows(ctx, tx, bounds.before)
 	if err != nil {
 		return sweepCounts{}, err
 	}

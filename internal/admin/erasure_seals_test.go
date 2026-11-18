@@ -146,3 +146,59 @@ func TestSweep_waitsForACopyInProgressOnTheAgentOfAnExpiringSeal(t *testing.T) {
 		t.Fatalf("derived run after the sweep: err = %v, want erased", err)
 	}
 }
+
+// A seal already erased some other way still has its derived runs taken by the next sweep,
+// and its agent is fenced for that too: catching up is not a reason to skip the fence.
+func TestSweep_aTombstonedSealsLiveRun_isTakenOnlyBehindTheAgentsFence(t *testing.T) {
+	erasures, content := erasuresFor(t, time.Now)
+	pool := openPool(t)
+	cleanCorpus(t, pool)
+	ctx := context.Background()
+	agent := string(fresh("agent-tombstoned-"))
+	seal := sealOf(t, pool, content, agent, time.Hour)
+	derived := runOnSeal(t, pool, content, agent, seal)
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := content.EraseOwnersTx(ctx, tx, "authoring", []string{seal}, "test"); err != nil {
+		t.Fatalf("erase the seal alone: %v", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	entered, release, swept := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	held := make(chan error, 1)
+	go func() {
+		held <- regression.NewStore(pool).Hold(ctx, domain.AgentID(agent), func(context.Context) error {
+			close(entered)
+			<-release
+			return nil
+		})
+	}()
+	<-entered
+	go func() {
+		_, err := erasures.Sweep(ctx)
+		swept <- err
+	}()
+
+	select {
+	case err := <-swept:
+		t.Fatalf("the sweep did not wait for the agent's fence: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	if _, err := content.Get(ctx, derived); err != nil {
+		t.Fatalf("the derived run went while the fence was held: %v", err)
+	}
+	close(release)
+	if err := <-held; err != nil {
+		t.Fatalf("Hold: %v", err)
+	}
+	if err := <-swept; err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if _, err := content.Get(ctx, derived); !errors.Is(err, ledger.ErrErased) {
+		t.Fatalf("derived run after the sweep: err = %v, want erased", err)
+	}
+}
