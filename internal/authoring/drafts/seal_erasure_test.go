@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 	"testing"
 	"time"
 
@@ -216,5 +217,52 @@ func TestSubjectErasure_reachesTheSealsOfTheCitedTurnsProposalsAndTheirRuns(t *t
 	if erased(t, pool, neighbourSeal.ref) || erased(t, pool, neighbourRun) {
 		t.Errorf("the neighbour's seal erased=%v its run erased=%v, want neither",
 			erased(t, pool, neighbourSeal.ref), erased(t, pool, neighbourRun))
+	}
+}
+
+// Seals are insert-only, so a search that scanned them would cost every seal ever taken,
+// inside the erasure's transaction and its exclusive fence.
+func TestSealsReached_startsFromTheDraft(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := t.Context()
+	// Seeded and planned in one transaction that is rolled back: seals are insert-only, and
+	// five thousand left in the package's database would skew every later plan.
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := tx.Exec(ctx, `
+		insert into agent_version_digests (agent_id, version_id, digest)
+		select 'plan-agent', 'vplan' || g, repeat('a', 64) from generate_series(1, 5000) g
+		on conflict do nothing;
+		insert into agent_seals (seal_id, agent_id, version_id, company_id, area_id, content_ref,
+		  draft_id, draft_revision, sealed_by)
+		select gen_random_uuid(), 'plan-agent', 'vplan' || g, 'acme', 'cx', 'ref',
+		  gen_random_uuid(), 'rev', 'usr_ana'
+		from generate_series(1, 5000) g;
+		insert into agent_seal_sources (seal_id, part, trail_seq)
+		select seal_id, 'tools/crm.lookup', null from agent_seals where agent_id = 'plan-agent'
+		on conflict do nothing;
+		analyze agent_seals;
+		analyze agent_seal_sources;`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	rows, err := tx.Query(ctx, "explain "+drafts.SealsReachedSQL,
+		"0b7c3e52-8a43-4b55-9a3f-0d6a3c5f9e11", []string{}, []string{})
+	if err != nil {
+		t.Fatalf("explain: %v", err)
+	}
+	plan := ""
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		plan += line + "\n"
+	}
+	rows.Close()
+	if strings.Contains(plan, "Seq Scan on agent_seals") || strings.Contains(plan, "Seq Scan on agent_seal_sources") {
+		t.Errorf("the search reads every seal:\n%s", plan)
 	}
 }

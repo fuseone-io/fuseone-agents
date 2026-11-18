@@ -49,8 +49,10 @@ func (s *Store) eraseSealsReachedTx(ctx context.Context, tx pgx.Tx, in sealReach
 	return erased + n, nil
 }
 
-func sealsReached(ctx context.Context, tx pgx.Tx, in sealReach) ([]string, error) {
-	rows, err := tx.Query(ctx, `
+// sealsReachedSQL starts from the draft, on the agent_seals draft index: seals are
+// insert-only, so a scan would grow with every seal the installation ever took, inside the
+// erasure's transaction and its exclusive fence.
+const sealsReachedSQL = `
 		select distinct s.seal_id::text
 		from agent_seals s
 		join agent_seal_sources source on source.seal_id = s.seal_id
@@ -61,7 +63,10 @@ func sealsReached(ctx context.Context, tx pgx.Tx, in sealReach) ([]string, error
 		  and (p.trail_seq is null
 		       or proposal.thread_id = any($2::uuid[])
 		       or proposal.proposal_id = any($3::uuid[]))
-		order by 1`, in.draftID, in.threads, in.proposals)
+		order by 1`
+
+func sealsReached(ctx context.Context, tx pgx.Tx, in sealReach) ([]string, error) {
+	rows, err := tx.Query(ctx, sealsReachedSQL, in.draftID, in.threads, in.proposals)
 	if err != nil {
 		return nil, fmt.Errorf("drafts: find seals reached by erasure: %w", err)
 	}
