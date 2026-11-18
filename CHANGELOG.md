@@ -30,6 +30,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.119.1] — 2026-11-18
+
+The workbench conversation could not take a turn on a real agent: a draft with tens of
+kilobytes of instructions was refused before the model was called (#387). No migration,
+no rollback floor.
+
 ### Fixed
 
 - **A real agent's draft fits a workbench turn.** A draft with tens of kilobytes of
