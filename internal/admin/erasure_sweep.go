@@ -39,12 +39,16 @@ func (e *Erasures) Sweep(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	agents, err := e.agentsLosingCopies(ctx, before)
+	copies, err := e.agentsLosingCopies(ctx, before)
+	if err != nil {
+		return 0, err
+	}
+	seals, err := e.agentsLosingSeals(ctx, before)
 	if err != nil {
 		return 0, err
 	}
 	var total int
-	err = e.fence.Exclusive(ctx, agents, func(ctx context.Context) error {
+	err = e.fence.Exclusive(ctx, fencedAgents(copies, seals), func(ctx context.Context) error {
 		var err error
 		total, err = e.sweepPast(ctx, window, before)
 		return err
@@ -104,11 +108,15 @@ func (e *Erasures) eraseExpired(
 	if err != nil {
 		return sweepCounts{}, err
 	}
+	derived, err := e.eraseRunsOfExpiredSeals(ctx, tx, before)
+	if err != nil {
+		return sweepCounts{}, err
+	}
 	counts.objects, err = e.content.ErasePastTx(ctx, tx, before, "retention")
 	if err != nil {
 		return sweepCounts{}, err
 	}
-	counts.objects += replayed + expectations
+	counts.objects += replayed + expectations + derived
 	counts.channelRecords, err = e.eraseChannelOperationalRows(ctx, tx, before)
 	if err != nil {
 		return sweepCounts{}, err
