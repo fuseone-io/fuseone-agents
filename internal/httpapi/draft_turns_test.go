@@ -14,6 +14,7 @@ import (
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/model"
+	"github.com/jackc/pgx/v5"
 )
 
 /*
@@ -322,4 +323,8 @@ func TestListDraftTurns_saysWhatTheDayHoldsAgainstItsCeiling(t *testing.T) {
 	if got := resp.(openapi.ListDraftTurns200JSONResponse); got.SpentMicros != nil || got.DailyMicros != nil {
 		t.Errorf("assistant off still says %v of %v", got.SpentMicros, got.DailyMicros)
 	}
+}
+
+func (d *draftStub) WithinPublication(drafts.Publishing) func(context.Context, pgx.Tx, domain.VersionID) error {
+	return func(context.Context, pgx.Tx, domain.VersionID) error { return d.err }
 }

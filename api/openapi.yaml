@@ -899,6 +899,59 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
 
+  /agents/{agentId}/draft/publish:
+    post:
+      tags: [agents]
+      operationId: publishAgentDraft
+      summary: Publish the draft as the agent's next version
+      description: |
+        Publishing from the workbench (NT-018, contracts 4, 5 and 10). The
+        draft becomes the agent's next version through the ordinary
+        publication, its fences and its claim included, and the draft stays,
+        based on that version.
+
+        In one transaction: the agent's ETag, which must still be the one the
+        draft was based on (none for an agent the draft creates); the draft's
+        ETag, which must be the `If-Match` sent; and both scopes, the agent's
+        current one and the draft's, for `agent:publish`. A draft that moved
+        answers 412 with its ETag (`fuseone:precondition-failed`); an agent
+        that moved since the draft was based on it answers 412 with
+        `fuseone:agent-moved`, and the draft must be opened again on the
+        current version. Without either scope, 404.
+
+        Until candidates exist, a draft whose instructions have no `never`
+        block is refused (400, `fuseone:publish-needs-never`), as activation
+        will. The JSON API, the `.agent.md` file and Terraform publish without
+        it.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatchRequired'
+      responses:
+        '200':
+          description: Published; the draft, based on the new version.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agentId, versionId, created, paused, draft]
+                properties:
+                  agentId: { type: string }
+                  versionId: { type: string }
+                  created:
+                    type: boolean
+                    description: False when the draft was the current version already.
+                  paused: { type: boolean }
+                  draft: { $ref: '#/components/schemas/AgentDraft' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
   /agents/{agentId}/draft/proposals:
     get:
       tags: [agents]

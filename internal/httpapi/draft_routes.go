@@ -9,6 +9,7 @@ import (
 	"github.com/fuseone/agents/internal/authoring/drafts"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/jackc/pgx/v5"
 )
 
 /*
@@ -37,6 +38,9 @@ type Drafts interface {
 	BeginTurn(ctx context.Context, b drafts.Beginning) (drafts.Started, error)
 	SettleTurn(ctx context.Context, s drafts.Settlement) (drafts.Settled, error)
 	EraseThread(ctx context.Context, agent domain.AgentID, c drafts.Caller) error
+	// WithinPublication is the draft's condition on its own publication,
+	// run in the publication's transaction.
+	WithinPublication(p drafts.Publishing) func(context.Context, pgx.Tx, domain.VersionID) error
 }
 
 // WithDrafts wires the workbench's drafts.

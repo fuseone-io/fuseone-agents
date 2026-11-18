@@ -123,6 +123,10 @@ const (
 	CodeConversationSpent    Code = "fuseone:conversation-spent"
 	CodeTurnInFlight         Code = "fuseone:turn-in-flight"
 	CodeTurnTooLarge         Code = "fuseone:turn-too-large"
+	// Publishing from the workbench: the agent was published elsewhere since
+	// the draft was based on it, or the draft has no "never" block yet.
+	CodeAgentMoved        Code = "fuseone:agent-moved"
+	CodePublishNeedsNever Code = "fuseone:publish-needs-never"
 )
 
 /*

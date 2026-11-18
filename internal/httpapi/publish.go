@@ -112,28 +112,7 @@ func (s *Server) PublishAgent(
 	if err != nil {
 		return nil, fmt.Errorf("publish %s: %w", req.AgentId, err)
 	}
-	// Recorded as paused only if nobody has decided: republishing an agent
-	// somebody deliberately started must not stop it.
-	if err := s.publisher.EnsurePaused(ctx, published.ID, callerOf(ctx)); err != nil {
-		return nil, err
-	}
-
-	// After the version exists, so what is reconciled is what was published.
-	// An error here is returned rather than swallowed: publishing the same
-	// definition again is a no-op, so a caller retrying reaches the sync.
-	if s.schedules != nil {
-		if err := s.schedules.Sync(ctx, published.ID,
-			spec.CronSchedules(published), clockOr(s.clock).Now()); err != nil {
-			return nil, fmt.Errorf("reconcile the schedules of %s: %w", published.ID, err)
-		}
-	}
-	if s.webhooks != nil {
-		if err := s.webhooks.Sync(ctx, published.ID, scope, spec.Webhooks(published)); err != nil {
-			return nil, fmt.Errorf("reconcile the webhooks of %s: %w", published.ID, err)
-		}
-	}
-
-	paused, err := s.publisher.IsPaused(ctx, published.ID)
+	paused, err := s.afterPublication(ctx, published, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -243,4 +222,31 @@ func (s *Server) agentVersions(ctx context.Context, agent domain.AgentID) (map[d
 		out[v.VersionID] = true
 	}
 	return out, nil
+}
+
+// afterPublication is what every door that publishes does once the version
+// exists: the agent recorded as paused unless somebody decided, its schedules
+// and webhooks reconciled to what was published. It answers whether the agent
+// is paused.
+func (s *Server) afterPublication(ctx context.Context, published spec.Spec, scope domain.Scope) (bool, error) {
+	// Recorded as paused only if nobody has decided: republishing an agent
+	// somebody deliberately started must not stop it.
+	if err := s.publisher.EnsurePaused(ctx, published.ID, callerOf(ctx)); err != nil {
+		return false, err
+	}
+	// After the version exists, so what is reconciled is what was published.
+	// An error here is returned rather than swallowed: publishing the same
+	// definition again is a no-op, so a caller retrying reaches the sync.
+	if s.schedules != nil {
+		if err := s.schedules.Sync(ctx, published.ID,
+			spec.CronSchedules(published), clockOr(s.clock).Now()); err != nil {
+			return false, fmt.Errorf("reconcile the schedules of %s: %w", published.ID, err)
+		}
+	}
+	if s.webhooks != nil {
+		if err := s.webhooks.Sync(ctx, published.ID, scope, spec.Webhooks(published)); err != nil {
+			return false, fmt.Errorf("reconcile the webhooks of %s: %w", published.ID, err)
+		}
+	}
+	return s.publisher.IsPaused(ctx, published.ID)
 }
