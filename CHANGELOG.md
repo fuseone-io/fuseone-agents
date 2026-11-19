@@ -50,9 +50,10 @@ field" is a commit message.
   definition a publication would refuse, no `never` block (400
   `fuseone:publish-needs-never`), an agent that moved out of the version's scope (409
   `fuseone:candidate-scope-moved`), an autonomous agent, a candidate with no readable seal
-  (409 `fuseone:candidate-unreadable`), or a version id that names other bytes. A first
-  version is born paused. Schedules and webhooks are reconciled after the commit, and a
-  retry with the new ETag reaches them again.
+  (409 `fuseone:candidate-unreadable`), a version id that names other bytes, or a webhook
+  path another agent answers on (409 `fuseone:webhook-path-taken`). A first version is
+  born paused. The agent's schedules and webhooks move with the version in the same
+  transaction, so a slower activation can never put an earlier version's triggers back.
 
 ## [0.124.1] — 2026-11-19
 

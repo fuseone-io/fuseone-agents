@@ -345,8 +345,8 @@ func TestActivate_firstVersion_ifNoneMatch_goesLivePausedInTheSealedScope(t *tes
 	if err != nil || got.SealID != seal || w.current(t) != candidate.Version {
 		t.Fatalf("Activate = %+v, %v; want the first version live", got, err)
 	}
-	if paused, err := w.publisher.IsPaused(t.Context(), "triage"); err != nil || !paused {
-		t.Errorf("paused = %v (%v), want a first version born paused", paused, err)
+	if !got.Paused {
+		t.Errorf("paused = %v, want a first version born paused", got.Paused)
 	}
 }
 

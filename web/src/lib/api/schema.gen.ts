@@ -721,11 +721,13 @@ export interface paths {
          *     `fuseone:stage-refused`), a candidate with no readable seal (409
          *     `fuseone:candidate-unreadable`), and a version id that names other
          *     bytes or bytes nobody kept (409 `fuseone:version-collision`,
-         *     `fuseone:version-digest-unknown`).
+         *     `fuseone:version-digest-unknown`), and a webhook path another agent
+         *     already answers on (409 `fuseone:webhook-path-taken`).
          *
+         *     The agent's schedules and webhooks move to the version in the same
+         *     transaction, so nothing is left to reconcile after the answer.
          *     Activating the version that is already current, with the ETag it has
-         *     now, succeeds again: a retry reaches the reconciliation of schedules
-         *     and webhooks that follows the commit.
+         *     now, succeeds again and changes nothing.
          */
         post: operations["activateAgentVersion"];
         delete?: never;
@@ -8675,8 +8677,9 @@ export interface operations {
             404: components["responses"]["NotFound"];
             /**
              * @description The agent moved out of the version's scope, it is autonomous, the
-             *     candidate has no readable seal, or the version id names other bytes
-             *     or bytes nobody kept. The problem type says which.
+             *     candidate has no readable seal, the version id names other bytes
+             *     or bytes nobody kept, or a webhook path it declares belongs to
+             *     another agent. The problem type says which.
              */
             409: {
                 headers: {

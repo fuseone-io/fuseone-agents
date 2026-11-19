@@ -29,6 +29,10 @@ type Activation struct {
 	// Accept judges the definition after the graph, before anything is written: the
 	// workbench's never block.
 	Accept func(Spec) error
+	// Within runs in the activation's transaction once the version is current, before
+	// the commit: what must move with the version moves in the same commit, under the
+	// agent's row. An error undoes the activation.
+	Within func(ctx context.Context, tx pgx.Tx, s Spec) error
 }
 
 // Activated is an activation that committed.
@@ -42,6 +46,8 @@ type Activated struct {
 	Judged  Published
 	// Revision is the agent's tag once the activation committed.
 	Revision domain.Revision
+	// Paused is whether the agent may start, as the activation's transaction left it.
+	Paused bool
 }
 
 /*
@@ -82,6 +88,10 @@ func (p *Publisher) Activate(ctx context.Context, a Activation) (Activated, erro
 	}
 	if err := writeActivation(ctx, tx, a, out); err != nil {
 		return Activated{}, err
+	}
+	if err := tx.QueryRow(ctx, `select paused from agent_state where agent_id = $1`,
+		string(a.Agent)).Scan(&out.Paused); err != nil {
+		return Activated{}, fmt.Errorf("spec: activate %s@%s: read the pause: %w", a.Agent, a.Version, err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Activated{}, fmt.Errorf("spec: activate %s@%s: commit: %w", a.Agent, a.Version, err)
@@ -223,5 +233,8 @@ func writeActivation(ctx context.Context, tx pgx.Tx, a Activation, out Activated
 		string(a.Agent), string(a.Version), out.SealID, path, string(a.By)); err != nil {
 		return fmt.Errorf("spec: record the activation of %s@%s: %w", a.Agent, a.Version, err)
 	}
-	return nil
+	if a.Within == nil {
+		return nil
+	}
+	return a.Within(ctx, tx, out.Spec)
 }

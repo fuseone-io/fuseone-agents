@@ -18,8 +18,8 @@ A candidate, or a version already published, becomes the agent's current version
 the publication's locks and checks. This route does what comes before any lock — the
 headers by syntax, the version's scope, the content fence — and the publication's checks
 over the stored definition; the store does the rest under the agent's row, in the order
-NT-018 gives, and the route answers what it found. What follows the commit is what follows
-every publication.
+NT-018 gives, moving the agent's schedules and webhooks in the same transaction, and the
+route answers what it found.
 */
 
 // Activations is what the activation route reads and does, declared here by the consumer.
@@ -77,7 +77,7 @@ func (s *Server) ActivateAgentVersion(
 	if refused != nil || err != nil {
 		return refused, err
 	}
-	return s.activationAnswered(ctx, activated, scope)
+	return s.activationAnswered(ctx, activated), nil
 }
 
 /*
@@ -107,11 +107,15 @@ func (s *Server) activateHeld(ctx context.Context, a spec.Activation) (spec.Acti
 	if err != nil {
 		return spec.Activated{}, nil, err
 	}
-	if found {
-		detail, err := s.checker().Check(ctx, definition, clockOr(s.clock).Now())
-		if err != nil || detail != "" {
-			return spec.Activated{}, activationInvalid(CodeInvalidInput, detail), err
-		}
+	// No readable seal is answered here, before the locks: activating bytes that were
+	// never checked, because a seal of the same version was written in between, would
+	// skip the publication's checks.
+	if !found {
+		return spec.Activated{}, activationUnreadable(a.Agent, a.Version), nil
+	}
+	detail, err := s.checker().Check(ctx, definition, clockOr(s.clock).Now())
+	if err != nil || detail != "" {
+		return spec.Activated{}, activationInvalid(CodeInvalidInput, detail), err
 	}
 	activated, err := s.activations.Activate(ctx, a)
 	if refused, ok := activationRefused(string(a.Agent), err); ok {
@@ -120,25 +124,23 @@ func (s *Server) activateHeld(ctx context.Context, a spec.Activation) (spec.Acti
 	return activated, nil, err
 }
 
-// activationAnswered answers a committed activation, after what follows every
-// publication: the agent recorded paused if nobody decided, schedules and webhooks
-// reconciled to the version now current.
-func (s *Server) activationAnswered(ctx context.Context, a spec.Activated, scope domain.Scope) (activationReply, error) {
-	paused, err := s.afterPublication(ctx, a.Spec, scope)
-	if err != nil {
-		return nil, err
-	}
+/*
+activationAnswered answers a committed activation. Nothing is left to do after the commit:
+the schedules, the webhooks and the pause moved in the store's transaction, under the
+agent's row, so a slower activation can never land its triggers after a later one.
+*/
+func (s *Server) activationAnswered(ctx context.Context, a spec.Activated) activationReply {
 	out := openapi.ActivateAgentVersion200JSONResponse{
 		Headers: openapi.ActivateAgentVersion200ResponseHeaders{ETag: string(a.Revision)},
 		Body: openapi.AgentActivated{
-			AgentId: string(a.Spec.ID), VersionId: string(a.Spec.Version), Created: a.Created, Paused: paused,
+			AgentId: string(a.Spec.ID), VersionId: string(a.Spec.Version), Created: a.Created, Paused: a.Paused,
 			EventCycleWarning: eventCycleWarning(a.Judged, auth.VisibleScopes(ctx, domain.PermAgentRead)),
 		},
 	}
 	if a.SealID != "" {
 		out.Body.SealId = ptr(a.SealID)
 	}
-	return out, nil
+	return out
 }
 
 // acceptNever is the workbench's checklist on the definition the store activates.

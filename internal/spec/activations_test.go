@@ -1,10 +1,16 @@
 package spec_test
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/trigger"
 )
 
 /*
@@ -71,5 +77,105 @@ func TestActivations_definition_isThePublishedRow_elseAReadableSeal_elseNone(t *
 	w.erase(t, seal)
 	if _, found, err := activations.Definition(t.Context(), "triage", candidate.Version, cx); err != nil || found {
 		t.Errorf("Definition(erased) found %v, %v; want none, for the activation to refuse", found, err)
+	}
+}
+
+/*
+What must move with the version — its schedules and webhooks — moves in the activation's
+transaction, under the agent's row: a reconciliation run after the commit could land after
+a later activation's and put the earlier version's triggers back. Within sees the version
+current, and its refusal undoes the activation.
+*/
+func TestActivate_within_seesTheVersionCurrentAndItsRefusalUndoesTheActivation(t *testing.T) {
+	w := newActivationWorld(t)
+	first := w.publishFirst(t)
+	_, candidate := w.seal(t, candidateOf("Read the sealed ticket and classify it."))
+	a := w.activation(t, candidate.Version, first.Version)
+	refused := errors.New("the path belongs to another agent")
+	var seen domain.VersionID
+	a.Within = func(ctx context.Context, tx pgx.Tx, s spec.Spec) error {
+		current, _, err := spec.CurrentIn(ctx, tx, "triage")
+		seen = current.Version
+		return errors.Join(err, refused)
+	}
+
+	if _, err := w.publisher.Activate(t.Context(), a); !errors.Is(err, refused) {
+		t.Fatalf("Activate = %v, want the refusal", err)
+	}
+	if seen != candidate.Version {
+		t.Errorf("Within saw %s current, want the candidate", seen)
+	}
+	w.unchanged(t, first)
+}
+
+func TestActivate_answersWhetherTheAgentIsPaused_asItsTransactionLeftIt(t *testing.T) {
+	w := newActivationWorld(t)
+	first := w.publishFirst(t)
+	_, candidate := w.seal(t, candidateOf("Read the sealed ticket and classify it."))
+	if err := w.publisher.SetPaused(t.Context(), "triage", false, "usr_ops"); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := w.publisher.Activate(t.Context(), w.activation(t, candidate.Version, first.Version))
+	if err != nil || got.Paused {
+		t.Fatalf("Activate = paused %v, %v; want the running agent left running", got.Paused, err)
+	}
+}
+
+func reconciling(t *testing.T, w activationWorld) *spec.Activations {
+	t.Helper()
+	if _, err := w.pool.Exec(t.Context(), `truncate trigger_schedules, webhook_triggers`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	return spec.NewActivations(w.publisher, w.reader).
+		WithReconciliation(trigger.NewPostgresSchedules(w.pool), trigger.NewPostgresWebhooks(w.pool))
+}
+
+func schedulesOf(t *testing.T, w activationWorld) []string {
+	t.Helper()
+	rows, err := w.pool.Query(t.Context(), `select schedule from trigger_schedules where agent_id = 'triage'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestActivations_activate_reconcilesTheVersionsSchedulesInItsTransaction(t *testing.T) {
+	w := newActivationWorld(t)
+	first := w.publishFirst(t)
+	_, candidate := w.seal(t, candidateOf("Read the sealed ticket and classify it."))
+	activations := reconciling(t, w)
+
+	if _, err := activations.Activate(t.Context(), w.activation(t, candidate.Version, first.Version)); err != nil {
+		t.Fatalf("Activate = %v", err)
+	}
+	if got := schedulesOf(t, w); len(got) != 1 || got[0] != "*/15 * * * *" {
+		t.Errorf("schedules = %v, want the activated version's cron", got)
+	}
+}
+
+func TestActivations_activate_aWebhookPathTakenByAnotherAgent_undoesEverything(t *testing.T) {
+	w := newActivationWorld(t)
+	first := w.publishFirst(t)
+	text := strings.Replace(candidateOf("Read the sealed ticket and classify it."),
+		`triggers:`, "triggers:\n  - { type: webhook, path: crm/ticket }", 1)
+	_, hooked := w.seal(t, text)
+	activations := reconciling(t, w)
+	if err := trigger.NewPostgresWebhooks(w.pool).Sync(t.Context(), "someone-else", cx,
+		[]domain.WebhookTrigger{{Path: "crm/ticket"}}); err != nil {
+		t.Fatalf("take the path: %v", err)
+	}
+
+	_, err := activations.Activate(t.Context(), w.activation(t, hooked.Version, first.Version))
+	if !errors.Is(err, trigger.ErrPathTaken) {
+		t.Fatalf("Activate = %v, want the taken path refused", err)
+	}
+	w.unchanged(t, first)
+	if got := schedulesOf(t, w); len(got) != 0 {
+		t.Errorf("schedules = %v, want none written by an undone activation", got)
 	}
 }

@@ -2,11 +2,13 @@ package httpapi
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/trigger"
 )
 
 // activationConflicts are the store's refusals answered 409, each with its own type.
@@ -20,6 +22,7 @@ var activationConflicts = []struct {
 	{domain.ErrCandidateUnreadable, CodeCandidateUnreadable, "Candidate unreadable"},
 	{spec.ErrVersionCollision, CodeVersionCollision, "Version id already taken"},
 	{spec.ErrDigestUnknown, CodeVersionDigestUnknown, "Version published without a digest"},
+	{trigger.ErrPathTaken, CodeWebhookPathTaken, "Webhook path taken"},
 }
 
 // activationRefused is an activation the store refused for a reason the caller can act
@@ -45,6 +48,12 @@ func activationRefused(agent string, err error) (activationReply, bool) {
 		}
 	}
 	return nil, false
+}
+
+func activationUnreadable(agent domain.AgentID, version domain.VersionID) activationReply {
+	return openapi.ActivateAgentVersion409ApplicationProblemPlusJSONResponse(refusal(
+		http.StatusConflict, CodeCandidateUnreadable, "Candidate unreadable",
+		fmt.Sprintf("no seal of %s@%s is readable: seal the draft again", agent, version)))
 }
 
 func activationRequired() activationReply {

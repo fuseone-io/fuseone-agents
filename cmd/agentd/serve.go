@@ -225,9 +225,11 @@ func serve(args []string) error {
 			WithDrafts(draftStore).
 			// Candidates sealed from it, each seen only in its sealed scope (NT-018 phase 2).
 			WithCandidates(spec.NewCandidateReader(identity.pool, ledger.NewContent(identity.pool))).
-			// Activating one, or a published version, through the publication's locks.
+			// Activating one, or a published version, through the publication's locks,
+			// moving its schedules and webhooks in the same transaction.
 			WithActivations(spec.NewActivations(spec.NewPublisher(identity.pool, engine.SystemClock{}),
-				spec.NewCandidateReader(identity.pool, ledger.NewContent(identity.pool)))).
+				spec.NewCandidateReader(identity.pool, ledger.NewContent(identity.pool))).
+				WithReconciliation(trigger.NewPostgresSchedules(identity.pool), webhooksWith(identity.pool, masterVault))).
 			// The workbench's conversation (NT-018 phase 3): the same
 			// registry, for the model, its price and a scope's providers.
 			WithTurnModels(providers).

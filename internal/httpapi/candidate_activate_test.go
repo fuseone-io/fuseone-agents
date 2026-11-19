@@ -9,6 +9,7 @@ import (
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/trigger"
 )
 
 /*
@@ -32,6 +33,8 @@ type fakeActivations struct {
 	corpus    *fakeCorpus
 	calls     []spec.Activation
 	fenced    bool
+	// unreadable is a candidate with no readable seal before the locks.
+	unreadable bool
 }
 
 func newFakeActivations(corpus *fakeCorpus) *fakeActivations {
@@ -40,7 +43,7 @@ func newFakeActivations(corpus *fakeCorpus) *fakeActivations {
 		activated: spec.Activated{
 			Spec: spec.Spec{ID: "triage", Version: activatedVersion, Company: "acme", Area: "cx",
 				Instructions: "Classify.\n\nNever\nRefund."},
-			SealID: "0b7c3e52-8a43-4b55-9a3f-0d6a3c5f9e11", Created: true,
+			SealID: "0b7c3e52-8a43-4b55-9a3f-0d6a3c5f9e11", Created: true, Paused: true,
 			Revision: domain.AgentRevision(activatedVersion, false),
 		},
 	}
@@ -53,7 +56,7 @@ func (f *fakeActivations) Scopes(gocontext.Context, domain.AgentID, domain.Versi
 func (f *fakeActivations) Definition(
 	gocontext.Context, domain.AgentID, domain.VersionID, domain.Scope,
 ) (spec.Spec, bool, error) {
-	return spec.Spec{}, false, nil
+	return f.activated.Spec, !f.unreadable, nil
 }
 
 func (f *fakeActivations) Activate(_ gocontext.Context, a spec.Activation) (spec.Activated, error) {
@@ -129,7 +132,7 @@ func TestActivate_aVersionTheCallerMayNotPublishIn_orNone_isNotFound(t *testing.
 	}
 }
 
-func TestActivate_committed_answersTheNewTagFromInsideTheFence_andRecordsItPaused(t *testing.T) {
+func TestActivate_committed_answersTheNewTagFromInsideTheFence_withNothingLeftForAfter(t *testing.T) {
 	t.Parallel()
 	corpus, pub := &fakeCorpus{}, newPublisher()
 	f := newFakeActivations(corpus)
@@ -138,14 +141,28 @@ func TestActivate_committed_answersTheNewTagFromInsideTheFence_andRecordsItPause
 	ok, isOK := resp.(openapi.ActivateAgentVersion200JSONResponse)
 	if !isOK || ok.Headers.ETag != string(f.activated.Revision) || !ok.Body.Created ||
 		ok.Body.SealId == nil || *ok.Body.SealId != f.activated.SealID || !ok.Body.Paused {
-		t.Fatalf("answer = %T %+v, want 200 with the new tag, the seal and paused", resp, resp)
+		t.Fatalf("answer = %T %+v, want 200 with the new tag, the seal and the pause the store read", resp, resp)
 	}
 	a := f.calls[0]
 	if !f.fenced || a.Scope != cxScope || a.By != "usr_ana" || a.Guard.Allow == nil {
 		t.Errorf("activation = %+v (fenced %v), want it inside the fence, in cx, by the caller, guarded", a, f.fenced)
 	}
-	if len(pub.ensured) != 1 || pub.ensured[0] != "triage" {
-		t.Errorf("ensured paused = %v, want the agent, as after a publication", pub.ensured)
+	// Schedules, webhooks and the pause move in the store's transaction: anything after
+	// the commit could land after a later activation's.
+	if len(pub.ensured) != 0 {
+		t.Errorf("ensured paused after the commit = %v, want nothing done after it", pub.ensured)
+	}
+}
+
+func TestActivate_aCandidateWithNoReadableSealBeforeTheLocks_isUnreadable_andNotActivated(t *testing.T) {
+	t.Parallel()
+	f := newFakeActivations(&fakeCorpus{})
+	f.unreadable = true
+
+	resp := activate(t, activationServer(f, newPublisher()), inArea("cx", domain.RoleAuthor), liveTag(), nil)
+	c, ok := resp.(openapi.ActivateAgentVersion409ApplicationProblemPlusJSONResponse)
+	if !ok || c.Type == nil || *c.Type != string(CodeCandidateUnreadable) || len(f.calls) != 0 {
+		t.Fatalf("answer = %T %+v, %d activations; want 409 candidate-unreadable and none", resp, resp, len(f.calls))
 	}
 }
 
@@ -169,6 +186,7 @@ func TestActivate_storeRefusals_becomeThePublicationsAnswers(t *testing.T) {
 		domain.ErrCandidateUnreadable: CodeCandidateUnreadable,
 		spec.ErrVersionCollision:      CodeVersionCollision,
 		spec.ErrDigestUnknown:         CodeVersionDigestUnknown,
+		trigger.ErrPathTaken:          CodeWebhookPathTaken,
 	}
 	for err, code := range conflicts {
 		f := newFakeActivations(&fakeCorpus{})

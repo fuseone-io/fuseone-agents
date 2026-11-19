@@ -6,8 +6,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -65,15 +68,15 @@ func activationBytes(agent domain.AgentID, never string) string {
 	return fmt.Sprintf(activationTemplate, agent, block)
 }
 
-// activationWorld is the experiment world with activation and the schedules wired, as
-// serve wires them.
+// activationWorld is the experiment world with activation wired as serve wires it, its
+// reconciliation included.
 func activationWorld(t *testing.T) *experimentWorld {
 	t.Helper()
 	w := newExperimentWorld(t)
 	content := ledger.NewContent(w.pool)
-	w.server.WithSchedules(trigger.NewPostgresSchedules(w.pool)).
-		WithActivations(spec.NewActivations(spec.NewPublisher(w.pool, engine.SystemClock{}),
-			spec.NewCandidateReader(w.pool, content)))
+	w.server.WithActivations(spec.NewActivations(spec.NewPublisher(w.pool, engine.SystemClock{}),
+		spec.NewCandidateReader(w.pool, content)).
+		WithReconciliation(trigger.NewPostgresSchedules(w.pool), trigger.NewPostgresWebhooks(w.pool)))
 	return w
 }
 
@@ -308,5 +311,84 @@ func TestActivation_holdingTheFence_isWaitedForByTheErasure_andKeepsItsText(t *t
 	instructions, _, err := spec.NewRegistry(w.pool).Instructions(ctx, w.agent, version)
 	if err != nil || !strings.Contains(instructions, "from the activated text") || w.currentOf(t, w.agent) != version {
 		t.Errorf("after the erasure: instructions %q (%v), current %s; want the live version's text kept", instructions, err, w.currentOf(t, w.agent))
+	}
+}
+
+func TestActivation_fromTheRoute_aWebhookPathAnotherAgentHolds_changesNothing(t *testing.T) {
+	w := activationWorld(t)
+	live := w.currentOf(t, w.agent)
+	text := strings.Replace(activationBytes(w.agent, "Refund a ticket."),
+		"triggers:", "triggers:\n  - { type: webhook, path: crm/ticket }", 1)
+	version := w.sealText(t, activationSeal, text)
+	if err := trigger.NewPostgresWebhooks(w.pool).Sync(t.Context(), "someone-else",
+		domain.Scope{Company: "acme", Area: "cx"}, []domain.WebhookTrigger{{Path: "crm/ticket"}}); err != nil {
+		t.Fatalf("take the path: %v", err)
+	}
+
+	if code := activationConflict(w.activate(t, author(t.Context()), w.agent, version, tagOf(live), nil)); code != "fuseone:webhook-path-taken" {
+		t.Fatalf("activate = %s, want fuseone:webhook-path-taken", code)
+	}
+	if got := w.currentOf(t, w.agent); got != live {
+		t.Errorf("current = %s, want %s still live", got, live)
+	}
+	if got := w.schedulesOf(t, w.agent); len(got) != 0 {
+		t.Errorf("schedules = %v, want none from an activation that was undone", got)
+	}
+}
+
+// stallingSchedules holds the first reconciliation until released.
+type stallingSchedules struct {
+	*trigger.PostgresSchedules
+	once             *sync.Once
+	entered, release chan struct{}
+}
+
+func (s stallingSchedules) SyncIn(
+	ctx context.Context, tx pgx.Tx, agent domain.AgentID, schedules []string, from time.Time,
+) error {
+	s.once.Do(func() {
+		close(s.entered)
+		<-s.release
+	})
+	return s.PostgresSchedules.SyncIn(ctx, tx, agent, schedules, from)
+}
+
+/*
+A slower activation never puts its triggers back after a later one. A stalls while it
+reconciles; B, made against the tag A will leave, waits for A's row lock instead of
+committing around it, and reconciles after A. The schedules end as B declares them.
+*/
+func TestActivation_aStalledReconciliation_holdsTheNextActivation_andTheLatestWins(t *testing.T) {
+	w := newExperimentWorld(t)
+	stall := stallingSchedules{PostgresSchedules: trigger.NewPostgresSchedules(w.pool), once: &sync.Once{},
+		entered: make(chan struct{}), release: make(chan struct{})}
+	w.server.WithActivations(spec.NewActivations(spec.NewPublisher(w.pool, engine.SystemClock{}),
+		spec.NewCandidateReader(w.pool, ledger.NewContent(w.pool))).
+		WithReconciliation(stall, trigger.NewPostgresWebhooks(w.pool)))
+	live := w.currentOf(t, w.agent)
+	a := w.sealText(t, activationSeal, activationBytes(w.agent, "Refund a ticket."))
+	b := w.sealText(t, "0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d", strings.Replace(
+		activationBytes(w.agent, "Refund a ticket."), activationCron, "*/30 * * * *", 1))
+	ctx := context.Background()
+
+	first := make(chan openapi.ActivateAgentVersionResponseObject, 1)
+	go func() { first <- w.activate(t, author(ctx), w.agent, a, tagOf(live), nil) }()
+	<-stall.entered
+	second := make(chan openapi.ActivateAgentVersionResponseObject, 1)
+	go func() { second <- w.activate(t, author(ctx), w.agent, b, tagOf(a), nil) }()
+	select {
+	case resp := <-second:
+		t.Fatalf("B committed around A's reconciliation: %T %+v", resp, resp)
+	case <-time.After(400 * time.Millisecond):
+	}
+	close(stall.release)
+
+	for name, done := range map[string]chan openapi.ActivateAgentVersionResponseObject{"A": first, "B": second} {
+		if resp, ok := (<-done).(openapi.ActivateAgentVersion200JSONResponse); !ok {
+			t.Fatalf("%s = %T %+v, want it live", name, resp, resp)
+		}
+	}
+	if got := w.schedulesOf(t, w.agent); len(got) != 1 || got[0] != "*/30 * * * *" {
+		t.Errorf("schedules = %v, want B's alone", got)
 	}
 }
