@@ -44,3 +44,24 @@ func (r *CandidateReader) Candidate(
 	out.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
 	return out, true, nil
 }
+
+// Sealed is one seal's definition, read and checked as the worker checks it (ReadSeal). A
+// seal of another agent, or none, is ErrCandidateNotFound; bytes that are gone or do not
+// match are domain.ErrCandidateUnreadable.
+func (r *CandidateReader) Sealed(ctx context.Context, agent domain.AgentID, seal string) (Spec, error) {
+	rows := NewSealRows(r.pool)
+	row, err := sealRow(ctx, rows, seal)
+	if errors.Is(err, domain.ErrCandidateUnreadable) {
+		return Spec{}, ErrCandidateNotFound
+	}
+	if err != nil {
+		return Spec{}, err
+	}
+	if row.Agent != agent {
+		return Spec{}, ErrCandidateNotFound
+	}
+	sealed, err := ReadSeal(ctx, rows, r.content, seal, SealExpectation{
+		Agent: agent, Version: row.Version, Scope: row.Scope,
+	})
+	return sealed.Spec, err
+}
