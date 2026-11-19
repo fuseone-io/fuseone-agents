@@ -30,6 +30,11 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.124.1] — 2026-11-19
+
+The workbench shows the instructions again (#409). Console only: no migrations, and the
+rollback floor stays at 0.123.0.
+
 ### Fixed
 
 - **The workbench hid the instructions of a published agent.** With a draft that had not
