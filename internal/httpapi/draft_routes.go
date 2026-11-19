@@ -38,6 +38,8 @@ type Drafts interface {
 	BeginTurn(ctx context.Context, b drafts.Beginning) (drafts.Started, error)
 	SettleTurn(ctx context.Context, s drafts.Settlement) (drafts.Settled, error)
 	EraseThread(ctx context.Context, agent domain.AgentID, c drafts.Caller) error
+	// Seal keeps the draft as a candidate (NT-018 phase 2).
+	Seal(ctx context.Context, in drafts.Sealing) (drafts.Sealed, error)
 	// WithinPublication is the draft's condition on its own publication,
 	// run in the publication's transaction.
 	WithinPublication(p drafts.Publishing) func(context.Context, pgx.Tx, domain.VersionID) error

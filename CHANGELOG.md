@@ -30,6 +30,26 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Rollback floor: 0.123.0** (NT-018 phase 2, release 2b). This release writes seals, and
+  only 0.123.0 and later reach them when a workbench thread or a subject is erased: an
+  older binary erases the thread, marks it reconciled, and leaves the sealed copy and the
+  runs derived from it. Never roll back below 0.123.0 once a seal exists. During the
+  rollout, a 0.123.0 replica answers the new seal route as an unknown route.
+
+### Added
+
+- `POST /agents/{agentId}/draft/seals` seals the draft as a candidate: the exact bytes a
+  publication would write, under the version id it would compute, outside the agent's
+  published versions. It takes the draft's `If-Match`, needs `agent:publish` on the draft's
+  and the agent's current scope (404 otherwise), and checks the definition as a publication
+  does, without the `never` block and without judging the stage. The version id is claimed
+  as a publication claims it (409 `fuseone:version-collision` or
+  `fuseone:version-digest-unknown`); bytes already published seal nothing and name that
+  version. The seal copies the draft's source map, so erasure reaches it, and holds the
+  agent's content fence while it keeps the text.
+
 ## [0.123.0] — 2026-11-18
 
 Readers of candidate versions (NT-018 phase 2, release 2a, #398–#401). The schema for seals,

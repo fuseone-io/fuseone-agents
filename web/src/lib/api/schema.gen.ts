@@ -589,6 +589,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/draft/seals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Seal the draft as a candidate version
+         * @description Keeps the draft as a candidate (NT-018 phase 2): the exact bytes a
+         *     publication of this draft would write, under the version id it would
+         *     compute, outside the agent's published versions. A candidate is
+         *     invisible to every reader of the current version and opens no real
+         *     run; experiments run on it by its seal.
+         *
+         *     In one transaction, under the agent's content fence: the draft's ETag
+         *     must be the `If-Match` sent (412 otherwise), and the caller needs
+         *     `agent:publish` on the draft's scope and on the agent's current one
+         *     (404 otherwise). The definition is checked as a publication checks it
+         *     (400), but the `never` block is not required and the agent's stage is
+         *     not judged: sealing to experiment is safe, putting it live is what
+         *     activation refuses.
+         *
+         *     The version id is claimed for these bytes as a publication claims it.
+         *     If the draft's bytes are already a published version, nothing is
+         *     sealed and the answer (200) names that version. A version id that
+         *     already names other bytes is 409 `fuseone:version-collision`; one
+         *     published before digests were kept is 409
+         *     `fuseone:version-digest-unknown`. Either way, change the draft.
+         *
+         *     A version that would close an event cycle is still sealed, and the
+         *     answer names the cycle in `eventCycleWarning`.
+         */
+        post: operations["sealAgentDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/candidates": {
         parameters: {
             query?: never;
@@ -606,8 +648,8 @@ export interface paths {
          *
          *     At most the 200 newest seals the caller may see, newest first. With
          *     none the caller may see, the answer is 404, as at every other door to a
-         *     candidate: it says nothing about whether one exists elsewhere. Nothing
-         *     writes seals until release 2b, so until then every listing is 404.
+         *     candidate: it says nothing about whether one exists elsewhere. Seals
+         *     are written by `sealAgentDraft`.
          */
         get: operations["listAgentCandidates"];
         put?: never;
@@ -6216,6 +6258,16 @@ export interface components {
             /** @description What publication still needs and the draft lacks. */
             missing: ("instructions" | "tools" | "budget" | "provider")[];
         };
+        DraftSeal: {
+            version: string;
+            /** @description True when the draft's bytes were a published version already and nothing was sealed. */
+            published: boolean;
+            /** @description The new seal; absent when nothing was sealed. */
+            sealId?: string;
+            company: string;
+            area: string;
+            eventCycleWarning?: components["schemas"]["EventCycleWarning"];
+        };
         CandidateSeal: {
             version: string;
             sealId: string;
@@ -8388,6 +8440,64 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    sealAgentDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description The ETag the caller read. Required: every change names the state it
+                 *     read, and without it the request is a 400, never applied. Refused with
+                 *     a 412, carrying the current ETag, unless the resource is still at one
+                 *     of these revisions; `*` means it exists at all. A weak tag matches the
+                 *     revision it weakens.
+                 */
+                "If-Match": components["parameters"]["IfMatchRequired"];
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The draft's bytes are a published version already; nothing was sealed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftSeal"];
+                };
+            };
+            /** @description Sealed. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftSeal"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description Nothing was sealed. `fuseone:version-collision`: the version id
+             *     these bytes get already names other bytes.
+             *     `fuseone:version-digest-unknown`: the version id was published
+             *     before digests were kept. Change the draft.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             412: components["responses"]["PreconditionFailed"];
         };
     };
