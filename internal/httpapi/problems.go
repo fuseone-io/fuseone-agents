@@ -78,6 +78,9 @@ const (
 	// before digests were kept, so nothing can show the bytes are the same
 	// (NT-018). Changing the definition almost always gives another id.
 	CodeVersionDigestUnknown Code = "fuseone:version-digest-unknown"
+	// CodeCandidateUnreadable is a candidate whose every seal the caller may see
+	// was erased, aged out or no longer matches its claim (NT-018 phase 2).
+	CodeCandidateUnreadable Code = "fuseone:candidate-unreadable"
 	// CodeIntegrationNameTaken is an integration whose name another scope
 	// already holds (NT-019). Its own code, so the console can ask for another
 	// name rather than report a failure. It never says which scope holds it.

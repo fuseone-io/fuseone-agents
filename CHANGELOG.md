@@ -35,10 +35,10 @@ field" is a commit message.
 - **NT-018 phase 2, release 2a, teaches readers the candidate shape.** Migration 0118 adds
   the insert-only `agent_seals` and `agent_seal_sources`, and `runs.seal_id` and
   `runs.authoring_thread`; 0119 indexes the two columns concurrently, so appends to `runs`
-  carry on while it builds, and 0120 indexes `agent_seals.draft_id`. Nothing writes a seal
-  yet: release 2b, which does, must wait for this release on every replica. No rollback
-  floor here; release 2b will set its floor at this release, because only this release and
-  later reach seals when a thread or a subject is erased.
+  carry on while it builds; 0120 and 0121 index `agent_seals` by draft, and by agent and
+  time. Nothing writes a seal yet: release 2b, which does, must wait for this release on
+  every replica. No rollback floor here; release 2b will set its floor at this release,
+  because only this release and later reach seals when a thread or a subject is erased.
 
 ### Added
 
@@ -56,6 +56,14 @@ field" is a commit message.
   longer holds the value. Erasing a thread also erases its rehearsals' content. When a seal
   ages out of the retention window, the sweep fences its agent and erases its derived runs'
   content, however recent.
+- `GET /agents/{agentId}/candidates` lists the caller's candidate seals, newest first (at
+  most 200), and `GET /agents/{agentId}/candidates/{version}` reads a candidate's sealed text
+  from the newest seal that still checks out, naming the seal it read. Each seal is seen
+  only with `agent:publish` on its own sealed scope, never where the agent lives now, and
+  the scope filter and the limit are applied in the query (migration 0121 indexes an
+  agent's seals by time). A version already published is not a candidate. Every seal the
+  caller may see being unreadable is 409 `fuseone:candidate-unreadable`; anything else they
+  may not see is 404, the listing included. Until release 2b writes seals, both answer 404.
 
 ## [0.122.0] — 2026-11-18
 

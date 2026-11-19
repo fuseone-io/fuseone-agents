@@ -589,6 +589,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The candidate seals of an agent the caller may see
+         * @description A candidate is a version sealed from the draft and not yet published
+         *     (NT-018 phase 2). Each seal is authorised on its own sealed scope, with
+         *     `agent:publish`: a candidate is unpublished work, so `agent:read` is not
+         *     enough. Seals outside every scope the caller may publish in are left
+         *     out, and so is every seal of a version that is already published.
+         *
+         *     At most the 200 newest seals the caller may see, newest first. With
+         *     none the caller may see, the answer is 404, as at every other door to a
+         *     candidate: it says nothing about whether one exists elsewhere. Nothing
+         *     writes seals until release 2b, so until then every listing is 404.
+         */
+        get: operations["listAgentCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/candidates/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A candidate's sealed text
+         * @description The sealed definition, byte for byte, from the newest seal of the
+         *     version that the caller may see (`agent:publish` on its sealed scope)
+         *     and whose bytes still match the version's claim, agent and sealed
+         *     scope. The answer names the seal it read. It is for display: a run
+         *     stays pinned to the seal it opened with, whatever this answers.
+         *
+         *     No seal the caller may see, or a version that is already published, is
+         *     404, as for a version that does not exist. Seals the caller may see
+         *     whose bytes are all erased or do not match are 409
+         *     `fuseone:candidate-unreadable`; a caller who may see none of them gets
+         *     the 404.
+         */
+        get: operations["getAgentCandidate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/draft/proposals": {
         parameters: {
             query?: never;
@@ -6157,6 +6216,29 @@ export interface components {
             /** @description What publication still needs and the draft lacks. */
             missing: ("instructions" | "tools" | "budget" | "provider")[];
         };
+        CandidateSeal: {
+            version: string;
+            sealId: string;
+            /** @description The sealed scope's company, as the sealed text names it. */
+            company: string;
+            /** @description The sealed scope's area, as the sealed text names it. */
+            area: string;
+            sealedBy: string;
+            /** Format: date-time */
+            sealedAt: string;
+        };
+        Candidate: {
+            version: string;
+            /** @description The seal this answer was read from. */
+            sealId: string;
+            company: string;
+            area: string;
+            sealedBy: string;
+            /** Format: date-time */
+            sealedAt: string;
+            /** @description The sealed `.agent.md`, exactly the bytes the version's digest covers. */
+            definition: string;
+        };
         DraftProposal: {
             proposalId: string;
             /**
@@ -8307,6 +8389,70 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    listAgentCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's candidate seals, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["CandidateSeal"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAgentCandidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The candidate. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Candidate"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description `fuseone:candidate-unreadable`: every seal of the version the caller
+             *     may see was erased, aged out, or no longer matches its claim. Seal
+             *     the draft again to make a new candidate.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listDraftProposals: {

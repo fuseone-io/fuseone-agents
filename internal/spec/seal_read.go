@@ -17,6 +17,13 @@ type SealExpectation struct {
 	Scope   domain.Scope
 }
 
+// Sealed is a seal's definition and the exact bytes it was parsed from: the bytes the
+// version's digest covers.
+type Sealed struct {
+	Spec  Spec
+	Bytes []byte
+}
+
 var sealIDShape = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 /*
@@ -30,28 +37,32 @@ unreadable, and any other fault comes back as itself, so the caller can try agai
 */
 func ReadSeal(
 	ctx context.Context, rows SealRows, content Content, id string, want SealExpectation,
-) (Spec, error) {
+) (Sealed, error) {
 	row, err := sealRow(ctx, rows, id)
 	if err != nil {
-		return Spec{}, err
+		return Sealed{}, err
 	}
 	if row.Agent != want.Agent || row.Version != want.Version || row.Scope != want.Scope {
-		return Spec{}, unreadable(id, "it names another agent, version or scope")
+		return Sealed{}, unreadable(id, "it names another agent, version or scope")
 	}
 	if row.Digest == "" {
-		return Spec{}, unreadable(id, "its version was claimed without a digest")
+		return Sealed{}, unreadable(id, "its version was claimed without a digest")
 	}
 	data, err := content.Get(ctx, row.ContentRef)
 	if errors.Is(err, domain.ErrContentErased) || errors.Is(err, domain.ErrContentAbsent) {
-		return Spec{}, unreadable(id, "its bytes are gone")
+		return Sealed{}, unreadable(id, "its bytes are gone")
 	}
 	if err != nil {
-		return Spec{}, fmt.Errorf("read seal %s: %w", id, err)
+		return Sealed{}, fmt.Errorf("read seal %s: %w", id, err)
 	}
 	if digestOf(data) != row.Digest {
-		return Spec{}, unreadable(id, "its bytes do not hash to the claim")
+		return Sealed{}, unreadable(id, "its bytes do not hash to the claim")
 	}
-	return parseSealed(id, data, want)
+	parsed, err := parseSealed(id, data, want)
+	if err != nil {
+		return Sealed{}, err
+	}
+	return Sealed{Spec: parsed, Bytes: data}, nil
 }
 
 func sealRow(ctx context.Context, rows SealRows, id string) (SealRow, error) {

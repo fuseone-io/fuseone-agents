@@ -223,6 +223,8 @@ func serve(args []string) error {
 			// The workbench's drafts (NT-018 1b): working state beside the
 			// versions, never one of them.
 			WithDrafts(draftStore).
+			// Candidates sealed from it, each seen only in its sealed scope (NT-018 phase 2).
+			WithCandidates(spec.NewCandidateReader(identity.pool, ledger.NewContent(identity.pool))).
 			// The workbench's conversation (NT-018 phase 3): the same
 			// registry, for the model, its price and a scope's providers.
 			WithTurnModels(providers).
