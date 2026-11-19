@@ -33,17 +33,12 @@ func (s *Server) StartExperiment(
 	if errors.Is(refused, errVersionAndSeal) {
 		return openapi.StartExperiment400ApplicationProblemPlusJSONResponse(invalid(refused.Error())), nil
 	}
-	target, refusal, err := s.experimentTarget(ctx, agent, id, ask)
-	if err != nil || refusal != nil {
-		return refusal, err
-	}
-	if refused != nil {
-		return openapi.StartExperiment400ApplicationProblemPlusJSONResponse(invalid(refused.Error())), nil
-	}
-	out, err := s.openExperiment(ctx, target, id, ask)
+	out, err := s.openExperiment(ctx, experimentCall{agent: agent, id: id, ask: ask, refused: refused})
 	switch {
 	case err != nil:
 		return nil, fmt.Errorf("open experiment %s: %w", id, err)
+	case out.answer != nil:
+		return out.answer, nil
 	case out.unreadable:
 		return candidateUnreadable(id), nil
 	case out.hidden:
@@ -72,6 +67,9 @@ type experimentOpened struct {
 	// publish, answered as if it did not exist.
 	conflict, refused error
 	hidden            bool
+	// answer is a refusal decided while resolving what the experiment runs on: the agent
+	// or the seal the caller may not reach, or a request no experiment could run.
+	answer openapi.StartExperimentResponseObject
 	// unreadable is a first attempt on a candidate whose seal cannot be read.
 	unreadable bool
 }
@@ -85,11 +83,14 @@ on: two first attempts under one key, with different bodies, would otherwise bot
 nothing recorded and open their runs into one experiment. Taken alone, the second reads
 what the first recorded. The fence still keeps an erasure out while the corpus is copied.
 */
-func (s *Server) openExperiment(
-	ctx context.Context, target experimentTarget, id string, ask experimentAsk,
-) (out experimentOpened, err error) {
-	published := target.summary
-	err = s.regressions.Exclusive(ctx, []domain.AgentID{published.ID}, func(ctx context.Context) error {
+func (s *Server) openExperiment(ctx context.Context, call experimentCall) (out experimentOpened, err error) {
+	id, ask := call.id, call.ask
+	err = s.regressions.Exclusive(ctx, []domain.AgentID{call.agent}, func(ctx context.Context) error {
+		target, err := s.resolvedTarget(ctx, call, &out)
+		if err != nil || out.answer != nil {
+			return err
+		}
+		published := target.summary
 		before, found, err := simulate.Recorded(ctx, s.store, id)
 		if err != nil {
 			return err

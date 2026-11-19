@@ -50,7 +50,9 @@ field" is a commit message.
   version. The seal copies the draft's source map, so erasure reaches it, and holds the
   agent's content fence while it keeps the text.
 - An experiment runs a candidate: `sealId` on `POST /agents/{agentId}/experiments`, instead
-  of `version`. The route checks the seal's bytes before the first run, needs
+  of `version`. The route checks the seal's bytes before the first run, inside the agent's
+  content fence that erasure takes too, so a seal erased concurrently is either found erased
+  or reached with the runs opened on it; it needs
   `agent:publish` on the sealed scope (404 otherwise), and needs no published version of the
   agent. Every run is opened on the seal, in the sealed scope, and the simulation pool runs
   the sealed definition. Only an agent's recorded pause refuses it; the installation's, the
