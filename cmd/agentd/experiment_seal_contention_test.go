@@ -2,15 +2,18 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/regression"
+	"github.com/fuseone/agents/internal/spec"
 )
 
 /*
@@ -149,3 +152,46 @@ func TestExperiment_onASealHoldingTheFence_isWaitedForAndItsRunsAreErased(t *tes
 	}
 }
 
+// An agent moved to another area after the seal still runs its candidate where it was
+// sealed, for whoever may publish there.
+func TestExperiment_onASealOfAnAgentMovedSince_runsInTheSealedScope(t *testing.T) {
+	world := newExperimentWorld(t)
+	world.resume(t)
+	world.seal(t, routeSeal)
+	moved, err := spec.Parse("triage.agent.md", []byte(fmt.Sprintf(`---
+id: %s
+name: Triage
+area: sales
+provider: primary
+model: declared-model
+tools:
+  - crm.lookup
+budget:
+  micros: 500000
+  steps: 20
+---
+
+Classify the ticket, from sales.
+`, world.agent)))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if _, err := spec.NewPublisher(world.pool, engine.SystemClock{}).Publish(t.Context(), spec.Publication{
+		Spec: moved, By: "usr_ops", Company: "acme",
+	}); err != nil {
+		t.Fatalf("move the agent to sales: %v", err)
+	}
+
+	accepted, ok := world.startOnSeal(t, author(t.Context()), "contention-seal-3", onSeal(routeSeal)).(openapi.StartExperiment202JSONResponse)
+	if !ok || accepted.Runs != 1 {
+		t.Fatalf("an experiment on the cx seal of an agent now in sales = %+v, want its run", accepted)
+	}
+	runs, err := world.store.SimulationRuns(t.Context(), accepted.Id)
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("runs = %v (%v)", runs, err)
+	}
+	steps, err := world.store.Read(t.Context(), runs[0], domain.FirstSeq)
+	if err != nil || steps[0].Scope != (domain.Scope{Company: "acme", Area: "cx"}) {
+		t.Errorf("the run opened in %v (%v), want the sealed scope acme/cx", steps[0].Scope, err)
+	}
+}
