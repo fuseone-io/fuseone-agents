@@ -76,9 +76,14 @@ type Store struct {
 	// content keeps what each change said, exactly: the size is judged
 	// before anything is written, so nothing is ever truncated.
 	content *ledger.Content
-	fence   interface {
-		Exclusive(context.Context, []domain.AgentID, func(context.Context) error) error
-	}
+	fence   CorpusFence
+}
+
+// CorpusFence is the agent's content fence, declared here by the consumer: held
+// exclusive by erasure, held shared by a seal while it keeps the draft's text.
+type CorpusFence interface {
+	Exclusive(ctx context.Context, agents []domain.AgentID, inside func(context.Context) error) error
+	Hold(ctx context.Context, agent domain.AgentID, inside func(context.Context) error) error
 }
 
 func NewStore(pool *pgxpool.Pool) *Store {
@@ -90,9 +95,7 @@ func NewStore(pool *pgxpool.Pool) *Store {
 
 // WithCorpusFence shares the process's bounded fence connection budget with
 // the regression corpus. The database advisory lock is the same either way.
-func (s *Store) WithCorpusFence(fence interface {
-	Exclusive(context.Context, []domain.AgentID, func(context.Context) error) error
-}) *Store {
+func (s *Store) WithCorpusFence(fence CorpusFence) *Store {
 	s.fence = fence
 	return s
 }

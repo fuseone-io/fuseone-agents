@@ -566,6 +566,13 @@ type blockedCorpusFence struct {
 	release chan struct{}
 }
 
+// Hold passes through: only the erasure's exclusive fence is under test here.
+func (f *blockedCorpusFence) Hold(
+	ctx context.Context, _ domain.AgentID, inside func(context.Context) error,
+) error {
+	return inside(ctx)
+}
+
 func (f *blockedCorpusFence) Exclusive(
 	ctx context.Context, _ []domain.AgentID, inside func(context.Context) error,
 ) error {
