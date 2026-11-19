@@ -50,6 +50,15 @@ func (f *CorpusFence) Exclusive(
 	return f.fence.enter(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`, agents, inside)
 }
 
+// Hold runs inside with the agent's corpus fenced shared, as a copy holds it: a seal
+// keeping the draft's text is one (NT-018 phase 2). Erasure waits for it.
+func (f *CorpusFence) Hold(
+	ctx context.Context, agent domain.AgentID, inside func(context.Context) error,
+) error {
+	return f.fence.enter(ctx, `select pg_advisory_xact_lock_shared(hashtextextended($1, 0))`,
+		[]domain.AgentID{agent}, inside)
+}
+
 func newFence(config *pgx.ConnConfig) *fence {
 	return &fence{config: config, slots: make(chan struct{}, FenceSlots)}
 }
