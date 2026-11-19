@@ -89,6 +89,9 @@ type Request struct {
 	// Version pins the run to one published version of the agent. Empty is
 	// the version published now, which is what every trigger but one wants.
 	Version domain.VersionID
+	// SealID names the candidate an experiment's simulated run executes (NT-018 phase 2).
+	// Any other request naming one is refused as a version the agent never published.
+	SealID string
 	// SourceRun is the recorded run whose input seeds this one, when an
 	// operator asked to run from it (#16). An id and nothing else: the trail
 	// points at the source, it does not copy it.
@@ -142,7 +145,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		return Result{RunID: existing}, nil
 	}
 
-	published, err := o.publishedFor(ctx, req)
+	published, err := o.targetFor(ctx, req)
 	if err != nil {
 		return Result{}, err
 	}
@@ -183,6 +186,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 			WorkItem:         workItem,
 			Experiment:       req.Experiment,
 			ExperimentConfig: experimentConfig,
+			SealID:           req.SealID,
 
 			ExperimentRepetitions: req.ExperimentRepetitions,
 		}),
