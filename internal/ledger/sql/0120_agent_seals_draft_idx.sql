@@ -1,0 +1,12 @@
+-- The seals of one draft, which every erasure of the draft's conversation or of a
+-- subject it cites searches (NT-018 phase 2, release 2a).
+--
+-- agent_seals is insert-only, so without this a search would cost every seal the
+-- installation ever took, inside the erasure's transaction and its exclusive
+-- fence.
+--
+-- A plain index inside the migration's transaction, unlike 0119: nothing writes
+-- agent_seals before release 2b, which waits for this release on every replica,
+-- so the table is empty when this runs and the build holds nothing anyone waits
+-- for.
+create index agent_seals_draft_idx on agent_seals (draft_id);

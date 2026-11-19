@@ -34,6 +34,11 @@ func (s *Store) eraseThreadsTx(ctx context.Context, tx pgx.Tx, in threadErasure)
 	if _, err := s.content.EraseOwnersTx(ctx, tx, "authoring", in.threads, in.reason); err != nil {
 		return err
 	}
+	if _, err := s.eraseSealsReachedTx(ctx, tx, sealReach{
+		draftID: in.draft.draftID, threads: in.threads, reason: in.reason,
+	}); err != nil {
+		return err
+	}
 	return s.eraseThreadDraftValues(ctx, tx, in)
 }
 
