@@ -58,7 +58,7 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	if err != nil {
 		// A run whose spec cannot be resolved will not fix itself by retrying:
 		// park it so someone sees it.
-		return true, w.park(ctx, claim, err, "spec_unresolved")
+		return true, w.unresolved(ctx, claim, err)
 	}
 
 	// The agent's own ceiling is per run; the scope's is over a window. They

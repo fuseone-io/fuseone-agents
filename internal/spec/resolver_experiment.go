@@ -31,6 +31,22 @@ func (r *Resolver) ResolveExperiment(
 	if err != nil {
 		return worker.Resolution{}, err
 	}
+	return r.resolveDefinition(spec, claim, config)
+}
+
+// resolveDefinition is what a worker runs one definition with: as declared,
+// fallback and all, under an empty configuration; on the configuration's pair,
+// with no fallback, under any other (NT-015).
+func (r *Resolver) resolveDefinition(
+	spec Spec, claim domain.Claim, config domain.ExperimentConfig,
+) (worker.Resolution, error) {
+	if config.IsZero() {
+		planner, err := r.planner(spec, declaredPair(spec), claim.Scope)
+		if err != nil {
+			return worker.Resolution{}, err
+		}
+		return resolution(spec, planner, r.fallback(spec, claim.Scope)), nil
+	}
 	pair := declaredPair(spec)
 	if config.Provider != "" {
 		pair.Provider = config.Provider

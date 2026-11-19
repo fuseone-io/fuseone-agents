@@ -87,12 +87,7 @@ func (r *Resolver) Resolve(ctx context.Context, claim domain.Claim) (worker.Reso
 	if err != nil {
 		return worker.Resolution{}, err
 	}
-
-	planner, err := r.planner(spec, declaredPair(spec), claim.Scope)
-	if err != nil {
-		return worker.Resolution{}, err
-	}
-	return resolution(spec, planner, r.fallback(spec, claim.Scope)), nil
+	return r.resolveDefinition(spec, claim, domain.ExperimentConfig{})
 }
 
 // resolution is what a worker runs one version with, on the planner it was resolved to.
