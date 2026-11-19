@@ -35,6 +35,16 @@ describe("the workbench's instructions", () => {
     expect(screen.getByText(now)).toBeInTheDocument();
   });
 
+  // Accepting a proposal updates the cached draft without unmounting this
+  // section, so a choice of "Text" must not outlive the prose it was made on.
+  it("goes back to the difference when an accepted proposal changes the prose again", async () => {
+    const { rerender } = render(<SummaryInstructions now="Você triagem chamados de vendas." published={published} />);
+    await userEvent.click(screen.getByRole("radio", { name: "Texto" }));
+    rerender(<SummaryInstructions now="Você triagem chamados de compras." published={published} />);
+    expect(screen.getByRole("radio", { name: "Diferença" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("insertion")).toHaveTextContent(/compras/);
+  });
+
   it("offers no difference for an agent never published", () => {
     render(<SummaryInstructions now={published} />);
     expect(screen.getByText(published)).toBeInTheDocument();

@@ -36,7 +36,8 @@ field" is a commit message.
   changed the prose, the instructions section said only that the prose had not changed, and
   the text appeared nowhere on the screen. They are now always shown, read-only. When the
   draft changed them, the section opens on the difference against the published version,
-  and "Text" shows the whole new prose.
+  and "Text" shows the whole new prose; a proposal accepted afterwards opens on the
+  difference again.
 
 ## [0.124.0] — 2026-11-19
 

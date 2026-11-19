@@ -13,11 +13,15 @@ type View = "text" | "diff";
  * hidden — this is the one place the author reads what the agent is told — so
  * the text is always on the screen. When the draft changed the prose against
  * the published version, the section opens on the difference, and the text is
- * one press away.
+ * one press away; prose changed again opens on the difference again.
  */
 export function SummaryInstructions({ now, published }: { now: string; published?: string }) {
   const { t } = useTranslation();
-  const [view, setView] = useState<View>("diff");
+  // A choice holds for the prose it was made on. Accepting a proposal updates
+  // the draft without unmounting this section, and new prose opens on the
+  // difference again — the change the author has not read yet.
+  const [chosen, setChosen] = useState<{ view: View; on: string }>({ view: "diff", on: now });
+  const view = chosen.on === now ? chosen.view : "diff";
   if (now === "" && published === undefined) {
     return <p className="text-sm text-muted-foreground">{t("workbench.instructionsEmpty")}</p>;
   }
@@ -32,7 +36,7 @@ export function SummaryInstructions({ now, published }: { now: string; published
         variant="outline"
         value={view}
         // Never empty: pressing the active one again would leave no instructions.
-        onValueChange={(next) => next && setView(next as View)}
+        onValueChange={(next) => next && setChosen({ view: next as View, on: now })}
         aria-label={t("workbench.instructionsView")}
         className="self-start"
       >
