@@ -30,6 +30,11 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.125.0] — 2026-11-19
+
+NT-018 phase 2c: activating a version through the publication's locks (#411, #415).
+Migration 0122 is additive and sets no rollback floor; the floor stays at 0.123.0.
+
 ### Upgrade notes
 
 - **Migration 0122 adds `agent_activations`** (NT-018 phase 2, release 2c): one insert-only
