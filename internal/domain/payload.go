@@ -57,6 +57,14 @@ type RunStartedPayload struct {
 	// mark is what keeps it from counting as one. Known to every reader one release
 	// before anything writes it.
 	Rehearsal bool `json:"rehearsal,omitempty"`
+	// SealID names the candidate this simulated run executes, an agent_seals id
+	// (NT-018 phase 2). Honoured only on an experiment's or a rehearsal's
+	// simulated run; any other run naming one fails before the model is called.
+	// Known to every reader one release before anything writes it.
+	SealID string `json:"seal_id,omitempty"`
+	// AuthoringThread is the workbench thread a rehearsal came from, so that
+	// erasing the thread reaches the runs it opened.
+	AuthoringThread string `json:"authoring_thread,omitempty"`
 
 	// Origin is where the ask came from, when it came from a conversation.
 	Origin *RunOrigin `json:"origin,omitempty"`

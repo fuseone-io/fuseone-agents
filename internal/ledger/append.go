@@ -2,7 +2,6 @@ package ledger
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -207,22 +206,7 @@ func insertStep(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 func upsertRun(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 	phase, endedAt := projectPhase(s)
 
-	// Read from the step rather than passed beside it. The ledger is the
-	// record; a projection that learned this from somewhere else could
-	// disagree with the thing it projects.
-	simulated, simulation := false, ""
-	var ticketKey string
-	var ticketRevision int64
-	if s.Kind == domain.StepRunStarted {
-		var started domain.RunStartedPayload
-		if err := json.Unmarshal(s.Payload, &started); err == nil {
-			simulated, simulation = started.Simulated, started.Simulation
-			if started.Ticket != nil && started.Ticket.Ref.Valid() {
-				ticketKey = string(started.Ticket.Ref.Key)
-				ticketRevision = started.Ticket.Ref.Revision
-			}
-		}
-	}
+	started := startedFactsOf(s)
 
 	_, err := tx.Exec(ctx, `
 		insert into runs (
@@ -233,16 +217,18 @@ func upsertRun(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 			input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
 			simulated, simulation,
 			failure_code, failure_provider, failure_status, failure_request_id, failure_retryable,
-			ticket_key, ticket_revision
+			ticket_key, ticket_revision, seal_id, authoring_thread
 		) values (
 			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$18,
 			$22,$23,$24,$25,$26,$27,
-			$28,$29,$30,$31,$32,$33,$34
+			$28,$29,$30,$31,$32,$33,$34,$36::uuid,$37::uuid
 		)
 		on conflict (run_id) do update set
 			agent_id        = case when runs.agent_id = '' then excluded.agent_id else runs.agent_id end,
 			version_id      = case when runs.version_id = '' then excluded.version_id else runs.version_id end,
 			on_behalf_of    = case when runs.on_behalf_of = '' then excluded.on_behalf_of else runs.on_behalf_of end,
+			seal_id          = coalesce(runs.seal_id, excluded.seal_id),
+			authoring_thread = coalesce(runs.authoring_thread, excluded.authoring_thread),
 			phase           = coalesce($20, runs.phase),
 			last_seq        = excluded.last_seq,
 			cost_micros     = runs.cost_micros + excluded.cost_micros,
@@ -277,10 +263,11 @@ func upsertRun(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 		s.At, endedAt,
 		phase, reservationDelta(s),
 		s.Cost.InputTokens, s.Cost.OutputTokens, s.Cost.CacheReadTokens, s.Cost.CacheWriteTokens,
-		simulated, simulation,
+		started.simulated, started.simulation,
 		failureCode(s), failureProvider(s), failureStatus(s), failureRequestID(s), failureRetryable(s),
-		ticketKey, ticketRevision,
+		started.ticketKey, started.ticketRevision,
 		s.Kind == domain.StepEffectReconciled,
+		started.seal, started.thread,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert run projection: %w", err)

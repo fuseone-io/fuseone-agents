@@ -30,6 +30,20 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **NT-018 phase 2, release 2a, teaches readers the candidate shape.** Migration 0118 adds
+  the insert-only `agent_seals` and `agent_seal_sources`, and `runs.seal_id` and
+  `runs.authoring_thread`; 0119 indexes the two columns concurrently, so appends to `runs`
+  carry on while it builds. Nothing writes a seal yet: release 2b, which does, must wait for
+  this release on every replica. No rollback floor.
+
+### Added
+
+- `run_started` knows a `seal_id` and an `authoring_thread`, and the runs projection keeps them,
+  so erasure can follow a candidate or a workbench thread to the runs derived from it.
+  Nothing writes them yet.
+
 ## [0.122.0] — 2026-11-18
 
 Simulations stop touching real approvals (NT-018 phase 0, #395): they no longer spend
