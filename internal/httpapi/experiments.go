@@ -88,8 +88,12 @@ what the first recorded. The fence still keeps an erasure out while the corpus i
 func (s *Server) openExperiment(
 	ctx context.Context, target experimentTarget, id string, ask experimentAsk,
 ) (out experimentOpened, err error) {
-	published := target.summary
-	err = s.regressions.Exclusive(ctx, []domain.AgentID{published.ID}, func(ctx context.Context) error {
+	err = s.regressions.Exclusive(ctx, []domain.AgentID{target.summary.ID}, func(ctx context.Context) error {
+		target, err := s.withSealedDefinition(ctx, target)
+		if err != nil {
+			return err
+		}
+		published := target.summary
 		before, found, err := simulate.Recorded(ctx, s.store, id)
 		if err != nil {
 			return err

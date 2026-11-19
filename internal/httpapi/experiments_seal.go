@@ -17,6 +17,9 @@ import (
 // (NT-018 phase 2) whose sealed definition says which provider it asks.
 type experimentTarget struct {
 	summary domain.AgentSummary
+	// seal is the candidate's seal, empty for a published version. Its bytes are read
+	// inside the experiment's fence (withSealedDefinition), never before it.
+	seal string
 	// unreadable is a candidate whose seal is erased or no longer matches its claim. A
 	// first attempt on it is refused; a retry with runs answers from them.
 	unreadable bool
@@ -47,19 +50,34 @@ func (s *Server) experimentTarget(
 	if err != nil || !found || auth.Require(ctx, domain.PermAgentPublish, c.Scope) != nil {
 		return experimentTarget{}, absent, err
 	}
-	target := experimentTarget{summary: domain.AgentSummary{ID: agent, VersionID: c.Version, Scope: c.Scope}}
-	sealed, err := s.candidates.Sealed(ctx, agent, seal)
+	return experimentTarget{
+		summary: domain.AgentSummary{ID: agent, VersionID: c.Version, Scope: c.Scope}, seal: seal,
+	}, nil, nil
+}
+
+/*
+withSealedDefinition reads a candidate's bytes, inside the experiment's fence.
+
+The seal's row is insert-only and was read before the fence; its bytes are not. An erasure
+of the seal takes the same fence, so a read here either comes after the erasure and finds
+the tombstone, or comes first and opens its runs before the erasure reaches them. Read
+before the fence, the bytes could be found readable, the erasure commit, and the runs open
+on bytes that no longer exist.
+*/
+func (s *Server) withSealedDefinition(ctx context.Context, target experimentTarget) (experimentTarget, error) {
+	if target.seal == "" {
+		return target, nil
+	}
+	sealed, err := s.candidates.Sealed(ctx, target.summary.ID, target.seal)
 	switch {
-	case errors.Is(err, domain.ErrCandidateUnreadable):
+	case errors.Is(err, domain.ErrCandidateUnreadable), errors.Is(err, spec.ErrCandidateNotFound):
 		target.unreadable = true
-	case errors.Is(err, spec.ErrCandidateNotFound):
-		return experimentTarget{}, absent, nil
 	case err != nil:
-		return experimentTarget{}, nil, err
+		return experimentTarget{}, err
 	default:
 		target.summary.Provider = sealed.Provider
 	}
-	return target, nil, nil
+	return target, nil
 }
 
 /*
