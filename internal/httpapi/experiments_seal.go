@@ -25,6 +25,40 @@ type experimentTarget struct {
 	unreadable bool
 }
 
+// experimentCall is one request to start an experiment: its agent, its id, what it asks,
+// and why its body is refused, when it is.
+type experimentCall struct {
+	agent   domain.AgentID
+	id      string
+	ask     experimentAsk
+	refused error
+}
+
+/*
+resolvedTarget is what the experiment runs on, decided inside its fence.
+
+All of it: which seal (the recorded intention's first, then the request's), the seal's row,
+the authorisation, the published version's refusals, and the seal's bytes. A call that
+reached the route before any intention existed decides nothing on the way in, so it cannot
+enter carrying a published target after another call recorded the experiment on a seal,
+skip the seal's bytes, and open runs on a seal erased in between. A refusal is set in
+out.answer, in the order the route always answered: 404 or 403, then the request's 400.
+*/
+func (s *Server) resolvedTarget(
+	ctx context.Context, call experimentCall, out *experimentOpened,
+) (experimentTarget, error) {
+	target, answer, err := s.experimentTarget(ctx, call.agent, call.id, call.ask)
+	if err != nil || answer != nil {
+		out.answer = answer
+		return experimentTarget{}, err
+	}
+	if call.refused != nil {
+		out.answer = openapi.StartExperiment400ApplicationProblemPlusJSONResponse(invalid(call.refused.Error()))
+		return experimentTarget{}, nil
+	}
+	return s.withSealedDefinition(ctx, target)
+}
+
 /*
 experimentTarget resolves what this request runs on, or the answer that refuses it.
 
