@@ -60,6 +60,14 @@ field" is a commit message.
   409 `fuseone:candidate-unreadable`. Every other way of opening a run refuses a seal as a
   version the agent never published.
 
+### Fixed
+
+- **The workbench's side panels cut their content.** The panels that edit the steps, the
+  tools and the governance were as narrow as an admin form: the steps' flow showed about
+  one card and the tool table cut every name. They are now much wider on large screens. The
+  governance cards no longer shrink below their content (only their headers showed); the
+  panel scrolls instead. The tool filters ("Human queue") stay on one line.
+
 ## [0.123.0] — 2026-11-18
 
 Readers of candidate versions (NT-018 phase 2, release 2a, #398–#401). The schema for seals,
