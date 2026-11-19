@@ -413,7 +413,7 @@ func channelStore(t *testing.T) (*channel.Postgres, *pgxpool.Pool) {
 	// nothing, and the test agrees with a row nobody in it wrote.
 	if _, err := pool.Exec(t.Context(), `
 		truncate run_steps, runs, channel_deliveries, channel_delivery_failures,
-		         agent_specs`); err != nil {
+		         agent_activations, agent_specs`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	// The configuration too. Settings survive a test, and a row left behind by
