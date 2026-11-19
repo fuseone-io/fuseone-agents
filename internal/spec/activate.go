@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -124,59 +125,78 @@ func (p *Publisher) definitionOf(ctx context.Context, tx pgx.Tx, a Activation) (
 sealedDefinition is the candidate as a readable seal holds it, read in the activation's
 own transaction: a read through the pool, while this transaction holds the locks every
 other activation waits for with a connection of its own, could wait for a connection
-nobody returns. The newest seal in the version's scope whose bytes are kept and parse to
-the version, its agent and scope; bytes kept but not the ones the claim names are a row
-written around every writer, and refused as a collision.
+nobody returns.
+
+The seals of the version in its scope are walked newest first, by key, one row a query,
+and the query itself skips any whose bytes were erased or never kept. No window is fixed:
+the oldest kept seal behind any number of erased ones is found, and no query reads more
+than one seal's bytes while the locks are held. Kept bytes that are not the claimed ones
+are a row written around every writer, refused as a collision; bytes that do not parse to
+the version, its agent and scope are passed over.
 */
 func sealedDefinition(ctx context.Context, tx pgx.Tx, a Activation, claimed string) (Activated, error) {
-	rows, err := tx.Query(ctx, `
-		select seal_id::text, content_ref from agent_seals
-		where agent_id = $1 and version_id = $2 and company_id = $3 and area_id = $4
-		order by sealed_at desc, seal_id desc
-		limit $5`,
-		string(a.Agent), string(a.Version), string(a.Scope.Company), string(a.Scope.Area), CandidateListLimit)
-	if err != nil {
-		return Activated{}, fmt.Errorf("spec: seals of %s@%s: %w", a.Agent, a.Version, err)
-	}
-	seals, err := pgx.CollectRows(rows, pgx.RowToStructByPos[sealRef])
-	if err != nil {
-		return Activated{}, fmt.Errorf("spec: seals of %s@%s: %w", a.Agent, a.Version, err)
-	}
-	for _, seal := range seals {
-		out, readable, err := sealIn(ctx, tx, a, seal, claimed)
-		if err != nil || readable {
-			return out, err
+	var after *sealKey
+	for {
+		seal, found, err := nextKeptSeal(ctx, tx, a, after)
+		if err != nil || !found {
+			return Activated{}, firstOrUnreadable(err, a)
 		}
+		if digestOf(seal.bytes) != claimed {
+			return Activated{}, fmt.Errorf("%w: seal %s of %s@%s holds other bytes",
+				ErrVersionCollision, seal.id, a.Agent, a.Version)
+		}
+		sealed, err := parseSealed(seal.id, seal.bytes, SealExpectation{Agent: a.Agent, Version: a.Version, Scope: a.Scope})
+		if err == nil {
+			return Activated{Spec: sealed, SealID: seal.id, Created: true}, nil
+		}
+		after = &seal.sealKey
 	}
-	return Activated{}, fmt.Errorf("candidate %s/%s: %w", a.Agent, a.Version, domain.ErrCandidateUnreadable)
 }
 
-type sealRef struct {
-	ID, ContentRef string
+// sealKey is where a seal stands in the walk: newest first, the id breaking ties.
+type sealKey struct {
+	at time.Time
+	id string
 }
 
-// sealIn reads one seal's bytes in tx: not readable when they are gone or do not parse
-// to the version, a collision when they are kept but are not the claimed ones.
-func sealIn(ctx context.Context, tx pgx.Tx, a Activation, seal sealRef, claimed string) (Activated, bool, error) {
-	var data []byte
-	var erased bool
-	err := tx.QueryRow(ctx, `select bytes, erased_at is not null from run_content where ref = $1`,
-		seal.ContentRef).Scan(&data, &erased)
-	if errors.Is(err, pgx.ErrNoRows) || erased {
-		return Activated{}, false, nil
+type keptSeal struct {
+	sealKey
+	bytes []byte
+}
+
+// nextKeptSeal is the newest seal of the version in its scope after the key, whose bytes
+// are still kept.
+func nextKeptSeal(ctx context.Context, tx pgx.Tx, a Activation, after *sealKey) (keptSeal, bool, error) {
+	var at *time.Time
+	var id *string
+	if after != nil {
+		at, id = &after.at, &after.id
+	}
+	var out keptSeal
+	err := tx.QueryRow(ctx, `
+		select s.seal_id::text, s.sealed_at, c.bytes
+		from agent_seals s
+		join run_content c on c.ref = s.content_ref and c.erased_at is null
+		where s.agent_id = $1 and s.version_id = $2 and s.company_id = $3 and s.area_id = $4
+		  and ($5::timestamptz is null or (s.sealed_at, s.seal_id) < ($5, $6::uuid))
+		order by s.sealed_at desc, s.seal_id desc
+		limit 1`,
+		string(a.Agent), string(a.Version), string(a.Scope.Company), string(a.Scope.Area), at, id).
+		Scan(&out.id, &out.at, &out.bytes)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return keptSeal{}, false, nil
 	}
 	if err != nil {
-		return Activated{}, false, fmt.Errorf("spec: read seal %s: %w", seal.ID, err)
+		return keptSeal{}, false, fmt.Errorf("spec: seals of %s@%s: %w", a.Agent, a.Version, err)
 	}
-	if digestOf(data) != claimed {
-		return Activated{}, false, fmt.Errorf("%w: seal %s of %s@%s holds other bytes",
-			ErrVersionCollision, seal.ID, a.Agent, a.Version)
-	}
-	sealed, err := parseSealed(seal.ID, data, SealExpectation{Agent: a.Agent, Version: a.Version, Scope: a.Scope})
+	return out, true, nil
+}
+
+func firstOrUnreadable(err error, a Activation) error {
 	if err != nil {
-		return Activated{}, false, nil
+		return err
 	}
-	return Activated{Spec: sealed, SealID: seal.ID, Created: true}, true, nil
+	return fmt.Errorf("candidate %s/%s: %w", a.Agent, a.Version, domain.ErrCandidateUnreadable)
 }
 
 // writeActivation writes a candidate's row, makes the version current and records the

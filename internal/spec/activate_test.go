@@ -412,3 +412,37 @@ func TestActivate_withOnePoolConnection_readsTheSealInItsOwnTransaction(t *testi
 		t.Fatalf("Activate on one connection = %+v, %v; want the candidate live from %s", got, err, seal)
 	}
 }
+
+/*
+No window of seals is fixed. With more seals of one version than any listing answers, the
+newest all erased and only the oldest kept, the activation still finds the oldest: the
+search walks the seals by key, one row a query, the erased ones skipped by the query
+itself, in the activation's transaction.
+*/
+func TestActivate_theOnlyReadableSealIsOlderThanTwoHundredErasedOnes_isFound(t *testing.T) {
+	w := newActivationWorld(t)
+	first := w.publishFirst(t)
+	text := candidateOf("Read the sealed ticket and classify it.")
+	oldest, candidate := w.seal(t, text)
+	var erased []string
+	for i := 0; i < spec.CandidateListLimit; i++ {
+		id, _ := w.seal(t, text)
+		erased = append(erased, id)
+	}
+	tx, err := w.pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := w.content.EraseOwnersTx(t.Context(), tx, "authoring", erased, "test"); err != nil {
+		t.Fatalf("erase: %v", err)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := w.publisher.Activate(t.Context(), w.activation(t, candidate.Version, first.Version))
+	if err != nil || got.SealID != oldest {
+		t.Fatalf("Activate = seal %q, %v; want the oldest seal %s, the only one kept", got.SealID, err, oldest)
+	}
+}
