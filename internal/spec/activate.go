@@ -37,6 +37,9 @@ type Activation struct {
 	// locks. They are the claimed bytes on either path, so one check covers every seal
 	// and the published row; with none, the activation is refused under the locks.
 	Checked bool
+	// Refused is what those checks found against the bytes: a refusal, or a failure to
+	// check at all. Answered under the locks, after what NT-018 judges first.
+	Refused error
 	// Within runs in the activation's transaction once the version is current, before
 	// the commit: what must move with the version moves in the same commit, under the
 	// agent's row. An error undoes the activation.
@@ -87,8 +90,8 @@ func (p *Publisher) Activate(ctx context.Context, a Activation) (Activated, erro
 	if err != nil {
 		return Activated{}, err
 	}
-	if !a.Checked {
-		return Activated{}, fmt.Errorf("%w: %s@%s", ErrNotChecked, a.Agent, a.Version)
+	if err := judgedBeforeTheLocks(a); err != nil {
+		return Activated{}, err
 	}
 	out.Revision = domain.AgentRevision(a.Version, retired)
 	if out.Judged, err = p.judge(ctx, tx, out.Spec); err != nil {
@@ -108,6 +111,19 @@ func (p *Publisher) Activate(ctx context.Context, a Activation) (Activated, erro
 		return Activated{}, fmt.Errorf("spec: activate %s@%s: commit: %w", a.Agent, a.Version, err)
 	}
 	return out, nil
+}
+
+// judgedBeforeTheLocks is what the publication's checks found before the locks, answered
+// only now, once the definition is chosen and everything NT-018 judges first has passed:
+// their refusal or failure, else bytes they never saw.
+func judgedBeforeTheLocks(a Activation) error {
+	if a.Refused != nil {
+		return a.Refused
+	}
+	if !a.Checked {
+		return fmt.Errorf("%w: %s@%s", ErrNotChecked, a.Agent, a.Version)
+	}
+	return nil
 }
 
 // guardActivation is everything judged about the agent under its row lock: who may

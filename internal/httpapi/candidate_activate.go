@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/authoring/blocks"
@@ -102,9 +103,10 @@ func (s *Server) activationScope(
 
 /*
 activateHeld runs inside the content fence: the publication's checks over the stored
-definition (step 4), then the store's steps under the locks. A candidate no seal of which
-is readable now is not answered here: the store judges the agent's scope, the tag, the
-scope move and the stage first, and refuses bytes nobody checked only after them.
+definition (step 4), then the store's steps under the locks. Nothing the checks find is
+answered here — not a refusal, not a failure to check, not a candidate no seal of which is
+readable now: the store judges the agent's scope, the tag, the scope move and the stage
+first, and answers what the checks found only after them.
 */
 func (s *Server) activateHeld(ctx context.Context, a spec.Activation) (spec.Activated, activationReply, error) {
 	definition, found, err := s.activations.Definition(ctx, a.Agent, a.Version, a.Scope)
@@ -112,11 +114,8 @@ func (s *Server) activateHeld(ctx context.Context, a spec.Activation) (spec.Acti
 		return spec.Activated{}, nil, err
 	}
 	if found {
-		detail, err := s.checker().Check(ctx, definition, clockOr(s.clock).Now())
-		if err != nil || detail != "" {
-			return spec.Activated{}, activationInvalid(CodeInvalidInput, detail), err
-		}
 		a.Checked = true
+		a.Refused = s.checkActivation(ctx, definition)
 	}
 	activated, err := s.activations.Activate(ctx, a)
 	if refused, ok := activationRefused(string(a.Agent), err); ok {
@@ -124,6 +123,24 @@ func (s *Server) activateHeld(ctx context.Context, a spec.Activation) (spec.Acti
 	}
 	return activated, nil, err
 }
+
+// checkActivation is the publication's checks over a definition, as the error the store
+// answers once it has judged what comes first: a refusal, a failure to check, or nil.
+func (s *Server) checkActivation(ctx context.Context, definition spec.Spec) error {
+	detail, err := s.checker().Check(ctx, definition, clockOr(s.clock).Now())
+	if err != nil {
+		return fmt.Errorf("check %s@%s: %w", definition.ID, definition.Version, err)
+	}
+	if detail != "" {
+		return checkRefusal{detail}
+	}
+	return nil
+}
+
+// checkRefusal is a definition the publication's checks refused.
+type checkRefusal struct{ detail string }
+
+func (c checkRefusal) Error() string { return c.detail }
 
 /*
 activationAnswered answers a committed activation. Nothing is left to do after the commit:

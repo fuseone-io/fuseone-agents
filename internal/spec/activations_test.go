@@ -229,3 +229,54 @@ func TestActivate_aCollisionIsNotMaskedByTheMissingCheck(t *testing.T) {
 		t.Fatalf("Activate = %v, want the collision", err)
 	}
 }
+
+/*
+The publication's checks read the catalogue before the locks, but what they found — a
+refusal or a failure to check at all — is the store's to answer, after the agent's scope,
+the tag, the scope move and the stage, and after a seal holding other bytes collides. An
+invalid definition never tells a caller outside the agent's scope that it exists, nor
+hides a stale tag.
+*/
+func TestActivate_whatTheChecksFoundIsAnsweredAfterWhatComesFirst(t *testing.T) {
+	refused := errors.New("the provider is not configured")
+	cases := map[string]struct {
+		change func(*spec.Activation)
+		want   func(error) bool
+	}{
+		"the refusal": {func(*spec.Activation) {}, func(err error) bool { return errors.Is(err, refused) }},
+		"outside the scope": {func(a *spec.Activation) { a.Guard.Allow = inScope(domain.Scope{Company: "acme", Area: "finance"}) },
+			func(err error) bool { return errors.Is(err, spec.ErrAgentNotFound) }},
+		"a stale tag": {func(a *spec.Activation) { a.Guard.Expect = ifMatch(t, domain.AgentRevision("vstale000001", false)) },
+			func(err error) bool { var stale *domain.StaleError; return errors.As(err, &stale) }},
+	}
+	for name, c := range cases {
+		w := newActivationWorld(t)
+		first := w.publishFirst(t)
+		_, candidate := w.seal(t, candidateOf("Read the sealed ticket and classify it."))
+		a := w.activation(t, candidate.Version, first.Version)
+		a.Refused = refused
+		c.change(&a)
+
+		if _, err := w.publisher.Activate(t.Context(), a); !c.want(err) {
+			t.Errorf("%s: Activate = %v", name, err)
+		}
+		w.unchanged(t, first)
+	}
+}
+
+func TestActivate_aCollisionIsNotMaskedByWhatTheChecksFound(t *testing.T) {
+	w := newActivationWorld(t)
+	first := w.publishFirst(t)
+	seal, candidate := w.seal(t, candidateOf("Read the sealed ticket and classify it."))
+	if _, err := w.pool.Exec(t.Context(), `
+		update run_content set bytes = bytes || 'And more.'::bytea
+		where ref = (select content_ref from agent_seals where seal_id = $1::uuid)`, seal); err != nil {
+		t.Fatal(err)
+	}
+	a := w.activation(t, candidate.Version, first.Version)
+	a.Refused = errors.New("the provider is not configured")
+
+	if _, err := w.publisher.Activate(t.Context(), a); !errors.Is(err, spec.ErrVersionCollision) {
+		t.Fatalf("Activate = %v, want the collision", err)
+	}
+}

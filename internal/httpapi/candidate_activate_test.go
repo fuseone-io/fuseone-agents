@@ -3,11 +3,13 @@ package httpapi
 import (
 	gocontext "context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/model"
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/trigger"
 )
@@ -35,6 +37,9 @@ type fakeActivations struct {
 	fenced    bool
 	// unreadable is a candidate with no readable seal before the locks.
 	unreadable bool
+	// answerRefused has the store answer what the checks carried, as it does once
+	// nothing it judges first refuses.
+	answerRefused bool
 }
 
 func newFakeActivations(corpus *fakeCorpus) *fakeActivations {
@@ -63,6 +68,9 @@ func (f *fakeActivations) Activate(_ gocontext.Context, a spec.Activation) (spec
 	f.calls, f.fenced = append(f.calls, a), f.corpus.inside
 	if f.err != nil {
 		return spec.Activated{}, f.err
+	}
+	if f.answerRefused && a.Refused != nil {
+		return spec.Activated{}, a.Refused
 	}
 	if err := a.Accept(f.activated.Spec); err != nil {
 		return spec.Activated{}, err
@@ -251,4 +259,67 @@ func TestActivate_aStaleTag_answersTheCurrentOne(t *testing.T) {
 	if !ok || stale.Headers.ETag == nil || *stale.Headers.ETag != string(current) {
 		t.Fatalf("answer = %T %+v, want 412 with the current tag", resp, resp)
 	}
+}
+
+// failingTools is a catalogue that cannot be read.
+type failingTools struct{}
+
+func (failingTools) Tools(gocontext.Context) ([]domain.ToolEntry, error) {
+	return nil, errors.New("the catalogue is unreachable")
+}
+
+/*
+What the publication's checks find before the locks — a refusal, or no answer at all — is
+carried to the store and answered only after the agent's scope, the tag, the scope move
+and the stage. An invalid definition never answers 400 to a caller the store would answer
+404, nor hides a stale tag.
+*/
+func TestActivate_whatTheChecksFound_isAnsweredAfterTheStoresFirstDecisions(t *testing.T) {
+	t.Parallel()
+	refusing := func(f *fakeActivations) *Server {
+		return activationServer(f, newPublisher()).WithProviderNames(model.NewRegistry(nil))
+	}
+	failing := func(f *fakeActivations) *Server {
+		return activationServer(f, newPublisher()).WithAdministration(nil, failingTools{}, nil)
+	}
+	for name, c := range map[string]struct {
+		server func(*fakeActivations) *Server
+		store  error
+		want   func(openapi.ActivateAgentVersionResponseObject) bool
+	}{
+		"refused, outside the scope": {refusing, spec.ErrAgentNotFound, isAbsent},
+		"refused, a stale tag":       {refusing, &domain.StaleError{Current: domain.AgentRevision("vother000001", false)}, isStale},
+		"failed, outside the scope":  {failing, spec.ErrAgentNotFound, isAbsent},
+	} {
+		f := newFakeActivations(&fakeCorpus{})
+		f.activated.Spec.Provider, f.err = "openai", c.store
+		resp := activate(t, c.server(f), inArea("cx", domain.RoleAuthor), liveTag(), nil)
+		if len(f.calls) != 1 || f.calls[0].Refused == nil || !c.want(resp) {
+			t.Errorf("%s: answer = %T, %d activations; want the store's answer, carrying what the checks found", name, resp, len(f.calls))
+		}
+	}
+}
+
+func TestActivate_aCheckRefusalTheStoreAnswers_isABadRequestWithItsDetail(t *testing.T) {
+	t.Parallel()
+	f := newFakeActivations(&fakeCorpus{})
+	f.activated.Spec.Provider = "openai"
+	server := activationServer(f, newPublisher()).WithProviderNames(model.NewRegistry(nil))
+	f.answerRefused = true
+
+	resp := activate(t, server, inArea("cx", domain.RoleAuthor), liveTag(), nil)
+	bad, ok := resp.(openapi.ActivateAgentVersion400ApplicationProblemPlusJSONResponse)
+	if !ok || bad.Type == nil || *bad.Type != string(CodeInvalidInput) || bad.Detail == nil || !strings.Contains(*bad.Detail, "openai") {
+		t.Fatalf("answer = %T %+v, want 400 invalid-input naming the provider", resp, resp)
+	}
+}
+
+func isAbsent(r openapi.ActivateAgentVersionResponseObject) bool {
+	_, ok := r.(openapi.ActivateAgentVersion404ApplicationProblemPlusJSONResponse)
+	return ok
+}
+
+func isStale(r openapi.ActivateAgentVersionResponseObject) bool {
+	_, ok := r.(openapi.ActivateAgentVersion412ApplicationProblemPlusJSONResponse)
+	return ok
 }

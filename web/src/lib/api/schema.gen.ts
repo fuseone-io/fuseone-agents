@@ -730,11 +730,13 @@ export interface paths {
          *     now, succeeds again: it records another activation and brings the
          *     schedules and webhooks back to what the version declares.
          *
-         *     A candidate none of whose seals is readable when the request arrives
-         *     is never activated unchecked: the 409 `fuseone:candidate-unreadable`
-         *     comes only after the agent's scope (404), the ETag (412), the scope
-         *     move and the stage were judged, and after a seal holding other bytes
-         *     was refused as a collision.
+         *     The publication's checks read the catalogue before the locks, but
+         *     what they find is answered only after the agent's scope (404), the
+         *     ETag (412), the scope move and the stage were judged, and after a
+         *     seal holding other bytes was refused as a collision: a definition
+         *     they refuse (400), or a candidate none of whose seals was readable
+         *     when the request arrived, which is never activated unchecked (409
+         *     `fuseone:candidate-unreadable`).
          */
         post: operations["activateAgentVersion"];
         delete?: never;
