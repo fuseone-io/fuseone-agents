@@ -140,7 +140,7 @@ export function AgentToolsSection({
                       {/* The icon alone on a phone, where four labels do
                           not fit one row; the label stays the trigger's
                           name for anyone reading by ear. */}
-                      <span className="sr-only sm:not-sr-only">
+                      <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
                         {t(`agents.filter.${option}`)}
                       </span>
                     </TabsTrigger>
