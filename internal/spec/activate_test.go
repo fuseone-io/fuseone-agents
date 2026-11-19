@@ -116,7 +116,7 @@ func (w activationWorld) activation(t *testing.T, version domain.VersionID, live
 	return spec.Activation{
 		Agent: "triage", Version: version, Scope: cx, By: "usr_bea",
 		Guard:  spec.Guard{Allow: inScope(cx), Expect: ifMatch(t, domain.AgentRevision(live, false))},
-		Accept: func(spec.Spec) error { return nil },
+		Accept: func(spec.Spec) error { return nil }, Checked: true,
 	}
 }
 

@@ -179,3 +179,53 @@ func TestActivations_activate_aWebhookPathTakenByAnotherAgent_undoesEverything(t
 		t.Errorf("schedules = %v, want none written by an undone activation", got)
 	}
 }
+
+/*
+The publication's checks run before the locks, on the bytes the route could read then. A
+candidate unreadable then is not checked, and a seal of the same version written in
+between must not go live unchecked. That refusal is the store's, under the locks and after
+everything NT-018 judges first: a caller outside the agent's scope still gets not found, a
+stale tag still the current one, and a seal holding other bytes still collides.
+*/
+func TestActivate_aDefinitionNotCheckedBeforeTheLocks_isRefusedAfterWhatComesFirst(t *testing.T) {
+	cases := map[string]struct {
+		change func(*spec.Activation)
+		want   func(error) bool
+	}{
+		"checked by nobody": {func(*spec.Activation) {}, func(err error) bool { return errors.Is(err, spec.ErrNotChecked) }},
+		"outside the scope": {func(a *spec.Activation) { a.Guard.Allow = inScope(domain.Scope{Company: "acme", Area: "finance"}) },
+			func(err error) bool { return errors.Is(err, spec.ErrAgentNotFound) }},
+		"a stale tag": {func(a *spec.Activation) { a.Guard.Expect = ifMatch(t, domain.AgentRevision("vstale000001", false)) },
+			func(err error) bool { var stale *domain.StaleError; return errors.As(err, &stale) }},
+	}
+	for name, c := range cases {
+		w := newActivationWorld(t)
+		first := w.publishFirst(t)
+		_, candidate := w.seal(t, candidateOf("Read the sealed ticket and classify it."))
+		a := w.activation(t, candidate.Version, first.Version)
+		a.Checked = false
+		c.change(&a)
+
+		if _, err := w.publisher.Activate(t.Context(), a); !c.want(err) {
+			t.Errorf("%s: Activate = %v", name, err)
+		}
+		w.unchanged(t, first)
+	}
+}
+
+func TestActivate_aCollisionIsNotMaskedByTheMissingCheck(t *testing.T) {
+	w := newActivationWorld(t)
+	first := w.publishFirst(t)
+	seal, candidate := w.seal(t, candidateOf("Read the sealed ticket and classify it."))
+	if _, err := w.pool.Exec(t.Context(), `
+		update run_content set bytes = bytes || 'And more.'::bytea
+		where ref = (select content_ref from agent_seals where seal_id = $1::uuid)`, seal); err != nil {
+		t.Fatal(err)
+	}
+	a := w.activation(t, candidate.Version, first.Version)
+	a.Checked = false
+
+	if _, err := w.publisher.Activate(t.Context(), a); !errors.Is(err, spec.ErrVersionCollision) {
+		t.Fatalf("Activate = %v, want the collision", err)
+	}
+}

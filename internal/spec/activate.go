@@ -15,6 +15,10 @@ import (
 // longer lives in. Nothing was written.
 var ErrCandidateScopeMoved = errors.New("spec: the agent moved out of the version's scope")
 
+// ErrNotChecked is an activation of bytes the publication's checks never saw: a candidate
+// unreadable before the locks, readable under them. Nothing was written.
+var ErrNotChecked = errors.New("spec: the version was not checked before the locks")
+
 // Activation is one version to make current (NT-018 phase 2, release 2c).
 type Activation struct {
 	Agent   domain.AgentID
@@ -29,6 +33,10 @@ type Activation struct {
 	// Accept judges the definition after the graph, before anything is written: the
 	// workbench's never block.
 	Accept func(Spec) error
+	// Checked is whether the version's bytes passed the publication's checks before the
+	// locks. They are the claimed bytes on either path, so one check covers every seal
+	// and the published row; with none, the activation is refused under the locks.
+	Checked bool
 	// Within runs in the activation's transaction once the version is current, before
 	// the commit: what must move with the version moves in the same commit, under the
 	// agent's row. An error undoes the activation.
@@ -78,6 +86,9 @@ func (p *Publisher) Activate(ctx context.Context, a Activation) (Activated, erro
 	out, err := p.definitionOf(ctx, tx, a)
 	if err != nil {
 		return Activated{}, err
+	}
+	if !a.Checked {
+		return Activated{}, fmt.Errorf("%w: %s@%s", ErrNotChecked, a.Agent, a.Version)
 	}
 	out.Revision = domain.AgentRevision(a.Version, retired)
 	if out.Judged, err = p.judge(ctx, tx, out.Spec); err != nil {

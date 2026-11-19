@@ -727,7 +727,14 @@ export interface paths {
          *     The agent's schedules and webhooks move to the version in the same
          *     transaction, so nothing is left to reconcile after the answer.
          *     Activating the version that is already current, with the ETag it has
-         *     now, succeeds again and changes nothing.
+         *     now, succeeds again: it records another activation and brings the
+         *     schedules and webhooks back to what the version declares.
+         *
+         *     A candidate none of whose seals is readable when the request arrives
+         *     is never activated unchecked: the 409 `fuseone:candidate-unreadable`
+         *     comes only after the agent's scope (404), the ETag (412), the scope
+         *     move and the stage were judged, and after a seal holding other bytes
+         *     was refused as a collision.
          */
         post: operations["activateAgentVersion"];
         delete?: never;

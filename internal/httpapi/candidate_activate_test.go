@@ -154,15 +154,48 @@ func TestActivate_committed_answersTheNewTagFromInsideTheFence_withNothingLeftFo
 	}
 }
 
-func TestActivate_aCandidateWithNoReadableSealBeforeTheLocks_isUnreadable_andNotActivated(t *testing.T) {
+/*
+A candidate unreadable before the locks is not answered there: the store judges the
+agent's scope, the tag, the scope move and the stage first, and refuses unchecked bytes
+only after them. The route says it checked nothing, and answers what the store found.
+*/
+func TestActivate_aCandidateUnreadableBeforeTheLocks_isTheStoresToAnswer_unchecked(t *testing.T) {
+	t.Parallel()
+	current := domain.AgentRevision("vother000001", false)
+	for name, c := range map[string]struct {
+		err  error
+		want func(openapi.ActivateAgentVersionResponseObject) bool
+	}{
+		"outside the scope": {spec.ErrAgentNotFound, func(r openapi.ActivateAgentVersionResponseObject) bool {
+			_, ok := r.(openapi.ActivateAgentVersion404ApplicationProblemPlusJSONResponse)
+			return ok
+		}},
+		"a stale tag": {&domain.StaleError{Current: current}, func(r openapi.ActivateAgentVersionResponseObject) bool {
+			_, ok := r.(openapi.ActivateAgentVersion412ApplicationProblemPlusJSONResponse)
+			return ok
+		}},
+		"unchecked": {spec.ErrNotChecked, func(r openapi.ActivateAgentVersionResponseObject) bool {
+			c, ok := r.(openapi.ActivateAgentVersion409ApplicationProblemPlusJSONResponse)
+			return ok && c.Type != nil && *c.Type == string(CodeCandidateUnreadable)
+		}},
+	} {
+		f := newFakeActivations(&fakeCorpus{})
+		f.unreadable, f.err = true, c.err
+		resp := activate(t, activationServer(f, newPublisher()), inArea("cx", domain.RoleAuthor), liveTag(), nil)
+		if len(f.calls) != 1 || f.calls[0].Checked || !c.want(resp) {
+			t.Errorf("%s: answer = %T, %d activations (checked %v); want the store's answer, unchecked",
+				name, resp, len(f.calls), len(f.calls) == 1 && f.calls[0].Checked)
+		}
+	}
+}
+
+func TestActivate_aDefinitionReadBeforeTheLocks_isActivatedChecked(t *testing.T) {
 	t.Parallel()
 	f := newFakeActivations(&fakeCorpus{})
-	f.unreadable = true
 
-	resp := activate(t, activationServer(f, newPublisher()), inArea("cx", domain.RoleAuthor), liveTag(), nil)
-	c, ok := resp.(openapi.ActivateAgentVersion409ApplicationProblemPlusJSONResponse)
-	if !ok || c.Type == nil || *c.Type != string(CodeCandidateUnreadable) || len(f.calls) != 0 {
-		t.Fatalf("answer = %T %+v, %d activations; want 409 candidate-unreadable and none", resp, resp, len(f.calls))
+	activate(t, activationServer(f, newPublisher()), inArea("cx", domain.RoleAuthor), liveTag(), nil)
+	if len(f.calls) != 1 || !f.calls[0].Checked {
+		t.Fatalf("activations = %+v, want one, checked", f.calls)
 	}
 }
 

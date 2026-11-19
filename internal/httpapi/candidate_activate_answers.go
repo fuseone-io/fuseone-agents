@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -20,6 +19,9 @@ var activationConflicts = []struct {
 	{spec.ErrCandidateScopeMoved, CodeCandidateScopeMoved, "The agent moved out of the version's scope"},
 	{spec.ErrStageRefused, CodeStageRefused, "Stage refused"},
 	{domain.ErrCandidateUnreadable, CodeCandidateUnreadable, "Candidate unreadable"},
+	// A seal readable only after the checks ran: what the caller does is the same, ask
+	// again and the checks see it.
+	{spec.ErrNotChecked, CodeCandidateUnreadable, "Candidate unreadable"},
 	{spec.ErrVersionCollision, CodeVersionCollision, "Version id already taken"},
 	{spec.ErrDigestUnknown, CodeVersionDigestUnknown, "Version published without a digest"},
 	{trigger.ErrPathTaken, CodeWebhookPathTaken, "Webhook path taken"},
@@ -48,12 +50,6 @@ func activationRefused(agent string, err error) (activationReply, bool) {
 		}
 	}
 	return nil, false
-}
-
-func activationUnreadable(agent domain.AgentID, version domain.VersionID) activationReply {
-	return openapi.ActivateAgentVersion409ApplicationProblemPlusJSONResponse(refusal(
-		http.StatusConflict, CodeCandidateUnreadable, "Candidate unreadable",
-		fmt.Sprintf("no seal of %s@%s is readable: seal the draft again", agent, version)))
 }
 
 func activationRequired() activationReply {
