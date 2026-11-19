@@ -1,22 +1,56 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { diffInstructions } from "@/features/agents/instruction-diff";
 import { InstructionsDiffView } from "@/features/agents/instructions-diff-view";
 import { InstructionsRead } from "@/features/agents/instructions-read";
 
+type View = "text" | "diff";
+
 /**
  * The instructions, read-only (NT-018, contract 3): they change only through
- * a proposal of the conversation its author accepts. Against the published
- * version, as the difference; for an agent never published, as text.
+ * a proposal of the conversation its author accepts. Read-only is never
+ * hidden — this is the one place the author reads what the agent is told — so
+ * the text is always on the screen. When the draft changed the prose against
+ * the published version, the section opens on the difference, and the text is
+ * one press away; prose changed again opens on the difference again.
  */
 export function SummaryInstructions({ now, published }: { now: string; published?: string }) {
   const { t } = useTranslation();
+  // A choice holds for the prose it was made on. Accepting a proposal updates
+  // the draft without unmounting this section, and new prose opens on the
+  // difference again — the change the author has not read yet.
+  const [chosen, setChosen] = useState<{ view: View; on: string }>({ view: "diff", on: now });
+  const view = chosen.on === now ? chosen.view : "diff";
   if (now === "" && published === undefined) {
     return <p className="text-sm text-muted-foreground">{t("workbench.instructionsEmpty")}</p>;
   }
-  if (published === undefined) return <InstructionsRead instructions={now} />;
+  const changed =
+    published !== undefined && diffInstructions(published, now).some((block) => block.state !== "same");
+  if (!changed) return <InstructionsRead instructions={now} />;
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs font-medium text-muted-foreground">{t("workbench.againstPublished")}</span>
-      <InstructionsDiffView was={published} now={now} />
+      <ToggleGroup
+        type="single"
+        size="sm"
+        variant="outline"
+        value={view}
+        // Never empty: pressing the active one again would leave no instructions.
+        onValueChange={(next) => next && setChosen({ view: next as View, on: now })}
+        aria-label={t("workbench.instructionsView")}
+        className="self-start"
+      >
+        <ToggleGroupItem value="diff">{t("workbench.instructionsDiff")}</ToggleGroupItem>
+        <ToggleGroupItem value="text">{t("workbench.instructionsText")}</ToggleGroupItem>
+      </ToggleGroup>
+      {view === "diff" ? (
+        <>
+          <span className="text-xs font-medium text-muted-foreground">{t("workbench.againstPublished")}</span>
+          <InstructionsDiffView was={published} now={now} />
+        </>
+      ) : (
+        <InstructionsRead instructions={now} />
+      )}
     </div>
   );
 }
