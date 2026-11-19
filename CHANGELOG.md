@@ -30,6 +30,13 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.124.0] — 2026-11-19
+
+Writers of candidate versions (NT-018 phase 2, release 2b, #403–#406), and wider workbench
+panels (#407). The workbench draft can be sealed as a candidate, and an experiment can run
+that candidate before anything is published. Sets the rollback floor at 0.123.0, the release
+that taught erasure and retention to reach seals. No migrations.
+
 ### Upgrade notes
 
 - **Rollback floor: 0.123.0** (NT-018 phase 2, release 2b). This release writes seals, and
