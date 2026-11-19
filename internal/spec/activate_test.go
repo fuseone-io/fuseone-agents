@@ -7,12 +7,14 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/testdb"
 )
 
 /*
@@ -113,8 +115,8 @@ func (w activationWorld) activation(t *testing.T, version domain.VersionID, live
 	t.Helper()
 	return spec.Activation{
 		Agent: "triage", Version: version, Scope: cx, By: "usr_bea",
-		Guard: spec.Guard{Allow: inScope(cx), Expect: ifMatch(t, domain.AgentRevision(live, false))},
-		Seals: w.reader, Accept: func(spec.Spec) error { return nil },
+		Guard:  spec.Guard{Allow: inScope(cx), Expect: ifMatch(t, domain.AgentRevision(live, false))},
+		Accept: func(spec.Spec) error { return nil },
 	}
 }
 
@@ -296,27 +298,20 @@ func TestActivate_candidateWithNoReadableSeal_unreadable(t *testing.T) {
 	w.unchanged(t, first)
 }
 
-// otherBytes answers a seal holding bytes the claim does not name: a row written around
-// every writer, which claims make unreachable otherwise.
-type otherBytes struct{ text string }
-
-func (o otherBytes) Read(
-	_ context.Context, agent domain.AgentID, version domain.VersionID, _ []domain.Scope,
-) (spec.Candidate, error) {
-	return spec.Candidate{
-		CandidateSeal: spec.CandidateSeal{SealID: "00000000-0000-4000-8000-000000000001", Version: version},
-		Definition:    o.text,
-	}, nil
-}
-
+// A seal row whose kept bytes are not the claimed ones: written around every writer, which
+// claims make unreachable otherwise.
 func TestActivate_sealBytesThatDoNotHashToTheClaim_collide(t *testing.T) {
 	w := newActivationWorld(t)
 	first := w.publishFirst(t)
-	_, candidate := w.seal(t, candidateOf("Read the sealed ticket and classify it."))
-	a := w.activation(t, candidate.Version, first.Version)
-	a.Seals = otherBytes{candidateOf("Read the sealed ticket and classify it.") + "\nAnd more.\n"}
+	seal, candidate := w.seal(t, candidateOf("Read the sealed ticket and classify it."))
+	if _, err := w.pool.Exec(t.Context(), `
+		update run_content set bytes = bytes || 'And more.'::bytea
+		where ref = (select content_ref from agent_seals where seal_id = $1::uuid)`, seal); err != nil {
+		t.Fatalf("plant other bytes: %v", err)
+	}
 
-	if _, err := w.publisher.Activate(t.Context(), a); !errors.Is(err, spec.ErrVersionCollision) {
+	_, err := w.publisher.Activate(t.Context(), w.activation(t, candidate.Version, first.Version))
+	if !errors.Is(err, spec.ErrVersionCollision) {
 		t.Fatalf("Activate = %v, want a collision", err)
 	}
 	w.unchanged(t, first)
@@ -382,5 +377,38 @@ func TestActivate_theLiveVersionAgainWithItsTag_succeeds(t *testing.T) {
 	got, err := w.publisher.Activate(t.Context(), w.activation(t, candidate.Version, candidate.Version))
 	if err != nil || got.Created || w.current(t) != candidate.Version {
 		t.Fatalf("Activate again = %+v, %v; want it live, nothing created", got, err)
+	}
+}
+
+/*
+Under its locks an activation holds one pool connection, the event graph and the agent's
+row. Every other activation waits for those locks holding a connection of its own, so a
+read of the seal through the pool could wait for a connection nobody returns. The seal is
+read in the activation's own transaction: with one connection in the pool, it still goes
+through.
+*/
+func TestActivate_withOnePoolConnection_readsTheSealInItsOwnTransaction(t *testing.T) {
+	w := newActivationWorld(t)
+	first := w.publishFirst(t)
+	seal, candidate := w.seal(t, candidateOf("Read the sealed ticket and classify it."))
+	config, err := pgxpool.ParseConfig(testdb.Required(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.MaxConns = 1
+	pool, err := pgxpool.NewWithConfig(t.Context(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	content := ledger.NewContent(pool)
+	one := activationWorld{pool: pool, content: content, publisher: spec.NewPublisher(pool, fixedClock{}),
+		reader: spec.NewCandidateReader(pool, content)}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	got, err := one.publisher.Activate(ctx, one.activation(t, candidate.Version, first.Version))
+	if err != nil || got.SealID != seal {
+		t.Fatalf("Activate on one connection = %+v, %v; want the candidate live from %s", got, err, seal)
 	}
 }

@@ -14,11 +14,6 @@ import (
 // longer lives in. Nothing was written.
 var ErrCandidateScopeMoved = errors.New("spec: the agent moved out of the version's scope")
 
-// CandidateSource reads a candidate's sealed text: CandidateReader in production.
-type CandidateSource interface {
-	Read(ctx context.Context, agent domain.AgentID, version domain.VersionID, visible []domain.Scope) (Candidate, error)
-}
-
 // Activation is one version to make current (NT-018 phase 2, release 2c).
 type Activation struct {
 	Agent   domain.AgentID
@@ -30,8 +25,6 @@ type Activation struct {
 	By    domain.UserID
 	// Guard is judged under the agent's row lock, as a publication's is.
 	Guard Guard
-	// Seals is where a candidate's bytes are read from.
-	Seals CandidateSource
 	// Accept judges the definition after the graph, before anything is written: the
 	// workbench's never block.
 	Accept func(Spec) error
@@ -124,26 +117,66 @@ func (p *Publisher) definitionOf(ctx context.Context, tx pgx.Tx, a Activation) (
 		row, err := p.registry.within(tx).Get(ctx, a.Agent, a.Version)
 		return Activated{Spec: row}, err
 	}
-	return sealedDefinition(ctx, a, *claimed)
+	return sealedDefinition(ctx, tx, a, *claimed)
 }
 
-// sealedDefinition is the candidate as a readable seal holds it, refused unless its
-// bytes are exactly the ones the claim names.
-func sealedDefinition(ctx context.Context, a Activation, claimed string) (Activated, error) {
-	candidate, err := a.Seals.Read(ctx, a.Agent, a.Version, []domain.Scope{a.Scope})
+/*
+sealedDefinition is the candidate as a readable seal holds it, read in the activation's
+own transaction: a read through the pool, while this transaction holds the locks every
+other activation waits for with a connection of its own, could wait for a connection
+nobody returns. The newest seal in the version's scope whose bytes are kept and parse to
+the version, its agent and scope; bytes kept but not the ones the claim names are a row
+written around every writer, and refused as a collision.
+*/
+func sealedDefinition(ctx context.Context, tx pgx.Tx, a Activation, claimed string) (Activated, error) {
+	rows, err := tx.Query(ctx, `
+		select seal_id::text, content_ref from agent_seals
+		where agent_id = $1 and version_id = $2 and company_id = $3 and area_id = $4
+		order by sealed_at desc, seal_id desc
+		limit $5`,
+		string(a.Agent), string(a.Version), string(a.Scope.Company), string(a.Scope.Area), CandidateListLimit)
 	if err != nil {
-		return Activated{}, err
+		return Activated{}, fmt.Errorf("spec: seals of %s@%s: %w", a.Agent, a.Version, err)
 	}
-	data := []byte(candidate.Definition)
+	seals, err := pgx.CollectRows(rows, pgx.RowToStructByPos[sealRef])
+	if err != nil {
+		return Activated{}, fmt.Errorf("spec: seals of %s@%s: %w", a.Agent, a.Version, err)
+	}
+	for _, seal := range seals {
+		out, readable, err := sealIn(ctx, tx, a, seal, claimed)
+		if err != nil || readable {
+			return out, err
+		}
+	}
+	return Activated{}, fmt.Errorf("candidate %s/%s: %w", a.Agent, a.Version, domain.ErrCandidateUnreadable)
+}
+
+type sealRef struct {
+	ID, ContentRef string
+}
+
+// sealIn reads one seal's bytes in tx: not readable when they are gone or do not parse
+// to the version, a collision when they are kept but are not the claimed ones.
+func sealIn(ctx context.Context, tx pgx.Tx, a Activation, seal sealRef, claimed string) (Activated, bool, error) {
+	var data []byte
+	var erased bool
+	err := tx.QueryRow(ctx, `select bytes, erased_at is not null from run_content where ref = $1`,
+		seal.ContentRef).Scan(&data, &erased)
+	if errors.Is(err, pgx.ErrNoRows) || erased {
+		return Activated{}, false, nil
+	}
+	if err != nil {
+		return Activated{}, false, fmt.Errorf("spec: read seal %s: %w", seal.ID, err)
+	}
 	if digestOf(data) != claimed {
-		return Activated{}, fmt.Errorf("%w: seal %s of %s@%s holds other bytes",
-			ErrVersionCollision, candidate.SealID, a.Agent, a.Version)
+		return Activated{}, false, fmt.Errorf("%w: seal %s of %s@%s holds other bytes",
+			ErrVersionCollision, seal.ID, a.Agent, a.Version)
 	}
-	sealed, err := Parse("sealed.agent.md", data)
+	sealed, err := parseSealed(seal.ID, data, SealExpectation{Agent: a.Agent, Version: a.Version, Scope: a.Scope})
 	if err != nil {
-		return Activated{}, unreadable(candidate.SealID, "its bytes do not parse")
+		return Activated{}, false, nil
 	}
-	return Activated{Spec: sealed, SealID: candidate.SealID, Created: true}, nil
+	return Activated{Spec: sealed, SealID: seal.ID, Created: true}, true, nil
 }
 
 // writeActivation writes a candidate's row, makes the version current and records the
