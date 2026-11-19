@@ -2,10 +2,12 @@ package spec_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/spec"
 )
 
 // The opener resolves an experiment's seal through the reader: its version, its sealed
@@ -41,5 +43,26 @@ func TestCandidateReader_resolvesASealForTheOpener(t *testing.T) {
 		if _, found, err := w.reader.Candidate(ctx, probe.agent, probe.seal); err != nil || found {
 			t.Errorf("%s: found=%v err=%v, want not found", name, found, err)
 		}
+	}
+}
+
+// The experiment route reads one seal's definition, checked as the worker checks it, before
+// its first run: the sealed provider is what it asks about, and an unreadable seal refuses
+// the first attempt.
+func TestCandidateReader_readsOneSealsDefinition(t *testing.T) {
+	w := newCandidateWorld(t)
+	ctx := context.Background()
+	seal, version := w.seal(t, "finance", time.Date(2026, 11, 19, 9, 0, 0, 0, time.UTC))
+
+	got, err := w.reader.Sealed(ctx, w.agent, seal)
+	if err != nil || got.Version != version || got.Provider != "openai" || got.Area != "finance" {
+		t.Fatalf("Sealed = %s %s %s (%v), want the sealed definition", got.Version, got.Provider, got.Area, err)
+	}
+	if _, err := w.reader.Sealed(ctx, "someone-else", seal); !errors.Is(err, spec.ErrCandidateNotFound) {
+		t.Errorf("another agent's seal: err = %v, want ErrCandidateNotFound", err)
+	}
+	w.erase(t, seal)
+	if _, err := w.reader.Sealed(ctx, w.agent, seal); !errors.Is(err, domain.ErrCandidateUnreadable) {
+		t.Errorf("an erased seal: err = %v, want ErrCandidateUnreadable", err)
 	}
 }

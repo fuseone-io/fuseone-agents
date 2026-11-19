@@ -9,6 +9,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/trigger"
 )
 
 /*
@@ -23,6 +24,10 @@ The reader decides which seals the caller may see; the routes only answer.
 type Candidates interface {
 	List(ctx context.Context, agent domain.AgentID, visible []domain.Scope) ([]spec.CandidateSeal, error)
 	Read(ctx context.Context, agent domain.AgentID, version domain.VersionID, visible []domain.Scope) (spec.Candidate, error)
+	// Candidate and Sealed resolve one seal for an experiment: what the opener runs it
+	// as, and its definition checked as the worker checks it.
+	Candidate(ctx context.Context, agent domain.AgentID, seal string) (trigger.Candidate, bool, error)
+	Sealed(ctx context.Context, agent domain.AgentID, seal string) (spec.Spec, error)
 }
 
 // WithCandidates wires the candidate reader.

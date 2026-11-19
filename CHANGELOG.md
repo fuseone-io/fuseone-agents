@@ -49,6 +49,16 @@ field" is a commit message.
   `fuseone:version-digest-unknown`); bytes already published seal nothing and name that
   version. The seal copies the draft's source map, so erasure reaches it, and holds the
   agent's content fence while it keeps the text.
+- An experiment runs a candidate: `sealId` on `POST /agents/{agentId}/experiments`, instead
+  of `version`. The route checks the seal's bytes before the first run, needs
+  `agent:publish` on the sealed scope (404 otherwise), and needs no published version of the
+  agent. Every run is opened on the seal, in the sealed scope, and the simulation pool runs
+  the sealed definition. Only an agent's recorded pause refuses it; the installation's, the
+  sealed scope's and the agent's stops apply. A retry that leaves `sealId` out runs the
+  recorded seal, one naming another seal or a version is a 409, and once runs exist a retry
+  answers from them even if the seal was erased since. A first attempt on an erased seal is
+  409 `fuseone:candidate-unreadable`. Every other way of opening a run refuses a seal as a
+  version the agent never published.
 
 ## [0.123.0] — 2026-11-18
 

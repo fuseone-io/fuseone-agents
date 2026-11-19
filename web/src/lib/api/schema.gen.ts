@@ -1220,6 +1220,14 @@ export interface paths {
          *     the experiment where it was recorded. When either is a scope the caller may not
          *     publish in — an agent republished elsewhere keeps its old versions and runs — the
          *     answer is a 404, as for an experiment that does not exist.
+         *
+         *     With `sealId`, the experiment runs a candidate: the seal's bytes, checked against
+         *     its claim before the first run opens, in the scope the seal was sealed in, which is
+         *     the scope a caller needs `agent:publish` on (404 otherwise, and for a seal of
+         *     another agent or none at all). The agent need not be published. A retry that leaves
+         *     `sealId` out runs the seal the experiment recorded; one naming another seal, or a
+         *     version, is a 409. Once the experiment has runs, a retry is answered from them even
+         *     if the seal has been erased since, and never moves to another seal.
          */
         post: operations["startExperiment"];
         delete?: never;
@@ -4102,8 +4110,10 @@ export interface components {
             effort?: string;
         };
         ExperimentRequest: {
-            /** @description The agent version to run. Absent is the version published now, pinned when the experiment opens, so a version published while it runs reaches none of its runs. */
+            /** @description The agent version to run. Absent is the version published now, pinned when the experiment opens, so a version published while it runs reaches none of its runs. Not with `sealId`. */
             version?: string;
+            /** @description A seal of the agent's draft to run instead of a published version (NT-018 phase 2). The candidate's runs run its sealed bytes, in the scope it was sealed in, and need no published version of the agent. Not with `version`. */
+            sealId?: string;
             /**
              * Format: int64
              * @description The dataset version to replay. Absent is the latest.
@@ -9291,7 +9301,8 @@ export interface operations {
             /**
              * @description A retry under this key stating another intention than the one it names, or not
              *     one run could be opened: a paused agent, or an agent version that does not
-             *     exist.
+             *     exist. `fuseone:candidate-unreadable`: a first attempt on a seal whose bytes are
+             *     erased or no longer match their claim; seal the draft again.
              */
             409: {
                 headers: {

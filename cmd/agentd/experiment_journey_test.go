@@ -109,7 +109,8 @@ func newExperimentWorld(t *testing.T) *experimentWorld {
 		WithAgents(spec.NewRegistry(pool)).
 		WithContent(content).WithCases(content).
 		WithRegressions(regression.NewStore(pool)).
-		WithProviderNames(providers)
+		WithProviderNames(providers).
+		WithCandidates(spec.NewCandidateReader(pool, content))
 	w.publish(t)
 	w.correct(t, content)
 	// The one tool the version declares, so the planner can name it to the model.

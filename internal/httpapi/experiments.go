@@ -4,9 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 
-	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/simulate"
@@ -24,32 +24,30 @@ out.
 func (s *Server) StartExperiment(
 	ctx context.Context, req openapi.StartExperimentRequestObject,
 ) (openapi.StartExperimentResponseObject, error) {
-	absent := openapi.StartExperiment404ApplicationProblemPlusJSONResponse{
-		NotFoundApplicationProblemPlusJSONResponse: notFound(req.AgentId),
+	if s.regressions == nil {
+		return experimentAbsent(req.AgentId), nil
 	}
-	published, ok, err := s.publishedAgent(ctx, req.AgentId)
-	if err != nil || !ok || s.regressions == nil {
-		return absent, err
-	}
-	if err := auth.Require(ctx, domain.PermAgentPublish, published.Scope); err != nil {
-		return openapi.StartExperiment403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish, published.Scope),
-		}, nil
-	}
+	agent := domain.AgentID(req.AgentId)
+	id := experimentID(agent, req.Params.IdempotencyKey)
 	ask, refused := askOf(req.Body)
+	if errors.Is(refused, errVersionAndSeal) {
+		return openapi.StartExperiment400ApplicationProblemPlusJSONResponse(invalid(refused.Error())), nil
+	}
+	target, refusal, err := s.experimentTarget(ctx, agent, id, ask)
+	if err != nil || refusal != nil {
+		return refusal, err
+	}
 	if refused != nil {
 		return openapi.StartExperiment400ApplicationProblemPlusJSONResponse(invalid(refused.Error())), nil
 	}
-
-	id := experimentID(published.ID, req.Params.IdempotencyKey)
-	out, err := s.openExperiment(ctx, published, id, ask)
+	out, err := s.openExperiment(ctx, target, id, ask)
 	switch {
 	case err != nil:
 		return nil, fmt.Errorf("open experiment %s: %w", id, err)
+	case out.unreadable:
+		return candidateUnreadable(id), nil
 	case out.hidden:
-		return openapi.StartExperiment404ApplicationProblemPlusJSONResponse{
-			NotFoundApplicationProblemPlusJSONResponse: notFound(id),
-		}, nil
+		return experimentAbsent(id), nil
 	case out.conflict != nil:
 		return openapi.StartExperiment409ApplicationProblemPlusJSONResponse(conflicted(out.conflict.Error())), nil
 	case out.refused != nil:
@@ -74,6 +72,8 @@ type experimentOpened struct {
 	// publish, answered as if it did not exist.
 	conflict, refused error
 	hidden            bool
+	// unreadable is a first attempt on a candidate whose seal cannot be read.
+	unreadable bool
 }
 
 /*
@@ -86,8 +86,9 @@ nothing recorded and open their runs into one experiment. Taken alone, the secon
 what the first recorded. The fence still keeps an erasure out while the corpus is copied.
 */
 func (s *Server) openExperiment(
-	ctx context.Context, published domain.AgentSummary, id string, ask experimentAsk,
+	ctx context.Context, target experimentTarget, id string, ask experimentAsk,
 ) (out experimentOpened, err error) {
+	published := target.summary
 	err = s.regressions.Exclusive(ctx, []domain.AgentID{published.ID}, func(ctx context.Context) error {
 		before, found, err := simulate.Recorded(ctx, s.store, id)
 		if err != nil {
@@ -108,19 +109,33 @@ func (s *Server) openExperiment(
 				return err
 			}
 		}
-		refused, err := s.addMissing(ctx, experimentBatch{published, id, &out})
-		if err != nil {
-			return err
-		}
-		// Refused only before anything was opened. After, it decides whether a retry can
-		// still add what the first attempt left unopened, never whether it happened.
-		if !found && refused != nil {
-			out.refused = refused
-			return nil
-		}
-		return s.answerFromRecord(ctx, id, &out)
+		return s.openSettled(ctx, target, experimentBatch{published, id, &out}, found)
 	})
 	return out, err
+}
+
+// openSettled opens what the settled intention still lacks, and answers from the record.
+func (s *Server) openSettled(ctx context.Context, target experimentTarget, b experimentBatch, found bool) error {
+	// A candidate that cannot be read opens nothing: a first attempt is refused, and a
+	// retry is answered from the runs it holds, never moved to another seal.
+	if target.unreadable {
+		if !found {
+			b.out.unreadable = true
+			return nil
+		}
+		return s.answerFromRecord(ctx, b.id, b.out)
+	}
+	refused, err := s.addMissing(ctx, b)
+	if err != nil {
+		return err
+	}
+	// Refused only before anything was opened. After, it decides whether a retry can
+	// still add what the first attempt left unopened, never whether it happened.
+	if !found && refused != nil {
+		b.out.refused = refused
+		return nil
+	}
+	return s.answerFromRecord(ctx, b.id, b.out)
 }
 
 // experimentBatch is one experiment being opened: its agent, its id and its result so far.
