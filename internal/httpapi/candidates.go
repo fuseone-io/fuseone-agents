@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/spec"
@@ -20,8 +21,8 @@ The reader decides which seals the caller may see; the routes only answer.
 
 // Candidates is the candidate reader, declared here by the consumer.
 type Candidates interface {
-	List(ctx context.Context, agent domain.AgentID, allow func(domain.Scope) bool) ([]spec.CandidateSeal, error)
-	Read(ctx context.Context, agent domain.AgentID, version domain.VersionID, allow func(domain.Scope) bool) (spec.Candidate, error)
+	List(ctx context.Context, agent domain.AgentID, visible []domain.Scope) ([]spec.CandidateSeal, error)
+	Read(ctx context.Context, agent domain.AgentID, version domain.VersionID, visible []domain.Scope) (spec.Candidate, error)
 }
 
 // WithCandidates wires the candidate reader.
@@ -38,7 +39,7 @@ func (s *Server) ListAgentCandidates(
 	if s.candidates == nil {
 		return openapi.ListAgentCandidates200JSONResponse{Items: items}, nil
 	}
-	seals, err := s.candidates.List(ctx, domain.AgentID(req.AgentId), mayPublishAt(ctx))
+	seals, err := s.candidates.List(ctx, domain.AgentID(req.AgentId), publishScopes(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +59,7 @@ func (s *Server) GetAgentCandidate(
 	if s.candidates == nil {
 		return absent, nil
 	}
-	got, err := s.candidates.Read(ctx, domain.AgentID(req.AgentId), domain.VersionID(req.Version), mayPublishAt(ctx))
+	got, err := s.candidates.Read(ctx, domain.AgentID(req.AgentId), domain.VersionID(req.Version), publishScopes(ctx))
 	switch {
 	case errors.Is(err, spec.ErrCandidateNotFound):
 		return absent, nil
@@ -73,6 +74,12 @@ func (s *Server) GetAgentCandidate(
 		Version: view.Version, SealId: view.SealId, Company: view.Company, Area: view.Area,
 		SealedBy: view.SealedBy, SealedAt: view.SealedAt, Definition: got.Definition,
 	}, nil
+}
+
+// publishScopes is where the caller may publish, for the reader to filter seals by in its
+// query rather than reading every seal and discarding.
+func publishScopes(ctx context.Context) []domain.Scope {
+	return auth.VisibleScopes(ctx, domain.PermAgentPublish)
 }
 
 func candidateSealView(seal spec.CandidateSeal) openapi.CandidateSeal {

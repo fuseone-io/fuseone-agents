@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -106,15 +107,12 @@ func (w candidateWorld) erase(t *testing.T, seal string) {
 	}
 }
 
-func allowAreas(areas ...string) func(domain.Scope) bool {
-	return func(s domain.Scope) bool {
-		for _, a := range areas {
-			if s == (domain.Scope{Company: "acme", Area: domain.AreaID(a)}) {
-				return true
-			}
-		}
-		return false
+func allowAreas(areas ...string) []domain.Scope {
+	out := make([]domain.Scope, 0, len(areas))
+	for _, a := range areas {
+		out = append(out, domain.Scope{Company: "acme", Area: domain.AreaID(a)})
 	}
+	return out
 }
 
 func TestCandidates_listsEachVisibleSealNewestFirst_andNoPublishedVersion(t *testing.T) {
@@ -189,5 +187,124 @@ func TestCandidates_refusals(t *testing.T) {
 	}
 	if _, err := w.reader.Read(context.Background(), w.agent, version, allowAreas("finance")); !errors.Is(err, spec.ErrCandidateNotFound) {
 		t.Errorf("an unreadable seal outside the scope: err = %v, want ErrCandidateNotFound, never a 409 that leaks it", err)
+	}
+}
+
+// The limit is the database's, after the scope filter: hidden seals newer than every visible
+// one must neither fill the page nor be read and discarded.
+func TestCandidates_theListingStopsAtItsLimitOfVisibleSeals_pastNewerHiddenOnes(t *testing.T) {
+	w := newCandidateWorld(t)
+	ctx := context.Background()
+	t0 := time.Date(2026, 11, 18, 10, 0, 0, 0, time.UTC)
+	visible, _ := w.seal(t, "cx", t0)
+	if _, err := w.pool.Exec(ctx, `
+		insert into agent_seals (seal_id, agent_id, version_id, company_id, area_id, content_ref,
+		  draft_id, draft_revision, sealed_by, sealed_at)
+		select gen_random_uuid(), s.agent_id, s.version_id, 'acme', area, 'ref', gen_random_uuid(),
+		  'rev', 'usr_ana', $2::timestamptz + make_interval(secs => g)
+		from agent_seals s,
+		     lateral (select g, case when g > 210 then 'finance' else 'cx' end as area
+		              from generate_series(1, 240) g) seeded
+		where s.seal_id = $1::uuid`, visible, t0); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	got, err := w.reader.List(ctx, w.agent, allowAreas("cx"))
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != spec.CandidateListLimit {
+		t.Fatalf("listed %d seals, want the limit %d", len(got), spec.CandidateListLimit)
+	}
+	for i, seal := range got {
+		if seal.Scope.Area != "cx" {
+			t.Fatalf("seal %d is in %s, outside the caller's scope", i, seal.Scope.Area)
+		}
+		if i > 0 && seal.SealedAt.After(got[i-1].SealedAt) {
+			t.Fatalf("seal %d is newer than seal %d", i, i-1)
+		}
+	}
+	if want := t0.Add(210 * time.Second); !got[0].SealedAt.Equal(want) {
+		t.Errorf("newest listed seal is at %s, want the newest visible one at %s", got[0].SealedAt, want)
+	}
+}
+
+// The scope filter is the query's, and it must say what domain.Scope.Contains says: a grant
+// over the installation, over a company, or over one area.
+func TestCandidates_theQueryScopeFilterAgreesWithScopeContains(t *testing.T) {
+	w := newCandidateWorld(t)
+	t0 := time.Date(2026, 11, 18, 10, 0, 0, 0, time.UTC)
+	cxSeal, _ := w.seal(t, "cx", t0)
+	financeSeal, _ := w.seal(t, "finance", t0.Add(time.Second))
+	sealed := map[string]domain.Scope{
+		cxSeal: {Company: "acme", Area: "cx"}, financeSeal: {Company: "acme", Area: "finance"},
+	}
+	for name, grants := range map[string][]domain.Scope{
+		"the installation":            {{Company: domain.Installation}},
+		"the company":                 {{Company: "acme"}},
+		"one area":                    {{Company: "acme", Area: "cx"}},
+		"another company":             {{Company: "globex"}},
+		"another company's same area": {{Company: "globex", Area: "cx"}},
+		"nothing":                     nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := w.reader.List(context.Background(), w.agent, grants)
+			if err != nil {
+				t.Fatalf("List: %v", err)
+			}
+			listed := map[string]bool{}
+			for _, seal := range got {
+				listed[seal.SealID] = true
+			}
+			for id, scope := range sealed {
+				want := false
+				for _, g := range grants {
+					want = want || g.Contains(scope)
+				}
+				if listed[id] != want {
+					t.Errorf("seal in %s listed=%v, Contains says %v", scope, listed[id], want)
+				}
+			}
+		})
+	}
+}
+
+func TestCandidates_theListingQueryUsesTheAgentIndexAndALimit(t *testing.T) {
+	w := newCandidateWorld(t)
+	ctx := context.Background()
+	tx, err := w.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := tx.Exec(ctx, `
+		insert into agent_version_digests (agent_id, version_id, digest)
+		select 'plan-' || (g % 50), 'vplan' || g, repeat('a', 64) from generate_series(1, 5000) g;
+		insert into agent_seals (seal_id, agent_id, version_id, company_id, area_id, content_ref,
+		  draft_id, draft_revision, sealed_by)
+		select gen_random_uuid(), 'plan-' || (g % 50), 'vplan' || g, 'acme', 'cx', 'ref',
+		  gen_random_uuid(), 'rev', 'usr_ana'
+		from generate_series(1, 5000) g;
+		analyze agent_seals;`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	companies, areas := spec.ScopeArrays(allowAreas("cx"))
+	rows, err := tx.Query(ctx, "explain "+spec.CandidateSealsSQL, "plan-7", companies, areas,
+		string(domain.Installation), spec.CandidateListLimit)
+	if err != nil {
+		t.Fatalf("explain: %v", err)
+	}
+	plan := ""
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		plan += line + "\n"
+	}
+	rows.Close()
+	if strings.Contains(plan, "Seq Scan on agent_seals") || !strings.Contains(plan, "agent_seals_agent_sealed_idx") ||
+		!strings.Contains(plan, "Limit") {
+		t.Errorf("the listing does not walk the agent's index under a limit:\n%s", plan)
 	}
 }

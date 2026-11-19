@@ -46,26 +46,38 @@ func NewCandidateReader(pool *pgxpool.Pool, content Content) *CandidateReader {
 }
 
 // List is the caller's candidate seals of agent, newest first: every seal of a version not
-// yet published, each in a sealed scope allow accepts, at most CandidateListLimit of them.
+// yet published, in a sealed scope one of visible covers, at most CandidateListLimit of
+// them. The scope filter and the limit are the query's, so a caller who may see nothing
+// costs an index probe, not the agent's whole history.
 func (r *CandidateReader) List(
-	ctx context.Context, agent domain.AgentID, allow func(domain.Scope) bool,
+	ctx context.Context, agent domain.AgentID, visible []domain.Scope,
 ) ([]CandidateSeal, error) {
-	return r.visible(ctx, candidateSealsSQL, CandidateListLimit, allow, string(agent))
+	if len(visible) == 0 {
+		return nil, nil
+	}
+	companies, areas := scopeArrays(visible)
+	return r.seals(ctx, candidateSealsSQL, string(agent), companies, areas,
+		string(domain.Installation), CandidateListLimit)
 }
 
 /*
-Read is a candidate's sealed text, from the newest seal the caller can see whose bytes check
-out as the worker checks them, and which seal that was. It is for display: a run stays
-pinned to the seal it opened with, whatever this answers.
+Read is a candidate's sealed text, from the newest seal in a scope one of visible covers
+whose bytes check out as the worker checks them, and which seal that was. It is for
+display: a run stays pinned to the seal it opened with, whatever this answers.
 
 No visible seal, or a version already published, is ErrCandidateNotFound. Visible seals
 that are all unreadable are domain.ErrCandidateUnreadable, which a caller outside every
 seal's scope never gets: that would tell them the candidate exists.
 */
 func (r *CandidateReader) Read(
-	ctx context.Context, agent domain.AgentID, version domain.VersionID, allow func(domain.Scope) bool,
+	ctx context.Context, agent domain.AgentID, version domain.VersionID, visible []domain.Scope,
 ) (Candidate, error) {
-	seals, err := r.visible(ctx, candidateVersionSealsSQL, 0, allow, string(agent), string(version))
+	if len(visible) == 0 {
+		return Candidate{}, ErrCandidateNotFound
+	}
+	companies, areas := scopeArrays(visible)
+	seals, err := r.seals(ctx, candidateVersionSealsSQL, string(agent), companies, areas,
+		string(domain.Installation), string(version))
 	if err != nil {
 		return Candidate{}, err
 	}
@@ -88,46 +100,51 @@ func (r *CandidateReader) Read(
 	return Candidate{}, fmt.Errorf("candidate %s/%s: %w", agent, version, domain.ErrCandidateUnreadable)
 }
 
+// visibleSealSQL is domain.Scope.Contains as a predicate over a seal s: a grant over the
+// installation ($4, with no area), over the seal's company, or over its area.
+const visibleSealSQL = `exists (
+		select 1 from unnest($2::text[], $3::text[]) granted(company, area)
+		where (granted.company = $4 and granted.area = '')
+		   or (granted.company = s.company_id and (granted.area = '' or granted.area = s.area_id)))`
+
 const candidateSealsSQL = `
 	select s.seal_id::text, s.version_id, s.company_id, s.area_id, s.sealed_by, s.sealed_at
 	from agent_seals s
-	where s.agent_id = $1
+	where s.agent_id = $1 and ` + visibleSealSQL + `
 	  and not exists (select 1 from agent_specs p
 	                  where p.agent_id = s.agent_id and p.version_id = s.version_id)
-	order by s.sealed_at desc, s.seal_id desc`
+	order by s.sealed_at desc, s.seal_id desc
+	limit $5`
 
 const candidateVersionSealsSQL = `
 	select s.seal_id::text, s.version_id, s.company_id, s.area_id, s.sealed_by, s.sealed_at
 	from agent_seals s
-	where s.agent_id = $1 and s.version_id = $2
+	where s.agent_id = $1 and s.version_id = $5 and ` + visibleSealSQL + `
 	  and not exists (select 1 from agent_specs p
 	                  where p.agent_id = s.agent_id and p.version_id = s.version_id)
 	order by s.sealed_at desc, s.seal_id desc`
 
-// visible streams seals newest first and keeps the ones allow accepts, up to limit (zero
-// is all of them).
-func (r *CandidateReader) visible(
-	ctx context.Context, query string, limit int, allow func(domain.Scope) bool, args ...any,
-) ([]CandidateSeal, error) {
+// scopeArrays is visible as the two parallel arrays the predicate unnests.
+func scopeArrays(visible []domain.Scope) ([]string, []string) {
+	companies, areas := make([]string, len(visible)), make([]string, len(visible))
+	for i, scope := range visible {
+		companies[i], areas[i] = string(scope.Company), string(scope.Area)
+	}
+	return companies, areas
+}
+
+// seals reads the seals a query answers, in its order.
+func (r *CandidateReader) seals(ctx context.Context, query string, args ...any) ([]CandidateSeal, error) {
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("read candidate seals: %w", err)
 	}
-	defer rows.Close()
-	var out []CandidateSeal
-	for rows.Next() && (limit == 0 || len(out) < limit) {
-		seal, err := scanCandidateSeal(rows)
-		if err != nil {
-			return nil, err
-		}
-		if allow(seal.Scope) {
-			out = append(out, seal)
-		}
-	}
-	return out, rows.Err()
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (CandidateSeal, error) {
+		return scanCandidateSeal(row)
+	})
 }
 
-func scanCandidateSeal(rows pgx.Rows) (CandidateSeal, error) {
+func scanCandidateSeal(rows pgx.CollectableRow) (CandidateSeal, error) {
 	var seal CandidateSeal
 	var version, company, area, by string
 	if err := rows.Scan(&seal.SealID, &version, &company, &area, &by, &seal.SealedAt); err != nil {
