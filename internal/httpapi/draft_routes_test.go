@@ -40,6 +40,11 @@ type draftStub struct {
 	stored    *drafts.Turn
 }
 
+// Seal is not exercised through the stub: sealing is tested against the real store.
+func (d *draftStub) Seal(context.Context, drafts.Sealing) (drafts.Sealed, error) {
+	return drafts.Sealed{}, drafts.ErrNotFound
+}
+
 func (d *draftStub) Get(_ context.Context, _ domain.AgentID, c drafts.Caller) (drafts.Opened, error) {
 	d.callers = append(d.callers, c)
 	return d.opened, d.err

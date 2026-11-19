@@ -44,7 +44,8 @@ func newPublishWorld(t *testing.T) publishWorld {
 		WithAgents(spec.NewRegistry(pool)).
 		WithPublisher(spec.NewPublisher(pool, engine.SystemClock{})).
 		WithRetirements(spec.NewState(pool)).
-		WithDrafts(store)
+		WithDrafts(store).
+		WithCandidates(spec.NewCandidateReader(pool, ledger.NewContent(pool)))
 	return publishWorld{
 		draftJourney: draftJourney{etagJourney{handler: apiHandlerFor(api)}},
 		store:        store, agent: fmt.Sprintf("nt018-publish-%d", time.Now().UnixNano()),

@@ -961,6 +961,66 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
 
+  /agents/{agentId}/draft/seals:
+    post:
+      tags: [agents]
+      operationId: sealAgentDraft
+      summary: Seal the draft as a candidate version
+      description: |
+        Keeps the draft as a candidate (NT-018 phase 2): the exact bytes a
+        publication of this draft would write, under the version id it would
+        compute, outside the agent's published versions. A candidate is
+        invisible to every reader of the current version and opens no real
+        run; experiments run on it by its seal.
+
+        In one transaction, under the agent's content fence: the draft's ETag
+        must be the `If-Match` sent (412 otherwise), and the caller needs
+        `agent:publish` on the draft's scope and on the agent's current one
+        (404 otherwise). The definition is checked as a publication checks it
+        (400), but the `never` block is not required and the agent's stage is
+        not judged: sealing to experiment is safe, putting it live is what
+        activation refuses.
+
+        The version id is claimed for these bytes as a publication claims it.
+        If the draft's bytes are already a published version, nothing is
+        sealed and the answer (200) names that version. A version id that
+        already names other bytes is 409 `fuseone:version-collision`; one
+        published before digests were kept is 409
+        `fuseone:version-digest-unknown`. Either way, change the draft.
+
+        A version that would close an event cycle is still sealed, and the
+        answer names the cycle in `eventCycleWarning`.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatchRequired'
+      responses:
+        '200':
+          description: The draft's bytes are a published version already; nothing was sealed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DraftSeal' }
+        '201':
+          description: Sealed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DraftSeal' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            Nothing was sealed. `fuseone:version-collision`: the version id
+            these bytes get already names other bytes.
+            `fuseone:version-digest-unknown`: the version id was published
+            before digests were kept. Change the draft.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
   /agents/{agentId}/candidates:
     get:
       tags: [agents]
@@ -975,8 +1035,8 @@ paths:
 
         At most the 200 newest seals the caller may see, newest first. With
         none the caller may see, the answer is 404, as at every other door to a
-        candidate: it says nothing about whether one exists elsewhere. Nothing
-        writes seals until release 2b, so until then every listing is 404.
+        candidate: it says nothing about whether one exists elsewhere. Seals
+        are written by `sealAgentDraft`.
       parameters:
         - name: agentId
           in: path
@@ -10157,6 +10217,20 @@ components:
           items:
             type: string
             enum: [instructions, tools, budget, provider]
+    DraftSeal:
+      type: object
+      required: [version, published, company, area]
+      properties:
+        version: { type: string }
+        published:
+          type: boolean
+          description: True when the draft's bytes were a published version already and nothing was sealed.
+        sealId:
+          type: string
+          description: The new seal; absent when nothing was sealed.
+        company: { type: string }
+        area: { type: string }
+        eventCycleWarning: { $ref: '#/components/schemas/EventCycleWarning' }
     CandidateSeal:
       type: object
       required: [version, sealId, company, area, sealedBy, sealedAt]
