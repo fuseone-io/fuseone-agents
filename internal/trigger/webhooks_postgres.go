@@ -144,7 +144,17 @@ func (p *PostgresWebhooks) Sync(
 		return fmt.Errorf("trigger: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := p.SyncIn(ctx, tx, agent, scope, hooks); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
 
+// SyncIn is Sync in the caller's transaction, for a write that must move the webhooks
+// with the version it makes current, in one commit (NT-018 phase 2, activation).
+func (p *PostgresWebhooks) SyncIn(
+	ctx context.Context, tx pgx.Tx, agent domain.AgentID, scope domain.Scope, hooks []domain.WebhookTrigger,
+) error {
 	paths := []string{}
 	for _, hook := range hooks {
 		if err := claimHook(ctx, tx, agent, scope, hook); err != nil {
@@ -161,7 +171,7 @@ func (p *PostgresWebhooks) Sync(
 		string(agent), paths); err != nil {
 		return fmt.Errorf("trigger: prune hooks of %s: %w", agent, err)
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 // claimHook writes one declared webhook.

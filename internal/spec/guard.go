@@ -42,6 +42,8 @@ type Found struct {
 	Exists   bool
 	Scope    domain.Scope
 	Revision domain.Revision
+	// Retired is the half of Revision a write that changes the version keeps.
+	Retired bool
 }
 
 // Judge applies the guard to the agent as the lock found it. Exported so a
@@ -87,7 +89,7 @@ func lockAgent(ctx context.Context, tx pgx.Tx, agent domain.AgentID) (Found, err
 		return Found{}, err
 	}
 	return Found{
-		Exists: true, Scope: scope,
+		Exists: true, Scope: scope, Retired: retired,
 		Revision: domain.AgentRevision(version, retired),
 	}, nil
 }

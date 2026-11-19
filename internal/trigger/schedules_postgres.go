@@ -3,6 +3,7 @@ package trigger
 import (
 	"context"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -72,7 +73,17 @@ func (p *PostgresSchedules) Sync(
 		return fmt.Errorf("trigger: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := p.SyncIn(ctx, tx, agent, schedules, from); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
 
+// SyncIn is Sync in the caller's transaction, for a write that must move the schedules
+// with the version it makes current, in one commit (NT-018 phase 2, activation).
+func (p *PostgresSchedules) SyncIn(
+	ctx context.Context, tx pgx.Tx, agent domain.AgentID, schedules []string, from time.Time,
+) error {
 	for _, schedule := range schedules {
 		next, err := NextAfter(schedule, from)
 		if err != nil {
@@ -101,5 +112,5 @@ func (p *PostgresSchedules) Sync(
 		string(agent), schedules); err != nil {
 		return fmt.Errorf("trigger: prune %s: %w", agent, err)
 	}
-	return tx.Commit(ctx)
+	return nil
 }

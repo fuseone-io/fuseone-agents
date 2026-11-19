@@ -1102,6 +1102,86 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /agents/{agentId}/candidates/{version}/activate:
+    post:
+      tags: [agents]
+      operationId: activateAgentVersion
+      summary: Make a candidate, or a published version, the agent's current version
+      description: |
+        Activation (NT-018 phase 2): the version goes live through the
+        publication's own locks and checks, in one transaction. A candidate
+        goes live as the exact bytes a readable seal holds, and its text is
+        then kept as every published version is. A version already published
+        is made current again from its row, and no seal has to be readable.
+
+        Exactly one of `If-Match` (the agent's ETag) and `If-None-Match: *`
+        (a first version) is required, or the request is 428; a value that
+        does not parse is 400. The version must be one the caller may publish
+        in (`agent:publish` on its scope), and the agent must be one they may
+        publish where it lives now; otherwise the answer is 404, before any
+        412. A first version is born paused, in the scope it was sealed in.
+
+        Refused, changing nothing: a definition the publication would refuse
+        (400), one with no `never` block (400 `fuseone:publish-needs-never`),
+        an agent that moved out of the version's scope (409
+        `fuseone:candidate-scope-moved`), an autonomous agent (409
+        `fuseone:stage-refused`), a candidate with no readable seal (409
+        `fuseone:candidate-unreadable`), and a version id that names other
+        bytes or bytes nobody kept (409 `fuseone:version-collision`,
+        `fuseone:version-digest-unknown`), and a webhook path another agent
+        already answers on (409 `fuseone:webhook-path-taken`).
+
+        The agent's schedules and webhooks move to the version in the same
+        transaction, so nothing is left to reconcile after the answer.
+        Activating the version that is already current, with the ETag it has
+        now, succeeds again: it records another activation and brings the
+        schedules and webhooks back to what the version declares.
+
+        The publication's checks read the catalogue before the locks, but
+        what they find is answered only after the agent's scope (404), the
+        ETag (412), the scope move and the stage were judged, and after a
+        seal holding other bytes was refused as a collision: a definition
+        they refuse (400), or a candidate none of whose seals was readable
+        when the request arrived, which is never activated unchecked (409
+        `fuseone:candidate-unreadable`).
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IfNoneMatchCreate'
+      responses:
+        '200':
+          description: The version is current.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentActivated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            The agent moved out of the version's scope, it is autonomous, the
+            candidate has no readable seal, the version id names other bytes
+            or bytes nobody kept, or a webhook path it declares belongs to
+            another agent. The problem type says which.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428':
+          description: Neither If-Match nor If-None-Match. Problem type `fuseone:precondition-required`.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /agents/{agentId}/draft/proposals:
     get:
       tags: [agents]
@@ -10172,6 +10252,25 @@ components:
           description: |
             The definition as a file, exactly as published. An installation
             that keeps its agents in git commits this.
+        eventCycleWarning: { $ref: '#/components/schemas/EventCycleWarning' }
+
+    AgentActivated:
+      type: object
+      required: [agentId, versionId, created, paused]
+      properties:
+        agentId: { type: string }
+        versionId: { type: string }
+        created:
+          type: boolean
+          description: |
+            True when the activation wrote the version from a candidate's seal;
+            false when the version was already published.
+        sealId:
+          type: string
+          description: The seal the candidate's bytes were read from. Absent when the version was already published.
+        paused:
+          type: boolean
+          description: Whether the agent is allowed to start. A first version never is.
         eventCycleWarning: { $ref: '#/components/schemas/EventCycleWarning' }
 
     EventCycleWarning:

@@ -81,6 +81,12 @@ const (
 	// CodeCandidateUnreadable is a candidate whose every seal the caller may see
 	// was erased, aged out or no longer matches its claim (NT-018 phase 2).
 	CodeCandidateUnreadable Code = "fuseone:candidate-unreadable"
+	// CodeCandidateScopeMoved is an activation of a version sealed in a scope the agent
+	// no longer lives in (NT-018 phase 2).
+	CodeCandidateScopeMoved Code = "fuseone:candidate-scope-moved"
+	// CodeWebhookPathTaken is a version declaring a webhook path another agent already
+	// answers on: activating it would aim that path's key at a different agent.
+	CodeWebhookPathTaken Code = "fuseone:webhook-path-taken"
 	// CodeIntegrationNameTaken is an integration whose name another scope
 	// already holds (NT-019). Its own code, so the console can ask for another
 	// name rather than report a failure. It never says which scope holds it.

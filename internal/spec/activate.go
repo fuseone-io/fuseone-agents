@@ -15,6 +15,10 @@ import (
 // longer lives in. Nothing was written.
 var ErrCandidateScopeMoved = errors.New("spec: the agent moved out of the version's scope")
 
+// ErrNotChecked is an activation of bytes the publication's checks never saw: a candidate
+// unreadable before the locks, readable under them. Nothing was written.
+var ErrNotChecked = errors.New("spec: the version was not checked before the locks")
+
 // Activation is one version to make current (NT-018 phase 2, release 2c).
 type Activation struct {
 	Agent   domain.AgentID
@@ -29,6 +33,17 @@ type Activation struct {
 	// Accept judges the definition after the graph, before anything is written: the
 	// workbench's never block.
 	Accept func(Spec) error
+	// Checked is whether the version's bytes passed the publication's checks before the
+	// locks. They are the claimed bytes on either path, so one check covers every seal
+	// and the published row; with none, the activation is refused under the locks.
+	Checked bool
+	// Refused is what those checks found against the bytes: a refusal, or a failure to
+	// check at all. Answered under the locks, after what NT-018 judges first.
+	Refused error
+	// Within runs in the activation's transaction once the version is current, before
+	// the commit: what must move with the version moves in the same commit, under the
+	// agent's row. An error undoes the activation.
+	Within func(ctx context.Context, tx pgx.Tx, s Spec) error
 }
 
 // Activated is an activation that committed.
@@ -40,6 +55,10 @@ type Activated struct {
 	// Created is whether the version's row was written by this activation.
 	Created bool
 	Judged  Published
+	// Revision is the agent's tag once the activation committed.
+	Revision domain.Revision
+	// Paused is whether the agent may start, as the activation's transaction left it.
+	Paused bool
 }
 
 /*
@@ -63,13 +82,18 @@ func (p *Publisher) Activate(ctx context.Context, a Activation) (Activated, erro
 	if err := lockEventGraph(ctx, tx); err != nil {
 		return Activated{}, fmt.Errorf("spec: activate %s@%s: %w", a.Agent, a.Version, err)
 	}
-	if err := guardActivation(ctx, tx, a); err != nil {
+	retired, err := guardActivation(ctx, tx, a)
+	if err != nil {
 		return Activated{}, err
 	}
 	out, err := p.definitionOf(ctx, tx, a)
 	if err != nil {
 		return Activated{}, err
 	}
+	if err := judgedBeforeTheLocks(a); err != nil {
+		return Activated{}, err
+	}
+	out.Revision = domain.AgentRevision(a.Version, retired)
 	if out.Judged, err = p.judge(ctx, tx, out.Spec); err != nil {
 		return Activated{}, err
 	}
@@ -79,24 +103,42 @@ func (p *Publisher) Activate(ctx context.Context, a Activation) (Activated, erro
 	if err := writeActivation(ctx, tx, a, out); err != nil {
 		return Activated{}, err
 	}
+	if err := tx.QueryRow(ctx, `select paused from agent_state where agent_id = $1`,
+		string(a.Agent)).Scan(&out.Paused); err != nil {
+		return Activated{}, fmt.Errorf("spec: activate %s@%s: read the pause: %w", a.Agent, a.Version, err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Activated{}, fmt.Errorf("spec: activate %s@%s: commit: %w", a.Agent, a.Version, err)
 	}
 	return out, nil
 }
 
+// judgedBeforeTheLocks is what the publication's checks found before the locks, answered
+// only now, once the definition is chosen and everything NT-018 judges first has passed:
+// their refusal or failure, else bytes they never saw.
+func judgedBeforeTheLocks(a Activation) error {
+	if a.Refused != nil {
+		return a.Refused
+	}
+	if !a.Checked {
+		return fmt.Errorf("%w: %s@%s", ErrNotChecked, a.Agent, a.Version)
+	}
+	return nil
+}
+
 // guardActivation is everything judged about the agent under its row lock: who may
-// write and what they saw, where it lives, and its stage.
-func guardActivation(ctx context.Context, tx pgx.Tx, a Activation) error {
+// write and what they saw, where it lives, and its stage. It answers whether the agent
+// is retired, which activation does not change.
+func guardActivation(ctx context.Context, tx pgx.Tx, a Activation) (bool, error) {
 	found, err := guardAgent(ctx, tx, a.Agent, a.Guard)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if found.Exists && found.Scope != a.Scope {
-		return fmt.Errorf("%w: %s lives in %s/%s, the version in %s/%s", ErrCandidateScopeMoved,
+		return false, fmt.Errorf("%w: %s lives in %s/%s, the version in %s/%s", ErrCandidateScopeMoved,
 			a.Agent, found.Scope.Company, found.Scope.Area, a.Scope.Company, a.Scope.Area)
 	}
-	return refuseStage(ctx, tx, a.Agent, []domain.Stage{domain.StageAutonomous})
+	return found.Retired, refuseStage(ctx, tx, a.Agent, []domain.Stage{domain.StageAutonomous})
 }
 
 // definitionOf decides which row defines the version, by its claim, and loads it.
@@ -218,5 +260,8 @@ func writeActivation(ctx context.Context, tx pgx.Tx, a Activation, out Activated
 		string(a.Agent), string(a.Version), out.SealID, path, string(a.By)); err != nil {
 		return fmt.Errorf("spec: record the activation of %s@%s: %w", a.Agent, a.Version, err)
 	}
-	return nil
+	if a.Within == nil {
+		return nil
+	}
+	return a.Within(ctx, tx, out.Spec)
 }
