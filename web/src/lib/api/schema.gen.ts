@@ -604,8 +604,10 @@ export interface paths {
          *     enough. Seals outside every scope the caller may publish in are left
          *     out, and so is every seal of a version that is already published.
          *
-         *     At most the 200 newest seals the caller may see, newest first. Nothing
-         *     writes seals until release 2b, so until then the list is empty.
+         *     At most the 200 newest seals the caller may see, newest first. With
+         *     none the caller may see, the answer is 404, as at every other door to a
+         *     candidate: it says nothing about whether one exists elsewhere. Nothing
+         *     writes seals until release 2b, so until then every listing is 404.
          */
         get: operations["listAgentCandidates"];
         put?: never;
@@ -8412,6 +8414,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     getAgentCandidate: {

@@ -35,14 +35,20 @@ func (s *Server) WithCandidates(c Candidates) *Server {
 func (s *Server) ListAgentCandidates(
 	ctx context.Context, req openapi.ListAgentCandidatesRequestObject,
 ) (openapi.ListAgentCandidatesResponseObject, error) {
-	items := []openapi.CandidateSeal{}
+	absent := openapi.ListAgentCandidates404ApplicationProblemPlusJSONResponse{
+		NotFoundApplicationProblemPlusJSONResponse: notFound(req.AgentId),
+	}
 	if s.candidates == nil {
-		return openapi.ListAgentCandidates200JSONResponse{Items: items}, nil
+		return absent, nil
 	}
 	seals, err := s.candidates.List(ctx, domain.AgentID(req.AgentId), publishScopes(ctx))
 	if err != nil {
 		return nil, err
 	}
+	if len(seals) == 0 {
+		return absent, nil
+	}
+	items := make([]openapi.CandidateSeal, 0, len(seals))
 	for _, seal := range seals {
 		items = append(items, candidateSealView(seal))
 	}

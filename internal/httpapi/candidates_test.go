@@ -20,7 +20,8 @@ import (
 /*
 The candidate routes answer 404 outside the sealed scope, in both directions (NT-018,
 "Tests that must exist"): a cx author cannot see a candidate sealed in finance, a finance
-author cannot see one sealed in cx, and agent:read is not enough to see either.
+author cannot see one sealed in cx, and agent:read is not enough to see either. The listing
+is one of those doors: with nothing the caller may see, it is 404, not an empty page.
 */
 
 const routeCandidate = `---
@@ -90,15 +91,22 @@ func (c candidateRoutes) seal(t *testing.T, area string) (string, string) {
 	return id, string(parsed.Version)
 }
 
+// listed is the seals a listing answers, or nil for its 404.
 func (c candidateRoutes) listed(t *testing.T, ctx context.Context) []string {
 	t.Helper()
 	resp, err := c.server.ListAgentCandidates(ctx, openapi.ListAgentCandidatesRequestObject{AgentId: c.agent})
 	if err != nil {
 		t.Fatalf("ListAgentCandidates: %v", err)
 	}
+	if _, absent := resp.(openapi.ListAgentCandidates404ApplicationProblemPlusJSONResponse); absent {
+		return nil
+	}
 	ok, isOK := resp.(openapi.ListAgentCandidates200JSONResponse)
 	if !isOK {
 		t.Fatalf("list answered %T", resp)
+	}
+	if len(ok.Items) == 0 {
+		t.Fatalf("list answered 200 with no items, want the 404 every door answers")
 	}
 	var seals []string
 	for _, item := range ok.Items {
@@ -145,8 +153,8 @@ func TestCandidateRoutes_eachSealIsVisibleOnlyInItsSealedScope_inBothDirections(
 	}
 	t.Run("agent:read alone", func(t *testing.T) {
 		ctx := grantedAt(domain.RoleApprover, cx)
-		if got := c.listed(t, ctx); len(got) != 0 {
-			t.Errorf("listed %v, want nothing", got)
+		if got := c.listed(t, ctx); got != nil {
+			t.Errorf("listed %v, want the 404", got)
 		}
 		if resp := c.read(t, ctx, cxVersion); !isCandidate404(resp) {
 			t.Errorf("reading answered %T, want 404", resp)
@@ -180,4 +188,16 @@ func TestCandidateRoutes_anUnreadableCandidate_is409OnlyToWhoMaySeeIt(t *testing
 func isCandidate404(resp openapi.GetAgentCandidateResponseObject) bool {
 	_, ok := resp.(openapi.GetAgentCandidate404ApplicationProblemPlusJSONResponse)
 	return ok
+}
+
+func TestCandidateRoutes_aListingWithNothingVisible_is404(t *testing.T) {
+	c := newCandidateRoutes(t)
+	c.seal(t, "finance")
+	if got := c.listed(t, grantedAt(domain.RoleAuthor, cx)); got != nil {
+		t.Errorf("a cx author listed %v, want the 404", got)
+	}
+	c.agent += "-never-sealed"
+	if got := c.listed(t, grantedAt(domain.RoleAuthor, cx)); got != nil {
+		t.Errorf("an agent with no candidate listed %v, want the same 404", got)
+	}
 }
