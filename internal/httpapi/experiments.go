@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -29,6 +30,9 @@ func (s *Server) StartExperiment(
 	agent := domain.AgentID(req.AgentId)
 	id := experimentID(agent, req.Params.IdempotencyKey)
 	ask, refused := askOf(req.Body)
+	if errors.Is(refused, errVersionAndSeal) {
+		return openapi.StartExperiment400ApplicationProblemPlusJSONResponse(invalid(refused.Error())), nil
+	}
 	target, refusal, err := s.experimentTarget(ctx, agent, id, ask)
 	if err != nil || refusal != nil {
 		return refusal, err
@@ -36,7 +40,6 @@ func (s *Server) StartExperiment(
 	if refused != nil {
 		return openapi.StartExperiment400ApplicationProblemPlusJSONResponse(invalid(refused.Error())), nil
 	}
-
 	out, err := s.openExperiment(ctx, target, id, ask)
 	switch {
 	case err != nil:
@@ -44,9 +47,7 @@ func (s *Server) StartExperiment(
 	case out.unreadable:
 		return candidateUnreadable(id), nil
 	case out.hidden:
-		return openapi.StartExperiment404ApplicationProblemPlusJSONResponse{
-			NotFoundApplicationProblemPlusJSONResponse: notFound(id),
-		}, nil
+		return experimentAbsent(id), nil
 	case out.conflict != nil:
 		return openapi.StartExperiment409ApplicationProblemPlusJSONResponse(conflicted(out.conflict.Error())), nil
 	case out.refused != nil:

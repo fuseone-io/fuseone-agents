@@ -62,17 +62,27 @@ func (s *Server) experimentTarget(
 	return target, nil, nil
 }
 
-// experimentSeal is the seal this request runs: the one it names, else the one its
-// experiment was recorded on, else none.
+/*
+experimentSeal is the seal this request runs on: the one its experiment was recorded on,
+when it was recorded, and otherwise the one it names.
+
+The recorded intention comes first. A retry is answered by what its key already names, and
+only then compared with what it asks (settle): a retry naming another seal, or one that
+does not exist, is the conflict of an intention that diverges, never a 404 for the seal it
+named instead.
+*/
 func (s *Server) experimentSeal(ctx context.Context, id string, ask experimentAsk) (string, error) {
+	recorded, found, err := simulate.Recorded(ctx, s.store, id)
+	if err != nil {
+		return "", err
+	}
+	if found {
+		return recorded.Seal, nil
+	}
 	if ask.seal != nil {
 		return *ask.seal, nil
 	}
-	recorded, found, err := simulate.Recorded(ctx, s.store, id)
-	if err != nil || !found {
-		return "", err
-	}
-	return recorded.Seal, nil
+	return "", nil
 }
 
 // publishedTarget is the version published now, refused as the route always has.

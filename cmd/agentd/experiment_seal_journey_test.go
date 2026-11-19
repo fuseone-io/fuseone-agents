@@ -139,6 +139,9 @@ func TestExperiment_onASeal_aRetryInheritsTheSealAndRefusesAnother(t *testing.T)
 	version := "v000000000000"
 	for name, body := range map[string]*openapi.ExperimentRequest{
 		"another seal": onSeal(otherRouteSeal), "a version": {Version: &version},
+		// The value the bug takes: a seal that does not exist must not be judged before the
+		// recorded intention, or the retry is a 404 and not the conflict it is.
+		"a seal nobody wrote": onSeal("9f9f9f9f-7b8c-4d9e-0f1a-2b3c4d5e6f70"),
 	} {
 		if _, isConflict := conflictCode(world.startOnSeal(t, author(t.Context()), "journey-seal-2", body)); !isConflict {
 			t.Errorf("a retry naming %s was not a conflict", name)
@@ -225,8 +228,21 @@ func TestExperiment_namingBothAVersionAndASeal_isABadRequest(t *testing.T) {
 	world.seal(t, routeSeal)
 	version := "v000000000000"
 	seal := routeSeal
-	resp := world.startOnSeal(t, author(t.Context()), "journey-seal-8", &openapi.ExperimentRequest{Version: &version, SealId: &seal})
-	if _, bad := resp.(openapi.StartExperiment400ApplicationProblemPlusJSONResponse); !bad {
+	body := &openapi.ExperimentRequest{Version: &version, SealId: &seal}
+	if resp := world.startOnSeal(t, author(t.Context()), "journey-seal-8", body); !isBadRequest(resp) {
 		t.Errorf("both a version and a seal = %T, want 400", resp)
 	}
+	// Judged on the request alone: an agent with nothing published answers the same.
+	world.agent = domain.AgentID(fmt.Sprintf("fresh-%d", time.Now().UnixNano()))
+	world.seal(t, otherRouteSeal)
+	other := otherRouteSeal
+	body.SealId = &other
+	if resp := world.startOnSeal(t, author(t.Context()), "journey-seal-9", body); !isBadRequest(resp) {
+		t.Errorf("both on an agent never published = %T, want 400", resp)
+	}
+}
+
+func isBadRequest(resp openapi.StartExperimentResponseObject) bool {
+	_, bad := resp.(openapi.StartExperiment400ApplicationProblemPlusJSONResponse)
+	return bad
 }

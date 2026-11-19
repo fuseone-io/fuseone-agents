@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -21,6 +22,10 @@ type experimentAsk struct {
 	datasetVersion *int64
 }
 
+// errVersionAndSeal is a request naming both a published version and a seal. It is judged
+// on the request alone, before anything about the agent is read.
+var errVersionAndSeal = errors.New("an experiment runs either a published version or a seal, not both")
+
 // askOf reads a request, refusing what no experiment could run.
 func askOf(body *openapi.ExperimentRequest) (experimentAsk, error) {
 	var out experimentAsk
@@ -32,7 +37,7 @@ func askOf(body *openapi.ExperimentRequest) (experimentAsk, error) {
 	}
 	out.repetitions = body.Repetitions
 	if body.Version != nil && body.SealId != nil {
-		return out, fmt.Errorf("an experiment runs either a published version or a seal, not both")
+		return out, errVersionAndSeal
 	}
 	if body.Version != nil {
 		v := domain.VersionID(*body.Version)
