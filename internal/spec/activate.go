@@ -40,6 +40,8 @@ type Activated struct {
 	// Created is whether the version's row was written by this activation.
 	Created bool
 	Judged  Published
+	// Revision is the agent's tag once the activation committed.
+	Revision domain.Revision
 }
 
 /*
@@ -63,13 +65,15 @@ func (p *Publisher) Activate(ctx context.Context, a Activation) (Activated, erro
 	if err := lockEventGraph(ctx, tx); err != nil {
 		return Activated{}, fmt.Errorf("spec: activate %s@%s: %w", a.Agent, a.Version, err)
 	}
-	if err := guardActivation(ctx, tx, a); err != nil {
+	retired, err := guardActivation(ctx, tx, a)
+	if err != nil {
 		return Activated{}, err
 	}
 	out, err := p.definitionOf(ctx, tx, a)
 	if err != nil {
 		return Activated{}, err
 	}
+	out.Revision = domain.AgentRevision(a.Version, retired)
 	if out.Judged, err = p.judge(ctx, tx, out.Spec); err != nil {
 		return Activated{}, err
 	}
@@ -86,17 +90,18 @@ func (p *Publisher) Activate(ctx context.Context, a Activation) (Activated, erro
 }
 
 // guardActivation is everything judged about the agent under its row lock: who may
-// write and what they saw, where it lives, and its stage.
-func guardActivation(ctx context.Context, tx pgx.Tx, a Activation) error {
+// write and what they saw, where it lives, and its stage. It answers whether the agent
+// is retired, which activation does not change.
+func guardActivation(ctx context.Context, tx pgx.Tx, a Activation) (bool, error) {
 	found, err := guardAgent(ctx, tx, a.Agent, a.Guard)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if found.Exists && found.Scope != a.Scope {
-		return fmt.Errorf("%w: %s lives in %s/%s, the version in %s/%s", ErrCandidateScopeMoved,
+		return false, fmt.Errorf("%w: %s lives in %s/%s, the version in %s/%s", ErrCandidateScopeMoved,
 			a.Agent, found.Scope.Company, found.Scope.Area, a.Scope.Company, a.Scope.Area)
 	}
-	return refuseStage(ctx, tx, a.Agent, []domain.Stage{domain.StageAutonomous})
+	return found.Retired, refuseStage(ctx, tx, a.Agent, []domain.Stage{domain.StageAutonomous})
 }
 
 // definitionOf decides which row defines the version, by its claim, and loads it.
