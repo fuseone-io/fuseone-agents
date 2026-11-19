@@ -30,6 +30,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Migration 0122 adds `agent_activations`** (NT-018 phase 2, release 2c): one insert-only
+  row per activation of a version, naming the seal it read, or none. Additive, and nothing
+  reads or writes it until the activation route lands; it sets no rollback floor.
+
 ## [0.124.1] — 2026-11-19
 
 The workbench shows the instructions again (#409). Console only: no migrations, and the
