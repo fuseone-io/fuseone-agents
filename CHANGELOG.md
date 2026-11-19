@@ -30,6 +30,15 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.123.0] — 2026-11-18
+
+Readers of candidate versions (NT-018 phase 2, release 2a, #398–#401). The schema for seals,
+the worker that runs a candidate only from its seal, erasure and retention that reach seals
+and the runs derived from them, and the candidate listing and detail. Nothing writes a seal
+yet. Release 2b, which does, waits for this one on every replica and sets its rollback floor
+here. Migrations 0118–0121 are additive and set no floor; 0119 builds its indexes
+concurrently.
+
 ### Upgrade notes
 
 - **NT-018 phase 2, release 2a, teaches readers the candidate shape.** Migration 0118 adds
