@@ -22,6 +22,9 @@ type Experiment struct {
 	Version     domain.VersionID
 	Config      domain.ExperimentConfig
 	Repetitions int
+	// Seal is the candidate the experiment runs, when it runs one (NT-018 phase 2). Its
+	// Version is then the seal's.
+	Seal string
 }
 
 // draw is one run a batch opens: a case, and the intention that names it.
@@ -65,4 +68,5 @@ func withExperiment(req *trigger.Request, batch Batch) {
 	req.ExperimentConfig = &config
 	req.ExperimentRepetitions = batch.Experiment.Repetitions
 	req.Version = batch.Experiment.Version
+	req.SealID = batch.Experiment.Seal
 }

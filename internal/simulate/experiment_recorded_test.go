@@ -1,12 +1,14 @@
 package simulate_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/simulate"
+	"github.com/fuseone/agents/internal/trigger"
 )
 
 /*
@@ -156,5 +158,42 @@ func TestIntentionOf_aStepThatIsNotAnOpening_isRefused(t *testing.T) {
 	t.Parallel()
 	if _, err := simulate.IntentionOf(domain.Step{Kind: domain.StepRunFinished}); err == nil {
 		t.Error("IntentionOf accepted a step that opens nothing")
+	}
+}
+
+type oneSeal struct{ candidate trigger.Candidate }
+
+func (s oneSeal) Candidate(_ context.Context, agent domain.AgentID, seal string) (trigger.Candidate, bool, error) {
+	if seal != experimentSealID || agent != s.candidate.Agent {
+		return trigger.Candidate{}, false, nil
+	}
+	return s.candidate, true, nil
+}
+
+const experimentSealID = "0b7c3e52-8a43-4b55-9a3f-0d6a3c5f9e11"
+
+// An experiment on a candidate opens every run on its seal, and its retry reads the seal
+// back from the runs, so it can inherit it and refuse another (NT-018 phase 2).
+func TestRecorded_anExperimentOnASeal_recordsTheSealAndItsVersion(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	sealed := domain.Scope{Company: "acme", Area: "finance"}
+	opener := openerFor(store, engine.NewMemoryContent()).WithCandidates(oneSeal{trigger.Candidate{
+		Agent: "triage", Version: "vsealed00001", Scope: sealed,
+	}})
+	batch := experimentBatch(1)
+	batch.Experiment.Seal = experimentSealID
+	opened, err := simulate.Open(t.Context(), opener, batch)
+	if err != nil || len(opened.Runs) != 2 {
+		t.Fatalf("Open = %+v (%v), want both cases opened on the seal", opened, err)
+	}
+
+	got, found, err := simulate.Recorded(t.Context(), store, "exp-1")
+	if err != nil || !found {
+		t.Fatalf("Recorded = %v found=%v", err, found)
+	}
+	if got.Seal != experimentSealID || got.Version != "vsealed00001" || got.Scope != sealed {
+		t.Errorf("Recorded = seal %q version %s scope %s, want the seal, its version and its scope",
+			got.Seal, got.Version, got.Scope)
 	}
 }

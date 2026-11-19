@@ -102,6 +102,7 @@ func recordedIntention(step domain.Step, started domain.RunStartedPayload) Inten
 	out := Intention{
 		Experiment: Experiment{
 			Version: step.VersionID, Repetitions: started.ExperimentRepetitions,
+			Seal: started.SealID,
 		},
 		DatasetVersion: started.DatasetVersion,
 	}
