@@ -15,6 +15,7 @@ import (
 // first attempt's when there was one, the default when this is the first.
 type experimentAsk struct {
 	version        *domain.VersionID
+	seal           *string
 	config         *domain.ExperimentConfig
 	repetitions    *int
 	datasetVersion *int64
@@ -30,10 +31,14 @@ func askOf(body *openapi.ExperimentRequest) (experimentAsk, error) {
 		return out, fmt.Errorf("an experiment runs each case 1 to %d times", simulate.MaxRepetitions)
 	}
 	out.repetitions = body.Repetitions
+	if body.Version != nil && body.SealId != nil {
+		return out, fmt.Errorf("an experiment runs either a published version or a seal, not both")
+	}
 	if body.Version != nil {
 		v := domain.VersionID(*body.Version)
 		out.version = &v
 	}
+	out.seal = body.SealId
 	if c := body.Config; c != nil {
 		out.config = &domain.ExperimentConfig{
 			Provider: deref(c.Provider), Model: deref(c.Model), Effort: deref(c.Effort),
@@ -59,6 +64,9 @@ func fresh(ask experimentAsk, published domain.VersionID) simulate.Intention {
 	if ask.version != nil {
 		out.Version = *ask.version
 	}
+	if ask.seal != nil {
+		out.Seal = *ask.seal
+	}
 	if ask.config != nil {
 		out.Config = *ask.config
 	}
@@ -76,6 +84,9 @@ func diverging(ask experimentAsk, recorded simulate.Intention) []string {
 	var out []string
 	if ask.version != nil && *ask.version != recorded.Version {
 		out = append(out, fmt.Sprintf("agent version %s, not %s", recorded.Version, *ask.version))
+	}
+	if ask.seal != nil && *ask.seal != recorded.Seal {
+		out = append(out, "another seal")
 	}
 	if ask.config != nil && *ask.config != recorded.Config {
 		out = append(out, "another configuration")

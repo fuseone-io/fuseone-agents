@@ -75,6 +75,11 @@ func (s *Server) opener() *trigger.Opener {
 	if s.content != nil {
 		opener = opener.WithContent(s.content)
 	}
+	if s.candidates != nil {
+		// Only an experiment's simulated run may run a candidate; the opener refuses
+		// every other request that names one.
+		opener = opener.WithCandidates(s.candidates)
+	}
 	if s.stages != nil {
 		// A draft may be simulated and may not act, by any route including
 		// this button.

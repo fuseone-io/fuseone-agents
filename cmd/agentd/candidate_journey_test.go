@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -28,8 +29,8 @@ reader fails these runs with the same code an unreadable seal does, so only a ru
 plans on the sealed model proves the wiring.
 */
 
-const candidateBytes = `---
-id: triage
+const candidateTemplate = `---
+id: %s
 name: Triage
 company: acme
 area: cx
@@ -45,21 +46,24 @@ budget:
 Classify the ticket from the sealed text.
 `
 
+// candidateBytes is the sealed definition of agent, naming a provider only it uses.
+func candidateBytes(agent domain.AgentID) string { return fmt.Sprintf(candidateTemplate, agent) }
+
 // seal writes a candidate of the world's agent the way release 2b will.
 func (w *experimentWorld) seal(t *testing.T, sealID string) domain.VersionID {
 	t.Helper()
-	sealed, err := spec.Parse("triage.agent.md", []byte(candidateBytes))
+	sealed, err := spec.Parse("triage.agent.md", []byte(candidateBytes(w.agent)))
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	sum := sha256.Sum256([]byte(candidateBytes))
+	sum := sha256.Sum256([]byte(candidateBytes(w.agent)))
 	ctx := t.Context()
 	if _, err := w.pool.Exec(ctx, `
 		insert into agent_version_digests (agent_id, version_id, digest) values ($1, $2, $3)
 		on conflict do nothing`, string(w.agent), string(sealed.Version), hex.EncodeToString(sum[:])); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	ref, err := ledger.NewContent(w.pool).PutFor(ctx, "authoring", sealID, 0, []byte(candidateBytes))
+	ref, err := ledger.NewContent(w.pool).PutFor(ctx, "authoring", sealID, 0, []byte(candidateBytes(w.agent)))
 	if err != nil {
 		t.Fatalf("keep the sealed bytes: %v", err)
 	}
