@@ -109,6 +109,9 @@ type Server struct {
 	drafts Drafts
 	// candidates lists and reads sealed candidates (NT-018 phase 2). Optional.
 	candidates Candidates
+	// activations makes a candidate or a published version current (NT-018 phase 2).
+	// Optional.
+	activations Activations
 	// turnModels is the installation's model registry as a turn needs it:
 	// a completer, a configured price, and the providers of a scope.
 	turnModels  TurnModels

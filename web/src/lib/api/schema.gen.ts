@@ -690,6 +690,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/candidates/{version}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make a candidate, or a published version, the agent's current version
+         * @description Activation (NT-018 phase 2): the version goes live through the
+         *     publication's own locks and checks, in one transaction. A candidate
+         *     goes live as the exact bytes a readable seal holds, and its text is
+         *     then kept as every published version is. A version already published
+         *     is made current again from its row, and no seal has to be readable.
+         *
+         *     Exactly one of `If-Match` (the agent's ETag) and `If-None-Match: *`
+         *     (a first version) is required, or the request is 428; a value that
+         *     does not parse is 400. The version must be one the caller may publish
+         *     in (`agent:publish` on its scope), and the agent must be one they may
+         *     publish where it lives now; otherwise the answer is 404, before any
+         *     412. A first version is born paused, in the scope it was sealed in.
+         *
+         *     Refused, changing nothing: a definition the publication would refuse
+         *     (400), one with no `never` block (400 `fuseone:publish-needs-never`),
+         *     an agent that moved out of the version's scope (409
+         *     `fuseone:candidate-scope-moved`), an autonomous agent (409
+         *     `fuseone:stage-refused`), a candidate with no readable seal (409
+         *     `fuseone:candidate-unreadable`), and a version id that names other
+         *     bytes or bytes nobody kept (409 `fuseone:version-collision`,
+         *     `fuseone:version-digest-unknown`).
+         *
+         *     Activating the version that is already current, with the ETag it has
+         *     now, succeeds again: a retry reaches the reconciliation of schedules
+         *     and webhooks that follows the commit.
+         */
+        post: operations["activateAgentVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/draft/proposals": {
         parameters: {
             query?: never;
@@ -6226,6 +6270,20 @@ export interface components {
             definition?: string;
             eventCycleWarning?: components["schemas"]["EventCycleWarning"];
         };
+        AgentActivated: {
+            agentId: string;
+            versionId: string;
+            /**
+             * @description True when the activation wrote the version from a candidate's seal;
+             *     false when the version was already published.
+             */
+            created: boolean;
+            /** @description The seal the candidate's bytes were read from. Absent when the version was already published. */
+            sealId?: string;
+            /** @description Whether the agent is allowed to start. A first version never is. */
+            paused: boolean;
+            eventCycleWarning?: components["schemas"]["EventCycleWarning"];
+        };
         /**
          * @description Present when the published version takes part in a cycle of the static
          *     event graph: its events, through the agents listening to them, come
@@ -8566,6 +8624,71 @@ export interface operations {
              *     the draft again to make a new candidate.
              */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    activateAgentVersion: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+                /**
+                 * @description `*` makes the write a creation: refused with a 412 if the resource
+                 *     already exists. Any other value is a 400, never ignored. Without the
+                 *     header, the write creates or replaces.
+                 */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchCreate"];
+            };
+            path: {
+                agentId: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The version is current. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentActivated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The agent moved out of the version's scope, it is autonomous, the
+             *     candidate has no readable seal, or the version id names other bytes
+             *     or bytes nobody kept. The problem type says which.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            /** @description Neither If-Match nor If-None-Match. Problem type `fuseone:precondition-required`. */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };
