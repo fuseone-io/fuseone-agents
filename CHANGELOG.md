@@ -34,7 +34,25 @@ field" is a commit message.
 
 - **Migration 0122 adds `agent_activations`** (NT-018 phase 2, release 2c): one insert-only
   row per activation of a version, naming the seal it read, or none. Additive, and nothing
-  reads or writes it until the activation route lands; it sets no rollback floor.
+  reads or writes it before this release; it sets no rollback floor. During the rollout, a
+  0.124.x replica answers the activation route as an unknown route.
+
+### Added
+
+- `POST /agents/{agentId}/candidates/{version}/activate` makes a candidate, or a version
+  already published, the agent's current version through the publication's locks and
+  checks, in one transaction. It needs exactly one of `If-Match` (the agent's ETag) and
+  `If-None-Match: *` (428 otherwise), and `agent:publish` on the version's scope and on
+  the agent's current one (404 otherwise, before any 412). A candidate goes live as the
+  exact bytes of a readable seal and is then kept as every published version is; a
+  published version is made current again from its row, with no seal needed, which also
+  makes this the way to put an older version back. Refused, changing nothing: a
+  definition a publication would refuse, no `never` block (400
+  `fuseone:publish-needs-never`), an agent that moved out of the version's scope (409
+  `fuseone:candidate-scope-moved`), an autonomous agent, a candidate with no readable seal
+  (409 `fuseone:candidate-unreadable`), or a version id that names other bytes. A first
+  version is born paused. Schedules and webhooks are reconciled after the commit, and a
+  retry with the new ETag reaches them again.
 
 ## [0.124.1] — 2026-11-19
 
