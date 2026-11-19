@@ -89,6 +89,9 @@ type Request struct {
 	// Version pins the run to one published version of the agent. Empty is
 	// the version published now, which is what every trigger but one wants.
 	Version domain.VersionID
+	// SealID names the candidate an experiment's simulated run executes (NT-018 phase 2).
+	// Any other request naming one is refused as a version the agent never published.
+	SealID string
 	// SourceRun is the recorded run whose input seeds this one, when an
 	// operator asked to run from it (#16). An id and nothing else: the trail
 	// points at the source, it does not copy it.
@@ -142,56 +145,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		return Result{RunID: existing}, nil
 	}
 
-	// After the key and before anything is written: a repeat of an intention
-	// that already opened a run still answers with that run, because pausing
-	// an agent does not unmake what it already started.
-	if o.pauses != nil {
-		stopped, err := o.pauses.IsPaused(ctx, req.Agent)
-		if err != nil {
-			return Result{}, fmt.Errorf("trigger: read pause state: %w", err)
-		}
-		if stopped {
-			return Result{}, fmt.Errorf("%w: %s", ErrPaused, req.Agent)
-		}
-	}
-
-	// Wider than the agent, and checked after it: an operator who has stopped
-	// a scope gets one refusal naming the scope, rather than a per-agent
-	// message that makes them wonder which agents are covered.
-	//
-	// A simulation is stopped too. It spends real money at the provider and
-	// the person who pressed this wanted the platform quiet.
-	if o.stops != nil {
-		stop, err := o.stopping(ctx, req.Agent)
-		if err != nil {
-			return Result{}, err
-		}
-		if stop != nil {
-			return Result{}, fmt.Errorf("%w: %s", ErrStopped, stop.Reason)
-		}
-	}
-
-	// A draft may be simulated and may not act. That is what Draft means, and
-	// it is checked here rather than at the Gate because a run that should
-	// never have opened leaves a trail somebody has to explain.
-	if o.stages != nil && req.Simulation == "" {
-		stage, err := o.stages.StageOf(ctx, req.Agent)
-		if err != nil {
-			return Result{}, fmt.Errorf("trigger: read stage: %w", err)
-		}
-		if stage == domain.StageDraft {
-			return Result{}, fmt.Errorf("%w: %s", ErrDraft, req.Agent)
-		}
-	}
-
-	versions, err := o.registry.Versions(ctx, req.Agent)
-	if err != nil {
-		return Result{}, fmt.Errorf("trigger: versions of %s: %w", req.Agent, err)
-	}
-	if len(versions) == 0 {
-		return Result{}, fmt.Errorf("%w: %s", ErrUnknownAgent, req.Agent)
-	}
-	published, err := Pin(versions, req.Version)
+	published, err := o.targetFor(ctx, req)
 	if err != nil {
 		return Result{}, err
 	}
@@ -232,6 +186,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 			WorkItem:         workItem,
 			Experiment:       req.Experiment,
 			ExperimentConfig: experimentConfig,
+			SealID:           req.SealID,
 
 			ExperimentRepetitions: req.ExperimentRepetitions,
 		}),
@@ -247,6 +202,71 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 	}
 
 	return Result{RunID: runID, Scope: published.Scope, Created: true}, nil
+}
+
+// refusedToStart is why the agent may not start now: paused, or under a switch wider than
+// it (PRD FO-06).
+func (o *Opener) refusedToStart(ctx context.Context, agent domain.AgentID) error {
+	// After the key and before anything is written: a repeat of an intention
+	// that already opened a run still answers with that run, because pausing
+	// an agent does not unmake what it already started.
+	if o.pauses != nil {
+		stopped, err := o.pauses.IsPaused(ctx, agent)
+		if err != nil {
+			return fmt.Errorf("trigger: read pause state: %w", err)
+		}
+		if stopped {
+			return fmt.Errorf("%w: %s", ErrPaused, agent)
+		}
+	}
+
+	// Wider than the agent, and checked after it: an operator who has stopped
+	// a scope gets one refusal naming the scope, rather than a per-agent
+	// message that makes them wonder which agents are covered.
+	//
+	// A simulation is stopped too. It spends real money at the provider and
+	// the person who pressed this wanted the platform quiet.
+	if o.stops != nil {
+		stop, err := o.stopping(ctx, agent)
+		if err != nil {
+			return err
+		}
+		if stop != nil {
+			return fmt.Errorf("%w: %s", ErrStopped, stop.Reason)
+		}
+	}
+	return nil
+}
+
+// publishedFor is the published version a run opens on: refused while the agent is paused
+// or a wider switch is off, refused for a real run of a draft, and pinned to the version
+// the request named or the one published now.
+func (o *Opener) publishedFor(ctx context.Context, req Request) (domain.AgentSummary, error) {
+	if err := o.refusedToStart(ctx, req.Agent); err != nil {
+		return domain.AgentSummary{}, err
+	}
+
+	// A draft may be simulated and may not act. That is what Draft means, and
+	// it is checked here rather than at the Gate because a run that should
+	// never have opened leaves a trail somebody has to explain.
+	if o.stages != nil && req.Simulation == "" {
+		stage, err := o.stages.StageOf(ctx, req.Agent)
+		if err != nil {
+			return domain.AgentSummary{}, fmt.Errorf("trigger: read stage: %w", err)
+		}
+		if stage == domain.StageDraft {
+			return domain.AgentSummary{}, fmt.Errorf("%w: %s", ErrDraft, req.Agent)
+		}
+	}
+
+	versions, err := o.registry.Versions(ctx, req.Agent)
+	if err != nil {
+		return domain.AgentSummary{}, fmt.Errorf("trigger: versions of %s: %w", req.Agent, err)
+	}
+	if len(versions) == 0 {
+		return domain.AgentSummary{}, fmt.Errorf("%w: %s", ErrUnknownAgent, req.Agent)
+	}
+	return Pin(versions, req.Version)
 }
 
 // store puts what the run is about outside the ledger. A ticket or a message

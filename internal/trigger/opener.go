@@ -86,6 +86,8 @@ type Opener struct {
 	stops    Stops
 	stages   Stages
 	clock    Clock
+	// candidates resolves seals for experiments on a candidate (open_candidate.go).
+	candidates Candidates
 }
 
 func NewOpener(ledger Ledger, registry Registry, clock Clock) *Opener {
@@ -133,13 +135,17 @@ func (o *Opener) stopping(ctx context.Context, agent domain.AgentID) (*domain.St
 			scope = versions[0].Scope
 		}
 	}
+	return covering(inForce, scope, agent), nil
+}
 
+// covering is the first switch in force over an agent in a scope, or nil.
+func covering(inForce []domain.Stop, scope domain.Scope, agent domain.AgentID) *domain.Stop {
 	for _, stop := range inForce {
 		if stop.Covers(scope, agent) {
-			return &stop, nil
+			return &stop
 		}
 	}
-	return nil, nil
+	return nil
 }
 
 func needsScope(stops []domain.Stop) bool {
