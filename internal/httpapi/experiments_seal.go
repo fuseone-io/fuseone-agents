@@ -92,11 +92,11 @@ func (s *Server) experimentTarget(
 /*
 withSealedDefinition reads a candidate's bytes, inside the experiment's fence.
 
-The seal's row is insert-only and was read before the fence; its bytes are not. An erasure
-of the seal takes the same fence, so a read here either comes after the erasure and finds
-the tombstone, or comes first and opens its runs before the erasure reaches them. Read
-before the fence, the bytes could be found readable, the erasure commit, and the runs open
-on bytes that no longer exist.
+It runs inside the fence, after the seal's row was resolved there too (resolvedTarget). An
+erasure of the seal takes the same fence, so a read here either comes after the erasure and
+finds the tombstone, or comes first and opens its runs before the erasure reaches them.
+Read before the fence, the bytes could be found readable, the erasure commit, and the runs
+open on bytes that no longer exist.
 */
 func (s *Server) withSealedDefinition(ctx context.Context, target experimentTarget) (experimentTarget, error) {
 	if target.seal == "" {
