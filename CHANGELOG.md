@@ -30,6 +30,14 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The workbench hid the instructions of a published agent.** With a draft that had not
+  changed the prose, the instructions section said only that the prose had not changed, and
+  the text appeared nowhere on the screen. They are now always shown, read-only. When the
+  draft changed them, the section opens on the difference against the published version,
+  and "Text" shows the whole new prose.
+
 ## [0.124.0] — 2026-11-19
 
 Writers of candidate versions (NT-018 phase 2, release 2b, #403–#406), and wider workbench
