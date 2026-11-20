@@ -41,9 +41,10 @@ field" is a commit message.
 ### Changed
 
 - **A workbench turn no longer reads the whole conversation first.** Building the prompt read
-  every earlier turn and its message and reply before keeping the newest ten; it now asks the
-  database for the newest ten alone, so a long conversation costs a turn no more than a short
-  one. The conversation's listing still shows every turn (#422).
+  every earlier turn's message and reply, one turn at a time, before choosing the window. It
+  now measures every turn in one query, without reading what was said, chooses the window by
+  the same rule (the newest that fit, a turn too large skipped for an older one that fits),
+  and reads only the turns chosen. The conversation's listing still shows every turn (#422).
 
 ## [0.126.0] — 2026-11-19
 

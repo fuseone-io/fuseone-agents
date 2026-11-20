@@ -31,11 +31,27 @@ func (d *draftStub) Turns(_ context.Context, _ domain.AgentID, c drafts.Caller) 
 	return d.turns, d.err
 }
 
-// RecentTurns answers the newest n of the stub's turns, and records the n asked.
-func (d *draftStub) RecentTurns(_ context.Context, _ domain.AgentID, c drafts.Caller, n int) ([]drafts.Turn, error) {
+// TurnSizes answers each of the stub's turns with the size of what was said in it.
+func (d *draftStub) TurnSizes(_ context.Context, _ domain.AgentID, c drafts.Caller) ([]drafts.TurnSize, error) {
 	d.callers = append(d.callers, c)
-	d.recentAsked = append(d.recentAsked, n)
-	return d.turns[max(0, len(d.turns)-n):], d.err
+	out := make([]drafts.TurnSize, 0, len(d.turns))
+	for _, t := range d.turns {
+		out = append(out, drafts.TurnSize{ID: t.ID, Bytes: len(t.Message) + len(t.Reply)})
+	}
+	return out, d.err
+}
+
+// TurnsByID answers the stub's turns of those ids, and records the ids whose content was read.
+func (d *draftStub) TurnsByID(_ context.Context, _ domain.AgentID, c drafts.Caller, ids []string) ([]drafts.Turn, error) {
+	d.callers = append(d.callers, c)
+	d.turnsRead = append(d.turnsRead, ids)
+	var out []drafts.Turn
+	for _, t := range d.turns {
+		if slices.Contains(ids, t.ID) {
+			out = append(out, t)
+		}
+	}
+	return out, d.err
 }
 
 func (d *draftStub) BeginTurn(_ context.Context, b drafts.Beginning) (drafts.Started, error) {
@@ -417,9 +433,9 @@ func TestDraftTurns_whatWasDiscarded_isAnsweredOnReplayAndListing(t *testing.T) 
 	}
 }
 
-// A turn's prompt asks the store for the newest turns a window holds, never the whole
-// conversation: removing the limit would read every turn's content again (#422).
-func TestSendDraftTurn_asksForTheWindowsTurnsOnly(t *testing.T) {
+// A turn's prompt reads the content of the window's turns alone: older turns are measured,
+// never read (#422).
+func TestSendDraftTurn_readsTheContentOfTheWindowsTurnsOnly(t *testing.T) {
 	t.Parallel()
 	stub := &draftStub{opened: someDraft()}
 	for i := 0; i < conversation.WindowTurns+3; i++ {
@@ -428,7 +444,7 @@ func TestSendDraftTurn_asksForTheWindowsTurnsOnly(t *testing.T) {
 	models := &turnModelsStub{reply: `{"reply":"x","proposals":[]}`, priced: true}
 	sendTurn(t, turnServer(stub, models, turnChoice), "Oi")
 
-	if len(stub.recentAsked) != 1 || stub.recentAsked[0] != conversation.WindowTurns {
-		t.Errorf("recent turns asked %v, want one read of %d", stub.recentAsked, conversation.WindowTurns)
+	if len(stub.turnsRead) != 1 || len(stub.turnsRead[0]) != conversation.WindowTurns || slices.Contains(stub.turnsRead[0], "t-02") {
+		t.Errorf("turns read %v, want the %d of the window alone", stub.turnsRead, conversation.WindowTurns)
 	}
 }

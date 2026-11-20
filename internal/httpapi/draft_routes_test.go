@@ -37,11 +37,11 @@ type draftStub struct {
 	turns     []drafts.Turn
 	// outcomesAsked is the turns each ProposalOutcomes call asked for.
 	outcomesAsked [][]string
-	// recentAsked is the n each RecentTurns call asked for.
-	recentAsked []int
-	begun       []drafts.Beginning
-	beginErr    error
-	stored      *drafts.Turn
+	// turnsRead is the ids each TurnsByID call read the content of.
+	turnsRead [][]string
+	begun     []drafts.Beginning
+	beginErr  error
+	stored    *drafts.Turn
 }
 
 // Seal is not exercised through the stub: sealing is tested against the real store.

@@ -249,3 +249,32 @@ func TestRun_aProposalWhoseBodyWasErased_isToldAsErased_onTheSameDraft(t *testin
 		t.Errorf("the prompt does not tell the erased proposal as erased:\n%s", m.prompt)
 	}
 }
+
+/*
+The window keeps its rule however the turns are read (#427 review): the newest turns that
+fit, a turn too large for the window skipped, and an older one that fits still taken. Read
+as "the newest WindowTurns", a run of large recent turns hid the small older one the window
+had always kept.
+*/
+func TestRun_aWindowPastLargeRecentTurns_stillKeepsAnOlderOneThatFits(t *testing.T) {
+	store := drafts.NewStore(testdb.Pool(t))
+	agent, _ := newDraft(t, store)
+	m := &scripted{reply: reply("O mais antigo, e pequeno."), cost: 1}
+	if _, err := run(t, engine(store, m), agent, "old"); err != nil {
+		t.Fatalf("Run(old) = %v", err)
+	}
+	m.reply = reply(strings.Repeat("x", conversation.WindowBytes+1))
+	for i := 0; i < conversation.WindowTurns; i++ {
+		if _, err := run(t, engine(store, m), agent, fmt.Sprintf("big-%02d", i)); err != nil {
+			t.Fatalf("Run(big %d) = %v", i, err)
+		}
+	}
+
+	m.reply = reply("Certo.")
+	if _, err := run(t, engine(store, m), agent, "now"); err != nil {
+		t.Fatalf("Run(now) = %v", err)
+	}
+	if !strings.Contains(m.prompt, "O mais antigo, e pequeno.") {
+		t.Error("the window lost the older turn that fits behind the large recent ones")
+	}
+}

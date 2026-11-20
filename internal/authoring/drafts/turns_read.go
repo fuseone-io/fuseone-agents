@@ -114,13 +114,47 @@ func (s *Store) EraseThread(ctx context.Context, agent domain.AgentID, c Caller)
 	})
 }
 
+// TurnSize is a turn of the caller's thread and the bytes of what was said in it.
+type TurnSize struct {
+	ID    string
+	Bytes int
+}
+
 /*
-RecentTurns is the newest n turns of the caller's own thread, oldest first, with what was
-said when it is still kept (#422). The limit is the query's, so a turn's prompt never reads
-the content of a turn older than it can show, however long the conversation grew; the
-thread's (thread_id, seq) key walks it backwards. A reading: it locks nothing.
+TurnSizes is every turn of the caller's own thread, oldest first, with the bytes of its
+message and reply as the content store keeps them, and none of the content itself (#422):
+enough to choose a window before any turn's words are read. What was erased counts as
+nothing, as a turn read whole would have it. A reading: it locks nothing.
 */
-func (s *Store) RecentTurns(ctx context.Context, agent domain.AgentID, c Caller, n int) ([]Turn, error) {
+func (s *Store) TurnSizes(ctx context.Context, agent domain.AgentID, c Caller) ([]TurnSize, error) {
+	var out []TurnSize
+	err := s.within(ctx, func(tx pgx.Tx) error {
+		r, err := s.reachableRow(ctx, tx, agent, c, false)
+		if err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `
+			select t.turn_id::text,
+			       coalesce((select octet_length(m.bytes) from run_content m where m.ref = t.message_ref and m.erased_at is null), 0)
+			     + coalesce((select octet_length(p.bytes) from run_content p where p.ref = t.reply_ref and p.erased_at is null), 0)
+			from agent_draft_turns t
+			join agent_draft_threads th on th.thread_id = t.thread_id
+			where th.draft_id = $1::uuid and th.author = $2 order by t.seq`, r.draftID, string(c.By))
+		if err != nil {
+			return fmt.Errorf("drafts: read the thread's turn sizes: %w", err)
+		}
+		out, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (TurnSize, error) {
+			var ts TurnSize
+			return ts, row.Scan(&ts.ID, &ts.Bytes)
+		})
+		return err
+	})
+	return out, err
+}
+
+// TurnsByID is the given turns of the caller's own thread, oldest first, with what was
+// said; an id that is not one of them is left out. Only these turns' content is read.
+func (s *Store) TurnsByID(ctx context.Context, agent domain.AgentID, c Caller, ids []string) ([]Turn, error) {
 	var out []Turn
 	err := s.within(ctx, func(tx pgx.Tx) error {
 		r, err := s.reachableRow(ctx, tx, agent, c, false)
@@ -128,20 +162,18 @@ func (s *Store) RecentTurns(ctx context.Context, agent domain.AgentID, c Caller,
 			return err
 		}
 		rows, err := tx.Query(ctx, `
-			select turn_id from (
-				select t.turn_id::text, t.seq from agent_draft_turns t
-				join agent_draft_threads th on th.thread_id = t.thread_id
-				where th.draft_id = $1::uuid and th.author = $2
-				order by t.seq desc limit $3
-			) newest order by seq`, r.draftID, string(c.By), n)
+			select t.turn_id::text from agent_draft_turns t
+			join agent_draft_threads th on th.thread_id = t.thread_id
+			where th.draft_id = $1::uuid and th.author = $2 and t.turn_id = any($3::uuid[])
+			order by t.seq`, r.draftID, string(c.By), ids)
 		if err != nil {
-			return fmt.Errorf("drafts: read the thread's newest turns: %w", err)
+			return fmt.Errorf("drafts: read the thread's chosen turns: %w", err)
 		}
-		ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		mine, err := pgx.CollectRows(rows, pgx.RowTo[string])
 		if err != nil {
 			return err
 		}
-		out, err = saidOf(ctx, tx, ids)
+		out, err = saidOf(ctx, tx, mine)
 		return err
 	})
 	return out, err
