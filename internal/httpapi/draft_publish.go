@@ -197,6 +197,10 @@ func draftPublicationRefused(agent string, err error) (openapi.PublishAgentDraft
 		stale.Headers.ETag = nil
 		return openapi.PublishAgentDraft412ApplicationProblemPlusJSONResponse{PreconditionFailedApplicationProblemPlusJSONResponse: stale}, true
 	}
+	// Refused by the version, as the file's door refuses it: nothing was written.
+	if conflict, ok := publicationConflict(err); ok {
+		return openapi.PublishAgentDraft409ApplicationProblemPlusJSONResponse(conflict), true
+	}
 	return nil, false
 }
 

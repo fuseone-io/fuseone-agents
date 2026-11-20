@@ -7,6 +7,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/trigger"
 )
 
 /*
@@ -39,6 +40,8 @@ func TestPublishAgent_aVersionIdThatCannotBeClaimed_answersConflictWithItsCode(t
 	}{
 		{spec.ErrVersionCollision, CodeVersionCollision},
 		{spec.ErrDigestUnknown, CodeVersionDigestUnknown},
+		// Refused under the locks, the version undone with it (#416).
+		{trigger.ErrPathTaken, CodeWebhookPathTaken},
 	} {
 		t.Run(string(one.code), func(t *testing.T) {
 			t.Parallel()
