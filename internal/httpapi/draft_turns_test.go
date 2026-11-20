@@ -91,6 +91,18 @@ func (m *turnModelsStub) Configured(name string, at domain.Scope) bool {
 	return name == "anthropic" && at.Area == "cx"
 }
 
+// Models serves two models for anthropic in cx, and a third model for a provider not
+// configured there, which must never reach the prompt.
+func (m *turnModelsStub) Models(name string, at domain.Scope) []string {
+	switch {
+	case name == "anthropic" && at.Area == "cx":
+		return []string{"claude-x", "claude-y"}
+	case name == "local-llm":
+		return []string{"llama-local"}
+	}
+	return nil
+}
+
 var turnChoice = authoring.Choice{Provider: "anthropic", Model: "claude-x", DailyMicros: 5_000_000, Enabled: true}
 
 func turnServer(stub *draftStub, models *turnModelsStub, choice authoring.Choice) *Server {
@@ -148,6 +160,10 @@ func TestSendDraftTurn_offersTheScopesToolsAndProvidersOnly(t *testing.T) {
 	}
 	if !strings.Contains(models.prompt, `"anthropic"`) || strings.Contains(models.prompt, `"local-llm"`) {
 		t.Errorf("providers offered beyond the scope's:\n%s", models.prompt)
+	}
+	// Each with the models it serves in the scope (#414), and no other provider's.
+	if !strings.Contains(models.prompt, `{"name":"anthropic","models":["claude-x","claude-y"]}`) || strings.Contains(models.prompt, "llama-local") {
+		t.Errorf("providers offered without their models, or with another's:\n%s", models.prompt)
 	}
 }
 

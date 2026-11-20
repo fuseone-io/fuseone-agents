@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -80,4 +81,16 @@ func (r *Registry) restoreOrDrop(name string) {
 		return
 	}
 	delete(r.providers, name)
+}
+
+// Models is what name serves, as configured, for a run at scope; none for a provider
+// not found there or not built here. A copy: the caller may keep it.
+func (r *Registry) Models(name string, at domain.Scope) []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	p, held := r.providers[name]
+	if !held || !p.Scope.Contains(at) {
+		return nil
+	}
+	return slices.Clone(p.Models)
 }

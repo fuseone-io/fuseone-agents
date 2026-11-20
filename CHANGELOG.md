@@ -48,6 +48,11 @@ field" is a commit message.
   one after another, each judged again on the draft as it is and shown with what accepting
   it would leave. A draft changed by anything else since the turn — by hand, or by another
   turn's proposal — still refuses them (#412).
+- **The workbench assistant asked for the model's name instead of choosing one.** The
+  assistant was shown the providers configured for the draft's scope by name only, so for a
+  gateway whose model names are the installation's own it could only ask, or guess. It is now
+  shown the models each provider serves, as configured, at most 100 per provider with a count
+  of the rest, and told to choose among them (#414).
 
 ## [0.125.0] — 2026-11-19
 
