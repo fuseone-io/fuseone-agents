@@ -9,16 +9,20 @@ import type { Agent } from "@/lib/api/client";
  *
  * Every repetition is its own run, reserved and billed, so the preview counts
  * runs and not cases: five repetitions of forty cases is two hundred runs, each
- * up to the version's ceiling.
+ * up to the version's ceiling. A candidate's runs are held to the ceiling its
+ * sealed text declares, which is not the published version's, so no sum is
+ * stated for one.
  */
 export function ExperimentCost({
   agentId,
   agent,
   repetitions,
+  candidate = false,
 }: {
   agentId: string;
   agent?: Agent;
   repetitions: number;
+  candidate?: boolean;
 }) {
   const { t } = useTranslation();
   const corpus = useRegressions(agentId);
@@ -31,7 +35,7 @@ export function ExperimentCost({
       <div className="min-w-0 space-y-1">
         <p className="text-sm font-medium">{t("experiments.costTitle")}</p>
         <p className="text-sm text-muted-foreground">
-          {costText({ t, cases, repetitions, perRun, error: corpus.isError })}
+          {costText({ t, cases, repetitions, perRun, error: corpus.isError, candidate })}
         </p>
       </div>
     </div>
@@ -44,16 +48,19 @@ function costText({
   repetitions,
   perRun,
   error,
+  candidate,
 }: {
   t: ReturnType<typeof useTranslation>["t"];
   cases?: number;
   repetitions: number;
   perRun: number;
   error: boolean;
+  candidate: boolean;
 }) {
   if (error) return t("experiments.costUnknown");
   if (cases === undefined) return t("experiments.costCounting");
   const runs = cases * repetitions;
+  if (candidate) return t("experiments.costCandidate", { count: runs, cases, repetitions });
   if (perRun <= 0) return t("experiments.costUnbounded", { count: runs, cases, repetitions });
   return t("experiments.costBounded", {
     count: runs,

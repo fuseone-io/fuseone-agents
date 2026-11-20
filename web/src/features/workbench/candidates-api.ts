@@ -43,6 +43,27 @@ export function useCandidate(agentId: string, version: string) {
   });
 }
 
+/**
+ * One candidate seal, by its id: what an experiment on it will run, found whatever page of
+ * the listing it would fall on. Null when it is not a candidate the person may see; a
+ * failed read is an error, never taken for an absent seal.
+ */
+export function useSeal(agentId: string, sealId: string) {
+  return useQuery({
+    queryKey: [...candidateKeys.all(agentId), "seal", sealId] as const,
+    queryFn: async (): Promise<CandidateSeal | null> => {
+      try {
+        return unwrap(await api.GET("/agents/{agentId}/seals/{sealId}", { params: { path: { agentId, sealId } } }));
+      } catch (error) {
+        if (isAbsent(error)) return null;
+        throw error;
+      }
+    },
+    enabled: agentId !== "" && sealId !== "",
+    retry: false,
+  });
+}
+
 /** Seals the saved draft under the ETag the panel holds. */
 export function useSealDraft(agentId: string) {
   const queryClient = useQueryClient();

@@ -24,17 +24,20 @@ export function experimentDefaults(version: string): ExperimentForm {
  * A field left as published is left out, never sent empty, and a form that
  * overrides nothing sends no configuration at all: that is the version as
  * published, the one configuration that keeps its declared fallback. Any
- * override, even of effort alone, runs without it.
+ * override, even of effort alone, runs without it. With a seal, the request
+ * runs that candidate instead of a published version (NT-018 phase 2).
  */
-export function experimentRequestOf(values: ExperimentForm): ExperimentRequest {
+export function experimentRequestOf(values: ExperimentForm, sealId?: string): ExperimentRequest {
   const config = {
     provider: values.provider === AS_PUBLISHED ? undefined : values.provider,
     model: values.model === "" ? undefined : values.model,
     effort: values.effort === AS_PUBLISHED ? undefined : values.effort,
   };
   const overrides = Object.values(config).some((v) => v !== undefined);
+  // A candidate is named by its seal alone: the API refuses a version beside it.
+  const runs = sealId ? { sealId } : { version: values.version };
   return {
-    version: values.version,
+    ...runs,
     repetitions: Number(values.repetitions),
     config: overrides ? config : undefined,
   };

@@ -201,3 +201,29 @@ func TestCandidateRoutes_aListingWithNothingVisible_is404(t *testing.T) {
 		t.Errorf("an agent with no candidate listed %v, want the same 404", got)
 	}
 }
+
+// One seal by its id answers what the listing would, and the same 404 outside its scope.
+func TestCandidateRoutes_aSealByItsID_isVisibleOnlyInItsSealedScope(t *testing.T) {
+	c := newCandidateRoutes(t)
+	id, version := c.seal(t, "cx")
+	get := func(ctx context.Context) openapi.GetAgentSealResponseObject {
+		resp, err := c.server.GetAgentSeal(ctx, openapi.GetAgentSealRequestObject{AgentId: c.agent, SealId: id})
+		if err != nil {
+			t.Fatalf("GetAgentSeal: %v", err)
+		}
+		return resp
+	}
+
+	got, ok := get(inArea("cx", domain.RoleAuthor)).(openapi.GetAgentSeal200JSONResponse)
+	if !ok || got.SealId != id || got.Version != version || got.Area != "cx" {
+		t.Errorf("in its scope = %+v, want the seal", got)
+	}
+	if resp := get(inArea("finance", domain.RoleAuthor)); !isSeal404(resp) {
+		t.Errorf("outside its scope = %T, want 404", resp)
+	}
+}
+
+func isSeal404(resp openapi.GetAgentSealResponseObject) bool {
+	_, ok := resp.(openapi.GetAgentSeal404ApplicationProblemPlusJSONResponse)
+	return ok
+}

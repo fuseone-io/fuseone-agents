@@ -124,6 +124,13 @@ const candidateVersionSealsSQL = `
 	                  where p.agent_id = s.agent_id and p.version_id = s.version_id)
 	order by s.sealed_at desc, s.seal_id desc`
 
+const candidateSealByIDSQL = `
+	select s.seal_id::text, s.version_id, s.company_id, s.area_id, s.sealed_by, s.sealed_at
+	from agent_seals s
+	where s.agent_id = $1 and s.seal_id = $5::uuid and ` + visibleSealSQL + `
+	  and not exists (select 1 from agent_specs p
+	                  where p.agent_id = s.agent_id and p.version_id = s.version_id)`
+
 // scopeArrays is visible as the two parallel arrays the predicate unnests.
 func scopeArrays(visible []domain.Scope) ([]string, []string) {
 	companies, areas := make([]string, len(visible)), make([]string, len(visible))
@@ -153,4 +160,28 @@ func scanCandidateSeal(rows pgx.CollectableRow) (CandidateSeal, error) {
 	seal.Version, seal.SealedBy = domain.VersionID(version), domain.UserID(by)
 	seal.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
 	return seal, nil
+}
+
+/*
+Seal is one candidate seal of agent, by its id, under the listing's own rule: sealed in a
+scope one of visible covers, of a version not yet published. Found whatever page of the
+listing it would fall on. Anything else — another agent's seal, one outside every visible
+scope, a version published since, an id that is not a seal's — is ErrCandidateNotFound.
+*/
+func (r *CandidateReader) Seal(
+	ctx context.Context, agent domain.AgentID, seal string, visible []domain.Scope,
+) (CandidateSeal, error) {
+	if len(visible) == 0 || !sealIDShape.MatchString(seal) {
+		return CandidateSeal{}, ErrCandidateNotFound
+	}
+	companies, areas := scopeArrays(visible)
+	found, err := r.seals(ctx, candidateSealByIDSQL, string(agent), companies, areas,
+		string(domain.Installation), seal)
+	if err != nil {
+		return CandidateSeal{}, err
+	}
+	if len(found) == 0 {
+		return CandidateSeal{}, ErrCandidateNotFound
+	}
+	return found[0], nil
 }

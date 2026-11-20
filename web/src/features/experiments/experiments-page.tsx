@@ -27,6 +27,9 @@ export function ExperimentsPage() {
   const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
   const starting = params.get("new") === "1";
+  // A candidate to run, as the workbench links here: its seal, which alone decides what
+  // runs (NT-018 phase 2).
+  const sealId = params.get("seal") || undefined;
   const report = useExperiment(agentId, id);
   const comparing = from !== "" && to !== "";
 
@@ -61,8 +64,10 @@ export function ExperimentsPage() {
       {starting && (
         <ExperimentStart
           agentId={agentId}
+          sealId={sealId}
           onClose={() => {
             params.delete("new");
+            params.delete("seal");
             setParams(params);
           }}
           onStarted={(exp) => setParams({ exp }, { replace: true })}

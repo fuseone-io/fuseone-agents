@@ -37,6 +37,15 @@ field" is a commit message.
   newest first, and opens each on its sealed text, read from the candidate, never from the
   draft. It says when the draft was already the published version and nothing was sealed,
   which event cycle the sealed version would close, and why a seal was refused.
+- **An experiment on a candidate**: a candidate opens on "Experiment", which starts the
+  experiments form on that seal. The experiment runs the sealed text, named by its seal,
+  needs no published version of the agent, and states its cost at the ceiling the candidate
+  declares, not the published one's. The seal travels in the URL, so a refresh keeps it;
+  the form names the seal's own version, read from the seal, and says when a seal is not a
+  candidate the person may see, or when it could not be read.
+- `GET /agents/{agentId}/seals/{sealId}` answers one candidate seal by its id, under the
+  listing's rule (`agent:publish` on the sealed scope, a version not yet published), however
+  far down the listing it would fall; 404 otherwise.
 
 ## [0.126.0] — 2026-11-19
 
