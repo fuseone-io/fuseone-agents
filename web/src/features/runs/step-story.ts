@@ -43,6 +43,9 @@ const TITLES: Record<StepKind, string> = {
   model_fallback: "runs.storyFellBack",
   work_item_claimed: "runs.storyWorkItemClaimed",
   work_item_linked: "runs.storyWorkItemLinked",
+  world_awaited: "runs.storyWorldAwaitedTitle",
+  world_supplied: "runs.storyWorldSuppliedTitle",
+  rehearsal_decided: "runs.storyRehearsalDecided",
 };
 
 const VERDICT_CHIP: Record<string, { text: string; className: string }> = {
@@ -237,6 +240,20 @@ export function detailOf(step: Step): Line {
     case "approval_decided":
       return {
         key: payload.approved ? "runs.storyApprovedBy" : "runs.storyRefusedBy",
+        values: { who: payload.by ?? "—" },
+      };
+
+    // A live rehearsal's author answers for the world and decides as the approver
+    // would (NT-018 phase 4); the answer itself stays in the content store.
+    case "world_awaited":
+      return { key: "runs.storyWorldAwaited", values: { tool: typeof payload.tool === "string" ? payload.tool : "" } };
+
+    case "world_supplied":
+      return { key: "runs.storyWorldSupplied", values: { who: payload.by ?? "—" } };
+
+    case "rehearsal_decided":
+      return {
+        key: payload.approved ? "runs.storyRehearsalApprovedBy" : "runs.storyRehearsalRefusedBy",
         values: { who: payload.by ?? "—" },
       };
 

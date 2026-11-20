@@ -3857,8 +3857,12 @@ export interface components {
             detail?: string;
             instance?: string;
         };
-        /** @enum {string} */
-        Phase: "unstarted" | "running" | "awaiting_approval" | "awaiting_tool" | "parked" | "compensating" | "finished" | "failed";
+        /**
+         * @description `awaiting_world` is a live rehearsal waiting for its author to answer a
+         *     tool call for the world (NT-018 phase 4). No worker holds it meanwhile.
+         * @enum {string}
+         */
+        Phase: "unstarted" | "running" | "awaiting_approval" | "awaiting_tool" | "parked" | "compensating" | "finished" | "failed" | "awaiting_world";
         /** @enum {string} */
         Verdict: "allow" | "constrain" | "require_approval" | "block" | "duplicate";
         /**
@@ -3935,8 +3939,16 @@ export interface components {
          * @enum {string}
          */
         ToolEffect: "unknown" | "read" | "write" | "destructive" | "financial";
-        /** @enum {string} */
-        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "effect_reconciled" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensation_started" | "compensated" | "failed" | "parked" | "run_finished" | "model_fallback" | "work_item_claimed" | "work_item_linked";
+        /**
+         * @description `world_awaited`, `world_supplied` and `rehearsal_decided` belong to a
+         *     live rehearsal (NT-018 phase 4): the run waiting for its author to answer
+         *     a call for the world, the author's answer (by reference and digest, never
+         *     its text), and the author's decision where the Gate held an action, which
+         *     is never an `approval_decided`. Every reader knows them one release
+         *     before anything writes them.
+         * @enum {string}
+         */
+        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "effect_reconciled" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensation_started" | "compensated" | "failed" | "parked" | "run_finished" | "model_fallback" | "work_item_claimed" | "work_item_linked" | "world_awaited" | "world_supplied" | "rehearsal_decided";
         /**
          * @description Whether a grant given ahead of time may release a call of this agent
          *     (#192). Forbidden refuses a new grant for an agent whose current

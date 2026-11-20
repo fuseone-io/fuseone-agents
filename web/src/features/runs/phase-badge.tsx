@@ -17,6 +17,7 @@ export const PHASE_LABELS: Record<Phase, string> = {
   compensating: "runs.phaseCompensating",
   finished: "runs.phaseFinished",
   failed: "runs.phaseFailed",
+  awaiting_world: "runs.phaseAwaitingWorld",
 };
 
 export function PhaseBadge({ phase }: { phase: Phase }) {

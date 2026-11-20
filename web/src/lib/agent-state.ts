@@ -16,6 +16,8 @@ const BY_PHASE: Record<Phase, AgentState> = {
   running: "running",
   awaiting_tool: "running",
   awaiting_approval: "waiting",
+  // A live rehearsal waiting for its author: waiting on a person, as an approval does.
+  awaiting_world: "waiting",
   parked: "blocked",
   // Undoing is work in progress, and an operator scanning a list wants to know
   // it is still moving.

@@ -2,9 +2,11 @@ package httpapi
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 )
 
@@ -60,5 +62,22 @@ func TestToStep_workItemLinked_servesThePayloadTheSchemaDocuments(t *testing.T) 
 	}
 	if !got.Proof.Kind.Valid() || !openapi.WorkItemLinkProofKindApprovalDecided.Valid() {
 		t.Fatalf("proof kind %q is outside the documented enum", got.Proof.Kind)
+	}
+}
+
+// Every phase the engine folds a run into is a value of the API's Phase enum, the
+// rehearsal's awaiting_world included (NT-018 phase 4): a run the API lists in a phase
+// its own schema lacks is a run the console cannot place.
+func TestPhase_everyEnginePhase_isInTheAPIEnum(t *testing.T) {
+	t.Parallel()
+
+	for p := engine.Phase(0); ; p++ {
+		name := p.String()
+		if strings.HasPrefix(name, "phase(") {
+			break
+		}
+		if !openapi.Phase(name).Valid() {
+			t.Errorf("%s: not in the Phase enum", name)
+		}
 	}
 }
