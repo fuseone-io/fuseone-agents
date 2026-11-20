@@ -35,10 +35,13 @@ type scripted struct {
 	// during runs while the model is "thinking", between the reservation
 	// and the answer.
 	during func()
+	// prompt is the last prompt the model was sent.
+	prompt string
 }
 
-func (s *scripted) Complete(context.Context, string) (model.Completion, error) {
+func (s *scripted) Complete(_ context.Context, prompt string) (model.Completion, error) {
 	s.calls.Add(1)
+	s.prompt = prompt
 	if s.during != nil {
 		s.during()
 	}
@@ -178,7 +181,7 @@ func TestRun_aDraftThatMovedDuringTheCall_dropsTheTurnsProposals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if len(got.Proposals) != 0 || got.Stale != 1 || got.Turn.State != drafts.TurnDone {
+	if len(got.Proposals) != 0 || got.Turn.Stale != 1 || got.Turn.State != drafts.TurnDone {
 		t.Fatalf("result %+v, want the turn done and its one proposal dropped as stale", got)
 	}
 }
@@ -196,5 +199,53 @@ func TestRun_aMessageTooLargeOrEmpty_isRefused(t *testing.T) {
 		if !errors.Is(err, want) || m.calls.Load() != 0 {
 			t.Errorf("Run = %v, want %v and no call", err, want)
 		}
+	}
+}
+
+/*
+What an answer carried that never became a card is answered again when its key is retried
+(#413 review): the first response lost, the retry is the only answer the console gets, and
+it must still say what was discarded, without calling the model again.
+*/
+func TestRun_theSameKeyAgain_stillSaysWhatWasDiscarded(t *testing.T) {
+	store := drafts.NewStore(testdb.Pool(t))
+	agent, _ := newDraft(t, store)
+	m := &scripted{reply: `{"reply":"Proponho dois.","proposals":[{"kind":"add_tool","operation":{"Tool":"crm.lookup"}},{"kind":"no_such_kind"}]}`, cost: 10}
+	first, err := run(t, engine(store, m), agent, "k1")
+	if err != nil || first.Turn.Dropped != 1 {
+		t.Fatalf("Run = %+v (%v), want one operation discarded", first.Turn, err)
+	}
+
+	again, err := run(t, engine(store, m), agent, "k1")
+	if err != nil || !again.Replayed || again.Turn.Dropped != 1 || m.calls.Load() != 1 {
+		t.Errorf("retry = %+v replayed %v (%v), %d calls; want the stored turn saying one discarded", again.Turn, again.Replayed, err, m.calls.Load())
+	}
+}
+
+/*
+A proposal whose body retention took is told to the model as erased, not as waiting,
+though the draft is still at the ETag it read (#413 review): accepting it answers 404, and
+the console offers nothing to accept.
+*/
+func TestRun_aProposalWhoseBodyWasErased_isToldAsErased_onTheSameDraft(t *testing.T) {
+	pool := testdb.Pool(t)
+	store := drafts.NewStore(pool)
+	agent, _ := newDraft(t, store)
+	m := &scripted{reply: reply("Proponho a busca.", draft.AddTool{Tool: "crm.lookup"}), cost: 10}
+	first, err := run(t, engine(store, m), agent, "k1")
+	if err != nil || len(first.Proposals) != 1 {
+		t.Fatalf("Run = %+v (%v), want one proposal", first, err)
+	}
+	if _, err := pool.Exec(t.Context(), `update run_content set erased_at = now(), bytes = null where ref = $1`,
+		first.Proposals[0].BodyRef); err != nil {
+		t.Fatalf("erase the body: %v", err)
+	}
+
+	m.reply = reply("Certo.")
+	if _, err := run(t, engine(store, m), agent, "k2"); err != nil {
+		t.Fatalf("Run(k2) = %v", err)
+	}
+	if !strings.Contains(m.prompt, "add_tool: apagada") || strings.Contains(m.prompt, "add_tool: ainda esperando") {
+		t.Errorf("the prompt does not tell the erased proposal as erased:\n%s", m.prompt)
 	}
 }

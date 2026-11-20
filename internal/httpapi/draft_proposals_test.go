@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +27,19 @@ reads on the wire.
 func (d *draftStub) Proposals(_ context.Context, _ domain.AgentID, c drafts.Caller) ([]drafts.Proposal, error) {
 	d.callers = append(d.callers, c)
 	return d.proposals, d.err
+}
+
+// ProposalOutcomes answers the stub's proposals of the turns asked, and records what was asked.
+func (d *draftStub) ProposalOutcomes(_ context.Context, _ domain.AgentID, c drafts.Caller, turns []string) ([]drafts.Proposal, error) {
+	d.callers = append(d.callers, c)
+	d.outcomesAsked = append(d.outcomesAsked, turns)
+	var out []drafts.Proposal
+	for _, p := range d.proposals {
+		if slices.Contains(turns, p.Turn) {
+			out = append(out, p)
+		}
+	}
+	return out, d.err
 }
 
 func (d *draftStub) Accept(_ context.Context, a drafts.Acceptance) (drafts.Opened, error) {

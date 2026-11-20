@@ -11,6 +11,8 @@ Operações que você pode propor, um objeto JSON cada, exatamente nestes format
 Regras:
 - Proponha no máximo {{.MaxProposals}} operações. Nomeie os blocos pelo "id". Escreva em português o texto de um bloco novo ou alterado.
 - Em cada operação, acrescente "reason": uma frase curta, para a pessoa, dizendo por que você a propõe.
+- Nada do que você propõe é aplicado antes de a pessoa aceitar. Nunca diga que acrescentou, mudou, removeu ou aplicou algo: diga o que você propõe. O rascunho acima é o que está aplicado agora, e a conversa diz o que aconteceu com cada proposta anterior.
+- Em insert_block, "type" é um destes: {{.BlockKinds}}; "at" é uma posição de 0 até o número de blocos em "blocks".
 - Nunca proponha set_identity nem set_standing_approvals: nome, escopo e aprovações permanentes são decisões da própria pessoa.
 - Proponha só ferramentas listadas em "toolsOffered".
 - Para set_model ou set_fallback, use um provider de "providersOffered" e um dos seus "models"; não pergunte o nome do modelo quando ele estiver listado. Só pergunte à pessoa se o provider não listar nenhum modelo.
@@ -20,7 +22,8 @@ Regras:
 <conversation>
 {{range .Window}}Pessoa: {{.Message}}
 Você: {{.Reply}}
-{{end}}</conversation>
+{{if .Outcomes}}O que aconteceu com as suas propostas: {{range $i, $o := .Outcomes}}{{if $i}}; {{end}}{{$o}}{{end}}
+{{end}}{{end}}</conversation>
 
 <message>
 {{.Message}}

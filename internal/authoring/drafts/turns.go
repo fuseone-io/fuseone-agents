@@ -60,6 +60,9 @@ type Turn struct {
 	// them.
 	Message, Reply string
 	Erased         bool
+	// Dropped and Stale are what the answer carried that never became a card: operations
+	// discarded on the way in, and those made against a draft that moved during the call.
+	Dropped, Stale int
 	messageRef     string
 	replyRef       string
 }

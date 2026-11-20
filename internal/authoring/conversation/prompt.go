@@ -17,35 +17,71 @@ import (
 //go:embed prompts/*.tmpl
 var prompts embed.FS
 
+// PromptInput is what one turn's prompt is built from: the draft's projection, the window
+// of earlier turns with what became of each one's proposals, and the message.
+type PromptInput struct {
+	Projection string
+	Window     []drafts.Turn
+	// Outcomes is each earlier turn's proposals, by the turn's id (#413).
+	Outcomes map[string][]Outcome
+	Message  string
+	Pasted   bool
+}
+
 // promptData is what one turn's prompt is rendered from.
 type promptData struct {
 	Projection   string
 	Examples     []string
+	BlockKinds   string
 	MaxProposals int
-	Window       []drafts.Turn
+	Window       []exchange
 	Message      string
 	Pasted       bool
 }
 
+// exchange is one earlier turn as the prompt shows it, its outcomes in the locale's words.
+type exchange struct {
+	Message, Reply string
+	Outcomes       []string
+}
+
 // Prompt renders a turn's prompt in the author's locale, pt-BR by default.
-func Prompt(locale, projection string, window []drafts.Turn, message string, pasted bool) (string, error) {
-	name := "prompts/turn.pt-BR.tmpl"
+func Prompt(locale string, in PromptInput) (string, error) {
+	name, words := "prompts/turn.pt-BR.tmpl", fateWords["pt-BR"]
 	if strings.HasPrefix(locale, "en") {
-		name = "prompts/turn.en-US.tmpl"
+		name, words = "prompts/turn.en-US.tmpl", fateWords["en-US"]
 	}
 	tmpl, err := template.ParseFS(prompts, name)
 	if err != nil {
 		return "", fmt.Errorf("conversation: read the prompt: %w", err)
 	}
+	window := make([]exchange, 0, len(in.Window))
+	for _, t := range in.Window {
+		e := exchange{Message: t.Message, Reply: t.Reply}
+		for _, o := range in.Outcomes[t.ID] {
+			e.Outcomes = append(e.Outcomes, o.Kind+": "+words[o.Fate])
+		}
+		window = append(window, e)
+	}
 	var out bytes.Buffer
 	err = tmpl.Execute(&out, promptData{
-		Projection: projection, Examples: Examples(), MaxProposals: MaxProposalsPerTurn,
-		Window: window, Message: message, Pasted: pasted,
+		Projection: in.Projection, Examples: Examples(), BlockKinds: blockKinds(), MaxProposals: MaxProposalsPerTurn,
+		Window: window, Message: in.Message, Pasted: in.Pasted,
 	})
 	if err != nil {
 		return "", fmt.Errorf("conversation: render the prompt: %w", err)
 	}
 	return out.String(), nil
+}
+
+// blockKinds is every block kind, quoted, from the codec: the prompt names no other.
+func blockKinds() string {
+	kinds := blocks.Kinds()
+	quoted := make([]string, 0, len(kinds))
+	for _, k := range kinds {
+		quoted = append(quoted, `"`+string(k)+`"`)
+	}
+	return strings.Join(quoted, ", ")
 }
 
 /*

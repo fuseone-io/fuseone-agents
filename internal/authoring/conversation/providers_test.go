@@ -77,7 +77,7 @@ func TestPrompt_asksForAModelAmongThoseOffered(t *testing.T) {
 		"pt-BR": `um dos seus "models"`,
 		"en-US": `one of its "models"`,
 	} {
-		got, err := conversation.Prompt(locale, "{}", nil, "Oi", false)
+		got, err := conversation.Prompt(locale, conversation.PromptInput{Projection: "{}", Message: "Oi"})
 		if err != nil || !strings.Contains(got, want) || !strings.Contains(got, `"providersOffered"`) {
 			t.Errorf("%s: prompt does not ask for an offered model (%v)", locale, err)
 		}

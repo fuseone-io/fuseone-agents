@@ -58,6 +58,9 @@ type Proposal struct {
 	// proposal can be accepted on: the one the model read, or one only its own turn's
 	// acceptances moved (#412). What applying it would leave is judged on acceptance.
 	Current bool
+	// Gone is whether the proposal's body is no longer kept, taken by retention or by
+	// erasing the thread: it can no longer be accepted, whatever the draft holds.
+	Gone    bool
 	BodyRef string
 	At      time.Time
 }

@@ -240,11 +240,12 @@ func turnView(r conversation.Result) openapi.DraftTurn {
 		}
 		out.Proposals = &ids
 	}
-	if r.Dropped > 0 {
-		out.Dropped = ptr(r.Dropped)
+	// From the turn, not this call: a replay of its key, and the listing, say it too.
+	if t.Dropped > 0 {
+		out.Dropped = ptr(t.Dropped)
 	}
-	if r.Stale > 0 {
-		out.Stale = ptr(r.Stale)
+	if t.Stale > 0 {
+		out.Stale = ptr(t.Stale)
 	}
 	return out
 }

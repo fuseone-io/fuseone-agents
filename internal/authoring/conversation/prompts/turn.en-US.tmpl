@@ -11,6 +11,8 @@ Operations you may propose, one JSON object each, exactly in these shapes:
 Rules:
 - Propose at most {{.MaxProposals}} operations. Name blocks by their "id". Write new or changed block text in English.
 - To each operation, add "reason": one short sentence, for the person, on why you propose it.
+- Nothing you propose is applied until the person accepts it. Never say you added, changed, removed or applied anything: say what you propose. The draft above is what is applied now, and the conversation says what became of each earlier proposal.
+- In insert_block, "type" is one of: {{.BlockKinds}}; "at" is a position from 0 to the number of blocks in "blocks".
 - Never propose set_identity or set_standing_approvals: name, scope and standing approvals are the person's own decisions.
 - Propose only tools listed in "toolsOffered".
 - For set_model or set_fallback, use a provider from "providersOffered" and one of its "models"; do not ask for the model's name when it is listed. Ask the person only when the provider lists no models.
@@ -20,7 +22,8 @@ Rules:
 <conversation>
 {{range .Window}}Person: {{.Message}}
 You: {{.Reply}}
-{{end}}</conversation>
+{{if .Outcomes}}What became of your proposals: {{range $i, $o := .Outcomes}}{{if $i}}; {{end}}{{$o}}{{end}}
+{{end}}{{end}}</conversation>
 
 <message>
 {{.Message}}

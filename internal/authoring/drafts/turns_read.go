@@ -17,10 +17,10 @@ func readTurn(ctx context.Context, tx pgx.Tx, where string, args ...any) (Turn, 
 	err := tx.QueryRow(ctx, `
 		select turn_id::text, thread_id::text, idempotency_key, seq, draft_revision, state,
 		       reserved_micros, cost_micros, pasted, created_at, message_ref, reply_ref,
-		       (erased or subject_erased)
+		       (erased or subject_erased), dropped, stale
 		from agent_draft_turns where `+where, args...).Scan(
 		&t.ID, &t.Thread, &t.Key, &t.Seq, &read, &t.State, &t.Reserved, &t.Cost, &t.Pasted, &t.At,
-		&t.messageRef, &t.replyRef, &t.Erased)
+		&t.messageRef, &t.replyRef, &t.Erased, &t.Dropped, &t.Stale)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Turn{}, false, nil
 	}

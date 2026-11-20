@@ -202,8 +202,11 @@ func endsWithBlankLine(s string) bool {
 
 // Insert adds a block of a kind at a position, written in the locale given.
 func Insert(doc []Block, at int, kind Kind, text, locale string) ([]Block, error) {
-	if at < 0 || at > len(doc) || !KindOf(kind) {
-		return nil, fmt.Errorf("%w: insert %s at %d", ErrUnknownBlock, kind, at)
+	if !KindOf(kind) {
+		return nil, fmt.Errorf("%w: insert: no block kind %q; the kinds are %s", ErrUnknownBlock, kind, kindList())
+	}
+	if at < 0 || at > len(doc) {
+		return nil, fmt.Errorf("%w: insert %s: no position %d; a block goes at 0 to %d", ErrUnknownBlock, kind, at, len(doc))
 	}
 	b := Block{ID: nextID(doc), Kind: kind, Label: LabelOf(kind, locale), Text: strings.TrimSpace(text)}
 	return slices.Insert(slices.Clone(doc), at, b), nil
@@ -260,3 +263,14 @@ func nextID(doc []Block) string {
 	}
 	return idOf(highest + 1)
 }
+
+func kindList() string {
+	names := make([]string, 0, len(order)+1)
+	for _, k := range Kinds() {
+		names = append(names, string(k))
+	}
+	return strings.Join(names, ", ")
+}
+
+// Kinds is every kind a block may be, prose first.
+func Kinds() []Kind { return append([]Kind{Prose}, order...) }

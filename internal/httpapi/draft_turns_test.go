@@ -3,6 +3,8 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -343,4 +345,67 @@ func TestListDraftTurns_saysWhatTheDayHoldsAgainstItsCeiling(t *testing.T) {
 
 func (d *draftStub) WithinPublication(drafts.Publishing) func(context.Context, pgx.Tx, domain.VersionID) error {
 	return func(context.Context, pgx.Tx, domain.VersionID) error { return d.err }
+}
+
+// A turn's prompt tells the model what became of each earlier proposal, read from the
+// author's own thread (#413).
+func TestSendDraftTurn_tellsTheModelWhatBecameOfEarlierProposals(t *testing.T) {
+	t.Parallel()
+	stub := &draftStub{opened: someDraft(),
+		turns: []drafts.Turn{{ID: "t-0", Seq: 1, State: drafts.TurnDone, Message: "Ponha um teto.", Reply: "Proponho um teto."}},
+		proposals: []drafts.Proposal{
+			{ID: "p-0", Turn: "t-0", Kind: "set_budget", Valid: true, Current: true},
+			{ID: "p-9", Turn: "t-0", Kind: "set_triggers", Valid: true, Decision: "accepted"},
+		}}
+	models := &turnModelsStub{reply: `{"reply":"x","proposals":[]}`, priced: true}
+	sendTurn(t, turnServer(stub, models, turnChoice), "E o teto?")
+
+	for _, want := range []string{"set_budget: ainda esperando", "set_triggers: aceita"} {
+		if !strings.Contains(models.prompt, want) {
+			t.Errorf("the prompt does not say %q:\n%s", want, models.prompt)
+		}
+	}
+}
+
+// Only the turns the prompt shows have their outcomes read: a long thread's older history
+// is never consulted on the way to the model (#413 review).
+func TestSendDraftTurn_readsTheOutcomesOfTheWindowsTurnsOnly(t *testing.T) {
+	t.Parallel()
+	stub := &draftStub{opened: someDraft()}
+	for i := 0; i < conversation.WindowTurns+3; i++ {
+		stub.turns = append(stub.turns, drafts.Turn{ID: fmt.Sprintf("t-%02d", i), Seq: i + 1, State: drafts.TurnDone, Message: "m", Reply: "r"})
+	}
+	models := &turnModelsStub{reply: `{"reply":"x","proposals":[]}`, priced: true}
+	sendTurn(t, turnServer(stub, models, turnChoice), "Oi")
+
+	if len(stub.outcomesAsked) != 1 {
+		t.Fatalf("outcomes read %d times, want once", len(stub.outcomesAsked))
+	}
+	asked := stub.outcomesAsked[0]
+	if len(asked) != conversation.WindowTurns || slices.Contains(asked, "t-00") || slices.Contains(asked, "t-02") {
+		t.Errorf("outcomes asked for %v, want the %d turns of the window alone", asked, conversation.WindowTurns)
+	}
+}
+
+// What a turn's answer discarded is answered from the turn: a retry of its key after a lost
+// response, and the listing a reload reads, both say it (#413 review).
+func TestDraftTurns_whatWasDiscarded_isAnsweredOnReplayAndListing(t *testing.T) {
+	t.Parallel()
+	kept := drafts.Turn{ID: "t-0", Key: "k1", Seq: 1, State: drafts.TurnDone, Reply: "Proponho três.", Dropped: 2, Stale: 1}
+	stub := &draftStub{opened: someDraft(), stored: &kept, turns: []drafts.Turn{kept}}
+	models := &turnModelsStub{priced: true}
+	server := turnServer(stub, models, turnChoice)
+
+	replayed, ok := sendTurn(t, server, "Ajude.").(openapi.SendDraftTurn200JSONResponse)
+	if !ok || valueOr(replayed.Dropped) != 2 || valueOr(replayed.Stale) != 1 || models.prompt != "" {
+		t.Errorf("replay = %+v, want the stored turn's counts and no model call", replayed)
+	}
+	listed, err := server.ListDraftTurns(inArea("cx", domain.RoleAuthor), openapi.ListDraftTurnsRequestObject{AgentId: "triage"})
+	if err != nil {
+		t.Fatalf("ListDraftTurns: %v", err)
+	}
+	items := listed.(openapi.ListDraftTurns200JSONResponse).Items
+	if len(items) != 1 || valueOr(items[0].Dropped) != 2 || valueOr(items[0].Stale) != 1 {
+		t.Errorf("listing = %+v, want the turn's counts", items)
+	}
 }
