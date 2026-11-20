@@ -92,3 +92,52 @@ func TestHasSimulation_rehearsal_doesNotLetAnAgentLeaveDraft(t *testing.T) {
 		}
 	})
 }
+
+/*
+A rehearsal waiting for its author is not claimable (NT-018 phase 4): no worker holds it
+while the author thinks. The author's answer makes it claimable again, so the next turn
+records the call's result, and the author's decision on a held action does what a person's
+does. The same rule in both stores, from the same projection.
+*/
+func TestSimulationClaim_aRehearsalWaitingForTheWorld_isClaimableOnlyOnceAnswered(t *testing.T) {
+	at := time.Date(2026, 11, 20, 9, 0, 0, 0, time.UTC)
+	step := func(seq int64, kind domain.StepKind, payload any) domain.Step {
+		return domain.Step{RunID: "run-rehearsal", Seq: seq, Kind: kind, Scope: domain.Scope{Company: "acme", Area: "cx"},
+			AgentID: "triage", VersionID: "v3", At: at.Add(time.Duration(seq) * time.Second), Payload: mustJSON(t, payload)}
+	}
+	run(t, "waiting, then answered", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, rehearsalRun(t, "run-rehearsal", at))
+		mustAppend(t, s, step(2, domain.StepToolCalled, domain.ToolCalledPayload{Tool: "crm.lookup", Effect: domain.EffectRead}))
+		mustAppend(t, s, step(3, domain.StepWorldAwaited, domain.WorldAwaitedPayload{Tool: "crm.lookup", CallSeq: 2}))
+
+		if claimed, err := s.Simulations().Claim(ctx, "sim-worker-1", time.Minute); err == nil {
+			t.Fatalf("claimed %s while it waits for its author", claimed.RunID)
+		}
+		mustAppend(t, s, step(4, domain.StepWorldSupplied, domain.WorldSuppliedPayload{AtSeq: 3, Ref: "r", Digest: "d", By: "usr_ana"}))
+		claimed, err := s.Simulations().Claim(ctx, "sim-worker-1", time.Minute)
+		if err != nil || claimed.RunID != "run-rehearsal" {
+			t.Fatalf("Claim = %+v (%v), want the answered rehearsal", claimed, err)
+		}
+	})
+}
+
+func TestSimulationClaim_aRehearsalDecided_isClaimableAgain(t *testing.T) {
+	at := time.Date(2026, 11, 20, 9, 0, 0, 0, time.UTC)
+	step := func(seq int64, kind domain.StepKind, payload any) domain.Step {
+		return domain.Step{RunID: "run-decided", Seq: seq, Kind: kind, Scope: domain.Scope{Company: "acme", Area: "cx"},
+			AgentID: "triage", VersionID: "v3", At: at.Add(time.Duration(seq) * time.Second), Payload: mustJSON(t, payload)}
+	}
+	run(t, "held, then decided", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, rehearsalRun(t, "run-decided", at))
+		mustAppend(t, s, step(2, domain.StepApprovalRequested, domain.ApprovalRequestedPayload{Tool: "crm.refund"}))
+		if claimed, err := s.Simulations().Claim(ctx, "sim-worker-1", time.Minute); err == nil {
+			t.Fatalf("claimed %s while the Gate holds it", claimed.RunID)
+		}
+		mustAppend(t, s, step(3, domain.StepRehearsalDecided, domain.RehearsalDecidedPayload{AtSeq: 2, Approved: true, By: "usr_ana"}))
+		if claimed, err := s.Simulations().Claim(ctx, "sim-worker-1", time.Minute); err != nil || claimed.RunID != "run-decided" {
+			t.Fatalf("Claim = %+v (%v), want the decided rehearsal", claimed, err)
+		}
+	})
+}
