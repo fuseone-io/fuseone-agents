@@ -105,6 +105,11 @@ func referenceOf(step domain.Step) (ref, digest string) {
 		var p domain.RunFinishedPayload
 		decodePayload(step.Payload, &p)
 		return p.OutcomeRef, p.OutcomeDigest
+	case domain.StepWorldSupplied:
+		// A live rehearsal's author answering for the world (NT-018 phase 4).
+		var p domain.WorldSuppliedPayload
+		decodePayload(step.Payload, &p)
+		return p.Ref, p.Digest
 	}
 	return "", ""
 }
