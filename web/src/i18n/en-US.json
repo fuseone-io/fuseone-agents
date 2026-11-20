@@ -1202,7 +1202,9 @@
     "candidate": "Candidate {{version}}",
     "candidateExplains": "This candidate's sealed text, in the scope it was sealed in. Nothing is published and the agent does not change.",
     "costCandidate_one": "Cases: {{cases}} × repetitions: {{repetitions}} = {{count}} run, up to the ceiling the candidate's sealed text declares. The Gate enforces it.",
-    "costCandidate_other": "Cases: {{cases}} × repetitions: {{repetitions}} = {{count}} runs, each up to the ceiling the candidate's sealed text declares. The Gate enforces it."
+    "costCandidate_other": "Cases: {{cases}} × repetitions: {{repetitions}} = {{count}} runs, each up to the ceiling the candidate's sealed text declares. The Gate enforces it.",
+    "candidateReading": "Reading the candidate",
+    "candidateMissing": "This seal is not among the candidates you may see: it was published, erased, or is in another scope. Nothing runs."
   },
   "compensation": {
     "abandon": "End run",

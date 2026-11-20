@@ -111,7 +111,7 @@ describe("the workbench's candidates", () => {
     await openCandidates();
     await userEvent.click(await screen.findByRole("button", { name: "Abrir v2abc" }));
     const link = await within(await screen.findByRole("dialog")).findByRole("link", { name: "Experimentar" });
-    expect(link).toHaveAttribute("href", "/agents/triagem/experiments?new=1&seal=s-1&candidate=v2abc");
+    expect(link).toHaveAttribute("href", "/agents/triagem/experiments?new=1&seal=s-1");
   });
 
   it("says when a candidate's sealed text can no longer be read", async () => {

@@ -18,18 +18,19 @@ const agent = {
   name: "Triage", provider: "anthropic", model: "test-model", tools: [],
   budget: { micros: 500_000, steps: 20 }, publishedAt: "2026-11-01T10:00:00Z", latest: true,
 };
-const seal = { id: "s-1", version: "v9candidate1" };
+const candidate = (sealId: string, version: string) => ({ version, sealId, company: "acme", area: "cx", sealedBy: "usr_ana", sealedAt: "2026-11-19T12:00:00Z" });
 const started = { id: "exp_triage_1", cases: 3, repetitions: 1, runs: 3, datasetVersion: 2 };
 
-function showStart(published: boolean) {
+function showStart(published: boolean, sealId = "s-1") {
   const posted = stubApi({
+    "GET /agents/triage/candidates": { items: [candidate("s-1", "v9candidate1"), candidate("s-2", "v9fromurl")] },
     ...(published && { "GET /agents/triage": { agent, versions: [{ versionId: agent.versionId, publishedAt: agent.publishedAt, latest: true }] } }),
     "GET /agents/triage/regressions": { items: [{ id: "a" }, { id: "b" }, { id: "c" }] },
     "GET /providers?scope=acme%2Fcx": { items: [] },
     "POST /agents/triage/experiments": started,
   });
   const onStarted = vi.fn();
-  renderWithClient(<ExperimentStart agentId="triage" seal={seal} onClose={vi.fn()} onStarted={onStarted} />);
+  renderWithClient(<ExperimentStart agentId="triage" sealId={sealId} onClose={vi.fn()} onStarted={onStarted} />);
   return { posted, onStarted };
 }
 
@@ -65,17 +66,27 @@ describe("starting an experiment on a candidate", () => {
     expect(posted[0]?.body).toEqual({ sealId: "s-1", repetitions: 1 });
   });
 
-  // The workbench's candidate sheet links here with the seal in the URL, so a refresh, or
-  // the link sent to someone, opens the same form on the same candidate.
-  it("opens the form on the candidate the URL names", async () => {
-    stubApi({ "GET /agents/triage/regressions": { items: [] } });
+  // The seal alone decides what runs, so the candidate named is the seal's own: a version
+  // written beside it in the URL is not believed.
+  it("opens the form on the seal the URL names, whatever version is written beside it", async () => {
+    stubApi({
+      "GET /agents/triage/candidates": { items: [candidate("s-1", "v9candidate1"), candidate("s-2", "v9fromurl")] },
+      "GET /agents/triage/regressions": { items: [] },
+    });
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <MemoryRouter initialEntries={["/agents/triage/experiments?new=1&seal=s-2&candidate=v9fromurl"]}>
+        <MemoryRouter initialEntries={["/agents/triage/experiments?new=1&seal=s-2&candidate=v9candidate1"]}>
           <Routes><Route path="/agents/:agentId/experiments" element={<ExperimentsPage />} /></Routes>
         </MemoryRouter>
       </QueryClientProvider>,
     );
     expect(await screen.findByText("Candidata v9fromurl")).toBeInTheDocument();
+  });
+
+  // A seal not among the candidates the person may see runs nothing, and says so.
+  it("says when the seal is not a candidate the person may see, and starts nothing", async () => {
+    showStart(true, "s-gone");
+    expect(await screen.findByText(/não está entre as candidatas/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Iniciar experimento" })).toBeDisabled();
   });
 });

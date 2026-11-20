@@ -57,7 +57,7 @@ export function CandidateSheet({
       {candidate.data && (
         <PropertiesSheetFooter>
           <Button asChild variant="outline">
-            <Link to={experimentOn(agentId, candidate.data.sealId, candidate.data.version)}>
+            <Link to={experimentOn(agentId, candidate.data.sealId)}>
               <TestTubes className="size-4" aria-hidden />
               {t("workbench.candidates.experiment")}
             </Link>
@@ -69,7 +69,7 @@ export function CandidateSheet({
 }
 
 /** The experiments screen, its form open on this seal: the seal the sheet read, by id. */
-function experimentOn(agentId: string, sealId: string, version: string): string {
-  const query = new URLSearchParams({ new: "1", seal: sealId, candidate: version });
+function experimentOn(agentId: string, sealId: string): string {
+  const query = new URLSearchParams({ new: "1", seal: sealId });
   return `/agents/${encodeURIComponent(agentId)}/experiments?${query.toString()}`;
 }

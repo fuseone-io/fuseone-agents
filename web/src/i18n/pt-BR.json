@@ -1202,7 +1202,9 @@
     "candidate": "Candidata {{version}}",
     "candidateExplains": "O texto selado desta candidata, no escopo em que foi selado. Nada é publicado e o agente não muda.",
     "costCandidate_one": "Casos: {{cases}} × repetições: {{repetitions}} = {{count}} run, até o teto que o texto selado da candidata declara. O Gate aplica o teto.",
-    "costCandidate_other": "Casos: {{cases}} × repetições: {{repetitions}} = {{count}} runs, cada um até o teto que o texto selado da candidata declara. O Gate aplica o teto."
+    "costCandidate_other": "Casos: {{cases}} × repetições: {{repetitions}} = {{count}} runs, cada um até o teto que o texto selado da candidata declara. O Gate aplica o teto.",
+    "candidateReading": "Lendo a candidata",
+    "candidateMissing": "Este selo não está entre as candidatas que você pode ver: foi publicado, apagado ou é de outro escopo. Nada roda."
   },
   "compensation": {
     "abandon": "Encerrar",

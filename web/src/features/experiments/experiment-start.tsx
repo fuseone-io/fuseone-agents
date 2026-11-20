@@ -21,6 +21,7 @@ import {
   type ExperimentForm,
 } from "@/features/experiments/experiment-form";
 import { useStartExperiment } from "@/features/experiments/experiments-api";
+import { useCandidates } from "@/features/workbench/candidates-api";
 import { problemMessage } from "@/lib/api/problem-message";
 
 /**
@@ -33,25 +34,30 @@ import { problemMessage } from "@/lib/api/problem-message";
  */
 export function ExperimentStart({
   agentId,
-  seal,
+  sealId,
   onClose,
   onStarted,
 }: {
   agentId: string;
-  /** A candidate to run instead of a published version. */
-  seal?: { id: string; version: string };
+  /** A candidate's seal to run instead of a published version. */
+  sealId?: string;
   onClose: () => void;
   onStarted: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const detail = useAgent(agentId);
+  // The seal alone decides what runs, so the candidate named is the seal's own, read from
+  // the candidates the person may see; nothing else in the URL is believed.
+  const candidates = useCandidates(sealId ? agentId : "");
+  const seal = sealId ? candidates.data?.find((c) => c.sealId === sealId) : undefined;
+  const unresolved = sealId !== undefined && seal === undefined;
   const start = useStartExperiment(agentId);
   const versions = detail.data?.versions ?? [];
 
   const form = useForm<ExperimentForm>({
     resolver: zodResolver(experimentForm),
     // A candidate's version only fills the form; the request names the seal.
-    values: experimentDefaults(seal?.version ?? detail.data?.agent.versionId ?? ""),
+    values: experimentDefaults(sealId ? (seal?.version ?? "") : (detail.data?.agent.versionId ?? "")),
     resetOptions: { keepDirtyValues: true },
   });
 
@@ -61,11 +67,11 @@ export function ExperimentStart({
   const version = useWatch({ control: form.control, name: "version" });
   // A candidate is no published version to read: the published agent, if any, is
   // what its models are offered for and its cost is stated at.
-  const agent = useAgent(agentId, seal ? undefined : version || undefined).data?.agent;
+  const agent = useAgent(agentId, sealId ? undefined : version || undefined).data?.agent;
 
   async function submit(values: ExperimentForm) {
     try {
-      const started = await start.mutateAsync(experimentRequestOf(values, seal?.id));
+      const started = await start.mutateAsync(experimentRequestOf(values, sealId));
       toast.success(t("experiments.started", { count: started.runs }));
       onStarted(started.id);
     } catch (error) {
@@ -83,7 +89,11 @@ export function ExperimentStart({
       <Form {...form}>
         <form onSubmit={form.handleSubmit(submit)} className="flex min-h-0 flex-1 flex-col">
           <PropertiesSheetBody className="space-y-4">
-            {seal ? <CandidateLine version={seal.version} /> : <VersionField form={form} versions={versions} />}
+            {sealId ? (
+              <CandidateLine version={seal?.version} reading={candidates.isLoading} />
+            ) : (
+              <VersionField form={form} versions={versions} />
+            )}
             <ExperimentConfigFields
               form={form}
               publishedProvider={agent?.provider ?? ""}
@@ -94,14 +104,14 @@ export function ExperimentStart({
               agentId={agentId}
               agent={agent}
               repetitions={Number(repetitions)}
-              candidate={seal !== undefined}
+              candidate={sealId !== undefined}
             />
           </PropertiesSheetBody>
           <PropertiesSheetFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" disabled={start.isPending || (!seal && !agent)}>
+            <Button type="submit" disabled={start.isPending || (sealId ? unresolved : !agent)}>
               {t("experiments.start")}
             </Button>
           </PropertiesSheetFooter>

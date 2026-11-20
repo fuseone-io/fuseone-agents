@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { UseFormReturn } from "react-hook-form";
 import { FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import {
@@ -76,9 +77,14 @@ export function RepetitionsField({ form }: { form: UseFormReturn<ExperimentForm>
   );
 }
 
-/** The candidate an experiment runs, named by its version, in place of a version to choose. */
-export function CandidateLine({ version }: { version: string }) {
+/**
+ * The candidate an experiment runs, named by its seal's own version, in place of a version
+ * to choose. A seal not among the candidates the person may see says so, and runs nothing.
+ */
+export function CandidateLine({ version, reading }: { version?: string; reading: boolean }) {
   const { t } = useTranslation();
+  if (reading) return <Skeleton aria-label={t("experiments.candidateReading")} className="h-10 w-full" />;
+  if (!version) return <p className="text-sm text-danger">{t("experiments.candidateMissing")}</p>;
   return (
     <div className="flex flex-col gap-1">
       <p className="text-sm font-medium">{t("experiments.candidate", { version })}</p>
