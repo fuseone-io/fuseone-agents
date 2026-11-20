@@ -34,7 +34,10 @@ type Settlement struct {
 	// Proposed are the answer's operations, each with the model's reason,
 	// proposed against the ETag the turn read; Validator and Now judge them as
 	// operations by proposal.
-	Proposed  []Proposed
+	Proposed []Proposed
+	// Dropped is what the answer carried that could not be read as operations, or past
+	// the limit per answer: kept on the turn with what settling itself discards.
+	Dropped   int
 	Validator draft.Validator
 	Now       time.Time
 }
@@ -80,8 +83,9 @@ func (s *Store) SettleTurn(ctx context.Context, st Settlement) (Settled, error) 
 			state = TurnFailed
 		}
 		if _, err := tx.Exec(ctx, `
-			update agent_draft_turns set state = $2, cost_micros = $3, reply_ref = $4, settled_at = now()
-			where turn_id = $1::uuid`, turn.ID, state, st.Cost, ref); err != nil {
+			update agent_draft_turns set state = $2, cost_micros = $3, reply_ref = $4, settled_at = now(),
+			  dropped = $5, stale = $6
+			where turn_id = $1::uuid`, turn.ID, state, st.Cost, ref, st.Dropped+out.Withheld, out.Stale); err != nil {
 			return fmt.Errorf("drafts: settle the turn: %w", err)
 		}
 		out.Turn, _, err = readTurn(ctx, tx, `turn_id = $1::uuid`, turn.ID)
