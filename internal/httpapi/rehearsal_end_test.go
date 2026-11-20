@@ -123,6 +123,14 @@ func (m *movingStore) AppendIfHead(ctx context.Context, head domain.StepRef, s d
 	return m.Memory.AppendIfHead(ctx, head, s)
 }
 
+func (m *movingStore) AppendIfHeadWithContent(
+	ctx context.Context, head domain.StepRef, run domain.RunID, seq int64, data []byte,
+	build func(ref, digest string) domain.Step,
+) (domain.Step, error) {
+	m.move(ctx)
+	return m.Memory.AppendIfHeadWithContent(ctx, head, run, seq, data, build)
+}
+
 func heldForADecision(t *testing.T) *ledger.Memory {
 	t.Helper()
 	store := ledger.NewMemory()

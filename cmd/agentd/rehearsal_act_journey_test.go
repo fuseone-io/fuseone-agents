@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/regression"
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/tools"
 )
@@ -296,6 +298,14 @@ func TestRehearsal_twoAnswersToOneWait_onlyOneIsTaken(t *testing.T) {
 	}
 	close(start)
 	wg.Wait()
+	var kept int
+	if err := w.pool.QueryRow(t.Context(), `select count(*) from run_content where owner_kind = 'run' and run_id = $1 and seq = $2`,
+		w.run, at+1).Scan(&kept); err != nil {
+		t.Fatal(err)
+	}
+	if kept != 1 {
+		t.Errorf("answers kept = %d, want only the one a step names", kept)
+	}
 	taken := 0
 	for _, r := range replies {
 		switch r.code {
@@ -407,5 +417,99 @@ func TestRehearsal_erasingTheConversation_erasesTheAnswersForTheWorld(t *testing
 	_ = json.Unmarshal(supplied[0].Payload, &p)
 	if _, err := ledger.NewContent(w.pool).Get(t.Context(), p.Ref); !errors.Is(err, domain.ErrContentErased) {
 		t.Errorf("the answer after its conversation was erased: %v, want erased", err)
+	}
+}
+
+// Any author who may publish in the rehearsal's scope may answer for it, and the answer
+// says who gave it.
+func TestRehearsal_anotherAuthorOfTheArea_answersAndIsNamed(t *testing.T) {
+	w := newActWorld(t, "crm__lookup")
+	w.until(t, engine.PhaseAwaitingWorld)
+	if got := w.answer(t, inCx("usr_bia", domain.RoleAuthor), w.head(t).Seq, `{"customer":"Ana"}`); got.code != http.StatusOK {
+		t.Fatalf("bia's answer = %d: %s", got.code, got.raw)
+	}
+	var p domain.WorldSuppliedPayload
+	_ = json.Unmarshal(w.head(t).Payload, &p)
+	if p.By != "usr_bia" {
+		t.Errorf("the answer names %q, want usr_bia", p.By)
+	}
+}
+
+// The largest answer the contract allows is taken whatever JSON spells it: 256 KiB written
+// as \u escapes is six times that on the wire.
+func TestRehearsal_anAnswerAtTheLimitSpelledInEscapes_isTaken(t *testing.T) {
+	w := newActWorld(t, "crm__lookup")
+	w.until(t, engine.PhaseAwaitingWorld)
+	escape := string(rune(92)) + "u0061"
+	body := fmt.Sprintf(`{"atSeq":%d,"answer":"%s"}`, w.head(t).Seq, strings.Repeat(escape, 256<<10))
+	if got := w.send(t, ana(), "/world", []byte(body)); got.code != http.StatusOK {
+		t.Fatalf("an answer of 256 KiB in escapes (%d bytes on the wire) = %d: %.200s", len(body), got.code, got.raw)
+	}
+}
+
+/*
+The answer is kept inside the agent's exclusive fence, the one erasing the conversation
+takes. Held by an answer, the erasure waits and then reaches it; held by an erasure, the
+answer waits for it.
+*/
+func TestRehearsal_anAnswerHoldingTheFence_isWaitedForAndThenErased(t *testing.T) {
+	w := newActWorld(t, "crm__lookup")
+	w.until(t, engine.PhaseAwaitingWorld)
+	at := w.head(t).Seq
+	fence := firstStalls{Store: regression.NewStore(w.pool), once: &sync.Once{},
+		entered: make(chan struct{}), release: make(chan struct{})}
+	w.server.WithRegressions(fence)
+
+	answered := make(chan rehearsalReply, 1)
+	go func() { answered <- w.answer(t, ana(), at, `{"customer":"Ana"}`) }()
+	select {
+	case <-fence.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the answer never took the agent's fence")
+	}
+	erased := make(chan error, 1)
+	go func() { erased <- drafts.NewStore(w.pool).EraseThread(context.Background(), w.agent, anaCaller()) }()
+	select {
+	case err := <-erased:
+		t.Fatalf("the erasure did not wait for the answer's fence: %v", err)
+	case <-time.After(400 * time.Millisecond):
+	}
+	close(fence.release)
+	if got := <-answered; got.code != http.StatusOK {
+		t.Fatalf("answer = %d: %s", got.code, got.raw)
+	}
+	if err := <-erased; err != nil {
+		t.Fatalf("EraseThread: %v", err)
+	}
+	var p domain.WorldSuppliedPayload
+	_ = json.Unmarshal(w.head(t).Payload, &p)
+	if _, err := ledger.NewContent(w.pool).Get(t.Context(), p.Ref); !errors.Is(err, domain.ErrContentErased) {
+		t.Errorf("the answer after the erasure that waited for it: %v, want erased", err)
+	}
+}
+
+func TestRehearsal_anAnswerWhileAnErasureHoldsTheFence_waitsForIt(t *testing.T) {
+	w := newActWorld(t, "crm__lookup")
+	w.until(t, engine.PhaseAwaitingWorld)
+	at := w.head(t).Seq
+	held, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	go func() {
+		done <- regression.NewStore(w.pool).Exclusive(context.Background(), []domain.AgentID{w.agent},
+			func(context.Context) error { close(held); <-release; return nil })
+	}()
+	<-held
+	answered := make(chan rehearsalReply, 1)
+	go func() { answered <- w.answer(t, ana(), at, `{"customer":"Ana"}`) }()
+	select {
+	case got := <-answered:
+		t.Fatalf("the answer did not wait for the fence an erasure holds: %d", got.code)
+	case <-time.After(400 * time.Millisecond):
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if got := <-answered; got.code != http.StatusOK {
+		t.Errorf("answer after the fence = %d: %s", got.code, got.raw)
 	}
 }

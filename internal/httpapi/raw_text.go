@@ -10,9 +10,10 @@ import (
 	"unicode/utf8"
 )
 
-// maxTypedTextBody bounds what RefuseRewrittenText reads: far above a rehearsal's case even
-// written entirely in \u escapes, and below the server's own body ceiling.
-const maxTypedTextBody = 1 << 20
+// maxTypedTextBody bounds what RefuseRewrittenText reads: the largest text a guarded route
+// takes, an answer for the world of 256 KiB, written entirely in six-byte \u escapes, fits
+// with room to spare, and it is the server's own body ceiling, which no body passes anyway.
+const maxTypedTextBody = 2 << 20
 
 /*
 RefuseRewrittenText refuses, on the routes the patterns name, a JSON body whose text the
