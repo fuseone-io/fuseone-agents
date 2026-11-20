@@ -30,6 +30,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Migration 0123 adds `dropped` and `stale` to `agent_draft_turns`** (#413): what a
+  workbench turn's answer carried that never became a card, kept on the turn. Additive, with
+  defaults; a replica from before it settles a turn without them, which leaves zero, as before.
+
 ### Fixed
 
 - **A slower publication could put an earlier version's triggers back.** Publishing — from
@@ -51,9 +57,11 @@ field" is a commit message.
 - **The workbench assistant said it had applied what it only proposed.** It was never told
   what became of its earlier proposals, so one still waiting for the person read to it as
   done. Each earlier turn it is shown now says what became of every proposal (accepted,
-  rejected, still waiting, or invalid), and the prompt forbids describing a proposal as
-  applied. An answer whose operations were discarded, unreadable or past the limit per
-  answer, now says so on the screen instead of leaving a reply that announces them (#413).
+  rejected, still waiting, no longer acceptable because the draft changed, or invalid), read
+  for the turns shown alone, and the prompt forbids describing a proposal as applied. What
+  an answer carried that never became a card — operations unreadable or past the limit per
+  answer, and proposals made over a draft that changed during the call — is kept on its turn
+  and said under it, on a retry of the same message and after a reload too (#413).
 - **Most block proposals the assistant made were invalid.** It invented block kinds and
   positions past the end of the instructions. The prompt now names the kinds there are and
   the positions a block may go to, and an invalid one says which part was wrong (#413).

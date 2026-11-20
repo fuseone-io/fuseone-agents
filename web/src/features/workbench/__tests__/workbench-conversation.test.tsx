@@ -100,6 +100,14 @@ describe("the workbench conversation", () => {
     expect(await screen.findByText("2 operações da resposta foram descartadas (ilegíveis ou além do limite por resposta); nenhuma delas é uma proposta.")).toBeInTheDocument();
   });
 
+  // Kept on the turn, so a reload, or a retry whose first answer was lost, says it too.
+  it("says what an earlier answer discarded when the page is opened again", async () => {
+    world({ [`GET ${TURNS}`]: () => ({ body: { conversation: "open", items: [{ ...turn, message: "Ajude.", reply: "Proponho três.", dropped: 1, stale: 2 }] } }) });
+    openAt("/agents/triagem/workbench");
+    expect(await screen.findByText("1 operação da resposta foi descartada (ilegível ou além do limite por resposta); ela não é uma proposta.")).toBeInTheDocument();
+    expect(screen.getByText("2 propostas da resposta foram feitas sobre um rascunho que mudou durante a resposta e não foram guardadas.")).toBeInTheDocument();
+  });
+
   it("sends the same key again when the first send never got an answer", async () => {
     let tries = 0;
     const calls = world({ [`POST ${TURNS}`]: () => (++tries === 1 ? { status: 503 } : { body: { ...turn, message: "Oi" } }) });

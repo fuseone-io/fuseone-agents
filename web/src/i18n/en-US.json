@@ -3520,6 +3520,8 @@
       "staleProposal": "This proposal was made over an earlier version of the draft",
       "dropped_one": "1 operation in the answer was discarded (unreadable or past the limit per answer); it is not a proposal.",
       "dropped_other": "{{count}} operations in the answer were discarded (unreadable or past the limit per answer); none of them is a proposal.",
+      "staleOnArrival_one": "1 proposal in the answer was made over a draft that changed during the answer, and was not kept.",
+      "staleOnArrival_other": "{{count}} proposals in the answer were made over a draft that changed during the answer, and were not kept.",
       "erase": "Erase conversation",
       "eraseTitle": "Erase this conversation?",
       "eraseBody": "The messages, the replies and the proposals' content stop existing. The draft and the recorded costs stay.",
