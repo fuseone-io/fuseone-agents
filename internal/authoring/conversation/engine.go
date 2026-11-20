@@ -17,7 +17,8 @@ import (
 // Declared here by the consumer.
 type Store interface {
 	Get(ctx context.Context, agent domain.AgentID, c drafts.Caller) (drafts.Opened, error)
-	Turns(ctx context.Context, agent domain.AgentID, c drafts.Caller) ([]drafts.Turn, error)
+	TurnSizes(ctx context.Context, agent domain.AgentID, c drafts.Caller) ([]drafts.TurnSize, error)
+	TurnsByID(ctx context.Context, agent domain.AgentID, c drafts.Caller, ids []string) ([]drafts.Turn, error)
 	ReplayTurn(ctx context.Context, r drafts.Replaying) (drafts.Started, bool, error)
 	BeginTurn(ctx context.Context, b drafts.Beginning) (drafts.Started, error)
 	SettleTurn(ctx context.Context, s drafts.Settlement) (drafts.Settled, error)
@@ -122,7 +123,7 @@ func (e Engine) prepare(ctx context.Context, r Request) (string, domain.Revision
 	if err != nil {
 		return "", "", 0, err
 	}
-	turns, err := e.Store.Turns(ctx, r.Agent, r.Caller)
+	turns, err := e.windowTurns(ctx, r)
 	if err != nil {
 		return "", "", 0, err
 	}
@@ -170,4 +171,26 @@ func turnIDs(turns []drafts.Turn) []string {
 		ids = append(ids, t.ID)
 	}
 	return ids
+}
+
+// windowTurns is the window's turns with what was said in them: chosen from their sizes
+// first, so no turn outside the window has its content read (#422).
+func (e Engine) windowTurns(ctx context.Context, r Request) ([]drafts.Turn, error) {
+	sized, err := e.Store.TurnSizes(ctx, r.Agent, r.Caller)
+	if err != nil {
+		return nil, err
+	}
+	sizes := make([]int, len(sized))
+	for i, s := range sized {
+		sizes[i] = s.Bytes
+	}
+	kept := WindowOf(sizes)
+	ids := make([]string, 0, len(kept))
+	for _, i := range kept {
+		ids = append(ids, sized[i].ID)
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	return e.Store.TurnsByID(ctx, r.Agent, r.Caller, ids)
 }

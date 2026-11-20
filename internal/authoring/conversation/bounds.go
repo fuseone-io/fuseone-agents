@@ -125,15 +125,32 @@ func Project(d draft.Draft, missing []string, offer Offer) (string, error) {
 // Window is the conversation sent with a turn: the newest turns that fit
 // WindowTurns and WindowBytes, oldest first.
 func Window(turns []drafts.Turn) []drafts.Turn {
-	var kept []drafts.Turn
+	sizes := make([]int, len(turns))
+	for i, t := range turns {
+		sizes[i] = len(t.Message) + len(t.Reply)
+	}
+	kept := make([]drafts.Turn, 0, WindowTurns)
+	for _, i := range WindowOf(sizes) {
+		kept = append(kept, turns[i])
+	}
+	return kept
+}
+
+/*
+WindowOf is the window's rule on sizes alone: given each turn's size in bytes, oldest first,
+the indexes of the newest that fit WindowTurns and WindowBytes, oldest first. A turn too
+large for what is left is skipped and an older one that fits is still taken, so the window
+can be chosen from sizes before any turn's content is read (#422).
+*/
+func WindowOf(sizes []int) []int {
+	var kept []int
 	used := 0
-	for i := len(turns) - 1; i >= 0 && len(kept) < WindowTurns; i-- {
-		size := len(turns[i].Message) + len(turns[i].Reply)
-		if used+size > WindowBytes {
+	for i := len(sizes) - 1; i >= 0 && len(kept) < WindowTurns; i-- {
+		if used+sizes[i] > WindowBytes {
 			continue
 		}
-		used += size
-		kept = append(kept, turns[i])
+		used += sizes[i]
+		kept = append(kept, i)
 	}
 	slices.Reverse(kept)
 	return kept

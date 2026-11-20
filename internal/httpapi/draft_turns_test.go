@@ -31,6 +31,29 @@ func (d *draftStub) Turns(_ context.Context, _ domain.AgentID, c drafts.Caller) 
 	return d.turns, d.err
 }
 
+// TurnSizes answers each of the stub's turns with the size of what was said in it.
+func (d *draftStub) TurnSizes(_ context.Context, _ domain.AgentID, c drafts.Caller) ([]drafts.TurnSize, error) {
+	d.callers = append(d.callers, c)
+	out := make([]drafts.TurnSize, 0, len(d.turns))
+	for _, t := range d.turns {
+		out = append(out, drafts.TurnSize{ID: t.ID, Bytes: len(t.Message) + len(t.Reply)})
+	}
+	return out, d.err
+}
+
+// TurnsByID answers the stub's turns of those ids, and records the ids whose content was read.
+func (d *draftStub) TurnsByID(_ context.Context, _ domain.AgentID, c drafts.Caller, ids []string) ([]drafts.Turn, error) {
+	d.callers = append(d.callers, c)
+	d.turnsRead = append(d.turnsRead, ids)
+	var out []drafts.Turn
+	for _, t := range d.turns {
+		if slices.Contains(ids, t.ID) {
+			out = append(out, t)
+		}
+	}
+	return out, d.err
+}
+
 func (d *draftStub) BeginTurn(_ context.Context, b drafts.Beginning) (drafts.Started, error) {
 	d.begun = append(d.begun, b)
 	if d.beginErr != nil {
@@ -407,5 +430,21 @@ func TestDraftTurns_whatWasDiscarded_isAnsweredOnReplayAndListing(t *testing.T) 
 	items := listed.(openapi.ListDraftTurns200JSONResponse).Items
 	if len(items) != 1 || valueOr(items[0].Dropped) != 2 || valueOr(items[0].Stale) != 1 {
 		t.Errorf("listing = %+v, want the turn's counts", items)
+	}
+}
+
+// A turn's prompt reads the content of the window's turns alone: older turns are measured,
+// never read (#422).
+func TestSendDraftTurn_readsTheContentOfTheWindowsTurnsOnly(t *testing.T) {
+	t.Parallel()
+	stub := &draftStub{opened: someDraft()}
+	for i := 0; i < conversation.WindowTurns+3; i++ {
+		stub.turns = append(stub.turns, drafts.Turn{ID: fmt.Sprintf("t-%02d", i), Seq: i + 1, State: drafts.TurnDone, Message: "m", Reply: "r"})
+	}
+	models := &turnModelsStub{reply: `{"reply":"x","proposals":[]}`, priced: true}
+	sendTurn(t, turnServer(stub, models, turnChoice), "Oi")
+
+	if len(stub.turnsRead) != 1 || len(stub.turnsRead[0]) != conversation.WindowTurns || slices.Contains(stub.turnsRead[0], "t-02") {
+		t.Errorf("turns read %v, want the %d of the window alone", stub.turnsRead, conversation.WindowTurns)
 	}
 }

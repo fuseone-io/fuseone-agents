@@ -47,6 +47,14 @@ field" is a commit message.
   listing's rule (`agent:publish` on the sealed scope, a version not yet published), however
   far down the listing it would fall; 404 otherwise.
 
+### Changed
+
+- **A workbench turn no longer reads the whole conversation first.** Building the prompt read
+  every earlier turn's message and reply, one turn at a time, before choosing the window. It
+  now measures every turn in one query, without reading what was said, chooses the window by
+  the same rule (the newest that fit, a turn too large skipped for an older one that fits),
+  and reads only the turns chosen. The conversation's listing still shows every turn (#422).
+
 ## [0.126.0] — 2026-11-19
 
 Workbench and publication fixes (#412, #413, #414, #416; PRs #418–#421). Migrations 0123 and
