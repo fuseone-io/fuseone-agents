@@ -37,6 +37,10 @@ field" is a commit message.
   newest first, and opens each on its sealed text, read from the candidate, never from the
   draft. It says when the draft was already the published version and nothing was sealed,
   which event cycle the sealed version would close, and why a seal was refused.
+- **An experiment on a candidate**: a candidate opens on "Experiment", which starts the
+  experiments form on that seal. The experiment runs the sealed text, named by its seal,
+  needs no published version of the agent, and states its cost at the ceiling the candidate
+  declares, not the published one's. The seal travels in the URL, so a refresh keeps it.
 
 ## [0.126.0] — 2026-11-19
 

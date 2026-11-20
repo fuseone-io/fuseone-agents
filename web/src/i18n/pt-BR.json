@@ -1198,7 +1198,11 @@
     "startTitle": "Novo experimento",
     "startExplains": "Roda uma versão do agente contra a versão mais recente do dataset. Para trocar de modelo de verdade, publique uma nova versão, com sua própria bateria.",
     "current": "atual",
-    "start": "Iniciar experimento"
+    "start": "Iniciar experimento",
+    "candidate": "Candidata {{version}}",
+    "candidateExplains": "O texto selado desta candidata, no escopo em que foi selado. Nada é publicado e o agente não muda.",
+    "costCandidate_one": "Casos: {{cases}} × repetições: {{repetitions}} = {{count}} run, até o teto que o texto selado da candidata declara. O Gate aplica o teto.",
+    "costCandidate_other": "Casos: {{cases}} × repetições: {{repetitions}} = {{count}} runs, cada um até o teto que o texto selado da candidata declara. O Gate aplica o teto."
   },
   "compensation": {
     "abandon": "Encerrar",
@@ -3626,7 +3630,8 @@
       "sealedByColumn": "Por",
       "open": "Abrir {{version}}",
       "sheetDescription": "O texto selado, exatamente como foi guardado. É ele que um experimento roda, mesmo que o rascunho mude depois.",
-      "sealedBy": "Selada por {{by}} em {{at}}"
+      "sealedBy": "Selada por {{by}} em {{at}}",
+      "experiment": "Experimentar"
     }
   }
 }

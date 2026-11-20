@@ -75,3 +75,14 @@ export function RepetitionsField({ form }: { form: UseFormReturn<ExperimentForm>
     />
   );
 }
+
+/** The candidate an experiment runs, named by its version, in place of a version to choose. */
+export function CandidateLine({ version }: { version: string }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-sm font-medium">{t("experiments.candidate", { version })}</p>
+      <p className="text-xs text-muted-foreground">{t("experiments.candidateExplains")}</p>
+    </div>
+  );
+}

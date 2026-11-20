@@ -103,6 +103,17 @@ describe("the workbench's candidates", () => {
     expect(await within(sheet).findByText(/Prometer prazo\./)).toBeInTheDocument();
   });
 
+  it("links a candidate to an experiment on its seal", async () => {
+    world({
+      [`GET ${CANDIDATES}`]: () => ({ body: { items: [seal] } }),
+      [`GET ${CANDIDATES}/v2abc`]: () => ({ body: { ...seal, definition: "---\nid: triagem\n---\n" } }),
+    });
+    await openCandidates();
+    await userEvent.click(await screen.findByRole("button", { name: "Abrir v2abc" }));
+    const link = await within(await screen.findByRole("dialog")).findByRole("link", { name: "Experimentar" });
+    expect(link).toHaveAttribute("href", "/agents/triagem/experiments?new=1&seal=s-1&candidate=v2abc");
+  });
+
   it("says when a candidate's sealed text can no longer be read", async () => {
     world({
       [`GET ${CANDIDATES}`]: () => ({ body: { items: [seal] } }),

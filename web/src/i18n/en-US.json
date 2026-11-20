@@ -1198,7 +1198,11 @@
     "startTitle": "New experiment",
     "startExplains": "Runs a version of the agent against the latest dataset version. To really change models, publish a new version, with its own battery.",
     "current": "current",
-    "start": "Start experiment"
+    "start": "Start experiment",
+    "candidate": "Candidate {{version}}",
+    "candidateExplains": "This candidate's sealed text, in the scope it was sealed in. Nothing is published and the agent does not change.",
+    "costCandidate_one": "Cases: {{cases}} × repetitions: {{repetitions}} = {{count}} run, up to the ceiling the candidate's sealed text declares. The Gate enforces it.",
+    "costCandidate_other": "Cases: {{cases}} × repetitions: {{repetitions}} = {{count}} runs, each up to the ceiling the candidate's sealed text declares. The Gate enforces it."
   },
   "compensation": {
     "abandon": "End run",
@@ -3626,7 +3630,8 @@
       "sealedByColumn": "By",
       "open": "Open {{version}}",
       "sheetDescription": "The sealed text, exactly as it was kept. It is what an experiment runs, even if the draft changes afterwards.",
-      "sealedBy": "Sealed by {{by}} on {{at}}"
+      "sealedBy": "Sealed by {{by}} on {{at}}",
+      "experiment": "Experiment"
     }
   }
 }

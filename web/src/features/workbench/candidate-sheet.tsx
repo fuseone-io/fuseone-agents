@@ -1,6 +1,9 @@
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
+import { TestTubes } from "lucide-react";
 import { Mono } from "@/components/shared/mono";
-import { PropertiesSheet, PropertiesSheetBody } from "@/components/shared/properties-sheet";
+import { PropertiesSheet, PropertiesSheetBody, PropertiesSheetFooter } from "@/components/shared/properties-sheet";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadFailed } from "@/features/experiments/load-failed";
 import { useCandidate } from "@/features/workbench/candidates-api";
@@ -51,6 +54,22 @@ export function CandidateSheet({
           </>
         )}
       </PropertiesSheetBody>
+      {candidate.data && (
+        <PropertiesSheetFooter>
+          <Button asChild variant="outline">
+            <Link to={experimentOn(agentId, candidate.data.sealId, candidate.data.version)}>
+              <TestTubes className="size-4" aria-hidden />
+              {t("workbench.candidates.experiment")}
+            </Link>
+          </Button>
+        </PropertiesSheetFooter>
+      )}
     </PropertiesSheet>
   );
+}
+
+/** The experiments screen, its form open on this seal: the seal the sheet read, by id. */
+function experimentOn(agentId: string, sealId: string, version: string): string {
+  const query = new URLSearchParams({ new: "1", seal: sealId, candidate: version });
+  return `/agents/${encodeURIComponent(agentId)}/experiments?${query.toString()}`;
 }
