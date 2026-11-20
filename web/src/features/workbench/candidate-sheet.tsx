@@ -6,6 +6,7 @@ import { PropertiesSheet, PropertiesSheetBody, PropertiesSheetFooter } from "@/c
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadFailed } from "@/features/experiments/load-failed";
+import { CandidateActivate } from "@/features/workbench/candidate-activate";
 import { useCandidate } from "@/features/workbench/candidates-api";
 import { formatInstant } from "@/lib/format";
 import { problemMessage } from "@/lib/api/problem-message";
@@ -56,6 +57,7 @@ export function CandidateSheet({
       </PropertiesSheetBody>
       {candidate.data && (
         <PropertiesSheetFooter>
+          <CandidateActivate agentId={agentId} candidate={candidate.data} onActivated={onClose} />
           <Button asChild variant="outline">
             <Link to={experimentOn(agentId, candidate.data.sealId)}>
               <TestTubes className="size-4" aria-hidden />

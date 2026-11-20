@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { agentKeys } from "@/features/agents/api";
 import { api, unwrap } from "@/lib/api/client";
-import type { Candidate, CandidateSeal, DraftSeal } from "@/lib/api/client";
+import type { AgentActivated, Candidate, CandidateSeal, DraftSeal } from "@/lib/api/client";
+import { revised, revisionReads } from "@/lib/api/revision";
 import { isAbsent, workbenchKeys } from "@/features/workbench/api";
 
 /*
@@ -71,5 +73,43 @@ export function useSealDraft(agentId: string) {
     mutationFn: async (etag: string): Promise<DraftSeal> =>
       unwrap(await api.POST("/agents/{agentId}/draft/seals", { params: { path: { agentId }, header: { "If-Match": etag } } })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: candidateKeys.all(agentId) }),
+  });
+}
+
+/**
+ * The agent as an activation names it: its current version and ETag, or null when it has
+ * no version yet. Read when the dialog opens, so what is sent is what the person saw.
+ */
+export function useAgentHead(agentId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...candidateKeys.all(agentId), "head"] as const,
+    queryFn: async (): Promise<{ versionId: string; etag: string } | null> => {
+      try {
+        const head = revised(await api.GET("/agents/{agentId}", { params: { path: { agentId } } }));
+        return { versionId: head.body.agent.versionId, etag: head.etag };
+      } catch (error) {
+        if (isAbsent(error)) return null;
+        throw error;
+      }
+    },
+    enabled: enabled && agentId !== "",
+    ...revisionReads,
+  });
+}
+
+/** Makes a candidate the agent's current version, under the agent as the dialog read it. */
+export function useActivateCandidate(agentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ version, etag }: { version: string; etag: string | null }): Promise<AgentActivated> => {
+      const header = etag === null ? { "If-None-Match": "*" as const } : { "If-Match": etag };
+      return unwrap(await api.POST("/agents/{agentId}/candidates/{version}/activate", {
+        params: { path: { agentId, version }, header },
+      }));
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: candidateKeys.all(agentId) });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all });
+    },
   });
 }

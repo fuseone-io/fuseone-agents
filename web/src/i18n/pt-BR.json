@@ -2598,7 +2598,9 @@
     "version-collision": "O identificador de versão deste texto já identifica outro texto. Mude o rascunho e tente de novo.",
     "version-digest-unknown": "Este identificador de versão foi publicado antes de o conteúdo ser registrado, então não dá para provar que é o mesmo texto. Mude o rascunho e tente de novo.",
     "candidate-unreadable": "O texto selado desta candidata não pode mais ser lido: foi apagado, expirou ou não confere mais com a versão. Sele o rascunho de novo para criar outra candidata.",
-    "webhook-path-taken": "O caminho de webhook desta versão já é atendido por outro agente. Escolha outro caminho; nada foi gravado."
+    "webhook-path-taken": "O caminho de webhook desta versão já é atendido por outro agente. Escolha outro caminho; nada foi gravado.",
+    "candidate-scope-moved": "O agente mudou de escopo depois que esta candidata foi selada. Sele o rascunho de novo no escopo atual.",
+    "stage-refused": "O agente está no estágio autônomo, onde uma versão nova não entra. Volte-o para copiloto antes."
   },
   "retention": {
     "byDefault": "padrão, ninguém escolheu",
@@ -3633,7 +3635,15 @@
       "open": "Abrir {{version}}",
       "sheetDescription": "O texto selado, exatamente como foi guardado. É ele que um experimento roda, mesmo que o rascunho mude depois.",
       "sealedBy": "Selada por {{by}} em {{at}}",
-      "experiment": "Experimentar"
+      "experiment": "Experimentar",
+      "activate": "Ativar",
+      "activateTitle": "Ativar {{version}}?",
+      "activateReplaces": "O texto selado abaixo passa a ser a versão em produção do agente, no lugar de {{current}}.",
+      "activateFirst": "É a primeira versão do agente: ela nasce pausada, no escopo em que foi selada.",
+      "activateKept": "Depois de ativado, o texto é guardado como toda versão publicada.",
+      "activateConfirm": "Ativar versão",
+      "activatedLive": "{{version}} está em produção.",
+      "activatedPaused": "{{version}} está ativa, pausada."
     }
   }
 }

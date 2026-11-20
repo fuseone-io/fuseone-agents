@@ -2598,7 +2598,9 @@
     "version-collision": "This text's version id already names other text. Change the draft and try again.",
     "version-digest-unknown": "This version id was published before its content was recorded, so nothing can show it is the same text. Change the draft and try again.",
     "candidate-unreadable": "This candidate's sealed text can no longer be read: it was erased, aged out, or no longer matches its version. Seal the draft again to make another candidate.",
-    "webhook-path-taken": "This version's webhook path is already answered by another agent. Choose another path; nothing was written."
+    "webhook-path-taken": "This version's webhook path is already answered by another agent. Choose another path; nothing was written.",
+    "candidate-scope-moved": "The agent moved to another scope after this candidate was sealed. Seal the draft again in the current scope.",
+    "stage-refused": "The agent is at the autonomous stage, where no new version goes in. Move it back to copilot first."
   },
   "retention": {
     "byDefault": "default, nobody chose it",
@@ -3633,7 +3635,15 @@
       "open": "Open {{version}}",
       "sheetDescription": "The sealed text, exactly as it was kept. It is what an experiment runs, even if the draft changes afterwards.",
       "sealedBy": "Sealed by {{by}} on {{at}}",
-      "experiment": "Experiment"
+      "experiment": "Experiment",
+      "activate": "Activate",
+      "activateTitle": "Activate {{version}}?",
+      "activateReplaces": "The sealed text below becomes the agent's version in production, in place of {{current}}.",
+      "activateFirst": "It is the agent's first version: it is born paused, in the scope it was sealed in.",
+      "activateKept": "Once activated, the text is kept as every published version is.",
+      "activateConfirm": "Activate version",
+      "activatedLive": "{{version}} is in production.",
+      "activatedPaused": "{{version}} is active, paused."
     }
   }
 }
