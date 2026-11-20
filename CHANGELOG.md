@@ -46,6 +46,11 @@ field" is a commit message.
 - `GET /agents/{agentId}/seals/{sealId}` answers one candidate seal by its id, under the
   listing's rule (`agent:publish` on the sealed scope, a version not yet published), however
   far down the listing it would fall; 404 otherwise.
+- **Activating a candidate from the workbench**: "Activate" shows the whole sealed text, the
+  version it replaces (or that it is the agent's first, born paused), and that it is then
+  kept as every published version is. It activates under the agent's ETag as the dialog
+  read it (`If-None-Match: *` for a first version), so a version published meanwhile is
+  refused, not replaced unseen; each refusal and the event-cycle warning are said in words.
 
 ### Changed
 
