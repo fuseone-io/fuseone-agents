@@ -314,6 +314,10 @@ type ToolReturnedPayload struct {
 	Context *ContextArtifact `json:"context,omitempty"`
 	// PullRequest is the pull request a trusted create_pull_request answer named, and where from (#204).
 	PullRequest *PullRequestStamp `json:"pull_request,omitempty"`
+	// ForSeq is the tool_called step this result returns for, when steps stand between
+	// them: a rehearsal's world_awaited and world_supplied (NT-018 phase 4). Absent, the
+	// result returns for the step just before it, as every result written before did.
+	ForSeq int64 `json:"for_seq,omitempty"`
 }
 
 // EffectReconciledPayload records the final truth learned after a write whose

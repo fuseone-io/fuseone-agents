@@ -2,6 +2,7 @@ package simulate_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/fuseone/agents/internal/engine"
@@ -54,5 +55,19 @@ func TestDryTools_answersWithNothingRatherThanFailing(t *testing.T) {
 	// decision about data the run never saw.
 	if got.ResultRef != "" || len(got.Labels) != 0 || got.Failed {
 		t.Errorf("result = %+v, want nothing", got)
+	}
+}
+
+// A rehearsal's call is parked by the engine before any tool layer sees it (NT-018 phase 4).
+// One that reaches this layer anyway is refused, never answered with an empty result the
+// run would read as the world's.
+func TestDryTools_aRehearsalsCall_isRefusedNotAnswered(t *testing.T) {
+	t.Parallel()
+
+	if _, err := (simulate.DryTools{}).Invoke(t.Context(), engine.Call{Tool: "crm.lookup", Rehearsal: true}); !errors.Is(err, simulate.ErrRehearsalCall) {
+		t.Fatalf("Invoke = %v, want ErrRehearsalCall", err)
+	}
+	if err := (simulate.DryTools{}).Reserve(t.Context(), engine.Call{Tool: "crm.lookup", Rehearsal: true}); !errors.Is(err, simulate.ErrRehearsalCall) {
+		t.Fatalf("Reserve = %v, want ErrRehearsalCall", err)
 	}
 }

@@ -141,10 +141,15 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 			if !p.Failed {
 				content = compactToolResult(p.Tool, content, &elided)
 			}
+			// Pairs with the call it names, when steps stand between them (a
+			// rehearsal's wait and answer), else with the call one step earlier.
+			callSeq := step.Seq - 1
+			if p.ForSeq > 0 {
+				callSeq = p.ForSeq
+			}
 			turns = append(turns, Turn{
-				Kind: TurnToolResult,
-				// Pairs with the call one step earlier.
-				CallID:        CallID(step.RunID, step.Seq-1),
+				Kind:          TurnToolResult,
+				CallID:        CallID(step.RunID, callSeq),
 				Tool:          p.Tool,
 				Failed:        p.Failed,
 				Content:       content,
@@ -177,12 +182,14 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 					p.Tool, p.Rule, p.Reason),
 			})
 
-		case domain.StepApprovalDecided:
-			var p domain.ApprovalDecidedPayload
-			if err := decode(step, &p); err != nil {
+		case domain.StepApprovalDecided, domain.StepRehearsalDecided:
+			// A rehearsal's author decides as the approver would, and the
+			// planner reads it the same way (NT-018 phase 4).
+			approved, err := decidedApproval(step)
+			if err != nil {
 				return nil, err
 			}
-			if p.Approved {
+			if approved {
 				turns = append(turns, Turn{Kind: TurnNote, Text: "A human approved the pending action. Proceed."})
 			} else {
 				turns = append(turns, Turn{Kind: TurnNote,
@@ -210,4 +217,16 @@ func resolve(ctx context.Context, store ContentStore, ref string) ([]byte, error
 		return nil, fmt.Errorf("engine: resolve %s: %w", ref, err)
 	}
 	return data, nil
+}
+
+// decidedApproval is whether a person's decision, or a rehearsal author's, approved.
+func decidedApproval(step domain.Step) (bool, error) {
+	if step.Kind == domain.StepRehearsalDecided {
+		var p domain.RehearsalDecidedPayload
+		err := decode(step, &p)
+		return p.Approved, err
+	}
+	var p domain.ApprovalDecidedPayload
+	err := decode(step, &p)
+	return p.Approved, err
 }

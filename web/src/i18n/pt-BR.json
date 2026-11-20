@@ -2907,7 +2907,17 @@
     "runFromInputHelp": "Uma execução nova, com identificador e trilha próprios, aberta com a entrada que esta execução registrou e fixada na versão publicada agora. Esta execução não é alterada. Nada do que ela recebeu é herdado: aprovações, reservas e orçamento começam do zero, e uma entrada que veio de fora continua não confiável. Não é Reproduzir, que só reconfere as decisões registradas.",
     "runFromInputConfirm": "Abrir nova execução",
     "runFromInputOpened": "Nova execução aberta com esta entrada",
-    "openedFrom": "Aberta a partir da execução"
+    "openedFrom": "Aberta a partir da execução",
+    "phaseAwaitingWorld": "Aguardando o autor",
+    "verbAwaitedWorld": "esperou o autor responder pelo mundo",
+    "verbSuppliedWorld": "recebeu a resposta do autor",
+    "storyWorldAwaitedTitle": "Aguardando o autor responder pelo mundo",
+    "storyWorldSuppliedTitle": "O autor respondeu pelo mundo",
+    "storyRehearsalDecided": "O autor decidiu no ensaio",
+    "storyWorldAwaited": "esperando a resposta para {{tool}}; nada foi executado",
+    "storyWorldSupplied": "respondida por {{who}}; a resposta entra como conteúdo não confiável",
+    "storyRehearsalApprovedBy": "aprovada no ensaio por {{who}}; não é uma aprovação real",
+    "storyRehearsalRefusedBy": "recusada no ensaio por {{who}}; não é uma aprovação real"
   },
   "runtime": {
     "attentionChannelDetail": "{{count}} tentativa(s) de entrega, {{secondary}} run(s).",

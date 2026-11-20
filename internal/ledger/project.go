@@ -144,8 +144,15 @@ func projectPhase(s domain.Step) (phase *string, endedAt *time.Time) {
 		return set("running"), nil
 	case domain.StepToolCalled:
 		return set("awaiting_tool"), nil
-	case domain.StepToolReturned, domain.StepApprovalDecided:
+	case domain.StepToolReturned, domain.StepApprovalDecided, domain.StepRehearsalDecided:
 		return set("running"), nil
+	case domain.StepWorldAwaited:
+		// A rehearsal waiting for its author: not claimable, so no worker holds it
+		// while the author thinks (NT-018 phase 4).
+		return set("awaiting_world"), nil
+	case domain.StepWorldSupplied:
+		// The answer is in; the next turn records it as the call's result.
+		return set("awaiting_tool"), nil
 	case domain.StepApprovalRequested:
 		return set("awaiting_approval"), nil
 	case domain.StepParked:

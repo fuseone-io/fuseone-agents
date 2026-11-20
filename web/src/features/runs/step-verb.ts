@@ -30,6 +30,10 @@ const VERBS: Record<StepKind, { verb: string; tone: Tone }> = {
   model_fallback: { verb: "runs.verbFellBack", tone: "warn" },
   work_item_claimed: { verb: "runs.verbClaimed", tone: "neutral" },
   work_item_linked: { verb: "runs.verbLinked", tone: "neutral" },
+  // A live rehearsal (NT-018 phase 4): the author answers for the world and decides.
+  world_awaited: { verb: "runs.verbAwaitedWorld", tone: "warn" },
+  world_supplied: { verb: "runs.verbSuppliedWorld", tone: "neutral" },
+  rehearsal_decided: { verb: "runs.verbDecided", tone: "good" },
 };
 
 const VERDICTS: Record<string, { verb: string; tone: Tone }> = {

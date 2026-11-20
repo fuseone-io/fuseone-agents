@@ -239,3 +239,40 @@ func TestGetRun_parkedProviderFailureCarriesTheStableCause(t *testing.T) {
 		t.Errorf("failure = %+v, want the stable parked provider cause", *run.Failure)
 	}
 }
+
+// The author's answer for the world in a live rehearsal (NT-018 phase 4) is content the run
+// points at like any other: whoever may read the run reads the answer, with the digest the
+// chain sealed beside its reference.
+func TestGetStepContent_anAnswerForTheWorld_returnsTheAuthorsAnswer(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, content := ledger.NewMemory(), engine.NewMemoryContent()
+	answer := `{"customer":"c-1","plan":"gold"}`
+	ref, err := content.Put(ctx, "run-cx", 3, []byte(answer))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	at := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	for i, step := range []domain.Step{
+		{Kind: domain.StepRunStarted, Payload: mustPayload(t, domain.RunStartedPayload{Simulated: true, Rehearsal: true})},
+		{Kind: domain.StepWorldAwaited, Payload: mustPayload(t, domain.WorldAwaitedPayload{Tool: "crm.lookup", CallSeq: 1})},
+		{Kind: domain.StepWorldSupplied, Payload: mustPayload(t, domain.WorldSuppliedPayload{AtSeq: 2, Ref: ref, Digest: "sha256:answer", By: "usr_ana"})},
+	} {
+		step.RunID, step.Scope, step.AgentID, step.VersionID = "run-cx", domain.Scope{Company: "acme", Area: "cx"}, "triage", "v1"
+		step.At = at.Add(time.Duration(i) * time.Second)
+		if _, err := store.Append(ctx, step); err != nil {
+			t.Fatalf("seed %s: %v", step.Kind, err)
+		}
+	}
+
+	resp, err := NewServer(store, "test").WithContent(content).
+		GetStepContent(inArea("cx", domain.RoleAuthor), openapi.GetStepContentRequestObject{RunId: "run-cx", Seq: 3})
+	if err != nil {
+		t.Fatalf("GetStepContent: %v", err)
+	}
+	got, ok := resp.(openapi.GetStepContent200JSONResponse)
+	if !ok || got.Content != answer || got.Digest != "sha256:answer" {
+		t.Errorf("response = %#v, want the author's answer and its sealed digest", resp)
+	}
+}

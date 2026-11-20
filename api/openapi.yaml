@@ -6488,7 +6488,10 @@ components:
 
     Phase:
       type: string
-      enum: [unstarted, running, awaiting_approval, awaiting_tool, parked, compensating, finished, failed]
+      enum: [unstarted, running, awaiting_approval, awaiting_tool, parked, compensating, finished, failed, awaiting_world]
+      description: |
+        `awaiting_world` is a live rehearsal waiting for its author to answer a
+        tool call for the world (NT-018 phase 4). No worker holds it meanwhile.
 
     Verdict:
       type: string
@@ -6622,6 +6625,16 @@ components:
         - model_fallback
         - work_item_claimed
         - work_item_linked
+        - world_awaited
+        - world_supplied
+        - rehearsal_decided
+      description: |
+        `world_awaited`, `world_supplied` and `rehearsal_decided` belong to a
+        live rehearsal (NT-018 phase 4): the run waiting for its author to answer
+        a call for the world, the author's answer (by reference and digest, never
+        its text), and the author's decision where the Gate held an action, which
+        is never an `approval_decided`. Every reader knows them one release
+        before anything writes them.
 
     StandingPolicy:
       type: string
