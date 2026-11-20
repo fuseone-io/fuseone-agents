@@ -91,6 +91,15 @@ describe("the workbench conversation", () => {
     expect(sent[0]?.key).toMatch(/.{8,}/);
   });
 
+  // An operation the reply carried that could not be read, or past the cap, is never a
+  // card: the person is told, so a reply announcing it does not read as if it were there.
+  it("says when the answer carried operations that were discarded", async () => {
+    world({ [`POST ${TURNS}`]: () => ({ body: { ...turn, message: "Ajude.", reply: "Proponho três mudanças.", dropped: 2 } }) });
+    openAt("/agents/triagem/workbench");
+    await say("Ajude.");
+    expect(await screen.findByText("2 operações da resposta foram descartadas (ilegíveis ou além do limite por resposta); nenhuma delas é uma proposta.")).toBeInTheDocument();
+  });
+
   it("sends the same key again when the first send never got an answer", async () => {
     let tries = 0;
     const calls = world({ [`POST ${TURNS}`]: () => (++tries === 1 ? { status: 503 } : { body: { ...turn, message: "Oi" } }) });

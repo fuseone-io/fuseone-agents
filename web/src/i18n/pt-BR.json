@@ -3518,6 +3518,8 @@
       "reject": "Recusar",
       "applied": "Proposta aplicada ao rascunho",
       "staleProposal": "Esta proposta foi feita sobre uma versão anterior do rascunho",
+      "dropped_one": "1 operação da resposta foi descartada (ilegível ou além do limite por resposta); ela não é uma proposta.",
+      "dropped_other": "{{count}} operações da resposta foram descartadas (ilegíveis ou além do limite por resposta); nenhuma delas é uma proposta.",
       "erase": "Apagar conversa",
       "eraseTitle": "Apagar esta conversa?",
       "eraseBody": "As mensagens, as respostas e o conteúdo das propostas deixam de existir. O rascunho e os custos registrados continuam.",

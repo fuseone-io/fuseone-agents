@@ -3518,6 +3518,8 @@
       "reject": "Reject",
       "applied": "Proposal applied to the draft",
       "staleProposal": "This proposal was made over an earlier version of the draft",
+      "dropped_one": "1 operation in the answer was discarded (unreadable or past the limit per answer); it is not a proposal.",
+      "dropped_other": "{{count}} operations in the answer were discarded (unreadable or past the limit per answer); none of them is a proposal.",
       "erase": "Erase conversation",
       "eraseTitle": "Erase this conversation?",
       "eraseBody": "The messages, the replies and the proposals' content stop existing. The draft and the recorded costs stay.",

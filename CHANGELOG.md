@@ -48,6 +48,15 @@ field" is a commit message.
   one after another, each judged again on the draft as it is and shown with what accepting
   it would leave. A draft changed by anything else since the turn — by hand, or by another
   turn's proposal — still refuses them (#412).
+- **The workbench assistant said it had applied what it only proposed.** It was never told
+  what became of its earlier proposals, so one still waiting for the person read to it as
+  done. Each earlier turn it is shown now says what became of every proposal (accepted,
+  rejected, still waiting, or invalid), and the prompt forbids describing a proposal as
+  applied. An answer whose operations were discarded, unreadable or past the limit per
+  answer, now says so on the screen instead of leaving a reply that announces them (#413).
+- **Most block proposals the assistant made were invalid.** It invented block kinds and
+  positions past the end of the instructions. The prompt now names the kinds there are and
+  the positions a block may go to, and an invalid one says which part was wrong (#413).
 - **The workbench assistant asked for the model's name instead of choosing one.** The
   assistant was shown the providers configured for the draft's scope by name only, so for a
   gateway whose model names are the installation's own it could only ask, or guess. It is now

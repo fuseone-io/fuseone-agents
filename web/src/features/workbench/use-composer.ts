@@ -31,7 +31,12 @@ export function useComposer(agentId: string) {
     sending.mutate(
       { key, message: draft.text, pasted: draft.pasted, locale: i18n.language },
       {
-        onSuccess: () => setDraft({ text: "", pasted: false }),
+        onSuccess: (turn) => {
+          setDraft({ text: "", pasted: false });
+          // Never a card, so said here: a reply announcing such an operation
+          // would otherwise read as if it were waiting below.
+          if (turn.dropped) toast.warning(t("workbench.conversation.dropped", { count: turn.dropped }));
+        },
         onError: (error) => toast.error(problemMessage(error, t)),
       },
     );
