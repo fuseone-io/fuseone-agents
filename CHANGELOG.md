@@ -30,6 +30,26 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **The first live rehearsal makes 0.128.0 the rollback floor** (NT-018 phase 4, release 4b).
+  `POST /agents/{agentId}/rehearsals` writes rehearsal runs; a release older than 0.128.0 does
+  not know them, and would claim a rehearsal waiting for its author. Until somebody opens one,
+  the floor stays 0.123.0.
+
+### Added
+
+- **Open a live rehearsal of a candidate**: `POST /agents/{agentId}/rehearsals` with a seal and
+  a case the author types (UTF-8 text, at most 32 KiB) opens one simulated run of the candidate
+  in its sealed scope. The seal is found as `getAgentSeal` finds it (404 outside the caller's
+  `agent:publish` scopes). The case is kept as the run's input, labelled untrusted, and the
+  ledger holds only its digest. The run belongs to the caller's conversation on the draft the
+  seal came from, so erasing that conversation erases it too. The seal's bytes are read inside
+  the agent's fence before anything is written: an erased seal is a 409
+  `fuseone:candidate-unreadable` and opens nothing, as does a paused or stopped agent. The
+  `Idempotency-Key` is the caller's own: the same key and request answer with the run it opened
+  (even after the seal is erased), and the same key with another seal or case is a 409.
+
 ## [0.128.0] — 2026-11-20
 
 NT-018 phase 4, release 4a: every reader knows a live rehearsal, and nothing writes one yet
