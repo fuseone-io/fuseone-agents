@@ -58,18 +58,24 @@ func (w *experimentWorld) seal(t *testing.T, sealID string) domain.VersionID {
 // sealFrom seals the candidate from a draft, or from a draft nobody has when draftID is empty.
 func (w *experimentWorld) sealFrom(t *testing.T, sealID, draftID string) domain.VersionID {
 	t.Helper()
-	sealed, err := spec.Parse("triage.agent.md", []byte(candidateBytes(w.agent)))
+	return w.sealDefinition(t, sealID, draftID, candidateBytes(w.agent))
+}
+
+// sealDefinition seals a definition from a draft, the way the seal route writes one.
+func (w *experimentWorld) sealDefinition(t *testing.T, sealID, draftID, text string) domain.VersionID {
+	t.Helper()
+	sealed, err := spec.Parse("triage.agent.md", []byte(text))
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	sum := sha256.Sum256([]byte(candidateBytes(w.agent)))
+	sum := sha256.Sum256([]byte(text))
 	ctx := t.Context()
 	if _, err := w.pool.Exec(ctx, `
 		insert into agent_version_digests (agent_id, version_id, digest) values ($1, $2, $3)
 		on conflict do nothing`, string(w.agent), string(sealed.Version), hex.EncodeToString(sum[:])); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	ref, err := ledger.NewContent(w.pool).PutFor(ctx, "authoring", sealID, 0, []byte(candidateBytes(w.agent)))
+	ref, err := ledger.NewContent(w.pool).PutFor(ctx, "authoring", sealID, 0, []byte(text))
 	if err != nil {
 		t.Fatalf("keep the sealed bytes: %v", err)
 	}
@@ -105,6 +111,14 @@ func (w *experimentWorld) openOnSeal(t *testing.T, run domain.RunID, version dom
 // production, until the run reaches an ending.
 func (w *experimentWorld) settleCandidate(t *testing.T, run domain.RunID) engine.State {
 	t.Helper()
+	return w.advanceUntil(t, run, func(s engine.State) bool {
+		return s.Phase == engine.PhaseFinished || s.Phase == engine.PhaseFailed
+	})
+}
+
+// advanceUntil runs the production simulation pool until the run's state satisfies done.
+func (w *experimentWorld) advanceUntil(t *testing.T, run domain.RunID, done func(engine.State) bool) engine.State {
+	t.Helper()
 	parts := &workerParts{store: w.store, queue: w.store, catalog: w.catalog, configPool: w.pool}
 	deps := engine.Deps{Ledger: w.store, Gate: gate.New(), Tools: w.catalog, Catalog: w.catalog,
 		Clock: engine.SystemClock{}, Content: ledger.NewContent(w.pool)}
@@ -128,11 +142,11 @@ func (w *experimentWorld) settleCandidate(t *testing.T, run domain.RunID) engine
 		if err != nil {
 			t.Fatalf("Fold: %v", err)
 		}
-		if state.Phase == engine.PhaseFinished || state.Phase == engine.PhaseFailed {
+		if done(state) {
 			return state
 		}
 	}
-	t.Fatalf("the run never reached an ending")
+	t.Fatalf("the run never reached the state awaited")
 	return engine.State{}
 }
 
