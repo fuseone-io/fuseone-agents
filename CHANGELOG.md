@@ -30,6 +30,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.127.0] — 2026-11-20
+
+NT-018 phase 2, release 2d: candidates in the workbench console — seal, experiment and activate
+(#424, #425, #426), with `GET /agents/{agentId}/seals/{sealId}`; and a turn's prompt no longer
+reads the whole conversation (#422, #427). No migrations; the rollback floor stays at 0.123.0.
+
 ### Added
 
 - **Candidates in the workbench** (NT-018 phase 2, release 2d): a "Candidates" tab seals the
