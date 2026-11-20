@@ -2588,7 +2588,11 @@
     "turn-in-flight": "Outro turno desta conversa ainda está em andamento. Espere a resposta.",
     "turn-too-large": "A mensagem, ou o rascunho junto com ela, passa do tamanho de um turno.",
     "publish-needs-never": "Diga nas instruções o que o agente nunca deve fazer antes de publicar: peça ao assistente um bloco \"Nunca\".",
-    "agent-moved": "O agente foi publicado por outro caminho depois que este rascunho foi aberto. Descarte o rascunho e abra outro sobre a versão atual."
+    "agent-moved": "O agente foi publicado por outro caminho depois que este rascunho foi aberto. Descarte o rascunho e abra outro sobre a versão atual.",
+    "version-collision": "O identificador de versão deste texto já identifica outro texto. Mude o rascunho e tente de novo.",
+    "version-digest-unknown": "Este identificador de versão foi publicado antes de o conteúdo ser registrado, então não dá para provar que é o mesmo texto. Mude o rascunho e tente de novo.",
+    "candidate-unreadable": "O texto selado desta candidata não pode mais ser lido: foi apagado, expirou ou não confere mais com a versão. Sele o rascunho de novo para criar outra candidata.",
+    "webhook-path-taken": "O caminho de webhook desta versão já é atendido por outro agente. Escolha outro caminho; nada foi gravado."
   },
   "retention": {
     "byDefault": "padrão, ninguém escolheu",
@@ -3569,7 +3573,8 @@
     "authoringOf": "{{spent}} de {{daily}}",
     "workspace": "Espaço de trabalho",
     "tabs": {
-      "draft": "Rascunho"
+      "draft": "Rascunho",
+      "candidates": "Candidatas"
     },
     "parts": {
       "identity": "Identidade e modelo",
@@ -3605,6 +3610,23 @@
     "publishConfirm": "Publicar versão",
     "publishedPaused": "Publicado como {{version}}, pausado",
     "publishedLive": "Publicado como {{version}}, em execução",
-    "saveBeforePublish": "Salve as alterações antes de publicar: o que se publica é o rascunho salvo."
+    "saveBeforePublish": "Salve as alterações antes de publicar: o que se publica é o rascunho salvo.",
+    "candidates": {
+      "intro": "Uma candidata é o rascunho salvo, selado como versão para experimentar. Nenhum leitor do agente a vê e nenhuma execução real roda nela.",
+      "seal": "Selar candidata",
+      "saveFirst": "Salve as alterações antes de selar: a candidata é o rascunho salvo.",
+      "sealed": "Selada como candidata {{version}}.",
+      "alreadyPublished": "O rascunho já é a versão publicada {{version}}; nada foi selado.",
+      "reading": "Lendo as candidatas",
+      "readingOne": "Lendo o texto selado",
+      "empty": "Nenhuma candidata ainda",
+      "emptyBody": "Sele o rascunho salvo para experimentá-lo antes de qualquer publicação. As candidatas que você pode ver aparecem aqui, da mais nova para a mais antiga.",
+      "version": "Versão",
+      "sealedAt": "Selada em",
+      "sealedByColumn": "Por",
+      "open": "Abrir {{version}}",
+      "sheetDescription": "O texto selado, exatamente como foi guardado. É ele que um experimento roda, mesmo que o rascunho mude depois.",
+      "sealedBy": "Selada por {{by}} em {{at}}"
+    }
   }
 }
