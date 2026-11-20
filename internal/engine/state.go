@@ -57,9 +57,12 @@ const (
 	// one does not — it is the run somebody decided cannot go on, after what
 	// it left standing was compensated (PRD SE-08).
 	PhaseFailed
+	// PhaseAwaitingWorld is a rehearsal waiting for its author to answer a call for the
+	// world (NT-018 phase 4). Not claimable: no worker holds it while the author thinks.
+	PhaseAwaitingWorld
 )
 
-var phaseNames = [...]string{"unstarted", "running", "awaiting_approval", "awaiting_tool", "parked", "finished", "compensating", "failed"}
+var phaseNames = [...]string{"unstarted", "running", "awaiting_approval", "awaiting_tool", "parked", "finished", "compensating", "failed", "awaiting_world"}
 
 func (p Phase) String() string {
 	if int(p) < len(phaseNames) {
@@ -193,6 +196,12 @@ type State struct {
 	completedReads map[string]int
 	pendingIdemKey string
 	pendingEffect  domain.Effect
+	// pendingCallSeq is the tool_called step still waiting for its result.
+	pendingCallSeq int64
+	// waiting is the world_awaited a rehearsal stands at; supplied, the author's answer
+	// not yet recorded as the call's result (NT-018 phase 4).
+	waiting  *worldWait
+	supplied *domain.WorldSuppliedPayload
 
 	pendingInvestigation *investigationCall
 	investigation        investigationStreak

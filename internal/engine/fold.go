@@ -116,6 +116,7 @@ func (s *State) applyKind(step domain.Step) error {
 		s.Spent.ToolCalls++
 		s.Called = append(s.Called, p.Tool)
 		s.PendingTool = p.Tool
+		s.pendingCallSeq = step.Seq
 		s.pendingIdemKey = step.IdemKey
 		s.pendingEffect = p.Effect
 		s.Phase = PhaseAwaitingTool
@@ -149,6 +150,8 @@ func (s *State) applyKind(step domain.Step) error {
 		s.pendingEffect = domain.EffectUnknown
 		s.recordInvestigationResult(p)
 		s.PendingTool = ""
+		s.pendingCallSeq = 0
+		s.waiting, s.supplied = nil, nil
 		s.Phase = PhaseRunning
 
 	case domain.StepEffectReconciled:
@@ -190,6 +193,9 @@ func (s *State) applyKind(step domain.Step) error {
 			return err
 		}
 		s.decide(p)
+
+	case domain.StepWorldAwaited, domain.StepWorldSupplied, domain.StepRehearsalDecided:
+		return s.foldRehearsal(step)
 
 	case domain.StepParked:
 		s.Phase = PhaseParked

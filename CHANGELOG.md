@@ -30,6 +30,25 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Every reader learns the steps of a live rehearsal** (NT-018 phase 4, release 4a), and
+  nothing writes them yet: `world_awaited`, `world_supplied`, `rehearsal_decided` and the phase
+  `awaiting_world`. **This release must run on every `serve` and `worker` replica before the
+  release that opens the first rehearsal (4b).** An older replica would claim a rehearsal
+  waiting for its author, or record an unknown outcome where the rehearsal waits for an answer.
+  Once the first rehearsal exists, rolling back below this release is not safe.
+
+### Added
+
+- The ledger, the engine, the API and the console read a live rehearsal ahead of it: a run
+  waiting for its author to answer a call for the world is not claimable; the author's answer
+  becomes the call's result, untrusted and named back to the call it answers; a rehearsal whose
+  worker crashed after recording a call resumes by waiting for its author; and the author's
+  decision on an action the Gate held answers that request as a person's would, as its own kind,
+  never counted as a real approval. A tool result may now name the call it returns for
+  (`for_seq`), so the planner pairs it correctly when steps stand between them.
+
 ## [0.127.0] — 2026-11-20
 
 NT-018 phase 2, release 2d: candidates in the workbench console — seal, experiment and activate

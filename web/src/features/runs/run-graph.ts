@@ -56,6 +56,7 @@ const BOOKKEEPING: ReadonlySet<StepKind> = new Set<StepKind>([
 const CLOSERS: ReadonlySet<StepKind> = new Set<StepKind>([
   "tool_returned",
   "approval_decided",
+  "rehearsal_decided",
 ]);
 
 export function buildGraph(steps: Step[]): {
@@ -85,15 +86,16 @@ export function buildGraph(steps: Step[]): {
 
 /** The step that closes this one, if it arrived. */
 function closerFor(step: Step, rest: Step[]): Step | undefined {
-  const wanted: Partial<Record<StepKind, StepKind>> = {
-    tool_called: "tool_returned",
-    approval_requested: "approval_decided",
+  // A live rehearsal's author decides as a person would (NT-018 phase 4).
+  const wanted: Partial<Record<StepKind, readonly StepKind[]>> = {
+    tool_called: ["tool_returned"],
+    approval_requested: ["approval_decided", "rehearsal_decided"],
   };
-  const kind = wanted[step.kind];
-  if (!kind) return undefined;
+  const kinds = wanted[step.kind];
+  if (!kinds) return undefined;
   // The first one after it: a run can call the same tool twice, and matching
   // by name would pair the first call with the second answer.
-  return rest.find((next) => next.kind === kind);
+  return rest.find((next) => kinds.includes(next.kind));
 }
 
 /** How long the node took, or how long since the last thing happened. */

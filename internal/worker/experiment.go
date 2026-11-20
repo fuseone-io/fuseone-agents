@@ -44,6 +44,16 @@ func (w *Worker) resolve(ctx context.Context, claim domain.Claim) (Resolution, e
 	if err != nil {
 		return Resolution{}, err
 	}
+	resolved, err := w.resolveFrom(ctx, claim, started)
+	// The rehearsal mark rides from the opening into the engine, and only from there:
+	// nothing the model says can make a run wait for the world, or stop it waiting
+	// (NT-018 phase 4). A rehearsal is a simulated run or it is nothing.
+	resolved.Start.Rehearsal = started.Simulated && started.Rehearsal
+	return resolved, err
+}
+
+// resolveFrom chooses the resolver a run's opening calls for.
+func (w *Worker) resolveFrom(ctx context.Context, claim domain.Claim, started domain.RunStartedPayload) (Resolution, error) {
 	if started.Judge != nil {
 		return w.resolveJudge(ctx, claim, started)
 	}

@@ -77,8 +77,14 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	if state.Terminal() || state.Phase == PhaseAwaitingApproval {
+	if state.Terminal() || state.Phase == PhaseAwaitingApproval || state.Phase == PhaseAwaitingWorld {
 		return status(state), nil
+	}
+	if state.supplied != nil {
+		return r.returnSupplied(ctx, state, start)
+	}
+	if state.Phase == PhaseAwaitingTool && start.Rehearsal {
+		return r.awaitWorld(ctx, state, start)
 	}
 	if state.Phase == PhaseAwaitingTool {
 		return r.recoverOrphanedCall(ctx, state, start)

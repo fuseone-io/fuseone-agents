@@ -357,6 +357,10 @@ type Start struct {
 	PublishesEvents bool
 	// Closer, when set, seals the closing answer itself (NT-016): a judge run's.
 	Closer Closer
+	// Rehearsal is a live rehearsal (NT-018 phase 4), copied from the run's opening by
+	// the worker, never from the model: its calls wait for the author to answer for the
+	// world instead of reaching any tool.
+	Rehearsal bool
 }
 
 // Status is the outcome of one Advance.
