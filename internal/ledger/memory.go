@@ -52,6 +52,9 @@ type Memory struct {
 	finishSeq   uint64
 	eventCursor domain.FinishCursor
 
+	// kept is content kept with the step that names it (append_content.go).
+	kept map[string][]byte
+
 	// Clock is injectable so lease expiry is testable without sleeping.
 	Clock func() time.Time
 }
@@ -144,7 +147,11 @@ func (m *Memory) append(
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.appendLocked(epoch, expect, s)
+}
 
+// appendLocked is the append itself. Callers hold m.mu.
+func (m *Memory) appendLocked(epoch *int64, expect *domain.StepRef, s domain.Step) (domain.Step, error) {
 	steps := m.runs[s.RunID]
 	var prev *domain.Step
 	if n := len(steps); n > 0 {
@@ -194,20 +201,6 @@ func (m *Memory) append(
 		delete(m.lastFailureAt, sealed.RunID)
 	}
 	return sealed, nil
-}
-
-// leaseHeld is the one reading of "may this epoch still act": the number is
-// current AND the lease is live. Callers hold m.mu.
-func (m *Memory) leaseHeld(runID domain.RunID, epoch int64) bool {
-	st := m.leases[runID]
-	return st.epoch == epoch && !st.leasedUntil.IsZero() && st.leasedUntil.After(m.now())
-}
-
-func (m *Memory) now() time.Time {
-	if m.Clock != nil {
-		return m.Clock()
-	}
-	return time.Now()
 }
 
 // Read returns the run's steps from fromSeq onward, in order.
