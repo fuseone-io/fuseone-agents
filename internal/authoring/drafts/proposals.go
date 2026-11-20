@@ -54,8 +54,12 @@ type Proposal struct {
 	reasonRef string
 	// Decision is accepted, rejected, or empty while it waits.
 	Decision string
-	BodyRef  string
-	At       time.Time
+	// Current is whether the draft, as the thread was read, is still one this waiting
+	// proposal can be accepted on: the one the model read, or one only its own turn's
+	// acceptances moved (#412). What applying it would leave is judged on acceptance.
+	Current bool
+	BodyRef string
+	At      time.Time
 }
 
 // Proposing is one operation the model proposes, for the author whose turn

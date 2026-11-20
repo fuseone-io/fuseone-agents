@@ -222,18 +222,20 @@ func TestAcceptDraftProposal_validatesWithTheInstallationsChecks(t *testing.T) {
 // A block proposal carries the instructions accepting it now would leave,
 // rendered by the codec accepting uses: a new block under its locale's label
 // at its position, a rewritten one under the label of the operation's locale.
-// Only while it could be accepted: waiting, valid, and against the draft's
-// current ETag.
+// Only while it could be accepted: waiting, valid, and on a draft the store
+// says it still waits on, the one the model read or one only its own turn's
+// acceptances moved (#412).
 func TestListDraftProposals_aBlockProposalCarriesTheInstructionsItWouldLeave(t *testing.T) {
 	t.Parallel()
 	opened := someDraft()
 	first := opened.Draft.Blocks[0].ID
 	stub := &draftStub{opened: opened, proposals: []drafts.Proposal{
-		{ID: "insert", Read: opened.Revision, Valid: true, Op: draft.InsertBlock{At: 1, Type: blocks.Never, Text: "Prometer prazo.", Locale: "pt-BR"}},
-		{ID: "retitle", Read: opened.Revision, Valid: true, Op: draft.ReplaceBlock{ID: first, Text: "Triage.", Locale: "en-US"}},
+		{ID: "insert", Read: opened.Revision, Current: true, Valid: true, Op: draft.InsertBlock{At: 1, Type: blocks.Never, Text: "Prometer prazo.", Locale: "pt-BR"}},
+		{ID: "retitle", Read: opened.Revision, Current: true, Valid: true, Op: draft.ReplaceBlock{ID: first, Text: "Triage.", Locale: "en-US"}},
+		{ID: "sibling", Read: `"older"`, Current: true, Valid: true, Op: draft.InsertBlock{At: 1, Type: blocks.Never, Text: "Prometer prazo.", Locale: "pt-BR"}},
 		{ID: "stale", Read: `"older"`, Valid: true, Op: draft.InsertBlock{At: 0, Type: blocks.Never, Text: "x", Locale: "pt-BR"}},
 		{ID: "decided", Read: opened.Revision, Valid: true, Decision: "rejected", Op: draft.RemoveBlock{ID: first}},
-		{ID: "field", Read: opened.Revision, Valid: true, Op: draft.AddTool{Tool: "crm.lookup"}},
+		{ID: "field", Read: opened.Revision, Current: true, Valid: true, Op: draft.AddTool{Tool: "crm.lookup"}},
 	}}
 	resp, err := draftServer(stub).ListDraftProposals(inArea("cx", domain.RoleAuthor), openapi.ListDraftProposalsRequestObject{AgentId: "triage"})
 	if err != nil {
@@ -245,6 +247,9 @@ func TestListDraftProposals_aBlockProposalCarriesTheInstructionsItWouldLeave(t *
 	}
 	if got := after["insert"]; !strings.Contains(got, "Objetivo\nTriar.") || !strings.HasSuffix(got, "Nunca\nPrometer prazo.") {
 		t.Errorf("insert leaves %q, want the never block under its label, after the objective", got)
+	}
+	if got := after["sibling"]; !strings.HasSuffix(got, "Nunca\nPrometer prazo.") {
+		t.Errorf("a sibling of an accepted proposal leaves %q, want its effect on the draft as it is", got)
 	}
 	if got := after["retitle"]; !strings.HasPrefix(got, "Purpose\nTriage.") {
 		t.Errorf("retitle leaves %q, want the block under the operation's locale's label", got)

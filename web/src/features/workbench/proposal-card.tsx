@@ -14,9 +14,10 @@ const HUMAN_ONLY = new Set(["set_identity", "set_standing_approvals"]);
 /** Why a proposal's change is not on its card. */
 function unshown(proposal: DraftProposal): string {
   if (!proposal.operation) return "workbench.conversation.proposalErased";
-  // A block proposal comes with its effect only against the draft's current
-  // ETag: without it, it was made over an older draft, and accepting it
-  // would be refused.
+  // A block proposal comes with its effect only while the draft is one it can
+  // be accepted on: the one the model read, or one only its own turn's
+  // acceptances moved. Without it, something else changed the draft since,
+  // and accepting it would be refused.
   if (proposal.kind.endsWith("_block")) return "workbench.conversation.staleBlock";
   return "workbench.conversation.unshowable";
 }

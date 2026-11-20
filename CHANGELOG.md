@@ -42,6 +42,12 @@ field" is a commit message.
   webhook path another agent answers on now refuses the publication (409
   `fuseone:webhook-path-taken`) and writes nothing; before, the version went live and the
   answer was an error (#416).
+- **Only the first card of a workbench turn could be accepted.** When the assistant made
+  several proposals in one answer, accepting one left the others refused as made over an
+  older draft, and they stayed pending. The cards of one turn are now accepted in any order,
+  one after another, each judged again on the draft as it is and shown with what accepting
+  it would leave. A draft changed by anything else since the turn — by hand, or by another
+  turn's proposal — still refuses them (#412).
 
 ## [0.125.0] — 2026-11-19
 
