@@ -398,8 +398,10 @@ func (r *Runner) park(ctx context.Context, state State, start Start, reason stri
 
 func (r *Runner) semanticDedupe(ctx context.Context, start Start, p Proposal) (semanticDedupe, error) {
 	// A coordination call is judged by the ledger on every attempt; a
-	// semantic dedupe would answer it from an earlier run's record.
-	if r.deps.Dedupe == nil || r.deps.Catalog == nil || p.Tool.Coordination() {
+	// semantic dedupe would answer it from an earlier run's record. A
+	// rehearsal reaches no effect, so it reads and writes none of the store
+	// production runs share (NT-018 phase 4).
+	if r.deps.Dedupe == nil || r.deps.Catalog == nil || p.Tool.Coordination() || start.Rehearsal {
 		return semanticDedupe{}, nil
 	}
 	decl, ok := r.deps.Catalog.Dedupe(p.Tool)
@@ -560,9 +562,13 @@ func (r *Runner) invoke(
 		At:               r.deps.Clock.Now(),
 		Labels:           state.Labels.Clone(),
 		MemoryLearning:   start.MemoryLearning.Normalize(),
+		Rehearsal:        start.Rehearsal,
 	}
-	if err := r.reserve(ctx, call); err != nil {
-		return Status{}, err
+	// A rehearsal's call asks no tool layer to get ready: nothing will reach one.
+	if !start.Rehearsal {
+		if err := r.reserve(ctx, call); err != nil {
+			return Status{}, err
+		}
 	}
 
 	state, err := r.append(ctx, state, start, domain.Step{
@@ -596,6 +602,12 @@ func (r *Runner) invoke(
 	}
 
 	call.Seq = state.Seq
+	// A rehearsal's call waits for its author before anything executes it: no
+	// tool, and none of the engine's own coordination calls either, which act on
+	// real cards (NT-018 phase 4).
+	if start.Rehearsal {
+		return r.awaitWorld(ctx, state, start)
+	}
 	state, result, err := r.execute(ctx, state, start, call)
 	if err != nil {
 		return Status{}, err

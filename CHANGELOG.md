@@ -46,7 +46,10 @@ field" is a commit message.
   becomes the call's result, untrusted and named back to the call it answers; a rehearsal whose
   worker crashed after recording a call resumes by waiting for its author; and the author's
   decision on an action the Gate held answers that request as a person's would, as its own kind,
-  never counted as a real approval. A tool result may now name the call it returns for
+  never counted as a real approval. Every new call of a rehearsal, an approved one included,
+  waits for its author before anything executes it: no tool, not the engine's own work-item claim
+  or link, and no read or write of the semantic dedupe store production runs share. The author's
+  answer is readable through the step's content, like any content a run points at. A tool result may now name the call it returns for
   (`for_seq`), so the planner pairs it correctly when steps stand between them.
 
 ## [0.127.0] — 2026-11-20

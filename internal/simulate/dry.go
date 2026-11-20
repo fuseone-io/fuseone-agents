@@ -2,6 +2,7 @@ package simulate
 
 import (
 	"context"
+	"errors"
 
 	"github.com/fuseone/agents/internal/engine"
 )
@@ -29,9 +30,22 @@ outlives every simulation it serves.
 */
 type DryTools struct{}
 
-func (DryTools) Reserve(context.Context, engine.Call) error { return nil }
+// ErrRehearsalCall is a live rehearsal's call that reached a tool layer. The engine parks
+// every such call before any layer sees it (NT-018 phase 4); answering one here, even
+// with nothing, would hand the run an empty world it would read as an answer.
+var ErrRehearsalCall = errors.New("simulate: a rehearsal's call reached the tool layer")
 
-func (DryTools) Invoke(context.Context, engine.Call) (engine.ToolResult, error) {
+func (DryTools) Reserve(_ context.Context, call engine.Call) error {
+	if call.Rehearsal {
+		return ErrRehearsalCall
+	}
+	return nil
+}
+
+func (DryTools) Invoke(_ context.Context, call engine.Call) (engine.ToolResult, error) {
+	if call.Rehearsal {
+		return engine.ToolResult{}, ErrRehearsalCall
+	}
 	// No reference and no labels: nothing was read, so nothing can be tainted
 	// by it. Inventing a label would make the next decision a decision about
 	// data the run never saw.

@@ -173,8 +173,12 @@ type Call struct {
 	// RunID and Seq locate the call in the ledger. The tool layer needs them
 	// to file bulky results in the content store under a stable key.
 	RunID domain.RunID
-	Seq   int64
-	Scope domain.Scope
+	// Rehearsal marks a live rehearsal's call, copied from Start by the engine
+	// and never from the model (NT-018 phase 4). The engine parks such a call
+	// before any tool layer sees it; a layer that still receives one refuses it.
+	Rehearsal bool
+	Seq       int64
+	Scope     domain.Scope
 	// AgentID is the agent whose pack proposed the call. Platform-owned tools
 	// use it to scope their own state; the model never supplies it.
 	AgentID domain.AgentID
