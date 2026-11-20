@@ -21,7 +21,7 @@ type Store interface {
 	ReplayTurn(ctx context.Context, r drafts.Replaying) (drafts.Started, bool, error)
 	BeginTurn(ctx context.Context, b drafts.Beginning) (drafts.Started, error)
 	SettleTurn(ctx context.Context, s drafts.Settlement) (drafts.Settled, error)
-	Proposals(ctx context.Context, agent domain.AgentID, c drafts.Caller) ([]drafts.Proposal, error)
+	ProposalOutcomes(ctx context.Context, agent domain.AgentID, c drafts.Caller, turns []string) ([]drafts.Proposal, error)
 }
 
 // Engine runs turns: the store, the installation's model for authoring, its
@@ -48,16 +48,12 @@ type Request struct {
 	Now     time.Time
 }
 
-// Result is a turn and what it proposed: proposals past the cap, that the
-// model's answer did not carry as operations, or of a thread erased during
-// the call are Dropped; those made against a draft that moved during the call
-// are Stale. Both are counted, never kept.
+// Result is a turn and what it proposed. What the answer carried that never became a
+// card — Dropped and Stale — is kept on the turn, so a replay of its key says it too.
 type Result struct {
 	Turn      drafts.Turn
 	Replayed  bool
 	Proposals []drafts.Proposal
-	Dropped   int
-	Stale     int
 }
 
 /*
@@ -101,13 +97,12 @@ func (e Engine) Run(ctx context.Context, r Request) (Result, error) {
 	}
 	settled, err := e.Store.SettleTurn(ctx, drafts.Settlement{
 		Agent: r.Agent, Caller: r.Caller, Turn: started.Turn.ID, Cost: completion.Cost.Micros, Reply: answer.Text,
-		Proposed: answer.Proposals, Validator: e.Validator, Now: r.Now,
+		Proposed: answer.Proposals, Dropped: answer.Dropped, Validator: e.Validator, Now: r.Now,
 	})
 	if err != nil {
 		return e.fail(ctx, r, started.Turn, completion, err)
 	}
-	return Result{Turn: settled.Turn, Proposals: settled.Proposals, Stale: settled.Stale,
-		Dropped: answer.Dropped + settled.Withheld}, nil
+	return Result{Turn: settled.Turn, Proposals: settled.Proposals}, nil
 }
 
 // Replay answers the turn the request's key already names, if any. It needs
@@ -139,14 +134,15 @@ func (e Engine) prepare(ctx context.Context, r Request) (string, domain.Revision
 	if err != nil {
 		return "", "", 0, err
 	}
-	// What became of each earlier proposal, so the model does not take one still waiting
-	// for one in place (#413).
-	thread, err := e.Store.Proposals(ctx, r.Agent, r.Caller)
+	// What became of the proposals of the turns shown, and of no other, so the model does
+	// not take one still waiting, or stale, for one in place (#413).
+	window := Window(turns)
+	shown, err := e.Store.ProposalOutcomes(ctx, r.Agent, r.Caller, turnIDs(window))
 	if err != nil {
 		return "", "", 0, err
 	}
 	prompt, err := Prompt(r.Locale, PromptInput{
-		Projection: projection, Window: Window(turns), Outcomes: Outcomes(thread), Message: r.Message, Pasted: r.Pasted,
+		Projection: projection, Window: window, Outcomes: Outcomes(shown), Message: r.Message, Pasted: r.Pasted,
 	})
 	if err != nil {
 		return "", "", 0, err
@@ -166,4 +162,12 @@ func (e Engine) fail(ctx context.Context, r Request, turn drafts.Turn, c model.C
 		return Result{Turn: turn}, errors.Join(cause, err)
 	}
 	return Result{Turn: settled.Turn}, cause
+}
+
+func turnIDs(turns []drafts.Turn) []string {
+	ids := make([]string, 0, len(turns))
+	for _, t := range turns {
+		ids = append(ids, t.ID)
+	}
+	return ids
 }

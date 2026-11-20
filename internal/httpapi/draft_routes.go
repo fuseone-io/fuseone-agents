@@ -29,6 +29,7 @@ type Drafts interface {
 	Apply(ctx context.Context, a drafts.Application) (drafts.Opened, error)
 	Discard(ctx context.Context, agent domain.AgentID, expect domain.IfMatch, c drafts.Caller) error
 	Proposals(ctx context.Context, agent domain.AgentID, c drafts.Caller) ([]drafts.Proposal, error)
+	ProposalOutcomes(ctx context.Context, agent domain.AgentID, c drafts.Caller, turns []string) ([]drafts.Proposal, error)
 	Accept(ctx context.Context, a drafts.Acceptance) (drafts.Opened, error)
 	Reject(ctx context.Context, agent domain.AgentID, id string, c drafts.Caller) error
 	// What a turn needs from the store (conversation.Store), and the thread's

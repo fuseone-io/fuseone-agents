@@ -2,7 +2,7 @@ package conversation
 
 import "github.com/fuseone/agents/internal/authoring/drafts"
 
-// Fate is what became of a proposal: accepted, rejected, still waiting, or invalid.
+// Fate is what became of a proposal: accepted, rejected, still waiting, stale, or invalid.
 type Fate string
 
 const (
@@ -10,6 +10,9 @@ const (
 	FateRejected Fate = "rejected"
 	FateWaiting  Fate = "waiting"
 	FateInvalid  Fate = "invalid"
+	// FateStale is a valid proposal nobody decided that the draft, as it is, would no
+	// longer accept: something other than its own turn changed it since (#412).
+	FateStale Fate = "stale"
 )
 
 // Outcome is one earlier proposal as the model is told of it: its kind and its fate. Never
@@ -27,12 +30,14 @@ var fateWords = map[string]map[Fate]string{
 		FateRejected: "recusada pela pessoa, não aplicada",
 		FateWaiting:  "ainda esperando a pessoa, não aplicada",
 		FateInvalid:  "inválida, nunca aplicada",
+		FateStale:    "obsoleta, o rascunho mudou e ela não pode mais ser aceita; proponha de novo se ainda fizer sentido",
 	},
 	"en-US": {
 		FateAccepted: "accepted, applied to the draft",
 		FateRejected: "rejected by the person, not applied",
 		FateWaiting:  "still waiting for the person, not applied",
 		FateInvalid:  "invalid, never applied",
+		FateStale:    "stale, the draft changed and it can no longer be accepted; propose it again if it still makes sense",
 	},
 }
 
@@ -57,6 +62,8 @@ func fateOf(p drafts.Proposal) Fate {
 		return FateAccepted
 	case p.Decision == "rejected":
 		return FateRejected
+	case !p.Current:
+		return FateStale
 	}
 	return FateWaiting
 }

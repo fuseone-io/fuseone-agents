@@ -6462,9 +6462,17 @@ export interface components {
             keptMicros?: number;
             /** @description The proposals this turn recorded, on the answer to sending it. */
             proposals?: string[];
-            /** @description Proposals the answer carried past the cap or not as operations. */
+            /**
+             * @description Operations the answer carried that never became proposals:
+             *     unreadable, past the limit per answer, or of a thread erased during
+             *     the call. Kept on the turn, so a replay of its key and the listing
+             *     answer it too.
+             */
             dropped?: number;
-            /** @description Proposals made against a draft that moved during the call. */
+            /**
+             * @description Proposals made against a draft that moved during the call, never
+             *     kept. Kept on the turn, as `dropped` is.
+             */
             stale?: number;
             /** Format: date-time */
             createdAt: string;

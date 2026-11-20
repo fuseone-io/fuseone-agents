@@ -10517,10 +10517,16 @@ components:
           items: { type: string }
         dropped:
           type: integer
-          description: Proposals the answer carried past the cap or not as operations.
+          description: |
+            Operations the answer carried that never became proposals:
+            unreadable, past the limit per answer, or of a thread erased during
+            the call. Kept on the turn, so a replay of its key and the listing
+            answer it too.
         stale:
           type: integer
-          description: Proposals made against a draft that moved during the call.
+          description: |
+            Proposals made against a draft that moved during the call, never
+            kept. Kept on the turn, as `dropped` is.
         createdAt: { type: string, format: date-time }
     DraftBlock:
       type: object

@@ -18,13 +18,15 @@ func TestOutcomes_groupTheThreadByTurn_eachWithItsFate(t *testing.T) {
 	t.Parallel()
 	got := conversation.Outcomes([]drafts.Proposal{
 		{Turn: "t1", Kind: "set_budget", Valid: true, Decision: "accepted"},
-		{Turn: "t1", Kind: "set_triggers", Valid: true},
+		{Turn: "t1", Kind: "set_triggers", Valid: true, Current: true},
+		{Turn: "t1", Kind: "set_model", Valid: true},
 		{Turn: "t2", Kind: "insert_block", Valid: false},
 		{Turn: "t2", Kind: "add_tool", Valid: true, Decision: "rejected"},
-		{Turn: "", Kind: "set_model", Valid: true},
+		{Turn: "", Kind: "set_model", Valid: true, Current: true},
 	})
 	want := map[string][]conversation.Outcome{
-		"t1": {{Kind: "set_budget", Fate: conversation.FateAccepted}, {Kind: "set_triggers", Fate: conversation.FateWaiting}},
+		"t1": {{Kind: "set_budget", Fate: conversation.FateAccepted}, {Kind: "set_triggers", Fate: conversation.FateWaiting},
+			{Kind: "set_model", Fate: conversation.FateStale}},
 		"t2": {{Kind: "insert_block", Fate: conversation.FateInvalid}, {Kind: "add_tool", Fate: conversation.FateRejected}},
 	}
 	if len(got) != len(want) {
@@ -43,14 +45,15 @@ func TestOutcomes_groupTheThreadByTurn_eachWithItsFate(t *testing.T) {
 func TestPrompt_saysWhatBecameOfEachEarlierProposal_inItsTurn(t *testing.T) {
 	t.Parallel()
 	for locale, want := range map[string][]string{
-		"pt-BR": {"set_budget: aceita", "set_triggers: ainda esperando"},
-		"en-US": {"set_budget: accepted", "set_triggers: still waiting"},
+		"pt-BR": {"set_budget: aceita", "set_triggers: ainda esperando", "set_model: obsoleta"},
+		"en-US": {"set_budget: accepted", "set_triggers: still waiting", "set_model: stale"},
 	} {
 		got, err := conversation.Prompt(locale, conversation.PromptInput{
 			Projection: "{}", Message: "E o gatilho?",
 			Window: []drafts.Turn{{ID: "t1", Message: "Ponha um teto e um gatilho.", Reply: "Proponho os dois."}},
 			Outcomes: map[string][]conversation.Outcome{"t1": {
 				{Kind: "set_budget", Fate: conversation.FateAccepted}, {Kind: "set_triggers", Fate: conversation.FateWaiting},
+				{Kind: "set_model", Fate: conversation.FateStale},
 			}},
 		})
 		if err != nil {

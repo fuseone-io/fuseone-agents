@@ -35,9 +35,11 @@ type draftStub struct {
 	accepted  []drafts.Acceptance
 	rejected  []string
 	turns     []drafts.Turn
-	begun     []drafts.Beginning
-	beginErr  error
-	stored    *drafts.Turn
+	// outcomesAsked is the turns each ProposalOutcomes call asked for.
+	outcomesAsked [][]string
+	begun         []drafts.Beginning
+	beginErr      error
+	stored        *drafts.Turn
 }
 
 // Seal is not exercised through the stub: sealing is tested against the real store.

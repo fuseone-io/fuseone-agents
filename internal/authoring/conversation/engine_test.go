@@ -178,7 +178,7 @@ func TestRun_aDraftThatMovedDuringTheCall_dropsTheTurnsProposals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if len(got.Proposals) != 0 || got.Stale != 1 || got.Turn.State != drafts.TurnDone {
+	if len(got.Proposals) != 0 || got.Turn.Stale != 1 || got.Turn.State != drafts.TurnDone {
 		t.Fatalf("result %+v, want the turn done and its one proposal dropped as stale", got)
 	}
 }
@@ -196,5 +196,25 @@ func TestRun_aMessageTooLargeOrEmpty_isRefused(t *testing.T) {
 		if !errors.Is(err, want) || m.calls.Load() != 0 {
 			t.Errorf("Run = %v, want %v and no call", err, want)
 		}
+	}
+}
+
+/*
+What an answer carried that never became a card is answered again when its key is retried
+(#413 review): the first response lost, the retry is the only answer the console gets, and
+it must still say what was discarded, without calling the model again.
+*/
+func TestRun_theSameKeyAgain_stillSaysWhatWasDiscarded(t *testing.T) {
+	store := drafts.NewStore(testdb.Pool(t))
+	agent, _ := newDraft(t, store)
+	m := &scripted{reply: `{"reply":"Proponho dois.","proposals":[{"kind":"add_tool","operation":{"Tool":"crm.lookup"}},{"kind":"no_such_kind"}]}`, cost: 10}
+	first, err := run(t, engine(store, m), agent, "k1")
+	if err != nil || first.Turn.Dropped != 1 {
+		t.Fatalf("Run = %+v (%v), want one operation discarded", first.Turn, err)
+	}
+
+	again, err := run(t, engine(store, m), agent, "k1")
+	if err != nil || !again.Replayed || again.Turn.Dropped != 1 || m.calls.Load() != 1 {
+		t.Errorf("retry = %+v replayed %v (%v), %d calls; want the stored turn saying one discarded", again.Turn, again.Replayed, err, m.calls.Load())
 	}
 }
