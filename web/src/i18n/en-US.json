@@ -3546,7 +3546,7 @@
       "staleOnArrival_other": "{{count}} proposals in the answer were made over a draft that changed during the answer, and were not kept.",
       "erase": "Erase conversation",
       "eraseTitle": "Erase this conversation?",
-      "eraseBody": "The messages, the replies and the proposals' content stop existing. The draft and the recorded costs stay.",
+      "eraseBody": "The messages, the replies and the proposals' content stop existing. The draft and the recorded costs stay. So do the cases and answers of this conversation's rehearsals on the current draft; those of rehearsals on earlier drafts do not.",
       "eraseConfirm": "Erase",
       "erasedToast": "Conversation erased",
       "closed": {
@@ -3592,7 +3592,8 @@
     "workspace": "Workspace",
     "tabs": {
       "draft": "Draft",
-      "candidates": "Candidates"
+      "candidates": "Candidates",
+      "rehearsal": "Rehearsal"
     },
     "parts": {
       "identity": "Identity and model",
@@ -3654,6 +3655,38 @@
       "activateConfirm": "Activate version",
       "activatedLive": "{{version}} is in production.",
       "activatedPaused": "{{version}} is active, paused."
+    },
+    "rehearsal": {
+      "intro": "Rehearse a candidate on a case you write. No call reaches a tool: you answer for it, and decide whatever the Gate holds.",
+      "erasureNote": "Erasing the conversation reaches only this conversation's rehearsals on the current draft. Rehearsals of candidates from earlier drafts go when their seal or the data subject is erased.",
+      "reading": "Reading the rehearsal",
+      "noCandidate": "Seal a candidate first",
+      "noCandidateBody": "A rehearsal runs a candidate. Sealing the draft in the Candidates tab makes one.",
+      "candidate": "Candidate",
+      "candidateOption": "{{version}} · sealed {{sealedAt}}",
+      "candidateRequired": "Choose the candidate to rehearse.",
+      "case": "Case",
+      "casePlaceholder": "What reaches the agent, as it really would.",
+      "caseRequired": "Write the case to rehearse.",
+      "caseTooLong": "A case is at most 32 KiB.",
+      "open": "Open rehearsal",
+      "worldTitle": "The run waits for the world's answer",
+      "worldBody": "This call reached no tool. What you answer is what the agent reads as its result, marked untrusted.",
+      "tool": "Tool",
+      "arguments": "The call's arguments",
+      "answer": "Answer",
+      "answerRequired": "Write the world's answer.",
+      "answerTooLong": "An answer is at most 256 KiB.",
+      "answerSend": "Send answer",
+      "heldTitle": "The Gate held an action",
+      "heldBody": "In a rehearsal the decision is yours and holds only here: it is no real approval, and an approved call still waits for the world's answer.",
+      "approve": "Approve",
+      "reject": "Reject",
+      "abandon": "End rehearsal",
+      "abandonTitle": "End this rehearsal?",
+      "abandonBody": "The rehearsal ends where it stands. Nothing is undone, since nothing reached the world.",
+      "abandonConfirm": "End",
+      "again": "New rehearsal"
     }
   }
 }
