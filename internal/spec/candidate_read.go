@@ -23,6 +23,9 @@ type CandidateSeal struct {
 	Scope    domain.Scope
 	SealedBy domain.UserID
 	SealedAt time.Time
+	// DraftID is the draft the seal was sealed from: what ties a rehearsal of it to its
+	// author's conversation on that draft (NT-018 phase 4). Never served to a client.
+	DraftID string
 }
 
 // Candidate is a candidate's sealed text and the seal it was read from.
@@ -108,7 +111,7 @@ const visibleSealSQL = `exists (
 		   or (granted.company = s.company_id and (granted.area = '' or granted.area = s.area_id)))`
 
 const candidateSealsSQL = `
-	select s.seal_id::text, s.version_id, s.company_id, s.area_id, s.sealed_by, s.sealed_at
+	select s.seal_id::text, s.version_id, s.company_id, s.area_id, s.sealed_by, s.sealed_at, s.draft_id::text
 	from agent_seals s
 	where s.agent_id = $1 and ` + visibleSealSQL + `
 	  and not exists (select 1 from agent_specs p
@@ -117,7 +120,7 @@ const candidateSealsSQL = `
 	limit $5`
 
 const candidateVersionSealsSQL = `
-	select s.seal_id::text, s.version_id, s.company_id, s.area_id, s.sealed_by, s.sealed_at
+	select s.seal_id::text, s.version_id, s.company_id, s.area_id, s.sealed_by, s.sealed_at, s.draft_id::text
 	from agent_seals s
 	where s.agent_id = $1 and s.version_id = $5 and ` + visibleSealSQL + `
 	  and not exists (select 1 from agent_specs p
@@ -125,7 +128,7 @@ const candidateVersionSealsSQL = `
 	order by s.sealed_at desc, s.seal_id desc`
 
 const candidateSealByIDSQL = `
-	select s.seal_id::text, s.version_id, s.company_id, s.area_id, s.sealed_by, s.sealed_at
+	select s.seal_id::text, s.version_id, s.company_id, s.area_id, s.sealed_by, s.sealed_at, s.draft_id::text
 	from agent_seals s
 	where s.agent_id = $1 and s.seal_id = $5::uuid and ` + visibleSealSQL + `
 	  and not exists (select 1 from agent_specs p
@@ -154,7 +157,7 @@ func (r *CandidateReader) seals(ctx context.Context, query string, args ...any) 
 func scanCandidateSeal(rows pgx.CollectableRow) (CandidateSeal, error) {
 	var seal CandidateSeal
 	var version, company, area, by string
-	if err := rows.Scan(&seal.SealID, &version, &company, &area, &by, &seal.SealedAt); err != nil {
+	if err := rows.Scan(&seal.SealID, &version, &company, &area, &by, &seal.SealedAt, &seal.DraftID); err != nil {
 		return CandidateSeal{}, fmt.Errorf("read candidate seal: %w", err)
 	}
 	seal.Version, seal.SealedBy = domain.VersionID(version), domain.UserID(by)

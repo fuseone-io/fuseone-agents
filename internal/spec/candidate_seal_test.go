@@ -59,3 +59,19 @@ func TestCandidates_aSealByItsID_refusals(t *testing.T) {
 		}
 	}
 }
+
+// A seal names the draft it was sealed from, so a rehearsal of it can be tied to its
+// author's conversation on that draft (NT-018 phase 4) by the server, never by the client.
+func TestCandidates_aSealByItsID_namesTheDraftItWasSealedFrom(t *testing.T) {
+	w := newCandidateWorld(t)
+	seal, _ := w.seal(t, "cx", time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC))
+	var draft string
+	if err := w.pool.QueryRow(context.Background(), `select draft_id::text from agent_seals where seal_id = $1::uuid`, seal).Scan(&draft); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := w.reader.Seal(context.Background(), w.agent, seal, allowAreas("cx"))
+	if err != nil || got.DraftID != draft {
+		t.Fatalf("Seal = %+v (%v), want draft %s", got, err, draft)
+	}
+}
