@@ -2819,6 +2819,128 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ApprovalPage' }
 
+  /runs/{runId}/world:
+    post:
+      tags: [runs]
+      operationId: answerForTheWorld
+      summary: Answer a live rehearsal's call as the world would
+      description: |
+        A live rehearsal (NT-018 phase 4) parks each tool call at a `world_awaited` step
+        and reaches no tool layer. Its author answers here instead: the answer becomes the
+        call's result on the rehearsal's next turn, labelled untrusted like any external
+        content, and named back to the call it answers.
+
+        The answer is kept in the content store, owned by the run, and the step names it
+        only by reference and digest. Erasing the rehearsal's conversation, its seal or
+        the data subject erases it with the run's other content.
+
+        Only a rehearsal, and only exactly at the wait named by `atSeq`: a real run, a
+        battery or an experiment run, a rehearsal at another step, and a second answer to
+        a wait somebody already answered are all 409, and write nothing. A run outside
+        the caller's `agent:publish` scopes is 404.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorldAnswer' }
+      responses:
+        '200':
+          description: The answer was recorded; the rehearsal resumes.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '400':
+          description: |
+            An answer that is empty or longer than 256 KiB; or a body that is not UTF-8,
+            or escapes an unpaired surrogate, judged on its bytes before decoding.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            The run is not a live rehearsal, or is not waiting for the world at `atSeq`,
+            or another answer reached that wait first.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /runs/{runId}/rehearsal-decisions:
+    post:
+      tags: [runs]
+      operationId: decideInRehearsal
+      summary: Decide an action the Gate held in a live rehearsal
+      description: |
+        Where the Gate holds an action in a live rehearsal, its author decides it here.
+        The decision answers the Gate's request as a person's would, and is recorded as
+        `rehearsal_decided`, never `approval_decided`: no inbox, count, report or audit
+        of real approvals reads it, and it grants nothing outside the rehearsal. An
+        approved call still reaches no tool layer; it parks for the world's answer.
+
+        `decideApproval` keeps refusing every simulated run, rehearsals included. Only a
+        rehearsal, and only at the request named by `atSeq`; anything else is 409 and
+        writes nothing. A run outside the caller's `agent:publish` scopes is 404.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RehearsalDecision' }
+      responses:
+        '200':
+          description: The decision was recorded; the rehearsal resumes.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            The run is not a live rehearsal, or is not waiting for a decision at
+            `atSeq`, or another decision reached that request first.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /runs/{runId}/rehearsal-abandon:
+    post:
+      tags: [runs]
+      operationId: abandonRehearsal
+      summary: End a live rehearsal
+      description: |
+        Ends a live rehearsal wherever it stands, waiting or not. Nothing is undone,
+        since nothing reached the world: the run ends failed, and any budget it still
+        held reserved is released first, so an abandoned rehearsal never ends holding
+        a reservation. A rehearsal waits indefinitely for its author, and this is how
+        its author stops it.
+
+        Written onto the step the rehearsal stood at when the request was read: one
+        that moved in the meantime is 409, and the author asks again. Only a rehearsal;
+        a real run is ended by `abandonRun`. A run outside the caller's `agent:publish`
+        scopes is 404.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: The rehearsal was ended.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            The run is not a live rehearsal, has already ended, or moved while the
+            request was being judged.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /runs/{runId}/approvals:
     post:
       tags: [approvals]
@@ -10485,6 +10607,32 @@ components:
         company: { type: string }
         area: { type: string }
         eventCycleWarning: { $ref: '#/components/schemas/EventCycleWarning' }
+    WorldAnswer:
+      type: object
+      required: [atSeq, answer]
+      properties:
+        atSeq:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The `world_awaited` step this answers.
+        answer:
+          type: string
+          description: |
+            What the world returns for the call, as the author writes it: at most 256 KiB
+            of UTF-8 text, usually JSON. Kept as the call's result, labelled untrusted.
+
+    RehearsalDecision:
+      type: object
+      required: [atSeq, approved]
+      properties:
+        atSeq:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The `approval_requested` step this decides.
+        approved: { type: boolean }
+
     RehearsalRequest:
       type: object
       required: [sealId, case]
