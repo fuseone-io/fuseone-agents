@@ -21,6 +21,7 @@ type Store interface {
 	ReplayTurn(ctx context.Context, r drafts.Replaying) (drafts.Started, bool, error)
 	BeginTurn(ctx context.Context, b drafts.Beginning) (drafts.Started, error)
 	SettleTurn(ctx context.Context, s drafts.Settlement) (drafts.Settled, error)
+	Proposals(ctx context.Context, agent domain.AgentID, c drafts.Caller) ([]drafts.Proposal, error)
 }
 
 // Engine runs turns: the store, the installation's model for authoring, its
@@ -138,7 +139,15 @@ func (e Engine) prepare(ctx context.Context, r Request) (string, domain.Revision
 	if err != nil {
 		return "", "", 0, err
 	}
-	prompt, err := Prompt(r.Locale, projection, Window(turns), r.Message, r.Pasted)
+	// What became of each earlier proposal, so the model does not take one still waiting
+	// for one in place (#413).
+	thread, err := e.Store.Proposals(ctx, r.Agent, r.Caller)
+	if err != nil {
+		return "", "", 0, err
+	}
+	prompt, err := Prompt(r.Locale, PromptInput{
+		Projection: projection, Window: Window(turns), Outcomes: Outcomes(thread), Message: r.Message, Pasted: r.Pasted,
+	})
 	if err != nil {
 		return "", "", 0, err
 	}

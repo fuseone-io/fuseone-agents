@@ -344,3 +344,23 @@ func TestListDraftTurns_saysWhatTheDayHoldsAgainstItsCeiling(t *testing.T) {
 func (d *draftStub) WithinPublication(drafts.Publishing) func(context.Context, pgx.Tx, domain.VersionID) error {
 	return func(context.Context, pgx.Tx, domain.VersionID) error { return d.err }
 }
+
+// A turn's prompt tells the model what became of each earlier proposal, read from the
+// author's own thread (#413).
+func TestSendDraftTurn_tellsTheModelWhatBecameOfEarlierProposals(t *testing.T) {
+	t.Parallel()
+	stub := &draftStub{opened: someDraft(),
+		turns: []drafts.Turn{{ID: "t-0", Seq: 1, State: drafts.TurnDone, Message: "Ponha um teto.", Reply: "Proponho um teto."}},
+		proposals: []drafts.Proposal{
+			{ID: "p-0", Turn: "t-0", Kind: "set_budget", Valid: true},
+			{ID: "p-9", Turn: "t-0", Kind: "set_triggers", Valid: true, Decision: "accepted"},
+		}}
+	models := &turnModelsStub{reply: `{"reply":"x","proposals":[]}`, priced: true}
+	sendTurn(t, turnServer(stub, models, turnChoice), "E o teto?")
+
+	for _, want := range []string{"set_budget: ainda esperando", "set_triggers: aceita"} {
+		if !strings.Contains(models.prompt, want) {
+			t.Errorf("the prompt does not say %q:\n%s", want, models.prompt)
+		}
+	}
+}
