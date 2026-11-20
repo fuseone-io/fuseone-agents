@@ -56,14 +56,8 @@ func (s *Store) Turns(ctx context.Context, agent domain.AgentID, c Caller) ([]Tu
 		if err != nil {
 			return err
 		}
-		for _, id := range ids {
-			turn, err := readSaid(ctx, tx, id)
-			if err != nil {
-				return err
-			}
-			out = append(out, turn)
-		}
-		return nil
+		out, err = saidOf(ctx, tx, ids)
+		return err
 	})
 	return out, err
 }
@@ -118,4 +112,50 @@ func (s *Store) EraseThread(ctx context.Context, agent domain.AgentID, c Caller)
 			})
 		})
 	})
+}
+
+/*
+RecentTurns is the newest n turns of the caller's own thread, oldest first, with what was
+said when it is still kept (#422). The limit is the query's, so a turn's prompt never reads
+the content of a turn older than it can show, however long the conversation grew; the
+thread's (thread_id, seq) key walks it backwards. A reading: it locks nothing.
+*/
+func (s *Store) RecentTurns(ctx context.Context, agent domain.AgentID, c Caller, n int) ([]Turn, error) {
+	var out []Turn
+	err := s.within(ctx, func(tx pgx.Tx) error {
+		r, err := s.reachableRow(ctx, tx, agent, c, false)
+		if err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `
+			select turn_id from (
+				select t.turn_id::text, t.seq from agent_draft_turns t
+				join agent_draft_threads th on th.thread_id = t.thread_id
+				where th.draft_id = $1::uuid and th.author = $2
+				order by t.seq desc limit $3
+			) newest order by seq`, r.draftID, string(c.By), n)
+		if err != nil {
+			return fmt.Errorf("drafts: read the thread's newest turns: %w", err)
+		}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			return err
+		}
+		out, err = saidOf(ctx, tx, ids)
+		return err
+	})
+	return out, err
+}
+
+// saidOf is each turn, in the order given, with what was said.
+func saidOf(ctx context.Context, tx pgx.Tx, ids []string) ([]Turn, error) {
+	out := make([]Turn, 0, len(ids))
+	for _, id := range ids {
+		turn, err := readSaid(ctx, tx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, turn)
+	}
+	return out, nil
 }
