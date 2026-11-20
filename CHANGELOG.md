@@ -46,7 +46,10 @@ field" is a commit message.
   400 judged on its bytes, before decoding could replace them. The case is kept as the run's
   input, labelled untrusted, and the ledger holds only its digest. The run belongs to the
   caller's conversation on the draft the seal came from, resolved by the opener and never named
-  by a caller, so erasing that conversation erases it too. Everything that decides or writes
+  by a caller, so erasing that conversation erases it too. Erasing the conversation from the
+  workbench reaches only the conversation on the agent's current draft: a rehearsal of a seal
+  from an earlier draft, or whose draft was discarded or replaced since, is reached by erasing
+  the seal or the data subject instead. Everything that decides or writes
   happens inside the agent's exclusive fence, the one those erasures take: an erased seal is a
   409 `fuseone:candidate-unreadable`, a paused or stopped agent a 409, and neither writes
   anything, not even the conversation. The `Idempotency-Key` is the caller's own: the same key

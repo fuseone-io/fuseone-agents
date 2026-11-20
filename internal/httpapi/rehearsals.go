@@ -42,10 +42,12 @@ type rehearsalAsk struct {
 /*
 OpenRehearsal opens a rehearsal, or answers with the one its key already opened.
 
-The order is the experiment's: the seal under the caller's authority first (404 for a seal
-the caller may not publish in, as for one that does not exist), then the request's 400,
-then, inside the agent's fence, the key, before the bytes are judged again, so a retry after
-a lost answer reaches its run even once the seal is erased.
+Before this runs, the transport has already refused a body that is not UTF-8 or escapes an
+unpaired surrogate (RefuseRewrittenText), before any seal is looked up. Once the body is
+decoded, the order is the experiment's: the seal under the caller's authority first (404 for
+a seal the caller may not publish in, as for one that does not exist), then the case's 400,
+then, inside the agent's fence, the key, before the seal's bytes are judged again, so a retry
+after a lost answer reaches its run even once the seal is erased.
 */
 func (s *Server) OpenRehearsal(ctx context.Context, req openapi.OpenRehearsalRequestObject) (rehearsalAnswer, error) {
 	agent := domain.AgentID(req.AgentId)

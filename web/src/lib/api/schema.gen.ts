@@ -1345,6 +1345,11 @@ export interface paths {
          *     seal was sealed from, so erasing that conversation erases the case and every answer
          *     given for the world.
          *
+         *     Erasing the conversation from the workbench reaches only the conversation on the
+         *     agent's current draft. A rehearsal of a seal from an earlier draft, or one whose
+         *     draft was discarded or replaced since, stays in that draft's conversation: it is
+         *     reached by erasing the seal or by erasing the data subject, not by that button.
+         *
          *     Everything that decides or writes happens inside the agent's exclusive fence, the
          *     one an erasure of the seal or of the conversation takes: the key, the seal's bytes,
          *     the agent's pause and stops, and only then the conversation and the run. A refused
