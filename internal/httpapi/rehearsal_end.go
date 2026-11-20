@@ -10,12 +10,13 @@ import (
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 )
 
-// rehearsalAbandonReason is what an abandoned rehearsal records as its reason: fixed,
-// because an immutable row holds no free text.
-const rehearsalAbandonReason = "rehearsal ended by its author"
+// rehearsalAbandonReason is what an abandoned rehearsal records as its reason. The step
+// names who ended it; the reason is fixed, since this route asks for none.
+const rehearsalAbandonReason = "rehearsal ended by an author"
 
 /*
-DecideInRehearsal records the author's decision where the Gate held an action.
+DecideInRehearsal records an author's decision where the Gate held an action: any author
+who may publish in the rehearsal's scope, named in the step.
 
 It is rehearsal_decided, never approval_decided: it answers the Gate's request as a
 person's would, and no inbox, count or audit of real approvals reads it. decideApproval
@@ -55,7 +56,7 @@ func (s *Server) DecideInRehearsal(
 	return openapi.DecideInRehearsal200JSONResponse(run), nil
 }
 
-// rehearsalDecision is the step that records the author's decision on the held request.
+// rehearsalDecision is the step that records an author's decision on the held request.
 func (s *Server) rehearsalDecision(ctx context.Context, live liveRun, body openapi.RehearsalDecision) domain.Step {
 	state := live.state
 	return domain.Step{
@@ -77,7 +78,7 @@ compensating. What it still holds reserved is released first, onto the head the 
 was judged against, and the ending is sealed onto that release: a rehearsal never ends
 holding a reservation, and one that moved in between is told so and writes nothing more.
 A release whose ending then lost is harmless: the rehearsal goes on with nothing reserved,
-and the author asks again.
+and an author asks again.
 */
 func (s *Server) AbandonRehearsal(
 	ctx context.Context, req openapi.AbandonRehearsalRequestObject,

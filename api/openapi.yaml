@@ -2826,12 +2826,15 @@ paths:
       summary: Answer a live rehearsal's call as the world would
       description: |
         A live rehearsal (NT-018 phase 4) parks each tool call at a `world_awaited` step
-        and reaches no tool layer. Its author answers here instead: the answer becomes the
+        and reaches no tool layer. An author who may publish in the rehearsal's scope answers
+        here instead, named in the step as the one who answered: the answer becomes the
         call's result on the rehearsal's next turn, labelled untrusted like any external
         content, and named back to the call it answers.
 
-        The answer is kept in the content store, owned by the run, and the step names it
-        only by reference and digest. Erasing the rehearsal's conversation, its seal or
+        The answer is kept in the content store, owned by the run, in the same transaction
+        as the step that names it by reference and digest, and inside the agent's exclusive
+        fence that erasing the conversation or the seal takes: a refused answer keeps
+        nothing, and an erasure either comes first or reaches the answer. Erasing the rehearsal's conversation, its seal or
         the data subject erases it with the run's other content.
 
         Only a rehearsal, and only exactly at the wait named by `atSeq`: a real run, a
@@ -2863,7 +2866,8 @@ paths:
         '409':
           description: |
             The run is not a live rehearsal, or is not waiting for the world at `atSeq`,
-            or another answer reached that wait first.
+            or another answer reached that wait first; or this very answer, at this wait,
+            was erased since, and is not brought back.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -2874,7 +2878,8 @@ paths:
       operationId: decideInRehearsal
       summary: Decide an action the Gate held in a live rehearsal
       description: |
-        Where the Gate holds an action in a live rehearsal, its author decides it here.
+        Where the Gate holds an action in a live rehearsal, an author who may publish in the
+        rehearsal's scope decides it here, named in the step as the one who decided.
         The decision answers the Gate's request as a person's would, and is recorded as
         `rehearsal_decided`, never `approval_decided`: no inbox, count, report or audit
         of real approvals reads it, and it grants nothing outside the rehearsal. An
@@ -2916,11 +2921,13 @@ paths:
         Ends a live rehearsal wherever it stands, waiting or not. Nothing is undone,
         since nothing reached the world: the run ends failed, and any budget it still
         held reserved is released first, so an abandoned rehearsal never ends holding
-        a reservation. A rehearsal waits indefinitely for its author, and this is how
-        its author stops it.
+        a reservation. A rehearsal waits indefinitely for an author, and this is how an
+        author who may publish in its scope stops it.
 
         Written onto the step the rehearsal stood at when the request was read: one
-        that moved in the meantime is 409, and the author asks again. Only a rehearsal;
+        that moved in the meantime is 409, and the author asks again. If the release
+        of the reservation landed and only the ending lost, that release stays: the
+        rehearsal goes on with nothing reserved. Only a rehearsal;
         a real run is ended by `abandonRun`. A run outside the caller's `agent:publish`
         scopes is 404.
       parameters:

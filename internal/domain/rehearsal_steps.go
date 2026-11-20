@@ -67,7 +67,7 @@ func (p WorldSuppliedPayload) Validate() error {
 }
 
 // RehearsalDecidedPayload is the author's decision on an action the Gate held in a
-// rehearsal. It carries no note: immutable rows hold no free text.
+// rehearsal. It carries no note in this release.
 type RehearsalDecidedPayload struct {
 	// AtSeq is the approval_requested step this decides.
 	AtSeq    int64  `json:"at_seq"`
