@@ -49,6 +49,11 @@ func (d *draftStub) Seal(context.Context, drafts.Sealing) (drafts.Sealed, error)
 	return drafts.Sealed{}, drafts.ErrNotFound
 }
 
+// ThreadFor is not exercised through the stub: a rehearsal is tested against the real store.
+func (d *draftStub) ThreadFor(context.Context, domain.AgentID, string, domain.UserID) (string, error) {
+	return "", drafts.ErrNotFound
+}
+
 func (d *draftStub) Get(_ context.Context, _ domain.AgentID, c drafts.Caller) (drafts.Opened, error) {
 	d.callers = append(d.callers, c)
 	return d.opened, d.err
