@@ -1077,6 +1077,36 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /agents/{agentId}/seals/{sealId}:
+    get:
+      tags: [agents]
+      operationId: getAgentSeal
+      summary: One candidate seal, by its id
+      description: |
+        The seal an experiment on a candidate names (NT-018 phase 2): its
+        version, sealed scope, author and time, found by its id whatever page of
+        `listAgentCandidates` it would fall on. The same rule as the listing: a
+        seal the caller may publish in (`agent:publish` on its sealed scope), of
+        a version not yet published. Anything else, another agent's seal, or an
+        id that is no seal's is 404, as at every other door to a candidate.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: sealId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The seal.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CandidateSeal' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /agents/{agentId}/candidates/{version}:
     get:
       tags: [agents]

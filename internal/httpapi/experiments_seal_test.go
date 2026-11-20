@@ -37,6 +37,10 @@ func (f *fakeCandidates) Read(gocontext.Context, domain.AgentID, domain.VersionI
 	return spec.Candidate{}, spec.ErrCandidateNotFound
 }
 
+func (f *fakeCandidates) Seal(gocontext.Context, domain.AgentID, string, []domain.Scope) (spec.CandidateSeal, error) {
+	return spec.CandidateSeal{}, spec.ErrCandidateNotFound
+}
+
 func (f *fakeCandidates) Candidate(_ gocontext.Context, agent domain.AgentID, seal string) (trigger.Candidate, bool, error) {
 	if seal != testSealA || agent != "triage" {
 		return trigger.Candidate{}, false, nil

@@ -665,6 +665,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/seals/{sealId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One candidate seal, by its id
+         * @description The seal an experiment on a candidate names (NT-018 phase 2): its
+         *     version, sealed scope, author and time, found by its id whatever page of
+         *     `listAgentCandidates` it would fall on. The same rule as the listing: a
+         *     seal the caller may publish in (`agent:publish` on its sealed scope), of
+         *     a version not yet published. Anything else, another agent's seal, or an
+         *     id that is no seal's is 404, as at every other door to a candidate.
+         */
+        get: operations["getAgentSeal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/candidates/{version}": {
         parameters: {
             query?: never;
@@ -8631,6 +8656,31 @@ export interface operations {
                     "application/json": {
                         items: components["schemas"]["CandidateSeal"][];
                     };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAgentSeal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                sealId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The seal. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateSeal"];
                 };
             };
             401: components["responses"]["Unauthorized"];

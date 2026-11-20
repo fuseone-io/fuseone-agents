@@ -24,6 +24,7 @@ The reader decides which seals the caller may see; the routes only answer.
 type Candidates interface {
 	List(ctx context.Context, agent domain.AgentID, visible []domain.Scope) ([]spec.CandidateSeal, error)
 	Read(ctx context.Context, agent domain.AgentID, version domain.VersionID, visible []domain.Scope) (spec.Candidate, error)
+	Seal(ctx context.Context, agent domain.AgentID, seal string, visible []domain.Scope) (spec.CandidateSeal, error)
 	// Candidate and Sealed resolve one seal for an experiment: what the opener runs it
 	// as, and its definition checked as the worker checks it.
 	Candidate(ctx context.Context, agent domain.AgentID, seal string) (trigger.Candidate, bool, error)
@@ -58,6 +59,24 @@ func (s *Server) ListAgentCandidates(
 		items = append(items, candidateSealView(seal))
 	}
 	return openapi.ListAgentCandidates200JSONResponse{Items: items}, nil
+}
+
+// GetAgentSeal is one candidate seal, by its id: what an experiment on it will run.
+func (s *Server) GetAgentSeal(
+	ctx context.Context, req openapi.GetAgentSealRequestObject,
+) (openapi.GetAgentSealResponseObject, error) {
+	absent := openapi.GetAgentSeal404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: notFound(req.SealId)}
+	if s.candidates == nil {
+		return absent, nil
+	}
+	seal, err := s.candidates.Seal(ctx, domain.AgentID(req.AgentId), req.SealId, publishScopes(ctx))
+	switch {
+	case errors.Is(err, spec.ErrCandidateNotFound):
+		return absent, nil
+	case err != nil:
+		return nil, err
+	}
+	return openapi.GetAgentSeal200JSONResponse(candidateSealView(seal)), nil
 }
 
 // GetAgentCandidate is a candidate's sealed text.
