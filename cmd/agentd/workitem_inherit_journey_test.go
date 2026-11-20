@@ -43,19 +43,21 @@ type inheritRig struct {
 	run   string
 }
 
-func newInheritRig(t *testing.T, hooks trigger.Webhooks) inheritRig {
+func newInheritRig(t *testing.T, hooks *trigger.PostgresWebhooks) inheritRig {
 	t.Helper()
 	store, err := openStore(context.Background(), testdb.Required(t))
 	if err != nil {
 		t.Fatalf("openStore: %v", err)
 	}
 	pool := testdb.Pool(t)
-	api := httpapi.NewServer(store, "test").
-		WithAgents(spec.NewRegistry(pool)).
-		WithPublisher(spec.NewPublisher(pool, engine.SystemClock{}))
+	publisher := spec.NewPublisher(pool, engine.SystemClock{})
+	api := httpapi.NewServer(store, "test").WithAgents(spec.NewRegistry(pool))
 	if hooks != nil {
+		// As serve wires it: the publication moves the webhooks, in its transaction.
+		publisher.WithReconciliation(trigger.NewPostgresSchedules(pool), hooks)
 		api = api.WithWebhooks(hooks)
 	}
+	api = api.WithPublisher(publisher)
 	return inheritRig{store: store, pool: pool, api: apiHandlerFor(api), run: fmt.Sprintf("i204-%d", time.Now().UnixNano())}
 }
 

@@ -73,10 +73,6 @@ type Server struct {
 	// back. Nil is an installation that cannot reactivate, which is a refusal.
 	memoryEvidence *memstore.Resolver
 	webhooks       trigger.Webhooks
-	// schedules is where a version's cron trigger becomes a moment the worker
-	// will reach. Without it, publishing from the console recorded a trigger
-	// no clock ever knew about.
-	schedules      Schedules
 	audit          audit.Reader
 	health         Health
 	policies       Policies

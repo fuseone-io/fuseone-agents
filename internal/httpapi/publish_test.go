@@ -9,7 +9,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
@@ -92,6 +91,13 @@ func (p *publisher) Publish(_ context.Context, pub spec.Publication) (spec.Publi
 	p.companies = append(p.companies, pub.Company)
 	p.current = append(p.current, pub.Spec.Version)
 	p.latest[pub.Spec.ID] = pub.Spec
+	// Paused unless somebody decided, read where the version became current, as
+	// spec.Publisher answers it from its transaction.
+	p.ensured = append(p.ensured, pub.Spec.ID)
+	if _, decided := p.paused[pub.Spec.ID]; !decided {
+		p.paused[pub.Spec.ID] = true
+	}
+	judged.Paused = p.paused[pub.Spec.ID]
 	return judged, nil
 }
 
@@ -117,16 +123,6 @@ func safePrefix(digest string) string {
 
 // waiting is how many publications are queued for the graph's lock.
 func (p *publisher) waiting() int32 { return p.queued.Load() }
-
-func (p *publisher) EnsurePaused(_ context.Context, agent domain.AgentID, _ domain.UserID) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.ensured = append(p.ensured, agent)
-	if _, decided := p.paused[agent]; !decided {
-		p.paused[agent] = true
-	}
-	return nil
-}
 
 func (p *publisher) SetPaused(_ context.Context, agent domain.AgentID, paused bool, _ domain.UserID) error {
 	p.mu.Lock()
@@ -513,67 +509,13 @@ func TestPublishAgent_withDeclaredSteps_keepsThem(t *testing.T) {
 	}
 }
 
-/*
-A trigger declared in a version is a trigger the platform reaches.
-
-The console let somebody choose a schedule, stored it in the version, printed
-it back on the screen and nothing ever fired: schedules were reconciled from
-specification files at worker start-up, so an agent authored here was never
-reachable by the clock at all. The screen kept a promise the platform had no
-way of keeping, and the only symptom was an agent that never ran.
-
-Reconciled where the version is written, so both ways of publishing —
-committing a file and pressing the button — end at the same table.
-*/
-func TestPublishAgent_declaresACronTrigger_scheduleIsReconciled(t *testing.T) {
-	t.Parallel()
-	moments := &schedules{}
-
-	if _, err := publishServer(t, newPublisher()).WithSchedules(moments).PublishAgent(
-		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{
-			AgentId: "triage",
-			JSONBody: definition(func(d *openapi.AgentDefinition) {
-				d.Triggers = &[]openapi.AgentTrigger{
-					{Type: "cron", Schedule: ptr("0 7 * * 1-5")},
-				}
-			}),
-		},
-	); err != nil {
-		t.Fatalf("PublishAgent: %v", err)
-	}
-
-	if got := moments.synced["triage"]; len(got) != 1 || got[0] != "0 7 * * 1-5" {
-		t.Errorf("synced = %v, want the schedule the version declares", got)
-	}
-}
-
-// A version that withdrew its schedule stops firing it, which is the same call
-// with an empty list rather than a second one.
-func TestPublishAgent_declaresNoTrigger_reconcilesToNothing(t *testing.T) {
-	t.Parallel()
-	moments := &schedules{}
-
-	if _, err := publishServer(t, newPublisher()).WithSchedules(moments).PublishAgent(
-		inArea("cx", domain.RoleAuthor),
-		openapi.PublishAgentRequestObject{AgentId: "triage", JSONBody: definition(nil)},
-	); err != nil {
-		t.Fatalf("PublishAgent: %v", err)
-	}
-
-	got, called := moments.synced["triage"]
-	if !called || len(got) != 0 {
-		t.Errorf("synced = %v (called %v), want an empty list", got, called)
-	}
-}
-
 // Refused before the version is written, because a schedule nobody can parse
 // would otherwise be published, reported as saved, and never fire.
 func TestPublishAgent_scheduleNobodyCanParse_isRefusedBeforePublishing(t *testing.T) {
 	t.Parallel()
 	pub := newPublisher()
 
-	resp, err := publishServer(t, pub).WithSchedules(&schedules{}).PublishAgent(
+	resp, err := publishServer(t, pub).PublishAgent(
 		inArea("cx", domain.RoleAuthor),
 		openapi.PublishAgentRequestObject{
 			AgentId: "triage",
@@ -729,18 +671,6 @@ func flowFor(t *testing.T, server *Server, area string) openapi.FlowFinding {
 		t.Fatalf("response = %T, want flow finding", resp)
 	}
 	return openapi.FlowFinding(found)
-}
-
-type schedules struct{ synced map[domain.AgentID][]string }
-
-func (s *schedules) Sync(
-	_ context.Context, agent domain.AgentID, list []string, _ time.Time,
-) error {
-	if s.synced == nil {
-		s.synced = map[domain.AgentID][]string{}
-	}
-	s.synced[agent] = list
-	return nil
 }
 
 /*

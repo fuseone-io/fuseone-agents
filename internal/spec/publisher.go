@@ -177,10 +177,6 @@ func refuseStage(ctx context.Context, tx pgx.Tx, agent domain.AgentID, refused [
 	return nil
 }
 
-func (p *Publisher) EnsurePaused(ctx context.Context, agent domain.AgentID, by domain.UserID) error {
-	return p.state.EnsurePaused(ctx, agent, by)
-}
-
 func (p *Publisher) SetPaused(
 	ctx context.Context, agent domain.AgentID, paused bool, by domain.UserID,
 ) error {

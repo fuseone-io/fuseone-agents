@@ -153,10 +153,6 @@ func (s *Server) draftPublished(
 	ctx context.Context, published drafts.Opened, o draftOutcome,
 ) (openapi.PublishAgentDraftResponseObject, error) {
 	version := o.version
-	paused, err := s.afterPublication(ctx, version, o.scope)
-	if err != nil {
-		return nil, err
-	}
 	after := published
 	after.BaseVersion = version.Version
 	agent := published.Agent
@@ -164,7 +160,7 @@ func (s *Server) draftPublished(
 		Headers: openapi.PublishAgentDraft200ResponseHeaders{ETag: string(after.Revision)},
 	}
 	out.Body.AgentId, out.Body.VersionId = string(agent), string(version.Version)
-	out.Body.Created, out.Body.Paused, out.Body.Draft = o.created, paused, draftView(after)
+	out.Body.Created, out.Body.Paused, out.Body.Draft = o.created, o.judged.Paused, draftView(after)
 	out.Body.EventCycleWarning = eventCycleWarning(o.judged, auth.VisibleScopes(ctx, domain.PermAgentRead))
 	return out, nil
 }
