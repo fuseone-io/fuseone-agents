@@ -42,13 +42,16 @@ field" is a commit message.
 - **Open a live rehearsal of a candidate**: `POST /agents/{agentId}/rehearsals` with a seal and
   a case the author types (UTF-8 text, at most 32 KiB) opens one simulated run of the candidate
   in its sealed scope. The seal is found as `getAgentSeal` finds it (404 outside the caller's
-  `agent:publish` scopes). The case is kept as the run's input, labelled untrusted, and the
-  ledger holds only its digest. The run belongs to the caller's conversation on the draft the
-  seal came from, so erasing that conversation erases it too. The seal's bytes are read inside
-  the agent's fence before anything is written: an erased seal is a 409
-  `fuseone:candidate-unreadable` and opens nothing, as does a paused or stopped agent. The
-  `Idempotency-Key` is the caller's own: the same key and request answer with the run it opened
-  (even after the seal is erased), and the same key with another seal or case is a 409.
+  `agent:publish` scopes). A body that is not UTF-8, or escapes an unpaired surrogate, is a
+  400 judged on its bytes, before decoding could replace them. The case is kept as the run's
+  input, labelled untrusted, and the ledger holds only its digest. The run belongs to the
+  caller's conversation on the draft the seal came from, resolved by the opener and never named
+  by a caller, so erasing that conversation erases it too. Everything that decides or writes
+  happens inside the agent's exclusive fence, the one those erasures take: an erased seal is a
+  409 `fuseone:candidate-unreadable`, a paused or stopped agent a 409, and neither writes
+  anything, not even the conversation. The `Idempotency-Key` is the caller's own: the same key
+  and request answer with the run it opened (even after the seal is erased), two attempts under
+  it store one case, and the same key with another seal or case is a 409.
 
 ## [0.128.0] — 2026-11-20
 
