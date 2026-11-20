@@ -55,6 +55,18 @@ field" is a commit message.
   anything, not even the conversation. The `Idempotency-Key` is the caller's own: the same key
   and request answer with the run it opened (even after the seal is erased), two attempts under
   it store one case, and the same key with another seal or case is a 409.
+- **Act in a live rehearsal**: three routes, each acting only on a live rehearsal, only at
+  the step it names, and only onto that step, so a second answer, a decision overtaken or a
+  rehearsal that moved writes nothing and is a 409. A run outside the caller's
+  `agent:publish` scopes is a 404.
+  - `POST /runs/{runId}/world` answers the call the rehearsal waits on, as the world would:
+    at most 256 KiB of UTF-8 text, judged on its bytes, kept owned by the run and named by
+    reference and digest. It becomes the call's result on the next turn, untrusted.
+  - `POST /runs/{runId}/rehearsal-decisions` decides an action the Gate held. It is recorded
+    as `rehearsal_decided`, never as a real approval; `decideApproval` still refuses every
+    simulated run.
+  - `POST /runs/{runId}/rehearsal-abandon` ends the rehearsal wherever it stands, undoing
+    nothing, after releasing whatever budget it still held reserved.
 
 ## [0.128.0] — 2026-11-20
 
