@@ -31,6 +31,13 @@ func (d *draftStub) Turns(_ context.Context, _ domain.AgentID, c drafts.Caller) 
 	return d.turns, d.err
 }
 
+// RecentTurns answers the newest n of the stub's turns, and records the n asked.
+func (d *draftStub) RecentTurns(_ context.Context, _ domain.AgentID, c drafts.Caller, n int) ([]drafts.Turn, error) {
+	d.callers = append(d.callers, c)
+	d.recentAsked = append(d.recentAsked, n)
+	return d.turns[max(0, len(d.turns)-n):], d.err
+}
+
 func (d *draftStub) BeginTurn(_ context.Context, b drafts.Beginning) (drafts.Started, error) {
 	d.begun = append(d.begun, b)
 	if d.beginErr != nil {
@@ -407,5 +414,21 @@ func TestDraftTurns_whatWasDiscarded_isAnsweredOnReplayAndListing(t *testing.T) 
 	items := listed.(openapi.ListDraftTurns200JSONResponse).Items
 	if len(items) != 1 || valueOr(items[0].Dropped) != 2 || valueOr(items[0].Stale) != 1 {
 		t.Errorf("listing = %+v, want the turn's counts", items)
+	}
+}
+
+// A turn's prompt asks the store for the newest turns a window holds, never the whole
+// conversation: removing the limit would read every turn's content again (#422).
+func TestSendDraftTurn_asksForTheWindowsTurnsOnly(t *testing.T) {
+	t.Parallel()
+	stub := &draftStub{opened: someDraft()}
+	for i := 0; i < conversation.WindowTurns+3; i++ {
+		stub.turns = append(stub.turns, drafts.Turn{ID: fmt.Sprintf("t-%02d", i), Seq: i + 1, State: drafts.TurnDone, Message: "m", Reply: "r"})
+	}
+	models := &turnModelsStub{reply: `{"reply":"x","proposals":[]}`, priced: true}
+	sendTurn(t, turnServer(stub, models, turnChoice), "Oi")
+
+	if len(stub.recentAsked) != 1 || stub.recentAsked[0] != conversation.WindowTurns {
+		t.Errorf("recent turns asked %v, want one read of %d", stub.recentAsked, conversation.WindowTurns)
 	}
 }

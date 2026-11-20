@@ -17,7 +17,7 @@ import (
 // Declared here by the consumer.
 type Store interface {
 	Get(ctx context.Context, agent domain.AgentID, c drafts.Caller) (drafts.Opened, error)
-	Turns(ctx context.Context, agent domain.AgentID, c drafts.Caller) ([]drafts.Turn, error)
+	RecentTurns(ctx context.Context, agent domain.AgentID, c drafts.Caller, n int) ([]drafts.Turn, error)
 	ReplayTurn(ctx context.Context, r drafts.Replaying) (drafts.Started, bool, error)
 	BeginTurn(ctx context.Context, b drafts.Beginning) (drafts.Started, error)
 	SettleTurn(ctx context.Context, s drafts.Settlement) (drafts.Settled, error)
@@ -122,7 +122,8 @@ func (e Engine) prepare(ctx context.Context, r Request) (string, domain.Revision
 	if err != nil {
 		return "", "", 0, err
 	}
-	turns, err := e.Store.Turns(ctx, r.Agent, r.Caller)
+	// The newest turns a window can hold, and no older one read (#422).
+	turns, err := e.Store.RecentTurns(ctx, r.Agent, r.Caller, WindowTurns)
 	if err != nil {
 		return "", "", 0, err
 	}

@@ -38,6 +38,13 @@ field" is a commit message.
   draft. It says when the draft was already the published version and nothing was sealed,
   which event cycle the sealed version would close, and why a seal was refused.
 
+### Changed
+
+- **A workbench turn no longer reads the whole conversation first.** Building the prompt read
+  every earlier turn and its message and reply before keeping the newest ten; it now asks the
+  database for the newest ten alone, so a long conversation costs a turn no more than a short
+  one. The conversation's listing still shows every turn (#422).
+
 ## [0.126.0] — 2026-11-19
 
 Workbench and publication fixes (#412, #413, #414, #416; PRs #418–#421). Migrations 0123 and
