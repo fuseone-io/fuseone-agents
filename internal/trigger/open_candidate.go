@@ -37,9 +37,10 @@ func (o *Opener) targetFor(ctx context.Context, req Request) (domain.AgentSummar
 }
 
 /*
-candidateFor is the candidate an experiment's simulated run executes (NT-018 phase 2).
+candidateFor is the candidate an experiment's or a rehearsal's simulated run executes
+(NT-018 phases 2 and 4).
 
-Only an experiment's simulated run may name one. Anything else naming a seal, a seal of
+Only an experiment's or a rehearsal's simulated run may name one. Anything else naming a seal, a seal of
 another agent, a seal that holds another version than the one asked, and a seal nobody
 wrote are all the error a version the agent never published gets, so a seal's id reveals
 nothing. The run needs no published version and runs in the sealed scope. It is refused by
@@ -48,7 +49,7 @@ switch over the installation, the sealed scope or the agent.
 */
 func (o *Opener) candidateFor(ctx context.Context, req Request) (domain.AgentSummary, error) {
 	unknown := fmt.Errorf("%w: %s", ErrUnknownVersion, req.SealID)
-	if req.Simulation == "" || req.Experiment == "" || o.candidates == nil {
+	if req.Simulation == "" || (req.Experiment == "" && !req.Rehearsal) || o.candidates == nil {
 		return domain.AgentSummary{}, unknown
 	}
 	c, found, err := o.candidates.Candidate(ctx, req.Agent, req.SealID)
