@@ -1321,6 +1321,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/rehearsals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rehearse a candidate on one case, with the author answering for the world
+         * @description A live rehearsal (NT-018 phase 4): one run of a candidate on a case the author
+         *     types, simulated, in the scope the seal was sealed in. The Gate decides and the
+         *     ledger records as in any simulation, but no tool layer is reached: each call the
+         *     candidate makes parks the run until the author answers it, and each action the Gate
+         *     holds waits for the author's decision.
+         *
+         *     The seal is found as `getAgentSeal` finds it: one the caller may publish in
+         *     (`agent:publish` on its sealed scope), of a version not yet published, and 404
+         *     otherwise. The case is free text, kept outside the ledger as the run's input and
+         *     labelled untrusted. The run belongs to the caller's conversation on the draft the
+         *     seal was sealed from, so erasing that conversation erases the case and every answer
+         *     given for the world.
+         *
+         *     The seal's bytes are read inside the agent's fence before anything is written: a
+         *     seal erased or no longer matching its claim opens nothing.
+         */
+        post: operations["openRehearsal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/experiments/{experimentId}": {
         parameters: {
             query?: never;
@@ -6389,6 +6423,15 @@ export interface components {
             area: string;
             eventCycleWarning?: components["schemas"]["EventCycleWarning"];
         };
+        RehearsalRequest: {
+            /** @description The candidate's seal, as `listAgentCandidates` names it. */
+            sealId: string;
+            /**
+             * @description What the rehearsal is about, as the author typed or pasted it: at most 32 KiB
+             *     of UTF-8 text. Kept as the run's input and labelled untrusted.
+             */
+            case: string;
+        };
         CandidateSeal: {
             version: string;
             sealId: string;
@@ -9531,6 +9574,73 @@ export interface operations {
              *     one run could be opened: a paused agent, or an agent version that does not
              *     exist. `fuseone:candidate-unreadable`: a first attempt on a seal whose bytes are
              *     erased or no longer match their claim; seal the draft again.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    openRehearsal: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Unique per intention, and the caller's own: another caller's key never reaches
+                 *     their run. The same key with the same seal and case answers with the run it
+                 *     opened, even once the seal has been erased; with another seal or case it is a
+                 *     409 and opens nothing.
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RehearsalRequest"];
+            };
+        };
+        responses: {
+            /** @description The rehearsal this key already opened. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description The rehearsal was opened. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description A case that is empty, longer than 32 KiB, or not UTF-8 text. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The key already names a rehearsal of another seal or case, or the agent is
+             *     paused or stopped. `fuseone:candidate-unreadable`: the seal's bytes are erased
+             *     or no longer match their claim; seal the draft again.
              */
             409: {
                 headers: {
