@@ -2588,7 +2588,11 @@
     "turn-in-flight": "Another turn of this conversation is still on its way. Wait for its answer.",
     "turn-too-large": "The message, or the draft with it, is larger than a turn may be.",
     "publish-needs-never": "Say in the instructions what the agent must never do before publishing: ask the assistant for a \"Never\" block.",
-    "agent-moved": "The agent was published another way after this draft was opened. Discard the draft and open another on the current version."
+    "agent-moved": "The agent was published another way after this draft was opened. Discard the draft and open another on the current version.",
+    "version-collision": "This text's version id already names other text. Change the draft and try again.",
+    "version-digest-unknown": "This version id was published before its content was recorded, so nothing can show it is the same text. Change the draft and try again.",
+    "candidate-unreadable": "This candidate's sealed text can no longer be read: it was erased, aged out, or no longer matches its version. Seal the draft again to make another candidate.",
+    "webhook-path-taken": "This version's webhook path is already answered by another agent. Choose another path; nothing was written."
   },
   "retention": {
     "byDefault": "default, nobody chose it",
@@ -3569,7 +3573,8 @@
     "authoringOf": "{{spent}} of {{daily}}",
     "workspace": "Workspace",
     "tabs": {
-      "draft": "Draft"
+      "draft": "Draft",
+      "candidates": "Candidates"
     },
     "parts": {
       "identity": "Identity and model",
@@ -3605,6 +3610,23 @@
     "publishConfirm": "Publish version",
     "publishedPaused": "Published as {{version}}, paused",
     "publishedLive": "Published as {{version}}, running",
-    "saveBeforePublish": "Save your changes before publishing: what is published is the saved draft."
+    "saveBeforePublish": "Save your changes before publishing: what is published is the saved draft.",
+    "candidates": {
+      "intro": "A candidate is the saved draft, sealed as a version to experiment with. No reader of the agent sees it and no real run opens on it.",
+      "seal": "Seal candidate",
+      "saveFirst": "Save your changes before sealing: the candidate is the saved draft.",
+      "sealed": "Sealed as candidate {{version}}.",
+      "alreadyPublished": "The draft is already the published version {{version}}; nothing was sealed.",
+      "reading": "Reading the candidates",
+      "readingOne": "Reading the sealed text",
+      "empty": "No candidates yet",
+      "emptyBody": "Seal the saved draft to experiment with it before anything is published. The candidates you may see appear here, newest first.",
+      "version": "Version",
+      "sealedAt": "Sealed at",
+      "sealedByColumn": "By",
+      "open": "Open {{version}}",
+      "sheetDescription": "The sealed text, exactly as it was kept. It is what an experiment runs, even if the draft changes afterwards.",
+      "sealedBy": "Sealed by {{by}} on {{at}}"
+    }
   }
 }

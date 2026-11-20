@@ -64,7 +64,15 @@ export function WorkbenchPanel({
         conversation={
           <WorkbenchConversation agentId={agentId} instructions={draft.body.definition.instructions} onDraft={bench.adopt} />
         }
-        workspace={<WorkbenchWorkspace agentId={agentId} draft={draft.body} local={bench.local} patch={bench.patch} />}
+        workspace={
+          <WorkbenchWorkspace
+            agentId={agentId}
+            draft={draft.body}
+            local={bench.local}
+            patch={bench.patch}
+            sealing={{ etag: draft.etag, unsaved: count > 0 }}
+          />
+        }
       />
     </div>
   );

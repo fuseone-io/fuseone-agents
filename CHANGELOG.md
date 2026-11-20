@@ -30,6 +30,14 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **Candidates in the workbench** (NT-018 phase 2, release 2d): a "Candidates" tab seals the
+  saved draft as a candidate under the draft's ETag, lists the candidates the person may see,
+  newest first, and opens each on its sealed text, read from the candidate, never from the
+  draft. It says when the draft was already the published version and nothing was sealed,
+  which event cycle the sealed version would close, and why a seal was refused.
+
 ## [0.126.0] — 2026-11-19
 
 Workbench and publication fixes (#412, #413, #414, #416; PRs #418–#421). Migrations 0123 and
