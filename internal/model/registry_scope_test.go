@@ -243,3 +243,30 @@ func TestSetPrices_reachesTheEnvironmentsProviderAnOverrideHides(t *testing.T) {
 		t.Fatalf("PriceFor = %+v, %v, %v; want the rate in force, 7", price, ok, err)
 	}
 }
+
+// The models a provider serves, as configured, from inside its scope only (#414): the
+// conversation shows them to the model, and a name another area configured is not offered
+// there. A claim this process could not build knows no models.
+func TestModels_areThoseConfiguredForTheProvider_atTheScopeAsked(t *testing.T) {
+	t.Parallel()
+
+	r := model.NewRegistry(nil)
+	gateway := areaProvider("gateway", cx)
+	gateway.Models = []string{"claude-sonnet", "gpt-mini"}
+	r.SetConfigured([]model.Provider{gateway}, model.Claim{Name: "gateway", Scope: cx}, model.Claim{Name: "sealed", Scope: cx})
+
+	got := r.Models("gateway", cx)
+	if len(got) != 2 || got[0] != "claude-sonnet" {
+		t.Errorf("Models(gateway, acme/cx) = %v, want its two models", got)
+	}
+	got[0] = "changed"
+	if r.Models("gateway", cx)[0] != "claude-sonnet" {
+		t.Error("Models handed out the registry's own slice")
+	}
+	if got := r.Models("gateway", finance); len(got) != 0 {
+		t.Errorf("Models(gateway, acme/finance) = %v, want none outside its scope", got)
+	}
+	if got := r.Models("sealed", cx); len(got) != 0 {
+		t.Errorf("Models(sealed) = %v, want none for a provider not built", got)
+	}
+}
