@@ -27,6 +27,10 @@ const (
 	MaxOutputTokens int64 = 4096
 	// MaxProposalsPerTurn bounds what one answer may propose.
 	MaxProposalsPerTurn = 8
+	// MaxModelsPerProvider bounds the models shown for one offered provider. A
+	// gateway can serve hundreds; past this many the projection says how many
+	// more there are rather than spend the turn's budget listing them.
+	MaxModelsPerProvider = 100
 	// MaxReasonBytes bounds a proposal's reason: one sentence beside a card.
 	MaxReasonBytes = 500
 	// MaxTurnMicros refuses a turn whose input alone costs more than this.

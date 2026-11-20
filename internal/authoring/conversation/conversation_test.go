@@ -83,7 +83,7 @@ func TestProject_showsTheDraftAndTheOfferAndNothingElse(t *testing.T) {
 	d.Blocks = blocks.Parse("Objetivo\nTriar.")
 	got, err := conversation.Project(d, []string{"tools"}, conversation.Offer{
 		Tools:     []domain.ToolEntry{{ID: "crm.lookup", Server: "crm-internal.acme.local", Description: "Busca o cliente", Effect: domain.EffectRead}},
-		Providers: []string{"openai"},
+		Providers: []conversation.ProviderOffer{{Name: "openai"}},
 	})
 	if err != nil {
 		t.Fatalf("Project: %v", err)

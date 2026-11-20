@@ -32,6 +32,8 @@ type TurnModels interface {
 	PriceFor(provider, model string) (model.Prices, bool, error)
 	Names() []string
 	Configured(name string, at domain.Scope) bool
+	// Models is what a provider serves, as configured, for a run at scope (#414).
+	Models(name string, at domain.Scope) []string
 }
 
 // WithTurnModels wires the conversation's models.
@@ -110,7 +112,7 @@ func (s *Server) turnEngine(ctx context.Context, agent domain.AgentID) (conversa
 }
 
 // offerFor is what a scope offers a turn: the tools on the surface there, and
-// the providers configured there.
+// the providers configured there with the models each serves there.
 func (s *Server) offerFor(ctx context.Context, scope domain.Scope) (conversation.Offer, error) {
 	rulings, err := s.checker().Rulings(ctx, scope)
 	if err != nil {
@@ -126,7 +128,7 @@ func (s *Server) offerFor(ctx context.Context, scope domain.Scope) (conversation
 	slices.SortFunc(offer.Tools, func(a, b domain.ToolEntry) int { return strings.Compare(string(a.ID), string(b.ID)) })
 	for _, name := range s.turnModels.Names() {
 		if s.turnModels.Configured(name, scope) {
-			offer.Providers = append(offer.Providers, name)
+			offer.Providers = append(offer.Providers, conversation.ProviderOffer{Name: name, Models: s.turnModels.Models(name, scope)})
 		}
 	}
 	return offer, nil

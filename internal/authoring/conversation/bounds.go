@@ -37,7 +37,13 @@ func Reserve(prompt string, price model.Prices, known bool) (int64, error) {
 // providers configured there.
 type Offer struct {
 	Tools     []domain.ToolEntry
-	Providers []string
+	Providers []ProviderOffer
+}
+
+// ProviderOffer is a provider configured in the draft's scope and the models it serves.
+type ProviderOffer struct {
+	Name   string
+	Models []string
 }
 
 type projectedBlock struct {
@@ -45,6 +51,26 @@ type projectedBlock struct {
 	Kind  string `json:"kind"`
 	Label string `json:"label,omitempty"`
 	Text  string `json:"text"`
+}
+
+type projectedProvider struct {
+	Name   string   `json:"name"`
+	Models []string `json:"models"`
+	// MoreModels is how many models past MaxModelsPerProvider were left out.
+	MoreModels int `json:"moreModels,omitempty"`
+}
+
+// projectProviders is each offered provider with the models it serves, at most
+// MaxModelsPerProvider of them, and how many more there are.
+func projectProviders(offered []ProviderOffer) []projectedProvider {
+	out := make([]projectedProvider, 0, len(offered))
+	for _, p := range offered {
+		shown := p.Models[:min(len(p.Models), MaxModelsPerProvider)]
+		out = append(out, projectedProvider{
+			Name: p.Name, Models: append([]string{}, shown...), MoreModels: len(p.Models) - len(shown),
+		})
+	}
+	return out
 }
 
 type projectedTool struct {
@@ -68,12 +94,12 @@ func Project(d draft.Draft, missing []string, offer Offer) (string, error) {
 		return "", fmt.Errorf("conversation: render the draft: %w", err)
 	}
 	out := struct {
-		Definition string           `json:"definition"`
-		Blocks     []projectedBlock `json:"blocks"`
-		Missing    []string         `json:"missing"`
-		Tools      []projectedTool  `json:"toolsOffered"`
-		Providers  []string         `json:"providersOffered"`
-	}{Definition: string(definition), Missing: missing, Providers: slices.Clone(offer.Providers)}
+		Definition string              `json:"definition"`
+		Blocks     []projectedBlock    `json:"blocks"`
+		Missing    []string            `json:"missing"`
+		Tools      []projectedTool     `json:"toolsOffered"`
+		Providers  []projectedProvider `json:"providersOffered"`
+	}{Definition: string(definition), Missing: missing, Providers: projectProviders(offer.Providers)}
 	for _, b := range d.Blocks {
 		out.Blocks = append(out.Blocks, projectedBlock{ID: b.ID, Kind: string(b.Kind), Label: b.Label, Text: b.Text})
 	}
