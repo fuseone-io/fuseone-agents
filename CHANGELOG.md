@@ -30,6 +30,32 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **The first live rehearsal makes 0.128.0 the rollback floor** (NT-018 phase 4, release 4b).
+  `POST /agents/{agentId}/rehearsals` writes rehearsal runs; a release older than 0.128.0 does
+  not know them, and would claim a rehearsal waiting for its author. Until somebody opens one,
+  the floor stays 0.123.0.
+
+### Added
+
+- **Open a live rehearsal of a candidate**: `POST /agents/{agentId}/rehearsals` with a seal and
+  a case the author types (UTF-8 text, at most 32 KiB) opens one simulated run of the candidate
+  in its sealed scope. The seal is found as `getAgentSeal` finds it (404 outside the caller's
+  `agent:publish` scopes). A body that is not UTF-8, or escapes an unpaired surrogate, is a
+  400 judged on its bytes, before decoding could replace them. The case is kept as the run's
+  input, labelled untrusted, and the ledger holds only its digest. The run belongs to the
+  caller's conversation on the draft the seal came from, resolved by the opener and never named
+  by a caller, so erasing that conversation erases it too. Erasing the conversation from the
+  workbench reaches only the conversation on the agent's current draft: a rehearsal of a seal
+  from an earlier draft, or whose draft was discarded or replaced since, is reached by erasing
+  the seal or the data subject instead. Everything that decides or writes
+  happens inside the agent's exclusive fence, the one those erasures take: an erased seal is a
+  409 `fuseone:candidate-unreadable`, a paused or stopped agent a 409, and neither writes
+  anything, not even the conversation. The `Idempotency-Key` is the caller's own: the same key
+  and request answer with the run it opened (even after the seal is erased), two attempts under
+  it store one case, and the same key with another seal or case is a 409.
+
 ## [0.128.0] — 2026-11-20
 
 NT-018 phase 4, release 4a: every reader knows a live rehearsal, and nothing writes one yet

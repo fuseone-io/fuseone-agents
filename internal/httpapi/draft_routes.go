@@ -41,6 +41,9 @@ type Drafts interface {
 	BeginTurn(ctx context.Context, b drafts.Beginning) (drafts.Started, error)
 	SettleTurn(ctx context.Context, s drafts.Settlement) (drafts.Settled, error)
 	EraseThread(ctx context.Context, agent domain.AgentID, c drafts.Caller) error
+	// ThreadFor is the author's conversation on a draft, opened the first time: the
+	// opener resolves a rehearsal's with it (trigger.Threads), after every refusal.
+	ThreadFor(ctx context.Context, agent domain.AgentID, draftID string, author domain.UserID) (string, error)
 	// Seal keeps the draft as a candidate (NT-018 phase 2).
 	Seal(ctx context.Context, in drafts.Sealing) (drafts.Sealed, error)
 	// WithinPublication is the draft's condition on its own publication,

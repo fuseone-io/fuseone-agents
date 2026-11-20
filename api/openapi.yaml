@@ -2075,6 +2075,84 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /agents/{agentId}/rehearsals:
+    post:
+      tags: [agents]
+      operationId: openRehearsal
+      summary: Rehearse a candidate on one case, with the author answering for the world
+      description: |
+        A live rehearsal (NT-018 phase 4): one run of a candidate on a case the author
+        types, simulated, in the scope the seal was sealed in. The Gate decides and the
+        ledger records as in any simulation, but no tool layer is reached: each call the
+        candidate makes parks the run until the author answers it, and each action the Gate
+        holds waits for the author's decision.
+
+        The seal is found as `getAgentSeal` finds it: one the caller may publish in
+        (`agent:publish` on its sealed scope), of a version not yet published, and 404
+        otherwise. The case is free text, kept outside the ledger as the run's input and
+        labelled untrusted. The run belongs to the caller's conversation on the draft the
+        seal was sealed from, so erasing that conversation erases the case and every answer
+        given for the world.
+
+        Erasing the conversation from the workbench reaches only the conversation on the
+        agent's current draft. A rehearsal of a seal from an earlier draft, or one whose
+        draft was discarded or replaced since, stays in that draft's conversation: it is
+        reached by erasing the seal or by erasing the data subject, not by that button.
+
+        Everything that decides or writes happens inside the agent's exclusive fence, the
+        one an erasure of the seal or of the conversation takes: the key, the seal's bytes,
+        the agent's pause and stops, and only then the conversation and the run. A refused
+        rehearsal writes nothing, two attempts under one key store one case, and an erasure
+        either comes first or reaches the run.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: |
+            Unique per intention, and the caller's own: another caller's key never reaches
+            their run. The same key with the same seal and case answers with the run it
+            opened, even once the seal has been erased; with another seal or case it is a
+            409 and opens nothing.
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RehearsalRequest' }
+      responses:
+        '201':
+          description: The rehearsal was opened.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '200':
+          description: The rehearsal this key already opened.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '400':
+          description: |
+            A case that is empty or blank, or longer than 32 KiB; or a body that is not
+            UTF-8, or escapes an unpaired surrogate. The body's bytes are judged before
+            they are decoded, so text a decoder would replace is refused, never kept.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            The key already names a rehearsal of another seal or case, or the agent is
+            paused or stopped. `fuseone:candidate-unreadable`: the seal's bytes are erased
+            or no longer match their claim; seal the draft again.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /agents/{agentId}/experiments/{experimentId}:
     get:
       tags: [agents]
@@ -10407,6 +10485,19 @@ components:
         company: { type: string }
         area: { type: string }
         eventCycleWarning: { $ref: '#/components/schemas/EventCycleWarning' }
+    RehearsalRequest:
+      type: object
+      required: [sealId, case]
+      properties:
+        sealId:
+          type: string
+          description: The candidate's seal, as `listAgentCandidates` names it.
+        case:
+          type: string
+          description: |
+            What the rehearsal is about, as the author typed or pasted it: at most 32 KiB
+            of UTF-8 text. Kept as the run's input and labelled untrusted.
+
     CandidateSeal:
       type: object
       required: [version, sealId, company, area, sealedBy, sealedAt]

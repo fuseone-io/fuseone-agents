@@ -88,6 +88,8 @@ type Opener struct {
 	clock    Clock
 	// candidates resolves seals for experiments on a candidate (open_candidate.go).
 	candidates Candidates
+	// threads resolves a rehearsal's conversation (open_rehearsal.go).
+	threads Threads
 }
 
 func NewOpener(ledger Ledger, registry Registry, clock Clock) *Opener {

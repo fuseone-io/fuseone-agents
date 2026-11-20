@@ -80,6 +80,11 @@ func (s *Server) opener() *trigger.Opener {
 		// every other request that names one.
 		opener = opener.WithCandidates(s.candidates)
 	}
+	if s.drafts != nil {
+		// A rehearsal belongs to its author's conversation, which the opener resolves
+		// after every refusal and before anything is written.
+		opener = opener.WithThreads(s.drafts)
+	}
 	if s.stages != nil {
 		// A draft may be simulated and may not act, by any route including
 		// this button.

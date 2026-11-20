@@ -12,7 +12,7 @@ import (
 
 // apiHandlerFor routes the OpenAPI contract to its implementation.
 func apiHandlerFor(api *httpapi.Server) http.Handler {
-	return httpapi.FoldIfMatch(openapi.HandlerWithOptions(
+	return httpapi.FoldIfMatch(httpapi.RefuseRewrittenText(openapi.HandlerWithOptions(
 		openapi.NewStrictHandlerWithOptions(api, nil, openapi.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc: requestProblem,
 			ResponseErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
@@ -26,7 +26,7 @@ func apiHandlerFor(api *httpapi.Server) http.Handler {
 				writeProblem(w, http.StatusBadRequest, "Invalid request", err.Error())
 			},
 		},
-	))
+	), "POST /api/v1/agents/*/rehearsals"))
 }
 
 // mountOpen serves an installation that has no database, and so nobody to
