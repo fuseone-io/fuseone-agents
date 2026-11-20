@@ -30,6 +30,11 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.126.0] — 2026-11-19
+
+Workbench and publication fixes (#412, #413, #414, #416; PRs #418–#421). Migrations 0123 and
+0124 are additive (0124 builds an index concurrently); the rollback floor stays at 0.123.0.
+
 ### Upgrade notes
 
 - **Migration 0123 adds `dropped` and `stale` to `agent_draft_turns`** (#413): what a
