@@ -14,8 +14,9 @@ ProposalOutcomes is what became of the proposals of the given turns of the calle
 thread, in the thread's order: each with its turn, kind, validity, decision, and whether
 the draft as it is would still accept it (#412). One query of metadata, bounded by the
 turns asked, which a prompt takes from its window; never a body or a reason, and never the
-rest of the thread. Whether a waiting proposal is current is judged once per turn, since
-every proposal of a turn read the same ETag.
+rest of the thread; whether its body is still kept is read with it, without the bytes.
+Whether a waiting proposal is current is judged once per turn, since every proposal of a
+turn read the same ETag. The turn's index (0124) finds them.
 */
 func (s *Store) ProposalOutcomes(ctx context.Context, agent domain.AgentID, c Caller, turns []string) ([]Proposal, error) {
 	var out []Proposal
@@ -38,10 +39,11 @@ func (s *Store) ProposalOutcomes(ctx context.Context, agent domain.AgentID, c Ca
 func outcomesOf(ctx context.Context, tx pgx.Tx, draftID string, author domain.UserID, turns []string) ([]Proposal, error) {
 	rows, err := tx.Query(ctx, `
 		select p.proposal_id::text, p.turn_id::text, p.draft_id::text, p.kind, p.valid,
-		       p.draft_revision, coalesce(d.decision, '')
+		       p.draft_revision, coalesce(d.decision, ''),
+		       not exists (select 1 from run_content c where c.ref = p.body_ref and c.erased_at is null)
 		from agent_draft_proposals p
 		left join agent_draft_proposal_decisions d on d.proposal_id = p.proposal_id
-		where p.draft_id = $1::uuid and p.author = $2 and p.turn_id = any($3::uuid[])
+		where p.turn_id is not null and p.turn_id = any($3::uuid[]) and p.draft_id = $1::uuid and p.author = $2
 		order by p.seq`, draftID, string(author), turns)
 	if err != nil {
 		return nil, fmt.Errorf("drafts: read the outcomes: %w", err)
@@ -49,7 +51,7 @@ func outcomesOf(ctx context.Context, tx pgx.Tx, draftID string, author domain.Us
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Proposal, error) {
 		var p Proposal
 		var read string
-		err := row.Scan(&p.ID, &p.Turn, &p.Draft, &p.Kind, &p.Valid, &read, &p.Decision)
+		err := row.Scan(&p.ID, &p.Turn, &p.Draft, &p.Kind, &p.Valid, &read, &p.Decision, &p.Gone)
 		p.Read = domain.Revision(read)
 		return p, err
 	})
@@ -59,7 +61,8 @@ func outcomesOf(ctx context.Context, tx pgx.Tx, draftID string, author domain.Us
 func judgeCurrent(ctx context.Context, tx pgx.Tx, r row, out []Proposal) error {
 	judged := map[string]bool{}
 	for i, p := range out {
-		if !p.Valid || p.Decision != "" {
+		// Gone is never current: acceptance answers 404 for a body no longer kept.
+		if !p.Valid || p.Decision != "" || p.Gone {
 			continue
 		}
 		current, seen := judged[p.Turn]

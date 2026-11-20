@@ -1,6 +1,7 @@
 package drafts_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/fuseone/agents/internal/authoring/draft"
@@ -33,6 +34,11 @@ func TestProposalOutcomes_areThoseOfTheTurnsAsked_withoutTheirBodies(t *testing.
 	if len(got) != 2 || got[0].Kind != "add_tool" || got[1].Kind != "set_budget" || !got[0].Valid {
 		t.Fatalf("outcomes = %+v, want the shown turn's two proposals, a body erased or not", got)
 	}
+	// The draft has not moved, so only the erased body keeps the first from being accepted:
+	// acceptance answers 404 for it, and the prompt must not call it waiting (#413 review).
+	if !got[0].Gone || got[0].Current || got[1].Gone || !got[1].Current {
+		t.Errorf("outcomes = %+v, want the erased one gone and not current, its sibling current", got)
+	}
 	for _, p := range got {
 		if p.Turn == old[0].Turn {
 			t.Errorf("a turn not asked for was read: %+v", p)
@@ -64,4 +70,29 @@ func TestProposalOutcomes_aProposalAnotherTurnMadeStale_isNotCurrent(t *testing.
 	if current["set_reply_locale"] || !current["add_tool"] || current["set_budget"] {
 		t.Errorf("current = %v, want the other turn's proposal stale, the waiting sibling current, the decided one not", current)
 	}
+}
+
+// The read is bounded in the database's work too, not only in what it answers: proposals
+// are found by their turn through an index, not by a scan of the append-only table.
+func TestProposalOutcomes_theProposalsOfATurnAreIndexedByIt(t *testing.T) {
+	pool := testdb.Pool(t)
+	var defs []string
+	rows, err := pool.Query(t.Context(), `select indexdef from pg_indexes where tablename = 'agent_draft_proposals'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var def string
+		if err := rows.Scan(&def); err != nil {
+			t.Fatal(err)
+		}
+		defs = append(defs, def)
+	}
+	for _, def := range defs {
+		if strings.Contains(def, "(turn_id") {
+			return
+		}
+	}
+	t.Errorf("no index leads with turn_id on agent_draft_proposals: %v", defs)
 }
