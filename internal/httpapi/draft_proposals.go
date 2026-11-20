@@ -63,10 +63,12 @@ instructionsAfter is what accepting a block proposal now would leave of the
 instructions, rendered by the codec accepting uses, so the card shows the
 effect and not a guess at it: the label a new or rewritten block takes in its
 locale, its position, the block a move takes. Only for a proposal that could
-be accepted now; any other would be refused, and shows nothing to accept.
+be accepted now, which the store answers as Current: the draft the model read,
+or one only its own turn's acceptances moved (#412). Any other would be
+refused, and shows nothing to accept.
 */
 func instructionsAfter(opened drafts.Opened, p drafts.Proposal) (string, bool) {
-	if p.Op == nil || !isBlockKind(p.Op.Kind()) || !p.Valid || p.Decision != "" || p.Read != opened.Revision {
+	if p.Op == nil || !isBlockKind(p.Op.Kind()) || !p.Valid || p.Decision != "" || !p.Current {
 		return "", false
 	}
 	next, err := draft.Preview(opened.Draft, p.Op)
