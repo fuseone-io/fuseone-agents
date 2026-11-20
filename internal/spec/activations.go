@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -15,28 +14,13 @@ import (
 type Activations struct {
 	publisher *Publisher
 	reader    *CandidateReader
-	schedules ScheduleSync
-	webhooks  WebhookSync
 }
 
-// ScheduleSync reconciles an agent's cron schedules in the caller's transaction.
-type ScheduleSync interface {
-	SyncIn(ctx context.Context, tx pgx.Tx, agent domain.AgentID, schedules []string, from time.Time) error
-}
-
-// WebhookSync reconciles an agent's webhooks in the caller's transaction.
-type WebhookSync interface {
-	SyncIn(ctx context.Context, tx pgx.Tx, agent domain.AgentID, scope domain.Scope, hooks []domain.WebhookTrigger) error
-}
-
-/*
-WithReconciliation moves the agent's schedules and webhooks with every activation, in its
-transaction and under the agent's row. Reconciled after the commit instead, a slower
-activation could land after a later one and put the earlier version's schedules back, or
-reopen a webhook the live version withdrew.
-*/
+// WithReconciliation is Publisher.WithReconciliation on the publisher activations go
+// through: the agent's schedules and webhooks move with every activation, in its
+// transaction.
 func (a *Activations) WithReconciliation(schedules ScheduleSync, webhooks WebhookSync) *Activations {
-	a.schedules, a.webhooks = schedules, webhooks
+	a.publisher.WithReconciliation(schedules, webhooks)
 	return a
 }
 
@@ -97,24 +81,7 @@ func (a *Activations) Definition(
 	return sealed, true, nil
 }
 
-// Activate is Publisher.Activate, reconciling what moves with the version inside it.
+// Activate is Publisher.Activate.
 func (a *Activations) Activate(ctx context.Context, act Activation) (Activated, error) {
-	act.Within = a.reconcile
 	return a.publisher.Activate(ctx, act)
-}
-
-func (a *Activations) reconcile(ctx context.Context, tx pgx.Tx, s Spec) error {
-	if a.schedules != nil {
-		if err := a.schedules.SyncIn(ctx, tx, s.ID, CronSchedules(s), a.publisher.clock.Now()); err != nil {
-			return fmt.Errorf("reconcile the schedules of %s: %w", s.ID, err)
-		}
-	}
-	if a.webhooks == nil {
-		return nil
-	}
-	scope := domain.Scope{Company: s.Company, Area: s.Area}
-	if err := a.webhooks.SyncIn(ctx, tx, s.ID, scope, Webhooks(s)); err != nil {
-		return fmt.Errorf("reconcile the webhooks of %s: %w", s.ID, err)
-	}
-	return nil
 }
