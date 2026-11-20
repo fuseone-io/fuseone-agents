@@ -1,5 +1,9 @@
 import { useTranslation } from "react-i18next";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadFailed } from "@/features/experiments/load-failed";
+import { problemMessage } from "@/lib/api/problem-message";
+import type { CandidateSeal } from "@/lib/api/client";
 import type { UseFormReturn } from "react-hook-form";
 import { FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import {
@@ -79,15 +83,17 @@ export function RepetitionsField({ form }: { form: UseFormReturn<ExperimentForm>
 
 /**
  * The candidate an experiment runs, named by its seal's own version, in place of a version
- * to choose. A seal not among the candidates the person may see says so, and runs nothing.
+ * to choose. A seal that is not a candidate the person may see says so and runs nothing; a
+ * read that failed says that instead, and offers to read again.
  */
-export function CandidateLine({ version, reading }: { version?: string; reading: boolean }) {
+export function CandidateLine({ seal }: { seal: UseQueryResult<CandidateSeal | null> }) {
   const { t } = useTranslation();
-  if (reading) return <Skeleton aria-label={t("experiments.candidateReading")} className="h-10 w-full" />;
-  if (!version) return <p className="text-sm text-danger">{t("experiments.candidateMissing")}</p>;
+  if (seal.isLoading) return <Skeleton aria-label={t("experiments.candidateReading")} className="h-10 w-full" />;
+  if (seal.error) return <LoadFailed message={problemMessage(seal.error, t)} onRetry={() => void seal.refetch()} />;
+  if (!seal.data) return <p className="text-sm text-danger">{t("experiments.candidateMissing")}</p>;
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-sm font-medium">{t("experiments.candidate", { version })}</p>
+      <p className="text-sm font-medium">{t("experiments.candidate", { version: seal.data.version })}</p>
       <p className="text-xs text-muted-foreground">{t("experiments.candidateExplains")}</p>
     </div>
   );

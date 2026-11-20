@@ -21,7 +21,7 @@ import {
   type ExperimentForm,
 } from "@/features/experiments/experiment-form";
 import { useStartExperiment } from "@/features/experiments/experiments-api";
-import { useCandidates } from "@/features/workbench/candidates-api";
+import { useSeal } from "@/features/workbench/candidates-api";
 import { problemMessage } from "@/lib/api/problem-message";
 
 /**
@@ -46,10 +46,10 @@ export function ExperimentStart({
 }) {
   const { t } = useTranslation();
   const detail = useAgent(agentId);
-  // The seal alone decides what runs, so the candidate named is the seal's own, read from
-  // the candidates the person may see; nothing else in the URL is believed.
-  const candidates = useCandidates(sealId ? agentId : "");
-  const seal = sealId ? candidates.data?.find((c) => c.sealId === sealId) : undefined;
+  // The seal alone decides what runs, so the candidate named is the seal's own, read by
+  // its id; nothing else in the URL is believed.
+  const sealRead = useSeal(sealId ? agentId : "", sealId ?? "");
+  const seal = sealRead.data ?? undefined;
   const unresolved = sealId !== undefined && seal === undefined;
   const start = useStartExperiment(agentId);
   const versions = detail.data?.versions ?? [];
@@ -90,7 +90,7 @@ export function ExperimentStart({
         <form onSubmit={form.handleSubmit(submit)} className="flex min-h-0 flex-1 flex-col">
           <PropertiesSheetBody className="space-y-4">
             {sealId ? (
-              <CandidateLine version={seal?.version} reading={candidates.isLoading} />
+              <CandidateLine seal={sealRead} />
             ) : (
               <VersionField form={form} versions={versions} />
             )}

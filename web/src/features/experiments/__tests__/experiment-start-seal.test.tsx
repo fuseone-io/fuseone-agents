@@ -23,7 +23,8 @@ const started = { id: "exp_triage_1", cases: 3, repetitions: 1, runs: 3, dataset
 
 function showStart(published: boolean, sealId = "s-1") {
   const posted = stubApi({
-    "GET /agents/triage/candidates": { items: [candidate("s-1", "v9candidate1"), candidate("s-2", "v9fromurl")] },
+    "GET /agents/triage/seals/s-1": candidate("s-1", "v9candidate1"),
+    "GET /agents/triage/seals/s-2": candidate("s-2", "v9fromurl"),
     ...(published && { "GET /agents/triage": { agent, versions: [{ versionId: agent.versionId, publishedAt: agent.publishedAt, latest: true }] } }),
     "GET /agents/triage/regressions": { items: [{ id: "a" }, { id: "b" }, { id: "c" }] },
     "GET /providers?scope=acme%2Fcx": { items: [] },
@@ -69,10 +70,7 @@ describe("starting an experiment on a candidate", () => {
   // The seal alone decides what runs, so the candidate named is the seal's own: a version
   // written beside it in the URL is not believed.
   it("opens the form on the seal the URL names, whatever version is written beside it", async () => {
-    stubApi({
-      "GET /agents/triage/candidates": { items: [candidate("s-1", "v9candidate1"), candidate("s-2", "v9fromurl")] },
-      "GET /agents/triage/regressions": { items: [] },
-    });
+    stubApi({ "GET /agents/triage/seals/s-2": candidate("s-2", "v9fromurl"), "GET /agents/triage/regressions": { items: [] } });
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <MemoryRouter initialEntries={["/agents/triage/experiments?new=1&seal=s-2&candidate=v9candidate1"]}>
@@ -81,6 +79,16 @@ describe("starting an experiment on a candidate", () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByText("Candidata v9fromurl")).toBeInTheDocument();
+  });
+
+  // A failed read is not an absent seal: it says what failed and offers to read again.
+  it("says when the seal could not be read, apart from a seal that is not there", async () => {
+    stubApi({ "GET /agents/triage/regressions": { items: [] } });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ title: "boom", status: 500 }), { status: 500, headers: { "Content-Type": "application/json" } })));
+    renderWithClient(<ExperimentStart agentId="triage" sealId="s-1" onClose={vi.fn()} onStarted={vi.fn()} />);
+    expect(await screen.findByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
+    expect(screen.queryByText(/não está entre as candidatas/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Iniciar experimento" })).toBeDisabled();
   });
 
   // A seal not among the candidates the person may see runs nothing, and says so.
