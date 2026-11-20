@@ -26,7 +26,7 @@ func apiHandlerFor(api *httpapi.Server) http.Handler {
 				writeProblem(w, http.StatusBadRequest, "Invalid request", err.Error())
 			},
 		},
-	), "POST /api/v1/agents/*/rehearsals"))
+	), "POST /api/v1/agents/*/rehearsals", "POST /api/v1/runs/*/world"))
 }
 
 // mountOpen serves an installation that has no database, and so nobody to

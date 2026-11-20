@@ -29,9 +29,20 @@ func (c *Content) PutExactForTx(
 	if c.limit > 0 && len(data) > c.limit {
 		return "", fmt.Errorf("%w: %d bytes for %s, limit %d", ErrTooLarge, len(data), owner, c.limit)
 	}
+	return keepExactTx(ctx, tx, kind, owner, seq, data)
+}
+
+// contentRef names data kept for owner at seq: its kind, its owner, its place, and the
+// first 16 hex of the digest of the whole payload, returned whole beside it.
+func contentRef(kind, owner string, seq int64, data []byte) (ref, digest string) {
 	sum := sha256.Sum256(data)
-	digest := hex.EncodeToString(sum[:])
-	ref := fmt.Sprintf("%s://%s/%d/%s", kind, owner, seq, digest[:16])
+	digest = hex.EncodeToString(sum[:])
+	return fmt.Sprintf("%s://%s/%d/%s", kind, owner, seq, digest[:16]), digest
+}
+
+// keepExactTx keeps data whole in tx under its reference, and refuses a tombstone.
+func keepExactTx(ctx context.Context, tx pgx.Tx, kind, owner string, seq int64, data []byte) (string, error) {
+	ref, digest := contentRef(kind, owner, seq, data)
 	if _, err := tx.Exec(ctx, `
 		insert into run_content
 			(ref, owner_kind, run_id, seq, digest, bytes, full_bytes, truncated)

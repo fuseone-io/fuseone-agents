@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"net/http"
 	"net/http/httptest"
@@ -42,18 +43,35 @@ result would say it tested another.
 type finishingModel struct {
 	mu    sync.Mutex
 	asked []string
+	// calls are the tools the model calls, in order: one more for every tool result the
+	// conversation already holds, and the finish once they are spent. None by default.
+	calls []string
 }
 
 func (m *finishingModel) serve(t *testing.T) string {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			Model string `json:"model"`
+			Model    string `json:"model"`
+			Messages []struct {
+				Role string `json:"role"`
+			} `json:"messages"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		results := 0
+		for _, message := range body.Messages {
+			if message.Role == "tool" {
+				results++
+			}
+		}
 		m.mu.Lock()
 		m.asked = append(m.asked, body.Model)
+		calls := m.calls
 		m.mu.Unlock()
+		if results < len(calls) {
+			m.call(w, calls[results], results)
+			return
+		}
 		args, _ := json.Marshal(map[string]string{"summary": "classified"})
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -68,6 +86,20 @@ func (m *finishingModel) serve(t *testing.T) string {
 	}))
 	t.Cleanup(srv.Close)
 	return srv.URL
+}
+
+// call answers with one call of tool, named the way the planner offers it.
+func (m *finishingModel) call(w http.ResponseWriter, tool string, n int) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"choices": []map[string]any{{"finish_reason": "tool_calls", "message": map[string]any{
+			"role": "assistant", "tool_calls": []map[string]any{{
+				"id": fmt.Sprintf("call_%d", n), "type": "function",
+				"function": map[string]any{"name": tool, "arguments": `{"id":"c-1"}`},
+			}},
+		}}},
+		"usage": map[string]any{"prompt_tokens": 10, "completion_tokens": 2},
+	})
 }
 
 func (m *finishingModel) models() []string {

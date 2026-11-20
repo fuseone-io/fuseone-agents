@@ -215,3 +215,17 @@ func identityOf(steps []domain.Step) runIdentity {
 	}
 	return out
 }
+
+// leaseHeld is the one reading of "may this epoch still act": the number is
+// current AND the lease is live. Callers hold m.mu.
+func (m *Memory) leaseHeld(runID domain.RunID, epoch int64) bool {
+	st := m.leases[runID]
+	return st.epoch == epoch && !st.leasedUntil.IsZero() && st.leasedUntil.After(m.now())
+}
+
+func (m *Memory) now() time.Time {
+	if m.Clock != nil {
+		return m.Clock()
+	}
+	return time.Now()
+}

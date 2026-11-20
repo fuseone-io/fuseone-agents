@@ -1859,6 +1859,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{runId}/world": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer a live rehearsal's call as the world would
+         * @description A live rehearsal (NT-018 phase 4) parks each tool call at a `world_awaited` step
+         *     and reaches no tool layer. An author who may publish in the rehearsal's scope answers
+         *     here instead, named in the step as the one who answered: the answer becomes the
+         *     call's result on the rehearsal's next turn, labelled untrusted like any external
+         *     content, and named back to the call it answers.
+         *
+         *     The answer is kept in the content store, owned by the run, in the same transaction
+         *     as the step that names it by reference and digest, and inside the agent's exclusive
+         *     fence that erasing the conversation or the seal takes: a refused answer keeps
+         *     nothing, and an erasure either comes first or reaches the answer. Erasing the rehearsal's conversation, its seal or
+         *     the data subject erases it with the run's other content.
+         *
+         *     Only a rehearsal, and only exactly at the wait named by `atSeq`: a real run, a
+         *     battery or an experiment run, a rehearsal at another step, and a second answer to
+         *     a wait somebody already answered are all 409, and write nothing. A run outside
+         *     the caller's `agent:publish` scopes is 404.
+         */
+        post: operations["answerForTheWorld"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{runId}/rehearsal-decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide an action the Gate held in a live rehearsal
+         * @description Where the Gate holds an action in a live rehearsal, an author who may publish in the
+         *     rehearsal's scope decides it here, named in the step as the one who decided.
+         *     The decision answers the Gate's request as a person's would, and is recorded as
+         *     `rehearsal_decided`, never `approval_decided`: no inbox, count, report or audit
+         *     of real approvals reads it, and it grants nothing outside the rehearsal. An
+         *     approved call still reaches no tool layer; it parks for the world's answer.
+         *
+         *     `decideApproval` keeps refusing every simulated run, rehearsals included. Only a
+         *     rehearsal, and only at the request named by `atSeq`; anything else is 409 and
+         *     writes nothing. A run outside the caller's `agent:publish` scopes is 404.
+         */
+        post: operations["decideInRehearsal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{runId}/rehearsal-abandon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End a live rehearsal
+         * @description Ends a live rehearsal wherever it stands, waiting or not. Nothing is undone,
+         *     since nothing reached the world: the run ends failed, and any budget it still
+         *     held reserved is released first, so an abandoned rehearsal never ends holding
+         *     a reservation. A rehearsal waits indefinitely for an author, and this is how an
+         *     author who may publish in its scope stops it.
+         *
+         *     Written onto the step the rehearsal stood at when the request was read: one
+         *     that moved in the meantime is 409, and the author asks again. If the release
+         *     of the reservation landed and only the ending lost, that release stays: the
+         *     rehearsal goes on with nothing reserved. Only a rehearsal;
+         *     a real run is ended by `abandonRun`. A run outside the caller's `agent:publish`
+         *     scopes is 404.
+         */
+        post: operations["abandonRehearsal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{runId}/approvals": {
         parameters: {
             query?: never;
@@ -6431,6 +6526,26 @@ export interface components {
             area: string;
             eventCycleWarning?: components["schemas"]["EventCycleWarning"];
         };
+        WorldAnswer: {
+            /**
+             * Format: int64
+             * @description The `world_awaited` step this answers.
+             */
+            atSeq: number;
+            /**
+             * @description What the world returns for the call, as the author writes it: at most 256 KiB
+             *     of UTF-8 text, usually JSON. Kept as the call's result, labelled untrusted.
+             */
+            answer: string;
+        };
+        RehearsalDecision: {
+            /**
+             * Format: int64
+             * @description The `approval_requested` step this decides.
+             */
+            atSeq: number;
+            approved: boolean;
+        };
         RehearsalRequest: {
             /** @description The candidate's seal, as `listAgentCandidates` names it. */
             sealId: string;
@@ -10272,6 +10387,136 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalPage"];
+                };
+            };
+        };
+    };
+    answerForTheWorld: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorldAnswer"];
+            };
+        };
+        responses: {
+            /** @description The answer was recorded; the rehearsal resumes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /**
+             * @description An answer that is empty or longer than 256 KiB; or a body that is not UTF-8,
+             *     or escapes an unpaired surrogate, judged on its bytes before decoding.
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The run is not a live rehearsal, or is not waiting for the world at `atSeq`,
+             *     or another answer reached that wait first; or this very answer, at this wait,
+             *     was erased since, and is not brought back.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    decideInRehearsal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RehearsalDecision"];
+            };
+        };
+        responses: {
+            /** @description The decision was recorded; the rehearsal resumes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The run is not a live rehearsal, or is not waiting for a decision at
+             *     `atSeq`, or another decision reached that request first.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    abandonRehearsal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rehearsal was ended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The run is not a live rehearsal, has already ended, or moved while the
+             *     request was being judged.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
