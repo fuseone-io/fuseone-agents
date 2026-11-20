@@ -22,8 +22,10 @@ Opening a live rehearsal (NT-018 phase 4, release 4b).
 A rehearsal is one simulated run of a candidate on a case its author typed. Nothing in it
 reaches a tool layer: the engine parks each call for the author to answer for the world.
 What this route decides is only whether the run opens, and on what: the seal the caller may
-publish in, the case as text, the caller's own conversation on the draft the seal came
-from, and the seal's bytes still readable inside the agent's fence.
+publish in, the case as text (its bytes judged before decoding, RefuseRewrittenText), and,
+inside the agent's exclusive fence, the key and the seal's bytes. The opener then refuses a
+paused or stopped agent and only after that resolves the caller's own conversation on the
+draft the seal came from.
 */
 
 // maxRehearsalCaseBytes bounds the case an author types. A case is a message, not a
@@ -42,8 +44,8 @@ OpenRehearsal opens a rehearsal, or answers with the one its key already opened.
 
 The order is the experiment's: the seal under the caller's authority first (404 for a seal
 the caller may not publish in, as for one that does not exist), then the request's 400,
-then the key, before the fence or the bytes are judged again, so a retry after a lost
-answer reaches its run even once the seal is erased.
+then, inside the agent's fence, the key, before the bytes are judged again, so a retry after
+a lost answer reaches its run even once the seal is erased.
 */
 func (s *Server) OpenRehearsal(ctx context.Context, req openapi.OpenRehearsalRequestObject) (rehearsalAnswer, error) {
 	agent := domain.AgentID(req.AgentId)
@@ -57,22 +59,11 @@ func (s *Server) OpenRehearsal(ctx context.Context, req openapi.OpenRehearsalReq
 	caller := callerOf(ctx)
 	key := trigger.RehearsalKey(agent, caller, req.Params.IdempotencyKey)
 	asked := rehearsalAsk{seal: seal.SealID, caseID: rehearsalCase(req.Body.Case)}
-	existing, err := s.store.RunByIdemKey(ctx, key)
-	switch {
-	case err == nil:
-		return s.rehearsalReplay(ctx, existing, asked)
-	case !errors.Is(err, domain.ErrRunNotFound):
-		return nil, fmt.Errorf("rehearsal by key: %w", err)
-	}
-	thread, err := s.drafts.ThreadFor(ctx, agent, seal.DraftID, caller)
-	if err != nil {
-		return nil, fmt.Errorf("the rehearsal's conversation: %w", err)
-	}
 	return s.openRehearsal(ctx, asked, trigger.Request{
 		Agent: agent, IdemKey: key, Trigger: "rehearsal", By: caller,
 		Input: []byte(req.Body.Case), Labels: domain.NewLabels(domain.LabelUntrusted),
 		Simulation: rehearsalSimulation(agent, key), Case: asked.caseID,
-		SealID: seal.SealID, Rehearsal: true, AuthoringThread: thread,
+		SealID: seal.SealID, Rehearsal: true,
 	})
 }
 
@@ -94,29 +85,24 @@ func (s *Server) rehearsedSeal(
 }
 
 /*
-openRehearsal reads the seal's bytes and opens the run, both inside the agent's fence.
+openRehearsal opens the run inside the agent's exclusive fence, the one an erasure of the
+seal or of the author's conversation takes.
 
-An erasure of the seal takes the same fence, so the read either finds the tombstone or
-opens the run before the erasure reaches it; read outside it, the run could open on bytes
-erased in between. Unreadable bytes open nothing.
+Everything that decides or writes happens inside it, in this order: the key, the seal's
+bytes, then the opener, which refuses a paused or stopped agent before it resolves the
+author's conversation, the first write. So a refused rehearsal writes nothing; an erasure
+either comes first, and the rehearsal finds its tombstone or joins a conversation already
+erased, or waits, and then reaches the run; and two attempts under one key cannot both store
+a case, since the second finds the first's run.
 */
 func (s *Server) openRehearsal(ctx context.Context, asked rehearsalAsk, req trigger.Request) (rehearsalAnswer, error) {
 	var opened trigger.Result
 	var refused rehearsalAnswer
-	open := func(ctx context.Context) error {
-		_, err := s.candidates.Sealed(ctx, req.Agent, req.SealID)
-		if errors.Is(err, domain.ErrCandidateUnreadable) || errors.Is(err, spec.ErrCandidateNotFound) {
-			refused = openapi.OpenRehearsal409ApplicationProblemPlusJSONResponse(refusal(
-				http.StatusConflict, CodeCandidateUnreadable, "Candidate unreadable", req.SealID))
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		opened, err = s.opener().Open(ctx, req)
+	err := s.withinAgentFence(ctx, req.Agent, func(ctx context.Context) error {
+		var err error
+		opened, refused, err = s.openFenced(ctx, req)
 		return err
-	}
-	err := s.withinAgentFence(ctx, req.Agent, open)
+	})
 	switch {
 	case refused != nil:
 		return refused, nil
@@ -129,19 +115,39 @@ func (s *Server) openRehearsal(ctx context.Context, asked rehearsalAsk, req trig
 	case err != nil:
 		return nil, fmt.Errorf("open a rehearsal of %s: %w", req.Agent, err)
 	case !opened.Created:
-		// Another attempt under the key won the race: its run is the answer only if it
-		// asked for the same thing.
+		// The key already named a run: it is the answer only if it asked for the same thing.
 		return s.rehearsalReplay(ctx, opened.RunID, asked)
 	}
 	return s.rehearsalRun(ctx, opened.RunID, true)
 }
 
-// withinAgentFence runs open inside the agent's shared fence, the one erasures take.
+// openFenced is the fenced part of opening: the key, the seal's bytes, then the opener.
+func (s *Server) openFenced(ctx context.Context, req trigger.Request) (trigger.Result, rehearsalAnswer, error) {
+	existing, err := s.store.RunByIdemKey(ctx, req.IdemKey)
+	switch {
+	case err == nil:
+		return trigger.Result{RunID: existing}, nil, nil
+	case !errors.Is(err, domain.ErrRunNotFound):
+		return trigger.Result{}, nil, fmt.Errorf("rehearsal by key: %w", err)
+	}
+	_, err = s.candidates.Sealed(ctx, req.Agent, req.SealID)
+	if errors.Is(err, domain.ErrCandidateUnreadable) || errors.Is(err, spec.ErrCandidateNotFound) {
+		return trigger.Result{}, openapi.OpenRehearsal409ApplicationProblemPlusJSONResponse(refusal(
+			http.StatusConflict, CodeCandidateUnreadable, "Candidate unreadable", req.SealID)), nil
+	}
+	if err != nil {
+		return trigger.Result{}, nil, err
+	}
+	opened, err := s.opener().Open(ctx, req)
+	return opened, nil, err
+}
+
+// withinAgentFence runs open inside the agent's exclusive fence.
 func (s *Server) withinAgentFence(ctx context.Context, agent domain.AgentID, open func(context.Context) error) error {
 	if s.regressions == nil {
 		return open(ctx)
 	}
-	return s.regressions.Hold(ctx, agent, open)
+	return s.regressions.Exclusive(ctx, []domain.AgentID{agent}, open)
 }
 
 /*

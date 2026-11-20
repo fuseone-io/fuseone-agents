@@ -15,6 +15,9 @@ type Candidate struct {
 	Scope domain.Scope
 	// Paused is the agent's recorded pause. An agent with no state has nothing to pause.
 	Paused bool
+	// DraftID is the draft the seal was sealed from, whose author's conversation a
+	// rehearsal of it belongs to.
+	DraftID string
 }
 
 // Candidates resolves a seal of an agent, declared here by the consumer.
@@ -28,12 +31,19 @@ func (o *Opener) WithCandidates(c Candidates) *Opener {
 	return o
 }
 
+// target is what a run opens on, and the draft its candidate was sealed from, if any.
+type target struct {
+	summary domain.AgentSummary
+	draft   string
+}
+
 // targetFor is what a run opens on: the candidate its seal names, or a published version.
-func (o *Opener) targetFor(ctx context.Context, req Request) (domain.AgentSummary, error) {
+func (o *Opener) targetFor(ctx context.Context, req Request) (target, error) {
 	if req.SealID != "" {
 		return o.candidateFor(ctx, req)
 	}
-	return o.publishedFor(ctx, req)
+	published, err := o.publishedFor(ctx, req)
+	return target{summary: published}, err
 }
 
 /*
@@ -47,25 +57,25 @@ nothing. The run needs no published version and runs in the sealed scope. It is 
 a pause the agent has (decision 3: an agent never published has nothing to pause) and by a
 switch over the installation, the sealed scope or the agent.
 */
-func (o *Opener) candidateFor(ctx context.Context, req Request) (domain.AgentSummary, error) {
+func (o *Opener) candidateFor(ctx context.Context, req Request) (target, error) {
 	unknown := fmt.Errorf("%w: %s", ErrUnknownVersion, req.SealID)
 	if req.Simulation == "" || (req.Experiment == "" && !req.Rehearsal) || o.candidates == nil {
-		return domain.AgentSummary{}, unknown
+		return target{}, unknown
 	}
 	c, found, err := o.candidates.Candidate(ctx, req.Agent, req.SealID)
 	if err != nil {
-		return domain.AgentSummary{}, fmt.Errorf("trigger: read seal %s: %w", req.SealID, err)
+		return target{}, fmt.Errorf("trigger: read seal %s: %w", req.SealID, err)
 	}
 	if !found || c.Agent != req.Agent || (req.Version != "" && req.Version != c.Version) {
-		return domain.AgentSummary{}, unknown
+		return target{}, unknown
 	}
 	if c.Paused {
-		return domain.AgentSummary{}, fmt.Errorf("%w: %s", ErrPaused, req.Agent)
+		return target{}, fmt.Errorf("%w: %s", ErrPaused, req.Agent)
 	}
 	if err := o.stoppedIn(ctx, c.Scope, req.Agent); err != nil {
-		return domain.AgentSummary{}, err
+		return target{}, err
 	}
-	return domain.AgentSummary{ID: req.Agent, VersionID: c.Version, Scope: c.Scope}, nil
+	return target{summary: domain.AgentSummary{ID: req.Agent, VersionID: c.Version, Scope: c.Scope}, draft: c.DraftID}, nil
 }
 
 // stoppedIn refuses a run in scope while a switch over it is in force.

@@ -68,13 +68,10 @@ type Request struct {
 	// agent never published.
 	SealID string
 	// Rehearsal marks a live rehearsal (NT-018 phase 4): a simulated run of a candidate
-	// whose calls wait for its author. Honoured only with a Simulation and a SealID;
-	// anywhere else it is refused, never dropped.
+	// whose calls wait for its author. Honoured only with a Simulation, a SealID and a
+	// By, and never with an Experiment; anywhere else it is refused, never dropped. Its
+	// conversation is resolved by the opener (open_rehearsal.go), never named here.
 	Rehearsal bool
-	// AuthoringThread is the workbench conversation a rehearsal belongs to, resolved by
-	// the server from the seal's draft and the caller, so that erasing the conversation
-	// reaches the run.
-	AuthoringThread string
 	// SourceRun is the recorded run whose input seeds this one, when an
 	// operator asked to run from it (#16). An id and nothing else: the trail
 	// points at the source, it does not copy it.

@@ -52,6 +52,12 @@ func candidateBytes(agent domain.AgentID) string { return fmt.Sprintf(candidateT
 // seal writes a candidate of the world's agent the way release 2b will.
 func (w *experimentWorld) seal(t *testing.T, sealID string) domain.VersionID {
 	t.Helper()
+	return w.sealFrom(t, sealID, "")
+}
+
+// sealFrom seals the candidate from a draft, or from a draft nobody has when draftID is empty.
+func (w *experimentWorld) sealFrom(t *testing.T, sealID, draftID string) domain.VersionID {
+	t.Helper()
 	sealed, err := spec.Parse("triage.agent.md", []byte(candidateBytes(w.agent)))
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
@@ -70,8 +76,8 @@ func (w *experimentWorld) seal(t *testing.T, sealID string) domain.VersionID {
 	if _, err := w.pool.Exec(ctx, `
 		insert into agent_seals (seal_id, agent_id, version_id, company_id, area_id,
 		  content_ref, draft_id, draft_revision, sealed_by)
-		values ($1::uuid, $2, $3, 'acme', 'cx', $4, gen_random_uuid(), 'rev-1', 'usr_ana')`,
-		sealID, string(w.agent), string(sealed.Version), ref); err != nil {
+		values ($1::uuid, $2, $3, 'acme', 'cx', $4, coalesce(nullif($5, '')::uuid, gen_random_uuid()), 'rev-1', 'usr_ana')`,
+		sealID, string(w.agent), string(sealed.Version), ref, draftID); err != nil {
 		t.Fatalf("seal: %v", err)
 	}
 	return sealed.Version

@@ -1345,8 +1345,11 @@ export interface paths {
          *     seal was sealed from, so erasing that conversation erases the case and every answer
          *     given for the world.
          *
-         *     The seal's bytes are read inside the agent's fence before anything is written: a
-         *     seal erased or no longer matching its claim opens nothing.
+         *     Everything that decides or writes happens inside the agent's exclusive fence, the
+         *     one an erasure of the seal or of the conversation takes: the key, the seal's bytes,
+         *     the agent's pause and stops, and only then the conversation and the run. A refused
+         *     rehearsal writes nothing, two attempts under one key store one case, and an erasure
+         *     either comes first or reaches the run.
          */
         post: operations["openRehearsal"];
         delete?: never;
@@ -9626,7 +9629,11 @@ export interface operations {
                     "application/json": components["schemas"]["Run"];
                 };
             };
-            /** @description A case that is empty, longer than 32 KiB, or not UTF-8 text. */
+            /**
+             * @description A case that is empty or blank, or longer than 32 KiB; or a body that is not
+             *     UTF-8, or escapes an unpaired surrogate. The body's bytes are judged before
+             *     they are decoded, so text a decoder would replace is refused, never kept.
+             */
             400: {
                 headers: {
                     [name: string]: unknown;

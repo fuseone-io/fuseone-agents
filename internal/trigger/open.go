@@ -66,18 +66,19 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if req.Rehearsal && (req.Simulation == "" || req.SealID == "") {
-		return Result{}, fmt.Errorf("%w: %s", ErrRehearsalOutsideCandidate, req.IdemKey)
+	if err := rehearsalShape(req); err != nil {
+		return Result{}, err
 	}
 
 	if existing, err := o.ledger.RunByIdemKey(ctx, req.IdemKey); err == nil {
 		return Result{RunID: existing}, nil
 	}
 
-	published, err := o.targetFor(ctx, req)
+	opening, err := o.targetFor(ctx, req)
 	if err != nil {
 		return Result{}, err
 	}
+	published := opening.summary
 	if violation, blocked := req.Labels.ScopeBoundaryViolation(published.Scope); blocked {
 		return Result{}, fmt.Errorf("trigger: %w", violation)
 	}
@@ -87,6 +88,10 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		}
 	}
 	labels := req.Labels.Union(domain.ScopeLabels(published.Scope))
+	thread, err := o.threadOf(ctx, req, opening.draft)
+	if err != nil {
+		return Result{}, err
+	}
 
 	runID := newRunID(published.ID, o.clock.Now(), req.IdemKey)
 
@@ -117,7 +122,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 			ExperimentConfig: experimentConfig,
 			SealID:           req.SealID,
 			Rehearsal:        req.Rehearsal,
-			AuthoringThread:  req.AuthoringThread,
+			AuthoringThread:  thread,
 
 			ExperimentRepetitions: req.ExperimentRepetitions,
 		}),

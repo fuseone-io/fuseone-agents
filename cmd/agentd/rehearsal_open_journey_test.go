@@ -1,9 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,34 +23,59 @@ import (
 )
 
 /*
-Opening a live rehearsal from the route (NT-018 phase 4, release 4b).
+Opening a live rehearsal through the HTTP route (NT-018 phase 4, release 4b).
 
 A rehearsal runs one candidate on one case the author typed, simulated, in the sealed
 scope, and belongs to the author's conversation on the draft the seal was sealed from. The
-route finds the seal under the caller's own authority, reads its bytes inside the agent's
-fence before anything is written, and answers a retry under the same key with the run it
-opened, or refuses one that asks for something else.
+route finds the seal under the caller's own authority, refuses text the JSON decoder would
+rewrite, and does everything that decides or writes inside the agent's exclusive fence: the
+key, the seal's bytes, the opener's refusals, then the conversation and the run. A refusal
+writes nothing, two attempts under one key store one case, and an erasure of the seal or the
+conversation either comes first or reaches the run.
 */
 
 const rehearsalSeal = "9e5f6a7b-8c9d-4e0f-a1b2-c3d4e5f6a7b8"
+
+func inCx(id string, role domain.Role) domain.Principal {
+	return domain.Principal{
+		ID: domain.UserID(id), Kind: domain.PrincipalUser,
+		Grants: []domain.Grant{{Scope: domain.Scope{Company: "acme", Area: "cx"}, Role: role}},
+	}
+}
+
+// rehearsalReply is what the route answered: its status, and the run or the refusal's code.
+type rehearsalReply struct {
+	code         int
+	run, problem string
+	raw          string
+}
 
 func (w *experimentWorld) withDrafts() *experimentWorld {
 	w.server = w.server.WithDrafts(drafts.NewStore(w.pool))
 	return w
 }
 
-func (w *experimentWorld) rehearse(
-	t *testing.T, ctx context.Context, key, seal, text string,
-) openapi.OpenRehearsalResponseObject {
+func (w *experimentWorld) rehearseRaw(t *testing.T, caller domain.Principal, key string, body []byte) rehearsalReply {
 	t.Helper()
-	resp, err := w.server.OpenRehearsal(ctx, openapi.OpenRehearsalRequestObject{
-		AgentId: string(w.agent), Params: openapi.OpenRehearsalParams{IdempotencyKey: key},
-		Body: &openapi.RehearsalRequest{SealId: seal, Case: text},
-	})
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+		"/api/v1/agents/"+string(w.agent)+"/rehearsals", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", key)
+	req = req.WithContext(auth.WithPrincipal(req.Context(), caller))
+	rec := httptest.NewRecorder()
+	apiHandlerFor(w.server).ServeHTTP(rec, req)
+	var out struct{ RunId, Type string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	return rehearsalReply{code: rec.Code, run: out.RunId, problem: out.Type, raw: rec.Body.String()}
+}
+
+func (w *experimentWorld) rehearse(t *testing.T, caller domain.Principal, key, seal, text string) rehearsalReply {
+	t.Helper()
+	body, err := json.Marshal(openapi.RehearsalRequest{SealId: seal, Case: text})
 	if err != nil {
-		t.Fatalf("OpenRehearsal: %v", err)
+		t.Fatal(err)
 	}
-	return resp
+	return w.rehearseRaw(t, caller, key, body)
 }
 
 func (w *experimentWorld) draftOf(t *testing.T, seal string) string {
@@ -71,13 +101,6 @@ func (w *experimentWorld) opening(t *testing.T, run string) (domain.Step, domain
 	return steps[0], started
 }
 
-func auditor(ctx context.Context) context.Context {
-	return auth.WithPrincipal(ctx, domain.Principal{
-		ID: "usr_eva", Kind: domain.PrincipalUser,
-		Grants: []domain.Grant{{Scope: domain.Scope{Company: "acme", Area: "cx"}, Role: domain.RoleAuditor}},
-	})
-}
-
 func (w *experimentWorld) pause(t *testing.T) {
 	t.Helper()
 	if err := spec.NewState(w.pool).SetPaused(t.Context(), w.agent, true, "usr_ops", time.Now()); err != nil {
@@ -85,12 +108,17 @@ func (w *experimentWorld) pause(t *testing.T) {
 	}
 }
 
-func rehearsalConflict(resp openapi.OpenRehearsalResponseObject) string {
-	c, ok := resp.(openapi.OpenRehearsal409ApplicationProblemPlusJSONResponse)
-	if !ok || c.Type == nil {
-		return ""
+// written counts what a rehearsal writes: rehearsal runs, conversations, and stored cases.
+func (w *experimentWorld) written(t *testing.T) (runs, threads, cases int) {
+	t.Helper()
+	if err := w.pool.QueryRow(t.Context(), `
+		select (select count(*) from runs where seal_id is not null),
+		       (select count(*) from agent_draft_threads where agent_id = $1),
+		       (select count(*) from run_content where owner_kind = 'run')`, string(w.agent)).
+		Scan(&runs, &threads, &cases); err != nil {
+		t.Fatalf("count what was written: %v", err)
 	}
-	return *c.Type
+	return runs, threads, cases
 }
 
 func rehearsalWorld(t *testing.T) (*experimentWorld, domain.VersionID) {
@@ -104,11 +132,11 @@ func TestRehearsal_fromTheRoute_opensTheCandidateInItsAuthorsConversation(t *tes
 	world, version := rehearsalWorld(t)
 	text := "Customer asks for a refund on order 1234."
 
-	opened, ok := world.rehearse(t, author(t.Context()), "rehearsal-key-1", rehearsalSeal, text).(openapi.OpenRehearsal201JSONResponse)
-	if !ok {
-		t.Fatal("the rehearsal was not opened")
+	opened := world.rehearse(t, inCx("usr_ana", domain.RoleAuthor), "rehearsal-key-1", rehearsalSeal, text)
+	if opened.code != http.StatusCreated {
+		t.Fatalf("status = %d: %s", opened.code, opened.raw)
 	}
-	step, started := world.opening(t, opened.RunId)
+	step, started := world.opening(t, opened.run)
 	thread, err := drafts.NewStore(world.pool).ThreadFor(t.Context(), world.agent, world.draftOf(t, rehearsalSeal), "usr_ana")
 	if err != nil {
 		t.Fatalf("ThreadFor: %v", err)
@@ -127,7 +155,7 @@ func TestRehearsal_fromTheRoute_opensTheCandidateInItsAuthorsConversation(t *tes
 	if strings.Contains(started.Case, "refund") {
 		t.Errorf("the ledger's case id %q carries the typed text", started.Case)
 	}
-	if state := world.settleCandidate(t, domain.RunID(opened.RunId)); state.Phase != engine.PhaseFinished {
+	if state := world.settleCandidate(t, domain.RunID(opened.run)); state.Phase != engine.PhaseFinished {
 		t.Errorf("phase = %v, want the rehearsal run to its end", state.Phase)
 	}
 }
@@ -135,117 +163,154 @@ func TestRehearsal_fromTheRoute_opensTheCandidateInItsAuthorsConversation(t *tes
 func TestRehearsal_theSameKey_answersTheRunItOpenedOrRefusesAnotherRequest(t *testing.T) {
 	world, _ := rehearsalWorld(t)
 	world.seal(t, otherRouteSeal)
-	ctx := author(t.Context())
-	first, ok := world.rehearse(t, ctx, "rehearsal-key-2", rehearsalSeal, "case one").(openapi.OpenRehearsal201JSONResponse)
-	if !ok {
-		t.Fatal("the first attempt was not opened")
+	ana := inCx("usr_ana", domain.RoleAuthor)
+	first := world.rehearse(t, ana, "rehearsal-key-2", rehearsalSeal, "case one")
+	if first.code != http.StatusCreated {
+		t.Fatalf("the first attempt = %d: %s", first.code, first.raw)
 	}
 
-	again, ok := world.rehearse(t, ctx, "rehearsal-key-2", rehearsalSeal, "case one").(openapi.OpenRehearsal200JSONResponse)
-	if !ok || again.RunId != first.RunId {
-		t.Errorf("the same request again = %+v, want the run it opened (%s)", again, first.RunId)
+	if again := world.rehearse(t, ana, "rehearsal-key-2", rehearsalSeal, "case one"); again.code != http.StatusOK || again.run != first.run {
+		t.Errorf("the same request again = %d %s, want 200 with %s", again.code, again.run, first.run)
 	}
 	for name, ask := range map[string][2]string{
 		"another seal": {otherRouteSeal, "case one"},
 		"another case": {rehearsalSeal, "case two"},
 	} {
-		if code := rehearsalConflict(world.rehearse(t, ctx, "rehearsal-key-2", ask[0], ask[1])); code != "fuseone:conflict" {
-			t.Errorf("%s under the same key = %q, want fuseone:conflict", name, code)
+		if got := world.rehearse(t, ana, "rehearsal-key-2", ask[0], ask[1]); got.code != http.StatusConflict || got.problem != "fuseone:conflict" {
+			t.Errorf("%s under the same key = %d %q, want 409 fuseone:conflict", name, got.code, got.problem)
 		}
 	}
 	world.eraseSeal(t, rehearsalSeal)
-	if _, ok := world.rehearse(t, ctx, "rehearsal-key-2", rehearsalSeal, "case one").(openapi.OpenRehearsal200JSONResponse); !ok {
-		t.Errorf("a retry after the seal was erased was refused, want the run it opened")
+	if got := world.rehearse(t, ana, "rehearsal-key-2", rehearsalSeal, "case one"); got.code != http.StatusOK {
+		t.Errorf("a retry after the seal was erased = %d: %s, want the run it opened", got.code, got.raw)
 	}
 }
 
-func TestRehearsal_anotherCallersKey_opensTheirOwnRun(t *testing.T) {
+// Attempts under one key racing past each other store one case and open one run: each
+// later one finds the first's run inside the fence, before it writes anything.
+func TestRehearsal_concurrentAttemptsUnderOneKey_storeOneCaseAndOpenOneRun(t *testing.T) {
 	world, _ := rehearsalWorld(t)
-	ana, ok := world.rehearse(t, author(t.Context()), "rehearsal-key-3", rehearsalSeal, "case one").(openapi.OpenRehearsal201JSONResponse)
-	if !ok {
-		t.Fatal("ana's rehearsal was not opened")
+	const attempts = 8
+	replies := make([]rehearsalReply, attempts)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := range attempts {
+		wg.Go(func() {
+			<-start
+			replies[i] = world.rehearse(t, inCx("usr_ana", domain.RoleAuthor), "rehearsal-key-race", rehearsalSeal, "the same case")
+		})
 	}
-	bia := auth.WithPrincipal(t.Context(), domain.Principal{
-		ID: "usr_bia", Kind: domain.PrincipalUser,
-		Grants: []domain.Grant{{Scope: domain.Scope{Company: "acme", Area: "cx"}, Role: domain.RoleAuthor}},
-	})
-	theirs, ok := world.rehearse(t, bia, "rehearsal-key-3", rehearsalSeal, "case one").(openapi.OpenRehearsal201JSONResponse)
-	if !ok || theirs.RunId == ana.RunId {
-		t.Fatalf("bia under ana's key = %+v, want a run of bia's own", theirs)
+	close(start)
+	wg.Wait()
+
+	created := 0
+	for _, r := range replies {
+		if r.code == http.StatusCreated {
+			created++
+		}
+		if r.run != replies[0].run || (r.code != http.StatusCreated && r.code != http.StatusOK) {
+			t.Errorf("an attempt answered %d with %q, want the one run %q", r.code, r.run, replies[0].run)
+		}
+	}
+	if runs, _, cases := world.written(t); created != 1 || runs != 1 || cases != 1 {
+		t.Errorf("created %d, runs %d, stored cases %d; want one of each", created, runs, cases)
+	}
+}
+
+func TestRehearsal_anotherCallersKey_opensTheirOwnRunInTheirOwnThread(t *testing.T) {
+	world, _ := rehearsalWorld(t)
+	first := world.rehearse(t, inCx("usr_ana", domain.RoleAuthor), "rehearsal-key-3", rehearsalSeal, "case one")
+	theirs := world.rehearse(t, inCx("usr_bia", domain.RoleAuthor), "rehearsal-key-3", rehearsalSeal, "case one")
+	if first.code != http.StatusCreated || theirs.code != http.StatusCreated || theirs.run == first.run {
+		t.Fatalf("ana %d %s, bia %d %s; want a run of bia's own", first.code, first.run, theirs.code, theirs.run)
 	}
 	own, err := drafts.NewStore(world.pool).ThreadFor(t.Context(), world.agent, world.draftOf(t, rehearsalSeal), "usr_bia")
 	if err != nil {
 		t.Fatalf("ThreadFor: %v", err)
 	}
-	if _, started := world.opening(t, theirs.RunId); started.AuthoringThread != own {
+	if _, started := world.opening(t, theirs.run); started.AuthoringThread != own {
 		t.Errorf("bia's rehearsal belongs to thread %q, want bia's own %q, not the sealer's", started.AuthoringThread, own)
 	}
 }
 
 func TestRehearsal_outsideTheSealedScope_isASealThatDoesNotExist(t *testing.T) {
 	world, _ := rehearsalWorld(t)
-	finance := auth.WithPrincipal(t.Context(), domain.Principal{
+	finance := domain.Principal{
 		ID: "usr_rui", Kind: domain.PrincipalUser,
 		Grants: []domain.Grant{{Scope: domain.Scope{Company: "acme", Area: "finance"}, Role: domain.RoleAuthor}},
-	})
-	for name, ctx := range map[string]context.Context{"another area": finance, "an auditor of the area": auditor(t.Context())} {
-		if _, ok := world.rehearse(t, ctx, "rehearsal-key-4", rehearsalSeal, "case").(openapi.OpenRehearsal404ApplicationProblemPlusJSONResponse); !ok {
-			t.Errorf("%s: want 404", name)
+	}
+	for name, caller := range map[string]domain.Principal{
+		"another area": finance, "an auditor of the area": inCx("usr_eva", domain.RoleAuditor),
+	} {
+		if got := world.rehearse(t, caller, "rehearsal-key-4", rehearsalSeal, "case"); got.code != http.StatusNotFound {
+			t.Errorf("%s = %d, want 404", name, got.code)
 		}
 	}
-	if _, ok := world.rehearse(t, author(t.Context()), "rehearsal-key-4", "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9", "case").(openapi.OpenRehearsal404ApplicationProblemPlusJSONResponse); !ok {
-		t.Errorf("a seal nobody wrote: want 404")
+	nobody := "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9"
+	if got := world.rehearse(t, inCx("usr_ana", domain.RoleAuthor), "rehearsal-key-4", nobody, "case"); got.code != http.StatusNotFound {
+		t.Errorf("a seal nobody wrote = %d, want 404", got.code)
 	}
 }
 
 func TestRehearsal_aCaseThatIsEmptyOversizedOrNotText_isRefused(t *testing.T) {
 	world, _ := rehearsalWorld(t)
+	ana := inCx("usr_ana", domain.RoleAuthor)
 	for name, text := range map[string]string{
-		"empty": "", "blank": " \n\t", "oversized": strings.Repeat("a", 32<<10+1), "not UTF-8": "caso \xff",
+		"empty": "", "blank": " \n\t", "oversized": strings.Repeat("a", 32<<10+1),
 	} {
-		if _, ok := world.rehearse(t, author(t.Context()), "rehearsal-key-5", rehearsalSeal, text).(openapi.OpenRehearsal400ApplicationProblemPlusJSONResponse); !ok {
-			t.Errorf("%s: want 400", name)
+		if got := world.rehearse(t, ana, "rehearsal-key-5", rehearsalSeal, text); got.code != http.StatusBadRequest {
+			t.Errorf("%s = %d, want 400", name, got.code)
 		}
 	}
-	if _, ok := world.rehearse(t, author(t.Context()), "rehearsal-key-5", rehearsalSeal, strings.Repeat("a", 32<<10)).(openapi.OpenRehearsal201JSONResponse); !ok {
-		t.Errorf("a case of exactly the limit: want it opened")
+	// What the JSON decoder would quietly turn into U+FFFD, sent as the bytes a client sends.
+	backslash := string(rune(92))
+	for name, body := range map[string]string{
+		"not UTF-8":             "{\"sealId\":\"" + rehearsalSeal + "\",\"case\":\"caso \xff\"}",
+		"an unpaired surrogate": `{"sealId":"` + rehearsalSeal + `","case":"caso ` + backslash + `ud800"}`,
+	} {
+		if got := world.rehearseRaw(t, ana, "rehearsal-key-5", []byte(body)); got.code != http.StatusBadRequest {
+			t.Errorf("%s = %d: %s, want 400", name, got.code, got.raw)
+		}
+	}
+	if runs, _, _ := world.written(t); runs != 0 {
+		t.Fatalf("a refused case opened %d runs", runs)
+	}
+	if got := world.rehearse(t, ana, "rehearsal-key-5", rehearsalSeal, strings.Repeat("a", 32<<10)); got.code != http.StatusCreated {
+		t.Errorf("a case of exactly the limit = %d: %s, want it opened", got.code, got.raw)
 	}
 }
 
-func (w *experimentWorld) rehearsalsOpened(t *testing.T) int {
-	t.Helper()
-	var runs int
-	if err := w.pool.QueryRow(t.Context(), `select count(*) from runs where seal_id is not null`).Scan(&runs); err != nil {
-		t.Fatalf("count the runs: %v", err)
+// A refused rehearsal writes nothing: no run, no stored case, and no conversation opened for it.
+func TestRehearsal_refused_writesNothing(t *testing.T) {
+	for name, refuse := range map[string]func(*testing.T, *experimentWorld){
+		"an erased seal": func(t *testing.T, w *experimentWorld) { w.eraseSeal(t, rehearsalSeal) },
+		"a paused agent": func(t *testing.T, w *experimentWorld) { w.pause(t) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			world, _ := rehearsalWorld(t)
+			refuse(t, world)
+			got := world.rehearse(t, inCx("usr_ana", domain.RoleAuthor), "rehearsal-key-6", rehearsalSeal, "case")
+			if got.code != http.StatusConflict {
+				t.Fatalf("status = %d: %s, want 409", got.code, got.raw)
+			}
+			if runs, threads, cases := world.written(t); runs != 0 || threads != 0 || cases != 0 {
+				t.Errorf("wrote %d runs, %d conversations, %d cases; want nothing", runs, threads, cases)
+			}
+		})
 	}
-	return runs
 }
 
-func TestRehearsal_onAnErasedSeal_opensNothing(t *testing.T) {
+func TestRehearsal_onAnErasedSeal_isUnreadable(t *testing.T) {
 	world, _ := rehearsalWorld(t)
 	world.eraseSeal(t, rehearsalSeal)
-	if code := rehearsalConflict(world.rehearse(t, author(t.Context()), "rehearsal-key-6", rehearsalSeal, "case")); code != "fuseone:candidate-unreadable" {
-		t.Errorf("an erased seal = %q, want fuseone:candidate-unreadable", code)
-	}
-	if n := world.rehearsalsOpened(t); n != 0 {
-		t.Errorf("runs opened = %d, want none", n)
-	}
-}
-
-func TestRehearsal_ofAPausedAgent_opensNothing(t *testing.T) {
-	world, _ := rehearsalWorld(t)
-	world.pause(t)
-	if code := rehearsalConflict(world.rehearse(t, author(t.Context()), "rehearsal-key-7", rehearsalSeal, "case")); code != "fuseone:conflict" {
-		t.Errorf("a paused agent = %q, want fuseone:conflict", code)
-	}
-	if n := world.rehearsalsOpened(t); n != 0 {
-		t.Errorf("runs opened = %d, want none", n)
+	if got := world.rehearse(t, inCx("usr_ana", domain.RoleAuthor), "rehearsal-key-7", rehearsalSeal, "case"); got.problem != "fuseone:candidate-unreadable" {
+		t.Errorf("an erased seal = %d %q, want fuseone:candidate-unreadable", got.code, got.problem)
 	}
 }
 
 // The seal's bytes are read inside the agent's fence: an erasure holding it is waited for,
 // and the rehearsal then finds the tombstone and opens nothing.
-func TestRehearsal_whileAnErasureHoldsTheFence_waitsAndFindsTheTombstone(t *testing.T) {
+func TestRehearsal_whileASealErasureHoldsTheFence_waitsAndFindsTheTombstone(t *testing.T) {
 	world, _ := rehearsalWorld(t)
 	ctx := context.Background()
 	entered, release, erased := make(chan struct{}), make(chan struct{}), make(chan error, 1)
@@ -254,21 +319,128 @@ func TestRehearsal_whileAnErasureHoldsTheFence_waitsAndFindsTheTombstone(t *test
 	}()
 	<-entered
 
-	opened := make(chan openapi.OpenRehearsalResponseObject, 1)
-	go func() { opened <- world.rehearse(t, author(ctx), "rehearsal-key-8", rehearsalSeal, "case") }()
+	opened := make(chan rehearsalReply, 1)
+	go func() {
+		opened <- world.rehearse(t, inCx("usr_ana", domain.RoleAuthor), "rehearsal-key-8", rehearsalSeal, "case")
+	}()
 	select {
-	case resp := <-opened:
-		t.Fatalf("the rehearsal did not wait for the erasure's fence: %T", resp)
+	case got := <-opened:
+		t.Fatalf("the rehearsal did not wait for the erasure's fence: %d", got.code)
 	case <-time.After(400 * time.Millisecond):
 	}
 	close(release)
 	if err := <-erased; err != nil {
 		t.Fatalf("erase: %v", err)
 	}
-	if code := rehearsalConflict(<-opened); code != "fuseone:candidate-unreadable" {
-		t.Fatalf("after the erasure = %q, want fuseone:candidate-unreadable", code)
+	if got := <-opened; got.problem != "fuseone:candidate-unreadable" {
+		t.Fatalf("after the erasure = %d %q, want fuseone:candidate-unreadable", got.code, got.problem)
 	}
-	if n := world.rehearsalsOpened(t); n != 0 {
-		t.Errorf("runs opened = %d, want none", n)
+	if runs, threads, _ := world.written(t); runs != 0 || threads != 0 {
+		t.Errorf("wrote %d runs and %d conversations on an erased seal", runs, threads)
+	}
+}
+
+/*
+The author erasing their conversation while a rehearsal is being opened in it: the erasure
+waits for the fence the rehearsal holds, and then reaches the run, the case included. Opened
+outside that fence, the run could be written after the erasure had read which runs the
+conversation holds, and keep a case its author had erased.
+*/
+func TestRehearsal_whileItHoldsTheFence_anErasureOfTheConversationWaitsAndReachesIt(t *testing.T) {
+	world := newExperimentWorld(t).withDrafts()
+	world.resume(t)
+	store := drafts.NewStore(world.pool)
+	caller := drafts.Caller{By: "usr_ana", Allow: func(domain.Scope) bool { return true }}
+	draft, err := store.Create(t.Context(), world.agent, nil, caller)
+	if err != nil {
+		t.Fatalf("open the draft: %v", err)
+	}
+	world.sealFrom(t, rehearsalSeal, draft.DraftID)
+	fence := stallingFence{Store: regression.NewStore(world.pool), entered: make(chan struct{}), release: make(chan struct{})}
+	world.server.WithRegressions(fence)
+
+	opened := make(chan rehearsalReply, 1)
+	go func() {
+		opened <- world.rehearse(t, inCx("usr_ana", domain.RoleAuthor), "rehearsal-key-9", rehearsalSeal, "a case to erase")
+	}()
+	select {
+	case <-fence.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the rehearsal never took the agent's exclusive fence")
+	}
+	erased := make(chan error, 1)
+	go func() { erased <- store.EraseThread(context.Background(), world.agent, caller) }()
+	select {
+	case err := <-erased:
+		t.Fatalf("the erasure did not wait for the rehearsal's fence: %v", err)
+	case <-time.After(400 * time.Millisecond):
+	}
+	close(fence.release)
+	got := <-opened
+	if got.code != http.StatusCreated {
+		t.Fatalf("the rehearsal = %d: %s", got.code, got.raw)
+	}
+	if err := <-erased; err != nil {
+		t.Fatalf("EraseThread: %v", err)
+	}
+	_, started := world.opening(t, got.run)
+	if _, err := ledger.NewContent(world.pool).Get(t.Context(), started.InputRef); !errors.Is(err, domain.ErrContentErased) {
+		t.Errorf("the rehearsal's case after its conversation was erased: %v, want erased", err)
+	}
+}
+
+// firstStalls holds the first caller inside the fence it asked for, shared or exclusive,
+// until released; every later caller takes its own fence as asked.
+type firstStalls struct {
+	*regression.Store
+	once             *sync.Once
+	entered, release chan struct{}
+}
+
+func (f firstStalls) stall(inside func(context.Context) error) func(context.Context) error {
+	return func(ctx context.Context) error {
+		f.once.Do(func() { close(f.entered); <-f.release })
+		return inside(ctx)
+	}
+}
+
+func (f firstStalls) Hold(ctx context.Context, agent domain.AgentID, inside func(context.Context) error) error {
+	return f.Store.Hold(ctx, agent, f.stall(inside))
+}
+
+func (f firstStalls) Exclusive(ctx context.Context, agents []domain.AgentID, inside func(context.Context) error) error {
+	return f.Store.Exclusive(ctx, agents, f.stall(inside))
+}
+
+// A second attempt under the key waits for the first to leave the fence, whatever fence
+// the route takes, and then answers with the first's run: never a second case stored.
+func TestRehearsal_aSecondAttemptUnderTheKey_waitsForTheFirstInsideTheFence(t *testing.T) {
+	world, _ := rehearsalWorld(t)
+	fence := firstStalls{Store: regression.NewStore(world.pool), once: &sync.Once{},
+		entered: make(chan struct{}), release: make(chan struct{})}
+	world.server.WithRegressions(fence)
+	ana := inCx("usr_ana", domain.RoleAuthor)
+
+	first := make(chan rehearsalReply, 1)
+	go func() { first <- world.rehearse(t, ana, "rehearsal-key-10", rehearsalSeal, "the same case") }()
+	select {
+	case <-fence.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the first attempt never took the agent's fence")
+	}
+	second := make(chan rehearsalReply, 1)
+	go func() { second <- world.rehearse(t, ana, "rehearsal-key-10", rehearsalSeal, "the same case") }()
+	select {
+	case got := <-second:
+		t.Fatalf("the second attempt did not wait for the first's fence: %d", got.code)
+	case <-time.After(400 * time.Millisecond):
+	}
+	close(fence.release)
+	a, b := <-first, <-second
+	if a.code != http.StatusCreated || b.code != http.StatusOK || a.run != b.run {
+		t.Errorf("first %d %s, second %d %s; want 201 then 200 with the same run", a.code, a.run, b.code, b.run)
+	}
+	if runs, _, cases := world.written(t); runs != 1 || cases != 1 {
+		t.Errorf("runs %d, stored cases %d; want one of each", runs, cases)
 	}
 }

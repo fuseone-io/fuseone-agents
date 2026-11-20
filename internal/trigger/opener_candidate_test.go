@@ -24,7 +24,10 @@ never published has nothing to pause) and by a stop of the installation, the sea
 or the agent.
 */
 
-const candidateSeal = "0b7c3e52-8a43-4b55-9a3f-0d6a3c5f9e11"
+const (
+	candidateSeal  = "0b7c3e52-8a43-4b55-9a3f-0d6a3c5f9e11"
+	candidateDraft = "1c8d4f63-9b54-4c66-8a4f-1e7b4d6a0f22"
+)
 
 var sealedScope = domain.Scope{Company: "acme", Area: "finance"}
 
@@ -49,7 +52,7 @@ func candidateOpener(t *testing.T, paused bool) (*trigger.Opener, *ledger.Memory
 	clock := fixedClock{t: time.Date(2026, 11, 19, 9, 0, 0, 0, time.UTC)}
 	return trigger.NewOpener(store, reg, clock).WithContent(engine.NewMemoryContent()).
 		WithCandidates(candidates{candidateSeal: {
-			Agent: "triage", Version: "vcandidate01", Scope: sealedScope, Paused: paused,
+			Agent: "triage", Version: "vcandidate01", Scope: sealedScope, Paused: paused, DraftID: candidateDraft,
 		}}), store
 }
 
