@@ -30,6 +30,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.128.0] — 2026-11-20
+
+NT-018 phase 4, release 4a: every reader knows a live rehearsal, and nothing writes one yet
+(#429). No migrations. This release must run on every replica before 4b opens the first
+rehearsal; once one exists, it becomes the rollback floor (until then the floor stays 0.123.0).
+
 ### Upgrade notes
 
 - **Every reader learns the steps of a live rehearsal** (NT-018 phase 4, release 4a), and
