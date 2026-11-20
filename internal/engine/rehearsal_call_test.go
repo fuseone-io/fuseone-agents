@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -113,5 +114,20 @@ func TestAdvance_aRehearsalsApprovedCall_waitsForTheAuthor(t *testing.T) {
 	}
 	if head := headOf(t, h, start); head.Kind != domain.StepWorldAwaited || len(h.tools.invocations) != 0 {
 		t.Errorf("head %s, %d calls; want world_awaited and nothing called", head.Kind, len(h.tools.invocations))
+	}
+}
+
+// A rehearsal's call asks no tool layer to get ready (review of #429): a layer whose
+// Reserve fails would otherwise end the turn, and one that succeeds would have prepared an
+// effect nothing is allowed to reach.
+func TestAdvance_aRehearsalsCall_neverReservesTheToolLayer(t *testing.T) {
+	t.Parallel()
+	h, start := rehearsalHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"c-1"}`)})
+	h.tools.reserveErr = errors.New("the tool layer was asked to reserve")
+	if _, err := h.runner.Advance(context.Background(), start); err != nil {
+		t.Fatalf("Advance = %v, want the call parked without asking the layer", err)
+	}
+	if head := headOf(t, h, start); head.Kind != domain.StepWorldAwaited {
+		t.Errorf("head %s, want world_awaited", head.Kind)
 	}
 }
