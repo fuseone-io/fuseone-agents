@@ -35,6 +35,9 @@ field" is a commit message.
 - **Migration 0123 adds `dropped` and `stale` to `agent_draft_turns`** (#413): what a
   workbench turn's answer carried that never became a card, kept on the turn. Additive, with
   defaults; a replica from before it settles a turn without them, which leaves zero, as before.
+- **Migration 0124 indexes workbench proposals by their turn** (#413), built concurrently
+  outside a transaction while the previous release keeps writing. A turn reads what became of
+  the proposals of the turns it shows the model through it.
 
 ### Fixed
 
