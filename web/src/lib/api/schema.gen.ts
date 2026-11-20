@@ -579,6 +579,11 @@ export interface paths {
          *     will. The JSON API, the `.agent.md` file and Terraform publish without
          *     it.
          *
+         *     The agent's schedules and webhooks move with the version, in the same
+         *     transaction. A webhook path another agent already answers on, or a
+         *     version id that names other bytes, refuses the publication (409), and
+         *     nothing is written.
+         *
          *     A version that closes an event cycle is published, and the answer
          *     names the cycle in `eventCycleWarning`, as `publishAgent` does.
          */
@@ -8246,8 +8251,12 @@ export interface operations {
              *     - `fuseone:version-digest-unknown`: the version id was published
              *       before digests were kept, so nothing can show the bytes are the
              *       same.
+             *     - `fuseone:webhook-path-taken`: the definition declares a webhook
+             *       path another agent already answers on. The agent's schedules and
+             *       webhooks move with the version, in its transaction, so a refused
+             *       path leaves the version unpublished rather than live without it.
              *
-             *     For either, change the definition. The id is 48 bits of the
+             *     For any of these, change the definition. The id is 48 bits of the
              *     digest, so a change almost always gives another one; if the new id
              *     lands on another claim, it is refused the same way, and the
              *     definition is changed again.
@@ -8519,6 +8528,20 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            /**
+             * @description Nothing was written: no version, the current version unchanged and
+             *     the draft as it was. The problem type says why, as `publishAgent`
+             *     answers it: `fuseone:webhook-path-taken`,
+             *     `fuseone:version-collision` or `fuseone:version-digest-unknown`.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             412: components["responses"]["PreconditionFailed"];
         };
     };

@@ -100,12 +100,11 @@ func (p *Publisher) Activate(ctx context.Context, a Activation) (Activated, erro
 	if err := a.Accept(out.Spec); err != nil {
 		return Activated{}, err
 	}
-	if err := writeActivation(ctx, tx, a, out); err != nil {
+	if err := p.writeActivation(ctx, tx, a, out); err != nil {
 		return Activated{}, err
 	}
-	if err := tx.QueryRow(ctx, `select paused from agent_state where agent_id = $1`,
-		string(a.Agent)).Scan(&out.Paused); err != nil {
-		return Activated{}, fmt.Errorf("spec: activate %s@%s: read the pause: %w", a.Agent, a.Version, err)
+	if out.Paused, err = pausedIn(ctx, tx, a.Agent); err != nil {
+		return Activated{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Activated{}, fmt.Errorf("spec: activate %s@%s: commit: %w", a.Agent, a.Version, err)
@@ -241,9 +240,9 @@ func firstOrUnreadable(err error, a Activation) error {
 	return fmt.Errorf("candidate %s/%s: %w", a.Agent, a.Version, domain.ErrCandidateUnreadable)
 }
 
-// writeActivation writes a candidate's row, makes the version current and records the
-// activation, all in tx.
-func writeActivation(ctx context.Context, tx pgx.Tx, a Activation, out Activated) error {
+// writeActivation writes a candidate's row, makes the version current, records the
+// activation, runs its own condition and moves what the version declares, all in tx.
+func (p *Publisher) writeActivation(ctx context.Context, tx pgx.Tx, a Activation, out Activated) error {
 	path := "published"
 	if out.Created {
 		path = "candidate"
@@ -260,8 +259,10 @@ func writeActivation(ctx context.Context, tx pgx.Tx, a Activation, out Activated
 		string(a.Agent), string(a.Version), out.SealID, path, string(a.By)); err != nil {
 		return fmt.Errorf("spec: record the activation of %s@%s: %w", a.Agent, a.Version, err)
 	}
-	if a.Within == nil {
-		return nil
+	if a.Within != nil {
+		if err := a.Within(ctx, tx, out.Spec); err != nil {
+			return err
+		}
 	}
-	return a.Within(ctx, tx, out.Spec)
+	return p.reconcile(ctx, tx, out.Spec)
 }

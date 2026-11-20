@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -132,39 +131,30 @@ func TestDraftPublish_anAgentPublishedElsewhereSince_isRefusedAsMoved(t *testing
 	}
 }
 
-// heldSchedules holds the publication's schedule sync until released: the
-// moment after the commit, before the answer.
-type heldSchedules struct{ reached, release chan struct{} }
-
-func (h heldSchedules) Sync(context.Context, domain.AgentID, []string, time.Time) error {
-	close(h.reached)
-	<-h.release
-	return nil
-}
-
-// A publication committed is answered as such, whatever happens to the draft
-// after the commit: discarded by another tab while the schedules were being
-// reconciled, the answer is still the version and the draft as published.
+/*
+A publication committed is answered as such, whatever happens to the draft after the
+commit: the answer is the version and the draft as published, never read again. A
+discard sent while the publication holds the draft waits for its commit (#416 moved
+everything a publication does inside it), lands after it, and the answer is still the
+version and the draft as published.
+*/
 func TestDraftPublish_aDraftDiscardedAfterTheCommit_isStillAnsweredAsPublished(t *testing.T) {
-	pool := testdb.Pool(t)
-	held := heldSchedules{reached: make(chan struct{}), release: make(chan struct{})}
-	store := drafts.NewStore(pool)
-	api := httpapi.NewServer(ledger.NewMemory(), "test").
-		WithAgents(spec.NewRegistry(pool)).WithPublisher(spec.NewPublisher(pool, engine.SystemClock{})).
-		WithRetirements(spec.NewState(pool)).WithDrafts(store).WithSchedules(held)
-	w := publishWorld{draftJourney: draftJourney{etagJourney{handler: apiHandlerFor(api)}}, store: store,
-		agent: fmt.Sprintf("nt018-publish-%d", time.Now().UnixNano())}
+	var stall stallingSchedules
+	w, _ := reconcilingWorld(t, stalling(&stall))
 	tag := w.accept(t, w.ready(t), draft.InsertBlock{At: 1, Type: blocks.Never, Text: "Prometer prazo.", Locale: "pt-BR"})
 
 	answered := make(chan *httptest.ResponseRecorder, 1)
 	go func() { answered <- w.publish(t, areaAuthor("factory"), tag) }()
-	<-held.reached
-	discard := w.do(t, areaAuthor("factory"), http.MethodDelete, "/api/v1/agents/"+w.agent+"/draft", nil, map[string]string{"If-Match": tag})
-	wantStatus(t, "discard meanwhile", discard, http.StatusNoContent)
-	close(held.release)
+	<-stall.entered
+	discarded := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		discarded <- w.do(t, areaAuthor("factory"), http.MethodDelete, "/api/v1/agents/"+w.agent+"/draft", nil, map[string]string{"If-Match": tag})
+	}()
+	close(stall.release)
 
 	rec := <-answered
 	wantStatus(t, "publish", rec, http.StatusOK)
+	wantStatus(t, "discard", <-discarded, http.StatusNoContent)
 	var resp openapi.PublishAgentDraft200JSONResponse
 	decode(t, rec, &resp.Body)
 	if resp.Body.Draft.BaseVersionId == nil || *resp.Body.Draft.BaseVersionId != resp.Body.VersionId || rec.Header().Get("ETag") != tag {

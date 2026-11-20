@@ -30,6 +30,19 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A slower publication could put an earlier version's triggers back.** Publishing — from
+  a file through `PUT /agents/{id}/versions`, or from the workbench — reconciled the agent's
+  schedules and webhooks after the version had committed. Two publications of one agent
+  could commit in one order and reconcile in the other, leaving a cron the live version
+  removed still firing, or a webhook it withdrew answering again with its secret. Both now
+  move the schedules and webhooks in the publication's own transaction, under the agent's
+  lock, as activation already did, and answer whether the agent is paused from it. A
+  webhook path another agent answers on now refuses the publication (409
+  `fuseone:webhook-path-taken`) and writes nothing; before, the version went live and the
+  answer was an error (#416).
+
 ## [0.125.0] — 2026-11-19
 
 NT-018 phase 2c: activating a version through the publication's locks (#411, #415).

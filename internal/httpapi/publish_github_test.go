@@ -8,22 +8,9 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/trigger"
 )
-
-// syncedHooks records what a publish reconciles, and is otherwise spyHooks.
-type syncedHooks struct {
-	spyHooks
-	synced map[domain.AgentID][]domain.WebhookTrigger
-}
-
-func (s *syncedHooks) Sync(_ context.Context, agent domain.AgentID, _ domain.Scope, hooks []domain.WebhookTrigger) error {
-	if s.synced == nil {
-		s.synced = map[domain.AgentID][]domain.WebhookTrigger{}
-	}
-	s.synced[agent] = hooks
-	return nil
-}
 
 func githubTrigger() openapi.AgentTrigger {
 	from := openapi.AgentTriggerFromGithub
@@ -42,12 +29,11 @@ dropped on the way would publish a GitHub hook as an ordinary one: GitHub's
 signed deliveries would all be refused, and the screen would print back a
 trigger that looks configured.
 */
-func TestPublishAgent_aGitHubWebhook_isReconciledWithItsSourceAndEvents(t *testing.T) {
+func TestPublishAgent_aGitHubWebhook_isPublishedWithItsSourceAndEvents(t *testing.T) {
 	t.Parallel()
 	pub := newPublisher()
-	hooks := &syncedHooks{}
 
-	if _, err := publishServer(t, pub).WithWebhooks(hooks).PublishAgent(
+	if _, err := publishServer(t, pub).PublishAgent(
 		inArea("cx", domain.RoleAuthor),
 		openapi.PublishAgentRequestObject{
 			AgentId: "triage",
@@ -59,14 +45,15 @@ func TestPublishAgent_aGitHubWebhook_isReconciledWithItsSourceAndEvents(t *testi
 		t.Fatalf("PublishAgent: %v", err)
 	}
 
+	// What the publisher reconciles, in its transaction, from the version (#416).
 	want := []domain.WebhookTrigger{{
 		Path: "gh/reviewer", From: domain.WebhookFromGitHub, Events: []string{"pull_request.opened", "issues"},
 	}}
-	if got := hooks.synced["triage"]; !reflect.DeepEqual(got, want) {
-		t.Errorf("synced = %+v, want %+v", got, want)
+	if len(pub.published) != 1 {
+		t.Fatalf("published = %+v, want one version", pub.published)
 	}
-	if len(pub.published) != 1 || pub.published[0].Triggers[0].From != domain.WebhookFromGitHub {
-		t.Errorf("published = %+v, want the version to carry the source", pub.published)
+	if got := spec.Webhooks(pub.published[0]); !reflect.DeepEqual(got, want) {
+		t.Errorf("declared webhooks = %+v, want %+v", got, want)
 	}
 }
 

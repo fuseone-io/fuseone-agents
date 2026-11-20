@@ -3,34 +3,12 @@ package httpapi
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/spec"
 )
-
-/*
-Schedules is where a declared cron trigger becomes a moment the worker will
-reach. Declared here by the consumer.
-
-It exists because publishing from this screen did not reach it. Schedules were
-reconciled from specification files at worker start-up, which is the right
-thing for an installation that keeps its agents in git and nothing at all for
-one that presses the button: the version recorded the trigger, the screen
-printed it back, and no clock ever knew. Both ways of publishing end at the
-same table now.
-*/
-type Schedules interface {
-	Sync(ctx context.Context, agent domain.AgentID, schedules []string, from time.Time) error
-}
-
-// WithSchedules wires where a cron trigger is reconciled.
-func (s *Server) WithSchedules(schedules Schedules) *Server {
-	s.schedules = schedules
-	return s
-}
 
 // Publisher writes a version and records whether the agent may run.
 //
@@ -41,7 +19,6 @@ type Publisher interface {
 	// Publish judges the event cycles the version closes under the same
 	// serialisation as its write, and answers with them (#227).
 	Publish(ctx context.Context, p spec.Publication) (spec.Published, error)
-	EnsurePaused(ctx context.Context, agent domain.AgentID, by domain.UserID) error
 	SetPaused(ctx context.Context, agent domain.AgentID, paused bool, by domain.UserID) error
 	IsPaused(ctx context.Context, agent domain.AgentID) (bool, error)
 }
@@ -112,15 +89,10 @@ func (s *Server) PublishAgent(
 	if err != nil {
 		return nil, fmt.Errorf("publish %s: %w", req.AgentId, err)
 	}
-	paused, err := s.afterPublication(ctx, published, scope)
-	if err != nil {
-		return nil, err
-	}
-
 	return openapi.PublishAgent200JSONResponse{
 		AgentId: string(published.ID), VersionId: string(published.Version),
 		Created:           !before[published.Version],
-		Paused:            paused,
+		Paused:            judged.Paused,
 		Definition:        ptr(string(definition)),
 		EventCycleWarning: eventCycleWarning(judged, auth.VisibleScopes(ctx, domain.PermAgentRead)),
 	}, nil
@@ -222,31 +194,4 @@ func (s *Server) agentVersions(ctx context.Context, agent domain.AgentID) (map[d
 		out[v.VersionID] = true
 	}
 	return out, nil
-}
-
-// afterPublication is what every door that publishes does once the version
-// exists: the agent recorded as paused unless somebody decided, its schedules
-// and webhooks reconciled to what was published. It answers whether the agent
-// is paused.
-func (s *Server) afterPublication(ctx context.Context, published spec.Spec, scope domain.Scope) (bool, error) {
-	// Recorded as paused only if nobody has decided: republishing an agent
-	// somebody deliberately started must not stop it.
-	if err := s.publisher.EnsurePaused(ctx, published.ID, callerOf(ctx)); err != nil {
-		return false, err
-	}
-	// After the version exists, so what is reconciled is what was published.
-	// An error here is returned rather than swallowed: publishing the same
-	// definition again is a no-op, so a caller retrying reaches the sync.
-	if s.schedules != nil {
-		if err := s.schedules.Sync(ctx, published.ID,
-			spec.CronSchedules(published), clockOr(s.clock).Now()); err != nil {
-			return false, fmt.Errorf("reconcile the schedules of %s: %w", published.ID, err)
-		}
-	}
-	if s.webhooks != nil {
-		if err := s.webhooks.Sync(ctx, published.ID, scope, spec.Webhooks(published)); err != nil {
-			return false, fmt.Errorf("reconcile the webhooks of %s: %w", published.ID, err)
-		}
-	}
-	return s.publisher.IsPaused(ctx, published.ID)
 }

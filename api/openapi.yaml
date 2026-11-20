@@ -688,8 +688,12 @@ paths:
             - `fuseone:version-digest-unknown`: the version id was published
               before digests were kept, so nothing can show the bytes are the
               same.
+            - `fuseone:webhook-path-taken`: the definition declares a webhook
+              path another agent already answers on. The agent's schedules and
+              webhooks move with the version, in its transaction, so a refused
+              path leaves the version unpublished rather than live without it.
 
-            For either, change the definition. The id is 48 bits of the
+            For any of these, change the definition. The id is 48 bits of the
             digest, so a change almost always gives another one; if the new id
             lands on another claim, it is refused the same way, and the
             definition is changed again.
@@ -929,6 +933,11 @@ paths:
         will. The JSON API, the `.agent.md` file and Terraform publish without
         it.
 
+        The agent's schedules and webhooks move with the version, in the same
+        transaction. A webhook path another agent already answers on, or a
+        version id that names other bytes, refuses the publication (409), and
+        nothing is written.
+
         A version that closes an event cycle is published, and the answer
         names the cycle in `eventCycleWarning`, as `publishAgent` does.
       parameters:
@@ -959,6 +968,15 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            Nothing was written: no version, the current version unchanged and
+            the draft as it was. The problem type says why, as `publishAgent`
+            answers it: `fuseone:webhook-path-taken`,
+            `fuseone:version-collision` or `fuseone:version-digest-unknown`.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
 
   /agents/{agentId}/draft/seals:

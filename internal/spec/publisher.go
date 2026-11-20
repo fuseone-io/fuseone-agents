@@ -28,6 +28,10 @@ type Publisher struct {
 	// write. Nil outside tests; set by export_test.go to hold a publication
 	// there while another one races it.
 	afterJudging func()
+	// schedules and webhooks move with every version this publisher makes current, in
+	// its transaction (#416). Nil reconciles nothing.
+	schedules ScheduleSync
+	webhooks  WebhookSync
 }
 
 // Clock is when a pause was decided.
@@ -76,6 +80,8 @@ type Published struct {
 	// can hide an agent its reader may not read. The cycles are judged across
 	// every scope; who is told which names is the caller's to decide.
 	Scopes map[domain.AgentID]domain.Scope
+	// Paused is whether the agent is paused, as the publication's transaction left it.
+	Paused bool
 }
 
 /*
@@ -116,7 +122,7 @@ func (p *Publisher) Publish(ctx context.Context, pub Publication) (Published, er
 	if err != nil {
 		return Published{}, err
 	}
-	if err := writeOn(ctx, tx, pub); err != nil {
+	if judged.Paused, err = p.writeOn(ctx, tx, pub); err != nil {
 		return Published{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -171,10 +177,6 @@ func refuseStage(ctx context.Context, tx pgx.Tx, agent domain.AgentID, refused [
 	return nil
 }
 
-func (p *Publisher) EnsurePaused(ctx context.Context, agent domain.AgentID, by domain.UserID) error {
-	return p.state.EnsurePaused(ctx, agent, by)
-}
-
 func (p *Publisher) SetPaused(
 	ctx context.Context, agent domain.AgentID, paused bool, by domain.UserID,
 ) error {
@@ -206,17 +208,22 @@ func inCompany(s Spec, company domain.CompanyID) Spec {
 	return s
 }
 
-// writeOn writes the version, makes it current and runs the publication's own
-// condition, all in tx.
-func writeOn(ctx context.Context, tx pgx.Tx, pub Publication) error {
+// writeOn writes the version, makes it current, runs the publication's own condition and
+// moves what the version declares, all in tx. It answers whether the agent is paused there.
+func (p *Publisher) writeOn(ctx context.Context, tx pgx.Tx, pub Publication) (bool, error) {
 	if err := publishOn(ctx, tx, pub.Spec, pub.By, pub.Company); err != nil {
-		return err
+		return false, err
 	}
 	if err := makeCurrentOn(ctx, tx, pub.Spec.ID, pub.Spec.Version); err != nil {
-		return err
+		return false, err
 	}
-	if pub.Within == nil {
-		return nil
+	if pub.Within != nil {
+		if err := pub.Within(ctx, tx, pub.Spec.Version); err != nil {
+			return false, err
+		}
 	}
-	return pub.Within(ctx, tx, pub.Spec.Version)
+	if err := p.reconcile(ctx, tx, inCompany(pub.Spec, pub.Company)); err != nil {
+		return false, err
+	}
+	return pausedIn(ctx, tx, pub.Spec.ID)
 }

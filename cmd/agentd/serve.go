@@ -147,6 +147,11 @@ func serve(args []string) error {
 		channels = admin.NewChannels(identity.pool, store, drivers)
 		connectorSettings := connectortools.NewSettings(store)
 		connectorInstances := admin.NewConnectorInstances(identity.pool, store)
+		// Every door that makes a version current moves its schedules and webhooks in
+		// the same transaction (#416): publishing from a file or the workbench, and
+		// activating. Files reconcile at start-up as well, for agents kept in git.
+		publisher := spec.NewPublisher(identity.pool, engine.SystemClock{}).
+			WithReconciliation(trigger.NewPostgresSchedules(identity.pool), webhooksWith(identity.pool, masterVault))
 		api = api.WithChannels(channels, drivers).
 			WithChannelListing(drivers).
 			WithCompanies(admin.NewCompanies(identity.pool)).
@@ -193,10 +198,6 @@ func serve(args []string) error {
 					admin.NewRetention(identity.pool, store), corpus).WithAuthoring(draftStore),
 			).
 			WithWebhooks(webhooksWith(identity.pool, masterVault)).
-			// Where a published cron trigger becomes a moment the worker
-			// reaches. Reconciled from files at start-up as well, which is
-			// the path an installation keeping its agents in git takes.
-			WithSchedules(trigger.NewPostgresSchedules(identity.pool)).
 			WithAudit(audit.NewPostgres(identity.pool)).
 			WithHealth(admin.NewHealth(identity.pool)).
 			WithPolicies(policy.NewStore(identity.pool)).
@@ -225,11 +226,9 @@ func serve(args []string) error {
 			WithDrafts(draftStore).
 			// Candidates sealed from it, each seen only in its sealed scope (NT-018 phase 2).
 			WithCandidates(spec.NewCandidateReader(identity.pool, ledger.NewContent(identity.pool))).
-			// Activating one, or a published version, through the publication's locks,
-			// moving its schedules and webhooks in the same transaction.
-			WithActivations(spec.NewActivations(spec.NewPublisher(identity.pool, engine.SystemClock{}),
-				spec.NewCandidateReader(identity.pool, ledger.NewContent(identity.pool))).
-				WithReconciliation(trigger.NewPostgresSchedules(identity.pool), webhooksWith(identity.pool, masterVault))).
+			// Activating one, or a published version, through the publication's locks.
+			WithActivations(spec.NewActivations(publisher,
+				spec.NewCandidateReader(identity.pool, ledger.NewContent(identity.pool)))).
 			// The workbench's conversation (NT-018 phase 3): the same
 			// registry, for the model, its price and a scope's providers.
 			WithTurnModels(providers).
@@ -242,7 +241,7 @@ func serve(args []string) error {
 			)).
 			WithStages(spec.NewState(identity.pool)).
 			WithPromotions(spec.NewState(identity.pool)).
-			WithPublisher(spec.NewPublisher(identity.pool, engine.SystemClock{}))
+			WithPublisher(publisher)
 
 		// Who may sign in, and what signing in grants. Saving registers the
 		// provider straight away, so a configuration never needs a restart to
