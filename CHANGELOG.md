@@ -30,6 +30,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.129.0] — 2026-11-20
+
+NT-018 phase 4, release 4b: live rehearsals are opened, answered, decided and ended through the
+API (#431, #433). No migrations. The console's "Rehearsal" tab is 4c. Once the first rehearsal
+exists, 0.128.0 is the rollback floor (until then the floor stays 0.123.0).
+
 ### Upgrade notes
 
 - **The first live rehearsal makes 0.128.0 the rollback floor** (NT-018 phase 4, release 4b).
