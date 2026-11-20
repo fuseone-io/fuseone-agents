@@ -108,7 +108,8 @@ func (s *Store) Accept(ctx context.Context, a Acceptance) (Opened, error) {
 
 // applicationOf is the stored operation as an application to the draft,
 // once its body is still kept (404), the scope it moves the draft to is the
-// caller's (403), and the draft is the one, at the ETag, the model read (412).
+// caller's (403), and the draft is the one, at the ETag, the model read, or
+// one its turn's own acceptances moved (412).
 func applicationOf(ctx context.Context, tx pgx.Tx, p stored, r row, a Acceptance) (Application, draft.Draft, error) {
 	data, found, err := body(ctx, tx, p.BodyRef)
 	if err != nil || !found {
@@ -130,8 +131,8 @@ func applicationOf(ctx context.Context, tx pgx.Tx, p stored, r row, a Acceptance
 	if err := destinationAllowed(d, r.scope, apply); err != nil {
 		return Application{}, draft.Draft{}, err
 	}
-	if r.draftID != p.Draft || r.revision != p.Read {
-		return Application{}, draft.Draft{}, &domain.StaleError{Current: r.revision}
+	if err := stillTheDraftRead(ctx, tx, p, r); err != nil {
+		return Application{}, draft.Draft{}, err
 	}
 	return apply, d, nil
 }
@@ -200,6 +201,9 @@ func (s *Store) Proposals(ctx context.Context, agent domain.AgentID, c Caller) (
 		for _, id := range ids {
 			p, _, err := readProposal(ctx, tx, agent, id, false)
 			if err != nil {
+				return err
+			}
+			if p.Current, err = waitsOnThisDraft(ctx, tx, p, r); err != nil {
 				return err
 			}
 			if data, found, err := body(ctx, tx, p.BodyRef); err != nil {
