@@ -76,6 +76,36 @@ func TestRecord_changingOnlyTheWorld_writesANewVersion(t *testing.T) {
 	}
 }
 
+/*
+During the rollout of the release that writes worlds, a replica still on the one before can
+record the same case again, from the same run: it knows no world and sends none. That must
+not take the world a newer replica recorded, or the case would silently stop being replayed.
+An empty world keeps the one the case has; a world that is named replaces it.
+*/
+func TestRecord_againWithNoWorld_keepsTheWorldTheCaseHas(t *testing.T) {
+	pool := activatedCorpus(t)
+	store := regression.NewStore(pool)
+	ref, _ := keptWorld(t, ledger.NewContent(pool), "reg-3", `{"case":"reg-3","entries":[]}`)
+	if err := store.Record(t.Context(), withWorld(aCase("reg-3", never("x")), ref)); err != nil {
+		t.Fatalf("Record (with the world): %v", err)
+	}
+	version, digest := latestVersion(t, pool)
+
+	if err := store.Record(t.Context(), aCase("reg-3", never("x"))); err != nil {
+		t.Fatalf("Record (a writer that knows no world): %v", err)
+	}
+	cases, err := store.List(t.Context(), "suporte")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if got := worldOf(cases, "reg-3"); got != ref {
+		t.Errorf("the case names world %q, want the one it had, %q", got, ref)
+	}
+	if v, d := latestVersion(t, pool); v != version || d != digest {
+		t.Errorf("version %d %s -> %d %s, want nothing changed", version, digest, v, d)
+	}
+}
+
 // A case with no world reads as one: no reference, and the version's line is the one a
 // binary before worlds wrote, so the first write after this migration records nothing new.
 func TestAtVersion_aCaseWithNoWorld_readsNone(t *testing.T) {

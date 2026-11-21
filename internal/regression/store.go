@@ -79,8 +79,11 @@ func upsertCase(ctx context.Context, tx pgx.Tx, c caseRow) error {
 		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 		on conflict (agent_id, case_id) do update set
 			input_ref = excluded.input_ref,
-			-- A correction recorded again keeps the world it was recorded with, or none.
-			world_ref = excluded.world_ref,
+			-- No world named keeps the one the case has: a writer from before worlds records
+			-- the same case again with none, and must not take what a newer one recorded
+			-- (NT-018 phase 5). A world that is named replaces it.
+			world_ref = case when excluded.world_ref = '' then regression_cases.world_ref
+			                 else excluded.world_ref end,
 			expectations = excluded.expectations,
 			expectations_ref = excluded.expectations_ref,
 			from_run = excluded.from_run,
