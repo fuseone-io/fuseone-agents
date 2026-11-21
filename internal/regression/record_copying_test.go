@@ -144,3 +144,31 @@ func TestEraseInputCopy_takesTheCasesWorldWithIt(t *testing.T) {
 		t.Errorf("%d world objects still readable after the input was erased, want none", readable)
 	}
 }
+
+// What is committed is what a replay will read: a world it would refuse is refused here, and
+// nothing of it is kept.
+func TestRecordCopying_aWorldTheReplayCouldNotRead_isRefusedAndKeepsNothing(t *testing.T) {
+	many := &regression.WorldCopy{}
+	for i := 0; i < 8000; i++ {
+		many.Answers = append(many.Answers, regression.Answer{Tool: "crm.lookup", ArgsDigest: fmt.Sprintf("sha256:%d", i), Bytes: []byte("{}")})
+	}
+	for name, world := range map[string]*regression.WorldCopy{
+		"an answer past the limit": {Answers: []regression.Answer{{Tool: "crm.lookup", ArgsDigest: "sha256:a", Bytes: make([]byte, domain.DefaultContentLimit+1)}}},
+		"an answer to no tool":     {Answers: []regression.Answer{{ArgsDigest: "sha256:a", Bytes: []byte("{}")}}},
+		"an answer to no call":     {Answers: []regression.Answer{{Tool: "crm.lookup", Bytes: []byte("{}")}}},
+		"a world past the limit":   many,
+	} {
+		t.Run(name, func(t *testing.T) {
+			pool := activatedCorpus(t)
+			input := uniqueBytes("ask")
+			_, err := regression.NewStore(pool).RecordCopying(t.Context(), aCase("reg-3", never("x")),
+				regression.Copying{Input: input, World: world})
+			if !errors.Is(err, regression.ErrWorldUnkeepable) {
+				t.Fatalf("err = %v, want %v", err, regression.ErrWorldUnkeepable)
+			}
+			if n := kept(t, pool, "reg-3", input); n != 0 {
+				t.Errorf("%d objects kept, want none", n)
+			}
+		})
+	}
+}

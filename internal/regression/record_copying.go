@@ -17,6 +17,11 @@ import (
 // one the corpus was first recorded in (NT-018 phase 5, D3).
 var ErrDatasetElsewhere = errors.New("regression: this corpus is recorded in another scope")
 
+// ErrWorldUnkeepable is a world the replay could not read whole: an answer that names no
+// call, or an answer or a world that would be kept only in part. It is refused before it is
+// kept, rather than committed and found unreadable by the first battery that replays it.
+var ErrWorldUnkeepable = errors.New("regression: this world cannot be kept whole")
+
 // Answer is one answer an author gave in a rehearsal, for the call it answered.
 type Answer struct {
 	Tool       domain.ToolID
@@ -72,6 +77,9 @@ func (s *Store) keepWorld(ctx context.Context, tx pgx.Tx, c domain.RegressionCas
 	owner := string(c.Agent) + "/" + c.ID
 	world := domain.CaseWorld{Case: c.ID, Entries: make([]domain.WorldEntry, 0, len(w.Answers))}
 	for i, a := range w.Answers {
+		if err := keepable(a); err != nil {
+			return "", fmt.Errorf("%w: answer %d of %s %v", ErrWorldUnkeepable, i+1, c.ID, err)
+		}
 		ref, err := s.content.RestoreForTx(ctx, tx, WorldKind, owner, int64(i+2), a.Bytes)
 		if err != nil {
 			return "", fmt.Errorf("regression: keep answer %d of %s: %w", i+1, c.ID, err)
@@ -86,9 +94,24 @@ func (s *Store) keepWorld(ctx context.Context, tx pgx.Tx, c domain.RegressionCas
 	if err != nil {
 		return "", fmt.Errorf("regression: encode the world of %s: %w", c.ID, err)
 	}
+	if len(object) > domain.DefaultContentLimit {
+		return "", fmt.Errorf("%w: the world of %s is %d bytes", ErrWorldUnkeepable, c.ID, len(object))
+	}
 	ref, err := s.content.RestoreForTx(ctx, tx, WorldKind, owner, 1, object)
 	if err != nil {
 		return "", fmt.Errorf("regression: keep the world of %s: %w", c.ID, err)
 	}
 	return ref, nil
+}
+
+// keepable holds an answer to what the replay's reader requires of it: the call it answers,
+// named, and its bytes kept whole.
+func keepable(a Answer) error {
+	switch {
+	case a.Tool == "" || a.ArgsDigest == "":
+		return errors.New("names no call")
+	case len(a.Bytes) > domain.DefaultContentLimit:
+		return fmt.Errorf("is %d bytes, past what is kept whole", len(a.Bytes))
+	}
+	return nil
 }
