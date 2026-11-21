@@ -203,7 +203,9 @@ func (w *experimentWorld) correct(t *testing.T, content *ledger.Content) {
 // settle runs the simulation pool the worker command builds until every run settles.
 func (w *experimentWorld) settle(t *testing.T, runs []domain.RunID) {
 	t.Helper()
-	parts := &workerParts{store: w.store, queue: w.store, catalog: w.catalog}
+	// The pool as the command builds it on Postgres, configuration pool and all: without
+	// it the pool reads no world, and refuses every case of a version (NT-018 phase 5).
+	parts := &workerParts{store: w.store, queue: w.store, catalog: w.catalog, configPool: w.pool}
 	deps := engine.Deps{Ledger: w.store, Gate: gate.New(), Tools: w.catalog, Catalog: w.catalog,
 		Clock: engine.SystemClock{}, Content: ledger.NewContent(w.pool)}
 	_, sim := parts.pools(workerFlags{owner: "journey", concurrency: 1, lease: time.Minute},

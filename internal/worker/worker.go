@@ -139,8 +139,10 @@ type Worker struct {
 	judges      Judges
 	// candidates is wired on the simulation pool only (candidate.go).
 	candidates Candidates
-	clock      engine.Clock
-	log        *slog.Logger
+	// worlds is wired on the simulation pool only (world.go).
+	worlds Worlds
+	clock  engine.Clock
+	log    *slog.Logger
 
 	// ceilings is optional; nil means the only budget is the agent's own.
 	ceilings Ceilings

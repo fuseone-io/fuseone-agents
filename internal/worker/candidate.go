@@ -43,16 +43,17 @@ func (w *Worker) resolveCandidate(
 	return w.candidates.ResolveCandidate(ctx, claim, started)
 }
 
-// unresolved ends a turn whose run could not be resolved. A candidate that
-// cannot be honoured will not become readable by retrying, and parking it would
-// invite a resume onto the same refusal: it fails. Anything else parks, so
+// unresolved ends a turn whose run could not be resolved. A candidate or a world
+// that cannot be honoured will not become readable by retrying, and parking it
+// would invite a resume onto the same refusal: it fails. Anything else parks, so
 // someone sees it.
 func (w *Worker) unresolved(ctx context.Context, claim domain.Claim, reason error) error {
-	if !errors.Is(reason, domain.ErrCandidateUnreadable) {
+	code, fails := unreadable(reason)
+	if !fails {
 		return w.park(ctx, claim, reason, "spec_unresolved")
 	}
-	w.log.Warn("candidate unreadable; failing the run", "run", claim.RunID, "err", reason)
-	return w.failRun(ctx, claim, domain.FailedPayload{Code: CodeCandidateUnreadable})
+	w.log.Warn("unreadable; failing the run", "run", claim.RunID, "code", code, "err", reason)
+	return w.failRun(ctx, claim, domain.FailedPayload{Code: code})
 }
 
 // failRun ends a run that has not planned, fenced on the lease and the head it

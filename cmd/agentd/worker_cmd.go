@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/regression"
 	"github.com/fuseone/agents/internal/simulate"
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/worker"
@@ -190,6 +191,9 @@ func (p *workerParts) pools(
 		// Only the simulation pool reads seals: a candidate never opens a real run,
 		// and the real pool fails any run that names one (NT-018 phase 2).
 		sim = sim.WithCandidates(specs.Candidates(spec.NewSealRows(p.configPool), deps.Content))
+		// And only it replays a case's world, read at the version its run was opened on
+		// (NT-018 phase 5). A reader, not a second corpus store: it takes no fence.
+		sim = sim.WithWorlds(regression.NewWorlds(p.configPool))
 	}
 	if p.budgets != nil {
 		if spender, ok := p.store.(spendReader); ok {

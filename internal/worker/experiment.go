@@ -49,6 +49,12 @@ func (w *Worker) resolve(ctx context.Context, claim domain.Claim) (Resolution, e
 	// nothing the model says can make a run wait for the world, or stop it waiting
 	// (NT-018 phase 4). A rehearsal is a simulated run or it is nothing.
 	resolved.Start.Rehearsal = started.Simulated && started.Rehearsal
+	if err != nil {
+		return resolved, err
+	}
+	// The world rides from the opening's case and version too, never from the model
+	// (NT-018 phase 5).
+	resolved.Start.World, err = w.worldOf(ctx, claim, started)
 	return resolved, err
 }
 
