@@ -3643,6 +3643,8 @@
       "version": "Versão",
       "sealedAt": "Selada em",
       "sealedByColumn": "Por",
+      "seals_one": "{{count}} selo",
+      "seals_other": "{{count}} selos",
       "open": "Abrir {{version}}",
       "sheetDescription": "O texto selado, exatamente como foi guardado. É ele que um experimento roda, mesmo que o rascunho mude depois.",
       "sealedBy": "Selada por {{by}} em {{at}}",

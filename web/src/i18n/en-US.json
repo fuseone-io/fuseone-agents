@@ -3643,6 +3643,8 @@
       "version": "Version",
       "sealedAt": "Sealed at",
       "sealedByColumn": "By",
+      "seals_one": "{{count}} seal",
+      "seals_other": "{{count}} seals",
       "open": "Open {{version}}",
       "sheetDescription": "The sealed text, exactly as it was kept. It is what an experiment runs, even if the draft changes afterwards.",
       "sealedBy": "Sealed by {{by}} on {{at}}",
