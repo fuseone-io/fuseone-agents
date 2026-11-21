@@ -162,6 +162,14 @@ describe("the workbench conversation", () => {
     expect(screen.getByText(/0,0045/)).toBeInTheDocument();
   });
 
+  it("says, before erasing, that only rehearsals on the current draft go with the conversation", async () => {
+    world({ [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Oi" }], conversation: "open" } }) });
+    openAt("/agents/triagem/workbench");
+    await userEvent.click(await screen.findByRole("button", { name: "Apagar conversa" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/ensaios desta conversa no rascunho atual também deixam de existir; os de ensaios de rascunhos anteriores, não/)).toBeInTheDocument();
+  });
+
   it("erases the conversation only once confirmed", async () => {
     const calls = world({
       [`GET ${TURNS}`]: () => ({ body: { items: [{ ...turn, message: "Oi" }], conversation: "open" } }),
