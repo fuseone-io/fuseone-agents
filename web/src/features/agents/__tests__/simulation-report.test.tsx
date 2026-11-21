@@ -168,4 +168,22 @@ describe("simulation report", () => {
 
     finish();
   });
+
+  // NT-018 phase 5: a replayed correction that left its world neither held nor broke.
+  it("counts the corrections that left their world apart from held and broken", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <SimulationSummary report={{ id: "sim-1", cases: [], running: false, held: 1, broken: 0, notComparable: 1 }} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText("Not comparable")).toBeInTheDocument();
+  });
+
+  it("says how a case left its world", async () => {
+    renderReport([answeredCase({ id: "estorno", diverged: { position: 1, divergence: "repeated", tool: "crm.lookup" } })]);
+    await userEvent.click(screen.getAllByRole("button")[0]!);
+    expect(await screen.findByText(/called crm\.lookup again after already receiving that answer/)).toBeInTheDocument();
+  });
 });

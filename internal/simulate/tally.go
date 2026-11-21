@@ -33,6 +33,9 @@ type Report struct {
 	// Erased counts the corrections that lost their input, which is coverage this
 	// battery does not have.
 	Erased int `json:"erased"`
+	// NotComparable counts the replayed cases that left the world they were recorded with
+	// (NT-018 phase 5): neither held nor broken, because nobody measured either.
+	NotComparable int `json:"not_comparable"`
 	// Change is how the corpus has moved since this battery's version, for whoever read
 	// both. Empty for a battery with no pin.
 	Change CorpusChange `json:"-"`

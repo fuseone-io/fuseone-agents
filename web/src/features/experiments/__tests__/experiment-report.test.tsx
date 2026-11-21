@@ -7,6 +7,7 @@ import {
   renderWithClient,
   report,
   stubApi,
+  summary,
 } from "@/features/experiments/__tests__/experiment-fixtures";
 
 /*
@@ -58,5 +59,27 @@ describe("an experiment's report", () => {
     const row = (await screen.findByText("estorno")).closest("tr")!;
     expect(within(row).getByText("0 de 3")).toBeInTheDocument();
     expect(within(row).getByText("rodou 3 de 5 repetições")).toBeInTheDocument();
+  });
+
+  // NT-018 phase 5: a replayed case that left its world neither held nor broke.
+  it("calls a case that left its world not comparable, and says how it left it", async () => {
+    const left = experimentCase("estorno", 0, 2);
+    left.divergedIn = 1;
+    left.case.diverged = { position: 2, divergence: "extra", tool: "kb.search" };
+    showReport([left]);
+
+    const row = (await screen.findByText("estorno")).closest("tr")!;
+    expect(within(row).getByText("Não comparável")).toBeInTheDocument();
+    expect(within(row).getByText(/chamou kb\.search, que o mundo gravado não tem na posição 2/)).toBeInTheDocument();
+    expect(within(row).getByText("desviou em 1")).toBeInTheDocument();
+    expect(within(row).queryByText("Segurou")).not.toBeInTheDocument();
+  });
+
+  it("counts the cases that left their world apart from held and broken", async () => {
+    stubApi({ "GET /agents/triage/experiments/exp_triage_1": { summary: summary({ notComparable: 2 }), cases: [] } });
+    renderWithClient(<Harness />);
+
+    const term = await screen.findByText("Não comparáveis");
+    expect(term.nextElementSibling?.textContent).toBe("2");
   });
 });

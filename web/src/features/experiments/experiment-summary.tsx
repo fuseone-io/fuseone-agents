@@ -36,6 +36,9 @@ export function ExperimentSummaryFacts({ summary }: { summary: ExperimentSummary
       <Fact label={t("experiments.repetitions")}>{summary.repetitions}</Fact>
       <Fact label={t("experiments.held")}>{summary.held}</Fact>
       <Fact label={t("experiments.broken")}>{summary.broken}</Fact>
+      {summary.notComparable > 0 && (
+        <Fact label={t("experiments.notComparable")}>{summary.notComparable}</Fact>
+      )}
       <Fact label={t("experiments.cost")}>
         <Mono>{formatMicros(summary.cost.micros)}</Mono>
       </Fact>

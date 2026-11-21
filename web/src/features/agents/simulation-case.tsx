@@ -24,6 +24,7 @@ import {
 } from "@/features/agents/simulation-tally";
 import { formatMicros } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { divergedKey } from "@/features/runs/diverged-key";
 import type {
   SimulationAct,
   SimulationCase,
@@ -140,6 +141,7 @@ export function CaseRow({
           </section>
 
           {(entry.unmet?.length ?? 0) > 0 ||
+          entry.diverged ||
           entry.error ||
           entry.reason ||
           blocked ? (
@@ -286,6 +288,9 @@ function statusOf(entry: SimulationCase, t: TFunction) {
 
 function warning(entry: SimulationCase, t: TFunction) {
   if (entry.error) return entry.error;
+  if (entry.diverged) {
+    return t(divergedKey(entry.diverged), { tool: entry.diverged.tool, position: entry.diverged.position });
+  }
   if (entry.reason) {
     const key = reasonKey(entry.reason);
     return key ? t(key) : entry.reason;
