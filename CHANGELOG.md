@@ -30,6 +30,19 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **The workbench's "Rehearsal" tab** (NT-018 phase 4, release 4c). An author chooses one of
+  the candidates they may see, writes the case, and follows the rehearsal as it runs. While
+  the rehearsal moves, the tab reads it every second; it stops reading once the rehearsal waits
+  for a person, is parked, or has ended. Each call the rehearsal makes shows its tool and
+  arguments, with a field to answer it as the world would. An action the Gate held shows
+  approve and reject, recorded as the rehearsal's own decision and never as a real approval.
+  The rehearsal can be ended wherever it stands, and its trail reads as any run's does. The
+  rehearsal being followed is named in the address, so it survives switching tabs and can be
+  shared with another author of the area. The tab and the conversation's erase dialog both say
+  that erasing the conversation reaches only the rehearsals on the current draft.
+
 ## [0.129.0] — 2026-11-20
 
 NT-018 phase 4, release 4b: live rehearsals are opened, answered, decided and ended through the

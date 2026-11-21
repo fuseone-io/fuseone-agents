@@ -3546,7 +3546,7 @@
       "staleOnArrival_other": "{{count}} propostas da resposta foram feitas sobre um rascunho que mudou durante a resposta e não foram guardadas.",
       "erase": "Apagar conversa",
       "eraseTitle": "Apagar esta conversa?",
-      "eraseBody": "As mensagens, as respostas e o conteúdo das propostas deixam de existir. O rascunho e os custos registrados continuam.",
+      "eraseBody": "As mensagens, as respostas e o conteúdo das propostas deixam de existir. O rascunho e os custos registrados continuam. Os casos e as respostas dos ensaios desta conversa no rascunho atual também deixam de existir; os de ensaios de rascunhos anteriores, não.",
       "eraseConfirm": "Apagar",
       "erasedToast": "Conversa apagada",
       "closed": {
@@ -3592,7 +3592,8 @@
     "workspace": "Espaço de trabalho",
     "tabs": {
       "draft": "Rascunho",
-      "candidates": "Candidatas"
+      "candidates": "Candidatas",
+      "rehearsal": "Ensaio"
     },
     "parts": {
       "identity": "Identidade e modelo",
@@ -3654,6 +3655,38 @@
       "activateConfirm": "Ativar versão",
       "activatedLive": "{{version}} está em produção.",
       "activatedPaused": "{{version}} está ativa, pausada."
+    },
+    "rehearsal": {
+      "intro": "Ensaie uma candidata num caso escrito por você. Nenhuma chamada chega a uma ferramenta: você responde por ela e decide o que o Gate segurar.",
+      "erasureNote": "Apagar a conversa só alcança os ensaios desta conversa no rascunho atual. Ensaios de candidatas de rascunhos anteriores saem quando o selo ou o titular é apagado.",
+      "reading": "Lendo o ensaio",
+      "noCandidate": "Sele uma candidata primeiro",
+      "noCandidateBody": "O ensaio roda uma candidata. Na aba Candidatas, selar o rascunho cria uma.",
+      "candidate": "Candidata",
+      "candidateOption": "{{version}} · selada em {{sealedAt}}",
+      "candidateRequired": "Escolha a candidata a ensaiar.",
+      "case": "Caso",
+      "casePlaceholder": "O que chega para o agente, como chegaria de verdade.",
+      "caseRequired": "Escreva o caso a ensaiar.",
+      "caseTooLong": "Um caso tem no máximo 32 KiB.",
+      "open": "Abrir ensaio",
+      "worldTitle": "A execução espera a resposta do mundo",
+      "worldBody": "Esta chamada não chegou a nenhuma ferramenta. O que você responder é o que o agente lê como resultado dela, marcado como não confiável.",
+      "tool": "Ferramenta",
+      "arguments": "Argumentos da chamada",
+      "answer": "Resposta",
+      "answerRequired": "Escreva a resposta do mundo.",
+      "answerTooLong": "Uma resposta tem no máximo 256 KiB.",
+      "answerSend": "Responder",
+      "heldTitle": "O Gate segurou uma ação",
+      "heldBody": "Num ensaio, a decisão é sua e vale só para ele: não é uma aprovação real, e a chamada aprovada ainda espera a resposta do mundo.",
+      "approve": "Aprovar",
+      "reject": "Recusar",
+      "abandon": "Abandonar ensaio",
+      "abandonTitle": "Abandonar este ensaio?",
+      "abandonBody": "O ensaio termina onde está. Nada é desfeito, porque nada chegou ao mundo.",
+      "abandonConfirm": "Abandonar",
+      "again": "Novo ensaio"
     }
   }
 }
