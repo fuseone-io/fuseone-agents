@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/fuseone/agents/internal/auth"
@@ -79,11 +80,14 @@ func (s *Server) RecordRegression(
 	}
 	if s.regressions != nil && s.content != nil && req.Body != nil {
 		// A rehearsal keeps its world, and its candidate need not be published: the
-		// rehearsal's own scope decides (NT-018 phase 5b).
-		if steps, err := s.store.Read(ctx, domain.RunID(req.Body.RunId), domain.FirstSeq); err == nil {
-			if _, rehearsal := rehearsalOf(steps); rehearsal {
-				return s.recordFromRehearsal(ctx, req)
-			}
+		// rehearsal's own scope decides (NT-018 phase 5b). A read that fails is not a run
+		// that is no rehearsal: recording it the ordinary way would keep it without its world.
+		steps, err := s.store.Read(ctx, domain.RunID(req.Body.RunId), domain.FirstSeq)
+		if err != nil && !errors.Is(err, domain.ErrRunNotFound) {
+			return nil, fmt.Errorf("read run %s: %w", req.Body.RunId, err)
+		}
+		if _, rehearsal := rehearsalOf(steps); err == nil && rehearsal {
+			return s.recordFromRehearsal(ctx, req)
 		}
 	}
 	published, ok, err := s.publishedAgent(ctx, req.AgentId)

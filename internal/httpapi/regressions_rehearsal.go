@@ -66,7 +66,25 @@ func (s *Server) recordFromRehearsal(
 	if err != nil {
 		return nil, err
 	}
+	if refused != nil && !answersTheCaller(refused) {
+		return nil, fmt.Errorf("record a case from rehearsal %s: %w", req.Body.RunId, refused)
+	}
 	return correctionOfRehearsal(req.AgentId, recorded, refused), nil
+}
+
+// answersTheCaller says whether an error is an answer to the caller's request: the rehearsal absent
+// or out of reach, a rehearsal that cannot be kept, a case the corpus refuses. Anything else
+// failed, and is the server's to answer for.
+func answersTheCaller(err error) bool {
+	for _, answer := range []error{
+		errNoSuchRun, errRehearsalUnkept, regression.ErrDatasetElsewhere, regression.ErrNothingToCheck,
+		regression.ErrInvalidCase, regression.ErrExpectationsTooLarge, regression.ErrWorldUnkeepable,
+	} {
+		if errors.Is(err, answer) {
+			return true
+		}
+	}
+	return false
 }
 
 // correctionOfRehearsal says what recording a rehearsal came to.
@@ -91,6 +109,9 @@ func (s *Server) rehearsalCopy(
 	ctx context.Context, agent domain.AgentID, body *openapi.RecordRegressionJSONRequestBody,
 ) (domain.RegressionCase, regression.Copying, error) {
 	steps, err := s.store.Read(ctx, domain.RunID(body.RunId), domain.FirstSeq)
+	if err != nil && !errors.Is(err, domain.ErrRunNotFound) {
+		return domain.RegressionCase{}, regression.Copying{}, fmt.Errorf("read the rehearsal: %w", err)
+	}
 	started, ok := rehearsalOf(steps)
 	if err != nil || !ok || steps[0].AgentID != agent {
 		return domain.RegressionCase{}, regression.Copying{}, errNoSuchRun
@@ -120,15 +141,24 @@ func (s *Server) rehearsalCopy(
 
 // readWorld reads back the input and every answer, refusing what has been erased since.
 func (s *Server) readWorld(ctx context.Context, inputRef string, calls []rehearsalCall) (regression.Copying, error) {
+	if inputRef == "" {
+		return regression.Copying{}, fmt.Errorf("%w: it was opened with no case", errRehearsalUnkept)
+	}
 	input, err := s.content.Get(ctx, inputRef)
-	if inputRef == "" || err != nil {
+	if gone(err) {
 		return regression.Copying{}, fmt.Errorf("%w: its case can no longer be read", errRehearsalUnkept)
+	}
+	if err != nil {
+		return regression.Copying{}, fmt.Errorf("read the rehearsal's case: %w", err)
 	}
 	world := &regression.WorldCopy{Answers: make([]regression.Answer, 0, len(calls))}
 	for i, call := range calls {
 		answer, err := s.content.Get(ctx, call.answer)
-		if err != nil {
+		if gone(err) {
 			return regression.Copying{}, fmt.Errorf("%w: answer %d can no longer be read", errRehearsalUnkept, i+1)
+		}
+		if err != nil {
+			return regression.Copying{}, fmt.Errorf("read answer %d: %w", i+1, err)
 		}
 		world.Answers = append(world.Answers, regression.Answer{Tool: call.tool, ArgsDigest: call.args, Bytes: answer})
 	}
@@ -181,4 +211,10 @@ func callsOf(steps []domain.Step) []rehearsalCall {
 		}
 	}
 	return calls
+}
+
+// gone says content is absent or erased: the rehearsal lost it, which is an answer, where
+// any other failure to read it is not.
+func gone(err error) bool {
+	return errors.Is(err, domain.ErrContentAbsent) || errors.Is(err, domain.ErrContentErased)
 }

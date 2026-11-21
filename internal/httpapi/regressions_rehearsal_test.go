@@ -200,3 +200,72 @@ func TestRecordRegression_fromARehearsalOutOfReach_isAbsent(t *testing.T) {
 		})
 	}
 }
+
+// failingReads fails the reads it is told to, by their order, and serves the rest.
+type failingReads struct {
+	*ledger.Memory
+	failing map[int]bool
+	reads   int
+}
+
+func (f *failingReads) Read(ctx gocontext.Context, run domain.RunID, from int64) ([]domain.Step, error) {
+	f.reads++
+	if f.failing[f.reads] {
+		return nil, errors.New("the ledger is away")
+	}
+	return f.Memory.Read(ctx, run, from)
+}
+
+// A read that fails is not a run that is not a rehearsal: the request stops, rather than
+// record a published agent's rehearsal the ordinary way, with its input and without its world.
+func TestRecordRegression_whenTheFirstReadFails_recordsNothing(t *testing.T) {
+	t.Parallel()
+	r := aRehearsal(t, true, true)
+	store := &failingReads{Memory: r.store, failing: map[int]bool{1: true}}
+	corpus := &recordingCopies{fakeCorpus: &fakeCorpus{}}
+	server := NewServer(store, "test").WithAgents(triggerable(t)).
+		WithContent(r.content).WithCases(r.content).WithRegressions(corpus)
+	_, err := server.RecordRegression(inArea("cx", domain.RoleAuthor), fromRehearsal())
+	if err == nil {
+		t.Error("the request went on past a read that failed")
+	}
+	if len(corpus.recorded) != 0 {
+		t.Errorf("recorded %+v, want nothing", corpus.recorded)
+	}
+}
+
+// failingContent fails every read of content, as a store that is away does.
+type failingContent struct{ *engine.MemoryContent }
+
+func (failingContent) Get(gocontext.Context, string) ([]byte, error) {
+	return nil, errors.New("the content store is away")
+}
+
+// What fails is the server's to answer for, not a refusal of the caller's request: only an
+// absent or erased run or content, and a case the corpus refuses, are 4xx.
+func TestRecordRegression_fromARehearsal_anOperationalFailure_isTheServersError(t *testing.T) {
+	t.Parallel()
+	for name, server := range map[string]func(r rehearsed, corpus *recordingCopies) *Server{
+		"the ledger fails inside the fence": func(r rehearsed, corpus *recordingCopies) *Server {
+			return NewServer(&failingReads{Memory: r.store, failing: map[int]bool{2: true}}, "test").
+				WithContent(r.content).WithCases(r.content).WithRegressions(corpus)
+		},
+		"the content store fails": func(r rehearsed, corpus *recordingCopies) *Server {
+			c := failingContent{r.content}
+			return NewServer(r.store, "test").WithContent(c).WithCases(c).WithRegressions(corpus)
+		},
+		"the corpus fails": func(r rehearsed, corpus *recordingCopies) *Server {
+			corpus.err = errors.New("the corpus is away")
+			return r.server(corpus)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			corpus := &recordingCopies{fakeCorpus: &fakeCorpus{}}
+			resp, err := server(aRehearsal(t, true, true), corpus).RecordRegression(inArea("cx", domain.RoleAuthor), fromRehearsal())
+			if err == nil {
+				t.Errorf("answered %T, want the failure returned as the server's", resp)
+			}
+		})
+	}
+}
