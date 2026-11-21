@@ -85,3 +85,22 @@ func TestDeleteRegression_isAuthorisedInTheScopeTheCorpusWasRecordedIn(t *testin
 		})
 	}
 }
+
+// An experiment replays a corpus in the scope its runs open in: a corpus fixed in another
+// scope is out of reach, and opens nothing (D3).
+func TestStartExperiment_onACorpusFixedInAnotherScope_opensNothing(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	server, corpus := experimentFixture(t, store, servedAgent())
+	corpus.where = &domain.Scope{Company: "acme", Area: "finance"}
+	resp, err := server.StartExperiment(inArea("cx", domain.RoleAuthor), startExperiment(openapi.ExperimentRequest{}))
+	if err != nil {
+		t.Fatalf("StartExperiment: %v", err)
+	}
+	if _, absent := resp.(openapi.StartExperiment404ApplicationProblemPlusJSONResponse); !absent {
+		t.Errorf("response = %T, want the corpus out of reach", resp)
+	}
+	if runs, _ := store.Runs(gocontext.Background()); len(runs) != 0 {
+		t.Errorf("%d runs opened on a corpus of another scope", len(runs))
+	}
+}

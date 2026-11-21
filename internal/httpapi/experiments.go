@@ -91,6 +91,11 @@ func (s *Server) openExperiment(ctx context.Context, call experimentCall) (out e
 			return err
 		}
 		published := target.summary
+		// The corpus replays in the scope its runs open in: one fixed in another scope is
+		// out of reach, for a candidate as for a version moved since (NT-018 phase 5b, D3).
+		if out.hidden, err = s.corpusElsewhere(ctx, call.agent, published.Scope); err != nil || out.hidden {
+			return err
+		}
 		before, found, err := simulate.Recorded(ctx, s.store, id)
 		if err != nil {
 			return err

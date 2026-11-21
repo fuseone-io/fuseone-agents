@@ -238,3 +238,16 @@ func regressionID(agent domain.AgentID, run string) string {
 	sum := sha256.Sum256([]byte(run))
 	return fmt.Sprintf("reg_%s_%s", agent, hex.EncodeToString(sum[:6]))
 }
+
+// corpusElsewhere says whether an agent's corpus was first recorded in another scope than
+// the one given: a corpus recorded nowhere yet is in none.
+func (s *Server) corpusElsewhere(ctx context.Context, agent domain.AgentID, scope domain.Scope) (bool, error) {
+	if s.regressions == nil {
+		return false, nil
+	}
+	where, found, err := s.regressions.Where(ctx, agent)
+	if err != nil {
+		return false, fmt.Errorf("where the corpus of %s is: %w", agent, err)
+	}
+	return found && where != scope, nil
+}
