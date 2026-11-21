@@ -30,6 +30,13 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A simulation no longer touches the semantic dedupe that real runs share.** A simulated
+  call reached the same store as a real one. A record it confirmed could answer a real run's
+  call as the duplicate of an effect that never happened, and a reservation it held could make
+  a real run wait. Simulations, experiments and rehearsals now read and write none of it.
+
 ## [0.130.0] — 2026-11-20
 
 NT-018 phase 4, release 4c: the console's "Rehearsal" tab (#435), which completes phase 4. No
