@@ -175,6 +175,9 @@ func comparisonOf(c simulate.Comparison) openapi.VersionComparison {
 			Now:        openapi.Standing(change.Now),
 			CostMicros: change.CostMicros,
 			Steps:      change.Steps,
+			// How each side left its world, when that is why it is not comparable.
+			WasDiverged: divergenceOut(change.WasDiverged),
+			NowDiverged: divergenceOut(change.NowDiverged),
 		})
 	}
 	return out

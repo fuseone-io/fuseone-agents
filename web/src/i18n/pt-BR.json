@@ -1128,7 +1128,9 @@
       "absent": "não rodou",
       "not_comparable": "não comparável"
     },
-    "title": "Contra a versão anterior"
+    "title": "Contra a versão anterior",
+    "divergedWas": "Antes: {{how}}",
+    "divergedNow": "Agora: {{how}}"
   },
   "experiments": {
     "title": "Experimentos",
@@ -1204,7 +1206,12 @@
     "costCandidate_one": "Casos: {{cases}} × repetições: {{repetitions}} = {{count}} run, até o teto que o texto selado da candidata declara. O Gate aplica o teto.",
     "costCandidate_other": "Casos: {{cases}} × repetições: {{repetitions}} = {{count}} runs, cada um até o teto que o texto selado da candidata declara. O Gate aplica o teto.",
     "candidateReading": "Lendo a candidata",
-    "candidateMissing": "Este selo não está entre as candidatas que você pode ver: foi publicado, apagado ou é de outro escopo. Nada roda."
+    "candidateMissing": "Este selo não está entre as candidatas que você pode ver: foi publicado, apagado ou é de outro escopo. Nada roda.",
+    "standingNotComparable": "Não comparável",
+    "divergedIn_one": "desviou em {{count}}",
+    "divergedIn_other": "desviou em {{count}}",
+    "notComparable": "Não comparáveis",
+    "divergedInSides": "desviou em {{was}} → {{now}}"
   },
   "compensation": {
     "abandon": "Encerrar",
@@ -1250,7 +1257,8 @@
     "tallyBroken": "Quebraram",
     "tallyErased": "Sem entrada, apagada",
     "tallyHeld": "Seguraram",
-    "title": "Corrigir este caso"
+    "title": "Corrigir este caso",
+    "tallyNotComparable": "Não comparáveis"
   },
   "cost": {
     "agent": "Agente",

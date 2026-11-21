@@ -186,3 +186,54 @@ func simulateVersion(
 		t.Fatalf("settle the simulated run: %v", err)
 	}
 }
+
+/*
+A case that left its world is not comparable (NT-018 phase 5): nobody measured whether it
+held, so it does not stop an agent from starting, as a case erased or never simulated does not.
+A case that truly broke still does, and it is the one the refusal names.
+*/
+func TestSetAgentPaused_aCaseThatLeftItsWorld_doesNotStopAStartButABrokenOneStill(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	simulateDiverged(t, store, "run-1", "sim-9", "caso-estorno")
+	resp, err := gated(t, store, brokenCorpus("caso-estorno")).SetAgentPaused(inArea("cx", domain.RoleAuthor), startAgent(false))
+	if err != nil {
+		t.Fatalf("SetAgentPaused: %v", err)
+	}
+	if _, ok := resp.(openapi.SetAgentPaused204Response); !ok {
+		t.Fatalf("response = %T, want it started: the only case is not comparable", resp)
+	}
+
+	simulateCase(t, store, "run-2", "sim-9", "caso-consulta")
+	corpus := append(brokenCorpus("caso-estorno"), brokenCorpus("caso-consulta")...)
+	resp, err = gated(t, store, corpus).SetAgentPaused(inArea("cx", domain.RoleAuthor), startAgent(false))
+	if err != nil {
+		t.Fatalf("SetAgentPaused: %v", err)
+	}
+	refused, ok := resp.(openapi.SetAgentPaused409ApplicationProblemPlusJSONResponse)
+	if !ok || refused.Detail == nil || !strings.Contains(*refused.Detail, "caso-consulta") || strings.Contains(*refused.Detail, "caso-estorno") {
+		t.Errorf("response = %T %+v, want it refused naming only the case that broke", resp, resp)
+	}
+}
+
+// simulateDiverged writes a settled simulated run whose replay left its world before it ended.
+func simulateDiverged(t *testing.T, store *ledger.Memory, run, simulation, kase string) {
+	t.Helper()
+	ctx := gocontext.Background()
+	started, _ := json.Marshal(domain.RunStartedPayload{Trigger: "simulation", Simulated: true, Simulation: simulation, Case: kase})
+	step := domain.Step{
+		RunID: domain.RunID(run), Kind: domain.StepRunStarted, Scope: domain.Scope{Company: "acme", Area: "cx"},
+		AgentID: "triage", VersionID: "v2", Payload: started,
+	}
+	diverged, _ := json.Marshal(domain.ReplayDivergedPayload{Position: 1, Divergence: domain.DivergenceMissing, Tool: "crm.lookup"})
+	settled, _ := json.Marshal(domain.RunFinishedPayload{Outcome: "answered"})
+	for _, s := range []struct {
+		kind    domain.StepKind
+		payload []byte
+	}{{domain.StepRunStarted, started}, {domain.StepReplayDiverged, diverged}, {domain.StepRunFinished, settled}} {
+		step.Kind, step.Payload = s.kind, s.payload
+		if _, err := store.Append(ctx, step); err != nil {
+			t.Fatalf("append %s: %v", s.kind, err)
+		}
+	}
+}

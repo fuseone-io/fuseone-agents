@@ -1128,7 +1128,9 @@
       "absent": "did not run",
       "not_comparable": "not comparable"
     },
-    "title": "Against the previous version"
+    "title": "Against the previous version",
+    "divergedWas": "Before: {{how}}",
+    "divergedNow": "Now: {{how}}"
   },
   "experiments": {
     "title": "Experiments",
@@ -1204,7 +1206,12 @@
     "costCandidate_one": "Cases: {{cases}} × repetitions: {{repetitions}} = {{count}} run, up to the ceiling the candidate's sealed text declares. The Gate enforces it.",
     "costCandidate_other": "Cases: {{cases}} × repetitions: {{repetitions}} = {{count}} runs, each up to the ceiling the candidate's sealed text declares. The Gate enforces it.",
     "candidateReading": "Reading the candidate",
-    "candidateMissing": "This seal is not among the candidates you may see: it was published, erased, or is in another scope. Nothing runs."
+    "candidateMissing": "This seal is not among the candidates you may see: it was published, erased, or is in another scope. Nothing runs.",
+    "standingNotComparable": "Not comparable",
+    "divergedIn_one": "left its world in {{count}}",
+    "divergedIn_other": "left its world in {{count}}",
+    "notComparable": "Not comparable",
+    "divergedInSides": "left its world in {{was}} → {{now}}"
   },
   "compensation": {
     "abandon": "End run",
@@ -1250,7 +1257,8 @@
     "tallyBroken": "Broke",
     "tallyErased": "Input erased",
     "tallyHeld": "Held",
-    "title": "Correct this case"
+    "title": "Correct this case",
+    "tallyNotComparable": "Not comparable"
   },
   "cost": {
     "agent": "Agent",

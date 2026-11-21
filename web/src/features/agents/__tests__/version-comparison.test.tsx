@@ -79,4 +79,17 @@ describe("comparing two versions", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(container).toBeEmptyDOMElement();
   });
+
+  // NT-018 phase 5: a case not comparable because a replay left its world says how.
+  it("says how a side left its world when that is why it is not comparable", async () => {
+    stubComparison(200, {
+      ...comparison,
+      cases: [{ id: "estorno", was: "held", now: "not_comparable", costMicros: 0, steps: 0,
+        nowDiverged: { position: 2, divergence: "out_of_order", tool: "kb.search" } }],
+    });
+    renderPanel();
+
+    expect(await screen.findByText(/Agora: chamou kb\.search antes da hora/)).toBeInTheDocument();
+    expect(screen.queryByText(/Antes:/)).not.toBeInTheDocument();
+  });
 });

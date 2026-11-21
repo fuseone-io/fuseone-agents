@@ -53,14 +53,14 @@ export function summary(over: Partial<ExperimentSummary> = {}): ExperimentSummar
   return {
     id: "exp_triage_1", datasetVersion: 3, version: "v2a1b2c3d4e5", config: { model: "other-model" },
     casesRun: 2, casesInVersion: 3, erased: 1, repetitions: 5,
-    held: 1, broken: 1, cost: { micros: 100_000 }, running: false,
+    held: 1, broken: 1, notComparable: 0, cost: { micros: 100_000 }, running: false,
     ...over,
   };
 }
 
 export function experimentCase(id: string, brokenIn: number, ran: number): ExperimentCase {
   return {
-    brokenIn, ran,
+    brokenIn, ran, divergedIn: 0,
     case: {
       id, settled: "finished", steps: 3, cost: { micros: 10_000 },
       unmet: brokenIn > 0 || ran === 0 ? [{ kind: "calls", value: "crm.lookup" }] : undefined,
@@ -79,9 +79,9 @@ export function comparison(over: Partial<ExperimentComparison> = {}): Experiment
     sharedOnly: true, onlyFrom: 1, onlyTo: 0, regressed: 1, fixed: 0, costMicros: 0,
     cases: [
       { id: "estorno", was: "held", now: "broke", costMicros: 0, steps: 0,
-        wasBrokenIn: 0, wasRan: 5, nowBrokenIn: 2, nowRan: 5 },
+        wasBrokenIn: 0, wasRan: 5, nowBrokenIn: 2, nowRan: 5, wasDivergedIn: 0, nowDivergedIn: 0 },
       { id: "consulta", was: "held", now: "held", costMicros: 0, steps: 0,
-        wasBrokenIn: 0, wasRan: 5, nowBrokenIn: 0, nowRan: 5 },
+        wasBrokenIn: 0, wasRan: 5, nowBrokenIn: 0, nowRan: 5, wasDivergedIn: 0, nowDivergedIn: 0 },
     ],
     ...over,
   };

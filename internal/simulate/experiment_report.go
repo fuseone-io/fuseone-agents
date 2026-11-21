@@ -31,6 +31,8 @@ type ExperimentSummary struct {
 	Repetitions    int
 
 	Held, Broken int
+	// NotComparable counts the cases that left their world (NT-018 phase 5).
+	NotComparable int
 	// Cost is what every run cost, every repetition included.
 	Cost domain.Cost
 	// Running is whether any run has yet to settle.
@@ -48,6 +50,8 @@ type ExperimentCase struct {
 	Case
 	BrokenIn int
 	Ran      int
+	// DivergedIn is how many repetitions left the case's world: not broken, not held.
+	DivergedIn int
 }
 
 // ReadExperiment reads an experiment's runs against the corpus of its dataset version.
@@ -58,7 +62,7 @@ func ReadExperiment(record Record, report Report, corpus []domain.RegressionCase
 			ID: report.ID, DatasetVersion: record.DatasetVersion, Version: record.Version,
 			Config: record.Config, CasesInVersion: len(corpus), Erased: battery.Erased,
 			Repetitions: record.Repetitions, Held: battery.Held, Broken: battery.Broken,
-			Running: battery.Running,
+			NotComparable: battery.NotComparable, Running: battery.Running,
 		},
 		Cases: make([]ExperimentCase, 0, len(battery.Cases)),
 	}
@@ -82,7 +86,10 @@ func repetitionsOf(row Case) ExperimentCase {
 	}
 	for _, run := range append([]Case{row}, row.others...) {
 		out.Ran++
-		if len(Check(run, row.Expected)) > 0 {
+		switch {
+		case run.Diverged != nil:
+			out.DivergedIn++
+		case len(Check(run, row.Expected)) > 0:
 			out.BrokenIn++
 		}
 	}

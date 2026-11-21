@@ -6,6 +6,7 @@ import { Panel } from "@/components/shared/panel";
 import { useComparison } from "@/features/agents/simulation-api";
 import { formatMicros } from "@/lib/format";
 import type { CaseChange } from "@/features/agents/simulation-api";
+import { DivergedSides } from "@/features/runs/diverged-sides";
 
 /**
  * Is this version better than the one before it?
@@ -75,7 +76,10 @@ function ChangeRow({ change }: { change: CaseChange }) {
 
   return (
     <li className="flex items-center gap-3 border-b border-border-subtle px-4 py-2 last:border-0">
-      <Mono className="min-w-0 flex-1 truncate text-xs">{change.id}</Mono>
+      <div className="min-w-0 flex-1">
+        <Mono className="block truncate text-xs">{change.id}</Mono>
+        <DivergedSides was={change.wasDiverged} now={change.nowDiverged} />
+      </div>
 
       {/* The words, never the colour alone. */}
       <Badge variant={regressed ? "destructive" : "outline"}>

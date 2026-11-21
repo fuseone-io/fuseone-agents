@@ -4390,6 +4390,8 @@ export interface components {
             held: number;
             /** @description Cases broken in any repetition, or that did not run. */
             broken: number;
+            /** @description Replayed cases that left the world they were recorded with (NT-018 phase 5): neither held nor broken, because nobody measured either. */
+            notComparable: number;
             cost: components["schemas"]["Cost"];
             running: boolean;
         };
@@ -4418,8 +4420,10 @@ export interface components {
         /** @description One case across its repetitions. `case` is the worst run, as in a battery. */
         ExperimentCase: {
             case: components["schemas"]["SimulationCase"];
-            /** @description Repetitions in which this case broke. */
+            /** @description Repetitions in which this case broke, having followed its world. */
             brokenIn: number;
+            /** @description Repetitions that left the case's world (NT-018 phase 5): neither broken nor held. */
+            divergedIn: number;
             /** @description Repetitions that opened a run. Fewer than the experiment's repetitions is a case not every repetition reached, and none is a case that did not run. */
             ran: number;
         };
@@ -4457,6 +4461,12 @@ export interface components {
             wasRan: number;
             nowBrokenIn: number;
             nowRan: number;
+            /** @description Repetitions that left the case's world on the old side (NT-018 phase 5). */
+            wasDivergedIn: number;
+            /** @description Repetitions that left the case's world on the new side. */
+            nowDivergedIn: number;
+            wasDiverged?: components["schemas"]["ReplayDivergence"];
+            nowDiverged?: components["schemas"]["ReplayDivergence"];
         };
         SimulationAccepted: {
             id: string;
@@ -4509,6 +4519,19 @@ export interface components {
             reason?: string;
             /** @description Why this case did not run, when it did not. */
             error?: string;
+            diverged?: components["schemas"]["ReplayDivergence"];
+        };
+        /** @description The first call of a replayed case that left the world it was recorded with (NT-018 phase 5). A case with one is not comparable: what it did answered a situation nobody corrected, so it neither held nor broke, and it has no unmet expectations. */
+        ReplayDivergence: {
+            /** @description The entry of the world, from one, the run was due to ask for next. */
+            position: number;
+            /**
+             * @description `missing`: the run finished without asking for it. `extra`: a call the world does not have. `repeated`: a call it had already answered. `out_of_order`: a call it answers further on.
+             * @enum {string}
+             */
+            divergence: "missing" | "extra" | "repeated" | "out_of_order";
+            /** @description The tool the run called, or for `missing` the one it never called. */
+            tool: string;
         };
         /**
          * @description Why outcome is absent when the case did finish with one. This is a protocol field rather than a sentinel in outcome: outcome is user text, and a stable code inside it would be rendered as though the model said it.
@@ -4525,6 +4548,11 @@ export interface components {
              *     Neither held nor broken: coverage this battery does not have.
              */
             erased?: number;
+            /**
+             * @description Replayed corrections that left the world they were recorded with
+             *     (NT-018 phase 5). Neither held nor broken: nobody measured either.
+             */
+            notComparable?: number;
             /**
              * @description Cases whose model is no longer the one they last held against.
              *
@@ -6243,6 +6271,8 @@ export interface components {
              */
             costMicros: number;
             steps: number;
+            wasDiverged?: components["schemas"]["ReplayDivergence"];
+            nowDiverged?: components["schemas"]["ReplayDivergence"];
         };
         /**
          * @description How a case stood in one battery. `absent` is a case that battery never ran — reported rather than dropped. `not_comparable` is a case the two batteries did not ask the same question about: only one version of the corpus had it, or it expected something else in each. It is neither a regression nor a fix.

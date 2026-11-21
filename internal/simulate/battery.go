@@ -29,7 +29,7 @@ func Battery(report Report, corpus []domain.RegressionCase) Report {
 		}
 	}
 
-	out.Held, out.Broken, out.Drifted, out.Erased = 0, 0, 0, 0
+	out.Held, out.Broken, out.Drifted, out.Erased, out.NotComparable = 0, 0, 0, 0, 0
 
 	for _, corrected := range corpus {
 		at, ran := rows[corrected.ID]
@@ -68,10 +68,16 @@ func Battery(report Report, corpus []domain.RegressionCase) Report {
 		// a model that moved is worth knowing about too: it is the one that
 		// will break next.
 		out.Cases[at].Drifted = drifted(out.Cases[at], corrected)
-		out.Cases[at].Unmet = Check(out.Cases[at], corrected.Expectations)
 		if out.Cases[at].Drifted {
 			out.Drifted++
 		}
+		// A case that left its world answered a situation nobody corrected: what it did
+		// is no evidence either way (NT-018 phase 5).
+		if out.Cases[at].Diverged != nil {
+			out.NotComparable++
+			continue
+		}
+		out.Cases[at].Unmet = Check(out.Cases[at], corrected.Expectations)
 		if len(out.Cases[at].Unmet) == 0 {
 			out.Held++
 		} else {
@@ -127,9 +133,15 @@ func worseOf(row, run Case, expected []domain.Expectation) Case {
 
 // weight orders the runs of one case by what a reader must not miss. A block is not in
 // here: the row keeps the other runs, so a block counts wherever it happened.
+//
+// A run that followed its world and broke is evidence, and outweighs one that left it; one
+// that left it outweighs every other, so a case is never held on the strength of a run that
+// answered another situation (NT-018 phase 5).
 func weight(c Case, expected []domain.Expectation) int {
 	switch {
-	case len(Check(c, expected)) > 0:
+	case c.Diverged == nil && len(Check(c, expected)) > 0:
+		return 6
+	case c.Diverged != nil:
 		return 5
 	case c.Settled == SettledUnsettled:
 		return 4
