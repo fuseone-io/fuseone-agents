@@ -30,6 +30,13 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.130.0] — 2026-11-20
+
+NT-018 phase 4, release 4c: the console's "Rehearsal" tab (#435), which completes phase 4. No
+migrations; only the console changed. The rollback floor from 0.129.0 still holds: once the
+first rehearsal exists, 0.128.0 is the floor (until then 0.123.0). With this tab, any author can
+open that first rehearsal from the console.
+
 ### Added
 
 - **The workbench's "Rehearsal" tab** (NT-018 phase 4, release 4c). An author chooses one of
