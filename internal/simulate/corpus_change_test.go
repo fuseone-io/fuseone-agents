@@ -14,6 +14,11 @@ func correction(id, input, value string) domain.RegressionCase {
 	}
 }
 
+func withWorldRef(c domain.RegressionCase, ref string) domain.RegressionCase {
+	c.World = ref
+	return c
+}
+
 func erasedCorrection(id, input string) domain.RegressionCase {
 	return domain.RegressionCase{ID: id, InputRef: input, Erased: true}
 }
@@ -45,6 +50,19 @@ func TestSince_comparesTheVersionWithTheCorpusAsItIs(t *testing.T) {
 			name:       "the same id expecting something else",
 			pinned:     []domain.RegressionCase{same},
 			working:    []domain.RegressionCase{correction("igual", "in-1", "b")},
+			notChecked: []string{"igual"},
+		},
+		// A battery that ran another world answered another situation (NT-018 phase 5).
+		{
+			name:       "the same id with another world",
+			pinned:     []domain.RegressionCase{withWorldRef(same, "w-1")},
+			working:    []domain.RegressionCase{withWorldRef(same, "w-2")},
+			notChecked: []string{"igual"},
+		},
+		{
+			name:       "the same id given a world since",
+			pinned:     []domain.RegressionCase{same},
+			working:    []domain.RegressionCase{withWorldRef(same, "w-1")},
 			notChecked: []string{"igual"},
 		},
 		{
