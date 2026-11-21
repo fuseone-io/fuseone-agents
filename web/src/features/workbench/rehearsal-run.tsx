@@ -16,10 +16,14 @@ import type { Run, Step } from "@/lib/api/client";
 
 const OVER: Run["phase"][] = ["finished", "failed"];
 
-/** The wait the rehearsal stands at, read from the head of its trail. */
+/**
+ * The wait the rehearsal stands at, read from the head of its trail. A trail that does not
+ * reach the run's head yet is an earlier one still shown while the new one is read: a wait
+ * read from it is one the run has already moved past.
+ */
 function waitAt(run: Run, steps: Step[]): WorldWait | undefined {
   const head = steps[steps.length - 1];
-  if (run.phase !== "awaiting_world" || head?.kind !== "world_awaited") return undefined;
+  if (run.phase !== "awaiting_world" || head?.kind !== "world_awaited" || head.seq !== run.seq) return undefined;
   const payload = head.payload as { tool?: string; call_seq?: number } | undefined;
   return { atSeq: head.seq, tool: payload?.tool ?? "", callSeq: payload?.call_seq ?? 0 };
 }

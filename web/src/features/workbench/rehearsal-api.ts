@@ -77,7 +77,8 @@ function useRehearsalAct<T>(runId: string, act: (body: T) => Promise<Run>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: act,
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: rehearsalKeys.run(runId) }),
+    // The run alone: its trail is keyed by head, and is read anew once the head moves.
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: rehearsalKeys.run(runId), exact: true }),
   });
 }
 

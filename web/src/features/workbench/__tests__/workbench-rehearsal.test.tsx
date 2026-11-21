@@ -44,6 +44,9 @@ async function openTab(at = "/agents/triagem/workbench") {
 const atRehearsal = "/agents/triagem/workbench?rehearsal=run-reh";
 const sent = (calls: Call[], path: string) => calls.find((c) => c.method === "POST" && c.path === path);
 const posts = (calls: Call[], path: string) => calls.filter((c) => c.method === "POST" && c.path === path);
+const reads = (calls: Call[], path: string) => calls.filter((c) => c.method === "GET" && c.path === path).length;
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const secondWait = [...waiting, step(5, "world_supplied"), step(6, "tool_called", { tool: "crm.reply" }), step(7, "world_awaited", { tool: "crm.reply", call_seq: 6 })];
 
 describe("the workbench's rehearsal", () => {
   beforeAll(polyfillPointer);
@@ -136,6 +139,38 @@ describe("the workbench's rehearsal", () => {
     await userEvent.click(within(card).getByRole("button", { name: "Recusar" }));
     await waitFor(() => expect(sent(calls, `${RUN}/rehearsal-decisions`)?.body).toEqual({ atSeq: 7, approved: false }));
     expect(sent(calls, `${RUN}/approvals`)).toBeUndefined();
+  });
+
+  it("offers no answer for a wait the run has moved past while its new trail is still on the way", async () => {
+    let answered = false;
+    world({
+      [`GET ${RUN}`]: () => ({ body: run({ phase: "awaiting_world", seq: answered ? 7 : 4 }) }),
+      [`GET ${RUN}/steps`]: () => (answered ? "hang" : { body: { items: waiting } }),
+      [`POST ${RUN}/world`]: () => ((answered = true), { body: run({ phase: "awaiting_world", seq: 7 }) }),
+    });
+    await openTab(atRehearsal);
+    const card = await screen.findByRole("region", { name: "A execução espera a resposta do mundo" });
+    await userEvent.type(within(card).getByRole("textbox", { name: "Resposta" }), "ok");
+    await userEvent.click(within(card).getByRole("button", { name: "Responder" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "A execução espera a resposta do mundo" })).not.toBeInTheDocument());
+  });
+
+  it("reads the trail once for the head an answer moved the run to, not again for the old head", async () => {
+    let answered = false;
+    const calls = world({
+      [`GET ${RUN}`]: () => ({ body: run({ phase: "awaiting_world", seq: answered ? 7 : 4 }) }),
+      [`GET ${RUN}/steps`]: () => ({ body: { items: answered ? secondWait : waiting } }),
+      [`GET ${RUN}/steps/6/content`]: () => ({ body: { seq: 6, digest: "d", content: '{"to":"c-1"}' } }),
+      [`POST ${RUN}/world`]: () => ((answered = true), { body: run({ phase: "awaiting_world", seq: 7 }) }),
+    });
+    await openTab(atRehearsal);
+    const card = await screen.findByRole("region", { name: "A execução espera a resposta do mundo" });
+    await userEvent.type(within(card).getByRole("textbox", { name: "Resposta" }), "ok");
+    await userEvent.click(within(card).getByRole("button", { name: "Responder" }));
+    const next = await screen.findByRole("region", { name: "A execução espera a resposta do mundo" });
+    await waitFor(() => expect(within(next).getByText("crm.reply")).toBeInTheDocument());
+    await pause(100);
+    expect(reads(calls, `${RUN}/steps`)).toBe(2);
   });
 
   it("polls while the rehearsal runs and stops once it waits for the world", async () => {
