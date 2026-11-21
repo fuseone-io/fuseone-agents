@@ -121,19 +121,22 @@ func (m *Memory) AppendFirstWithInput(
 	ref, _ := contentRef("run", string(run), domain.FirstSeq, input)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	sealed, err := m.appendLocked(nil, nil, s)
+	// Judged and sealed first, recorded last: an opening that loses its key keeps no input,
+	// and an input that cannot be kept opens no run.
+	sealed, err := m.sealLocked(nil, nil, s)
 	if err != nil {
 		return domain.Step{}, err
+	}
+	if m.inputs != nil {
+		if _, err := m.inputs.Put(ctx, run, domain.FirstSeq, input); err != nil {
+			return domain.Step{}, fmt.Errorf("ledger: keep the input of %s: %w", run, err)
+		}
 	}
 	stored, _ := domain.Truncate(input, domain.DefaultContentLimit)
 	if m.kept == nil {
 		m.kept = make(map[string][]byte)
 	}
 	m.kept[ref] = append([]byte(nil), stored...)
-	if m.inputs != nil {
-		if _, err := m.inputs.Put(ctx, run, domain.FirstSeq, input); err != nil {
-			return domain.Step{}, fmt.Errorf("ledger: keep the input of %s: %w", run, err)
-		}
-	}
+	m.commitLocked(sealed)
 	return sealed, nil
 }

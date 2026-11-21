@@ -175,3 +175,30 @@ func TestAppend_twoOpeningsUnderOneKeyAtTwoMoments_openOneRun(t *testing.T) {
 		}
 	})
 }
+
+type refusingSink struct{}
+
+func (refusingSink) Put(context.Context, domain.RunID, int64, []byte) (string, error) {
+	return "", errors.New("the content store is away")
+}
+
+// Both or neither, in memory as in Postgres: an input the store it is handed to cannot keep
+// opens no run, and leaves nothing kept.
+func TestMemory_AppendFirstWithInput_anInputThatCannotBeKept_opensNoRun(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	m := ledger.NewMemory().WithInputs(refusingSink{})
+	var named string
+	if _, err := m.AppendFirstWithInput(ctx, "run-1", fresh("lost"), opening("run-1", "hook:1", &named)); err == nil {
+		t.Fatal("the opening succeeded with its input unkept")
+	}
+	if steps, _ := m.Read(ctx, "run-1", domain.FirstSeq); len(steps) != 0 {
+		t.Errorf("a run opened with %d steps", len(steps))
+	}
+	if _, err := m.KeptContent(ctx, named); !errors.Is(err, domain.ErrContentAbsent) {
+		t.Errorf("the input: %v, want absent", err)
+	}
+	if _, err := m.RunByIdemKey(ctx, "hook:1"); err == nil {
+		t.Error("the key names a run that never opened")
+	}
+}

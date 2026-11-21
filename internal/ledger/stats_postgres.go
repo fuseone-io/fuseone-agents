@@ -187,8 +187,10 @@ func (p *Postgres) RunByIdemKey(ctx context.Context, key string) (domain.RunID, 
 		return "", ErrNotFound
 	}
 	var runID domain.RunID
+	// The run the key opened, as the opening claimed it (0126): the one answer, even for a
+	// key two runs shared before that, and one row rather than a scan of every partition.
 	err := p.pool.QueryRow(ctx,
-		`select run_id from run_steps where idem_key = $1`, key).Scan(&runID)
+		`select run_id from run_openings where idem_key = $1`, key).Scan(&runID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNotFound
 	}

@@ -18,7 +18,10 @@ create table run_openings (
 );
 
 -- Keys already used name the run that opened first; a key two runs already share keeps the
--- earlier, and the later one stays as history.
+-- earlier, and the later one stays as history. Twice: once before the trigger, without
+-- holding up openings for the length of the scan, and once after it, for any opening that
+-- committed between the first pass's snapshot and the trigger's lock. Once the trigger is
+-- in, every opening claims its key itself, and the second pass misses nothing.
 insert into run_openings (idem_key, run_id)
 select distinct on (idem_key) idem_key, run_id
 from run_steps
@@ -39,3 +42,10 @@ create trigger run_steps_claim_opening
     for each row
     when (new.kind = 'run_started' and new.idem_key <> '')
     execute function claim_run_opening();
+
+insert into run_openings (idem_key, run_id)
+select distinct on (idem_key) idem_key, run_id
+from run_steps
+where kind = 'run_started' and idem_key <> ''
+order by idem_key, at, run_id
+on conflict (idem_key) do nothing;
