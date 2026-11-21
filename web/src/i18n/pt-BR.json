@@ -2917,7 +2917,13 @@
     "storyWorldAwaited": "esperando a resposta para {{tool}}; nada foi executado",
     "storyWorldSupplied": "respondida por {{who}}; a resposta entra como conteúdo não confiável",
     "storyRehearsalApprovedBy": "aprovada no ensaio por {{who}}; não é uma aprovação real",
-    "storyRehearsalRefusedBy": "recusada no ensaio por {{who}}; não é uma aprovação real"
+    "storyRehearsalRefusedBy": "recusada no ensaio por {{who}}; não é uma aprovação real",
+    "verbReplayDiverged": "saiu do mundo gravado",
+    "storyReplayDivergedTitle": "O caso saiu do mundo gravado",
+    "storyReplayDiverged_missing": "a execução terminou antes de chamar {{tool}}, a resposta {{position}} do mundo gravado; o caso deixa de ser comparável",
+    "storyReplayDiverged_extra": "chamou {{tool}}, que o mundo gravado não tem na posição {{position}}; o caso deixa de ser comparável",
+    "storyReplayDiverged_repeated": "chamou {{tool}} de novo, depois de já receber essa resposta; o caso deixa de ser comparável",
+    "storyReplayDiverged_out_of_order": "chamou {{tool}} antes da hora: o mundo gravado esperava outra chamada na posição {{position}}; o caso deixa de ser comparável"
   },
   "runtime": {
     "attentionChannelDetail": "{{count}} tentativa(s) de entrega, {{secondary}} run(s).",

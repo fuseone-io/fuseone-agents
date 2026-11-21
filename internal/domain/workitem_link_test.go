@@ -62,8 +62,8 @@ func TestStepKinds_listsEveryValidKindOnce(t *testing.T) {
 	if !slices.IsSorted(kinds) {
 		t.Fatalf("StepKinds() = %v, want a stable order", kinds)
 	}
-	if len(kinds) != 23 {
-		t.Fatalf("StepKinds() lists %d kinds, want the 23 the ledger knows", len(kinds))
+	if len(kinds) != 24 {
+		t.Fatalf("StepKinds() lists %d kinds, want the 24 the ledger knows", len(kinds))
 	}
 }
 

@@ -318,6 +318,9 @@ type ToolReturnedPayload struct {
 	// them: a rehearsal's world_awaited and world_supplied (NT-018 phase 4). Absent, the
 	// result returns for the step just before it, as every result written before did.
 	ForSeq int64 `json:"for_seq,omitempty"`
+	// Replayed is the position, from one, of the world entry this result handed back to a
+	// replayed case (NT-018 phase 5). Absent, the result did not come from a world.
+	Replayed int `json:"replayed,omitempty"`
 }
 
 // EffectReconciledPayload records the final truth learned after a write whose

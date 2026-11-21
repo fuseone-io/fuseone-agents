@@ -2917,7 +2917,13 @@
     "storyWorldAwaited": "waiting for the answer to {{tool}}; nothing was executed",
     "storyWorldSupplied": "answered by {{who}}; the answer goes in as untrusted content",
     "storyRehearsalApprovedBy": "approved in the rehearsal by {{who}}; not a real approval",
-    "storyRehearsalRefusedBy": "refused in the rehearsal by {{who}}; not a real approval"
+    "storyRehearsalRefusedBy": "refused in the rehearsal by {{who}}; not a real approval",
+    "verbReplayDiverged": "left the recorded world",
+    "storyReplayDivergedTitle": "The case left its recorded world",
+    "storyReplayDiverged_missing": "the run finished before calling {{tool}}, answer {{position}} of the recorded world; the case is no longer comparable",
+    "storyReplayDiverged_extra": "called {{tool}}, which the recorded world does not have at position {{position}}; the case is no longer comparable",
+    "storyReplayDiverged_repeated": "called {{tool}} again after already receiving that answer; the case is no longer comparable",
+    "storyReplayDiverged_out_of_order": "called {{tool}} too early: the recorded world expected another call at position {{position}}; the case is no longer comparable"
   },
   "runtime": {
     "attentionChannelDetail": "{{count}} delivery attempt(s), {{secondary}} run(s).",

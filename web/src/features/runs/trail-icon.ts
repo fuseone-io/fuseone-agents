@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   ShieldX,
   Shuffle,
+  Split,
   CircleSlash,
   Sparkles,
   TriangleAlert,
@@ -67,6 +68,7 @@ const ICONS: Record<StepKind, LucideIcon> = {
   world_awaited: Globe,
   world_supplied: MessageSquareReply,
   rehearsal_decided: UserRoundCheck,
+  replay_diverged: Split,
 };
 
 const VERDICT_TONE: Record<string, TileTone> = {

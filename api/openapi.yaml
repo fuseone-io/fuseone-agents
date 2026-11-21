@@ -6835,6 +6835,7 @@ components:
         - world_awaited
         - world_supplied
         - rehearsal_decided
+        - replay_diverged
       description: |
         `world_awaited`, `world_supplied` and `rehearsal_decided` belong to a
         live rehearsal (NT-018 phase 4): the run waiting for its author to answer
@@ -6842,6 +6843,11 @@ components:
         its text), and the author's decision where the Gate held an action, which
         is never an `approval_decided`. Every reader knows them one release
         before anything writes them.
+
+        `replay_diverged` belongs to a replayed case (NT-018 phase 5): the first
+        call that did not follow the world the case was recorded with, as
+        `{position, divergence, tool}`, where `divergence` is `missing`, `extra`,
+        `repeated` or `out_of_order`. The case is not comparable from there on.
 
     StandingPolicy:
       type: string

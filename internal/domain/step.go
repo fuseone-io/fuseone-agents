@@ -54,6 +54,7 @@ var stepKinds = map[StepKind]bool{
 	StepParked: true, StepRunFinished: true, StepModelFallback: true,
 	StepWorkItemClaimed: true, StepWorkItemLinked: true,
 	StepWorldAwaited: true, StepWorldSupplied: true, StepRehearsalDecided: true,
+	StepReplayDiverged: true,
 }
 
 func (k StepKind) Valid() bool { return stepKinds[k] }
