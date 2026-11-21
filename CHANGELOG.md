@@ -54,6 +54,16 @@ field" is a commit message.
   `agent:publish` and `run:read` there. An agent's corpus stays in the scope it was first
   recorded in: a case from another reads as absent.
 
+### Changed
+
+- **An agent's corpus is read and changed in the scope it was first recorded in** (NT-018 phase
+  5b), not the one the agent is published in now. Listing and deleting cases work for an agent
+  never published, whose cases came from rehearsals, and keep working where they always did
+  for an agent moved since. Out of that scope the corpus reads as absent: listing it is a 404
+  rather than a 403, and deleting a case is a 404 too, as it now is for an agent with no corpus
+  at all. An experiment on a corpus recorded in another scope than its runs would open in is
+  refused the same way, and opens nothing.
+
 ### Fixed
 
 - **One idempotency key opens one run** (#432). Two attempts under one key that both got past

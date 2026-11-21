@@ -1791,6 +1791,10 @@ paths:
             a subject erasure takes them.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        # No corpus within reach (NT-018 phase 5b): a corpus is changed in the scope it was
+        # first recorded in, and outside it the answer is the one a corpus that does not
+        # exist gets.
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /agents/{agentId}/comparison:
     get:

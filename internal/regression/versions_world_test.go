@@ -156,3 +156,15 @@ func worldOf(cases []domain.RegressionCase, id string) string {
 	}
 	return "<absent>"
 }
+
+// Where is the scope the corpus was first recorded in, and none for an agent without one.
+func TestWhere_answersTheScopeTheCorpusWasFirstRecordedIn(t *testing.T) {
+	pool := activatedCorpus(t)
+	store := regression.NewStore(pool)
+	if scope, found, err := store.Where(t.Context(), "suporte"); err != nil || !found || scope != (domain.Scope{Company: "acme", Area: "cx"}) {
+		t.Errorf("Where(suporte) = %v %v (%v), want acme/cx", scope, found, err)
+	}
+	if _, found, err := store.Where(t.Context(), "never-recorded"); err != nil || found {
+		t.Errorf("Where(never-recorded) found=%v (%v), want none", found, err)
+	}
+}

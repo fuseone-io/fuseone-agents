@@ -32,6 +32,24 @@ type Regressions interface {
 	// Exclusive fences the corpus against every other copy as well, while an experiment
 	// reads what it recorded and acts on it.
 	Exclusive(ctx context.Context, agents []domain.AgentID, inside func(context.Context) error) error
+	// Where is the scope an agent's corpus was first recorded in, false for none.
+	Where(ctx context.Context, agent domain.AgentID) (domain.Scope, bool, error)
+}
+
+/*
+corpusScope is the scope an agent's corpus is read and changed in (NT-018 phase 5b, D3): the
+one it was first recorded in, which an agent never published, or moved since, may not be
+published in; or, for an agent with no corpus yet, the one it is published in.
+*/
+func (s *Server) corpusScope(ctx context.Context, agent string) (domain.Scope, bool, error) {
+	if s.regressions != nil {
+		scope, found, err := s.regressions.Where(ctx, domain.AgentID(agent))
+		if err != nil || found {
+			return scope, found, err
+		}
+	}
+	published, ok, err := s.publishedAgent(ctx, agent)
+	return published.Scope, ok, err
 }
 
 // WithRegressions wires the corrections a future version is checked against.
@@ -46,20 +64,19 @@ func (s *Server) ListRegressions(
 	absent := openapi.ListRegressions404ApplicationProblemPlusJSONResponse{
 		NotFoundApplicationProblemPlusJSONResponse: notFound(req.AgentId),
 	}
-	published, ok, err := s.publishedAgent(ctx, req.AgentId)
-	if err != nil || !ok {
-		return absent, err
+	scope, ok, err := s.corpusScope(ctx, req.AgentId)
+	if err != nil {
+		return nil, fmt.Errorf("where the corpus of %s is: %w", req.AgentId, err)
 	}
-	if err := auth.Require(ctx, domain.PermAgentRead, published.Scope); err != nil {
-		return openapi.ListRegressions403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentRead, published.Scope),
-		}, nil
+	// Out of reach reads as absent, as no corpus does: neither says which.
+	if !ok || auth.Require(ctx, domain.PermAgentRead, scope) != nil {
+		return absent, nil
 	}
 	if s.regressions == nil {
 		return openapi.ListRegressions200JSONResponse{Items: []openapi.RegressionCase{}}, nil
 	}
 
-	corpus, err := s.regressions.List(ctx, published.ID)
+	corpus, err := s.regressions.List(ctx, domain.AgentID(req.AgentId))
 	if err != nil {
 		return nil, fmt.Errorf("list regressions: %w", err)
 	}
@@ -160,20 +177,21 @@ func (s *Server) recordCorrection(
 func (s *Server) DeleteRegression(
 	ctx context.Context, req openapi.DeleteRegressionRequestObject,
 ) (openapi.DeleteRegressionResponseObject, error) {
-	published, ok, err := s.publishedAgent(ctx, req.AgentId)
-	if err != nil || !ok {
-		return openapi.DeleteRegression204Response{}, err
+	scope, ok, err := s.corpusScope(ctx, req.AgentId)
+	if err != nil {
+		return nil, fmt.Errorf("where the corpus of %s is: %w", req.AgentId, err)
 	}
-	if err := auth.Require(ctx, domain.PermAgentPublish, published.Scope); err != nil {
-		return openapi.DeleteRegression403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish, published.Scope),
+	// Out of reach reads as absent, as no corpus does: neither says which.
+	if !ok || auth.Require(ctx, domain.PermAgentPublish, scope) != nil {
+		return openapi.DeleteRegression404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(req.AgentId),
 		}, nil
 	}
 	if s.regressions == nil {
 		return openapi.DeleteRegression204Response{}, nil
 	}
 
-	if err := s.regressions.Delete(ctx, published.ID, req.CaseId, callerOf(ctx)); err != nil {
+	if err := s.regressions.Delete(ctx, domain.AgentID(req.AgentId), req.CaseId, callerOf(ctx)); err != nil {
 		return nil, fmt.Errorf("delete regression %s: %w", req.CaseId, err)
 	}
 	return openapi.DeleteRegression204Response{}, nil

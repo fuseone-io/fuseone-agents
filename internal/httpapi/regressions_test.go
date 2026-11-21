@@ -29,6 +29,16 @@ type fakeCorpus struct {
 	inside   bool
 	// exclusive counts the fences taken alone, as an experiment opens.
 	exclusive int
+	// where is the scope the corpus was first recorded in, nil for a corpus never recorded.
+	where   *domain.Scope
+	deleted []string
+}
+
+func (f *fakeCorpus) Where(gocontext.Context, domain.AgentID) (domain.Scope, bool, error) {
+	if f.where == nil {
+		return domain.Scope{}, false, nil
+	}
+	return *f.where, true, nil
 }
 
 func (f *fakeCorpus) Record(_ gocontext.Context, c domain.RegressionCase) error {
@@ -59,7 +69,8 @@ func (f *fakeCorpus) AtVersion(
 	return f.versions[version], nil
 }
 
-func (f *fakeCorpus) Delete(gocontext.Context, domain.AgentID, string, domain.UserID) error {
+func (f *fakeCorpus) Delete(_ gocontext.Context, _ domain.AgentID, id string, _ domain.UserID) error {
+	f.deleted = append(f.deleted, id)
 	return nil
 }
 
