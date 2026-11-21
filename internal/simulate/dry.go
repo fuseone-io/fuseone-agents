@@ -64,6 +64,10 @@ ceiling: asking it spends one of its uses and writes a real approval in its
 owner's name. A simulated run parks for a person where the grant would have
 released the real one, and the Gate's verdict is recorded either way.
 
+It drops the semantic dedupe store too (NT-018 phase 5). Real runs of the agent share it:
+a record a simulated call confirmed would answer a real call as the duplicate of an effect
+that never happened, and a reservation it held would make a real run wait on nothing.
+
 Everything else is the production collaborator — the same Gate, the same
 ledger, the same clock, the same planner. A simulation that decided differently
 would answer a question nobody asked.
@@ -71,5 +75,6 @@ would answer a question nobody asked.
 func Deps(deps engine.Deps) engine.Deps {
 	deps.Tools = DryTools{}
 	deps.Standing = nil
+	deps.Dedupe = nil
 	return deps
 }
