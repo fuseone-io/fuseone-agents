@@ -1105,6 +1105,15 @@ export interface paths {
          *     What is recorded is the checkable half: prose cannot be re-run, and a
          *     correction that cannot be re-run is a note rather than a correction.
          *
+         *     A rehearsal can be corrected too (NT-018 phase 5b), and the case keeps
+         *     the world it was corrected in: each call the rehearsal made with the
+         *     answer its author gave, copied with the input in one transaction, so a
+         *     battery replays them in order. Only a rehearsal that ended with every
+         *     call answered is kept; the case goes to the rehearsal's sealed scope,
+         *     so the agent need not be published, and the caller needs
+         *     `agent:publish` and `run:read` there. An agent's corpus stays in the
+         *     scope it was first recorded in: a case from another reads as absent.
+         *
          *     The occurrence is copied into the corpus. Runs are purged on the
          *     installation's retention, and a corpus that lost its cases as runs aged
          *     out would stop checking while still reporting green.
@@ -9467,6 +9476,20 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /**
+             * @description A rehearsal that cannot be kept as a case (NT-018 phase 5b): it has not
+             *     ended, a call it made was never answered, or an answer it was given has
+             *     been erased since. A case keeps the world it was corrected in, and a world
+             *     with a hole in it would replay a situation nobody corrected.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     deleteRegression: {

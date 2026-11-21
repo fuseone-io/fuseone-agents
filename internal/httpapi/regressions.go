@@ -5,17 +5,22 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/regression"
 )
 
 // Regressions is the corpus an agent is held to, declared here by the
 // consumer.
 type Regressions interface {
 	Record(ctx context.Context, c domain.RegressionCase) error
+	// RecordCopying records a case and what it copies, its input and its world, in one
+	// transaction (NT-018 phase 5b), answering the case with the references it kept.
+	RecordCopying(ctx context.Context, c domain.RegressionCase, copying regression.Copying) (domain.RegressionCase, error)
 	List(ctx context.Context, agent domain.AgentID) ([]domain.RegressionCase, error)
 	// Pinned is the latest version of the corpus, with its cases: what a battery runs.
 	Pinned(ctx context.Context, agent domain.AgentID) (int64, []domain.RegressionCase, error)
@@ -72,6 +77,18 @@ func (s *Server) RecordRegression(
 ) (openapi.RecordRegressionResponseObject, error) {
 	absent := openapi.RecordRegression404ApplicationProblemPlusJSONResponse{
 		NotFoundApplicationProblemPlusJSONResponse: notFound(req.AgentId),
+	}
+	if s.regressions != nil && s.content != nil && req.Body != nil {
+		// A rehearsal keeps its world, and its candidate need not be published: the
+		// rehearsal's own scope decides (NT-018 phase 5b). A read that fails is not a run
+		// that is no rehearsal: recording it the ordinary way would keep it without its world.
+		steps, err := s.store.Read(ctx, domain.RunID(req.Body.RunId), domain.FirstSeq)
+		if err != nil && !errors.Is(err, domain.ErrRunNotFound) {
+			return nil, fmt.Errorf("read run %s: %w", req.Body.RunId, err)
+		}
+		if _, rehearsal := rehearsalOf(steps); err == nil && rehearsal {
+			return s.recordFromRehearsal(ctx, req)
+		}
 	}
 	published, ok, err := s.publishedAgent(ctx, req.AgentId)
 	if err != nil || !ok {

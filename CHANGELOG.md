@@ -32,10 +32,27 @@ field" is a commit message.
 
 ### Upgrade notes
 
+- **Keeping a rehearsal as a case makes 0.131.0 the rollback floor** (NT-018 phase 5b). The
+  first case recorded from a rehearsal keeps a world, and a release older than 0.131.0 does not
+  read worlds: it would replay the case answering every call with nothing, and could report it
+  held on a situation nobody corrected. Until somebody keeps one, the floor does not move.
+- **Migration 0127** makes a case's world follow its input: erasing the input a case copied
+  erases the answers and the world that case keeps, by the case that owns them.
 - **Migration 0126** adds `run_openings`, one row per idempotency key that opened a run, filled
   from the runs already there and kept by a trigger on every opening. A key two runs already
   share keeps the one that opened first; the later run stays as history. The rule is the
   database's, so a release from before this one is held to it too.
+
+### Added
+
+- **Keep a rehearsal as a case** (NT-018 phase 5b). `POST /agents/{agentId}/regressions` with a
+  rehearsal's run records a case that keeps the world it was corrected in: each call the
+  rehearsal made, with the answer its author gave, copied with the input in one transaction, so
+  a battery or an experiment replays them in order. Only a rehearsal that ended with every call
+  answered is kept, and any other is a 409 that says why. The case goes to the rehearsal's
+  sealed scope, so an agent that was never published can have one; the caller needs
+  `agent:publish` and `run:read` there. An agent's corpus stays in the scope it was first
+  recorded in: a case from another reads as absent.
 
 ### Fixed
 

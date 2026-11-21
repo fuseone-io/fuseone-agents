@@ -12,6 +12,7 @@ import (
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/regression"
 )
 
 // A correction is only worth taking if a future version is checked against it
@@ -36,6 +37,10 @@ func (f *fakeCorpus) Record(_ gocontext.Context, c domain.RegressionCase) error 
 	}
 	f.recorded = append(f.recorded, c)
 	return nil
+}
+
+func (f *fakeCorpus) RecordCopying(ctx gocontext.Context, c domain.RegressionCase, _ regression.Copying) (domain.RegressionCase, error) {
+	return c, f.Record(ctx, c)
 }
 
 func (f *fakeCorpus) List(gocontext.Context, domain.AgentID) ([]domain.RegressionCase, error) {

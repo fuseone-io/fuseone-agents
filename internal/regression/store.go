@@ -23,6 +23,10 @@ import (
 // ErrNothingToCheck means a correction arrived with no expectation on it.
 var ErrNothingToCheck = errors.New("regression: a case with no expectation cannot be checked")
 
+// ErrInvalidCase is a case the corpus refuses as written: no agent or id, or an expectation
+// of a kind nothing can check.
+var ErrInvalidCase = errors.New("regression: this case cannot be recorded as written")
+
 type Store struct {
 	pool    *pgxpool.Pool
 	fence   *fence
@@ -41,26 +45,33 @@ func NewStore(pool *pgxpool.Pool) *Store {
 // note — notes are welcome, and they are not a regression case: letting one in
 // makes the battery report as passing something that was never checked.
 func (s *Store) Record(ctx context.Context, c domain.RegressionCase) error {
-	switch {
-	case strings.TrimSpace(c.ID) == "" || strings.TrimSpace(string(c.Agent)) == "":
-		return fmt.Errorf("regression: a case needs an agent and an id")
-	case len(c.Expectations) == 0:
-		return ErrNothingToCheck
-	}
-	for _, e := range c.Expectations {
-		if !e.Kind.Valid() {
-			return fmt.Errorf("regression: %q is not something that can be checked", e.Kind)
-		}
-	}
-
-	expectations, err := json.Marshal(c.Expectations)
+	expectations, err := checkedExpectations(c)
 	if err != nil {
-		return fmt.Errorf("regression: encode expectations: %w", err)
+		return err
 	}
-
 	return s.write(ctx, func(tx pgx.Tx) error {
 		return s.recordCase(ctx, tx, c, expectations)
 	})
+}
+
+// checkedExpectations refuses a case nothing can check, and encodes what it expects.
+func checkedExpectations(c domain.RegressionCase) ([]byte, error) {
+	switch {
+	case strings.TrimSpace(c.ID) == "" || strings.TrimSpace(string(c.Agent)) == "":
+		return nil, fmt.Errorf("%w: a case needs an agent and an id", ErrInvalidCase)
+	case len(c.Expectations) == 0:
+		return nil, ErrNothingToCheck
+	}
+	for _, e := range c.Expectations {
+		if !e.Kind.Valid() {
+			return nil, fmt.Errorf("%w: %q is not something that can be checked", ErrInvalidCase, e.Kind)
+		}
+	}
+	expectations, err := json.Marshal(c.Expectations)
+	if err != nil {
+		return nil, fmt.Errorf("regression: encode expectations: %w", err)
+	}
+	return expectations, nil
 }
 
 // caseRow is what one recorded case writes.
