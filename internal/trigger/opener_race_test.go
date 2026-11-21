@@ -20,26 +20,31 @@ named after, the loser's input stayed with no run naming it, beyond every erasur
 from a run.
 */
 
-// bothPastTheLookup holds each attempt at the key lookup until both have asked, so neither
-// can see the other's run: the race, made to happen every time.
+// bothPastTheLookup asks the store first, then holds each of the first two answers until
+// both are in hand: both attempts have learned the key names no run before either writes.
+// The race, made to happen every time; missed records whether it did.
 type bothPastTheLookup struct {
 	*ledger.Memory
 	arrived sync.WaitGroup
-	once    sync.Once
 	asked   int
+	missed  int
 	mu      sync.Mutex
 }
 
 func (b *bothPastTheLookup) RunByIdemKey(ctx context.Context, key string) (domain.RunID, error) {
+	run, err := b.Memory.RunByIdemKey(ctx, key)
 	b.mu.Lock()
 	b.asked++
 	first := b.asked <= 2
+	if first && err != nil {
+		b.missed++
+	}
 	b.mu.Unlock()
 	if first {
 		b.arrived.Done()
 		b.arrived.Wait()
 	}
-	return b.Memory.RunByIdemKey(ctx, key)
+	return run, err
 }
 
 // countingInputs counts every input kept, whoever keeps it.
@@ -101,6 +106,9 @@ func TestOpen_twoAttemptsPastTheLookup_openOneRunAndKeepOneInput(t *testing.T) {
 	}
 	done.Wait()
 
+	if store.missed != 2 {
+		t.Fatalf("%d attempts found no run before writing, want both: the race did not happen", store.missed)
+	}
 	if results[0].RunID != results[1].RunID || results[0].Created == results[1].Created {
 		t.Fatalf("results %+v, want one run, opened by exactly one attempt", results)
 	}

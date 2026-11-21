@@ -20,19 +20,26 @@ run names. Kept first and named after, the losing attempt's input stayed behind 
 naming it, beyond every erasure that starts from a run.
 */
 
-// bothAskFirst holds each attempt at the key lookup until both have asked, then lets the
-// second go a few milliseconds after the first, so the two derive different runs.
+// bothAskFirst asks Postgres first, then holds each of the first two answers until both are
+// in hand, and lets the second go a few milliseconds after the first so the two derive runs
+// of their own. Both have learned the key names no run before either writes; missed records
+// that they did.
 type bothAskFirst struct {
 	Store
 	mu      sync.Mutex
 	asked   int
+	missed  int
 	arrived sync.WaitGroup
 }
 
 func (b *bothAskFirst) RunByIdemKey(ctx context.Context, key string) (domain.RunID, error) {
+	run, err := b.Store.RunByIdemKey(ctx, key)
 	b.mu.Lock()
 	b.asked++
 	turn := b.asked
+	if turn <= 2 && err != nil {
+		b.missed++
+	}
 	b.mu.Unlock()
 	if turn <= 2 {
 		b.arrived.Done()
@@ -41,7 +48,7 @@ func (b *bothAskFirst) RunByIdemKey(ctx context.Context, key string) (domain.Run
 			time.Sleep(5 * time.Millisecond)
 		}
 	}
-	return b.Store.RunByIdemKey(ctx, key)
+	return run, err
 }
 
 func TestJourney_twoAttemptsUnderOneKey_openOneRunAndKeepOneInput(t *testing.T) {
@@ -67,6 +74,9 @@ func TestJourney_twoAttemptsUnderOneKey_openOneRunAndKeepOneInput(t *testing.T) 
 	}
 	done.Wait()
 
+	if racing.missed != 2 {
+		t.Fatalf("%d attempts found no run before writing, want both: the race did not happen", racing.missed)
+	}
 	var runs, inputs int
 	if err := rig.pool.QueryRow(t.Context(), `
 		select (select count(*) from run_steps where kind = 'run_started' and idem_key = $1),
