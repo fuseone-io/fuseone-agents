@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"testing"
 
@@ -15,17 +17,20 @@ import (
 The simulation pool the worker command builds reads a case's world from Postgres, at the
 version its run was opened on (NT-018 phase 5). Both sides, from an experiment started at the
 route: a world that reads is replayed and the run finishes, which a pool that reads no world
-would refuse; a world erased since fails the run with fuseone:world-unreadable before anything
-plans, rather than answer the case with nothing.
+would refuse; a world, or one answer it names, erased since fails the run with
+fuseone:world-unreadable before anything plans, rather than answer the case with nothing.
 */
 func TestExperiment_aCaseWithAWorld_isReplayedByTheProductionPoolOrRefusedOnceErased(t *testing.T) {
 	for name, tc := range map[string]struct {
-		erase bool
+		erase string
 		want  domain.StepKind
 		code  string
 	}{
 		"a world that reads": {want: domain.StepRunFinished},
-		"a world erased":     {erase: true, want: domain.StepFailed, code: "fuseone:world-unreadable"},
+		"a world erased":     {erase: "world", want: domain.StepFailed, code: "fuseone:world-unreadable"},
+		// The object still reads; one answer it names does not. Refused before anything
+		// plans, rather than on the turn that would have read it.
+		"one answer erased": {erase: "answer", want: domain.StepFailed, code: "fuseone:world-unreadable"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			head := experimentOnAWorld(t, tc.erase)
@@ -38,17 +43,28 @@ func TestExperiment_aCaseWithAWorld_isReplayedByTheProductionPoolOrRefusedOnceEr
 	}
 }
 
-// experimentOnAWorld records the experiment's case with a world, erased or not, runs one
-// experiment on it through the production pool, and answers where its run ended.
-func experimentOnAWorld(t *testing.T, erase bool) domain.Step {
+// experimentOnAWorld records the experiment's case with a world of one answer, erasing the
+// world or the answer when asked, runs one experiment on it through the production pool, and
+// answers where its run ended.
+func experimentOnAWorld(t *testing.T, erase string) domain.Step {
 	t.Helper()
 	world := newExperimentWorld(t)
 	content := ledger.NewContent(world.pool)
-	body, err := json.Marshal(domain.CaseWorld{Case: "refund"})
+	owner := string(world.agent) + "/refund"
+	answer := []byte(`{"order":"o-1"}`)
+	answerRef, err := content.PutFor(t.Context(), regression.WorldKind, owner, 2, answer)
+	if err != nil {
+		t.Fatalf("keep the answer: %v", err)
+	}
+	sum := sha256.Sum256(answer)
+	body, err := json.Marshal(domain.CaseWorld{Case: "refund", Entries: []domain.WorldEntry{{
+		Position: 1, Tool: "crm.lookup", ArgsDigest: "sha256:a",
+		AnswerRef: answerRef, AnswerDigest: hex.EncodeToString(sum[:]), AnswerBytes: int64(len(answer)),
+	}}})
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
-	worldRef, err := content.PutFor(t.Context(), regression.WorldKind, string(world.agent)+"/refund", 1, body)
+	worldRef, err := content.PutFor(t.Context(), regression.WorldKind, owner, 1, body)
 	if err != nil {
 		t.Fatalf("keep the world: %v", err)
 	}
@@ -63,10 +79,10 @@ func experimentOnAWorld(t *testing.T, erase bool) domain.Step {
 	}); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
-	if erase {
+	if erased := map[string]string{"world": worldRef, "answer": answerRef}[erase]; erased != "" {
 		if _, err := world.pool.Exec(t.Context(), `
-			update run_content set bytes = null, erased_at = now(), erased_reason = 'subject' where ref = $1`, worldRef); err != nil {
-			t.Fatalf("erase the world: %v", err)
+			update run_content set bytes = null, erased_at = now(), erased_reason = 'subject' where ref = $1`, erased); err != nil {
+			t.Fatalf("erase the %s: %v", erase, err)
 		}
 	}
 
