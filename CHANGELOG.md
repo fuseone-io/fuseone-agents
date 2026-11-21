@@ -30,6 +30,49 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.131.0] — 2026-11-21
+
+NT-018 phase 5, release 5a: the readers of a case's world (#439–#442). A case can name the
+world it was corrected in, and a battery or experiment replays it; nothing writes one yet, so
+every case replays as before. One migration (0125). The rollback floor does not move with this
+release: it becomes 0.131.0 once 5b writes the first world (until then, the floors of 0.130.0
+hold).
+
+### Upgrade notes
+
+- **The first case written with a world makes 0.131.0 the rollback floor** (NT-018 phase 5).
+  Release 5b records the answers an author gave in a rehearsal into the case it becomes. A
+  release older than this one does not read them: it would replay such a case answering every
+  call with nothing, and could report it held on a situation nobody corrected. This release
+  writes no world, so until 5b is deployed and used the floor stays where 0.130.0 left it.
+- **Migration 0125** adds `regression_cases.world_ref` and `dataset_version_cases.world_ref`
+  and `world_digest`, all empty by default. Every existing case reads as a case with no world,
+  and no dataset gains a version: a case with no world hashes to the line it always did.
+
+### Added
+
+- **Replaying a case's world** (NT-018 phase 5a). A case of a corpus version that names a world
+  is answered, call by call, from the answers that world recorded, strictly in order and each
+  once, and reaches no tool. The worker reads the world at the version the run was opened on,
+  and checks all of it before anything plans: the object the version fixed, its entries in
+  order, and every answer, present and whole. A world any part of which cannot be honoured
+  fails the run as `fuseone:world-unreadable`, rather than answering the case with nothing.
+- **A case that leaves its world is not comparable.** The first call that does not follow the
+  recorded world is written down as a `replay_diverged` step (`missing`, `extra`, `repeated` or
+  `out_of_order`), and every call after it is answered with nothing. A battery and an
+  experiment count such a case apart from held and broken, never as either, and both
+  comparisons name how each side left its world. The console says it in words. A case that
+  is not comparable does not stop an agent from starting, as a case erased or never simulated
+  does not; a case that truly broke still does.
+- `GET` reports and comparisons gain `diverged` on a case, `notComparable` on a battery and an
+  experiment, `divergedIn` on an experiment's case, and `wasDiverged`, `nowDiverged`,
+  `wasDivergedIn` and `nowDivergedIn` on a comparison's change.
+
+### Changed
+
+- **The workbench's candidates list a version once** (#437). A version sealed again shows once,
+  under its newest seal's time and author, with how many times it was sealed.
+
 ### Fixed
 
 - **A simulation no longer touches the semantic dedupe that real runs share.** A simulated
