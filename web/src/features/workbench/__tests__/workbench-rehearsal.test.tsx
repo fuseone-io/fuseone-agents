@@ -43,6 +43,7 @@ async function openTab(at = "/agents/triagem/workbench") {
 }
 const atRehearsal = "/agents/triagem/workbench?rehearsal=run-reh";
 const sent = (calls: Call[], path: string) => calls.find((c) => c.method === "POST" && c.path === path);
+const posts = (calls: Call[], path: string) => calls.filter((c) => c.method === "POST" && c.path === path);
 
 describe("the workbench's rehearsal", () => {
   beforeAll(polyfillPointer);
@@ -68,6 +69,42 @@ describe("the workbench's rehearsal", () => {
     expect(opened.body).toEqual({ sealId: "s-1", case: "A cliente pede reembolso." });
     expect(opened.headers.get("Idempotency-Key")).toMatch(/.{8,}/);
     expect(await screen.findByText("Em execução")).toBeInTheDocument();
+  });
+
+  it("asks again under the same key after a lost answer, and under another for another case", async () => {
+    const calls = world({
+      ["POST /agents/triagem/rehearsals"]: (_, all) => (posts(all, "/agents/triagem/rehearsals").length < 3 ? { status: 503 } : { status: 201, body: run() }),
+      [`GET ${RUN}`]: () => ({ body: run() }),
+    });
+    await openTab();
+    const user = userEvent.setup();
+    const ask = async (text: string, n: number) => {
+      await user.clear(screen.getByRole("textbox", { name: "Caso" }));
+      await user.type(screen.getByRole("textbox", { name: "Caso" }), text);
+      await user.click(screen.getByRole("button", { name: "Abrir ensaio" }));
+      await waitFor(() => expect(posts(calls, "/agents/triagem/rehearsals")).toHaveLength(n));
+    };
+    await screen.findByRole("button", { name: "Abrir ensaio" });
+    await ask("Reembolso.", 1);
+    await ask("Troca.", 2);
+    await ask("Reembolso.", 3);
+    const [first, other, again] = posts(calls, "/agents/triagem/rehearsals").map((c) => c.headers.get("Idempotency-Key"));
+    expect(again).toBe(first);
+    expect(other).not.toBe(first);
+  });
+
+  it("opens a new rehearsal of the same case under a new key once the first one exists", async () => {
+    const calls = world({ ["POST /agents/triagem/rehearsals"]: () => ({ status: 201, body: run({ phase: "finished" }) }), [`GET ${RUN}`]: () => ({ body: run({ phase: "finished" }) }) });
+    await openTab();
+    const user = userEvent.setup();
+    for (const n of [1, 2]) {
+      await user.type(await screen.findByRole("textbox", { name: "Caso" }), "Reembolso.");
+      await user.click(screen.getByRole("button", { name: "Abrir ensaio" }));
+      await user.click(await screen.findByRole("button", { name: "Novo ensaio" }));
+      expect(posts(calls, "/agents/triagem/rehearsals")).toHaveLength(n);
+    }
+    const [first, second] = posts(calls, "/agents/triagem/rehearsals").map((c) => c.headers.get("Idempotency-Key"));
+    expect(second).not.toBe(first);
   });
 
   it("refuses an empty case before asking the server", async () => {

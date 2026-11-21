@@ -61,10 +61,9 @@ function RehearsalForm({ agentId, candidates, onOpened }: { agentId: string; can
   const open = useOpenRehearsal(agentId);
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { sealId: candidates[0]?.sealId ?? "", text: "" } });
 
-  // One key per ask: a retry of the same ask after a lost answer is the person asking again.
   const submit = (values: Values) =>
     open.mutate(
-      { sealId: values.sealId, text: values.text, key: crypto.randomUUID() },
+      { sealId: values.sealId, case: values.text },
       { onSuccess: (run) => onOpened(run.runId), onError: (error) => toast.error(problemMessage(error, t)) },
     );
 

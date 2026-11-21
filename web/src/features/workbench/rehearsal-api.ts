@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
 import type { Phase, Run, Step } from "@/lib/api/client";
@@ -50,14 +51,25 @@ async function allSteps(runId: string): Promise<Step[]> {
   }
 }
 
-/** Opens a rehearsal of a candidate on a case, under a key of its own for this one ask. */
+/**
+ * Opens a rehearsal of a candidate on a case. The key names one intention, so it is minted
+ * per body and kept until that body's rehearsal exists: asking again after an answer that
+ * was lost reaches the rehearsal already opened, never a second one. Another seal or case is
+ * another intention, with a key of its own.
+ */
 export function useOpenRehearsal(agentId: string) {
+  const intentions = useRef(new Map<string, string>());
   return useMutation({
-    mutationFn: async ({ sealId, text, key }: { sealId: string; text: string; key: string }): Promise<Run> =>
-      unwrap(await api.POST("/agents/{agentId}/rehearsals", {
+    mutationFn: async (body: { sealId: string; case: string }): Promise<Run> => {
+      const intention = JSON.stringify(body);
+      const key = intentions.current.get(intention) ?? `reh-${crypto.randomUUID()}`;
+      intentions.current.set(intention, key);
+      return unwrap(await api.POST("/agents/{agentId}/rehearsals", {
         params: { path: { agentId }, header: { "Idempotency-Key": key } },
-        body: { sealId, case: text },
-      })),
+        body,
+      }));
+    },
+    onSuccess: (_, body) => void intentions.current.delete(JSON.stringify(body)),
   });
 }
 
