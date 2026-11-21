@@ -564,8 +564,9 @@ func (r *Runner) invoke(
 		MemoryLearning:   start.MemoryLearning.Normalize(),
 		Rehearsal:        start.Rehearsal,
 	}
-	// A rehearsal's call asks no tool layer to get ready: nothing will reach one.
-	if !start.Rehearsal {
+	// A rehearsal's call, or a replayed case's, asks no tool layer to get ready: nothing
+	// will reach one.
+	if !start.Rehearsal && start.World == nil {
 		if err := r.reserve(ctx, call); err != nil {
 			return Status{}, err
 		}
@@ -607,6 +608,10 @@ func (r *Runner) invoke(
 	// real cards (NT-018 phase 4).
 	if start.Rehearsal {
 		return r.awaitWorld(ctx, state, start)
+	}
+	// A replayed case's call is answered from its world by the engine (NT-018 phase 5).
+	if start.World != nil {
+		return r.resolveReplay(ctx, state, start)
 	}
 	state, result, err := r.execute(ctx, state, start, call)
 	if err != nil {

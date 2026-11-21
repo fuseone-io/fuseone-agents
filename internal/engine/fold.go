@@ -117,6 +117,7 @@ func (s *State) applyKind(step domain.Step) error {
 		s.Called = append(s.Called, p.Tool)
 		s.PendingTool = p.Tool
 		s.pendingCallSeq = step.Seq
+		s.replay.pendingArgs = p.ArgsDigest
 		s.pendingIdemKey = step.IdemKey
 		s.pendingEffect = p.Effect
 		s.Phase = PhaseAwaitingTool
@@ -148,6 +149,7 @@ func (s *State) applyKind(step domain.Step) error {
 		}
 		s.pendingIdemKey = ""
 		s.pendingEffect = domain.EffectUnknown
+		s.replay.consumed = max(s.replay.consumed, p.Replayed)
 		s.recordInvestigationResult(p)
 		s.PendingTool = ""
 		s.pendingCallSeq = 0
@@ -196,6 +198,8 @@ func (s *State) applyKind(step domain.Step) error {
 
 	case domain.StepWorldAwaited, domain.StepWorldSupplied, domain.StepRehearsalDecided:
 		return s.foldRehearsal(step)
+	case domain.StepReplayDiverged:
+		s.replay.diverged = true
 
 	case domain.StepParked:
 		s.Phase = PhaseParked

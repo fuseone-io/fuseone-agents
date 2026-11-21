@@ -202,6 +202,8 @@ type State struct {
 	// not yet recorded as the call's result (NT-018 phase 4).
 	waiting  *worldWait
 	supplied *domain.WorldSuppliedPayload
+	// replay is how far a replayed case has followed its world (NT-018 phase 5).
+	replay replayFold
 
 	pendingInvestigation *investigationCall
 	investigation        investigationStreak

@@ -365,6 +365,10 @@ type Start struct {
 	// the worker, never from the model: its calls wait for the author to answer for the
 	// world instead of reaching any tool.
 	Rehearsal bool
+	// World is the world of the case this run replays (NT-018 phase 5), loaded by the worker
+	// from the dataset version the run's opening names, never from the model. Set, every call
+	// is answered from it by the engine and none reaches a tool layer.
+	World *domain.CaseWorld
 }
 
 // Status is the outcome of one Advance.
