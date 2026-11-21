@@ -86,6 +86,10 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 	if state.Phase == PhaseAwaitingTool && start.Rehearsal {
 		return r.awaitWorld(ctx, state, start)
 	}
+	// A replayed call is pure: one a crash left behind is answered from the world again.
+	if state.Phase == PhaseAwaitingTool && start.World != nil {
+		return r.resolveReplay(ctx, state, start)
+	}
 	if state.Phase == PhaseAwaitingTool {
 		return r.recoverOrphanedCall(ctx, state, start)
 	}
@@ -165,6 +169,13 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		return Status{}, err
 	}
 
+	if proposal.Done {
+		// A replayed case that answers with entries of its world unasked diverged by
+		// missing them, and says so before it finishes (NT-018 phase 5).
+		if state, err = r.closeWorld(ctx, state, start); err != nil {
+			return Status{}, err
+		}
+	}
 	if proposal.Done && start.Closer != nil {
 		return r.finishClosed(ctx, state, start, proposal)
 	}

@@ -34,6 +34,7 @@ const VERBS: Record<StepKind, { verb: string; tone: Tone }> = {
   world_awaited: { verb: "runs.verbAwaitedWorld", tone: "warn" },
   world_supplied: { verb: "runs.verbSuppliedWorld", tone: "neutral" },
   rehearsal_decided: { verb: "runs.verbDecided", tone: "good" },
+  replay_diverged: { verb: "runs.verbReplayDiverged", tone: "warn" },
 };
 
 const VERDICTS: Record<string, { verb: string; tone: Tone }> = {

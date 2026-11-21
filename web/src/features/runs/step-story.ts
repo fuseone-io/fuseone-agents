@@ -46,6 +46,7 @@ const TITLES: Record<StepKind, string> = {
   world_awaited: "runs.storyWorldAwaitedTitle",
   world_supplied: "runs.storyWorldSuppliedTitle",
   rehearsal_decided: "runs.storyRehearsalDecided",
+  replay_diverged: "runs.storyReplayDivergedTitle",
 };
 
 const VERDICT_CHIP: Record<string, { text: string; className: string }> = {
@@ -255,6 +256,13 @@ export function detailOf(step: Step): Line {
       return {
         key: payload.approved ? "runs.storyRehearsalApprovedBy" : "runs.storyRehearsalRefusedBy",
         values: { who: payload.by ?? "—" },
+      };
+
+    // A replayed case's first call off its recorded world (NT-018 phase 5).
+    case "replay_diverged":
+      return {
+        key: `runs.storyReplayDiverged_${typeof payload.divergence === "string" ? payload.divergence : "extra"}`,
+        values: { tool: typeof payload.tool === "string" ? payload.tool : "", position: typeof payload.position === "number" ? payload.position : 0 },
       };
 
     case "model_fallback":

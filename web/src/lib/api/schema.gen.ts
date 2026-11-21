@@ -4083,9 +4083,14 @@ export interface components {
          *     its text), and the author's decision where the Gate held an action, which
          *     is never an `approval_decided`. Every reader knows them one release
          *     before anything writes them.
+         *
+         *     `replay_diverged` belongs to a replayed case (NT-018 phase 5): the first
+         *     call that did not follow the world the case was recorded with, as
+         *     `{position, divergence, tool}`, where `divergence` is `missing`, `extra`,
+         *     `repeated` or `out_of_order`. The case is not comparable from there on.
          * @enum {string}
          */
-        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "effect_reconciled" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensation_started" | "compensated" | "failed" | "parked" | "run_finished" | "model_fallback" | "work_item_claimed" | "work_item_linked" | "world_awaited" | "world_supplied" | "rehearsal_decided";
+        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "effect_reconciled" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensation_started" | "compensated" | "failed" | "parked" | "run_finished" | "model_fallback" | "work_item_claimed" | "work_item_linked" | "world_awaited" | "world_supplied" | "rehearsal_decided" | "replay_diverged";
         /**
          * @description Whether a grant given ahead of time may release a call of this agent
          *     (#192). Forbidden refuses a new grant for an agent whose current
