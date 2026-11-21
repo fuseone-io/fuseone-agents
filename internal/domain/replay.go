@@ -1,5 +1,7 @@
 package domain
 
+import "errors"
+
 /*
 A case's world (NT-018 phase 5): the answers an author gave in a rehearsal, in the order the
 run asked for them. A battery or an experiment replays a case that keeps one by handing those
@@ -7,6 +9,11 @@ answers back, strictly in order, each once. A run that asks for something else h
 situation the author corrected, and the case is not comparable from there on: reporting it as
 held would be the platform inventing evidence.
 */
+
+// ErrWorldUnreadable is a replayed case whose world cannot be read, or is not its own. Its
+// run fails rather than replay without it: the case would answer a situation the author
+// never corrected, and a battery would report it held.
+var ErrWorldUnreadable = errors.New("the case's world is unreadable")
 
 // StepReplayDiverged records the first call of a replayed case that did not follow its world.
 // The engine writes it, once per run; every call after it is answered with nothing.
