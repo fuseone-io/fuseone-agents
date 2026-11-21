@@ -7466,7 +7466,8 @@ components:
 
     ExperimentCaseChange:
       type: object
-      required: [id, was, now, costMicros, steps, wasBrokenIn, wasRan, nowBrokenIn, nowRan]
+      required: [id, was, now, costMicros, steps, wasBrokenIn, wasRan, nowBrokenIn, nowRan,
+        wasDivergedIn, nowDivergedIn]
       properties:
         id: { type: string }
         was: { $ref: '#/components/schemas/Standing' }
@@ -7482,6 +7483,14 @@ components:
         wasRan: { type: integer }
         nowBrokenIn: { type: integer }
         nowRan: { type: integer }
+        wasDivergedIn:
+          type: integer
+          description: Repetitions that left the case's world on the old side (NT-018 phase 5).
+        nowDivergedIn:
+          type: integer
+          description: Repetitions that left the case's world on the new side.
+        wasDiverged: { $ref: '#/components/schemas/ReplayDivergence' }
+        nowDiverged: { $ref: '#/components/schemas/ReplayDivergence' }
 
     SimulationAccepted:
       type: object
@@ -10220,6 +10229,10 @@ components:
           format: int64
           description: New minus old. An agent that reaches the same answer for three times the money is worse.
         steps: { type: integer }
+        wasDiverged:
+          $ref: '#/components/schemas/ReplayDivergence'
+        nowDiverged:
+          $ref: '#/components/schemas/ReplayDivergence'
 
     Standing:
       type: string

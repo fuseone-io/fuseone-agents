@@ -30,6 +30,9 @@ type ExperimentCaseChange struct {
 	CaseChange
 	WasBrokenIn, WasRan int
 	NowBrokenIn, NowRan int
+	// WasDivergedIn and NowDivergedIn are the repetitions that left the case's world on each
+	// side (NT-018 phase 5): neither broken nor held.
+	WasDivergedIn, NowDivergedIn int
 }
 
 // CompareExperiments answers what changed from one experiment to another.
@@ -46,6 +49,7 @@ func CompareExperiments(was, now ExperimentReport) ExperimentComparison {
 		}
 		out.Cases = append(out.Cases, ExperimentCaseChange{
 			CaseChange: change, WasBrokenIn: w.BrokenIn, WasRan: w.Ran, NowBrokenIn: n.BrokenIn, NowRan: n.Ran,
+			WasDivergedIn: w.DivergedIn, NowDivergedIn: n.DivergedIn,
 		})
 	}
 	if out.SharedOnly {

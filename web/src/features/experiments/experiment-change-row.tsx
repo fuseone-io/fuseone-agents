@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Mono } from "@/components/shared/mono";
+import { DivergedSides } from "@/features/runs/diverged-sides";
 import { formatMicros } from "@/lib/format";
 import type { ExperimentCaseChange } from "@/features/experiments/experiments-api";
 
@@ -31,11 +32,17 @@ export function ExperimentChangeRow({ change }: { change: ExperimentCaseChange }
         <Badge variant={regressed ? "destructive" : "outline"}>
           {t(STANDING[change.was])} → {t(STANDING[change.now])}
         </Badge>
+        <DivergedSides was={change.wasDiverged} now={change.nowDiverged} />
       </TableCell>
       <TableCell className="tabular-nums">
         {t("experiments.brokenIn", { broken: change.wasBrokenIn, count: change.wasRan })}
         {" → "}
         {t("experiments.brokenIn", { broken: change.nowBrokenIn, count: change.nowRan })}
+        {change.wasDivergedIn + change.nowDivergedIn > 0 && (
+          <span className="ml-2 text-2xs text-muted-foreground">
+            {t("experiments.divergedInSides", { was: change.wasDivergedIn, now: change.nowDivergedIn })}
+          </span>
+        )}
       </TableCell>
       <TableCell className="text-right">
         {change.costMicros !== 0 && (

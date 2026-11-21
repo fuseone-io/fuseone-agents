@@ -40,3 +40,22 @@ func TestReports_countTheCasesThatLeftTheirWorld(t *testing.T) {
 		t.Errorf("experiment notComparable = %d, want 2", summary.NotComparable)
 	}
 }
+
+// Both comparisons say how each side left its world, and an experiment's how often.
+func TestComparisons_nameEachSidesDivergence(t *testing.T) {
+	t.Parallel()
+	extra := &domain.ReplayDivergedPayload{Position: 2, Divergence: domain.DivergenceExtra, Tool: "kb.search"}
+	want := openapi.ReplayDivergence{Position: 2, Divergence: openapi.ReplayDivergenceDivergenceExtra, Tool: "kb.search"}
+	change := simulate.CaseChange{ID: "estorno", Was: simulate.Held, Now: simulate.NotComparable, NowDiverged: extra}
+
+	versions := comparisonOf(simulate.Comparison{Cases: []simulate.CaseChange{change}})
+	if got := versions.Cases[0]; got.WasDiverged != nil || got.NowDiverged == nil || *got.NowDiverged != want {
+		t.Errorf("version change %+v, want the new side's divergence", got)
+	}
+	experiments := experimentComparisonOut(simulate.ExperimentComparison{Cases: []simulate.ExperimentCaseChange{
+		{CaseChange: change, NowDivergedIn: 3, NowRan: 5},
+	}})
+	if got := experiments.Cases[0]; got.NowDivergedIn != 3 || got.NowDiverged == nil || *got.NowDiverged != want {
+		t.Errorf("experiment change %+v, want diverged in 3 and the divergence", got)
+	}
+}

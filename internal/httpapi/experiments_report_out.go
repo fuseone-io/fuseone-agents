@@ -52,6 +52,8 @@ func experimentComparisonOut(c simulate.ExperimentComparison) openapi.Experiment
 			CostMicros: change.CostMicros, Steps: change.Steps,
 			WasBrokenIn: change.WasBrokenIn, WasRan: change.WasRan,
 			NowBrokenIn: change.NowBrokenIn, NowRan: change.NowRan,
+			WasDivergedIn: change.WasDivergedIn, NowDivergedIn: change.NowDivergedIn,
+			WasDiverged: divergenceOut(change.WasDiverged), NowDiverged: divergenceOut(change.NowDiverged),
 		})
 	}
 	return out

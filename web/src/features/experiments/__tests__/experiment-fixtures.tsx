@@ -79,9 +79,9 @@ export function comparison(over: Partial<ExperimentComparison> = {}): Experiment
     sharedOnly: true, onlyFrom: 1, onlyTo: 0, regressed: 1, fixed: 0, costMicros: 0,
     cases: [
       { id: "estorno", was: "held", now: "broke", costMicros: 0, steps: 0,
-        wasBrokenIn: 0, wasRan: 5, nowBrokenIn: 2, nowRan: 5 },
+        wasBrokenIn: 0, wasRan: 5, nowBrokenIn: 2, nowRan: 5, wasDivergedIn: 0, nowDivergedIn: 0 },
       { id: "consulta", was: "held", now: "held", costMicros: 0, steps: 0,
-        wasBrokenIn: 0, wasRan: 5, nowBrokenIn: 0, nowRan: 5 },
+        wasBrokenIn: 0, wasRan: 5, nowBrokenIn: 0, nowRan: 5, wasDivergedIn: 0, nowDivergedIn: 0 },
     ],
     ...over,
   };

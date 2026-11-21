@@ -75,11 +75,7 @@ func (s *Server) caseOut(
 	}
 	// A replayed case that left its world names how, or it would read as one that held
 	// (NT-018 phase 5).
-	if d := c.Diverged; d != nil {
-		out.Diverged = &openapi.ReplayDivergence{
-			Position: d.Position, Divergence: openapi.ReplayDivergenceDivergence(d.Divergence), Tool: string(d.Tool),
-		}
-	}
+	out.Diverged = divergenceOut(c.Diverged)
 	if len(c.Expected) > 0 {
 		expected := toExpectations(c.Expected)
 		out.Expected = &expected
@@ -108,5 +104,15 @@ func toSimulationAct(a simulate.Act) openapi.SimulationAct {
 		Rule:    someString(a.Rule),
 		Policy:  someString(a.Policy),
 		Reason:  someString(a.Reason),
+	}
+}
+
+// divergenceOut renders how a replayed case left its world, and nothing for one that did not.
+func divergenceOut(d *domain.ReplayDivergedPayload) *openapi.ReplayDivergence {
+	if d == nil {
+		return nil
+	}
+	return &openapi.ReplayDivergence{
+		Position: d.Position, Divergence: openapi.ReplayDivergenceDivergence(d.Divergence), Tool: string(d.Tool),
 	}
 }

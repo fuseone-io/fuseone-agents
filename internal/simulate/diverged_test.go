@@ -92,3 +92,33 @@ func TestReadExperiment_countsTheRepetitionsThatLeftTheWorld(t *testing.T) {
 		t.Errorf("ran %d, diverged in %d, broken in %d; want 2, 1, 0", c.Ran, c.DivergedIn, c.BrokenIn)
 	}
 }
+
+// A comparison says how each side left its world, not only that it is not comparable.
+func TestCompare_carriesEachSidesDivergence(t *testing.T) {
+	t.Parallel()
+	missing := &domain.ReplayDivergedPayload{Position: 1, Divergence: domain.DivergenceMissing, Tool: "crm.lookup"}
+	was := Battery(Report{ID: "v1", Cases: []Case{{ID: "estorno", Settled: SettledFinished, Diverged: missing}}}, expectsLookup("estorno"))
+	now := Battery(Report{ID: "v2", Cases: []Case{diverged(Case{ID: "estorno", Settled: SettledFinished})}}, expectsLookup("estorno"))
+	got := Compare(was, now)
+	if len(got.Cases) != 1 || got.Cases[0].WasDiverged == nil || *got.Cases[0].WasDiverged != *missing ||
+		got.Cases[0].NowDiverged == nil || *got.Cases[0].NowDiverged != *anExtraCall {
+		t.Errorf("cases %+v, want each side's divergence named", got.Cases)
+	}
+}
+
+func TestCompareExperiments_countsTheRepetitionsThatLeftTheWorldOnEachSide(t *testing.T) {
+	t.Parallel()
+	held := ReadExperiment(Record{}, Report{ID: "e1", Cases: []Case{{ID: "estorno", Settled: SettledFinished, Acted: lookedUp(), RunID: "r1"}}}, expectsLookup("estorno"))
+	left := ReadExperiment(Record{}, Report{ID: "e2", Cases: []Case{
+		{ID: "estorno", Settled: SettledFinished, Acted: lookedUp(), RunID: "r2"},
+		diverged(Case{ID: "estorno", Settled: SettledFinished, RunID: "r3"}),
+	}}, expectsLookup("estorno"))
+	got := CompareExperiments(held, left)
+	if len(got.Cases) != 1 {
+		t.Fatalf("cases %+v, want one", got.Cases)
+	}
+	c := got.Cases[0]
+	if c.WasDivergedIn != 0 || c.NowDivergedIn != 1 || c.NowDiverged == nil || c.Now != NotComparable {
+		t.Errorf("change %+v, want it not comparable now, diverged in 1, naming how", c)
+	}
+}

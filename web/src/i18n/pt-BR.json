@@ -1128,7 +1128,9 @@
       "absent": "não rodou",
       "not_comparable": "não comparável"
     },
-    "title": "Contra a versão anterior"
+    "title": "Contra a versão anterior",
+    "divergedWas": "Antes: {{how}}",
+    "divergedNow": "Agora: {{how}}"
   },
   "experiments": {
     "title": "Experimentos",
@@ -1208,7 +1210,8 @@
     "standingNotComparable": "Não comparável",
     "divergedIn_one": "desviou em {{count}}",
     "divergedIn_other": "desviou em {{count}}",
-    "notComparable": "Não comparáveis"
+    "notComparable": "Não comparáveis",
+    "divergedInSides": "desviou em {{was}} → {{now}}"
   },
   "compensation": {
     "abandon": "Encerrar",

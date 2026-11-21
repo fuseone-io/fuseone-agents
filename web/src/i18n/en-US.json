@@ -1128,7 +1128,9 @@
       "absent": "did not run",
       "not_comparable": "not comparable"
     },
-    "title": "Against the previous version"
+    "title": "Against the previous version",
+    "divergedWas": "Before: {{how}}",
+    "divergedNow": "Now: {{how}}"
   },
   "experiments": {
     "title": "Experiments",
@@ -1208,7 +1210,8 @@
     "standingNotComparable": "Not comparable",
     "divergedIn_one": "left its world in {{count}}",
     "divergedIn_other": "left its world in {{count}}",
-    "notComparable": "Not comparable"
+    "notComparable": "Not comparable",
+    "divergedInSides": "left its world in {{was}} → {{now}}"
   },
   "compensation": {
     "abandon": "End run",

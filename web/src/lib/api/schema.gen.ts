@@ -4461,6 +4461,12 @@ export interface components {
             wasRan: number;
             nowBrokenIn: number;
             nowRan: number;
+            /** @description Repetitions that left the case's world on the old side (NT-018 phase 5). */
+            wasDivergedIn: number;
+            /** @description Repetitions that left the case's world on the new side. */
+            nowDivergedIn: number;
+            wasDiverged?: components["schemas"]["ReplayDivergence"];
+            nowDiverged?: components["schemas"]["ReplayDivergence"];
         };
         SimulationAccepted: {
             id: string;
@@ -6265,6 +6271,8 @@ export interface components {
              */
             costMicros: number;
             steps: number;
+            wasDiverged?: components["schemas"]["ReplayDivergence"];
+            nowDiverged?: components["schemas"]["ReplayDivergence"];
         };
         /**
          * @description How a case stood in one battery. `absent` is a case that battery never ran — reported rather than dropped. `not_comparable` is a case the two batteries did not ask the same question about: only one version of the corpus had it, or it expected something else in each. It is neither a regression nor a fix.

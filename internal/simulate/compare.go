@@ -46,6 +46,10 @@ type CaseChange struct {
 	// comparison of held-and-broken alone reports it as identical.
 	CostMicros int64 `json:"cost_micros"`
 	Steps      int   `json:"steps"`
+	// WasDiverged and NowDiverged say how a side's replay left its world (NT-018 phase 5),
+	// so a case not comparable for that reason says which way, on each side.
+	WasDiverged *domain.ReplayDivergedPayload `json:"was_diverged,omitempty"`
+	NowDiverged *domain.ReplayDivergedPayload `json:"now_diverged,omitempty"`
 }
 
 // Regressed reports the one change worth stopping for.
@@ -83,16 +87,17 @@ func Compare(was, now Report) Comparison {
 	for id, stood := range before {
 		stands, ran := after[id]
 		if !ran {
-			out.Cases = append(out.Cases, CaseChange{ID: id, Was: stood.standing, Now: missing})
+			out.Cases = append(out.Cases, CaseChange{ID: id, Was: stood.standing, Now: missing, WasDiverged: stood.diverged})
 			continue
 		}
 		change := changeOf(id, stood, stands)
+		change.WasDiverged, change.NowDiverged = stood.diverged, stands.diverged
 		out.CostMicros += change.CostMicros
 		out.Cases = append(out.Cases, change)
 	}
 	for id, stands := range after {
 		if _, ran := before[id]; !ran {
-			out.Cases = append(out.Cases, CaseChange{ID: id, Was: missing, Now: stands.standing})
+			out.Cases = append(out.Cases, CaseChange{ID: id, Was: missing, Now: stands.standing, NowDiverged: stands.diverged})
 		}
 	}
 	out.Regressed, out.Fixed = tally(out.Cases)
@@ -149,6 +154,7 @@ type standing struct {
 	cost     domain.Cost
 	steps    int
 	expected []domain.Expectation
+	diverged *domain.ReplayDivergedPayload
 }
 
 // standings indexes a report by case id.
@@ -177,6 +183,7 @@ func standings(r Report) map[string]standing {
 		}
 		out[c.ID] = standing{
 			standing: stood, ran: !c.didNotRun, cost: c.Cost, steps: c.Steps, expected: c.Expected,
+			diverged: c.Diverged,
 		}
 	}
 	return out
