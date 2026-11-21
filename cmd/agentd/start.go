@@ -13,7 +13,6 @@ import (
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
-	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/trigger"
 )
@@ -57,7 +56,6 @@ func startCmd(args []string) error {
 	// argument: a run pinned to a version nobody published is a run nobody
 	// can reproduce.
 	opener := trigger.NewOpener(store, spec.NewRegistry(pool), engine.SystemClock{}).
-		WithContent(ledger.NewContent(pool)).
 		WithPauses(spec.NewState(pool)).
 		// Including the command line. A stop honoured everywhere except the
 		// terminal is one somebody works around without meaning to.

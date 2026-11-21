@@ -39,6 +39,10 @@ type Store interface {
 	Decisions(ctx context.Context, filter domain.RunFilter, limit int) ([]domain.RecordedDecision, error)
 	// RunByIdemKey answers what a caller retrying a start already started.
 	RunByIdemKey(ctx context.Context, key string) (domain.RunID, error)
+	// AppendFirstWithInput opens a run and keeps its input in one act (#432): every door
+	// that opens a run with an input opens it through this, and a store without it is
+	// not one a door can be built on.
+	AppendFirstWithInput(ctx context.Context, run domain.RunID, input []byte, build func(ref, digest string) domain.Step) (domain.Step, error)
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
 	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
 	AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error)

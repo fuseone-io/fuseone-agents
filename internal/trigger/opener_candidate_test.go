@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/trigger"
 )
@@ -50,7 +49,7 @@ func candidateOpener(t *testing.T, paused bool) (*trigger.Opener, *ledger.Memory
 		ID: "triage", VersionID: "v2", Scope: domain.Scope{Company: "acme", Area: "cx"}, Latest: true,
 	}}}
 	clock := fixedClock{t: time.Date(2026, 11, 19, 9, 0, 0, 0, time.UTC)}
-	return trigger.NewOpener(store, reg, clock).WithContent(engine.NewMemoryContent()).
+	return trigger.NewOpener(store, reg, clock).
 		WithCandidates(candidates{candidateSeal: {
 			Agent: "triage", Version: "vcandidate01", Scope: sealedScope, Paused: paused, DraftID: candidateDraft,
 		}}), store

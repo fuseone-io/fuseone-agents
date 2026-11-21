@@ -39,8 +39,8 @@ func (c *capturedInput) Put(_ context.Context, _ domain.RunID, _ int64, data []b
 
 func ghServer(t *testing.T) (*http.ServeMux, *ledger.Memory, *capturedInput) {
 	t.Helper()
-	store := ledger.NewMemory()
 	inputs := &capturedInput{}
+	store := ledger.NewMemory().WithInputs(inputs)
 	hooks := &fakeHooks{
 		armed: map[string]string{"crm/ticket": "s3cret"},
 		agents: map[string]domain.AgentID{
@@ -50,7 +50,7 @@ func ghServer(t *testing.T) (*http.ServeMux, *ledger.Memory, *capturedInput) {
 		events:  map[string][]string{"gh/reviewer": {"pull_request.opened", "issues"}},
 	}
 	mux := http.NewServeMux()
-	NewHooks(hooks, trigger.NewOpener(store, hookRegistry{}, hookClock{}).WithContent(inputs),
+	NewHooks(hooks, trigger.NewOpener(store, hookRegistry{}, hookClock{}),
 		slog.New(slog.NewTextHandler(io.Discard, nil))).Mount(mux)
 	return mux, store, inputs
 }

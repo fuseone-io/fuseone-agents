@@ -124,7 +124,10 @@ func TestStartRun_inAnotherArea_readsAsAbsent(t *testing.T) {
 
 func TestStartRun_withInput_storesItOutsideTheLedger(t *testing.T) {
 	t.Parallel()
-	store, content := ledger.NewMemory(), engine.NewMemoryContent()
+	// One place for both, as in production: the ledger keeps the input in the act that
+	// opens the run, and the content store reads it back (#432).
+	content := engine.NewMemoryContent()
+	store := ledger.NewMemory().WithInputs(content)
 
 	req := startRequest("intent-0004")
 	input := "cliente pediu segunda via do boleto"

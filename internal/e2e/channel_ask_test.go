@@ -213,7 +213,6 @@ func aConversation(t *testing.T) *conversing {
 	t.Cleanup(c.door.Close)
 
 	opener := trigger.NewOpener(ledger.NewPostgres(pool), c.registry, engine.SystemClock{}).
-		WithContent(ledger.NewContent(pool)).
 		WithPauses(spec.NewState(pool)).
 		WithStops(admin.NewStops(pool)).
 		WithStages(spec.NewState(pool))

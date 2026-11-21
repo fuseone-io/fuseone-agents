@@ -146,7 +146,6 @@ not by an event is a stop that quietens half the platform.
 */
 func (p *workerParts) opener() *trigger.Opener {
 	return trigger.NewOpener(p.store, p.registry, engine.SystemClock{}).
-		WithContent(ledger.NewContent(p.configPool)).
 		WithPauses(spec.NewState(p.configPool)).
 		WithStops(admin.NewStops(p.configPool)).
 		WithStages(spec.NewState(p.configPool))

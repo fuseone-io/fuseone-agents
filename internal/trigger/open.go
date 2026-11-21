@@ -95,38 +95,39 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 
 	runID := newRunID(published.ID, o.clock.Now(), req.IdemKey)
 
-	inputRef, err := o.store(ctx, runID, req.Input)
-	if err != nil {
+	started := func(inputRef string) domain.Step {
+		return domain.Step{
+			RunID:      runID,
+			Kind:       domain.StepRunStarted,
+			Scope:      published.Scope,
+			AgentID:    published.ID,
+			VersionID:  published.VersionID,
+			OnBehalfOf: req.By,
+			IdemKey:    req.IdemKey,
+			At:         o.clock.Now(),
+			Labels:     labels,
+			Payload: mustJSON(domain.RunStartedPayload{
+				Trigger: req.Trigger, InputRef: inputRef,
+				Simulated: req.Simulation != "", Simulation: req.Simulation,
+				Case: req.Case, DatasetVersion: req.DatasetVersion, Origin: req.Origin, Ticket: ticket,
+				ContextArtifacts: cloneContextArtifacts(req.ContextArtifacts),
+				SourceRun:        req.SourceRun,
+				Chain:            req.Chain,
+				WorkItem:         workItem,
+				Experiment:       req.Experiment,
+				ExperimentConfig: experimentConfig,
+				SealID:           req.SealID,
+				Rehearsal:        req.Rehearsal,
+				AuthoringThread:  thread,
+
+				ExperimentRepetitions: req.ExperimentRepetitions,
+			}),
+		}
+	}
+	err = o.seal(ctx, runID, req.Input, started)
+	if errors.Is(err, ErrNoInputLedger) {
 		return Result{}, err
 	}
-
-	_, err = o.ledger.Append(ctx, domain.Step{
-		RunID:      runID,
-		Kind:       domain.StepRunStarted,
-		Scope:      published.Scope,
-		AgentID:    published.ID,
-		VersionID:  published.VersionID,
-		OnBehalfOf: req.By,
-		IdemKey:    req.IdemKey,
-		At:         o.clock.Now(),
-		Labels:     labels,
-		Payload: mustJSON(domain.RunStartedPayload{
-			Trigger: req.Trigger, InputRef: inputRef,
-			Simulated: req.Simulation != "", Simulation: req.Simulation,
-			Case: req.Case, DatasetVersion: req.DatasetVersion, Origin: req.Origin, Ticket: ticket,
-			ContextArtifacts: cloneContextArtifacts(req.ContextArtifacts),
-			SourceRun:        req.SourceRun,
-			Chain:            req.Chain,
-			WorkItem:         workItem,
-			Experiment:       req.Experiment,
-			ExperimentConfig: experimentConfig,
-			SealID:           req.SealID,
-			Rehearsal:        req.Rehearsal,
-			AuthoringThread:  thread,
-
-			ExperimentRepetitions: req.ExperimentRepetitions,
-		}),
-	})
 	if err != nil {
 		// Two attempts raced and this one lost. Asked rather than matched on
 		// the error: whatever went wrong, if the key now names a run then that
@@ -205,17 +206,23 @@ func (o *Opener) publishedFor(ctx context.Context, req Request) (domain.AgentSum
 	return Pin(versions, req.Version)
 }
 
-// store puts what the run is about outside the ledger. A ticket or a message
-// routinely carries personal data, and the ledger is kept for years (AU-04).
-func (o *Opener) store(ctx context.Context, runID domain.RunID, input []byte) (string, error) {
-	if len(input) == 0 || o.content == nil {
-		return "", nil
+/*
+seal opens the run. With an input, the input is kept in the act that opens it (#432): an
+opening that loses its key keeps nothing, and a ledger that cannot do that opens no run with
+an input at all. The input lives outside the ledger's chain all the same: a ticket or a
+message routinely carries personal data, and the chain is kept for years (AU-04).
+*/
+func (o *Opener) seal(ctx context.Context, run domain.RunID, input []byte, opening func(inputRef string) domain.Step) error {
+	if len(input) == 0 {
+		_, err := o.ledger.Append(ctx, opening(""))
+		return err
 	}
-	ref, err := o.content.Put(ctx, runID, domain.FirstSeq, input)
-	if err != nil {
-		return "", fmt.Errorf("trigger: store input: %w", err)
+	keeper, ok := o.ledger.(InputLedger)
+	if !ok {
+		return ErrNoInputLedger
 	}
-	return ref, nil
+	_, err := keeper.AppendFirstWithInput(ctx, run, input, func(ref, _ string) domain.Step { return opening(ref) })
+	return err
 }
 
 // newRunID names a run after the intention that opened it.
