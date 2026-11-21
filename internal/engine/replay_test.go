@@ -188,3 +188,27 @@ func TestAdvance_aReplayedCallACrashLeftBehind_isResolvedFromTheWorld(t *testing
 		t.Errorf("still reserved %+v, want the call's reservation released", reserved)
 	}
 }
+
+/*
+An experiment that reaches the Gate's boundary has a result: the action the Gate held, which
+nobody decides for a simulated run. The entries of its world after that point were not left
+out by anything the agent concluded, so a run parked there declares nothing missing, and what
+it consumed stays in the ledger it was folded from.
+*/
+func TestAdvance_aReplayedCaseHeldByTheGate_parksWithoutDeclaringTheRestMissing(t *testing.T) {
+	t.Parallel()
+	world := recorded("a", "b")
+	h, start := replayHarness(t, world, lookup("a"), Proposal{Tool: "crm.note", Args: []byte(`{"text":"hi"}`)}, lookup("b"))
+	start.Pack = gate.NewPack("crm.lookup", "crm.note")
+	start.Stage = domain.StageCopilot
+	if st := advanceToEnd(t, h, start); st.Phase != PhaseAwaitingApproval {
+		t.Fatalf("phase %v, want the run held by the Gate", st.Phase)
+	}
+	if got := divergences(t, h, start); len(got) != 0 {
+		t.Errorf("divergences %+v, want none declared at the Gate's boundary", got)
+	}
+	steps, _ := h.ledger.Read(context.Background(), start.RunID, domain.FirstSeq)
+	if consumed := mustFold(t, steps).replay.consumed; consumed != 1 {
+		t.Errorf("consumed %d, want the one answer handed out kept in the fold", consumed)
+	}
+}
