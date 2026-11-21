@@ -207,3 +207,31 @@ func TestSweep_aScheduledBattery_namesTheVersionItRan(t *testing.T) {
 		t.Errorf("runs = %+v, want them pinned to %d", opener.opened, pinnedByTheFake)
 	}
 }
+
+// scopedOccurrences is a corpus whose cases were read in a scope of their own.
+type scopedOccurrences struct {
+	occurrences
+	scope domain.Scope
+}
+
+func (o scopedOccurrences) Occurrences(ctx context.Context, agent domain.AgentID) (simulate.Corpus, error) {
+	corpus, err := o.occurrences.Occurrences(ctx, agent)
+	corpus.Scope = o.scope
+	return corpus, err
+}
+
+// A corpus recorded in another scope than the version is published in now is not this
+// version's to replay on a clock (NT-018 phase 5b, D3): it is skipped, and nothing opens.
+func TestRerun_aCorpusRecordedInAnotherScope_isSkipped(t *testing.T) {
+	t.Parallel()
+	opener := &openerSpy{}
+	elsewhere := scopedOccurrences{occurrencesOf("estorno"), domain.Scope{Company: "acme", Area: "finance"}}
+	rerun := drift.NewRerun(corpusOf("triage"), neverRan{}, elsewhere, opener, nil)
+	opened, err := rerun.Sweep(context.Background(), at())
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 0 || len(opener.opened) != 0 {
+		t.Errorf("batteries = %d, runs %+v; want none", opened, opener.opened)
+	}
+}

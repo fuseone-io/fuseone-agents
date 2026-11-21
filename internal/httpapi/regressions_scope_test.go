@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
 )
@@ -102,5 +103,71 @@ func TestStartExperiment_onACorpusFixedInAnotherScope_opensNothing(t *testing.T)
 	}
 	if runs, _ := store.Runs(gocontext.Background()); len(runs) != 0 {
 		t.Errorf("%d runs opened on a corpus of another scope", len(runs))
+	}
+}
+
+// The scope is judged on what is read, not only before it (review of #447): a corpus first
+// recorded elsewhere between the lookup of its scope and the read shows none of its cases to
+// a caller authorised by the published scope.
+func TestListRegressions_aCaseRecordedElsewhereMeanwhile_isNotShown(t *testing.T) {
+	t.Parallel()
+	server, corpus := corpusIn(nil, true, t)
+	corpus.listed = []domain.RegressionCase{
+		{ID: "reg-cx", Agent: "triage", Scope: corpusCX},
+		{ID: "reg-finance", Agent: "triage", Scope: domain.Scope{Company: "acme", Area: "finance"}, Note: "a note from finance"},
+	}
+	resp, err := server.ListRegressions(inArea("cx", domain.RoleAuthor), openapi.ListRegressionsRequestObject{AgentId: "triage"})
+	if err != nil {
+		t.Fatalf("ListRegressions: %v", err)
+	}
+	listed, ok := resp.(openapi.ListRegressions200JSONResponse)
+	if !ok || len(listed.Items) != 1 || listed.Items[0].Id != "reg-cx" {
+		t.Errorf("response = %T %+v, want only the case of the scope the caller reads", resp, resp)
+	}
+}
+
+// Deleting judges the corpus's scope under its own lock: one first recorded elsewhere
+// between the lookup and the delete is refused there, and reads as absent.
+func TestDeleteRegression_aCorpusRecordedElsewhereMeanwhile_isAbsent(t *testing.T) {
+	t.Parallel()
+	server, corpus := corpusIn(nil, true, t)
+	corpus.deleteIn = &domain.Scope{Company: "acme", Area: "finance"}
+	resp, err := server.DeleteRegression(inArea("cx", domain.RoleAuthor), openapi.DeleteRegressionRequestObject{AgentId: "triage", CaseId: "reg-1"})
+	if err != nil {
+		t.Fatalf("DeleteRegression: %v", err)
+	}
+	if _, absent := resp.(openapi.DeleteRegression404ApplicationProblemPlusJSONResponse); !absent || len(corpus.deleted) != 0 {
+		t.Errorf("response = %T, deleted %v; want absent and nothing deleted", resp, corpus.deleted)
+	}
+}
+
+// A battery replays its corpus in the scope its runs open in: one whose cases were read in
+// another scope is out of reach, judged on the cases read, and opens nothing (review of #447).
+func TestStartSimulation_onACorpusRecordedInAnotherScope_opensNothing(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	content := engine.NewMemoryContent()
+	ref, err := content.Put(gocontext.Background(), "origin", 1, []byte(`{"case":"finance"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	corpus := &fakeCorpus{latest: 3, listed: []domain.RegressionCase{
+		{ID: "reg-finance", Agent: "triage", Scope: domain.Scope{Company: "acme", Area: "finance"}, InputRef: ref},
+	}}
+	corpus.versions = map[int64][]domain.RegressionCase{3: corpus.listed}
+	server := NewServer(store, "test").WithAgents(triggerable(t)).
+		WithContent(content).WithCases(content).WithRegressions(corpus)
+	resp, err := server.StartSimulation(inArea("cx", domain.RoleAuthor), openapi.StartSimulationRequestObject{
+		AgentId: "triage", Params: openapi.StartSimulationParams{IdempotencyKey: "battery-elsewhere"},
+		Body: &openapi.SimulationRequest{Corpus: ptr(true)},
+	})
+	if err != nil {
+		t.Fatalf("StartSimulation: %v", err)
+	}
+	if _, absent := resp.(openapi.StartSimulation404ApplicationProblemPlusJSONResponse); !absent {
+		t.Errorf("response = %T, want the corpus out of reach", resp)
+	}
+	if runs, _ := store.Runs(gocontext.Background()); len(runs) != 0 {
+		t.Errorf("%d runs opened with another scope's cases", len(runs))
 	}
 }

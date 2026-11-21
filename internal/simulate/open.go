@@ -47,6 +47,10 @@ type Batch struct {
 type Corpus struct {
 	Version int64
 	Cases   []Occurrence
+	// Scope is the scope the cases were read in: their corpus's (NT-018 phase 5b, D3). A
+	// battery replays them in the scope its runs open in, and one in another is not its own.
+	// Empty for an uploaded set, and for a corpus recorded before its scope was.
+	Scope domain.Scope
 }
 
 // Opened is what a batch produced.

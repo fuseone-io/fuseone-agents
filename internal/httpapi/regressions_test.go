@@ -32,6 +32,9 @@ type fakeCorpus struct {
 	// where is the scope the corpus was first recorded in, nil for a corpus never recorded.
 	where   *domain.Scope
 	deleted []string
+	// deleteIn is the scope the corpus turns out to be in when a delete takes its lock: a
+	// corpus first recorded there meanwhile. Nil is the scope the delete was judged in.
+	deleteIn *domain.Scope
 }
 
 func (f *fakeCorpus) Where(gocontext.Context, domain.AgentID) (domain.Scope, bool, error) {
@@ -72,6 +75,13 @@ func (f *fakeCorpus) AtVersion(
 func (f *fakeCorpus) Delete(_ gocontext.Context, _ domain.AgentID, id string, _ domain.UserID) error {
 	f.deleted = append(f.deleted, id)
 	return nil
+}
+
+func (f *fakeCorpus) DeleteIn(ctx gocontext.Context, agent domain.AgentID, scope domain.Scope, id string, by domain.UserID) error {
+	if f.deleteIn != nil && *f.deleteIn != scope {
+		return regression.ErrDatasetElsewhere
+	}
+	return f.Delete(ctx, agent, id, by)
 }
 
 func (f *fakeCorpus) Hold(

@@ -167,9 +167,19 @@ takes them. The fence is still taken: it keeps this apart from anything copying 
 corpus, like every other write.
 */
 func (s *Store) Delete(ctx context.Context, agent domain.AgentID, id string, by domain.UserID) error {
+	return s.deleteCase(ctx, agent, nil, id, by)
+}
+
+// DeleteIn is Delete for a caller authorised in scope, judged against the corpus's own scope
+// under its lock (NT-018 phase 5b, D3): ErrDatasetElsewhere for a corpus in another.
+func (s *Store) DeleteIn(ctx context.Context, agent domain.AgentID, scope domain.Scope, id string, by domain.UserID) error {
+	return s.deleteCase(ctx, agent, &scope, id, by)
+}
+
+func (s *Store) deleteCase(ctx context.Context, agent domain.AgentID, scope *domain.Scope, id string, by domain.UserID) error {
 	return s.Exclusive(ctx, []domain.AgentID{agent}, func(ctx context.Context) error {
 		return s.write(ctx, func(tx pgx.Tx) error {
-			return deleteCase(ctx, tx, agent, id, by)
+			return deleteCase(ctx, tx, agent, scope, id, by)
 		})
 	})
 }

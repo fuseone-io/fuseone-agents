@@ -88,18 +88,24 @@ func (s *Store) recordCase(
 	return writeVersion(ctx, tx, c.Agent, c.CreatedBy)
 }
 
+// deleteCase removes a case under the dataset's lock. A scope given is the one the delete
+// was authorised in, judged here, under that lock, against the scope the corpus is in: a
+// corpus first recorded elsewhere since the caller was judged is refused, not changed.
 func deleteCase(
-	ctx context.Context, tx pgx.Tx, agent domain.AgentID, id string, by domain.UserID,
+	ctx context.Context, tx pgx.Tx, agent domain.AgentID, scope *domain.Scope, id string, by domain.UserID,
 ) error {
-	var locked string
-	err := tx.QueryRow(ctx, `select dataset_id from datasets where dataset_id = $1 for update`,
-		defaultDatasetOf(agent)).Scan(&locked)
+	var company, area string
+	err := tx.QueryRow(ctx, `select company_id, area_id from datasets where dataset_id = $1 for update`,
+		defaultDatasetOf(agent)).Scan(&company, &area)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Nothing was ever recorded here, so there is nothing to delete or to version.
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("regression: lock the dataset of %s: %w", agent, err)
+	}
+	if scope != nil && (company != string(scope.Company) || area != string(scope.Area)) {
+		return fmt.Errorf("%w: %s is in %s/%s", ErrDatasetElsewhere, agent, company, area)
 	}
 	if _, err := tx.Exec(ctx, `delete from regression_cases where agent_id = $1 and case_id = $2`,
 		string(agent), id); err != nil {

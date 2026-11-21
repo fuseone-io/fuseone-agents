@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -59,9 +60,12 @@ func (s *Server) StartSimulation(
 	}
 
 	id := simulationID(published.ID, clockOr(s.clock).Now().UnixMilli(), req.Params.IdempotencyKey)
-	opened, refused, err := s.openSimulation(ctx, published.ID, id, req.Body)
+	opened, refused, err := s.openSimulation(ctx, published, id, req.Body)
 	if err != nil {
 		return nil, fmt.Errorf("open simulation %s: %w", id, err)
+	}
+	if errors.Is(refused, errCorpusElsewhere) {
+		return absent, nil
 	}
 	if refused != nil {
 		// The whole file, named line and all. Running forty-nine of fifty and

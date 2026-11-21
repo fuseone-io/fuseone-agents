@@ -27,6 +27,9 @@ type Regressions interface {
 	// AtVersion is the corpus as one version recorded it: what a battery is read against.
 	AtVersion(ctx context.Context, agent domain.AgentID, version int64) ([]domain.RegressionCase, error)
 	Delete(ctx context.Context, agent domain.AgentID, id string, by domain.UserID) error
+	// DeleteIn deletes for a caller authorised in scope, judged against the corpus's own
+	// scope under its lock: ErrDatasetElsewhere for a corpus in another.
+	DeleteIn(ctx context.Context, agent domain.AgentID, scope domain.Scope, id string, by domain.UserID) error
 	// Hold fences the corpus against an erasure while it is being copied.
 	Hold(ctx context.Context, agent domain.AgentID, inside func(context.Context) error) error
 	// Exclusive fences the corpus against every other copy as well, while an experiment
@@ -82,6 +85,11 @@ func (s *Server) ListRegressions(
 	}
 	items := make([]openapi.RegressionCase, 0, len(corpus))
 	for _, c := range corpus {
+		// Judged on what was read, not only before it: a case recorded elsewhere between the
+		// scope's lookup and this read is not shown to a caller who cannot read it there.
+		if auth.Require(ctx, domain.PermAgentRead, c.Scope) != nil {
+			continue
+		}
 		items = append(items, toRegressionCase(c))
 	}
 	return openapi.ListRegressions200JSONResponse{Items: items}, nil
@@ -191,7 +199,13 @@ func (s *Server) DeleteRegression(
 		return openapi.DeleteRegression204Response{}, nil
 	}
 
-	if err := s.regressions.Delete(ctx, domain.AgentID(req.AgentId), req.CaseId, callerOf(ctx)); err != nil {
+	err = s.regressions.DeleteIn(ctx, domain.AgentID(req.AgentId), scope, req.CaseId, callerOf(ctx))
+	if errors.Is(err, regression.ErrDatasetElsewhere) {
+		return openapi.DeleteRegression404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(req.AgentId),
+		}, nil
+	}
+	if err != nil {
 		return nil, fmt.Errorf("delete regression %s: %w", req.CaseId, err)
 	}
 	return openapi.DeleteRegression204Response{}, nil
