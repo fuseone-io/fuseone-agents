@@ -98,6 +98,10 @@ type RegressionCase struct {
 	// The case stays, because a correction nobody can check any more is a gap
 	// somebody should see rather than a line that quietly disappears.
 	Erased bool
+	// World references the object naming the answers an author gave in the rehearsal this
+	// case was corrected from, in the order they were asked (NT-018 phase 5). Empty for a
+	// case with no world: its calls are answered with nothing, as they always were.
+	World string
 
 	CreatedBy UserID
 	CreatedAt time.Time

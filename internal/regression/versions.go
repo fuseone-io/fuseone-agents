@@ -25,6 +25,13 @@ const (
 	expectationsKind = "expectations"
 )
 
+// WorldKind owns a case's world and the answers it names, each owned by its case
+// (`<agent>/<case>`), never by the agent: the same answer on two cases is two objects. Not
+// the copies' kind either, for the reason expectations are not: an erasure searching copies
+// for an input by digest must never find an answer that happens to share its bytes
+// (NT-018 phase 5, C1).
+const WorldKind = "case_world"
+
 func defaultDatasetOf(agent domain.AgentID) string {
 	return "default:" + string(agent)
 }
