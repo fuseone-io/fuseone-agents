@@ -54,6 +54,8 @@ type Memory struct {
 
 	// kept is content kept with the step that names it (append_content.go).
 	kept map[string][]byte
+	// inputs also keeps each input a run opens with, when wired (append_first.go).
+	inputs InputSink
 
 	// Clock is injectable so lease expiry is testable without sleeping.
 	Clock func() time.Time
