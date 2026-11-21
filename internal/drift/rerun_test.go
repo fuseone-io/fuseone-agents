@@ -239,3 +239,17 @@ func TestRerun_aCorpusRecordedInAnotherScope_isSkipped(t *testing.T) {
 		t.Errorf("batteries = %d, runs %+v; want none", opened, opener.opened)
 	}
 }
+
+// The battery on a clock opens on the version it judged its corpus against: a republication
+// after the check moves none of its runs to another version, or another scope.
+func TestRerun_opensOnTheVersionItJudged(t *testing.T) {
+	t.Parallel()
+	opener := &openerSpy{}
+	rerun := drift.NewRerun(corpusOf("triage"), neverRan{}, occurrencesOf("estorno"), opener, nil)
+	if _, err := rerun.Sweep(context.Background(), at()); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if len(opener.opened) != 1 || opener.opened[0].Version != "v2" {
+		t.Errorf("runs %+v, want one pinned to v2", opener.opened)
+	}
+}

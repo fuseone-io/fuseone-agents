@@ -155,6 +155,9 @@ func (r *Rerun) open(ctx context.Context, one domain.WatchedCorpus, now time.Tim
 		By:             "platform",
 		DatasetVersion: corpus.Version,
 		Cases:          corpus.Cases,
+		// The version the corpus was judged against: one republished in another scope
+		// after the check would carry the cases there.
+		Version: one.Version,
 	})
 	if err != nil {
 		return err

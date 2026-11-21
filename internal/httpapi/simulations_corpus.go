@@ -37,6 +37,9 @@ func (s *Server) openSimulation(
 		opened, openErr = simulate.Open(ctx, s.opener(), simulate.Batch{
 			ID: id, Agent: agent, By: callerOf(ctx),
 			DatasetVersion: corpus.Version, Cases: corpus.Cases,
+			// The version judged above, and not whichever is published when each run
+			// opens: one republished elsewhere meanwhile would carry the cases there.
+			Version: published.VersionID,
 		})
 		return openErr
 	}

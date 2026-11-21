@@ -171,3 +171,53 @@ func TestStartSimulation_onACorpusRecordedInAnotherScope_opensNothing(t *testing
 		t.Errorf("%d runs opened with another scope's cases", len(runs))
 	}
 }
+
+// republishedAfterTheCheck answers with v2 in cx until the battery has been judged, and with
+// v3 in finance, published since, every time after: the move in the window between the scope
+// check and the opening of the runs (review of #447).
+type republishedAfterTheCheck struct {
+	*fakeDetail
+	asked int
+}
+
+func (r *republishedAfterTheCheck) Versions(ctx gocontext.Context, agent domain.AgentID) ([]domain.AgentSummary, error) {
+	r.asked++
+	if r.asked == 1 {
+		return r.fakeDetail.Versions(ctx, agent)
+	}
+	moved := servedVersion("v3")
+	moved.Scope = domain.Scope{Company: "acme", Area: "finance"}
+	older := servedVersion("v2")
+	older.Latest = false
+	return []domain.AgentSummary{moved, older}, nil // newest first, as the registry answers
+}
+
+// The battery opens on the version it was judged against: a republication in another scope
+// after the check moves none of its runs there.
+func TestStartSimulation_republishedAfterTheCheck_opensOnTheVersionJudged(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	content := engine.NewMemoryContent()
+	ref, err := content.Put(gocontext.Background(), "origin", 1, []byte(`{"case":"cx"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	corpus := &fakeCorpus{latest: 3, listed: []domain.RegressionCase{{ID: "reg-cx", Agent: "triage", Scope: corpusCX, InputRef: ref}}}
+	corpus.versions = map[int64][]domain.RegressionCase{3: corpus.listed}
+	agents := &republishedAfterTheCheck{fakeDetail: &fakeDetail{versions: []domain.AgentSummary{servedVersion("v2")}}}
+	server := NewServer(store, "test").WithAgents(agents).WithContent(content).WithCases(content).WithRegressions(corpus)
+	if _, err := server.StartSimulation(inArea("cx", domain.RoleAuthor), openapi.StartSimulationRequestObject{
+		AgentId: "triage", Params: openapi.StartSimulationParams{IdempotencyKey: "battery-pinned"},
+		Body: &openapi.SimulationRequest{Corpus: ptr(true)},
+	}); err != nil {
+		t.Fatalf("StartSimulation: %v", err)
+	}
+	runs, _ := store.Runs(gocontext.Background())
+	if len(runs) != 1 {
+		t.Fatalf("%d runs, want the one case", len(runs))
+	}
+	steps, _ := store.Read(gocontext.Background(), runs[0], domain.FirstSeq)
+	if steps[0].VersionID != "v2" || steps[0].Scope != corpusCX {
+		t.Errorf("run opened on %s in %s, want v2 in cx, the version judged", steps[0].VersionID, steps[0].Scope)
+	}
+}
