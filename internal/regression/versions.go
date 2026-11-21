@@ -110,14 +110,22 @@ func deleteCase(
 
 // lockDataset makes an agent's writers take turns, so version numbers have no gaps
 // and each version is built on the one before.
+//
+// The corpus stays in the scope it was first recorded in (NT-018 phase 5, D3): a case from
+// another scope is refused, because a battery replays it there, with content never read there.
 func lockDataset(ctx context.Context, tx pgx.Tx, agent domain.AgentID, scope domain.Scope) error {
-	if _, err := tx.Exec(ctx, `
+	var company, area string
+	if err := tx.QueryRow(ctx, `
 		insert into datasets (dataset_id, agent_id, name, company_id, area_id)
 		values ($1, $2, $3, $4, $5)
-		on conflict (dataset_id) do update set name = datasets.name`,
+		on conflict (dataset_id) do update set name = datasets.name
+		returning company_id, area_id`,
 		defaultDatasetOf(agent), string(agent), defaultDataset,
-		string(scope.Company), string(scope.Area)); err != nil {
+		string(scope.Company), string(scope.Area)).Scan(&company, &area); err != nil {
 		return fmt.Errorf("regression: lock the dataset of %s: %w", agent, err)
+	}
+	if company != string(scope.Company) || area != string(scope.Area) {
+		return fmt.Errorf("%w: %s is in %s/%s", ErrDatasetElsewhere, agent, company, area)
 	}
 	return nil
 }
