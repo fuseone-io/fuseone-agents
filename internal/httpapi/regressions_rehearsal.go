@@ -92,7 +92,7 @@ func correctionOfRehearsal(agent string, recorded domain.RegressionCase, refused
 	switch {
 	case refused == nil:
 		return openapi.RecordRegression201JSONResponse(toRegressionCase(recorded))
-	case errors.Is(refused, errRehearsalUnkept):
+	case errors.Is(refused, errRehearsalUnkept), errors.Is(refused, regression.ErrWorldUnkeepable):
 		return openapi.RecordRegression409ApplicationProblemPlusJSONResponse(conflicted(refused.Error()))
 	case errors.Is(refused, errNoSuchRun), errors.Is(refused, regression.ErrDatasetElsewhere):
 		return openapi.RecordRegression404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: notFound(agent)}

@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -267,5 +268,19 @@ func TestRecordRegression_fromARehearsal_anOperationalFailure_isTheServersError(
 				t.Errorf("answered %T, want the failure returned as the server's", resp)
 			}
 		})
+	}
+}
+
+// A world the corpus cannot keep whole is a rehearsal that cannot be kept, said as one: a
+// conflict, as the others are, not a request written wrong.
+func TestRecordRegression_aWorldTheCorpusCannotKeepWhole_isAConflict(t *testing.T) {
+	t.Parallel()
+	corpus := &recordingCopies{fakeCorpus: &fakeCorpus{err: fmt.Errorf("answer 1: %w", regression.ErrWorldUnkeepable)}}
+	resp, err := aRehearsal(t, true, true).server(corpus).RecordRegression(inArea("cx", domain.RoleAuthor), fromRehearsal())
+	if err != nil {
+		t.Fatalf("RecordRegression: %v", err)
+	}
+	if _, ok := resp.(openapi.RecordRegression409ApplicationProblemPlusJSONResponse); !ok {
+		t.Errorf("response = %T, want 409", resp)
 	}
 }
