@@ -168,7 +168,8 @@ type watched map[domain.AgentID]domain.WatchedCorpus
 func corpusOf(agent domain.AgentID) watched {
 	return watched{agent: {
 		Agent: agent, Version: "v2",
-		Scope: domain.Scope{Company: "acme", Area: "cx"},
+		Scope:     domain.Scope{Company: "acme", Area: "cx"},
+		Published: domain.Scope{Company: "acme", Area: "cx"},
 	}}
 }
 

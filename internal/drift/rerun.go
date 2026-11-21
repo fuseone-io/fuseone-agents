@@ -138,10 +138,11 @@ func (r *Rerun) open(ctx context.Context, one domain.WatchedCorpus, now time.Tim
 	}
 	// A corpus recorded in another scope than the version is published in now is not this
 	// version's to replay: its cases would open, with their bytes, where they were never read
-	// (NT-018 phase 5b, D3). Skipped, and said, rather than run.
-	if corpus.Scope != (domain.Scope{}) && corpus.Scope != one.Scope {
+	// (NT-018 phase 5b, D3). Judged against the version's scope, never the corpus's own, and
+	// a version whose scope is unknown is not replayed either. Skipped, and said.
+	if corpus.Scope != (domain.Scope{}) && corpus.Scope != one.Published {
 		r.log.Warn("skipping a corpus recorded in another scope", "agent", one.Agent,
-			"corpus", corpus.Scope.String(), "version", one.Scope.String())
+			"corpus", corpus.Scope.String(), "version", one.Published.String())
 		return errCorpusElsewhere
 	}
 

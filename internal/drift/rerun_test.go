@@ -225,8 +225,12 @@ func (o scopedOccurrences) Occurrences(ctx context.Context, agent domain.AgentID
 func TestRerun_aCorpusRecordedInAnotherScope_isSkipped(t *testing.T) {
 	t.Parallel()
 	opener := &openerSpy{}
-	elsewhere := scopedOccurrences{occurrencesOf("estorno"), domain.Scope{Company: "acme", Area: "finance"}}
-	rerun := drift.NewRerun(corpusOf("triage"), neverRan{}, elsewhere, opener, nil)
+	finance := domain.Scope{Company: "acme", Area: "finance"}
+	elsewhere := scopedOccurrences{occurrencesOf("estorno"), finance}
+	// As the store hands it over after a move: the corpus's scope is its cases', and only
+	// the version's says where it is published now.
+	moved := watched{"triage": {Agent: "triage", Version: "v2", Scope: finance, Published: domain.Scope{Company: "acme", Area: "cx"}}}
+	rerun := drift.NewRerun(moved, neverRan{}, elsewhere, opener, nil)
 	opened, err := rerun.Sweep(context.Background(), at())
 	if err != nil {
 		t.Fatalf("Sweep: %v", err)
