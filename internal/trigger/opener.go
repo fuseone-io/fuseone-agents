@@ -30,10 +30,20 @@ type Registry interface {
 	Versions(ctx context.Context, agent domain.AgentID) ([]domain.AgentSummary, error)
 }
 
-// Content holds what a run is about. Optional: a run can start with nothing.
-type Content interface {
-	Put(ctx context.Context, runID domain.RunID, seq int64, data []byte) (string, error)
+/*
+InputLedger opens a run and keeps its input in one act, declared here by the consumer (#432).
+
+A run with an input opens only through it. Kept first and named after, an input whose opening
+lost the race for its key stayed behind with no run naming it, beyond every erasure that
+starts from a run; there is no second way to open one, because the second way is that.
+*/
+type InputLedger interface {
+	AppendFirstWithInput(ctx context.Context, run domain.RunID, input []byte, build func(ref, digest string) domain.Step) (domain.Step, error)
 }
+
+// ErrNoInputLedger is an opener asked to open a run with an input on a ledger that cannot
+// keep the input with the opening.
+var ErrNoInputLedger = errors.New("trigger: this ledger cannot keep a run's input with its opening")
 
 // Clock is the time a run is stamped with.
 type Clock interface{ Now() time.Time }
@@ -81,7 +91,6 @@ var (
 type Opener struct {
 	ledger   Ledger
 	registry Registry
-	content  Content
 	pauses   Pauses
 	stops    Stops
 	stages   Stages
@@ -94,12 +103,6 @@ type Opener struct {
 
 func NewOpener(ledger Ledger, registry Registry, clock Clock) *Opener {
 	return &Opener{ledger: ledger, registry: registry, clock: clock}
-}
-
-// WithContent wires where the run's input is stored.
-func (o *Opener) WithContent(content Content) *Opener {
-	o.content = content
-	return o
 }
 
 // WithStops wires the switches wider than one agent.

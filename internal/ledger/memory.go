@@ -54,6 +54,8 @@ type Memory struct {
 
 	// kept is content kept with the step that names it (append_content.go).
 	kept map[string][]byte
+	// inputs also keeps each input a run opens with, when wired (append_first.go).
+	inputs InputSink
 
 	// Clock is injectable so lease expiry is testable without sleeping.
 	Clock func() time.Time
@@ -152,6 +154,18 @@ func (m *Memory) append(
 
 // appendLocked is the append itself. Callers hold m.mu.
 func (m *Memory) appendLocked(epoch *int64, expect *domain.StepRef, s domain.Step) (domain.Step, error) {
+	sealed, err := m.sealLocked(epoch, expect, s)
+	if err != nil {
+		return domain.Step{}, err
+	}
+	m.commitLocked(sealed)
+	return sealed, nil
+}
+
+// sealLocked judges s and seals it onto its run without recording it, so a caller can do
+// what must happen with the step, or not at all, before commitLocked records it. Callers
+// hold m.mu.
+func (m *Memory) sealLocked(epoch *int64, expect *domain.StepRef, s domain.Step) (domain.Step, error) {
 	steps := m.runs[s.RunID]
 	var prev *domain.Step
 	if n := len(steps); n > 0 {
@@ -183,12 +197,13 @@ func (m *Memory) appendLocked(epoch *int64, expect *domain.StepRef, s domain.Ste
 		return domain.Step{}, err
 	}
 
-	sealed, err := domain.NewStep(prev, s)
-	if err != nil {
-		return domain.Step{}, err
-	}
+	return domain.NewStep(prev, s)
+}
 
-	m.runs[s.RunID] = append(steps, sealed)
+// commitLocked records a step sealLocked sealed. Callers hold m.mu, the same hold the step
+// was sealed under.
+func (m *Memory) commitLocked(sealed domain.Step) {
+	m.runs[sealed.RunID] = append(m.runs[sealed.RunID], sealed)
 	if sealed.Kind == domain.StepRunFinished {
 		m.finishSeq++
 		m.finishOrder[sealed.RunID] = m.finishSeq
@@ -200,7 +215,6 @@ func (m *Memory) appendLocked(epoch *int64, expect *domain.StepRef, s domain.Ste
 		delete(m.lastFailure, sealed.RunID)
 		delete(m.lastFailureAt, sealed.RunID)
 	}
-	return sealed, nil
 }
 
 // Read returns the run's steps from fromSeq onward, in order.

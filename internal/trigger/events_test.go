@@ -68,7 +68,7 @@ func dispatcherFor(t *testing.T, w wiring, done finished) (*trigger.Dispatcher, 
 		{ID: "cobranca", VersionID: "v1", Scope: domain.Scope{Company: "acme", Area: "cx"}, Latest: true},
 	}}
 	clock := fixedClock{t: time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)}
-	opener := trigger.NewOpener(store, reg, clock).WithContent(engine.NewMemoryContent())
+	opener := trigger.NewOpener(store, reg, clock)
 	seedSources(t, store, done)
 	return trigger.NewDispatcher(w, store, opener, clock, nil), store
 }
@@ -155,13 +155,13 @@ func TestSweep_aFinishedRun_startsWhoeverListens(t *testing.T) {
 func TestSweep_eventContextReachesTheListeningRunInput(t *testing.T) {
 	t.Parallel()
 
-	store := ledger.NewMemory()
 	content := engine.NewMemoryContent()
+	store := ledger.NewMemory().WithInputs(content)
 	reg := registry{versions: []domain.AgentSummary{
 		{ID: "cobranca", VersionID: "v1", Scope: domain.Scope{Company: "acme", Area: "cx"}, Latest: true},
 	}}
 	clock := fixedClock{t: time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)}
-	opener := trigger.NewOpener(store, reg, clock).WithContent(content)
+	opener := trigger.NewOpener(store, reg, clock)
 	d := trigger.NewDispatcher(wiring{
 		emits: map[domain.AgentID][]domain.AgentEvent{"triage": {{
 			Event: "incident.triaged", Context: "incident",
@@ -209,8 +209,8 @@ func TestSweep_eventContextReachesTheListeningRunInput(t *testing.T) {
 func TestSweep_eventArtifactsBecomeAContextContract(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	store := ledger.NewMemory()
 	content := engine.NewMemoryContent()
+	store := ledger.NewMemory().WithInputs(content)
 	clock := fixedClock{t: time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)}
 	reg := registry{versions: []domain.AgentSummary{
 		{ID: "cobranca", VersionID: "v1", Scope: domain.Scope{Company: "acme", Area: "cx"}, Latest: true},
@@ -241,7 +241,7 @@ func TestSweep_eventArtifactsBecomeAContextContract(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("append finish: %v", err)
 	}
-	opener := trigger.NewOpener(store, reg, clock).WithContent(content)
+	opener := trigger.NewOpener(store, reg, clock)
 	d := trigger.NewDispatcher(wiring{
 		emits: map[domain.AgentID][]domain.AgentEvent{"triage": {{
 			Event: "incident.triaged", Context: "incident",
@@ -295,8 +295,8 @@ func TestSweep_eventArtifactsBecomeAContextContract(t *testing.T) {
 func TestSweep_finalAnswerCanBecomeAContextContract(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	store := ledger.NewMemory()
 	content := engine.NewMemoryContent()
+	store := ledger.NewMemory().WithInputs(content)
 	clock := fixedClock{t: time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)}
 	reg := registry{versions: []domain.AgentSummary{
 		{ID: "cobranca", VersionID: "v1", Scope: domain.Scope{Company: "acme", Area: "cx"}, Latest: true},
@@ -325,7 +325,7 @@ func TestSweep_finalAnswerCanBecomeAContextContract(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("append finish: %v", err)
 	}
-	opener := trigger.NewOpener(store, reg, clock).WithContent(content)
+	opener := trigger.NewOpener(store, reg, clock)
 	d := trigger.NewDispatcher(wiring{
 		emits: map[domain.AgentID][]domain.AgentEvent{"triage": {{
 			Event: "incident.triaged", Artifacts: []string{domain.ArtifactFinalAnswer},
@@ -365,8 +365,8 @@ func TestSweep_finalAnswerCanBecomeAContextContract(t *testing.T) {
 func TestSweep_malformedSourceFinishFailsInsteadOfDroppingContext(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	store := ledger.NewMemory()
 	content := engine.NewMemoryContent()
+	store := ledger.NewMemory().WithInputs(content)
 	clock := fixedClock{t: time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)}
 	reg := registry{versions: []domain.AgentSummary{
 		{ID: "cobranca", VersionID: "v1", Scope: domain.Scope{Company: "acme", Area: "cx"}, Latest: true},
@@ -381,7 +381,7 @@ func TestSweep_malformedSourceFinishFailsInsteadOfDroppingContext(t *testing.T) 
 	}); err != nil {
 		t.Fatalf("append malformed finish: %v", err)
 	}
-	opener := trigger.NewOpener(store, reg, clock).WithContent(content)
+	opener := trigger.NewOpener(store, reg, clock)
 	d := trigger.NewDispatcher(wiring{
 		emits: map[domain.AgentID][]domain.AgentEvent{"triage": {{
 			Event: "incident.triaged", Artifacts: []string{"triage_summary"},
@@ -442,7 +442,7 @@ func TestSweep_crossAreaSourceLabelsDoNotOpenAListeningRun(t *testing.T) {
 		{ID: "cobranca", VersionID: "v1", Scope: domain.Scope{Company: "acme", Area: "billing"}, Latest: true},
 	}}
 	clock := fixedClock{t: time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)}
-	opener := trigger.NewOpener(store, reg, clock).WithContent(engine.NewMemoryContent())
+	opener := trigger.NewOpener(store, reg, clock)
 	d := trigger.NewDispatcher(wiring{
 		emits:  map[domain.AgentID][]domain.AgentEvent{"triage": {{Event: "incident.triaged"}}},
 		listen: map[string][]domain.AgentID{"incident.triaged": {"cobranca"}},
@@ -543,7 +543,6 @@ func TestSweep_aStoppedPlatform_publishesNothingAndDoesNotFail(t *testing.T) {
 	}}}
 	clock := fixedClock{t: time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)}
 	opener := trigger.NewOpener(store, reg, clock).
-		WithContent(engine.NewMemoryContent()).
 		WithStops(stops{{Level: domain.StopInstallation, Reason: "incidente"}})
 
 	d := trigger.NewDispatcher(wiring{

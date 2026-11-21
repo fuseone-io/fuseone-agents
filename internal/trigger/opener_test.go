@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/trigger"
 )
@@ -33,7 +32,7 @@ func openerFor(t *testing.T) (*trigger.Opener, *ledger.Memory) {
 		ID: "triage", VersionID: "v2", Scope: domain.Scope{Company: "acme", Area: "cx"}, Latest: true,
 	}}}
 	clock := fixedClock{t: time.Date(2026, 8, 11, 9, 0, 0, 0, time.UTC)}
-	return trigger.NewOpener(store, reg, clock).WithContent(engine.NewMemoryContent()), store
+	return trigger.NewOpener(store, reg, clock), store
 }
 
 func TestOpen_pinsTheRunToTheVersionPublishedNow(t *testing.T) {

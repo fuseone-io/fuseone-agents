@@ -30,6 +30,26 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Migration 0126** adds `run_openings`, one row per idempotency key that opened a run, filled
+  from the runs already there and kept by a trigger on every opening. A key two runs already
+  share keeps the one that opened first; the later run stays as history. The rule is the
+  database's, so a release from before this one is held to it too.
+
+### Fixed
+
+- **One idempotency key opens one run** (#432). Two attempts under one key that both got past
+  the lookup, a millisecond apart, each opened a run: the uniqueness of a key was judged within
+  the moment a run opened, not across moments. The second attempt now loses the key and
+  answers with the run it names, at every door: webhooks, starts, reruns, channel asks,
+  tickets, schedules, events and simulations.
+- **A run's input is kept with its opening, or not at all** (#432). The input was kept first
+  and the run opened after, so an attempt that lost its key left its input behind with no run
+  naming it: retention reached it, but an erasure that starts from a run, a data subject's or a
+  conversation's, never could. The input is kept in the transaction that opens the run, as it
+  always was otherwise: whole up to the installation's limit, under the digest of all of it.
+
 ## [0.131.0] — 2026-11-21
 
 NT-018 phase 5, release 5a: the readers of a case's world (#439–#442). A case can name the

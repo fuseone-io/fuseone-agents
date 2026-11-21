@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/trigger"
 )
@@ -49,8 +48,7 @@ func chainDispatcher(store *ledger.Memory) *trigger.Dispatcher {
 
 func dispatcherWith(store *ledger.Memory, w trigger.Subscriptions) *trigger.Dispatcher {
 	clock := fixedClock{t: time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)}
-	opener := trigger.NewOpener(store, byAgent{"agent-a", "agent-b"}, clock).
-		WithContent(engine.NewMemoryContent())
+	opener := trigger.NewOpener(store, byAgent{"agent-a", "agent-b"}, clock)
 	return trigger.NewDispatcher(w, store, opener, clock, nil)
 }
 
@@ -373,7 +371,7 @@ func TestSweep_theListenerOpensOnTheVersionThatListened(t *testing.T) {
 	startRun(t, store, "run-root", "agent-a", nil)
 	finishRun(t, store, "run-root")
 	clock := fixedClock{t: time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)}
-	opener := trigger.NewOpener(store, newerSilentVersion{}, clock).WithContent(engine.NewMemoryContent())
+	opener := trigger.NewOpener(store, newerSilentVersion{}, clock)
 	w := pingPong
 	w.listenAt = map[domain.AgentID]domain.VersionID{"agent-b": "v1"}
 

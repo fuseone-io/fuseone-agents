@@ -8,7 +8,6 @@ import (
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi"
-	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/trigger"
 	"github.com/fuseone/agents/internal/vault"
@@ -34,7 +33,6 @@ func webhookDoor(pool *pgxpool.Pool, store Store, v *vault.Vault) *httpapi.Hooks
 	return httpapi.NewHooks(
 		webhooksWith(pool, v),
 		trigger.NewOpener(store, spec.NewRegistry(pool), engine.SystemClock{}).
-			WithContent(ledger.NewContent(pool)).
 			WithPauses(spec.NewState(pool)).
 			// A webhook is a way a run starts, so the switches reach it
 			// too. One honoured by the console and not by an inbound hook

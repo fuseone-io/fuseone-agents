@@ -71,10 +71,8 @@ func (s *Server) StartRun(ctx context.Context, req openapi.StartRunRequestObject
 
 // opener builds the shared run opener over this server's ports.
 func (s *Server) opener() *trigger.Opener {
+	// The input is kept by the ledger, in the act that opens the run (#432).
 	opener := trigger.NewOpener(s.store, s.agents, clockOr(s.clock))
-	if s.content != nil {
-		opener = opener.WithContent(s.content)
-	}
 	if s.candidates != nil {
 		// Only an experiment's simulated run may run a candidate; the opener refuses
 		// every other request that names one.

@@ -108,7 +108,7 @@ func (twoVersions) Versions(context.Context, domain.AgentID) ([]domain.AgentSumm
 func TestOpen_anExperiment_runsTheVersionItNames(t *testing.T) {
 	t.Parallel()
 	store := ledger.NewMemory()
-	opener := trigger.NewOpener(store, twoVersions{}, clock{}).WithContent(engine.NewMemoryContent())
+	opener := trigger.NewOpener(store, twoVersions{}, clock{})
 	batch := experimentBatch(1)
 	batch.Experiment.Version = "v1"
 

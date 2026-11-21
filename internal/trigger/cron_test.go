@@ -209,12 +209,12 @@ func TestValidSchedule_refusesASecondsField(t *testing.T) {
 func TestTick_scheduledRun_carriesTheMomentItWasFiredFor(t *testing.T) {
 	t.Parallel()
 	late := noon.Add(90 * time.Second)
-	store := ledger.NewMemory()
 	content := engine.NewMemoryContent()
+	store := ledger.NewMemory().WithInputs(content)
 	clock := fixedClock{t: late}
 	opener := trigger.NewOpener(store, registry{versions: []domain.AgentSummary{{
 		ID: "triage", VersionID: "v2", Scope: domain.Scope{Company: "acme", Area: "cx"}, Latest: true,
-	}}}, clock).WithContent(content)
+	}}}, clock)
 	s := trigger.NewScheduler(&schedules{due: []trigger.Due{
 		{Agent: "triage", Schedule: "0 * * * *", At: noon},
 	}}, opener, clock, slog.New(slog.NewTextHandler(io.Discard, nil)))

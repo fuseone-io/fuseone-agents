@@ -166,7 +166,8 @@ func (m *Memory) RunByIdemKey(ctx context.Context, key string) (domain.RunID, er
 
 	for _, steps := range m.runs {
 		for _, step := range steps {
-			if step.IdemKey == key {
+			// The opening's key, as Postgres answers it from the openings it claimed.
+			if step.Kind == domain.StepRunStarted && step.IdemKey == key {
 				return step.RunID, nil
 			}
 		}

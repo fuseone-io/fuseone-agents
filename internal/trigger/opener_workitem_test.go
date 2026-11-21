@@ -49,7 +49,8 @@ func TestOpen_invalidWorkItem_refused(t *testing.T) {
 	} {
 		opener, store := openerFor(t)
 		stored := &countingContent{}
-		_, err := opener.WithContent(stored).Open(t.Context(), trigger.Request{
+		store.WithInputs(stored)
+		_, err := opener.Open(t.Context(), trigger.Request{
 			Agent: "triage", IdemKey: "k-" + name, Input: []byte("x"), WorkItem: item,
 		})
 		if !errors.Is(err, domain.ErrRunWorkItemInvalid) {

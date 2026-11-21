@@ -69,7 +69,7 @@ func (f *failsOn) Open(ctx context.Context, req trigger.Request) (trigger.Result
 }
 
 func openerFor(store *ledger.Memory, content engine.ContentStore) *trigger.Opener {
-	return trigger.NewOpener(store, registry{}, clock{}).WithContent(content)
+	return trigger.NewOpener(store.WithInputs(content), registry{}, clock{})
 }
 
 func depsFor(store *ledger.Memory, content *engine.MemoryContent, tools engine.Tools) engine.Deps {

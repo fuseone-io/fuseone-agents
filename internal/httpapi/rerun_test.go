@@ -39,10 +39,10 @@ type rerunFixture struct {
 // untrusted input, a conversation it arrived in, a stored body.
 func recordedFromChannel(t *testing.T) rerunFixture {
 	t.Helper()
-	store, content := ledger.NewMemory(), engine.NewMemoryContent()
+	content := engine.NewMemoryContent()
+	store := ledger.NewMemory().WithInputs(content)
 	agents := withHistory()
 	opened, err := trigger.NewOpener(store, agents, fixedAt{t: time.Date(2026, 8, 11, 9, 0, 0, 0, time.UTC)}).
-		WithContent(content).
 		Open(context.Background(), trigger.Request{
 			Agent: "triage", IdemKey: "channel:ask-1", Trigger: "channel",
 			Input:  []byte(recordedAsk),
