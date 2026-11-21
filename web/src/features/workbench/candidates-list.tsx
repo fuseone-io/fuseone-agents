@@ -1,9 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { Mono } from "@/components/shared/mono";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LoadFailed } from "@/features/experiments/load-failed";
+import { byVersion } from "@/features/workbench/candidate-versions";
 import { useCandidates } from "@/features/workbench/candidates-api";
 import { formatInstant } from "@/lib/format";
 import { problemMessage } from "@/lib/api/problem-message";
@@ -33,7 +35,7 @@ export function CandidatesList({ agentId, onOpen }: { agentId: string; onOpen: (
     );
   }
   // The version opens the candidate, so no column of actions has to fit; who sealed it
-  // steps aside on a phone.
+  // steps aside on a phone. A version sealed again shows once, under its newest seal.
   return (
     <Table>
       <TableHeader>
@@ -44,14 +46,17 @@ export function CandidatesList({ agentId, onOpen }: { agentId: string; onOpen: (
         </TableRow>
       </TableHeader>
       <TableBody>
-        {candidates.data.map((c) => (
-          <TableRow key={c.sealId}>
+        {byVersion(candidates.data).map(({ seal: c, seals }) => (
+          <TableRow key={c.version}>
             <TableCell>
               <Button size="sm" variant="link" className="h-auto p-0" onClick={() => onOpen(c.version)} aria-label={t("workbench.candidates.open", { version: c.version })}>
                 <Mono>{c.version}</Mono>
               </Button>
             </TableCell>
-            <TableCell><Mono dim>{formatInstant(c.sealedAt)}</Mono></TableCell>
+            <TableCell>
+              <Mono dim>{formatInstant(c.sealedAt)}</Mono>
+              {seals > 1 && <Badge variant="secondary" className="ml-2">{t("workbench.candidates.seals", { count: seals })}</Badge>}
+            </TableCell>
             <TableCell className="hidden sm:table-cell">{c.sealedBy}</TableCell>
           </TableRow>
         ))}

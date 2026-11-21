@@ -91,6 +91,18 @@ describe("the workbench's candidates", () => {
     expect(await screen.findByLabelText("Lendo as candidatas")).toBeInTheDocument();
   });
 
+  it("lists a version sealed twice once, under its newest seal and how many there are", async () => {
+    const newer = { ...seal, sealId: "s-3", sealedBy: "usr_bia", sealedAt: "2026-11-20T09:00:00Z" };
+    const other = { ...seal, version: "v1def", sealId: "s-2", sealedBy: "usr_caio", sealedAt: "2026-11-19T15:00:00Z" };
+    world({ [`GET ${CANDIDATES}`]: () => ({ body: { items: [newer, other, seal] } }) });
+    await openCandidates();
+    const row = (await screen.findByRole("button", { name: "Abrir v2abc" })).closest("tr")!;
+    expect(within(row as HTMLElement).getByText("usr_bia")).toBeInTheDocument();
+    expect(within(row as HTMLElement).getByText("2 selos")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Abrir v/ })).toHaveLength(2);
+    expect(screen.queryByText("usr_ana")).toBeNull();
+  });
+
   it("opens a candidate on its sealed text, read from the candidate", async () => {
     const definition = "---\nid: triagem\n---\n\nNunca\nPrometer prazo.";
     world({
