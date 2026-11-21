@@ -310,6 +310,14 @@ func TestRecord_arrivingDuringActivation_waitsAndWritesAVersion(t *testing.T) {
 	pool := beforeActivation(t)
 	store := regression.NewStore(pool)
 	ctx := t.Context()
+	// This binary writes the columns 0125 adds; the switch it waits on is 0104's. Only the
+	// columns go in ahead, so the wait is the one this test is about.
+	if _, err := pool.Exec(ctx, `
+		alter table regression_cases add column world_ref text not null default '';
+		alter table dataset_version_cases add column world_ref text not null default '';
+		alter table dataset_version_cases add column world_digest text not null default ''`); err != nil {
+		t.Fatalf("add the world columns: %v", err)
+	}
 
 	migration, err := os.ReadFile("../ledger/sql/0104_activate_dataset_versions.sql")
 	if err != nil {

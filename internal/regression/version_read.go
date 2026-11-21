@@ -66,7 +66,7 @@ func (s *Store) AtVersion(
 		       coalesce(i.erased_at is not null, false),
 		       v.expectations_ref, ex.ref is not null, ex.bytes,
 		       coalesce(ex.erased_at is not null, false),
-		       coalesce(c.model, ''), coalesce(c.effort, '')
+		       coalesce(c.model, ''), coalesce(c.effort, ''), v.world_ref
 		from dataset_version_cases v
 		join datasets d on d.dataset_id = v.dataset_id
 		left join run_content i on i.ref = v.input_ref
@@ -97,7 +97,7 @@ func scanVersionCase(rows pgx.Rows) (domain.RegressionCase, error) {
 	var company, area, fromRun string
 	var inputErased bool
 	if err := rows.Scan(&c.ID, &c.InputRef, &fromRun, &company, &area, &inputErased,
-		&held.ref, &held.found, &held.object, &held.erased, &c.Model, &c.Effort); err != nil {
+		&held.ref, &held.found, &held.object, &held.erased, &c.Model, &c.Effort, &c.World); err != nil {
 		return c, fmt.Errorf("regression: scan a version's case: %w", err)
 	}
 	expectations, err := held.read()

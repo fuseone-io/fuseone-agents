@@ -44,8 +44,10 @@ func Since(pinned, working []domain.RegressionCase) CorpusChange {
 	return out
 }
 
-// unchanged compares what a case asks. Once erased, both sides read as no expectations,
-// so an erasure is not a change.
+// unchanged compares what a case asks, and the world it is answered with: a battery that ran
+// another world checked another situation (NT-018 phase 5). Once erased, both sides read as
+// no expectations, so an erasure is not a change.
 func unchanged(before, now domain.RegressionCase) bool {
-	return before.InputRef == now.InputRef && slices.Equal(before.Expectations, now.Expectations)
+	return before.InputRef == now.InputRef && before.World == now.World &&
+		slices.Equal(before.Expectations, now.Expectations)
 }

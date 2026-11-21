@@ -74,10 +74,16 @@ func upsertCase(ctx context.Context, tx pgx.Tx, c caseRow) error {
 	_, err := tx.Exec(ctx, `
 		insert into regression_cases (
 			agent_id, case_id, company_id, area_id,
-			input_ref, expectations, from_run, note, created_by, model, effort, expectations_ref
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+			input_ref, expectations, from_run, note, created_by, model, effort, expectations_ref,
+			world_ref
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 		on conflict (agent_id, case_id) do update set
 			input_ref = excluded.input_ref,
+			-- No world named keeps the one the case has: a writer from before worlds records
+			-- the same case again with none, and must not take what a newer one recorded
+			-- (NT-018 phase 5). A world that is named replaces it.
+			world_ref = case when excluded.world_ref = '' then regression_cases.world_ref
+			                 else excluded.world_ref end,
 			expectations = excluded.expectations,
 			expectations_ref = excluded.expectations_ref,
 			from_run = excluded.from_run,
@@ -89,7 +95,7 @@ func upsertCase(ctx context.Context, tx pgx.Tx, c caseRow) error {
 			effort = excluded.effort`,
 		string(c.Agent), c.ID, string(c.Scope.Company), string(c.Scope.Area),
 		c.InputRef, c.expectations, string(c.FromRun), c.Note, string(c.CreatedBy),
-		c.Model, c.Effort, c.ref)
+		c.Model, c.Effort, c.ref, c.World)
 	if err != nil {
 		return fmt.Errorf("regression: record %s: %w", c.ID, err)
 	}
@@ -107,7 +113,7 @@ func (s *Store) List(ctx context.Context, agent domain.AgentID) ([]domain.Regres
 		       c.from_run, c.note, c.created_by, c.created_at, c.model, c.effort,
 		       coalesce(rc.erased_at is not null, false),
 		       c.expectations_ref, ex.ref is not null, ex.bytes,
-		       coalesce(ex.erased_at is not null, false)
+		       coalesce(ex.erased_at is not null, false), c.world_ref
 		from regression_cases c
 		left join run_content rc on rc.ref = c.input_ref
 		left join run_content ex on ex.ref = c.expectations_ref
@@ -126,7 +132,7 @@ func (s *Store) List(ctx context.Context, agent domain.AgentID) ([]domain.Regres
 		var inputErased bool
 		if err := rows.Scan(&c.ID, &company, &area, &c.InputRef, &held.column,
 			&fromRun, &c.Note, &by, &c.CreatedAt, &c.Model, &c.Effort, &inputErased,
-			&held.ref, &held.found, &held.object, &held.erased); err != nil {
+			&held.ref, &held.found, &held.object, &held.erased, &c.World); err != nil {
 			return nil, fmt.Errorf("regression: scan case: %w", err)
 		}
 		var err error

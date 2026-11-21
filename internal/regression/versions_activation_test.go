@@ -90,6 +90,8 @@ func TestVersionTables_holdOnlyIdsReferencesAndDigests(t *testing.T) {
 		"dataset_version_cases.expectations_ref":    true,
 		"dataset_version_cases.expectations_digest": true,
 		"dataset_version_cases.from_run":            true,
+		"dataset_version_cases.world_ref":           true,
+		"dataset_version_cases.world_digest":        true,
 	}
 
 	rows, err := pool.Query(t.Context(), `
