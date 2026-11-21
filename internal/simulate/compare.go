@@ -164,7 +164,10 @@ func standings(r Report) map[string]standing {
 			continue
 		}
 		stood := Held
-		if len(c.Unmet) > 0 {
+		switch {
+		case c.Diverged != nil:
+			stood = NotComparable
+		case len(c.Unmet) > 0:
 			stood = Broke
 		}
 		// Two runs of one case, read with no corpus to reduce them. Either one breaking

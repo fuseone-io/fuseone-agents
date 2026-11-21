@@ -101,6 +101,9 @@ type Case struct {
 	// failure and not a pass: it is the reason a reader should read the rest
 	// of the row differently.
 	Drifted bool `json:"drifted,omitempty"`
+	// Diverged is the first call of a replayed case that left the world it was recorded
+	// with (NT-018 phase 5). A row with one is not comparable: it neither held nor broke.
+	Diverged *domain.ReplayDivergedPayload `json:"diverged,omitempty"`
 }
 
 // Fold turns one simulated run's steps into its row in the report.
@@ -140,6 +143,13 @@ func (f *folder) apply(step domain.Step) error {
 		f.c.ID = p.Case
 		f.c.datasetVersion = p.DatasetVersion
 		f.c.judge = p.Judge != nil
+
+	case domain.StepReplayDiverged:
+		var p domain.ReplayDivergedPayload
+		if err := decodeInto(step, &p); err != nil {
+			return err
+		}
+		f.c.Diverged = &p
 
 	case domain.StepPlanned:
 		var p domain.PlannedPayload
