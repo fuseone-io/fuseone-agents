@@ -41,6 +41,12 @@ export function SimulationSummary({ report }: { report: SimulationReport }) {
             />
           </>
         )}
+        {(report.notComparable ?? 0) > 0 && (
+          <Figure
+            label={t("correction.tallyNotComparable")}
+            value={report.notComparable ?? 0}
+          />
+        )}
         {(report.erased ?? 0) > 0 && (
           <Figure
             label={t("correction.tallyErased")}

@@ -7350,7 +7350,7 @@ components:
       description: >
         What an experiment ran and what it found, in the order a result is read (NT-015).
       required: [id, datasetVersion, version, config, casesRun, casesInVersion, erased,
-        repetitions, held, broken, cost, running]
+        repetitions, held, broken, notComparable, cost, running]
       properties:
         id: { type: string }
         datasetVersion: { type: integer, format: int64 }
@@ -7370,6 +7370,11 @@ components:
         broken:
           type: integer
           description: Cases broken in any repetition, or that did not run.
+        notComparable:
+          type: integer
+          description: >
+            Replayed cases that left the world they were recorded with (NT-018 phase 5):
+            neither held nor broken, because nobody measured either.
         cost:
           $ref: '#/components/schemas/Cost'
         running: { type: boolean }
@@ -7414,12 +7419,16 @@ components:
       type: object
       description: >
         One case across its repetitions. `case` is the worst run, as in a battery.
-      required: [case, brokenIn, ran]
+      required: [case, brokenIn, ran, divergedIn]
       properties:
         case: { $ref: '#/components/schemas/SimulationCase' }
         brokenIn:
           type: integer
-          description: Repetitions in which this case broke.
+          description: Repetitions in which this case broke, having followed its world.
+        divergedIn:
+          type: integer
+          description: >
+            Repetitions that left the case's world (NT-018 phase 5): neither broken nor held.
         ran:
           type: integer
           description: >
@@ -7569,6 +7578,31 @@ components:
         error:
           type: string
           description: Why this case did not run, when it did not.
+        diverged:
+          $ref: '#/components/schemas/ReplayDivergence'
+
+    ReplayDivergence:
+      type: object
+      description: >
+        The first call of a replayed case that left the world it was recorded with
+        (NT-018 phase 5). A case with one is not comparable: what it did answered a
+        situation nobody corrected, so it neither held nor broke, and it has no unmet
+        expectations.
+      required: [position, divergence, tool]
+      properties:
+        position:
+          type: integer
+          description: The entry of the world, from one, the run was due to ask for next.
+        divergence:
+          type: string
+          enum: [missing, extra, repeated, out_of_order]
+          description: >
+            `missing`: the run finished without asking for it. `extra`: a call the world
+            does not have. `repeated`: a call it had already answered. `out_of_order`: a
+            call it answers further on.
+        tool:
+          type: string
+          description: The tool the run called, or for `missing` the one it never called.
 
     SimulationOutcomeState:
       type: string
@@ -7595,6 +7629,11 @@ components:
           description: |
             Corrections that could not run because their input was erased.
             Neither held nor broken: coverage this battery does not have.
+        notComparable:
+          type: integer
+          description: |
+            Replayed corrections that left the world they were recorded with
+            (NT-018 phase 5). Neither held nor broken: nobody measured either.
         drifted:
           type: integer
           description: |

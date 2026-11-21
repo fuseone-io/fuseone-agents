@@ -2,10 +2,11 @@ import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Mono } from "@/components/shared/mono";
+import { DivergedNote } from "@/features/runs/diverged-note";
 import { formatMicros } from "@/lib/format";
 import type { ExperimentCase } from "@/features/experiments/experiments-api";
 
-type Standing = "held" | "broken" | "erased" | "notRun";
+type Standing = "held" | "broken" | "erased" | "notRun" | "notComparable";
 
 /**
  * Written out rather than built from the value, so the guard that checks every
@@ -16,6 +17,7 @@ const STANDING: Record<Standing, string> = {
   broken: "experiments.standingBroken",
   erased: "experiments.standingErased",
   notRun: "experiments.standingNotRun",
+  notComparable: "experiments.standingNotComparable",
 };
 
 /**
@@ -29,6 +31,8 @@ const STANDING: Record<Standing, string> = {
 function standingOf(row: ExperimentCase): Standing {
   if (row.case.settled === "erased") return "erased";
   if (row.ran === 0) return "notRun";
+  // A replayed case that left its world answered a situation nobody corrected (NT-018 phase 5).
+  if (row.case.diverged) return "notComparable";
   return (row.case.unmet?.length ?? 0) > 0 ? "broken" : "held";
 }
 
@@ -52,11 +56,17 @@ export function ExperimentCaseRow({
         <Badge variant={standing === "broken" || standing === "notRun" ? "destructive" : "outline"}>
           {t(STANDING[standing])}
         </Badge>
+        {row.case.diverged && <DivergedNote divergence={row.case.diverged} />}
       </TableCell>
       <TableCell className="tabular-nums">
         {standing === "erased"
           ? "—"
           : t("experiments.brokenIn", { broken: row.brokenIn, count: row.ran })}
+        {row.divergedIn > 0 && (
+          <span className="ml-2 text-2xs text-muted-foreground">
+            {t("experiments.divergedIn", { count: row.divergedIn })}
+          </span>
+        )}
         {row.ran > 0 && row.ran < repetitions && (
           <span className="ml-2 text-2xs text-muted-foreground">
             {t("experiments.ranFewer", { ran: row.ran, count: repetitions })}

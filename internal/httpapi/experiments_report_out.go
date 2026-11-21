@@ -15,7 +15,7 @@ func (s *Server) experimentReportOut(ctx context.Context, r simulate.ExperimentR
 	}
 	for _, c := range r.Cases {
 		out.Cases = append(out.Cases, openapi.ExperimentCase{
-			Case: s.simulationCase(ctx, c.Case), BrokenIn: c.BrokenIn, Ran: c.Ran,
+			Case: s.simulationCase(ctx, c.Case), BrokenIn: c.BrokenIn, Ran: c.Ran, DivergedIn: c.DivergedIn,
 		})
 	}
 	return out
@@ -26,7 +26,7 @@ func experimentSummaryOut(r simulate.ExperimentSummary) openapi.ExperimentSummar
 		Id: r.ID, DatasetVersion: r.DatasetVersion, Version: string(r.Version),
 		Config:   experimentConfigOut(r.Config),
 		CasesRun: r.CasesRun, CasesInVersion: r.CasesInVersion, Erased: r.Erased,
-		Repetitions: r.Repetitions, Held: r.Held, Broken: r.Broken,
+		Repetitions: r.Repetitions, Held: r.Held, Broken: r.Broken, NotComparable: r.NotComparable,
 		Cost: toCost(r.Cost), Running: r.Running,
 	}
 }

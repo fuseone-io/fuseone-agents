@@ -15,7 +15,8 @@ func (s *Server) simulationReport(ctx context.Context, r simulate.Report) openap
 	out := openapi.SimulationReport{
 		Id: r.ID, Running: r.Running,
 		Held: ptr(r.Held), Broken: ptr(r.Broken), Drifted: ptr(r.Drifted), Erased: ptr(r.Erased),
-		Cases: make([]openapi.SimulationCase, 0, len(r.Cases)),
+		NotComparable: ptr(r.NotComparable),
+		Cases:         make([]openapi.SimulationCase, 0, len(r.Cases)),
 	}
 	if r.Agent != "" {
 		out.Agent = ptr(string(r.Agent))
@@ -71,6 +72,13 @@ func (s *Server) caseOut(
 	}
 	if c.Drifted {
 		out.Drifted = ptr(true)
+	}
+	// A replayed case that left its world names how, or it would read as one that held
+	// (NT-018 phase 5).
+	if d := c.Diverged; d != nil {
+		out.Diverged = &openapi.ReplayDivergence{
+			Position: d.Position, Divergence: openapi.ReplayDivergenceDivergence(d.Divergence), Tool: string(d.Tool),
+		}
 	}
 	if len(c.Expected) > 0 {
 		expected := toExpectations(c.Expected)

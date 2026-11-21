@@ -53,14 +53,14 @@ export function summary(over: Partial<ExperimentSummary> = {}): ExperimentSummar
   return {
     id: "exp_triage_1", datasetVersion: 3, version: "v2a1b2c3d4e5", config: { model: "other-model" },
     casesRun: 2, casesInVersion: 3, erased: 1, repetitions: 5,
-    held: 1, broken: 1, cost: { micros: 100_000 }, running: false,
+    held: 1, broken: 1, notComparable: 0, cost: { micros: 100_000 }, running: false,
     ...over,
   };
 }
 
 export function experimentCase(id: string, brokenIn: number, ran: number): ExperimentCase {
   return {
-    brokenIn, ran,
+    brokenIn, ran, divergedIn: 0,
     case: {
       id, settled: "finished", steps: 3, cost: { micros: 10_000 },
       unmet: brokenIn > 0 || ran === 0 ? [{ kind: "calls", value: "crm.lookup" }] : undefined,
