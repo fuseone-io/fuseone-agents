@@ -216,6 +216,17 @@ describe("the workbench's rehearsal", () => {
     expect(await screen.findByText("Concluída")).toBeInTheDocument();
   });
 
+  it("stops reading a rehearsal it could not read, until asked to read it again", async () => {
+    const calls = world({ [`GET ${RUN}`]: () => ({ status: 404 }) });
+    await openTab(atRehearsal);
+    const retry = await screen.findByRole("button", { name: /tentar de novo/i });
+    const settled = reads(calls, RUN);
+    await pause(1600);
+    expect(reads(calls, RUN)).toBe(settled);
+    await userEvent.click(retry);
+    await waitFor(() => expect(reads(calls, RUN)).toBe(settled + 1));
+  });
+
   it("says what erasing the conversation reaches, beside the rehearsal", async () => {
     world();
     await openTab();

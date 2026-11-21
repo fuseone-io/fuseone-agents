@@ -27,7 +27,8 @@ export function useRehearsal(runId: string) {
     queryKey: rehearsalKeys.run(runId),
     queryFn: async (): Promise<Run> => unwrap(await api.GET("/runs/{runId}", { params: { path: { runId } } })),
     enabled: runId !== "",
-    refetchInterval: (query) => (rests(query.state.data?.phase) ? false : 1000),
+    // A read that failed is not read again on its own: the person retries.
+    refetchInterval: (query) => (query.state.error || rests(query.state.data?.phase) ? false : 1000),
   });
   const seq = run.data?.seq ?? 0;
   const steps = useQuery({
