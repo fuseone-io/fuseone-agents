@@ -3721,6 +3721,11 @@
       "removeBody": "A remoção cria uma nova versão do conjunto de casos sem ele. Nada é apagado: versões anteriores ainda o citam, e a entrada e as respostas seguem até a retenção ou o apagamento de titular.",
       "removeConfirm": "Remover",
       "removed": "Caso removido"
+    },
+    "trace": {
+      "readOnly": "Trace somente leitura de um run de experimento: nada aqui é guardado, respondido ou abandonado.",
+      "close": "Fechar trace",
+      "reading": "Lendo o trace"
     }
   }
 }

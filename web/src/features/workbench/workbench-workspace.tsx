@@ -35,9 +35,9 @@ export function WorkbenchWorkspace({
   const [part, setPart] = useState<FieldPart>();
   // The published version, when there is one, is what the instructions are read against.
   const published = useAgent(draft.baseVersionId ? agentId : "", undefined);
-  // A rehearsal named in the address opens on its tab: the address was shared to show it.
+  // A rehearsal or a trace named in the address opens on its tab: the address was shared to show it.
   const [params] = useSearchParams();
-  const rehearsing = params.has("rehearsal");
+  const rehearsing = params.has("rehearsal") || params.has("trace");
 
   return (
     <Tabs defaultValue={rehearsing ? "rehearsal" : "draft"} className="h-full">

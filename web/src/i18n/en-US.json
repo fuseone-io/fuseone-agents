@@ -3721,6 +3721,11 @@
       "removeBody": "Removing writes a new version of the case set without it. Nothing is erased: earlier versions still name it, and its input and answers stay until retention or a subject erasure takes them.",
       "removeConfirm": "Remove",
       "removed": "Case removed"
+    },
+    "trace": {
+      "readOnly": "Read-only trace of an experiment run: nothing here is kept, answered or abandoned.",
+      "close": "Close trace",
+      "reading": "Reading the trace"
     }
   }
 }
