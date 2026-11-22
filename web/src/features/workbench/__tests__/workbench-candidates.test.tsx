@@ -55,11 +55,13 @@ describe("the workbench's candidates", () => {
     expect(calls.find((c) => c.path === SEALS)?.headers.get("If-Match")).toBe('"e1"');
   });
 
-  it("says when the draft is already a published version and nothing was sealed", async () => {
+  it("says nothing changed since the published version, and what to do to seal one", async () => {
     world(sealWith(() => ({ body: { version: "v1", published: true, company: "acme", area: "cx" } })));
     await openCandidates();
     await userEvent.click(await screen.findByRole("button", { name: "Selar candidata" }));
-    expect(await screen.findByText("O rascunho já é a versão publicada v1; nada foi selado.")).toBeInTheDocument();
+    expect(await screen.findByText(
+      "Nada mudou desde a versão publicada v1, então não há candidata a selar. Altere o rascunho e salve para selar uma.",
+    )).toBeInTheDocument();
   });
 
   it("says what to do when the version id names other bytes", async () => {

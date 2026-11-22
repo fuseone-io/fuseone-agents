@@ -41,6 +41,15 @@ describe("publishing from the workbench", () => {
     expect(calls.find((c) => c.path === PUBLISH)?.headers.get("If-Match")).toBe('"e1"');
   });
 
+  it("warns, before publishing, that the version goes live with no candidate, rehearsal or experiment", async () => {
+    world(() => ({ status: 500 }));
+    openAt("/agents/triagem/workbench");
+    await userEvent.click(await screen.findByRole("button", { name: "Publicar" }));
+    expect(within(await screen.findByRole("alertdialog")).getByText(
+      "Isso vai direto para produção, sem candidata, ensaio nem experimento. Para testar antes, sele uma candidata na aba Candidatas e ative-a depois.",
+    )).toBeInTheDocument();
+  });
+
   // The workbench is the console's only door to publishing: a cycle it did
   // not tell would be published in silence (#227).
   it("says which event cycle the published version closes", async () => {
