@@ -30,6 +30,28 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.134.0] — 2026-11-22
+
+The workbench leads with the candidate path (#453, #455). Console only, no migration; the
+rollback floors of 0.132.0 hold.
+
+### Changed
+
+- **"Selar candidata" is the workbench's primary action** (#455). Once nothing waits to be
+  saved, sealing a candidate is the header's primary action, reached from every tab: seal,
+  rehearse it or run it against the cases, then activate. While edits wait, saving holds that
+  place and the seal is not shown.
+- **"Publicar" is now "Publicar direto", a secondary action** (#453, #455). It is never the
+  primary action, it keeps its confirmation, and the dialog now says the version goes straight
+  to production with no candidate, rehearsal or experiment, and how to test it first.
+
+### Fixed
+
+- **Sealing a draft that is already a published version says why nothing was sealed** (#453).
+  It used to show as a success with no next step, so the button seemed to do nothing. It now
+  says nothing changed since that version, and that changing and saving the draft is how to
+  seal a candidate.
+
 ## [0.133.0] — 2026-11-22
 
 NT-018 phase 5, release 5c: the workbench's Experimento tab runs a candidate against the
