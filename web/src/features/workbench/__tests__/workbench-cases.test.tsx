@@ -7,8 +7,9 @@ import type { Run, Step } from "@/lib/api/client";
 
 /*
 Cases in the workbench (NT-018 phase 5b). An ended rehearsal is kept as a case with the
-world its author answered for, and keeping it says that erasing the conversation will not
-reach the case (D2).
+world its author answered for, and the Casos tab lists the corpus and removes from it.
+Two things are said where they are decided: erasing the conversation does not reach a case
+once it is kept (D2), and removing a case writes a new version and erases nothing (D1).
 */
 
 const DRAFT = "/agents/triagem/draft";
@@ -38,7 +39,7 @@ function world(over: Routes = {}) {
   });
 }
 
-async function openTab(name: string, at: string) {
+async function openTab(name: string, at = "/agents/triagem/workbench") {
   openAt(at);
   await userEvent.click(await screen.findByRole("tab", { name }));
 }
@@ -89,4 +90,48 @@ describe("cases in the workbench", () => {
     expect(await screen.findByText(/never answered/)).toBeInTheDocument();
   });
 
+  it("lists the corpus, naming what each case checks and where it came from", async () => {
+    world({ [`GET ${CASES}`]: () => ({ body: { items: [kept] } }) });
+    await openTab("Casos");
+    const row = await screen.findByRole("listitem", { name: "case-1" });
+    expect(within(row).getByText("crm.lookup")).toBeInTheDocument();
+    expect(within(row).getByText("não consulta")).toBeInTheDocument();
+    expect(within(row).getByRole("link", { name: "run-reh" })).toHaveAttribute("href", "/runs/run-reh");
+  });
+
+  it("removes a case after saying it writes a new version and erases nothing", async () => {
+    const calls = world({ [`GET ${CASES}`]: () => ({ body: { items: [kept] } }), [`DELETE ${CASES}/case-1`]: () => ({ status: 204 }) });
+    await openTab("Casos");
+    await userEvent.click(await screen.findByRole("button", { name: "Remover case-1" }));
+    const confirm = await screen.findByRole("alertdialog");
+    expect(within(confirm).getByText(/nova versão do conjunto de casos/)).toBeInTheDocument();
+    await userEvent.click(within(confirm).getByRole("button", { name: "Remover" }));
+    await waitFor(() => expect(sent(calls, "DELETE", `${CASES}/case-1`)).toBeDefined());
+  });
+
+  it("reads the corpus again once a case is removed", async () => {
+    let gone = false;
+    world({
+      [`GET ${CASES}`]: () => ({ body: { items: gone ? [] : [kept] } }),
+      [`DELETE ${CASES}/case-1`]: () => ((gone = true), { status: 204 }),
+    });
+    await openTab("Casos");
+    await userEvent.click(await screen.findByRole("button", { name: "Remover case-1" }));
+    await userEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Remover" }));
+    expect(await screen.findByText("Nenhum caso guardado")).toBeInTheDocument();
+  });
+
+  it("explains how a case is made while the agent has none", async () => {
+    world({ [`GET ${CASES}`]: () => ({ status: 404 }) });
+    await openTab("Casos");
+    expect(await screen.findByText("Nenhum caso guardado")).toBeInTheDocument();
+  });
+
+  it("says why the corpus could not be read, and reads it again when asked", async () => {
+    let fail = true;
+    world({ [`GET ${CASES}`]: () => (fail ? ((fail = false), { status: 500 }) : { body: { items: [kept] } }) });
+    await openTab("Casos");
+    await userEvent.click(await screen.findByRole("button", { name: /tentar de novo/i }));
+    expect(await screen.findByRole("listitem", { name: "case-1" })).toBeInTheDocument();
+  });
 });

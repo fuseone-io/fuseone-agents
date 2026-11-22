@@ -90,3 +90,20 @@ export function baselineExpectations(entry: SimulationCase): Expectation[] {
   if (entry.settled !== "finished") return [];
   return [{ kind: "settles", value: "finished" }];
 }
+
+/**
+ * The sentence an expectation was recorded with, read back: the same words the author
+ * ticked, so a kept case says what it checks as it was said.
+ */
+export function expectationLabel(e: Expectation): { label: string; tool?: string } {
+  switch (e.kind) {
+    case "never_calls":
+      return { label: "correction.neverCalls", tool: e.value };
+    case "asks":
+      return { label: "correction.asksFirst", tool: e.value };
+    case "calls":
+      return { label: "correction.shouldCall", tool: e.value };
+    case "settles":
+      return { label: e.value === "finished" ? "correction.shouldFinish" : "correction.shouldAsk" };
+  }
+}

@@ -3607,7 +3607,8 @@
     "tabs": {
       "draft": "Rascunho",
       "candidates": "Candidatas",
-      "rehearsal": "Ensaio"
+      "rehearsal": "Ensaio",
+      "cases": "Casos"
     },
     "parts": {
       "identity": "Identidade e modelo",
@@ -3708,7 +3709,16 @@
       "keep": "Guardar como caso",
       "keepTitle": "Guardar este ensaio como caso",
       "keepConfirm": "Guardar caso",
-      "keepWarning": "O caso guarda a entrada e cada resposta que você deu ao mundo, e toda versão futura é verificada contra ele. Apagar a conversa não alcança um caso guardado: ele segue a retenção e o apagamento de titular."
+      "keepWarning": "O caso guarda a entrada e cada resposta que você deu ao mundo, e toda versão futura é verificada contra ele. Apagar a conversa não alcança um caso guardado: ele segue a retenção e o apagamento de titular.",
+      "intro": "Os casos que toda versão futura deste agente precisa manter. Cada um veio de um ensaio encerrado e repete o mundo que você respondeu nele.",
+      "reading": "Lendo os casos",
+      "empty": "Nenhum caso guardado",
+      "emptyBody": "Encerre um ensaio na aba Ensaio e use Guardar como caso para que toda versão futura seja verificada contra ele.",
+      "remove": "Remover {{id}}",
+      "removeTitle": "Remover este caso?",
+      "removeBody": "A remoção cria uma nova versão do conjunto de casos sem ele. Nada é apagado: versões anteriores ainda o citam, e a entrada e as respostas seguem até a retenção ou o apagamento de titular.",
+      "removeConfirm": "Remover",
+      "removed": "Caso removido"
     }
   }
 }
