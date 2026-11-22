@@ -3608,7 +3608,8 @@
       "draft": "Rascunho",
       "candidates": "Candidatas",
       "rehearsal": "Ensaio",
-      "cases": "Casos"
+      "cases": "Casos",
+      "experiment": "Experimento"
     },
     "parts": {
       "identity": "Identidade e modelo",
@@ -3721,6 +3722,31 @@
       "removeBody": "A remoção cria uma nova versão do conjunto de casos sem ele. Nada é apagado: versões anteriores ainda o citam, e a entrada e as respostas seguem até a retenção ou o apagamento de titular.",
       "removeConfirm": "Remover",
       "removed": "Caso removido"
+    },
+    "experiment": {
+      "intro": "Rode uma candidata contra os casos do agente, na versão mais nova do dataset e com a configuração dela, e compare com a versão publicada no mesmo dataset.",
+      "baselineNote": "A versão publicada é a referência. Um experimento dela já encerrado, com a mesma versão do dataset, sem configuração própria e com as mesmas repetições, é reaproveitado; sem um, outro é aberto, com o mesmo número de runs.",
+      "noCandidateBody": "O experimento roda uma candidata. Na aba Candidatas, selar o rascunho cria uma.",
+      "candidateRequired": "Escolha a candidata a rodar.",
+      "run": "Rodar contra os casos",
+      "reading": "Lendo o experimento",
+      "reused": "Referência reaproveitada: {{id}}",
+      "opened": "Referência aberta: {{id}}",
+      "candidateExperiment": "Candidata:",
+      "baseline": "Referência:",
+      "noBaseline": "Sem versão publicada para comparar: este é o relatório da candidata sozinha.",
+      "waiting": "A comparação aparece quando os dois experimentos encerrarem.",
+      "again": "Nova rodada",
+      "sharedOnly": "Só os casos que os dois rodaram são comparados: {{onlyFrom}} só na referência, {{onlyTo}} só na candidata.",
+      "groups": {
+        "regressed": "Regressões",
+        "fixed": "Corrigidos",
+        "kept": "Mantidos",
+        "apart": "À parte"
+      },
+      "groupEmpty": "Nenhum caso.",
+      "trace": "Ver trace",
+      "traceOf": "Ver trace de {{case}}"
     },
     "trace": {
       "readOnly": "Trace somente leitura de um run de experimento: nada aqui é guardado, respondido ou abandonado.",

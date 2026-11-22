@@ -3608,7 +3608,8 @@
       "draft": "Draft",
       "candidates": "Candidates",
       "rehearsal": "Rehearsal",
-      "cases": "Cases"
+      "cases": "Cases",
+      "experiment": "Experiment"
     },
     "parts": {
       "identity": "Identity and model",
@@ -3721,6 +3722,31 @@
       "removeBody": "Removing writes a new version of the case set without it. Nothing is erased: earlier versions still name it, and its input and answers stay until retention or a subject erasure takes them.",
       "removeConfirm": "Remove",
       "removed": "Case removed"
+    },
+    "experiment": {
+      "intro": "Run a candidate against the agent's cases, on the newest dataset version and under its own configuration, and compare it with the published version on the same dataset.",
+      "baselineNote": "The published version is the baseline. An ended experiment of it, on the same dataset version, with no configuration of its own and the same repetitions, is reused; without one, another is opened, with the same number of runs.",
+      "noCandidateBody": "The experiment runs a candidate. In the Candidates tab, sealing the draft creates one.",
+      "candidateRequired": "Choose the candidate to run.",
+      "run": "Run against the cases",
+      "reading": "Reading the experiment",
+      "reused": "Baseline reused: {{id}}",
+      "opened": "Baseline opened: {{id}}",
+      "candidateExperiment": "Candidate:",
+      "baseline": "Baseline:",
+      "noBaseline": "No published version to compare with: this is the candidate's report alone.",
+      "waiting": "The comparison appears once both experiments have ended.",
+      "again": "New run",
+      "sharedOnly": "Only the cases both ran are compared: {{onlyFrom}} only in the baseline, {{onlyTo}} only in the candidate.",
+      "groups": {
+        "regressed": "Regressions",
+        "fixed": "Fixed",
+        "kept": "Kept",
+        "apart": "Set apart"
+      },
+      "groupEmpty": "No cases.",
+      "trace": "View trace",
+      "traceOf": "View trace of {{case}}"
     },
     "trace": {
       "readOnly": "Read-only trace of an experiment run: nothing here is kept, answered or abandoned.",
