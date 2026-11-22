@@ -69,6 +69,8 @@ export function WorkbenchPublish({
         <AlertDialogHeader>
           <AlertDialogTitle>{t("workbench.publishTitle")}</AlertDialogTitle>
           <AlertDialogDescription>{t("workbench.publishBody")}</AlertDialogDescription>
+          {/* Publishing here skips what a candidate is for; the person should know before saying yes. */}
+          <p className="text-sm font-medium text-foreground">{t("workbench.publishSkipsTesting")}</p>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>

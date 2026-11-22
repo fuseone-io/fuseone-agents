@@ -26,11 +26,9 @@ export function WorkbenchCandidates({ agentId, sealing }: { agentId: string; sea
   const sealNow = () =>
     seal.mutate(sealing.etag, {
       onSuccess: (sealed) => {
-        toast.success(
-          sealed.published
-            ? t("workbench.candidates.alreadyPublished", { version: sealed.version })
-            : t("workbench.candidates.sealed", { version: sealed.version }),
-        );
+        // Bytes already published seal nothing: that is information about the draft, not success.
+        if (sealed.published) toast.info(t("workbench.candidates.alreadyPublished", { version: sealed.version }));
+        else toast.success(t("workbench.candidates.sealed", { version: sealed.version }));
         const cycle = eventCycleMessage(sealed.eventCycleWarning, t, currentLocale());
         if (cycle) toast.warning(cycle, { duration: Infinity });
       },
