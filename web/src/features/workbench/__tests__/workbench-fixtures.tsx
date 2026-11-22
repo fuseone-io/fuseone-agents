@@ -10,11 +10,11 @@ import type { AgentDraft } from "@/lib/api/client";
 
 /*
 The network boundary for the workbench's tests: every request is recorded with
-its method, path, headers and body, and answered by the route a test gives,
+its method, path, query, headers and body, and answered by the route a test gives,
 or by an empty list for any other read. Nothing of the panel is mocked.
 */
 
-export type Call = { method: string; path: string; headers: Headers; body: unknown };
+export type Call = { method: string; path: string; query: URLSearchParams; headers: Headers; body: unknown };
 export type Reply = { status?: number; body?: unknown; etag?: string } | "hang";
 export type Routes = Record<string, (call: Call, calls: Call[]) => Reply | Promise<Reply>>;
 
@@ -28,6 +28,7 @@ export function serve(routes: Routes): Call[] {
       const call: Call = {
         method: request.method,
         path: url.pathname.replace("/api/v1", ""),
+        query: url.searchParams,
         headers: request.headers,
         body: text ? JSON.parse(text) : undefined,
       };
