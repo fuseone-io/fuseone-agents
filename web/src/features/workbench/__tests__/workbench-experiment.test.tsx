@@ -154,6 +154,39 @@ describe("the workbench's experiment", () => {
     expect([keys[2], keys[3]]).toEqual([keys[0], keys[1]]);
   });
 
+  it("asks again for the baseline of the version it first read, though another was published after the failure", async () => {
+    let failing = true;
+    let published = PUBLISHED;
+    const calls = world({
+      ["GET /agents/triagem"]: () => ({ body: published }),
+      [`POST ${EXPERIMENTS}`]: (call) => {
+        if ((call.body as { sealId?: string }).sealId) return accepted("exp-cand");
+        return failing ? { status: 503 } : accepted("exp-ref-new");
+      },
+    });
+    await runAgainstCases();
+    await waitFor(() => expect(posts(calls)).toHaveLength(2));
+    [failing, published] = [false, { ...PUBLISHED, agent: { ...PUBLISHED.agent, versionId: "v9" } }];
+    await userEvent.click(await screen.findByRole("button", { name: "Rodar contra os casos" }));
+    await waitFor(() => expect(posts(calls)).toHaveLength(4));
+    expect(posts(calls)[3]).toEqual({ version: "v1", datasetVersion: 3, repetitions: 1 });
+  });
+
+  it("stays without a baseline on asking again, though the agent was first published after the failure", async () => {
+    let failing = true;
+    let published: { status: number; body?: typeof PUBLISHED } = { status: 404 };
+    const calls = world({
+      ["GET /agents/triagem"]: () => published,
+      [`POST ${EXPERIMENTS}`]: () => (failing ? { status: 503 } : accepted("exp-cand")),
+    });
+    await runAgainstCases();
+    await waitFor(() => expect(posts(calls)).toHaveLength(1));
+    [failing, published] = [false, { status: 200, body: PUBLISHED }];
+    await userEvent.click(await screen.findByRole("button", { name: "Rodar contra os casos" }));
+    expect(await screen.findByText(/Sem versão publicada para comparar/)).toBeInTheDocument();
+    expect(posts(calls)).toHaveLength(2);
+  });
+
   it("shows the candidate's report alone for an agent never published", async () => {
     const calls = world({ ["GET /agents/triagem"]: () => ({ status: 404 }) });
     await runAgainstCases();
