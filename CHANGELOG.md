@@ -30,6 +30,13 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.132.0] — 2026-11-21
+
+NT-018 phase 5, release 5b: a rehearsal becomes a case that keeps the world it was corrected in
+(#446–#448), with the opener fix it needed first (#432, #445). Two migrations (0126, 0127). The
+rollback floor becomes 0.131.0 as soon as somebody keeps a rehearsal as a case; until then, the
+floors of 0.130.0 hold.
+
 ### Upgrade notes
 
 - **Keeping a rehearsal as a case makes 0.131.0 the rollback floor** (NT-018 phase 5b). The
@@ -53,6 +60,13 @@ field" is a commit message.
   sealed scope, so an agent that was never published can have one; the caller needs
   `agent:publish` and `run:read` there. An agent's corpus stays in the scope it was first
   recorded in: a case from another reads as absent.
+- **"Guardar como caso" and the Casos tab in the workbench** (NT-018 phase 5b). An ended
+  rehearsal offers to keep it as a case, with the corrections read from what the rehearsal did,
+  once its whole trail has been read. Keeping it says that erasing the conversation will no
+  longer reach the case, and the conversation's erase dialog says the same of cases already
+  kept. The Casos tab lists the corpus with what each case checks, its note and the run it came
+  from; removing a case says what it is: a new version of the case set without it, with nothing
+  erased.
 
 ### Changed
 
