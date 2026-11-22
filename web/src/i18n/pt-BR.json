@@ -3560,7 +3560,7 @@
       "staleOnArrival_other": "{{count}} propostas da resposta foram feitas sobre um rascunho que mudou durante a resposta e não foram guardadas.",
       "erase": "Apagar conversa",
       "eraseTitle": "Apagar esta conversa?",
-      "eraseBody": "As mensagens, as respostas e o conteúdo das propostas deixam de existir. O rascunho e os custos registrados continuam. Os casos e as respostas dos ensaios desta conversa no rascunho atual também deixam de existir; os de ensaios de rascunhos anteriores, não.",
+      "eraseBody": "As mensagens, as respostas e o conteúdo das propostas deixam de existir. O rascunho e os custos registrados continuam. Os casos e as respostas dos ensaios desta conversa no rascunho atual também deixam de existir; os de ensaios de rascunhos anteriores, não. Casos já guardados na aba Casos não são alcançados: seguem a retenção e o apagamento de titular.",
       "eraseConfirm": "Apagar",
       "erasedToast": "Conversa apagada",
       "closed": {
@@ -3703,6 +3703,12 @@
       "abandonBody": "O ensaio termina onde está. Nada é desfeito, porque nada chegou ao mundo.",
       "abandonConfirm": "Abandonar",
       "again": "Novo ensaio"
+    },
+    "cases": {
+      "keep": "Guardar como caso",
+      "keepTitle": "Guardar este ensaio como caso",
+      "keepConfirm": "Guardar caso",
+      "keepWarning": "O caso guarda a entrada e cada resposta que você deu ao mundo, e toda versão futura é verificada contra ele. Apagar a conversa não alcança um caso guardado: ele segue a retenção e o apagamento de titular."
     }
   }
 }

@@ -21,7 +21,19 @@ export interface CorrectionOption {
   tool?: string;
 }
 
-export function correctionOptions(entry: SimulationCase): CorrectionOption[] {
+type Act = NonNullable<SimulationCase["acted"]>[number];
+
+/**
+ * What a correction reads from a case: the run, where it ended, and what it did. Narrower
+ * than a simulated case, so a rehearsal read from its trail is one too.
+ */
+export interface CorrectedCase {
+  runId?: string;
+  settled?: SimulationCase["settled"];
+  acted?: Pick<Act, "step" | "tool" | "reached">[];
+}
+
+export function correctionOptions(entry: CorrectedCase): CorrectionOption[] {
   // Keyed, because an expectation is about a tool at a step: a case that
   // proposed the same call three times is one correction to make, and
   // offering it three times invites recording it three times.

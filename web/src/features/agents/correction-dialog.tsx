@@ -14,9 +14,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Mono } from "@/components/shared/mono";
-import { correctionOptions } from "@/features/agents/correction-options";
+import { correctionOptions, type CorrectedCase } from "@/features/agents/correction-options";
 import { useRecordRegression } from "@/features/agents/regressions-api";
-import type { SimulationCase } from "@/features/agents/simulation-api";
 import { problemMessage } from "@/lib/api/problem-message";
 
 /**
@@ -29,15 +28,24 @@ import { problemMessage } from "@/lib/api/problem-message";
  * What is recorded is checkable, because it is re-run against every future
  * version (FU-12). The note is for the person who reads it in a year, and is
  * never what the battery checks.
+ *
+ * The wording is the caller's: a rehearsal kept as a case says so, and says what erasing
+ * the conversation will no longer reach (NT-018 phase 5b, D2).
  */
+export type CorrectionWording = { title: string; record: string; warning?: string };
+
+const CORRECTING: CorrectionWording = { title: "correction.title", record: "correction.record" };
+
 export function CorrectionDialog({
   agentId,
   entry,
   onClose,
+  wording = CORRECTING,
 }: {
   agentId: string;
-  entry: SimulationCase;
+  entry: CorrectedCase;
   onClose: () => void;
+  wording?: CorrectionWording;
 }) {
   const { t } = useTranslation();
   const record = useRecordRegression(agentId);
@@ -79,9 +87,10 @@ export function CorrectionDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("correction.title")}</DialogTitle>
+          <DialogTitle>{t(wording.title)}</DialogTitle>
           <DialogDescription>{t("correction.explains")}</DialogDescription>
         </DialogHeader>
+        {wording.warning && <p className="text-sm text-muted-foreground">{t(wording.warning)}</p>}
 
         <ul className="flex flex-col gap-2">
           {options.map((option) => (
@@ -129,7 +138,7 @@ export function CorrectionDialog({
             onClick={submit}
             disabled={chosen.size === 0 || record.isPending}
           >
-            {t("correction.record")}
+            {t(wording.record)}
           </Button>
         </DialogFooter>
       </DialogContent>

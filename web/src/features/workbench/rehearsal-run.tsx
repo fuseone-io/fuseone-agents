@@ -9,6 +9,7 @@ import { PhaseBadge } from "@/features/runs/phase-badge";
 import { TrailPanel } from "@/features/runs/trail-panel";
 import { RehearsalAbandon } from "@/features/workbench/rehearsal-abandon";
 import { useRehearsal } from "@/features/workbench/rehearsal-api";
+import { RehearsalKeep } from "@/features/workbench/rehearsal-keep";
 import { RehearsalDecisionCard } from "@/features/workbench/rehearsal-decision-card";
 import { RehearsalWorldCard, type WorldWait } from "@/features/workbench/rehearsal-world-card";
 import { problemMessage } from "@/lib/api/problem-message";
@@ -29,7 +30,7 @@ function waitAt(run: Run, steps: Step[]): WorldWait | undefined {
 }
 
 /** One rehearsal as it runs: where it stands, what it waits for, and its trail. */
-export function RehearsalRun({ runId, onNew }: { runId: string; onNew: () => void }) {
+export function RehearsalRun({ agentId, runId, onNew }: { agentId: string; runId: string; onNew: () => void }) {
   const { t } = useTranslation();
   const { run, steps } = useRehearsal(runId);
 
@@ -58,6 +59,7 @@ export function RehearsalRun({ runId, onNew }: { runId: string; onNew: () => voi
         </Button>
         <div className="ml-auto flex gap-2">
           {!over && <RehearsalAbandon runId={runId} />}
+          {over && <RehearsalKeep agentId={agentId} run={current} steps={trail} />}
           {over && (
             <Button size="sm" variant="outline" onClick={onNew}>
               <RotateCcw className="size-4" aria-hidden />
