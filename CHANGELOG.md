@@ -30,6 +30,32 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.133.0] — 2026-11-22
+
+NT-018 phase 5, release 5c: the workbench's Experimento tab runs a candidate against the
+agent's cases and compares it with the published version (#450). Console only, no migration;
+the rollback floors of 0.132.0 hold.
+
+### Added
+
+- **"Rodar contra os casos" in the workbench's Experimento tab** (NT-018 phase 5c). A sealed
+  candidate runs against the newest version of the agent's cases, under its own configuration,
+  and is compared with the published version on that same version of the cases. The baseline
+  is the newest ended experiment of the published version with exactly the same pins: the same
+  version, the same version of the cases, no configuration of its own and the same number of
+  repetitions. One still running is never reused; when none matches, the tab opens one and
+  shows its id. Every pin is read once, when the person asks: a version published or a case
+  set changed while the runs go cannot move the baseline, and asking again after a failure
+  reaches the experiments already opened, never a second candidate or a second baseline. An
+  agent never published shows the candidate's report alone.
+- **Cases grouped by how they moved** (NT-018 phase 5c). Once both experiments have ended, the
+  cases fall into Regressões (held, now broke), Corrigidos (broke, now held), Mantidos (held
+  and held) and À parte (anything that says nothing about which version is better). A
+  regression links to its run.
+- **A run read in the Ensaio tab, read-only** (NT-018 phase 5c). `?trace=` opens a run's trail
+  in the workbench with nothing to keep, abandon or answer, and wins over `?rehearsal=`. A run
+  that fails to load or does not exist shows the usual error and not-found states.
+
 ## [0.132.0] — 2026-11-21
 
 NT-018 phase 5, release 5b: a rehearsal becomes a case that keeps the world it was corrected in
