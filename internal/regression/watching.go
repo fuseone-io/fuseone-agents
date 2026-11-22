@@ -50,10 +50,12 @@ not the installation's.
 func (s *Store) Watching(ctx context.Context) ([]domain.WatchedCorpus, error) {
 	rows, err := s.pool.Query(ctx, `
 		select c.agent_id, coalesce(st.current_version, ''),
-		       min(c.company_id), min(c.area_id)
+		       min(c.company_id), min(c.area_id),
+		       coalesce(sp.company_id, ''), coalesce(sp.area_id, '')
 		from regression_cases c
 		left join agent_state st on st.agent_id = c.agent_id
-		group by c.agent_id, st.current_version
+		left join agent_specs sp on sp.agent_id = c.agent_id and sp.version_id = st.current_version
+		group by c.agent_id, st.current_version, sp.company_id, sp.area_id
 		order by c.agent_id`)
 	if err != nil {
 		return nil, fmt.Errorf("regression: list watched corpora: %w", err)
@@ -62,8 +64,8 @@ func (s *Store) Watching(ctx context.Context) ([]domain.WatchedCorpus, error) {
 
 	var out []domain.WatchedCorpus
 	for rows.Next() {
-		var agent, version, company, area string
-		if err := rows.Scan(&agent, &version, &company, &area); err != nil {
+		var agent, version, company, area, pubCompany, pubArea string
+		if err := rows.Scan(&agent, &version, &company, &area, &pubCompany, &pubArea); err != nil {
 			return nil, fmt.Errorf("regression: scan watched corpus: %w", err)
 		}
 		// An agent with no current version has never been published, so
@@ -77,6 +79,7 @@ func (s *Store) Watching(ctx context.Context) ([]domain.WatchedCorpus, error) {
 			Scope: domain.Scope{
 				Company: domain.CompanyID(company), Area: domain.AreaID(area),
 			},
+			Published: domain.Scope{Company: domain.CompanyID(pubCompany), Area: domain.AreaID(pubArea)},
 		})
 	}
 	return out, rows.Err()

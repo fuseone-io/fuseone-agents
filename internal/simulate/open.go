@@ -39,6 +39,10 @@ type Batch struct {
 	// an uploaded set.
 	DatasetVersion int64
 	Cases          []Occurrence
+	// Version pins every run to the version the batch was judged against (NT-018 phase 5b):
+	// a republication after the check, in another scope, moves none of them. Empty opens on
+	// the version published when each run opens; an experiment pins its own.
+	Version domain.VersionID
 	// Experiment, when set, makes this batch an experiment (experiment.go).
 	Experiment *Experiment
 }
@@ -47,6 +51,10 @@ type Batch struct {
 type Corpus struct {
 	Version int64
 	Cases   []Occurrence
+	// Scope is the scope the cases were read in: their corpus's (NT-018 phase 5b, D3). A
+	// battery replays them in the scope its runs open in, and one in another is not its own.
+	// Empty for an uploaded set, and for a corpus recorded before its scope was.
+	Scope domain.Scope
 }
 
 // Opened is what a batch produced.
@@ -95,6 +103,7 @@ func Open(ctx context.Context, opener Opener, batch Batch) (Opened, error) {
 			Case:       d.occurrence.ID,
 
 			DatasetVersion: batch.DatasetVersion,
+			Version:        batch.Version,
 		}
 		withExperiment(&req, batch)
 		opened, err := opener.Open(ctx, req)

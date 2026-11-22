@@ -55,6 +55,9 @@ func (c *Corpus) Occurrences(
 	}
 
 	out := simulate.Corpus{Version: version, Cases: make([]simulate.Occurrence, 0, len(cases))}
+	if len(cases) > 0 {
+		out.Scope = cases[0].Scope
+	}
 	for _, one := range cases {
 		if one.Erased {
 			continue

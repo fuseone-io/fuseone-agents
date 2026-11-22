@@ -18,18 +18,28 @@ opened after it, these runs would hold what was just erased. An uploaded set has
 no run to be erased from, so it needs no fence.
 */
 func (s *Server) openSimulation(
-	ctx context.Context, agent domain.AgentID, id string, body *openapi.SimulationRequest,
+	ctx context.Context, published domain.AgentSummary, id string, body *openapi.SimulationRequest,
 ) (opened simulate.Opened, refused error, err error) {
+	agent := published.ID
 	open := func(ctx context.Context) error {
 		corpus, readErr := s.occurrences(ctx, agent, id, body)
 		if readErr != nil {
 			refused = readErr
 			return nil
 		}
+		// Judged on the cases read, inside the fence: a corpus recorded in another scope than
+		// the runs open in is out of reach (NT-018 phase 5b, D3).
+		if elsewhere(corpus.Scope, published.Scope) {
+			refused = errCorpusElsewhere
+			return nil
+		}
 		var openErr error
 		opened, openErr = simulate.Open(ctx, s.opener(), simulate.Batch{
 			ID: id, Agent: agent, By: callerOf(ctx),
 			DatasetVersion: corpus.Version, Cases: corpus.Cases,
+			// The version judged above, and not whichever is published when each run
+			// opens: one republished elsewhere meanwhile would carry the cases there.
+			Version: published.VersionID,
 		})
 		return openErr
 	}
@@ -88,6 +98,9 @@ func (s *Server) corpusOccurrences(
 	}
 
 	out := simulate.Corpus{Version: version, Cases: make([]simulate.Occurrence, 0, len(corpus))}
+	if len(corpus) > 0 {
+		out.Scope = corpus[0].Scope
+	}
 	for _, c := range corpus {
 		// Erased is a stated gap, and the report names it. Anything else refuses
 		// the whole set: a battery missing a case for no reason reports green on
@@ -130,4 +143,13 @@ func (s *Server) corpusAt(
 	}
 	corpus, err := s.regressions.AtVersion(ctx, agent, asked)
 	return asked, corpus, err
+}
+
+// errCorpusElsewhere is a battery on a corpus recorded in another scope than its runs open in.
+var errCorpusElsewhere = errors.New("this corpus is recorded in another scope")
+
+// elsewhere says whether cases read in one scope would replay in another. A corpus with no
+// recorded scope is not judged.
+func elsewhere(read, runs domain.Scope) bool {
+	return read != (domain.Scope{}) && read != runs
 }

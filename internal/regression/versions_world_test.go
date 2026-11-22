@@ -1,6 +1,7 @@
 package regression_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -155,4 +156,45 @@ func worldOf(cases []domain.RegressionCase, id string) string {
 		}
 	}
 	return "<absent>"
+}
+
+// Where is the scope the corpus was first recorded in, and none for an agent without one.
+func TestWhere_answersTheScopeTheCorpusWasFirstRecordedIn(t *testing.T) {
+	pool := activatedCorpus(t)
+	store := regression.NewStore(pool)
+	if scope, found, err := store.Where(t.Context(), "suporte"); err != nil || !found || scope != (domain.Scope{Company: "acme", Area: "cx"}) {
+		t.Errorf("Where(suporte) = %v %v (%v), want acme/cx", scope, found, err)
+	}
+	if _, found, err := store.Where(t.Context(), "never-recorded"); err != nil || found {
+		t.Errorf("Where(never-recorded) found=%v (%v), want none", found, err)
+	}
+}
+
+// A delete is judged against the corpus's own scope under its lock: from another scope it is
+// refused and the case stays; from the corpus's scope it goes.
+func TestDeleteIn_judgesTheCorpusScopeUnderItsLock(t *testing.T) {
+	pool := activatedCorpus(t)
+	store := regression.NewStore(pool)
+	elsewhere := domain.Scope{Company: "acme", Area: "finance"}
+	if err := store.DeleteIn(t.Context(), "suporte", elsewhere, "reg-1", "usr_ana"); !errors.Is(err, regression.ErrDatasetElsewhere) {
+		t.Fatalf("from another scope: err = %v, want %v", err, regression.ErrDatasetElsewhere)
+	}
+	if got := worldOf(listed(t, store), "reg-1"); got == "<absent>" {
+		t.Fatal("the case went with a delete from another scope")
+	}
+	if err := store.DeleteIn(t.Context(), "suporte", domain.Scope{Company: "acme", Area: "cx"}, "reg-1", "usr_ana"); err != nil {
+		t.Fatalf("from the corpus's scope: %v", err)
+	}
+	if got := worldOf(listed(t, store), "reg-1"); got != "<absent>" {
+		t.Error("the case stayed after a delete from the corpus's scope")
+	}
+}
+
+func listed(t *testing.T, store *regression.Store) []domain.RegressionCase {
+	t.Helper()
+	cases, err := store.List(t.Context(), "suporte")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	return cases
 }

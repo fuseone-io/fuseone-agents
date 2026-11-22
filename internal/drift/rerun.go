@@ -2,6 +2,7 @@ package drift
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -99,7 +100,9 @@ func (r *Rerun) Sweep(ctx context.Context, now time.Time) (int, error) {
 			continue
 		}
 		if err := r.run(ctx, one, now); err != nil {
-			r.log.Error("could not run a corpus", "agent", one.Agent, "err", err)
+			if !errors.Is(err, errCorpusElsewhere) {
+				r.log.Error("could not run a corpus", "agent", one.Agent, "err", err)
+			}
 			continue
 		}
 		opened++
@@ -133,6 +136,15 @@ func (r *Rerun) open(ctx context.Context, one domain.WatchedCorpus, now time.Tim
 	if len(corpus.Cases) == 0 {
 		return nil
 	}
+	// A corpus recorded in another scope than the version is published in now is not this
+	// version's to replay: its cases would open, with their bytes, where they were never read
+	// (NT-018 phase 5b, D3). Judged against the version's scope, never the corpus's own, and
+	// a version whose scope is unknown is not replayed either. Skipped, and said.
+	if corpus.Scope != (domain.Scope{}) && corpus.Scope != one.Published {
+		r.log.Warn("skipping a corpus recorded in another scope", "agent", one.Agent,
+			"corpus", corpus.Scope.String(), "version", one.Published.String())
+		return errCorpusElsewhere
+	}
 
 	opened, err := simulate.Open(ctx, r.opener, simulate.Batch{
 		ID:    batteryID(one, now, r.every),
@@ -143,6 +155,9 @@ func (r *Rerun) open(ctx context.Context, one domain.WatchedCorpus, now time.Tim
 		By:             "platform",
 		DatasetVersion: corpus.Version,
 		Cases:          corpus.Cases,
+		// The version the corpus was judged against: one republished in another scope
+		// after the check would carry the cases there.
+		Version: one.Version,
 	})
 	if err != nil {
 		return err
@@ -174,3 +189,6 @@ func shortened(v domain.VersionID) string {
 	}
 	return string(v)
 }
+
+// errCorpusElsewhere is a corpus skipped for being recorded in another scope than its version.
+var errCorpusElsewhere = errors.New("drift: the corpus is recorded in another scope")

@@ -109,3 +109,19 @@ func scanVersionCase(rows pgx.Rows) (domain.RegressionCase, error) {
 	c.FromRun = domain.RunID(fromRun)
 	return c, nil
 }
+
+// Where answers the scope an agent's corpus was first recorded in, and false for an agent
+// with none (NT-018 phase 5b, D3): what its cases are read and changed in, whatever the
+// agent is published in now.
+func (s *Store) Where(ctx context.Context, agent domain.AgentID) (domain.Scope, bool, error) {
+	var company, area string
+	err := s.pool.QueryRow(ctx, `select company_id, area_id from datasets where dataset_id = $1`,
+		defaultDatasetOf(agent)).Scan(&company, &area)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Scope{}, false, nil
+	}
+	if err != nil {
+		return domain.Scope{}, false, fmt.Errorf("regression: where the corpus of %s is: %w", agent, err)
+	}
+	return domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}, true, nil
+}

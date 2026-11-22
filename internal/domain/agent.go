@@ -169,5 +169,10 @@ type EventEdge struct {
 type WatchedCorpus struct {
 	Agent   AgentID
 	Version VersionID
-	Scope   Scope
+	// Scope is where the corpus's cases were recorded, and where a notice about them goes.
+	Scope Scope
+	// Published is where the current version is published: where a battery's runs open.
+	// After a move it is not Scope, and the corpus is not that version's to replay
+	// (NT-018 phase 5b, D3).
+	Published Scope
 }
