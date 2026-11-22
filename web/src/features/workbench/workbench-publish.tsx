@@ -20,9 +20,10 @@ import { currentLocale } from "@/i18n";
 import { problemMessage } from "@/lib/api/problem-message";
 
 /**
- * Publishes the saved draft as the agent's next version (NT-018, contracts 4
- * and 10), after asking. The primary action once there is nothing to save:
- * what is published is the draft as stored, never unsaved edits.
+ * Publishes the saved draft straight as the agent's next version (NT-018,
+ * contracts 4 and 10), after asking: the exception beside the candidate path,
+ * with no candidate, rehearsal or experiment (#454). What is published is the
+ * draft as stored, never unsaved edits.
  */
 export function WorkbenchPublish({
   agentId,
@@ -60,9 +61,10 @@ export function WorkbenchPublish({
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button size="sm" variant={unsaved ? "outline" : "default"} disabled={unsaved || publishing.isPending}>
+        {/* Never the primary action: the candidate path is (#454). */}
+        <Button size="sm" variant="outline" disabled={unsaved || publishing.isPending}>
           <Rocket className="size-4" aria-hidden />
-          <span className="sr-only sm:not-sr-only">{t("workbench.publish")}</span>
+          <span className="sr-only xl:not-sr-only">{t("workbench.publish")}</span>
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>

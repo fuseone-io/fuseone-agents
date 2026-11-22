@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "@/i18n";
@@ -145,6 +145,8 @@ describe("the workbench's candidates", () => {
     await userEvent.type(within(await screen.findByRole("dialog")).getByLabelText(/^Nome/), " 2");
     await userEvent.keyboard("{Escape}");
     await userEvent.click(await screen.findByRole("tab", { name: "Candidatas" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Selar candidata" })).toBeDisabled());
+    // Saving holds the header's one primary slot until nothing waits: the seal gives way to it.
+    expect(await screen.findByText(/^Salve as alterações antes de selar/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Selar candidata" })).not.toBeInTheDocument();
   });
 });
