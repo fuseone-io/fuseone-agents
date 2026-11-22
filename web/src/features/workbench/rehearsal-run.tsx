@@ -49,6 +49,10 @@ export function RehearsalRun({ agentId, runId, onNew }: { agentId: string; runId
   const trail = steps.data ?? [];
   const wait = waitAt(current, trail);
   const over = OVER.includes(current.phase);
+  // A case is read from the trail, so only the trail of this head, read whole, may make one:
+  // one still on the way, an earlier one shown meanwhile, or one that failed would record
+  // expectations about a rehearsal nobody finished reading.
+  const whole = !steps.isPlaceholderData && !steps.error && trail.at(-1)?.seq === current.seq;
 
   return (
     <div className="flex flex-col gap-4">
@@ -59,7 +63,7 @@ export function RehearsalRun({ agentId, runId, onNew }: { agentId: string; runId
         </Button>
         <div className="ml-auto flex gap-2">
           {!over && <RehearsalAbandon runId={runId} />}
-          {over && <RehearsalKeep agentId={agentId} run={current} steps={trail} />}
+          {over && whole && <RehearsalKeep agentId={agentId} run={current} steps={trail} />}
           {over && (
             <Button size="sm" variant="outline" onClick={onNew}>
               <RotateCcw className="size-4" aria-hidden />

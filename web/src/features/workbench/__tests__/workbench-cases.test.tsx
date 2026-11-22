@@ -44,6 +44,7 @@ async function openTab(name: string, at = "/agents/triagem/workbench") {
   await userEvent.click(await screen.findByRole("tab", { name }));
 }
 const atRehearsal = "/agents/triagem/workbench?rehearsal=run-reh";
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const sent = (calls: Call[], method: string, path: string) => calls.find((c) => c.method === method && c.path === path);
 
 async function keepAsCase() {
@@ -80,6 +81,29 @@ describe("cases in the workbench", () => {
     });
     await openTab("Ensaio", atRehearsal);
     await screen.findByRole("region", { name: "A execução espera a resposta do mundo" });
+    expect(screen.queryByRole("button", { name: "Guardar como caso" })).not.toBeInTheDocument();
+  });
+
+  it("offers no case while the trail of the ended rehearsal is still on the way", async () => {
+    world({ [`GET ${RUN}/steps`]: () => "hang" });
+    await openTab("Ensaio", atRehearsal);
+    expect(await screen.findByText("Concluída")).toBeInTheDocument();
+    await pause(100);
+    expect(screen.queryByRole("button", { name: "Guardar como caso" })).not.toBeInTheDocument();
+  });
+
+  it("offers no case from a trail that does not reach the rehearsal's end", async () => {
+    world({ [`GET ${RUN}/steps`]: () => ({ body: { items: trail.slice(0, 5) } }) });
+    await openTab("Ensaio", atRehearsal);
+    await screen.findByText("Concluída");
+    await pause(100);
+    expect(screen.queryByRole("button", { name: "Guardar como caso" })).not.toBeInTheDocument();
+  });
+
+  it("offers no case when the trail could not be read", async () => {
+    world({ [`GET ${RUN}/steps`]: () => ({ status: 500 }) });
+    await openTab("Ensaio", atRehearsal);
+    await screen.findByRole("button", { name: /tentar de novo/i });
     expect(screen.queryByRole("button", { name: "Guardar como caso" })).not.toBeInTheDocument();
   });
 
