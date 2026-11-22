@@ -3710,6 +3710,8 @@
       "keepTitle": "Guardar este ensaio como caso",
       "keepConfirm": "Guardar caso",
       "keepWarning": "O caso guarda a entrada e cada resposta que você deu ao mundo, e toda versão futura é verificada contra ele. Apagar a conversa não alcança um caso guardado: ele segue a retenção e o apagamento de titular.",
+      "kept": "Caso guardado",
+      "keptHint": "Toda versão futura é verificada contra ele, com o mundo que você respondeu.",
       "intro": "Os casos que toda versão futura deste agente precisa manter. Cada um veio de um ensaio encerrado e repete o mundo que você respondeu nele.",
       "reading": "Lendo os casos",
       "empty": "Nenhum caso guardado",

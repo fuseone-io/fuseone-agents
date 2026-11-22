@@ -3710,6 +3710,8 @@
       "keepTitle": "Keep this rehearsal as a case",
       "keepConfirm": "Keep case",
       "keepWarning": "The case keeps the input and every answer you gave for the world, and every future version is checked against it. Erasing the conversation does not reach a kept case: it follows retention and subject erasure.",
+      "kept": "Case kept",
+      "keptHint": "Every future version is checked against it, with the world you answered for.",
       "intro": "The cases every future version of this agent has to hold. Each came from an ended rehearsal and replays the world you answered for in it.",
       "reading": "Reading the cases",
       "empty": "No cases kept",

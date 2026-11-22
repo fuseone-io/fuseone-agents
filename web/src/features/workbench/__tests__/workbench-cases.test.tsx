@@ -65,6 +65,7 @@ describe("cases in the workbench", () => {
     await waitFor(() =>
       expect(sent(calls, "POST", CASES)?.body).toEqual({ runId: "run-reh", expectations: [{ kind: "never_calls", value: "crm.lookup" }] }),
     );
+    expect(await screen.findByText("Caso guardado")).toBeInTheDocument();
   });
 
   it("says, before keeping, that erasing the conversation will not reach the case", async () => {

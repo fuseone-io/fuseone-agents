@@ -10,6 +10,8 @@ import type { Run, Step } from "@/lib/api/client";
 const KEEPING: CorrectionWording = {
   title: "workbench.cases.keepTitle",
   record: "workbench.cases.keepConfirm",
+  recorded: "workbench.cases.kept",
+  recordedHint: "workbench.cases.keptHint",
   warning: "workbench.cases.keepWarning",
 };
 

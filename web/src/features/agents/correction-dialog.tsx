@@ -32,9 +32,11 @@ import { problemMessage } from "@/lib/api/problem-message";
  * The wording is the caller's: a rehearsal kept as a case says so, and says what erasing
  * the conversation will no longer reach (NT-018 phase 5b, D2).
  */
-export type CorrectionWording = { title: string; record: string; warning?: string };
+export type CorrectionWording = { title: string; record: string; recorded: string; recordedHint: string; warning?: string };
 
-const CORRECTING: CorrectionWording = { title: "correction.title", record: "correction.record" };
+const CORRECTING: CorrectionWording = {
+  title: "correction.title", record: "correction.record", recorded: "correction.recorded", recordedHint: "correction.recordedHint",
+};
 
 export function CorrectionDialog({
   agentId,
@@ -71,9 +73,7 @@ export function CorrectionDialog({
       },
       {
         onSuccess: () => {
-          toast.success(t("correction.recorded"), {
-            description: t("correction.recordedHint"),
-          });
+          toast.success(t(wording.recorded), { description: t(wording.recordedHint) });
           onClose();
         },
         onError: (error) =>
