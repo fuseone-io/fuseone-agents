@@ -13,7 +13,9 @@ export function CaseRow({ agentId, entry }: { agentId: string; entry: Regression
 
   return (
     <li aria-label={entry.id} className="flex items-start gap-3 rounded-lg border p-3">
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      {/* Nothing here has a bound in the contract: a note or a tool without a space must
+          break where it reaches the edge, not widen the panel. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5 wrap-anywhere">
         <Mono>{entry.id}</Mono>
         <ul className="flex flex-col gap-0.5 text-sm">
           {entry.expectations.map((e, i) => {
@@ -30,7 +32,7 @@ export function CaseRow({ agentId, entry }: { agentId: string; entry: Regression
         {entry.note && <p className="text-sm text-muted-foreground">{entry.note}</p>}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           {entry.fromRun && (
-            <Button asChild size="sm" variant="link" className="h-auto p-0 text-xs">
+            <Button asChild size="sm" variant="link" className="h-auto min-w-0 shrink whitespace-normal p-0 text-xs">
               <Link to={`/runs/${entry.fromRun}`}><Mono>{entry.fromRun}</Mono></Link>
             </Button>
           )}
