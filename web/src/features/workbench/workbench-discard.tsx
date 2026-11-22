@@ -45,7 +45,8 @@ export function WorkbenchDiscard({ agentId, etag }: { agentId: string; etag: str
           <Trash2 className="size-4" aria-hidden />
           {/* The icon alone on a phone, as the save beside it: in Portuguese
               the words pushed the header's own controls off the screen. */}
-          <span className="sr-only sm:not-sr-only">{t("workbench.discard")}</span>
+          {/* A secondary action: its words wait for the widest header. */}
+          <span className="sr-only xl:not-sr-only">{t("workbench.discard")}</span>
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>

@@ -8,6 +8,7 @@ import { WorkbenchConversation } from "@/features/workbench/workbench-conversati
 import { WorkbenchDiscard } from "@/features/workbench/workbench-discard";
 import { WorkbenchPanes } from "@/features/workbench/workbench-panes";
 import { WorkbenchPublish } from "@/features/workbench/workbench-publish";
+import { WorkbenchSeal } from "@/features/workbench/workbench-seal";
 import { WorkbenchWorkspace } from "@/features/workbench/workbench-workspace";
 import { WorkbenchNotice } from "@/features/workbench/workbench-notice";
 import { useWorkbench, type Reread } from "@/features/workbench/use-workbench";
@@ -16,10 +17,10 @@ import type { RevisedDraft } from "@/features/workbench/api";
 /**
  * One agent's draft, worked on in the panel (NT-018 1b).
  *
- * Every change goes to the draft, under its ETag, and nothing here publishes:
- * the agent in production stays as it is. The one action is saving; the
- * instructions are read against the published version and change only by a
- * proposal of the conversation its author accepts.
+ * Every change goes to the draft, under its ETag, and production stays as it
+ * is until a candidate is activated or the person publishes straight. Saving
+ * comes first, then sealing; the instructions are read against the published
+ * version and change only by a proposal of the conversation its author accepts.
  */
 export function WorkbenchPanel({
   agentId,
@@ -45,17 +46,27 @@ export function WorkbenchPanel({
         <AuthoringToday agentId={agentId} className="hidden sm:inline" />
         <WorkbenchDiscard agentId={agentId} etag={draft.etag} />
         {/* One primary action at a time: saving while there is something to
-            save, publishing once there is not. */}
-        <Button size="sm" variant={count > 0 ? "default" : "outline"} onClick={bench.save} disabled={count === 0 || bench.state === "saving"}>
+            save, sealing a candidate once there is not (#454). Publishing
+            straight stays beside them, never primary. */}
+        {/* Below a wide header only the primary action of the moment shows:
+            the disabled one of saving and sealing gives way. */}
+        <Button
+          size="sm"
+          variant={count > 0 ? "default" : "outline"}
+          onClick={bench.save}
+          disabled={count === 0 || bench.state === "saving"}
+          className={count === 0 ? "hidden lg:inline-flex" : undefined}
+        >
           <Save className="size-4" aria-hidden />
-          {/* The icon alone on a phone, where the header holds two actions
-              beside the breadcrumb; the words stay the button's name. */}
-          <span className="sr-only sm:not-sr-only">
+          {/* The icon alone until the header is wide, where the sidebar leaves
+              room for the words; they stay the button's name. */}
+          <span className="sr-only lg:not-sr-only">
             {count === 0
               ? t("workbench.nothingToSave")
               : `${t("workbench.save")} · ${t("workbench.saveCount", { count })}`}
           </span>
         </Button>
+        <WorkbenchSeal agentId={agentId} etag={draft.etag} unsaved={count > 0} />
         <WorkbenchPublish agentId={agentId} draft={draft} unsaved={count > 0} onPublished={bench.adopt} />
       </PageHeader>
       {count > 0 && <p className="text-xs text-muted-foreground">{t("workbench.saveBeforePublish")}</p>}
@@ -70,7 +81,7 @@ export function WorkbenchPanel({
             draft={draft.body}
             local={bench.local}
             patch={bench.patch}
-            sealing={{ etag: draft.etag, unsaved: count > 0 }}
+            unsaved={count > 0}
           />
         }
       />

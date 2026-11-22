@@ -5,7 +5,7 @@ import { ShieldCheck } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAgent } from "@/features/agents/agent-detail-api";
-import { WorkbenchCandidates, type Sealing } from "@/features/workbench/workbench-candidates";
+import { WorkbenchCandidates } from "@/features/workbench/workbench-candidates";
 import { WorkbenchCases } from "@/features/workbench/workbench-cases";
 import { WorkbenchDraftSummary } from "@/features/workbench/workbench-draft-summary";
 import { WorkbenchExperiment } from "@/features/workbench/workbench-experiment";
@@ -25,13 +25,14 @@ export function WorkbenchWorkspace({
   draft,
   local,
   patch,
-  sealing,
+  unsaved,
 }: {
   agentId: string;
   draft: AgentDraft;
   local: AgentDefinition;
   patch: (over: Partial<AgentDefinition>) => void;
-  sealing: Sealing;
+  /** Edits not saved yet: the candidates tab says sealing waits for them. */
+  unsaved: boolean;
 }) {
   const { t } = useTranslation();
   const [part, setPart] = useState<FieldPart>();
@@ -78,7 +79,7 @@ export function WorkbenchWorkspace({
           <WorkbenchDraftSummary draft={draft} local={local} published={published.data?.instructions} onEdit={setPart} patch={patch} />
         </TabsContent>
         <TabsContent value="candidates" className="p-4">
-          <WorkbenchCandidates agentId={agentId} sealing={sealing} />
+          <WorkbenchCandidates agentId={agentId} unsaved={unsaved} />
         </TabsContent>
         <TabsContent value="rehearsal" className="p-4">
           <WorkbenchRehearsal agentId={agentId} />

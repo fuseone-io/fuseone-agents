@@ -24,8 +24,8 @@ function world(publish: () => Reply) {
 }
 
 async function publishConfirmed() {
-  await userEvent.click(await screen.findByRole("button", { name: "Publicar" }));
-  await userEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Publicar versão" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Publicar direto" }));
+  await userEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Publicar direto" }));
 }
 
 describe("publishing from the workbench", () => {
@@ -44,7 +44,7 @@ describe("publishing from the workbench", () => {
   it("warns, before publishing, that the version goes live with no candidate, rehearsal or experiment", async () => {
     world(() => ({ status: 500 }));
     openAt("/agents/triagem/workbench");
-    await userEvent.click(await screen.findByRole("button", { name: "Publicar" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Publicar direto" }));
     expect(within(await screen.findByRole("alertdialog")).getByText(
       "Isso vai direto para produção, sem candidata, ensaio nem experimento. Para testar antes, sele uma candidata na aba Candidatas e ative-a depois.",
     )).toBeInTheDocument();
@@ -61,13 +61,30 @@ describe("publishing from the workbench", () => {
     expect(screen.getByText("Publicado como v2abc, pausado")).toBeInTheDocument();
   });
 
+  // The candidate path is the workbench's way to production; publishing straight is the exception (#454).
+  it("leads with sealing a candidate once the draft is saved, publishing straight only beside it", async () => {
+    world(() => ({ status: 500 }));
+    openAt("/agents/triagem/workbench");
+    expect(await screen.findByRole("button", { name: "Selar candidata" })).toHaveAttribute("data-variant", "default");
+    expect(screen.getByRole("button", { name: "Publicar direto" })).toHaveAttribute("data-variant", "outline");
+    expect(screen.getByRole("button", { name: "Nada a salvar" })).not.toHaveAttribute("data-variant", "default");
+  });
+
+  it("asks before publishing straight, under the name it carries", async () => {
+    world(() => ({ status: 500 }));
+    openAt("/agents/triagem/workbench");
+    await userEvent.click(await screen.findByRole("button", { name: "Publicar direto" }));
+    expect(within(await screen.findByRole("alertdialog")).getByRole("heading", { name: "Publicar direto este rascunho?" })).toBeInTheDocument();
+  });
+
   it("waits for unsaved edits to be saved first", async () => {
     world(() => ({ status: 500 }));
     openAt("/agents/triagem/workbench");
     await userEvent.click(await screen.findByRole("button", { name: "Editar identidade e modelo" }));
     await userEvent.type(within(await screen.findByRole("dialog")).getByLabelText(/^Nome/), " 2");
     await userEvent.keyboard("{Escape}");
-    expect(screen.getByRole("button", { name: "Publicar" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Publicar direto" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Selar candidata" })).not.toBeInTheDocument();
     expect(screen.getByText(/^Salve as alterações antes de publicar/)).toBeInTheDocument();
   });
 
