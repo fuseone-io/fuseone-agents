@@ -21,7 +21,19 @@ export interface CorrectionOption {
   tool?: string;
 }
 
-export function correctionOptions(entry: SimulationCase): CorrectionOption[] {
+type Act = NonNullable<SimulationCase["acted"]>[number];
+
+/**
+ * What a correction reads from a case: the run, where it ended, and what it did. Narrower
+ * than a simulated case, so a rehearsal read from its trail is one too.
+ */
+export interface CorrectedCase {
+  runId?: string;
+  settled?: SimulationCase["settled"];
+  acted?: Pick<Act, "step" | "tool" | "reached">[];
+}
+
+export function correctionOptions(entry: CorrectedCase): CorrectionOption[] {
   // Keyed, because an expectation is about a tool at a step: a case that
   // proposed the same call three times is one correction to make, and
   // offering it three times invites recording it three times.
@@ -77,4 +89,21 @@ export function correctionOptions(entry: SimulationCase): CorrectionOption[] {
 export function baselineExpectations(entry: SimulationCase): Expectation[] {
   if (entry.settled !== "finished") return [];
   return [{ kind: "settles", value: "finished" }];
+}
+
+/**
+ * The sentence an expectation was recorded with, read back: the same words the author
+ * ticked, so a kept case says what it checks as it was said.
+ */
+export function expectationLabel(e: Expectation): { label: string; tool?: string } {
+  switch (e.kind) {
+    case "never_calls":
+      return { label: "correction.neverCalls", tool: e.value };
+    case "asks":
+      return { label: "correction.asksFirst", tool: e.value };
+    case "calls":
+      return { label: "correction.shouldCall", tool: e.value };
+    case "settles":
+      return { label: e.value === "finished" ? "correction.shouldFinish" : "correction.shouldAsk" };
+  }
 }

@@ -27,7 +27,7 @@ export function WorkbenchRehearsal({ agentId }: { agentId: string }) {
         <p className="text-sm text-muted-foreground">{t("workbench.rehearsal.intro")}</p>
         <p className="text-xs text-muted-foreground">{t("workbench.rehearsal.erasureNote")}</p>
       </div>
-      {runId ? <RehearsalRun runId={runId} onNew={() => follow("")} /> : <RehearsalStart agentId={agentId} onOpened={follow} />}
+      {runId ? <RehearsalRun agentId={agentId} runId={runId} onNew={() => follow("")} /> : <RehearsalStart agentId={agentId} onOpened={follow} />}
     </div>
   );
 }

@@ -3560,7 +3560,7 @@
       "staleOnArrival_other": "{{count}} propostas da resposta foram feitas sobre um rascunho que mudou durante a resposta e não foram guardadas.",
       "erase": "Apagar conversa",
       "eraseTitle": "Apagar esta conversa?",
-      "eraseBody": "As mensagens, as respostas e o conteúdo das propostas deixam de existir. O rascunho e os custos registrados continuam. Os casos e as respostas dos ensaios desta conversa no rascunho atual também deixam de existir; os de ensaios de rascunhos anteriores, não.",
+      "eraseBody": "As mensagens, as respostas e o conteúdo das propostas deixam de existir. O rascunho e os custos registrados continuam. Os casos e as respostas dos ensaios desta conversa no rascunho atual também deixam de existir; os de ensaios de rascunhos anteriores, não. Casos já guardados na aba Casos não são alcançados: seguem a retenção e o apagamento de titular.",
       "eraseConfirm": "Apagar",
       "erasedToast": "Conversa apagada",
       "closed": {
@@ -3607,7 +3607,8 @@
     "tabs": {
       "draft": "Rascunho",
       "candidates": "Candidatas",
-      "rehearsal": "Ensaio"
+      "rehearsal": "Ensaio",
+      "cases": "Casos"
     },
     "parts": {
       "identity": "Identidade e modelo",
@@ -3703,6 +3704,23 @@
       "abandonBody": "O ensaio termina onde está. Nada é desfeito, porque nada chegou ao mundo.",
       "abandonConfirm": "Abandonar",
       "again": "Novo ensaio"
+    },
+    "cases": {
+      "keep": "Guardar como caso",
+      "keepTitle": "Guardar este ensaio como caso",
+      "keepConfirm": "Guardar caso",
+      "keepWarning": "O caso guarda a entrada e cada resposta que você deu ao mundo, e toda versão futura é verificada contra ele. Apagar a conversa não alcança um caso guardado: ele segue a retenção e o apagamento de titular.",
+      "kept": "Caso guardado",
+      "keptHint": "Toda versão futura é verificada contra ele, com o mundo que você respondeu.",
+      "intro": "Os casos que toda versão futura deste agente precisa manter. Cada um veio de um ensaio encerrado e repete o mundo que você respondeu nele.",
+      "reading": "Lendo os casos",
+      "empty": "Nenhum caso guardado",
+      "emptyBody": "Encerre um ensaio na aba Ensaio e use Guardar como caso para que toda versão futura seja verificada contra ele.",
+      "remove": "Remover {{id}}",
+      "removeTitle": "Remover este caso?",
+      "removeBody": "A remoção cria uma nova versão do conjunto de casos sem ele. Nada é apagado: versões anteriores ainda o citam, e a entrada e as respostas seguem até a retenção ou o apagamento de titular.",
+      "removeConfirm": "Remover",
+      "removed": "Caso removido"
     }
   }
 }

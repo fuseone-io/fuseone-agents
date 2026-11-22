@@ -3560,7 +3560,7 @@
       "staleOnArrival_other": "{{count}} proposals in the answer were made over a draft that changed during the answer, and were not kept.",
       "erase": "Erase conversation",
       "eraseTitle": "Erase this conversation?",
-      "eraseBody": "The messages, the replies and the proposals' content stop existing. The draft and the recorded costs stay. So do the cases and answers of this conversation's rehearsals on the current draft; those of rehearsals on earlier drafts do not.",
+      "eraseBody": "The messages, the replies and the proposals' content stop existing. The draft and the recorded costs stay. So do the cases and answers of this conversation's rehearsals on the current draft; those of rehearsals on earlier drafts do not. Cases already kept on the Cases tab are not reached: they follow retention and subject erasure.",
       "eraseConfirm": "Erase",
       "erasedToast": "Conversation erased",
       "closed": {
@@ -3607,7 +3607,8 @@
     "tabs": {
       "draft": "Draft",
       "candidates": "Candidates",
-      "rehearsal": "Rehearsal"
+      "rehearsal": "Rehearsal",
+      "cases": "Cases"
     },
     "parts": {
       "identity": "Identity and model",
@@ -3703,6 +3704,23 @@
       "abandonBody": "The rehearsal ends where it stands. Nothing is undone, since nothing reached the world.",
       "abandonConfirm": "End",
       "again": "New rehearsal"
+    },
+    "cases": {
+      "keep": "Keep as a case",
+      "keepTitle": "Keep this rehearsal as a case",
+      "keepConfirm": "Keep case",
+      "keepWarning": "The case keeps the input and every answer you gave for the world, and every future version is checked against it. Erasing the conversation does not reach a kept case: it follows retention and subject erasure.",
+      "kept": "Case kept",
+      "keptHint": "Every future version is checked against it, with the world you answered for.",
+      "intro": "The cases every future version of this agent has to hold. Each came from an ended rehearsal and replays the world you answered for in it.",
+      "reading": "Reading the cases",
+      "empty": "No cases kept",
+      "emptyBody": "End a rehearsal on the Rehearsal tab and use Keep as a case so every future version is checked against it.",
+      "remove": "Remove {{id}}",
+      "removeTitle": "Remove this case?",
+      "removeBody": "Removing writes a new version of the case set without it. Nothing is erased: earlier versions still name it, and its input and answers stay until retention or a subject erasure takes them.",
+      "removeConfirm": "Remove",
+      "removed": "Case removed"
     }
   }
 }

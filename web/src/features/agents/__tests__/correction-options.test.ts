@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { correctionOptions } from "@/features/agents/correction-options";
+import { correctionOptions, expectationLabel } from "@/features/agents/correction-options";
 import type { SimulationCase } from "@/features/agents/simulation-api";
 
 function aCase(over: Partial<SimulationCase>): SimulationCase {
@@ -92,5 +92,15 @@ describe("the same call proposed more than once", () => {
     const calls = options.filter((o) => o.expectation.kind === "calls");
     expect(calls).toHaveLength(1);
     expect(new Set(options.map((o) => o.key)).size).toBe(options.length);
+  });
+});
+
+describe("an expectation read back", () => {
+  it("says it in the words it was ticked with", () => {
+    expect(expectationLabel({ kind: "never_calls", value: "crm.reply" })).toEqual({ label: "correction.neverCalls", tool: "crm.reply" });
+    expect(expectationLabel({ kind: "asks", value: "crm.reply" }).label).toBe("correction.asksFirst");
+    expect(expectationLabel({ kind: "calls", value: "crm.reply" }).label).toBe("correction.shouldCall");
+    expect(expectationLabel({ kind: "settles", value: "finished" })).toEqual({ label: "correction.shouldFinish" });
+    expect(expectationLabel({ kind: "settles", value: "awaiting_approval" }).label).toBe("correction.shouldAsk");
   });
 });
