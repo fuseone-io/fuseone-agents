@@ -2221,3 +2221,40 @@ func TestPutProvider_aDeclarationPastTheModelBounds_isRefused(t *testing.T) {
 		t.Fatalf("PutProvider = %v, want the same bounds the model list has", err)
 	}
 }
+
+// A header written for a server is judged before anything is sealed: one HTTP
+// cannot send is refused at the write, and nothing of it is stored.
+func TestPutMCPServer_aHeaderHTTPCannotSend_isRefusedAndNothingStored(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "crm", Transport: domain.TransportHTTP, URL: "https://crm.example/mcp", Enabled: true,
+	}, domain.MCPCredentialPatch{Headers: map[string]string{"api key": "k-secret"}})
+
+	if !errors.Is(err, domain.ErrHeaderInvalid) {
+		t.Fatalf("err = %v, want ErrHeaderInvalid", err)
+	}
+	servers, err := i.MCPServers(ctx)
+	if err != nil || len(servers) != 0 {
+		t.Fatalf("servers = %+v (%v), want none stored", servers, err)
+	}
+}
+
+func TestPutMCPPersonalCredential_aHeaderTheTransportOwns_isRefused(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	if err := i.PutMCPServer(ctx, "usr_curator", platform, domain.MCPServer{
+		Name: "crm", Transport: domain.TransportHTTP, URL: "https://crm.example/mcp", Enabled: true,
+	}, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	err := i.PutMCPPersonalCredential(ctx, "usr_ana", platform, "crm", domain.MCPCredentialPatch{
+		Headers: map[string]string{"Mcp-Session-Id": "k-secret"},
+	})
+
+	if !errors.Is(err, domain.ErrHeaderInvalid) {
+		t.Fatalf("err = %v, want ErrHeaderInvalid", err)
+	}
+}

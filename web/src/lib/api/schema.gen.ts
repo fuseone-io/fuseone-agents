@@ -12247,7 +12247,7 @@ export interface operations {
                     protocolMode?: components["schemas"]["MCPProtocolMode"];
                     /** @description Bearer token for a remote server. Omit to keep the stored one — correcting a URL must not demand re-entering a secret nobody has to hand. */
                     token?: string;
-                    /** @description Exact HTTP headers for a remote server whose credential is not a bearer token, such as Api-Key or Authorization: Basic. Omit to keep stored headers. Send an empty object to remove them. A non-empty object becomes the active HTTP credential and replaces stored bearer or OAuth material. */
+                    /** @description Exact HTTP headers for a remote server whose credential is not a bearer token, such as Api-Key or Authorization: Basic. Omit to keep stored headers. Send an empty object to remove them. A non-empty object becomes the active HTTP credential and replaces stored bearer or OAuth material. Each name must be an HTTP token the MCP transport does not set itself (Host, Content-Type, Accept, Mcp-Session-Id and the like are refused), and no value may hold a line break or another control character; a refused header is a 400 that names the header and never its value. */
                     headers?: {
                         [key: string]: string;
                     };
