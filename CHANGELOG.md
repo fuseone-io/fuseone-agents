@@ -30,6 +30,21 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **A generic MCP server can authenticate with a custom header.** A remote server with no recipe
+  could only take a bearer token or an OAuth grant, so an API that reads its key from a header
+  of its own, such as `apikey`, could not be connected from the console. The connection form
+  and the server's page now take a header name and its value, sealed in the vault and sent as
+  that exact header in place of the bearer.
+
+### Changed
+
+- **Headers written for an MCP server are checked at the write.** A name HTTP cannot send, a
+  header the MCP transport sets itself (Host, Content-Type, Accept, Mcp-Session-Id, …) or a
+  value with a line break is refused with a 400 that names the header, never its value. Only
+  what a write sends is judged: headers stored before keep working.
+
 ## [0.135.0] — 2026-11-22
 
 The workbench conversation can change the instructions, and a long message keeps Send in view

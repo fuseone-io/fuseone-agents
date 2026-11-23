@@ -27,6 +27,7 @@ import {
 } from "@/features/integrations/mcp/auth-plan";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 import { GitHubAppFormFields } from "@/features/integrations/mcp/github-app-form-fields";
+import { CustomHeaderFormFields } from "@/features/integrations/mcp/custom-header-form-fields";
 
 /**
  * The half of the form that depends on how the server is reached.
@@ -76,6 +77,7 @@ export function ServerFields({
         {headers.length > 0 && (
           <HeaderFields form={form} headers={headers} hasSecret={hasSecret} />
         )}
+        {!auth.known && <CustomHeaderFormFields form={form} kept={hasSecret} />}
         {auth.oauth !== null && <OAuthFormFields form={form} />}
         {auth.githubApp !== null && <GitHubAppFormFields form={form} />}
         <RateLimitFields form={form} />

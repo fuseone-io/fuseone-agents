@@ -4,6 +4,7 @@ import {
   githubAppIdsValid,
 } from "@/features/integrations/mcp/github-app-credential";
 import { oauthHasValue } from "@/features/integrations/mcp/oauth-credential";
+import { customHeaderError, customHeaderState } from "@/features/integrations/mcp/custom-header";
 
 /**
  * What a tool server needs depends on how it is reached.
@@ -30,6 +31,9 @@ export const serverSchema = z
     url: z.string(),
     token: z.string(),
     headers: z.record(z.string(), z.string()),
+    // A header a server with no recipe is reached with, such as apikey.
+    customHeaderName: z.string(),
+    customHeaderValue: z.string(),
     env: z.string(),
     dsn: z.string(),
     oauthAccessToken: z.string(),
@@ -136,6 +140,22 @@ export const serverSchema = z
       path: ["token"],
       message: "mcp.oauthBearerConflict",
     },
+  )
+  .superRefine((v, ctx) => {
+    if (v.transport !== "http") return;
+    const header = { name: v.customHeaderName, value: v.customHeaderValue };
+    const error = customHeaderError(header);
+    if (error) ctx.addIssue({ code: "custom", path: ["customHeaderName"], message: error });
+  })
+  .refine(
+    (v) =>
+      v.transport !== "http" ||
+      customHeaderState({ name: v.customHeaderName, value: v.customHeaderValue }) === "empty" ||
+      (v.token.trim() === "" &&
+        Object.values(v.headers).every((part) => part.trim() === "") &&
+        !oauthHasValue(v) &&
+        !githubAppHasValue(v)),
+    { path: ["token"], message: "mcp.remoteCredentialConflict" },
   )
   .refine((v) => v.transport !== "http" || githubAppIdsValid(v), {
     path: ["githubAppId"],
