@@ -30,15 +30,22 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.135.0] — 2026-11-22
+
+The workbench conversation can change the instructions, and a long message keeps Send in view
+(#457, #458). Migration 0128 only widens a check; the rollback floors of 0.134.0 hold.
+
 ### Fixed
 
-- **The workbench conversation can change a long block of the instructions.** A change to a
+- **The workbench conversation can change a long block of the instructions** (#458). A change to a
   block meant rewriting it whole, and a "how to act" block of thousands of words does not fit
   a turn's answer, so the conversation changed steps instead and the agent's behaviour never
   moved. A proposal can now edit one excerpt of a block (`edit_block`), found there exactly
   once, keeping the rest of the block and its label. The turn's prompt also says that
   behaviour belongs in the instructions: a step carries no text the agent reads. Migration
   0128 widens the proposals' kinds only; the previous binary keeps running against it.
+- **A long message no longer pushes Send out of view** (#457). The workbench's message box grows
+  up to a cap and then scrolls, so a long pasted prompt keeps the Send button reachable.
 
 ## [0.134.0] — 2026-11-22
 
