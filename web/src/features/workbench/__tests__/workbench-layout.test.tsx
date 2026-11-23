@@ -36,6 +36,16 @@ describe("the workbench layout", () => {
     expect(screen.getByLabelText("Mensagem para o assistente")).toBeInTheDocument();
   });
 
+  // A long prompt grew the box until Send fell out of the pane. jsdom lays nothing out, so
+  // this anchors the mechanism, a capped height that scrolls; the browser shows the effect.
+  it("keeps the message box from growing past its cap, scrolling instead, so Send stays reachable", async () => {
+    world();
+    openAt("/agents/triagem/workbench");
+    const box = await screen.findByLabelText("Mensagem para o assistente");
+    expect(box.className).toMatch(/(^|\s)max-h-\S+/);
+    expect(box.className).toMatch(/(^|\s)overflow-y-auto(\s|$)/);
+  });
+
   it("opens a part's manual controls in a side panel, and the summary follows them", async () => {
     world();
     openAt("/agents/triagem/workbench");

@@ -26,6 +26,9 @@ export function ConversationComposer({ composer, open }: { composer: Composer; o
         maxLength={MAX_MESSAGE_CHARS}
         disabled={blocked}
         placeholder={t("workbench.conversation.placeholder")}
+        // The box grows with the text up to a cap, then scrolls: a long prompt must never
+        // push Send out of the pane.
+        className="max-h-48 overflow-y-auto"
         onChange={(e) => composer.write(e.target.value)}
         onPaste={composer.paste}
         onKeyDown={(e) => {
