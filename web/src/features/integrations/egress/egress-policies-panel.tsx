@@ -57,7 +57,7 @@ export function EgressPoliciesPanel() {
         </ul>
       )}
       {editing !== undefined && (
-        <EgressPolicyDialog key={editing ? scopeLabel(editing) : "new"} policy={editing} onClose={() => setEditing(undefined)} />
+        <EgressPolicyDialog key={editing ? scopeLabel(editing) : "new"} policy={editing} policies={policies} onClose={() => setEditing(undefined)} />
       )}
       <ConfirmRemove
         policy={removing}

@@ -48,6 +48,17 @@ field" is a commit message.
   refused with a 400 that names the header, never its value. Only what a write sends is
   judged: headers stored before keep working.
 
+### Fixed
+
+- **A new egress policy no longer erases the one its scope already has.** A policy is replaced
+  whole, and "New policy" opened empty: choosing a company or area that already had a policy
+  and saving kept only the origins typed, so that scope's servers lost every other origin. The
+  dialog now opens the stored policy for that scope, with its origins, and every write says what
+  it read: `If-None-Match: *` to create, the policy's `etag` in `If-Match` to edit or remove.
+  The API answers 412 rather than replace a policy that exists or changed since, and lists each
+  policy's `etag`. Without either header the API replaces as before, so existing clients keep
+  working.
+
 ## [0.135.0] — 2026-11-22
 
 The workbench conversation can change the instructions, and a long message keeps Send in view
