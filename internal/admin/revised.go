@@ -23,6 +23,9 @@ nothing must not do that. A real change of configuration or secret still moves i
 */
 type revised struct {
 	expect domain.IfMatch
+	// absent makes the write a creation: refused over a row that exists, as
+	// If-None-Match: * asks.
+	absent bool
 	// of names a row of this resource, secret included.
 	of func(set settings.Setting) domain.Revision
 	// ofUnreadable names one whose secret will not open.
@@ -75,7 +78,7 @@ func (r *revised) judge(row storedRow) (domain.Revision, error) {
 	default:
 		current = r.of(row.set)
 	}
-	if !r.expect.Allows(row.exists, current) {
+	if !r.expect.Allows(row.exists, current) || (r.absent && row.exists) {
 		return "", &domain.StaleError{Current: current}
 	}
 	return current, nil

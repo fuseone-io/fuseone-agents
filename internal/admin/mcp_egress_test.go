@@ -186,3 +186,96 @@ func TestPutMCPEgressPolicy_originsNotGiven_isRefused(t *testing.T) {
 		t.Errorf("err = %v, want ErrEgressPolicyInvalid", err)
 	}
 }
+
+/*
+A policy is replaced whole, so a write that did not see what is stored erases
+it. Found in production: "new policy" for a company that already had one kept
+only the origin typed, and the company's servers lost the rest. A creation is
+refused over a policy that exists, and an edit over one that changed since it
+was read; each refusal leaves the policy as it was.
+*/
+func TestWriteMCPEgressPolicy_aCreationOverAnExistingPolicy_isStaleAndKeepsIt(t *testing.T) {
+	w := withAreaServer(t)
+	cleanEgress(t, w)
+	putEgress(t, w.integrations, acmeScope, "https://jira.example.com")
+
+	_, err := w.integrations.WriteMCPEgressPolicy(context.Background(), admin.EgressPolicyWrite{
+		By: "usr_ana", Audit: platform, Create: true,
+		Policy: admin.MCPEgressPolicy{Scope: acmeScope, Origins: []string{"https://crm.example.com"}},
+	})
+
+	var stale *domain.StaleError
+	if !errors.As(err, &stale) || stale.Current == "" {
+		t.Fatalf("err = %v, want a StaleError naming the policy's revision", err)
+	}
+	assertOrigins(t, w, acmeScope, "https://jira.example.com:443")
+}
+
+func TestWriteMCPEgressPolicy_anEditOverAChangedPolicy_isStaleAndKeepsIt(t *testing.T) {
+	w := withAreaServer(t)
+	cleanEgress(t, w)
+	putEgress(t, w.integrations, acmeScope, "https://jira.example.com")
+	read := policyAt(t, w, acmeScope).Revision
+	putEgress(t, w.integrations, acmeScope, "https://jira.example.com", "https://wiki.example.com")
+
+	_, err := w.integrations.WriteMCPEgressPolicy(context.Background(), admin.EgressPolicyWrite{
+		By: "usr_ana", Audit: platform, Expect: ifMatch(t, read),
+		Policy: admin.MCPEgressPolicy{Scope: acmeScope, Origins: []string{"https://jira.example.com", "https://crm.example.com"}},
+	})
+
+	if !errors.As(err, new(*domain.StaleError)) {
+		t.Fatalf("err = %v, want a StaleError", err)
+	}
+	assertOrigins(t, w, acmeScope, "https://jira.example.com:443", "https://wiki.example.com:443")
+
+	current := policyAt(t, w, acmeScope).Revision
+	got, err := w.integrations.WriteMCPEgressPolicy(context.Background(), admin.EgressPolicyWrite{
+		By: "usr_ana", Audit: platform, Expect: ifMatch(t, current),
+		Policy: admin.MCPEgressPolicy{Scope: acmeScope, Origins: []string{"https://crm.example.com"}},
+	})
+	if err != nil || got == "" || got == current {
+		t.Fatalf("an edit of the current revision = (%q, %v), want a new revision", got, err)
+	}
+	if listed := policyAt(t, w, acmeScope).Revision; listed != got {
+		t.Errorf("listed revision %q, want the one the write answered, %q", listed, got)
+	}
+}
+
+func TestRemoveMCPEgressPolicy_overAChangedPolicy_isStaleAndKeepsIt(t *testing.T) {
+	w := withAreaServer(t)
+	cleanEgress(t, w)
+	putEgress(t, w.integrations, acmeScope, "https://jira.example.com")
+	read := policyAt(t, w, acmeScope).Revision
+	putEgress(t, w.integrations, acmeScope, "https://wiki.example.com")
+
+	err := w.integrations.RemoveMCPEgressPolicy(context.Background(), admin.EgressPolicyRemoval{
+		By: "usr_ana", Audit: platform, At: acmeScope, Expect: ifMatch(t, read),
+	})
+
+	if !errors.As(err, new(*domain.StaleError)) {
+		t.Fatalf("err = %v, want a StaleError", err)
+	}
+	assertOrigins(t, w, acmeScope, "https://wiki.example.com:443")
+}
+
+func policyAt(t *testing.T, w areaServerWorld, at domain.Scope) admin.MCPEgressPolicy {
+	t.Helper()
+	policies, err := w.integrations.MCPEgressPolicies(context.Background())
+	if err != nil {
+		t.Fatalf("MCPEgressPolicies: %v", err)
+	}
+	for _, p := range policies {
+		if p.Scope == at {
+			return p
+		}
+	}
+	t.Fatalf("no policy at %s in %+v", at, policies)
+	return admin.MCPEgressPolicy{}
+}
+
+func assertOrigins(t *testing.T, w areaServerWorld, at domain.Scope, want ...string) {
+	t.Helper()
+	if got := policyAt(t, w, at).Origins; !slices.Equal(got, want) {
+		t.Errorf("origins at %s = %v, want %v", at, got, want)
+	}
+}

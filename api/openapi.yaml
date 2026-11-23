@@ -5582,16 +5582,30 @@ paths:
         an origin netguard never lets a request reach (cloud metadata,
         link-local). An empty list is a policy too: it allows nothing, and for
         an area it overrides the company's.
+
+        A policy is replaced whole, so a write that did not see what is stored
+        erases it. `If-None-Match: *` makes the write a creation, refused with a
+        412 when the scope already has a policy; `If-Match` with a policy's
+        `etag` makes it an edit, refused with a 412 when the policy changed
+        since. Either 412 leaves the policy as it was and carries its current
+        ETag. Without either header the write replaces, as it always did.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IfNoneMatchCreate'
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/MCPEgressPolicyInput' }
       responses:
-        '204': { description: Stored. Workers hold the scope's servers to it on their next pass. }
+        '204':
+          description: Stored. Workers hold the scope's servers to it on their next pass.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
     delete:
       tags: [admin]
       operationId: deleteMCPEgressPolicy
@@ -5599,8 +5613,10 @@ paths:
       description: >
         An area's servers inherit their company's policy again, or reach
         nothing. To deny an area what its company allows, store an empty list
-        instead.
+        instead. `If-Match` with the policy's `etag` refuses, with a 412, the
+        removal of a policy that changed since it was read.
       parameters:
+        - $ref: '#/components/parameters/IfMatch'
         - name: company
           in: query
           required: true
@@ -5614,6 +5630,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
 
   /admin/integrations/providers/{name}:
     get:
@@ -6552,10 +6569,15 @@ components:
           example: ["https://jira.example.com"]
     MCPEgressPolicy:
       type: object
-      required: [company, origins, updatedBy, updatedAt]
+      required: [company, origins, updatedBy, updatedAt, etag]
       properties:
         company: { type: string }
         area: { type: string }
+        etag:
+          type: string
+          description: >
+            The policy's revision, what a PUT's or a DELETE's If-Match names.
+            It moves when the origins change, and only then.
         origins:
           type: array
           description: Canonical origins, each with its port written.
