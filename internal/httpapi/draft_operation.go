@@ -71,8 +71,7 @@ kind reads. A block kind is refused here, before anything stored is asked:
 the public route never applies one (contract 3).
 */
 func operationOf(in openapi.DraftOperation) (draft.Operation, error) {
-	switch in.Kind {
-	case openapi.DraftOperationKindInsertBlock, openapi.DraftOperationKindReplaceBlock, openapi.DraftOperationKindRemoveBlock, openapi.DraftOperationKindMoveBlock:
+	if draft.ConversationOnly(string(in.Kind)) {
 		return nil, errBlockByHand
 	}
 	if build, ok := fieldOperations[in.Kind]; ok {

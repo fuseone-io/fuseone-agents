@@ -4,7 +4,7 @@ import { fieldValue } from "@/features/workbench/proposal-value";
 import { ProposalTextDiff } from "@/features/workbench/proposal-text-diff";
 import type { DraftProposal } from "@/lib/api/client";
 
-const BLOCK_KINDS = new Set(["insert_block", "replace_block", "remove_block", "move_block"]);
+const BLOCK_KINDS = new Set(["insert_block", "replace_block", "edit_block", "remove_block", "move_block"]);
 
 /**
  * What a proposal would change, read before it is accepted, or undefined when

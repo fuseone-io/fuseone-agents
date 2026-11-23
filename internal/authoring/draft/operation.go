@@ -48,7 +48,7 @@ func Operations() []Operation {
 		AddTool{}, RemoveTool{}, SetBudget{}, SetTriggers{},
 		SetMemoryLearning{}, SetApprovalDelivery{}, SetEmits{},
 		AddStep{}, EditStep{}, RemoveStep{},
-		InsertBlock{}, ReplaceBlock{}, RemoveBlock{}, MoveBlock{},
+		InsertBlock{}, ReplaceBlock{}, EditBlock{}, RemoveBlock{}, MoveBlock{},
 	}
 }
 
@@ -61,6 +61,18 @@ func admitted(op Operation, origin Origin) error {
 		return fmt.Errorf("%w: %s", ErrConversationOnly, op.Kind())
 	}
 	return nil
+}
+
+// ConversationOnly answers whether an operation's kind changes only through
+// an accepted proposal: the block kinds, read from the operations themselves so
+// a new one is fenced on every route the moment it exists.
+func ConversationOnly(kind string) bool {
+	for _, op := range Operations() {
+		if op.Kind() == kind {
+			return op.Class() == Conversation
+		}
+	}
+	return false
 }
 
 func invalidOp(kind, format string, args ...any) error {

@@ -3597,6 +3597,7 @@
       "remove_step": "Remover uma etapa",
       "insert_block": "Inserir um bloco",
       "replace_block": "Reescrever um bloco",
+      "edit_block": "Editar um trecho de um bloco",
       "remove_block": "Remover um bloco",
       "move_block": "Mover um bloco"
     },

@@ -6629,7 +6629,7 @@ export interface components {
              *     left once retention or erasing the thread took the body.
              * @enum {string}
              */
-            kind: "set_identity" | "set_standing_approvals" | "set_model" | "set_fallback" | "set_cache_prefix_ttl" | "set_reply_locale" | "add_tool" | "remove_tool" | "set_budget" | "set_triggers" | "set_memory_learning" | "set_approval_delivery" | "set_emits" | "add_step" | "edit_step" | "remove_step" | "insert_block" | "replace_block" | "remove_block" | "move_block";
+            kind: "set_identity" | "set_standing_approvals" | "set_model" | "set_fallback" | "set_cache_prefix_ttl" | "set_reply_locale" | "add_tool" | "remove_tool" | "set_budget" | "set_triggers" | "set_memory_learning" | "set_approval_delivery" | "set_emits" | "add_step" | "edit_step" | "remove_step" | "insert_block" | "replace_block" | "edit_block" | "remove_block" | "move_block";
             /** @description What it proposes. Absent once retention or erasing the thread took its body. */
             operation?: components["schemas"]["DraftOperation"];
             /** @description Whether it was valid when proposed; an invalid proposal can never be accepted. */
@@ -6753,7 +6753,7 @@ export interface components {
          */
         DraftOperation: {
             /** @enum {string} */
-            kind: "set_identity" | "set_standing_approvals" | "set_model" | "set_fallback" | "set_cache_prefix_ttl" | "set_reply_locale" | "add_tool" | "remove_tool" | "set_budget" | "set_triggers" | "set_memory_learning" | "set_approval_delivery" | "set_emits" | "add_step" | "edit_step" | "remove_step" | "insert_block" | "replace_block" | "remove_block" | "move_block";
+            kind: "set_identity" | "set_standing_approvals" | "set_model" | "set_fallback" | "set_cache_prefix_ttl" | "set_reply_locale" | "add_tool" | "remove_tool" | "set_budget" | "set_triggers" | "set_memory_learning" | "set_approval_delivery" | "set_emits" | "add_step" | "edit_step" | "remove_step" | "insert_block" | "replace_block" | "edit_block" | "remove_block" | "move_block";
             name?: string;
             company?: string;
             area?: string;
@@ -6772,7 +6772,7 @@ export interface components {
             emits?: components["schemas"]["AgentEvent"][];
             step?: components["schemas"]["AgentStep"];
             stepName?: string;
-            /** @description The block a replace, remove or move names. */
+            /** @description The block a replace, edit, remove or move names. */
             blockId?: string;
             /**
              * @description The kind of block an insert adds.
@@ -6783,8 +6783,14 @@ export interface components {
             at?: number;
             /** @description Where a move puts its block. */
             to?: number;
-            /** @description The text an insert or replace writes. */
+            /** @description The text an insert or replace writes, or what an edit writes in place of oldText. */
             text?: string;
+            /**
+             * @description The exact excerpt an edit replaces, found exactly once in its
+             *     block: the rest of the block is kept as it is, so a change to a
+             *     long block does not have to write the whole block again.
+             */
+            oldText?: string;
             /** @description The locale an inserted or changed block's label is written in. */
             locale?: string;
         };

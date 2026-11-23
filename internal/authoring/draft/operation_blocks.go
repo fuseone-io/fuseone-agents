@@ -34,6 +34,20 @@ func (o ReplaceBlock) apply(d *Draft) error {
 	})
 }
 
+// EditBlock replaces one excerpt of a block, found there exactly once, and
+// keeps the rest: a change to a long block names only what it changes, and
+// the block keeps its label.
+type EditBlock struct{ ID, Old, New string }
+
+func (EditBlock) Kind() string     { return "edit_block" }
+func (EditBlock) Class() Class     { return Conversation }
+func (EditBlock) Fields() []string { return []string{"instructions"} }
+func (o EditBlock) apply(d *Draft) error {
+	return onBlocks(d, o.Kind(), func(b []blocks.Block) ([]blocks.Block, error) {
+		return blocks.Edit(b, o.ID, o.Old, o.New)
+	})
+}
+
 // RemoveBlock takes a block out.
 type RemoveBlock struct{ ID string }
 

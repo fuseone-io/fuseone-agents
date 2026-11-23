@@ -291,6 +291,7 @@ describe("the workbench conversation", () => {
     ["insert_block", { blockKind: "never", at: 1, text: "Prometer prazo.", locale: "pt-BR" }, "Objetivo\nTriar e responder.\n\nNunca\nPrometer prazo.", /Nunca/],
     ["replace_block", { blockId: "b1", text: "Triage and answer.", locale: "en-US" }, "Purpose\nTriage and answer.", /Purpose/],
     ["move_block", { blockId: "b2", to: 0 }, "Nunca\nPrometer prazo.\n\nObjetivo\nTriar e responder.", /Nunca/],
+    ["edit_block", { blockId: "b1", oldText: "responder", text: "encerrar" }, "Objetivo\nTriar e encerrar.\n\nNunca\nPrometer prazo.", /encerrar/],
     ["insert_block", { blockKind: "never", at: 0, text: "Prometer prazo.", locale: "en-US" }, "Never\nPrometer prazo.\n\nObjetivo\nTriar e responder.", /Never/],
   ])("shows a %s proposal as the instructions accepting it would leave", async (kind, fields, after, shown) => {
     const proposal = { ...blockProposal, kind, operation: { kind, ...fields }, instructionsAfter: after };
