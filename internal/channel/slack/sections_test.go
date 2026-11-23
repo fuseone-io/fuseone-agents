@@ -100,18 +100,18 @@ const sweepReport = `✅ Varredura 21:01–22:01 (BRT): tudo ok, sem achados.
 Detalhe operacional (V1–V11):
 • V1: zero LOGIN_ERROR na janela.
 • V2: 1 CLIENT_LOGIN_ERROR de client int- (realm integration, fora do escopo).
-• V3: password grant só em application-access (5.963) no realm cora.
+• V3: password grant só em application-access (5.963) no realm acme.
 
 Nenhuma ação tomada (somente leitura); nenhum IP atingiu critério de bloqueio.`
 
 const runbookDiagnosis = `Runbook consultado: alertGatewayRTMInterfaceErrors.
 
 Diagnóstico: alerta crítico indica anomalia na taxa de erros 5xx do job
-nginx-third-part para o vhost cora.prod.jdpi.pstijd.
+nginx-third-part para o vhost gateway.prod.example.
 
 Causas prováveis (conforme runbook):
 - Problema no próprio Gateway ao processar requests.
-- Timeout do lado da JD.
+- Timeout do lado do parceiro.
 
 Próximos passos recomendados:
 1. Verificar se alertGatewayRTMHeapHigh também está firing.

@@ -13,7 +13,7 @@ const lists = vi.hoisted(() => ({
       items: [{ agentId: "security-sentinel", name: "Security Sentinel" }],
     },
   },
-  scopes: { data: { items: [{ company: "cora", area: "platform" }] } },
+  scopes: { data: { items: [{ company: "acme", area: "platform" }] } },
   people: { data: { items: [{ id: "usr_ana", display: "Ana" }] }, error: null },
   me: { data: { id: "usr_kleber", display: "Kleber Rocha" } },
 }));

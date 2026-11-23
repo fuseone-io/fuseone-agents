@@ -311,7 +311,7 @@ func TestPostPlaced_formattedAnswers_rendersParagraphsAsBlocks(t *testing.T) {
 	t.Parallel()
 	message := channel.Message{
 		Event: channel.EventFinished, RunID: "run-1", Agent: "security-sentinel",
-		Scope:  domain.Scope{Company: "cora", Area: "platform"},
+		Scope:  domain.Scope{Company: "acme", Area: "platform"},
 		Answer: "✅ Varredura: tudo ok.\n\n• V1: zero erros\n• V2: nada fora do padrão\n\nNenhuma ação tomada.",
 	}
 
