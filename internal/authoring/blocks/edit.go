@@ -26,14 +26,31 @@ func Edit(doc []Block, id, old, replacement string) ([]Block, error) {
 	if old == "" {
 		return nil, fmt.Errorf("%w: edit %s names no excerpt", ErrExcerpt, id)
 	}
-	if n := strings.Count(doc[i].Text, old); n != 1 {
-		return nil, fmt.Errorf("%w: edit %s finds it %d times", ErrExcerpt, id, n)
+	at, ok := onlyPlace(doc[i].Text, old)
+	if !ok {
+		return nil, fmt.Errorf("%w: edit %s", ErrExcerpt, id)
 	}
 	out := slices.Clone(doc)
-	text := strings.TrimSpace(strings.Replace(out[i].Text, old, replacement, 1))
+	text := strings.TrimSpace(out[i].Text[:at] + replacement + out[i].Text[at+len(old):])
 	if text == out[i].Text {
 		return out, nil
 	}
 	out[i] = Block{ID: id, Kind: out[i].Kind, Label: out[i].Label, Text: text}
 	return out, nil
+}
+
+/*
+onlyPlace is where an excerpt starts when it starts at exactly one place. The
+second search begins one byte past the first start, not past its end, so
+overlapping occurrences count: in "aaa", "aa" starts at two places, which
+strings.Count, counting matches that do not overlap, reports as one. A byte
+past a start is safe in UTF-8: an excerpt's first byte is never a
+continuation byte, so no match begins inside a character.
+*/
+func onlyPlace(text, excerpt string) (int, bool) {
+	at := strings.Index(text, excerpt)
+	if at < 0 || strings.Contains(text[at+1:], excerpt) {
+		return 0, false
+	}
+	return at, true
 }
