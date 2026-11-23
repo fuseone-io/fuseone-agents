@@ -68,7 +68,7 @@ or one only its own turn's acceptances moved (#412). Any other would be
 refused, and shows nothing to accept.
 */
 func instructionsAfter(opened drafts.Opened, p drafts.Proposal) (string, bool) {
-	if p.Op == nil || !isBlockKind(p.Op.Kind()) || !p.Valid || p.Decision != "" || !p.Current {
+	if p.Op == nil || !draft.ConversationOnly(p.Op.Kind()) || !p.Valid || p.Decision != "" || !p.Current {
 		return "", false
 	}
 	next, err := draft.Preview(opened.Draft, p.Op)
@@ -115,14 +115,6 @@ func (s *Server) proposedToolEffects(ctx context.Context, opened drafts.Opened, 
 		effect, _ := rulings.Effect(tool)
 		return effect.String(), true
 	}
-}
-
-func isBlockKind(kind string) bool {
-	switch kind {
-	case "insert_block", "replace_block", "remove_block", "move_block":
-		return true
-	}
-	return false
 }
 
 // AcceptDraftProposal applies one proposal, by its id alone.

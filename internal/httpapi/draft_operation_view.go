@@ -81,6 +81,10 @@ var operationViews = map[string]func(draft.Operation, *openapi.DraftOperation){
 		o := asValue[draft.ReplaceBlock](op)
 		out.BlockId, out.Text, out.Locale = ptr(o.ID), ptr(o.Text), ptr(o.Locale)
 	},
+	"edit_block": func(op draft.Operation, out *openapi.DraftOperation) {
+		o := asValue[draft.EditBlock](op)
+		out.BlockId, out.OldText, out.Text = ptr(o.ID), ptr(o.Old), ptr(o.New)
+	},
 	"remove_block": func(op draft.Operation, out *openapi.DraftOperation) {
 		out.BlockId = ptr(asValue[draft.RemoveBlock](op).ID)
 	},

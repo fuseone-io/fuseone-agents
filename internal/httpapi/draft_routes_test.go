@@ -131,7 +131,7 @@ func TestCreateAgentDraft_handsTheStoreTheCallersAuthority(t *testing.T) {
 func TestApplyDraftOperation_aBlockOperation_isRefusedBeforeTheStore(t *testing.T) {
 	t.Parallel()
 	for _, kind := range []openapi.DraftOperationKind{
-		openapi.DraftOperationKindInsertBlock, openapi.DraftOperationKindReplaceBlock, openapi.DraftOperationKindRemoveBlock, openapi.DraftOperationKindMoveBlock,
+		openapi.DraftOperationKindInsertBlock, openapi.DraftOperationKindReplaceBlock, openapi.DraftOperationKindEditBlock, openapi.DraftOperationKindRemoveBlock, openapi.DraftOperationKindMoveBlock,
 	} {
 		stub := &draftStub{opened: someDraft()}
 		resp, err := draftServer(stub).ApplyDraftOperation(inArea("cx", domain.RoleAuthor), openapi.ApplyDraftOperationRequestObject{

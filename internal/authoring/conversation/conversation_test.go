@@ -237,3 +237,32 @@ func TestBounds_theWorstCaseInputFitsTheTurnCeiling(t *testing.T) {
 		t.Fatalf("Reserve(worst case) = %v", err)
 	}
 }
+
+/*
+The prompt says, in both locales, where behaviour goes. A step holds no text
+the agent reads, only the tools it reaches, when it stops and the model it
+uses: a conversation that answered "act differently" with steps changed
+nothing the agent does. And a change inside a block names its excerpt, since
+rewriting a long block whole does not fit a turn.
+*/
+func TestPrompt_sendsBehaviourToTheInstructionsAndEditsInsideABlock(t *testing.T) {
+	t.Parallel()
+	for locale, rules := range map[string][]string{
+		"pt-BR": {"Regras:", "Passos não levam texto que o agente lê", "edit_block"},
+		"en-US": {"Rules:", "Steps carry no text the agent reads", "edit_block"},
+	} {
+		got, err := conversation.Prompt(locale, conversation.PromptInput{Projection: "{}", Message: "Oi"})
+		if err != nil {
+			t.Fatalf("%s: Prompt: %v", locale, err)
+		}
+		from, to := strings.Index(got, rules[0]), strings.Index(got, "<conversation>")
+		if from < 0 || to < from {
+			t.Fatalf("%s: no rules before the conversation", locale)
+		}
+		for _, rule := range rules[1:] {
+			if !strings.Contains(got[from:to], rule) {
+				t.Errorf("%s: the rules do not say %q", locale, rule)
+			}
+		}
+	}
+}

@@ -107,6 +107,7 @@ func Examples() []string {
 		draft.RemoveStep{Name: "Look up"},
 		draft.InsertBlock{At: 0, Type: blocks.Never, Text: "Promise a deadline.", Locale: "en-US"},
 		draft.ReplaceBlock{ID: "b1", Text: "Triage the ticket.", Locale: "en-US"},
+		draft.EditBlock{ID: "b2", Old: "Reply within a day.", New: "Reply within an hour."},
 		draft.RemoveBlock{ID: "b2"}, draft.MoveBlock{ID: "b1", To: 0},
 	}
 	out := make([]string, 0, len(samples))

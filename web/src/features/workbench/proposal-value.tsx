@@ -4,7 +4,7 @@ import { JsonBody } from "@/components/shared/json-body";
 import { Mono } from "@/components/shared/mono";
 import type { DraftOperation } from "@/lib/api/client";
 
-type FieldKind = Exclude<DraftOperation["kind"], "insert_block" | "replace_block" | "remove_block" | "move_block">;
+type FieldKind = Exclude<DraftOperation["kind"], "insert_block" | "replace_block" | "edit_block" | "remove_block" | "move_block">;
 
 const json = (value: unknown) => <JsonBody body={JSON.stringify(value, null, 2)} />;
 const line = (text: string) => <Mono className="text-sm">{text}</Mono>;

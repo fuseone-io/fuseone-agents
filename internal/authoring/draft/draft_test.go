@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -407,19 +408,91 @@ func TestKinds_theContractAndTheTableNameEveryOperationAndNoOther(t *testing.T) 
 		}
 	}
 
-	sql, err := os.ReadFile("../../ledger/sql/0114_agent_draft_proposals.sql")
+	// The newest migration to say the proposal's kinds is the one in force.
+	files, err := filepath.Glob("../../ledger/sql/*.sql")
 	if err != nil {
-		t.Fatalf("read 0114: %v", err)
+		t.Fatalf("list the migrations: %v", err)
 	}
-	check := regexp.MustCompile(`(?s)kind\s+text\s+not null check \(kind in \((.*?)\)\)`).FindSubmatch(sql)
+	slices.Sort(files)
+	kinds := regexp.MustCompile(`(?s)agent_draft_proposals.*?check \(kind in \((.*?)\)\)`)
+	var check [][]byte
+	for _, f := range files {
+		sql, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		if found := kinds.FindSubmatch(sql); found != nil {
+			check = found
+		}
+	}
 	if check == nil {
-		t.Fatal("0114 has no check on the proposal's kind")
+		t.Fatal("no migration checks the proposal's kind")
 	}
 	got := slices.Sorted(slices.Values(regexp.MustCompile(`'([a-z_]+)'`).FindAllString(string(check[1]), -1)))
 	for i := range got {
 		got[i] = strings.Trim(got[i], "'")
 	}
 	if !slices.Equal(got, want) {
-		t.Errorf("0114's check = %v, want %v", got, want)
+		t.Errorf("the proposals table's check = %v, want %v", got, want)
+	}
+}
+
+/*
+A change inside a long block names only the excerpt it changes. Found in
+production: a "how to act" block of about 17 thousand characters could only be
+rewritten whole, which no turn's output holds, so the conversation changed
+steps instead and the behaviour never moved. The edit keeps every other byte of
+the block, and what it says does not grow with the block.
+*/
+func TestValidate_editBlock_inABlockTooLargeToRewrite_changesOnlyItsExcerpt(t *testing.T) {
+	t.Parallel()
+	before := strings.Repeat("Leia o alerta inteiro antes de agir. ", 250)
+	after := strings.Repeat("Feche o caso só com evidência anexada. ", 200)
+	s, err := spec.Parse("triage", []byte("---\nid: triage\nname: Triagem\ncompany: acme\narea: cx\n"+
+		"provider: openai\nmodel: gpt-test\ntools: [crm.lookup]\nbudget: {micros: 500000, steps: 60}\n---\n\n"+
+		"Objetivo\nTriar.\n\nComo agir\n"+before+"Bloqueie o IP 10.0.0.1 sempre. "+after+"\n\nNunca\nPrometer."))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	d := draft.FromSpec(s)
+	howToAct := d.Blocks[1]
+	if howToAct.Kind != blocks.HowToAct || len(howToAct.Text) < 16000 {
+		t.Fatalf("fixture: block %s of %d bytes, want a how-to-act block of production's size", howToAct.Kind, len(howToAct.Text))
+	}
+	op := draft.EditBlock{ID: howToAct.ID, Old: "Bloqueie o IP 10.0.0.1 sempre.", New: "Bloqueie o IP 10.0.0.1 só com aprovação."}
+	if size := len(draft.Body(op)); size > 512 {
+		t.Fatalf("the edit says %d bytes, want it bounded by its excerpt, not by its block", size)
+	}
+	got, err := apply(t, d, op, draft.FromProposal)
+	if err != nil {
+		t.Fatalf("edit_block = %v, want it applied", err)
+	}
+	want := strings.TrimSpace(before + "Bloqueie o IP 10.0.0.1 só com aprovação. " + after)
+	if text := got.Draft.Blocks[1].Text; text != want {
+		t.Fatalf("the block after the edit differs from the excerpt replaced in place (%d bytes, want %d)", len(text), len(want))
+	}
+	if label := got.Draft.Blocks[1].Label; label != "Como agir" {
+		t.Errorf("label = %q, want the block's own: an excerpt does not retitle its block", label)
+	}
+	if _, err := apply(t, d, op, draft.FromControl); !errors.Is(err, draft.ErrConversationOnly) {
+		t.Errorf("an edit by hand = %v, want ErrConversationOnly", err)
+	}
+}
+
+// The excerpt names one place: absent, repeated or empty, the edit cannot say
+// which bytes it changes, and it is invalid rather than a guess.
+func TestValidate_editBlock_anExcerptNotThereExactlyOnce_isInvalid(t *testing.T) {
+	t.Parallel()
+	d := complete(t)
+	id := d.Blocks[0].ID // "Triar."
+	for name, op := range map[string]draft.EditBlock{
+		"absent":        {ID: id, Old: "Responder.", New: "Encerrar."},
+		"repeated":      {ID: id, Old: "r", New: "R"},
+		"empty":         {ID: id, Old: "", New: "Encerrar."},
+		"another block": {ID: "b99", Old: "Triar.", New: "Encerrar."},
+	} {
+		if _, err := apply(t, d, op, draft.FromProposal); !errors.Is(err, draft.ErrInvalidOperation) {
+			t.Errorf("%s = %v, want ErrInvalidOperation", name, err)
+		}
 	}
 }

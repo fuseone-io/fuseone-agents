@@ -10791,6 +10791,7 @@ components:
             - remove_step
             - insert_block
             - replace_block
+            - edit_block
             - remove_block
             - move_block
         operation:
@@ -10955,6 +10956,7 @@ components:
             - remove_step
             - insert_block
             - replace_block
+            - edit_block
             - remove_block
             - move_block
         name: { type: string }
@@ -10981,7 +10983,7 @@ components:
         stepName: { type: string }
         blockId:
           type: string
-          description: The block a replace, remove or move names.
+          description: The block a replace, edit, remove or move names.
         blockKind:
           type: string
           enum: [prose, objective, howToAct, whenToStop, never, howToReply]
@@ -10994,7 +10996,13 @@ components:
           description: Where a move puts its block.
         text:
           type: string
-          description: The text an insert or replace writes.
+          description: The text an insert or replace writes, or what an edit writes in place of oldText.
+        oldText:
+          type: string
+          description: |
+            The exact excerpt an edit replaces, found exactly once in its
+            block: the rest of the block is kept as it is, so a change to a
+            long block does not have to write the whole block again.
         locale:
           type: string
           description: The locale an inserted or changed block's label is written in.

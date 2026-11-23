@@ -3597,6 +3597,7 @@
       "remove_step": "Remove a step",
       "insert_block": "Insert a block",
       "replace_block": "Rewrite a block",
+      "edit_block": "Edit part of a block",
       "remove_block": "Remove a block",
       "move_block": "Move a block"
     },

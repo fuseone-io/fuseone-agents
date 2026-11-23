@@ -246,6 +246,7 @@ func TestListDraftProposals_aBlockProposalCarriesTheInstructionsItWouldLeave(t *
 	stub := &draftStub{opened: opened, proposals: []drafts.Proposal{
 		{ID: "insert", Read: opened.Revision, Current: true, Valid: true, Op: draft.InsertBlock{At: 1, Type: blocks.Never, Text: "Prometer prazo.", Locale: "pt-BR"}},
 		{ID: "retitle", Read: opened.Revision, Current: true, Valid: true, Op: draft.ReplaceBlock{ID: first, Text: "Triage.", Locale: "en-US"}},
+		{ID: "edit", Read: opened.Revision, Current: true, Valid: true, Op: draft.EditBlock{ID: first, Old: "Triar.", New: "Triar e responder."}},
 		{ID: "sibling", Read: `"older"`, Current: true, Valid: true, Op: draft.InsertBlock{At: 1, Type: blocks.Never, Text: "Prometer prazo.", Locale: "pt-BR"}},
 		{ID: "stale", Read: `"older"`, Valid: true, Op: draft.InsertBlock{At: 0, Type: blocks.Never, Text: "x", Locale: "pt-BR"}},
 		{ID: "decided", Read: opened.Revision, Valid: true, Decision: "rejected", Op: draft.RemoveBlock{ID: first}},
@@ -264,6 +265,9 @@ func TestListDraftProposals_aBlockProposalCarriesTheInstructionsItWouldLeave(t *
 	}
 	if got := after["sibling"]; !strings.HasSuffix(got, "Nunca\nPrometer prazo.") {
 		t.Errorf("a sibling of an accepted proposal leaves %q, want its effect on the draft as it is", got)
+	}
+	if got := after["edit"]; !strings.HasPrefix(got, "Objetivo\nTriar e responder.") {
+		t.Errorf("edit leaves %q, want the excerpt replaced in place", got)
 	}
 	if got := after["retitle"]; !strings.HasPrefix(got, "Purpose\nTriage.") {
 		t.Errorf("retitle leaves %q, want the block under the operation's locale's label", got)

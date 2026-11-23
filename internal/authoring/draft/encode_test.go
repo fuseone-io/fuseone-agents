@@ -98,6 +98,7 @@ func TestParseBody_readsBackEveryOperationExactly(t *testing.T) {
 		draft.EditStep{Name: "Ler", Step: spec.Step{Name: "Ler bem"}}, draft.RemoveStep{Name: "Ler"},
 		draft.InsertBlock{At: 1, Type: blocks.Never, Text: "Prometer.", Locale: "pt-BR"},
 		draft.ReplaceBlock{ID: "b1", Text: "Triar.", Locale: "en-US"},
+		draft.EditBlock{ID: "b1", Old: "Triar.", New: "Triar bem."},
 		draft.RemoveBlock{ID: "b2"}, draft.MoveBlock{ID: "b1", To: 0},
 	}
 	if len(examples) != len(draft.Operations()) {

@@ -30,6 +30,16 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The workbench conversation can change a long block of the instructions.** A change to a
+  block meant rewriting it whole, and a "how to act" block of thousands of words does not fit
+  a turn's answer, so the conversation changed steps instead and the agent's behaviour never
+  moved. A proposal can now edit one excerpt of a block (`edit_block`), found there exactly
+  once, keeping the rest of the block and its label. The turn's prompt also says that
+  behaviour belongs in the instructions: a step carries no text the agent reads. Migration
+  0128 widens the proposals' kinds only; the previous binary keeps running against it.
+
 ## [0.134.0] — 2026-11-22
 
 The workbench leads with the candidate path (#453, #455). Console only, no migration; the
