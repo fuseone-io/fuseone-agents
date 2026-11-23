@@ -133,6 +133,11 @@ frozen until the conversation returns.
 - Operations: `insert_block` (kind, position), `replace_block`, `remove_block`,
   `move_block`. They replace `set_block` in the table under
   [The model proposes operations](#2-the-model-proposes-operations-and-never-grants).
+- `edit_block` (since 2026-11-22) replaces one excerpt of a block, found there
+  exactly once, and keeps the rest of the block and its label. A whole-block
+  rewrite does not fit a turn's output once a block runs to thousands of
+  words, so without it the conversation could change only the steps, which
+  carry no text the agent reads.
 - A round-trip test, byte for byte, over the instructions of every example
   agent and of fixtures with loose prose, repeated kinds and labels in both
   languages.
@@ -286,7 +291,7 @@ more than that field does:
 | Operation | Edits | Validated against |
 |---|---|---|
 | `add_tool`, `remove_tool` | `tools` | The catalogue, as `read.go` does today |
-| `insert_block`, `replace_block`, `remove_block`, `move_block` (since 2026-11-16; they replace `set_block`) | `instructions`: any of the six kinds, by stable block id | [Contracts 2 and 3](#2-blocks-have-a-stable-identity-and-the-codec-is-the-servers): only from an accepted proposal |
+| `insert_block`, `replace_block`, `edit_block`, `remove_block`, `move_block` (since 2026-11-16; they replace `set_block`; `edit_block` since 2026-11-22) | `instructions`: any of the six kinds, by stable block id | [Contracts 2 and 3](#2-blocks-have-a-stable-identity-and-the-codec-is-the-servers): only from an accepted proposal |
 | `add_step`, `edit_step`, `remove_step` | `steps` | `reaches` must be in the catalogue and in the draft's tools |
 | `set_approval_delivery` | `approvals` (`direct`, `notify`) | `notify` names people who may decide in the scope |
 | `set_trigger` | `triggers` | The same validation the form uses |
