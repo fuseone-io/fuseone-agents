@@ -54,6 +54,11 @@ func TestCheckWrittenHeaders_whatHTTPCannotSendOrTheTransportOwns_isRefused(t *t
 		"the content type":     {"Content-Type": "k-secret"},
 		"the MCP session":      {"mcp-session-id": "k-secret"},
 		"the MCP protocol":     {"MCP-Protocol-Version": "k-secret"},
+		"the MCP method":       {"Mcp-Method": "k-secret"},
+		"the MCP tool name":    {"mcp-name": "k-secret"},
+		"an MCP parameter":     {"Mcp-Param-Region": "k-secret"},
+		"a future MCP header":  {"Mcp-Trace": "k-secret"},
+		"the resumption point": {"Last-Event-ID": "k-secret"},
 		"two spellings":        {"apikey": "k-secret", "APIKEY": "k-secret"},
 	} {
 		err := domain.CheckWrittenHeaders(headers)

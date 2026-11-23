@@ -2235,6 +2235,13 @@ func TestPutMCPServer_aHeaderHTTPCannotSend_isRefusedAndNothingStored(t *testing
 	if !errors.Is(err, domain.ErrHeaderInvalid) {
 		t.Fatalf("err = %v, want ErrHeaderInvalid", err)
 	}
+	// One the SDK sets after the credential is applied: the tool's name.
+	err = i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "crm", Transport: domain.TransportHTTP, URL: "https://crm.example/mcp", Enabled: true,
+	}, domain.MCPCredentialPatch{Headers: map[string]string{"Mcp-Name": "k-secret"}})
+	if !errors.Is(err, domain.ErrHeaderInvalid) {
+		t.Fatalf("Mcp-Name: err = %v, want ErrHeaderInvalid", err)
+	}
 	servers, err := i.MCPServers(ctx)
 	if err != nil || len(servers) != 0 {
 		t.Fatalf("servers = %+v (%v), want none stored", servers, err)
@@ -2256,5 +2263,11 @@ func TestPutMCPPersonalCredential_aHeaderTheTransportOwns_isRefused(t *testing.T
 
 	if !errors.Is(err, domain.ErrHeaderInvalid) {
 		t.Fatalf("err = %v, want ErrHeaderInvalid", err)
+	}
+	err = i.PutMCPPersonalCredential(ctx, "usr_ana", platform, "crm", domain.MCPCredentialPatch{
+		Headers: map[string]string{"Mcp-Param-Tenant": "k-secret"},
+	})
+	if !errors.Is(err, domain.ErrHeaderInvalid) {
+		t.Fatalf("Mcp-Param-Tenant: err = %v, want ErrHeaderInvalid", err)
 	}
 }
