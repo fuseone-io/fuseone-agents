@@ -25,6 +25,7 @@ import { useOrderedWrites } from "@/features/integrations/mcp/use-ordered-writes
 import { MoveServerDialog } from "@/features/integrations/mcp/move-server-dialog";
 import { moveOffered } from "@/features/integrations/mcp/move-offer";
 import { integrationAccess } from "@/features/integrations/integration-access";
+import { useServerRecipe } from "@/features/integrations/mcp/use-server-recipe";
 
 /**
  * One tool server, in the order the decisions are actually made.
@@ -51,6 +52,8 @@ export function MCPServerPage() {
     isLoading, error, refetch,
   } = useMCPServer(name, read.data?.body);
   const server = listed && read.data ? { ...listed, ...read.data.body } : undefined;
+  // What the server takes, as its recipe says; the connection offers that.
+  const recipe = useServerRecipe(name);
   // Who may rule on each tool, and as whom, by where its server is (NT-019).
   const me = useMe().data;
   const save = useSetSurface();
@@ -151,6 +154,7 @@ export function MCPServerPage() {
       <ConnectionPanel
         key={reloads}
         server={server}
+        recipe={recipe}
         revision={{ inOrder, onStale: () => setStale(true) }}
       />
 

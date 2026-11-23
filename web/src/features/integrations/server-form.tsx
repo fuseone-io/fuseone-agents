@@ -9,6 +9,7 @@ import {
 import { Form } from "@/components/ui/form";
 import { ServerFormBody } from "@/features/integrations/server-form-body";
 import { useServerForm } from "@/features/integrations/mcp/use-server-form";
+import { useServerRecipe } from "@/features/integrations/mcp/use-server-recipe";
 import { type MCPServer } from "@/features/integrations/api";
 import { StaleNotice } from "@/components/shared/stale-notice";
 import type { FormRevision } from "@/lib/api/revision";
@@ -25,10 +26,13 @@ export function ServerForm({
 }) {
   const { t } = useTranslation();
   const [stale, setStale] = useState(false);
+  // A server being connected here has no recipe; one stored is described by
+  // the recipe of its name, if any, so the form offers what that recipe says.
+  const recipe = useServerRecipe(server?.name);
   const { form, submit } = useServerForm(
     server,
     onClose,
-    undefined,
+    recipe,
     revision && { etag: revision.etag, onStale: () => setStale(true) },
   );
 
@@ -58,6 +62,7 @@ export function ServerForm({
                 editing={server !== null}
                 hasSecret={server?.hasSecret === true}
                 hasConfigFile={server?.hasConfigFile === true}
+                recipe={recipe}
               />
           </PropertiesSheetBody>
 

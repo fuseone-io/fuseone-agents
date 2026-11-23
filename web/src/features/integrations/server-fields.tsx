@@ -77,7 +77,8 @@ export function ServerFields({
         {headers.length > 0 && (
           <HeaderFields form={form} headers={headers} hasSecret={hasSecret} />
         )}
-        {!auth.known && <CustomHeaderFormFields form={form} kept={hasSecret} />}
+        {/* Only where the recipe is read and there is none: undefined is not knowing yet. */}
+        {recipe === null && <CustomHeaderFormFields form={form} kept={hasSecret} />}
         {auth.oauth !== null && <OAuthFormFields form={form} />}
         {auth.githubApp !== null && <GitHubAppFormFields form={form} />}
         <RateLimitFields form={form} />

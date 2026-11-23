@@ -206,7 +206,7 @@ export function ConnectionPanel({
         {remoteSecretConflict && (
           <p className="text-xs text-danger">{t("mcp.remoteCredentialConflict")}</p>
         )}
-        {!local && !remotePlan.known && (
+        {!local && recipe === null && (
           <CustomHeaderSection
             pending={put.isPending}
             kept={server.hasSecret === true && server.hasOAuth !== true && !server.githubApp}

@@ -17,6 +17,12 @@ vi.mock("@/features/integrations/api", async (importOriginal) => {
   };
 });
 
+// The catalogue answers with no recipe for these servers: a custom server.
+vi.mock("@/features/integrations/mcp/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/integrations/mcp/api")>();
+  return { ...actual, useRecipes: () => ({ data: { items: [] } }) };
+});
+
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
