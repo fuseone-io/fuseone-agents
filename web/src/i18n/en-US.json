@@ -1453,6 +1453,8 @@
       "reachesNothing": "Reaches nothing",
       "newTitle": "New egress policy",
       "editTitle": "Egress policy of {{scope}}",
+      "scopeHasPolicy": "{{scope}} already has a policy. Its origins were loaded here: saving replaces that list with the one below.",
+      "stale": "This policy changed since you opened it. Close and open it again to see the current origins before saving.",
       "dialogHint": "Each origin is a scheme, host and port, with no path, query or wildcard. An empty list blocks everything and, for an area, overrides the company's.",
       "origins": "Allowed origins",
       "originsHint": "One per line, such as https://jira.example.com. Include the OAuth token endpoint and the GitHub App API when the server uses them.",

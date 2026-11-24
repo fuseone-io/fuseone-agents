@@ -60,23 +60,36 @@ type fakeAdmin struct {
 	err    error
 }
 
-func (f *fakeAdmin) PutMCPEgressPolicy(_ context.Context, by domain.UserID, _ domain.Scope, p admin.MCPEgressPolicy) error {
+// The fake judges preconditions as the store does: a creation over a policy
+// that exists, or an If-Match over one at another revision, is stale and
+// leaves it. Its revision is the origins, quoted.
+func (f *fakeAdmin) WriteMCPEgressPolicy(_ context.Context, w admin.EgressPolicyWrite) (domain.Revision, error) {
 	if f.err != nil {
-		return f.err
+		return "", f.err
 	}
 	if f.egress == nil {
 		f.egress = map[domain.Scope]admin.MCPEgressPolicy{}
 	}
-	p.UpdatedBy = string(by)
+	held, exists := f.egress[w.Policy.Scope]
+	if !w.Expect.Allows(exists, held.Revision) || (w.Create && exists) {
+		return "", &domain.StaleError{Current: held.Revision}
+	}
+	p := w.Policy
+	p.UpdatedBy = string(w.By)
+	p.Revision = domain.Revision(`"` + strings.Join(p.Origins, ",") + `"`)
 	f.egress[p.Scope] = p
-	return nil
+	return p.Revision, nil
 }
 
-func (f *fakeAdmin) DeleteMCPEgressPolicy(_ context.Context, _ domain.UserID, _ domain.Scope, at domain.Scope) error {
+func (f *fakeAdmin) RemoveMCPEgressPolicy(_ context.Context, r admin.EgressPolicyRemoval) error {
 	if f.err != nil {
 		return f.err
 	}
-	delete(f.egress, at)
+	held, exists := f.egress[r.At]
+	if r.Expect.Present() && !r.Expect.Allows(exists, held.Revision) {
+		return &domain.StaleError{Current: held.Revision}
+	}
+	delete(f.egress, r.At)
 	return nil
 }
 

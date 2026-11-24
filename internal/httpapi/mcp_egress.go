@@ -33,7 +33,7 @@ func (s *Server) ListMCPEgressPolicies(ctx context.Context, _ openapi.ListMCPEgr
 	for _, p := range policies {
 		item := openapi.MCPEgressPolicy{
 			Company: string(p.Scope.Company), Origins: p.Origins,
-			UpdatedBy: p.UpdatedBy, UpdatedAt: p.UpdatedAt,
+			UpdatedBy: p.UpdatedBy, UpdatedAt: p.UpdatedAt, Etag: string(p.Revision),
 		}
 		if p.Scope.Area != "" {
 			item.Area = ptr(string(p.Scope.Area))
@@ -56,9 +56,19 @@ func (s *Server) PutMCPEgressPolicy(ctx context.Context, req openapi.PutMCPEgres
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid("a policy names a company and its origins")),
 		}, nil
 	}
-	err := s.integrations.PutMCPEgressPolicy(ctx, caller, adminScope, admin.MCPEgressPolicy{
-		Scope: egressScope(req.Body.Company, req.Body.Area), Origins: req.Body.Origins,
+	expect, create, refused := egressPrecondition(req.Params.IfMatch, req.Params.IfNoneMatch)
+	if refused != "" {
+		return openapi.PutMCPEgressPolicy400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(refused)),
+		}, nil
+	}
+	revision, err := s.integrations.WriteMCPEgressPolicy(ctx, admin.EgressPolicyWrite{
+		By: caller, Audit: adminScope, Expect: expect, Create: create,
+		Policy: admin.MCPEgressPolicy{Scope: egressScope(req.Body.Company, req.Body.Area), Origins: req.Body.Origins},
 	})
+	if stale, ok := staleFrom(err); ok {
+		return openapi.PutMCPEgressPolicy412ApplicationProblemPlusJSONResponse{PreconditionFailedApplicationProblemPlusJSONResponse: stale}, nil
+	}
 	if errors.Is(err, admin.ErrEgressPolicyInvalid) {
 		return openapi.PutMCPEgressPolicy400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
@@ -67,7 +77,24 @@ func (s *Server) PutMCPEgressPolicy(ctx context.Context, req openapi.PutMCPEgres
 	if err != nil {
 		return nil, err
 	}
-	return openapi.PutMCPEgressPolicy204Response{}, nil
+	return openapi.PutMCPEgressPolicy204Response{Headers: openapi.PutMCPEgressPolicy204ResponseHeaders{ETag: string(revision)}}, nil
+}
+
+// egressPrecondition reads what a policy write says it saw: an If-Match to
+// edit, or If-None-Match: * to create, never both. Neither replaces.
+func egressPrecondition(ifMatch, ifNoneMatch *string) (domain.IfMatch, bool, string) {
+	if ifMatch != nil && ifNoneMatch != nil {
+		return domain.IfMatch{}, false, "send If-Match to change a policy or If-None-Match: * to create one, not both"
+	}
+	expect, err := domain.ParseIfMatch(ifMatch)
+	if err != nil {
+		return domain.IfMatch{}, false, err.Error()
+	}
+	absent, err := domain.ParseIfNoneMatch(ifNoneMatch)
+	if err != nil {
+		return domain.IfMatch{}, false, err.Error()
+	}
+	return expect, absent, ""
 }
 
 func (s *Server) DeleteMCPEgressPolicy(ctx context.Context, req openapi.DeleteMCPEgressPolicyRequestObject) (openapi.DeleteMCPEgressPolicyResponseObject, error) {
@@ -78,7 +105,18 @@ func (s *Server) DeleteMCPEgressPolicy(ctx context.Context, req openapi.DeleteMC
 	if s.integrations == nil {
 		return nil, errNoAdministration
 	}
-	err := s.integrations.DeleteMCPEgressPolicy(ctx, caller, adminScope, egressScope(req.Params.Company, req.Params.Area))
+	expect, err := domain.ParseIfMatch(req.Params.IfMatch)
+	if err != nil {
+		return openapi.DeleteMCPEgressPolicy400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
+		}, nil
+	}
+	err = s.integrations.RemoveMCPEgressPolicy(ctx, admin.EgressPolicyRemoval{
+		By: caller, Audit: adminScope, At: egressScope(req.Params.Company, req.Params.Area), Expect: expect,
+	})
+	if stale, ok := staleFrom(err); ok {
+		return openapi.DeleteMCPEgressPolicy412ApplicationProblemPlusJSONResponse{PreconditionFailedApplicationProblemPlusJSONResponse: stale}, nil
+	}
 	if errors.Is(err, admin.ErrEgressPolicyInvalid) {
 		return openapi.DeleteMCPEgressPolicy400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),

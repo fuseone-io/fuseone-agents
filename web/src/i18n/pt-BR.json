@@ -1453,6 +1453,8 @@
       "reachesNothing": "Não alcança nada",
       "newTitle": "Nova política de egress",
       "editTitle": "Política de egress de {{scope}}",
+      "scopeHasPolicy": "{{scope}} já tem uma política. As origens dela foram carregadas aqui: salvar substitui essa lista pela que está abaixo.",
+      "stale": "Esta política mudou desde que você a abriu. Feche e abra de novo para ver as origens atuais antes de salvar.",
       "dialogHint": "Cada origem é esquema, host e porta, sem caminho, consulta ou curinga. Uma lista vazia bloqueia tudo e, numa área, prevalece sobre a da empresa.",
       "origins": "Origens permitidas",
       "originsHint": "Uma por linha, por exemplo https://jira.example.com. Inclua o endpoint de token de OAuth e a API do GitHub App, quando o servidor usar.",

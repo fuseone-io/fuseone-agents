@@ -47,8 +47,8 @@ type Integrations interface {
 	RemoveMCPServer(ctx context.Context, r admin.Removal) error
 	// The platform's egress policies for servers outside the installation
 	// (NT-019).
-	PutMCPEgressPolicy(ctx context.Context, by domain.UserID, audit domain.Scope, p admin.MCPEgressPolicy) error
-	DeleteMCPEgressPolicy(ctx context.Context, by domain.UserID, audit domain.Scope, at domain.Scope) error
+	WriteMCPEgressPolicy(ctx context.Context, w admin.EgressPolicyWrite) (domain.Revision, error)
+	RemoveMCPEgressPolicy(ctx context.Context, r admin.EgressPolicyRemoval) error
 	MCPEgressPolicies(ctx context.Context) ([]admin.MCPEgressPolicy, error)
 }
 

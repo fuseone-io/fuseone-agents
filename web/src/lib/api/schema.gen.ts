@@ -3397,12 +3397,13 @@ export interface paths {
         /**
          * Set the origins a company's or an area's MCP servers may reach
          * @description Replaces the policy for that company or area. Origins are stored in one canonical form; a path, a query, a user or a wildcard is refused, as is an origin netguard never lets a request reach (cloud metadata, link-local). An empty list is a policy too: it allows nothing, and for an area it overrides the company's.
+         *     A policy is replaced whole, so a write that did not see what is stored erases it. `If-None-Match: *` makes the write a creation, refused with a 412 when the scope already has a policy; `If-Match` with a policy's `etag` makes it an edit, refused with a 412 when the policy changed since. Either 412 leaves the policy as it was and carries its current ETag. Without either header the write replaces, as it always did.
          */
         put: operations["putMCPEgressPolicy"];
         post?: never;
         /**
          * Remove a company's or an area's egress policy
-         * @description An area's servers inherit their company's policy again, or reach nothing. To deny an area what its company allows, store an empty list instead.
+         * @description An area's servers inherit their company's policy again, or reach nothing. To deny an area what its company allows, store an empty list instead. `If-Match` with the policy's `etag` refuses, with a 412, the removal of a policy that changed since it was read.
          */
         delete: operations["deleteMCPEgressPolicy"];
         options?: never;
@@ -3890,6 +3891,8 @@ export interface components {
         MCPEgressPolicy: {
             company: string;
             area?: string;
+            /** @description The policy's revision, what a PUT's or a DELETE's If-Match names. It moves when the origins change, and only then. */
+            etag: string;
             /** @description Canonical origins, each with its port written. */
             origins: string[];
             updatedBy: string;
@@ -13005,7 +13008,22 @@ export interface operations {
     putMCPEgressPolicy: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+                /**
+                 * @description `*` makes the write a creation: refused with a 412 if the resource
+                 *     already exists. Any other value is a 400, never ignored. Without the
+                 *     header, the write creates or replaces.
+                 */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchCreate"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -13018,6 +13036,7 @@ export interface operations {
             /** @description Stored. Workers hold the scope's servers to it on their next pass. */
             204: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -13025,6 +13044,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     deleteMCPEgressPolicy: {
@@ -13033,7 +13053,16 @@ export interface operations {
                 company: string;
                 area?: string;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Refuses the write with a 412 unless the resource is still at one of these
+                 *     revisions. `*` means it exists at all. A weak tag matches the revision it
+                 *     weakens, since a compressing proxy marks the ETag it forwards W/. Any value
+                 *     on something that does not exist is refused, and one that does not parse is
+                 *     a 400. Without the header, the last write wins.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -13049,6 +13078,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     getModelProvider: {

@@ -37,71 +37,8 @@ type MCPEgressPolicy struct {
 	Origins   []string
 	UpdatedBy string
 	UpdatedAt time.Time
-}
-
-type storedEgressPolicy struct {
-	Company string   `json:"company"`
-	Area    string   `json:"area,omitempty"`
-	Origins []string `json:"origins"`
-}
-
-// PutMCPEgressPolicy stores the policy for a company or an area, replacing
-// any it had. The caller is the platform's administration; the door says so.
-func (i *Integrations) PutMCPEgressPolicy(ctx context.Context, by domain.UserID, audit domain.Scope, p MCPEgressPolicy) error {
-	if err := egressPolicyScope(p.Scope); err != nil {
-		return err
-	}
-	origins, err := egressOrigins(p.Origins)
-	if err != nil {
-		return err
-	}
-	value, err := json.Marshal(storedEgressPolicy{
-		Company: string(p.Scope.Company), Area: string(p.Scope.Area), Origins: origins,
-	})
-	if err != nil {
-		return fmt.Errorf("admin: encode MCP egress policy: %w", err)
-	}
-	return writeGuarded(ctx, i.pool, i.settings, LockMCPEgressPolicies, folded{
-		by: by, scope: audit, action: "mcp_egress_policy.configured", target: egressPolicyName(p.Scope),
-		set: settings.Setting{
-			ScopeKind: settings.ScopeInstallation, Kind: kindMCPEgressPolicy, Name: egressPolicyName(p.Scope),
-			Value: value, Enabled: true, UpdatedBy: string(by),
-		},
-		detail: map[string]any{
-			"company": string(p.Scope.Company), "area": string(p.Scope.Area), "origins": origins,
-		},
-	})
-}
-
-// DeleteMCPEgressPolicy removes a company's or an area's policy. An area's
-// servers inherit the company's again, or reach nothing; to deny an area what
-// its company allows, store an empty list instead.
-func (i *Integrations) DeleteMCPEgressPolicy(ctx context.Context, by domain.UserID, audit domain.Scope, at domain.Scope) error {
-	if err := egressPolicyScope(at); err != nil {
-		return err
-	}
-	tx, err := i.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("admin: begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	// The policies' lock first, then the row, as a PUT of a policy takes them
-	// (its guard runs before it reads or writes the row): two writes of one
-	// policy then never wait on each other crosswise.
-	if err := LockMCPEgressPolicies(ctx, tx); err != nil {
-		return err
-	}
-	if err := i.settings.DeleteTx(ctx, tx, settings.ScopeInstallation, domain.Scope{},
-		kindMCPEgressPolicy, egressPolicyName(at)); err != nil {
-		return err
-	}
-	if err := Record(ctx, tx, Event{
-		Principal: by, Scope: audit, Action: "mcp_egress_policy.removed", Target: egressPolicyName(at),
-		Detail: map[string]any{"company": string(at.Company), "area": string(at.Area)},
-	}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	// Revision names the policy as stored; a write's If-Match compares it.
+	Revision domain.Revision
 }
 
 // MCPEgressPolicies is every stored policy.
@@ -110,7 +47,15 @@ func (i *Integrations) MCPEgressPolicies(ctx context.Context) ([]MCPEgressPolicy
 	if err != nil {
 		return nil, err
 	}
-	return policiesFrom(rows)
+	policies, err := policiesFrom(rows)
+	if err != nil {
+		return nil, err
+	}
+	// In the rows' order, one policy each: the revision a write's If-Match names.
+	for k := range policies {
+		policies[k].Revision = i.egressRevision(rows[k])
+	}
+	return policies, nil
 }
 
 // policiesFrom decodes stored policy rows.
