@@ -198,6 +198,9 @@ type MCPServer struct {
 	// GitHubApp is which GitHub App and installation a remote server acts
 	// as. Nil when its credential is not an App. The key is never here.
 	GitHubApp *MCPGitHubAppSummary
+	// OAuthLogin is how a person signs in to this server from their browser,
+	// as its administrator configured it. Nil is a server with no such sign-in.
+	OAuthLogin *MCPOAuthLogin
 
 	/*
 		Surface is which of the server's tools this installation brought in.

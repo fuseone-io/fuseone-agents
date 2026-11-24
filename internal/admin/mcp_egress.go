@@ -225,6 +225,15 @@ func withinEgress(egress *domain.MCPEgress, serverURL string, creds domain.MCPCr
 		}
 		targets = append(targets, base)
 	}
+	return originsWithin(egress, targets)
+}
+
+// originsWithin refuses the first address the policy does not list, naming
+// its origin alone. Nil is the installation's, held to none.
+func originsWithin(egress *domain.MCPEgress, targets []string) error {
+	if egress == nil {
+		return nil
+	}
 	for _, raw := range targets {
 		u, err := url.Parse(raw)
 		if err != nil {
