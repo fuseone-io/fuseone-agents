@@ -17,10 +17,12 @@ vi.mock("@/features/integrations/api", async (importOriginal) => {
   };
 });
 
-// The catalogue answers with no recipe for these servers: a custom server.
+// The catalogue answers with no recipe for these servers, a custom server,
+// unless a test says it has not answered yet or answers with one.
+const catalogue = vi.hoisted(() => ({ data: { items: [] } as { items: unknown[] } | undefined }));
 vi.mock("@/features/integrations/mcp/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/features/integrations/mcp/api")>();
-  return { ...actual, useRecipes: () => ({ data: { items: [] } }) };
+  return { ...actual, useRecipes: () => ({ data: catalogue.data }) };
 });
 
 vi.mock("sonner", () => ({
@@ -44,6 +46,7 @@ describe("the MCP server properties sheet", () => {
     Element.prototype.scrollIntoView ??= () => {};
     api.mutateAsync.mockReset();
     api.mutateAsync.mockResolvedValue(undefined);
+    catalogue.data = { items: [] };
   });
 
   it("keeps the connection form full-height with a scrollable body", () => {
@@ -146,6 +149,27 @@ describe("the MCP server properties sheet", () => {
       await user.click(screen.getByRole("radio", { name: /^OAuth/ }));
       expect(screen.getByLabelText(/access token oauth/i)).toHaveValue("");
     });
+  });
+
+  // A recipe that arrives after the sheet can change the shape shown with
+  // nobody touching it: what was typed under the old one goes with it, or an
+  // invalid value nobody can see any more would refuse every save.
+  it("clears the shape a late recipe takes away, so the one it offers saves", async () => {
+    const user = userEvent.setup();
+    catalogue.data = undefined;
+    const docs: MCPServer = { name: "docs", transport: "http", url: "https://docs.example/mcp", enabled: true };
+    const { rerender } = render(<ServerForm server={docs} onClose={vi.fn()} />);
+    await user.click(screen.getByRole("radio", { name: /^OAuth/ }));
+    await user.click(screen.getByRole("button", { name: /avançado/i }));
+    await user.type(screen.getByLabelText(/expira em/i), "soon");
+
+    catalogue.data = { items: [{ server: "docs", title: "Docs", category: "knowledge",
+      authModes: [{ type: "headers", principal: "service", headers: ["Api-Key"] }] }] };
+    rerender(<ServerForm server={docs} onClose={vi.fn()} />);
+    await user.type(await screen.findByLabelText("Api-Key"), "key");
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(api.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ headers: { "Api-Key": "key" } }));
   });
 
   describe("a custom header for a server with no recipe", () => {

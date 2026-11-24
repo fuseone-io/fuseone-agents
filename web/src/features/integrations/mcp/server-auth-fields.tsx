@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { UseFormReturn } from "react-hook-form";
 import { Input } from "@/components/ui/input";
@@ -25,8 +26,8 @@ import { clearShapes, formChoice, serverFormAuth } from "@/features/integrations
  * shape first, then only its fields.
  *
  * The form opens on the stored shape and follows a recipe that arrives after
- * it. Switching clears every shape's fields, and a save sends only the one
- * shown (formCredential).
+ * it. A change of shape clears every shape's fields, and a save sends only
+ * the one shown (formCredential).
  */
 export function ServerAuthFields({
   form,
@@ -41,6 +42,19 @@ export function ServerAuthFields({
   const auth = serverFormAuth(recipe, server);
   const choice = formChoice(auth, form.watch("authChoice"));
   const kept = server?.hasSecret === true;
+  /*
+   * Whenever the shape shown changes, every shape's fields start empty: on a
+   * pick, and as much when a recipe arriving after the form changes it with
+   * nobody touching anything. Left behind, a value typed under the old shape
+   * would still be validated, and an invalid one nobody can see any more
+   * would refuse every save.
+   */
+  const shown = useRef(choice);
+  useEffect(() => {
+    if (shown.current === choice) return;
+    shown.current = choice;
+    clearShapes(form);
+  }, [choice, form]);
   return (
     <>
       <RemoteAuthSummary plan={auth.plan} />
@@ -48,10 +62,7 @@ export function ServerAuthFields({
         id="form-auth"
         choices={auth.choices}
         value={choice}
-        onChange={(next) => {
-          clearShapes(form);
-          form.setValue("authChoice", next, { shouldDirty: true });
-        }}
+        onChange={(next) => form.setValue("authChoice", next, { shouldDirty: true })}
       />
       {choice === "token" && (
         <FormField
