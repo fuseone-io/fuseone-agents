@@ -30,6 +30,17 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A personal MCP credential is held to its server's egress policy when it is saved.** The
+  worker always refused to refresh a personal OAuth grant whose token endpoint is outside the
+  policy of the server's area (or company), but the credential was saved anyway, then failed on
+  its first refresh. Saving it is now refused at once, with the same answer as the server's own
+  credential: 400 `fuseone:egress-not-allowed` naming the origin alone. A person re-sending the
+  tokens they hold no longer counts as a new grant, as on the server's credential. Credentials
+  already stored are unchanged, and servers of the installation are held to no policy, as
+  before.
+
 ## [0.137.0] — 2026-11-24
 
 The workbench names a granted tool no step reaches, and refuses to publish it until it is

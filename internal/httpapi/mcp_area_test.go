@@ -427,3 +427,26 @@ func TestPutMCPServer_anAuxiliaryAddressWithNoOrigin_isInvalidInputNotAnEgressRe
 		t.Errorf("problem = %s %q, want fuseone:invalid-input with a detail", valueOr(bad.Type), valueOr(bad.Detail))
 	}
 }
+
+// A person's grant whose token endpoint is outside the server's policy is the
+// same refusal as the server's own: its type, and the origin alone (NT-019).
+func TestPutMCPUserCredential_aTokenEndpointOutsideThePolicy_isAnEgressRefusal(t *testing.T) {
+	s := mcpWorld(t)
+	putMCP(t, s, as(domain.RoleCurator), "cx-jira", atCX, false)
+	resp, err := s.PutMCPUserCredential(grantedAt(domain.RoleAuthor, cx), openapi.PutMCPUserCredentialRequestObject{
+		Name: "cx-jira", Body: &openapi.PutMCPUserCredentialJSONRequestBody{Oauth: &openapi.MCPOAuthGrant{
+			AccessToken: ptr("a"), RefreshToken: ptr("r"),
+			TokenURL: ptr("https://issuer.example.org/token?tenant=secret"),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("PutMCPUserCredential: %v", err)
+	}
+	bad, ok := resp.(openapi.PutMCPUserCredential400ApplicationProblemPlusJSONResponse)
+	if !ok {
+		t.Fatalf("PutMCPUserCredential = %T, want 400", resp)
+	}
+	if valueOr(bad.Type) != "fuseone:egress-not-allowed" || valueOr(bad.Detail) != "https://issuer.example.org:443" {
+		t.Errorf("problem = %s %q, want fuseone:egress-not-allowed with the origin alone", valueOr(bad.Type), valueOr(bad.Detail))
+	}
+}

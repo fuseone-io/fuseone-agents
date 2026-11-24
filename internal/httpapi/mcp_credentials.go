@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/auth"
@@ -105,6 +106,15 @@ func (s *Server) PutMCPUserCredential(
 		By: caller.ID, Scope: firstVisibleScope(caller), Visible: caller.ScopesFor(domain.PermToolRead),
 		Server: req.Name, Given: creds,
 	}); err != nil {
+		// The same refusal as the server's own credential: its type, and the
+		// origin alone, never the path or query of a token endpoint (NT-019).
+		var refused *admin.EgressRefusal
+		if errors.As(err, &refused) {
+			return openapi.PutMCPUserCredential400ApplicationProblemPlusJSONResponse{
+				BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+					egressNotAllowed(refused.Origin)),
+			}, nil
+		}
 		return openapi.PutMCPUserCredential400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				invalid(err.Error())),
