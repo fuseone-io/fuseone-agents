@@ -198,6 +198,28 @@ describe("personal MCP credentials", () => {
     expect(screen.getByLabelText(/access token/i)).toHaveValue("");
   });
 
+  it("follows the recipe when it arrives after the panel", () => {
+    const oauthOnly = { ...datadog, authModes: [{ type: "oauth2" as const, principal: "user" as const }] };
+    const panel = (recipes: ServerRecipe[]) => (
+      <UserCredentialsPanel servers={[remote("datadog")]} recipes={recipes} credentials={[]}
+        isLoading={false} error={null} onRetry={vi.fn()} />
+    );
+    const { rerender } = render(panel([]));
+    rerender(panel([oauthOnly]));
+
+    expect(screen.getByLabelText(/access token oauth/i)).toBeInTheDocument();
+  });
+
+  it("lets a stored personal token be revoked where the recipe now offers only OAuth", async () => {
+    open({
+      recipes: [{ ...datadog, authModes: [{ type: "oauth2", principal: "user" }] }],
+      credentials: [credential("datadog")],
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Remover a credencial guardada" }));
+    expect(api.deleteAsync).toHaveBeenCalledWith("datadog");
+  });
+
   it("removes the signed-in user's credential without touching shared credentials", async () => {
     open({
       servers: [remote("google-workspace")],

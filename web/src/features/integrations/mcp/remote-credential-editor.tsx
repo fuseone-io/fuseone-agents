@@ -3,7 +3,9 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { CredentialFields } from "@/features/integrations/mcp/credential-fields";
 import { headerNames, remoteAuthPlan } from "@/features/integrations/mcp/auth-plan";
-import { authChoices, initialChoice, type AuthChoice } from "@/features/integrations/mcp/auth-choice";
+import { authChoices, type AuthChoice } from "@/features/integrations/mcp/auth-choice";
+import { secretShapeOffered, useAuthChoice } from "@/features/integrations/mcp/use-auth-choice";
+import { StoredSecretOnly } from "@/features/integrations/mcp/stored-secret-only";
 import { AuthChoicePicker } from "@/features/integrations/mcp/auth-choice-picker";
 import { chosenCredential, chosenReady } from "@/features/integrations/mcp/choice-credential";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
@@ -42,13 +44,11 @@ export function RemoteCredentialEditor({
   // A custom header only where the recipe was read and there is none:
   // undefined is not knowing yet.
   const choices = authChoices(plan, { customHeader: recipe === null, githubApp: Boolean(server.githubApp) });
-  const [choice, setChoice] = useState<AuthChoice | null>(() =>
-    initialChoice(choices, {
+  const [choice, setChoice] = useAuthChoice(choices, {
       oauth: server.hasOAuth === true,
       githubApp: Boolean(server.githubApp),
       headers: server.headerNames ?? [],
-    }, plan),
-  );
+    }, plan);
   const [value, setValue] = useState(() => blankCredential());
   const kept = server.hasSecret === true && server.hasOAuth !== true && !server.githubApp;
 
@@ -67,7 +67,7 @@ export function RemoteCredentialEditor({
   return (
     <>
       <AuthChoicePicker id="server-auth" choices={choices} value={choice} onChange={choose} />
-      {(choice === null || choice === "token" || choice === "headers") && (
+      {(choice === "token" || choice === "headers" || (choice === null && !kept)) && (
         <CredentialFields
           local={false}
           hasSecret={kept}
@@ -97,6 +97,9 @@ export function RemoteCredentialEditor({
       )}
       {choice === "githubApp" && (
         <GitHubAppSection server={server} pending={connection.pending} write={write} />
+      )}
+      {kept && !secretShapeOffered(choices) && (
+        <StoredSecretOnly onRevoke={() => void write({ token: "", headers: {} })} />
       )}
       {plan.oauth === null && server.hasOAuth === true && (
         <StoredOAuthOnly onRevoke={() => void write({ oauth: {} })} />

@@ -359,6 +359,43 @@ describe("the MCP connection panel", () => {
     expect(screen.getByLabelText(/token bearer/i)).toHaveValue("");
   });
 
+  // The page reads the recipe after it renders: the shape follows what it
+  // says when it arrives, instead of staying on the guess made without it.
+  it.each([
+    ["OAuth", recipe([{ type: "oauth2", principal: "user" }]), /access token oauth/i],
+    ["headers", recipe([{ type: "headers", principal: "service", headers: ["DD_API_KEY"] }]), /DD_API_KEY/],
+    ["a GitHub App", recipe([{ type: "github_app", principal: "installation" }]), /ID do App/],
+  ])("follows a recipe offering only %s that arrives after the page", (_what, arrived, field) => {
+    const { rerender } = render(<ConnectionPanel server={remote()} recipe={undefined} />);
+    rerender(<ConnectionPanel server={remote()} recipe={arrived} />);
+
+    expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(field)).toBeInTheDocument();
+  });
+
+  it("drops a shape picked before the recipe arrived when the recipe does not offer it", async () => {
+    const { rerender } = render(<ConnectionPanel server={remote()} recipe={undefined} />);
+    await userEvent.click(screen.getByRole("radio", { name: /^OAuth/ }));
+    await userEvent.click(screen.getByRole("radio", { name: /^Token/ }));
+    rerender(<ConnectionPanel server={remote()} recipe={recipe([{ type: "oauth2", principal: "user" }])} />);
+
+    expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/access token oauth/i)).toBeInTheDocument();
+  });
+
+  // Stored before the recipe said otherwise, a token can still be taken back.
+  it("lets a stored token be revoked where the recipe now offers only OAuth", async () => {
+    render(
+      <ConnectionPanel
+        server={remote({ hasSecret: true })}
+        recipe={recipe([{ type: "oauth2", principal: "user" }])}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Remover a credencial guardada" }));
+    expect(api.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ token: "", headers: {} }));
+  });
+
   it("opens on the shape that is stored", () => {
     render(<ConnectionPanel server={remote({ hasSecret: true, hasOAuth: true })} />);
 

@@ -11,7 +11,9 @@ import {
 import type { CredentialServer } from "@/features/integrations/mcp/credential-server";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 import { headerNames, remoteAuthPlan } from "@/features/integrations/mcp/auth-plan";
-import { authChoices, initialChoice, type AuthChoice } from "@/features/integrations/mcp/auth-choice";
+import { authChoices, type AuthChoice } from "@/features/integrations/mcp/auth-choice";
+import { secretShapeOffered, useAuthChoice } from "@/features/integrations/mcp/use-auth-choice";
+import { StoredSecretOnly } from "@/features/integrations/mcp/stored-secret-only";
 import { AuthChoicePicker } from "@/features/integrations/mcp/auth-choice-picker";
 import { chosenCredential, chosenReady, type ChosenCredential } from "@/features/integrations/mcp/choice-credential";
 import { CredentialFields } from "@/features/integrations/mcp/credential-fields";
@@ -41,14 +43,13 @@ export function PersonalCredentialForm({
   const plan = remoteAuthPlan(recipe?.authModes, recipe !== null);
   const headers = headerNames(plan.multiHeaders);
   const choices = authChoices(plan, { customHeader: false, githubApp: false });
-  const [choice, setChoice] = useState<AuthChoice | null>(() =>
-    initialChoice(choices, {
+  const [choice, setChoice] = useAuthChoice(choices, {
       oauth: credential?.hasOAuth === true,
       githubApp: false,
       headers: credential?.hasHeaders === true ? headers : [],
-    }, plan),
-  );
+    }, plan);
   const [value, setValue] = useState(() => blankCredential());
+  const storedSecret = credential?.hasCredential === true && credential.hasOAuth !== true;
   const pending = put.isPending || remove.isPending;
   const headersTyped = headers.some((header) => (value.headers[header] ?? "").trim() !== "");
 
@@ -80,10 +81,10 @@ export function PersonalCredentialForm({
   return (
     <>
       <AuthChoicePicker id="personal-auth" choices={choices} value={choice} onChange={choose} />
-      {(choice === null || choice === "token" || choice === "headers") && (
+      {(choice === "token" || choice === "headers" || (choice === null && !storedSecret)) && (
         <CredentialFields
           local={false}
-          hasSecret={credential?.hasCredential === true && credential.hasOAuth !== true}
+          hasSecret={storedSecret}
           hasConfigFile={false}
           showRemoteToken={choice === "token"}
           remoteTokenLabel={remoteTokenLabel(plan.secret, t)}
@@ -107,6 +108,9 @@ export function PersonalCredentialForm({
           onChange={setValue}
           onRevoke={() => void revoke()}
         />
+      )}
+      {storedSecret && !secretShapeOffered(choices) && (
+        <StoredSecretOnly onRevoke={() => void revoke()} />
       )}
       {plan.oauth === null && credential?.hasOAuth === true && (
         <StoredOAuthOnly onRevoke={() => void revoke()} />
