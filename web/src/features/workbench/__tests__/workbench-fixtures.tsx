@@ -83,6 +83,7 @@ export function draftOf(over: Partial<AgentDraft["definition"]> = {}, base = "v1
     },
     blocks: [{ id: "b1", kind: "objective", label: "Objetivo", text: "Triar e responder." }],
     missing: [],
+    unplaced: [],
   };
 }
 

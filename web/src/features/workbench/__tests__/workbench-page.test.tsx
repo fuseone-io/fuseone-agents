@@ -167,6 +167,16 @@ describe("a new agent's first step", () => {
     expect(created?.body).toEqual({ name: "Triagem", company: "acme", area: "cx" });
   });
 
+  it("names each tool no step reaches, since a run never receives it", async () => {
+    serve({
+      [`GET ${DRAFT}`]: () => ({ body: { ...draftOf(), unplaced: ["rootly.create_alert"] }, etag: '"e1"' }),
+    });
+    openAt("/agents/triagem/workbench");
+    const notice = await screen.findByRole("region", { name: /Nenhum passo alcança/ });
+    expect(within(notice).getByText("rootly.create_alert")).toBeInTheDocument();
+    expect(screen.queryByText("Nada falta para publicar.")).not.toBeInTheDocument();
+  });
+
   it("asks for what is missing before it sends anything", async () => {
     const calls = serve({ "GET /admin/scopes": () => ({ body: SCOPES }) });
     openAt("/agents/workbench");

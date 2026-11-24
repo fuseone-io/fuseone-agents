@@ -41,7 +41,7 @@ export function WorkbenchDraftSummary({
       <p className="text-xs text-muted-foreground">
         {t(draft.baseVersionId ? "workbench.summary.againstPublished" : "workbench.summary.neverPublished")}
       </p>
-      <WorkbenchMissing missing={draft.missing} />
+      <WorkbenchMissing draft={draft} />
       <SummarySection title={t("workbench.parts.identity")} onEdit={() => onEdit("identity")}>
         <dl className="flex flex-col gap-1.5">
           <SummaryFact label={t("workbench.summary.name")}>{local.name || none}</SummaryFact>

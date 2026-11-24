@@ -2612,6 +2612,7 @@
     "turn-in-flight": "Another turn of this conversation is still on its way. Wait for its answer.",
     "turn-too-large": "The message, or the draft with it, is larger than a turn may be.",
     "publish-needs-never": "Say in the instructions what the agent must never do before publishing: ask the assistant for a \"Never\" block.",
+    "publish-unplaced-tools": "A tool in this draft is in no step, so a run would never receive it. Place each tool in a step or take it out of the tools: the draft panel lists them.",
     "agent-moved": "The agent was published another way after this draft was opened. Discard the draft and open another on the current version.",
     "version-collision": "This text's version id already names other text. Change the draft and try again.",
     "version-digest-unknown": "This version id was published before its content was recorded, so nothing can show it is the same text. Change the draft and try again.",
@@ -3524,6 +3525,8 @@
     "areaRequired": "Choose the area",
     "missingTitle": "Still needed before publishing",
     "complete": "Nothing is missing for publication.",
+    "unplacedTitle": "No step reaches these tools",
+    "unplacedHint": "A run of an agent with steps receives only what its steps reach, so it never receives these. Place each in a step or take it out of the tools. A tool in the last step is available throughout the run.",
     "missing": {
       "instructions": "Instructions",
       "tools": "Tools",

@@ -82,6 +82,7 @@ describe("activating a candidate", () => {
 
   it.each([
     ["fuseone:publish-needs-never", 400, /nunca deve fazer/],
+    ["fuseone:publish-unplaced-tools", 400, /Coloque cada ferramenta num passo/],
     ["fuseone:candidate-scope-moved", 409, /mudou de escopo/],
     ["fuseone:stage-refused", 409, /autônomo/],
     ["fuseone:precondition-failed", 412, /alterou isto depois da leitura/],
