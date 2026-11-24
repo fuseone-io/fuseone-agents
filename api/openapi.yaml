@@ -4751,6 +4751,18 @@ paths:
                     becomes the active HTTP credential and replaces stored
                     bearer, header or OAuth material; one without a private key
                     keeps the stored key.
+                oauthLogin:
+                  allOf: [{ $ref: '#/components/schemas/MCPOAuthLoginInput' }]
+                  description: >
+                    How a person signs in to this server from their browser, so
+                    the tools act as them. Omit to keep the stored configuration.
+                    Send an empty object to remove it, with its client secret.
+                    Otherwise the fields given are the whole configuration, all
+                    but `clientSecret`, which is kept when omitted. Only for a
+                    remote server, never one acting as a GitHub App; the
+                    authorization and token endpoints are held to the server's
+                    egress policy. A server with a sign-in configured takes a
+                    personal credential for every tool call.
                 env:
                   type: object
                   additionalProperties: { type: string }
@@ -8383,6 +8395,43 @@ components:
         hasPrivateKey:
           type: boolean
           description: Always true for a stored App; the key itself never comes back.
+
+    MCPOAuthLoginInput:
+      type: object
+      description: >
+        A browser sign-in configuration as written. An empty object removes the
+        stored one. Every field but `clientSecret` is the configuration, whole.
+      properties:
+        clientID:
+          type: string
+          description: The client people sign in through. Required unless removing.
+        clientSecret:
+          type: string
+          writeOnly: true
+          description: >
+            The client's secret, sealed apart from the server. Omit to keep the
+            stored one; send an empty string to remove it.
+        scopes:
+          type: array
+          items: { type: string }
+        authorizeURL:
+          type: string
+          description: >
+            Where the browser is sent to sign in. Empty is found from the
+            server's protected resource metadata.
+        tokenURL:
+          type: string
+          description: Where codes and refresh tokens are exchanged. Empty is found the same way.
+        resource:
+          type: string
+          description: The RFC 8707 resource indicator. Empty is the server's address.
+        tokenAuthMethod:
+          type: string
+          enum: [none, client_secret_post, client_secret_basic]
+          description: >
+            How the token endpoint is told which client asks. Defaults to
+            client_secret_basic with a secret held, none without; a method that
+            sends a secret is refused when none is held.
 
     MCPOAuthLogin:
       type: object

@@ -114,7 +114,7 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 	}
 	revision, err := s.integrations.WriteMCPServer(ctx, admin.MCPServerWrite{
 		By: caller, Scope: connectorRuntimeScope(kind, stored), At: kind, Stored: stored,
-		Server: server, Given: creds, Expect: expect,
+		Server: server, Given: creds, Login: oauthLoginFromRequest(req.Body.OauthLogin), Expect: expect,
 	})
 	if stale, ok := staleFrom(err); ok {
 		return openapi.PutMCPServer412ApplicationProblemPlusJSONResponse{
@@ -132,7 +132,8 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(egressNotAllowed(refused.Origin)),
 		}, nil
 	}
-	if errors.Is(err, admin.ErrAreaServerIsRemote) || errors.Is(err, admin.ErrEgressAddressInvalid) {
+	if errors.Is(err, admin.ErrAreaServerIsRemote) || errors.Is(err, admin.ErrEgressAddressInvalid) ||
+		errors.Is(err, domain.ErrMCPOAuthLoginInvalid) {
 		return openapi.PutMCPServer400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
 		}, nil

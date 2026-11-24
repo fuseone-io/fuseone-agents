@@ -12,14 +12,14 @@ import (
 )
 
 /*
-The browser sign-in configuration through the door: read back with everything
-but the client secret, which a reader only learns is held, and kept by every
-write that does not mention it. This release reads it and writes none: every
-replica keeps it before any can write it.
+The browser sign-in configuration through the door: written with the server,
+read back with everything but the client secret, which a reader only learns
+is held, kept by every write that does not mention it, and refused as invalid
+input where no sign-in could use it.
 */
 
-// configureSignIn writes the sign-in where only the store can, this release:
-// the door reads it and keeps it, and takes no write of it yet.
+// configureSignIn writes the sign-in through the store, for the tests about
+// reading it: what the door writes is tested through the door, below.
 func configureSignIn(t *testing.T, s *Server, login domain.MCPOAuthLoginPatch) {
 	t.Helper()
 	integrations, ok := s.integrations.(*admin.Integrations)
@@ -61,9 +61,8 @@ func TestPutMCPServer_aSignInConfiguration_isReadBackWithoutItsSecret(t *testing
 	}
 }
 
-// What a read answers, sent back as it is, changes nothing. This release's
-// write does not know the field: it keeps the sign-in, as the release after
-// it, which writes it, must also find it kept.
+// What a read answers, sent back as it is, changes nothing: the secret it does
+// not carry is kept, not taken for a removal.
 func TestPutMCPServer_theReadSentBack_keepsTheSignInAndItsSecret(t *testing.T) {
 	s := mcpWorld(t)
 	configureSignIn(t, s, domain.MCPOAuthLoginPatch{ClientID: "agents", ClientSecret: ptr("s3cret")})
@@ -111,5 +110,65 @@ func TestListMCPUserCredentials_aServerPeopleSignInTo_isOfferedAsTakingTheirOwn(
 	}
 	if got["signin"] != [2]bool{true, true} || got["plain"] != [2]bool{false, false} {
 		t.Errorf("servers = %v, want signin signed in and personal, plain neither", got)
+	}
+}
+
+// putSignIn writes the sign-in through the door.
+func putSignIn(t *testing.T, s *Server, login *openapi.MCPOAuthLoginInput) openapi.PutMCPServerResponseObject {
+	t.Helper()
+	body := openapi.PutMCPServerJSONRequestBody{
+		Transport: ptr(openapi.TransportHttp), Url: ptr("https://mcp.example.com/signin"), OauthLogin: login,
+	}
+	resp, err := s.PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{Name: "signin", Body: &body})
+	if err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	return resp
+}
+
+func readSignIn(t *testing.T, s *Server) *openapi.MCPOAuthLogin {
+	t.Helper()
+	resp, err := s.GetMCPServer(as(domain.RoleCurator), openapi.GetMCPServerRequestObject{Name: "signin"})
+	got, ok := resp.(openapi.GetMCPServer200JSONResponse)
+	if err != nil || !ok {
+		t.Fatalf("GetMCPServer = %#v, %v", resp, err)
+	}
+	return got.Body.OauthLogin
+}
+
+func TestPutMCPServer_aSignIn_isWrittenThroughTheDoor_withItsSecretHeld(t *testing.T) {
+	s := mcpWorld(t)
+	if resp := putSignIn(t, s, &openapi.MCPOAuthLoginInput{ClientID: ptr("agents"), ClientSecret: ptr("s3cret")}); func() bool {
+		_, ok := resp.(openapi.PutMCPServer204Response)
+		return !ok
+	}() {
+		t.Fatalf("PutMCPServer = %#v, want 204", resp)
+	}
+	if login := readSignIn(t, s); login == nil || login.ClientID != "agents" || !login.HasClientSecret {
+		t.Errorf("oauthLogin = %+v, want agents with a secret held", login)
+	}
+}
+
+func TestPutMCPServer_aSignInNoSignInCouldUse_isInvalidInput(t *testing.T) {
+	s := mcpWorld(t)
+	resp := putSignIn(t, s, &openapi.MCPOAuthLoginInput{
+		ClientID: ptr("agents"), TokenAuthMethod: ptr(openapi.MCPOAuthLoginInputTokenAuthMethodClientSecretPost),
+	})
+	bad, ok := resp.(openapi.PutMCPServer400ApplicationProblemPlusJSONResponse)
+	if !ok || valueOr(bad.Type) != "fuseone:invalid-input" {
+		t.Errorf("PutMCPServer = %#v, want 400 invalid-input", resp)
+	}
+}
+
+// An empty object is the way to take a configuration back.
+func TestPutMCPServer_anEmptySignIn_removesTheStoredOne(t *testing.T) {
+	s := mcpWorld(t)
+	putSignIn(t, s, &openapi.MCPOAuthLoginInput{ClientID: ptr("agents")})
+	if readSignIn(t, s) == nil {
+		t.Fatal("the sign-in was not stored")
+	}
+	putSignIn(t, s, &openapi.MCPOAuthLoginInput{})
+	if login := readSignIn(t, s); login != nil {
+		t.Errorf("oauthLogin = %+v after an empty one, want none", login)
 	}
 }

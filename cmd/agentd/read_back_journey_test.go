@@ -575,6 +575,23 @@ func TestReadBack_mcpServer_putWhatGetAnsweredChangesNothing(t *testing.T) {
 		}},
 		secrets: []string{"PRIVATE KEY", "readback-toolset"},
 	}, {
+		// The sign-in's client secret is sealed in a row of its own, beside
+		// the server; the read answers the rest, and says the secret is held.
+		name: "remote people sign in to from their browser",
+		path: base + "readback-signin", sealed: settings.KindMCPOAuthLogin, key: "readback-signin",
+		body: map[string]any{
+			"transport": "http", "url": "https://mcp.example.test/mcp",
+			"oauthLogin": map[string]any{
+				"clientID": "readback-agents", "clientSecret": "readback-login-secret",
+				"scopes": []string{"openid"}, "tokenURL": "https://mcp.example.test/token",
+			},
+		},
+		normalised: map[string]any{"oauthLogin": map[string]any{
+			"clientID": "readback-agents", "scopes": []string{"openid"}, "tokenURL": "https://mcp.example.test/token",
+			"tokenAuthMethod": "client_secret_basic", "hasClientSecret": true,
+		}},
+		secrets: []string{"readback-login-secret"},
+	}, {
 		name: "local process with variables, a file and proxied egress",
 		path: base + "readback-local", sealed: settings.KindMCPServer, key: "readback-local",
 		body: map[string]any{

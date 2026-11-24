@@ -5048,6 +5048,25 @@ export interface components {
             /** @description Always true for a stored App; the key itself never comes back. */
             hasPrivateKey: boolean;
         };
+        /** @description A browser sign-in configuration as written. An empty object removes the stored one. Every field but `clientSecret` is the configuration, whole. */
+        MCPOAuthLoginInput: {
+            /** @description The client people sign in through. Required unless removing. */
+            clientID?: string;
+            /** @description The client's secret, sealed apart from the server. Omit to keep the stored one; send an empty string to remove it. */
+            clientSecret?: string;
+            scopes?: string[];
+            /** @description Where the browser is sent to sign in. Empty is found from the server's protected resource metadata. */
+            authorizeURL?: string;
+            /** @description Where codes and refresh tokens are exchanged. Empty is found the same way. */
+            tokenURL?: string;
+            /** @description The RFC 8707 resource indicator. Empty is the server's address. */
+            resource?: string;
+            /**
+             * @description How the token endpoint is told which client asks. Defaults to client_secret_basic with a secret held, none without; a method that sends a secret is refused when none is held.
+             * @enum {string}
+             */
+            tokenAuthMethod?: "none" | "client_secret_post" | "client_secret_basic";
+        };
         /** @description A server's browser sign-in configuration as read: everything but the client secret, which a reader only learns is held. */
         MCPOAuthLogin: {
             clientID: string;
@@ -12287,6 +12306,8 @@ export interface operations {
                     oauth?: components["schemas"]["MCPOAuthGrant"];
                     /** @description GitHub App a remote server is reached as. The worker mints short-lived installation tokens from the App's private key and refreshes them before expiry. Omit to keep the stored App. Send an empty object to clear it. A non-empty App becomes the active HTTP credential and replaces stored bearer, header or OAuth material; one without a private key keeps the stored key. */
                     githubApp?: components["schemas"]["MCPGitHubApp"];
+                    /** @description How a person signs in to this server from their browser, so the tools act as them. Omit to keep the stored configuration. Send an empty object to remove it, with its client secret. Otherwise the fields given are the whole configuration, all but `clientSecret`, which is kept when omitted. Only for a remote server, never one acting as a GitHub App; the authorization and token endpoints are held to the server's egress policy. A server with a sign-in configured takes a personal credential for every tool call. */
+                    oauthLogin?: components["schemas"]["MCPOAuthLoginInput"];
                     /**
                      * @description Variables handed to a local server, and only to one. A program started inside the worker no longer inherits the worker's environment, so this is how it receives the credential it needs — explicitly, per server, from the vault.
                      *     Sealed like the token, because the reason a server needs a variable is nearly always that the variable is a key, and a field that is sometimes a secret is stored as one always.
