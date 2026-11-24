@@ -30,6 +30,17 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Changed
+
+- **A server's credential and a person's own are entered one shape at a time.** On a remote
+  server's page and in Credentials, the form first asks how the connection authenticates
+  (token, headers, custom header, OAuth or GitHub App, as the recipe allows), opens on the one
+  stored, and shows only that one's fields. Saving sends that shape alone, and switching starts
+  the new one empty, so a value typed under another shape is never written. The OAuth grant's
+  fields are grouped (token endpoint and client, then the tokens), with token type, expiry and
+  scopes under Advanced, and a stored grant says which token endpoint and client it uses. The
+  connect and edit form is unchanged for now.
+
 ## [0.138.0] — 2026-11-24
 
 A personal MCP credential is held to its server's egress policy when it is saved, and every
