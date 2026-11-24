@@ -36,7 +36,8 @@ field" is a commit message.
   A binary from before it does not know the field and drops it the next time it rewrites the
   server, on an edit or a refresh of the shared grant: the server would stop taking personal
   credentials with nobody having decided so. Deploy this release only after the one before it is
-  on every replica, for the same reason.
+  on every replica, for the same reason, and configure no sign-in until this one is on every
+  replica: one still on the release before answers the write with 204 and stores nothing of it.
 
 ### Added
 
