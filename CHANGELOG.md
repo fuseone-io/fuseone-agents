@@ -30,6 +30,17 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **A remote server can hold how people sign in to it from their browser, and every replica
+  keeps it.** This release reads, keeps, moves and removes a server's browser sign-in (client ID,
+  scopes, and the authorization and token endpoints where discovery would not find them), its
+  client secret sealed in a row of its own beside the server and never read back. Nothing writes
+  one yet: the write comes in the next release, once every replica keeps what this one stores, so
+  an older replica cannot rewrite a server and drop it. A server with a sign-in takes a personal
+  credential for every tool call, as a recipe for people alone already did, and Credentials says
+  so (`signIn`, `requiresPersonal`).
+
 ### Fixed
 
 - **A personal MCP credential is held to its server's egress policy when it is saved.** The
