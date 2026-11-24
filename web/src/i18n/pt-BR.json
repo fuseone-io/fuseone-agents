@@ -1926,6 +1926,25 @@
     "oauthScopesPlaceholder": "read write",
     "oauthHint": "Grant OAuth manual. Guardado no cofre; use quando o servidor remoto espera OAuth e você já tem o grant.",
     "oauthKept": "Já existe um grant OAuth guardado. Deixe em branco para mantê-lo.",
+    "authChoiceLegend": "Como esta conexão se autentica",
+    "authChoice": {
+      "token": "Token",
+      "headers": "Cabeçalhos",
+      "customHeader": "Cabeçalho próprio",
+      "oauth": "OAuth",
+      "githubApp": "GitHub App"
+    },
+    "authChoiceHint": {
+      "token": "Um token enviado em cada chamada.",
+      "headers": "Os cabeçalhos que a receita deste servidor pede.",
+      "customHeader": "Um cabeçalho de nome próprio, como apikey.",
+      "oauth": "Um grant OAuth com tokens obtidos fora; o refresh token o mantém válido.",
+      "githubApp": "Um GitHub App que emite tokens de instalação."
+    },
+    "oauthGroupEndpoint": "Endpoint de token e client",
+    "oauthGroupTokens": "Tokens",
+    "oauthGroupAdvanced": "Avançado",
+    "oauthStoredClient": "Guardado: {{tokenURL}} · client {{clientID}}",
     "oauthBearerConflict": "Preencha bearer token ou grant OAuth, não os dois.",
     "remoteCredentialConflict": "Preencha só uma forma de credencial para este servidor.",
     "customHeader": "Header customizado",

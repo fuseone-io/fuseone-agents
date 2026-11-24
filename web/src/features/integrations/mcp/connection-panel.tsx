@@ -1,52 +1,22 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Panel } from "@/components/shared/panel";
 import { Button } from "@/components/ui/button";
-import { Mono } from "@/components/shared/mono";
 import { problemMessage } from "@/lib/api/problem-message";
-import { isStale } from "@/lib/api/revision";
-import type { InOrder } from "@/features/integrations/mcp/use-ordered-writes";
-import { CredentialFields } from "@/features/integrations/mcp/credential-fields";
-import {
-  dsnEnvMode,
-  headerNames,
-  remoteAuthPlan,
-  type RemoteAuthPlan,
-} from "@/features/integrations/mcp/auth-plan";
+import { remoteAuthPlan } from "@/features/integrations/mcp/auth-plan";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
-import {
-  blankCredential,
-  localCredential,
-  remoteCredential,
-} from "@/features/integrations/mcp/credential-value";
-import {
-  oauthExpiryIsValid,
-  oauthFromValue,
-  oauthHasValue,
-} from "@/features/integrations/mcp/oauth-credential";
-import {
-  OAuthFields,
-  StoredOAuthOnly,
-} from "@/features/integrations/mcp/oauth-fields";
-import { GitHubAppSection } from "@/features/integrations/mcp/github-app-section";
-import { CustomHeaderSection } from "@/features/integrations/mcp/custom-header-section";
 import { CallAuthNote } from "@/features/integrations/mcp/call-auth-note";
 import { EgressNote } from "@/features/integrations/mcp/egress-note";
 import { MCPHealthNote } from "@/features/integrations/mcp/health-note";
+import { ConnectionRow, RemoteAuthSummary } from "@/features/integrations/mcp/connection-summary";
+import { LocalCredentialEditor } from "@/features/integrations/mcp/local-credential-editor";
+import { RemoteCredentialEditor } from "@/features/integrations/mcp/remote-credential-editor";
 import {
-  remoteTokenHint,
-  remoteTokenLabel,
-} from "@/features/integrations/mcp/credential-labels";
-import { serverProblemMessage } from "@/features/integrations/mcp/server-refusal";
-import {
-  usePutMCPServer,
-  useProbeMCPServer,
-  type MCPGitHubApp,
-  type MCPOAuthGrant,
-  type MCPServer,
-} from "@/features/integrations/api";
+  useServerCredentialWrite,
+  type ServerRevision,
+} from "@/features/integrations/mcp/use-server-credential-write";
+import { useProbeMCPServer, type MCPServer } from "@/features/integrations/api";
 
 /**
  * How this server is reached, and what it is given to reach it with.
@@ -65,83 +35,12 @@ export function ConnectionPanel({
   server: MCPServer;
   recipe?: ServerRecipe | null;
   /** How its page orders writes to the server, and what to do when one is refused as stale. */
-  revision?: { inOrder: InOrder; onStale: () => void };
+  revision?: ServerRevision;
 }) {
   const { t } = useTranslation();
-  const put = usePutMCPServer();
   const probe = useProbeMCPServer();
+  const connection = useServerCredentialWrite(server, revision);
   const local = (server.transport ?? "stdio") === "stdio";
-  const remotePlan = remoteAuthPlan(recipe?.authModes, recipe !== undefined && recipe !== null);
-  const dsnMode = local ? dsnEnvMode(recipe?.authModes) : null;
-  const remoteHeaders = headerNames(remotePlan.multiHeaders);
-  const storedConfigEnv = server.configFileEnv ?? "";
-  const [value, setValue] = useState(() => blankCredential(storedConfigEnv));
-  const oauthChanged = oauthHasValue(value);
-  const secretChanged = remotePlan.secret !== null && value.token !== "";
-  const headersChanged = remoteHeaders.some((header) => value.headers[header] !== "");
-  const headersComplete =
-    remoteHeaders.length > 0 &&
-    remoteHeaders.every((header) => value.headers[header]?.trim() !== "");
-  const dsnChanged = dsnMode !== null && value.dsn !== "";
-  const remoteSecretConflict = !local && secretChanged && headersChanged;
-  const remoteConflict =
-    !local &&
-    remotePlan.oauth !== null &&
-    oauthChanged &&
-    (secretChanged || headersChanged);
-  const oauthExpiryInvalid =
-    !local && remotePlan.oauth !== null && !oauthExpiryIsValid(value);
-  const canWriteRemote =
-    remotePlan.secret !== null || remoteHeaders.length > 0 || remotePlan.oauth !== null;
-
-  async function write(credential: {
-    token?: string;
-    headers?: Record<string, string>;
-    oauth?: MCPOAuthGrant;
-    githubApp?: MCPGitHubApp;
-    env?: Record<string, string>;
-    configFile?: string;
-    configFileEnv?: string;
-  }): Promise<boolean> {
-    // Passed through exactly as given. An undefined token means this write is
-    // not about the token, and an empty one means somebody is removing it —
-    // collapsing the two is how a revoke button stops revoking.
-    const send = (record: MCPServer, etag?: string) =>
-      put.mutateAsync({
-        name: record.name,
-        // Where it is stored, as read: a server's scope does not move.
-        scope: record,
-        transport: record.transport ?? "stdio",
-        protocolMode: record.protocolMode ?? "auto",
-        command: record.command ?? "",
-        args: record.args ?? [],
-        url: record.url ?? "",
-        enabled: record.enabled,
-        acceptsLocalExecution: record.acceptsLocalExecution ?? false,
-        token: credential.token,
-        headers: credential.headers,
-        oauth: credential.oauth,
-        githubApp: credential.githubApp,
-        env: credential.env,
-        configFile: credential.configFile,
-        configFileEnv: credential.configFileEnv,
-        etag,
-      });
-    try {
-      // On the server's page, after any write before it and with the record
-      // stored then; alone, with the server it was given and no revision.
-      await (revision
-        ? revision.inOrder(({ body, etag }) => send(body, etag))
-        : send(server));
-      setValue(blankCredential(credential.configFileEnv ?? storedConfigEnv));
-      toast.success(t("mcp.credentialSaved"));
-      return true;
-    } catch (problem) {
-      if (revision && isStale(problem)) revision.onStale();
-      else toast.error(serverProblemMessage(problem, t));
-      return false;
-    }
-  }
 
   async function probeNow() {
     try {
@@ -156,156 +55,42 @@ export function ConnectionPanel({
     <Panel title={t("mcp.connection")}>
       <div className="space-y-4">
         <dl className="grid gap-1 text-xs">
-          <Row label={t("integrations.transport")} value={server.transport ?? "stdio"} />
+          <ConnectionRow label={t("integrations.transport")} value={server.transport ?? "stdio"} />
           {local ? (
-            <Row label={t("integrations.command")} value={[server.command, ...(server.args ?? [])].join(" ")} />
+            <ConnectionRow
+              label={t("integrations.command")}
+              value={[server.command, ...(server.args ?? [])].join(" ")}
+            />
           ) : (
-            <Row label={t("integrations.url")} value={server.url ?? ""} />
+            <ConnectionRow label={t("integrations.url")} value={server.url ?? ""} />
           )}
         </dl>
 
-        {!local && <RemoteAuthSummary plan={remotePlan} />}
+        {!local && (
+          <RemoteAuthSummary
+            plan={remoteAuthPlan(recipe?.authModes, recipe !== undefined && recipe !== null)}
+          />
+        )}
         <MCPHealthNote health={server.health} />
         <CallAuthNote callAuth={server.callAuth} />
         <EgressNote egress={server.egress} />
 
-        <CredentialFields
-          local={local}
-          hasSecret={local ? server.hasVariables === true : server.hasSecret === true && server.hasOAuth !== true && !server.githubApp}
-          hasConfigFile={server.hasConfigFile === true}
-          showRemoteToken={remotePlan.secret !== null}
-          remoteTokenLabel={remoteTokenLabel(remotePlan.secret, t)}
-          remoteTokenHint={remoteTokenHint(remotePlan.secret, t)}
-          remoteHeaders={remoteHeaders}
-          remoteHeadersHint={t("mcp.remoteHeadersHint")}
-          dsnLabel={dsnMode ? (dsnMode.label ?? t("mcp.dsn")) : undefined}
-          dsnHint={
-            dsnMode
-              ? t("mcp.dsnHint", { env: dsnMode.env ?? "DATABASE_URL" })
-              : undefined
-          }
-          value={value}
-          onChange={(next) => setValue((current) => ({ ...current, ...next }))}
-          onRevoke={() =>
-            // Explicit, and empty rather than absent: the two are different
-            // requests and only one of them is somebody revoking.
-            void write(local ? { env: {} } : { token: "", headers: {} })
-          }
-          onRevokeConfigFile={() => void write({ configFile: "" })}
-        />
-        {!local && remotePlan.oauth !== null && (
-          <OAuthFields
-            value={value}
-            hasOAuth={server.hasOAuth === true}
-            conflict={remoteConflict}
-            invalidExpiry={oauthExpiryInvalid}
-            onChange={setValue}
-            onRevoke={() => void write({ oauth: {} })}
-          />
-        )}
-        {remoteSecretConflict && (
-          <p className="text-xs text-danger">{t("mcp.remoteCredentialConflict")}</p>
-        )}
-        {!local && recipe === null && (
-          <CustomHeaderSection
-            pending={put.isPending}
-            kept={server.hasSecret === true && server.hasOAuth !== true && !server.githubApp}
-            write={write}
-          />
-        )}
-        {!local && (remotePlan.githubApp !== null || server.githubApp) && (
-          <GitHubAppSection server={server} pending={put.isPending} write={write} />
-        )}
-        {!local && remotePlan.oauth === null && server.hasOAuth === true && (
-          <StoredOAuthOnly onRevoke={() => void write({ oauth: {} })} />
+        {local ? (
+          <LocalCredentialEditor server={server} recipe={recipe} connection={connection} />
+        ) : (
+          <RemoteCredentialEditor server={server} recipe={recipe} connection={connection} />
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void probeNow()}
-            disabled={probe.isPending || !server.enabled}
-          >
-            <RefreshCw className="size-3.5" />
-            {t("mcp.probe")}
-          </Button>
-          <Button
-            onClick={() =>
-              void write(
-                local
-                  ? {
-                      ...localCredential(value, dsnMode),
-                      ...(value.configFile === ""
-                        ? {}
-                        : { configFile: value.configFile }),
-                      configFileEnv: value.configFileEnv,
-                    }
-                  : remotePlan.oauth !== null && oauthChanged
-                    ? { oauth: oauthFromValue(value) }
-                    : remoteCredential(value, remotePlan, remoteHeaders),
-              )
-            }
-            disabled={
-              put.isPending ||
-              remoteSecretConflict ||
-              remoteConflict ||
-              oauthExpiryInvalid ||
-              (local
-                ? value.env === "" &&
-                  !dsnChanged &&
-                  value.configFile === "" &&
-                  value.configFileEnv === storedConfigEnv
-                : !canWriteRemote ||
-                  ((remotePlan.secret === null || value.token === "") &&
-                    (remoteHeaders.length === 0 || !headersComplete) &&
-                    (remotePlan.oauth === null || !oauthChanged)))
-            }
-          >
-            {t("mcp.saveCredential")}
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void probeNow()}
+          disabled={probe.isPending || !server.enabled}
+        >
+          <RefreshCw className="size-3.5" />
+          {t("mcp.probe")}
+        </Button>
       </div>
     </Panel>
-  );
-}
-
-function RemoteAuthSummary({ plan }: { plan: RemoteAuthPlan }) {
-  const { t } = useTranslation();
-  if (!plan.known) {
-    return (
-      <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
-        {t("mcp.authUnknownShape")}
-      </p>
-    );
-  }
-
-  if (plan.noAuth !== null && plan.secret === null && plan.oauth === null) {
-    return (
-      <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
-        {t("mcp.authNoCredential")}
-      </p>
-    );
-  }
-
-  if (plan.unsupported.length === 0) return null;
-  const modes = plan.unsupported
-    .map((mode) => mode.label ?? t(`mcp.authMode.${mode.type}`))
-    .join(", ");
-  return (
-    <p className="rounded-lg border border-warning/30 bg-warning-surface px-3 py-2 text-xs text-warning">
-      {t("mcp.authShapeUnsupported", { modes })}
-    </p>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex gap-2">
-      <dt className="w-28 shrink-0 text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 truncate">
-        <Mono className="text-xs">{value}</Mono>
-      </dd>
-    </div>
   );
 }

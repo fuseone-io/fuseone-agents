@@ -68,6 +68,7 @@ describe("the GitHub App credential", () => {
     const user = userEvent.setup();
     render(<ConnectionPanel server={server()} recipe={github} />);
 
+    await user.click(screen.getByRole("radio", { name: /^GitHub App/ }));
     await user.type(screen.getByLabelText("ID do App"), "5550600");
     await user.type(screen.getByLabelText("ID da instalação"), "91");
     await user.click(screen.getByLabelText("Chave privada (PEM)"));
@@ -85,6 +86,7 @@ describe("the GitHub App credential", () => {
     const user = userEvent.setup();
     render(<ConnectionPanel server={server()} recipe={github} />);
 
+    await user.click(screen.getByRole("radio", { name: /^GitHub App/ }));
     await user.type(screen.getByLabelText("ID do App"), "5550600");
     await user.type(screen.getByLabelText("ID da instalação"), "91");
     await user.upload(screen.getByLabelText("Enviar arquivo da chave"),
@@ -152,6 +154,7 @@ describe("the GitHub App credential", () => {
     const user = userEvent.setup();
     render(<ConnectionPanel server={server()} recipe={github} />);
 
+    await user.click(screen.getByRole("radio", { name: /^GitHub App/ }));
     await user.type(screen.getByLabelText("ID do App"), "factory-qa");
     await user.type(screen.getByLabelText("ID da instalação"), "91");
 

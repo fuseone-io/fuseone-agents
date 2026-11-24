@@ -292,6 +292,7 @@ describe("the MCP connection panel", () => {
   it("saves a manual OAuth grant as oauth rather than a bearer token", async () => {
     render(<ConnectionPanel server={remote()} />);
 
+    await userEvent.click(screen.getByRole("radio", { name: /^OAuth/ }));
     await userEvent.type(screen.getByLabelText(/access token oauth/i), "access");
     await userEvent.type(screen.getByLabelText(/refresh token oauth/i), "refresh");
     await userEvent.type(
@@ -300,6 +301,7 @@ describe("the MCP connection panel", () => {
     );
     await userEvent.type(screen.getByLabelText(/client id oauth/i), "client");
     await userEvent.type(screen.getByLabelText(/client secret oauth/i), "secret");
+    await userEvent.click(screen.getByRole("button", { name: /avançado/i }));
     await userEvent.type(screen.getByLabelText(/escopos oauth/i), "sheets.readonly");
 
     await userEvent.click(
@@ -321,18 +323,70 @@ describe("the MCP connection panel", () => {
     );
   });
 
-  it("does not choose between bearer and OAuth on behalf of the operator", async () => {
+  // One shape at a time, as the platform stores it: the form asks which before
+  // anything is typed, rather than refusing the second one filled in.
+  it("shows one credential shape at a time, starting with the token", async () => {
+    render(<ConnectionPanel server={remote()} />);
+
+    expect(screen.getByRole("radio", { name: /^Token/ })).toBeChecked();
+    expect(screen.queryByLabelText(/access token oauth/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: /^OAuth/ }));
+    expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/access token oauth/i)).toBeInTheDocument();
+  });
+
+  it("sends only the shape chosen, never one typed before switching", async () => {
     render(<ConnectionPanel server={remote()} />);
 
     await userEvent.type(screen.getByLabelText(/token bearer/i), "bearer");
+    await userEvent.click(screen.getByRole("radio", { name: /^OAuth/ }));
     await userEvent.type(screen.getByLabelText(/access token oauth/i), "access");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar a credencial" }));
 
-    expect(
-      screen.getByText(/preencha bearer token ou grant oauth/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Salvar a credencial" }),
-    ).toBeDisabled();
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ token: undefined, oauth: expect.objectContaining({ accessToken: "access" }) }),
+    );
+  });
+
+  // Nothing saved in between: what was typed under one shape does not wait
+  // under it to be sent by somebody who came back to it later.
+  it("starts a shape empty after switching away from it and back", async () => {
+    render(<ConnectionPanel server={remote()} />);
+
+    await userEvent.type(screen.getByLabelText(/token bearer/i), "bearer");
+    await userEvent.click(screen.getByRole("radio", { name: /^OAuth/ }));
+    await userEvent.click(screen.getByRole("radio", { name: /^Token/ }));
+    expect(screen.getByLabelText(/token bearer/i)).toHaveValue("");
+  });
+
+  it("opens on the shape that is stored", () => {
+    render(<ConnectionPanel server={remote({ hasSecret: true, hasOAuth: true })} />);
+
+    expect(screen.getByRole("radio", { name: /^OAuth/ })).toBeChecked();
+  });
+
+  it("keeps the OAuth grant's rarely needed fields under Advanced", async () => {
+    render(<ConnectionPanel server={remote({ hasSecret: true, hasOAuth: true })} />);
+
+    expect(screen.queryByLabelText(/expira em/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /avançado/i }));
+    expect(screen.getByLabelText(/expira em/i)).toBeInTheDocument();
+  });
+
+  // The stored client is shown, never put in the fields: a grant saved from
+  // them would replace the stored tokens with none.
+  it("says which token endpoint and client the stored grant uses, without filling them in", () => {
+    render(
+      <ConnectionPanel
+        server={remote({
+          hasSecret: true, hasOAuth: true,
+          oauthClient: { tokenURL: "https://issuer.example/token", clientID: "agents" },
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/https:\/\/issuer\.example\/token/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/url de token oauth/i)).toHaveValue("");
   });
 
   it("revokes a stored OAuth grant with an empty oauth object", async () => {
@@ -486,6 +540,7 @@ describe("the MCP connection panel", () => {
       />,
     );
 
+    await userEvent.click(screen.getByRole("radio", { name: /^Cabeçalhos/ }));
     await userEvent.type(screen.getByLabelText("DD_API_KEY"), "api_secret");
     await userEvent.type(
       screen.getByLabelText("DD_APPLICATION_KEY"),
@@ -506,40 +561,32 @@ describe("the MCP connection panel", () => {
     );
   });
 
-  it("does not choose between bearer and multi-header auth on behalf of the operator", async () => {
+  it("sends the recipe's token alone when it is the shape chosen beside headers", async () => {
     render(
       <ConnectionPanel
         server={remote({ name: "datadog" })}
         recipe={recipe([
-          {
-            type: "bearer",
-            principal: "service",
-            label: "Service access token",
-          },
-          {
-            type: "headers",
-            principal: "service",
-            label: "API and application key headers",
-            headers: ["DD_API_KEY", "DD_APPLICATION_KEY"],
-          },
+          { type: "bearer", principal: "service", label: "Service access token" },
+          { type: "headers", principal: "service", label: "Key headers", headers: ["DD_API_KEY"] },
         ])}
       />,
     );
 
-    await userEvent.type(screen.getByLabelText(/service access token/i), "sat");
+    await userEvent.click(screen.getByRole("radio", { name: /^Cabeçalhos/ }));
     await userEvent.type(screen.getByLabelText("DD_API_KEY"), "api_secret");
+    await userEvent.click(screen.getByRole("radio", { name: /^Token/ }));
+    await userEvent.type(screen.getByLabelText(/service access token/i), "sat");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar a credencial" }));
 
-    expect(
-      screen.getByText(/preencha só uma forma de credencial/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Salvar a credencial" }),
-    ).toBeDisabled();
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ token: "sat", headers: undefined }),
+    );
   });
 
   it("stores a custom header for a server with no recipe, as headers and not a bearer", async () => {
     const user = userEvent.setup();
     render(<ConnectionPanel server={remote({ name: "crm" })} recipe={null} />);
+    await user.click(screen.getByRole("radio", { name: /^Cabeçalho próprio/ }));
     const save = screen.getByRole("button", { name: "Salvar header" });
     await user.type(screen.getByLabelText("Nome do header"), "apikey");
     expect(save).toBeDisabled();
@@ -579,8 +626,8 @@ describe("the MCP connection panel", () => {
       screen.getByText(/espera API and application key headers/i),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Salvar a credencial" }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: "Salvar a credencial" }),
+    ).not.toBeInTheDocument();
   });
 
   it("stores a local DSN in the env variable the recipe names", async () => {

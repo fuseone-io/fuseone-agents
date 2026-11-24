@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -55,12 +56,17 @@ describe("the custom header follows the server's recipe", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it.each([
-    ["the server's page", (name: string) => show(null, `/integrations/mcp/${name}`)],
-    ["the connected editor", (name: string) => show(<ServerEditor server={server(name)} onClose={() => {}} />)],
-  ])("on %s, is offered for a server with no recipe", async (_where, open) => {
+  // The page asks which shape the credential takes first; the header is one of them.
+  it("on the server's page, is offered for a server with no recipe", async () => {
     world("crm");
-    open("crm");
+    show(null, "/integrations/mcp/crm");
+    await userEvent.click(await screen.findByRole("radio", { name: /^Custom header/ }));
+    expect(screen.getByLabelText("Header name")).toBeInTheDocument();
+  });
+
+  it("on the connected editor, is offered for a server with no recipe", async () => {
+    world("crm");
+    show(<ServerEditor server={server("crm")} onClose={() => {}} />);
     expect(await screen.findByLabelText("Header name")).toBeInTheDocument();
   });
 

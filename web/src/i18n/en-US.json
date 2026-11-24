@@ -1926,6 +1926,25 @@
     "oauthScopesPlaceholder": "read write",
     "oauthHint": "Manual OAuth grant. Stored in the vault; use it when the remote server expects OAuth and you already have the grant.",
     "oauthKept": "An OAuth grant is already stored. Leave this blank to keep it.",
+    "authChoiceLegend": "How this connection authenticates",
+    "authChoice": {
+      "token": "Token",
+      "headers": "Headers",
+      "customHeader": "Custom header",
+      "oauth": "OAuth",
+      "githubApp": "GitHub App"
+    },
+    "authChoiceHint": {
+      "token": "A token sent with every call.",
+      "headers": "The headers this server's recipe asks for.",
+      "customHeader": "A header with a name of its own, such as apikey.",
+      "oauth": "An OAuth grant with tokens obtained elsewhere; the refresh token keeps it valid.",
+      "githubApp": "A GitHub App that mints installation tokens."
+    },
+    "oauthGroupEndpoint": "Token endpoint and client",
+    "oauthGroupTokens": "Tokens",
+    "oauthGroupAdvanced": "Advanced",
+    "oauthStoredClient": "Stored: {{tokenURL}} · client {{clientID}}",
     "oauthBearerConflict": "Fill either bearer token or OAuth grant, not both.",
     "remoteCredentialConflict": "Fill only one credential shape for this server.",
     "customHeader": "Custom header",
