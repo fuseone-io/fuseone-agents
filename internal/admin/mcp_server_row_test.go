@@ -134,6 +134,7 @@ not rewrite it.
 */
 func TestMCPPersonalCredential_isForTheServerRowItWasStoredFor(t *testing.T) {
 	w := withAreaServer(t)
+	allowPersonalEgress(t, w)
 	ctx := context.Background()
 	// As an author of acme/cx: a person's credential is for a server their
 	// scopes reach (NT-019).
@@ -159,6 +160,7 @@ func TestMCPPersonalCredential_isForTheServerRowItWasStoredFor(t *testing.T) {
 // Refreshed, a person's credential stays the credential of its server row.
 func TestRefreshMCPServerOAuth_aPersonalGrant_keepsItsServerRow(t *testing.T) {
 	w := withAreaServer(t)
+	allowPersonalEgress(t, w)
 	ctx := context.Background()
 	// As an author of acme/cx: a person's credential is for a server their
 	// scopes reach (NT-019).
@@ -206,6 +208,7 @@ func TestMCPPersonalCredential_storedBeforeItNamedARow_isTheInstallationServers(
 // the second server rather than the first one's grant.
 func TestPutMCPPersonalCredential_forAnotherServerRow_keepsNothingOfTheOld(t *testing.T) {
 	w := withAreaServer(t)
+	allowPersonalEgress(t, w)
 	ctx := context.Background()
 	// As an author of acme/cx: a person's credential is for a server their
 	// scopes reach (NT-019).
@@ -222,4 +225,12 @@ func TestPutMCPPersonalCredential_forAnotherServerRow_keepsNothingOfTheOld(t *te
 	if creds, found, _ := w.integrations.MCPPersonalCredential(ctx, financeScope, "github", "usr_ana"); found {
 		t.Errorf("at finance: %+v; want no credential carried over from %s", creds.OAuth, cxScope)
 	}
+}
+
+// allowPersonalEgress lets acme's areas reach the server and the token
+// endpoint these tests write a person's grant for: the egress policy is not
+// what they are about.
+func allowPersonalEgress(t *testing.T, w areaServerWorld) {
+	t.Helper()
+	allowEgress(t, w.integrations, domain.Scope{Company: "acme"}, copilotOrigin, "https://issuer.example")
 }

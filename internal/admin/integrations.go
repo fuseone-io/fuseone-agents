@@ -737,12 +737,21 @@ func (i *Integrations) WriteMCPPersonalCredential(ctx context.Context, w Persona
 	var (
 		serverKind settings.ScopeKind
 		serverAt   domain.Scope
+		serverURL  string
+		// The policy of the server's scope, read under the policies' lock held
+		// shared until the commit, as the server's own write reads it: the
+		// worker refreshes this grant through the same guard (NT-019).
+		egress *domain.MCPEgress
 	)
 
 	key := mcpUserCredentialName(name, by)
 	return writeFolded(ctx, i.pool, i.settings, folded{
 		guard: func(ctx context.Context, tx settings.DB) (err error) {
-			serverKind, serverAt, err = personalCredentialTarget(ctx, tx, name, w.Visible)
+			serverKind, serverAt, serverURL, err = personalCredentialTarget(ctx, tx, name, w.Visible)
+			if err != nil {
+				return err
+			}
+			egress, err = i.egressAtTx(ctx, tx, serverKind, serverAt)
 			return err
 		},
 		by: by, scope: scope, action: "mcp_credential.configured", target: name,
@@ -761,10 +770,14 @@ func (i *Integrations) WriteMCPPersonalCredential(ctx context.Context, w Persona
 				kept = domain.MCPCredentials{}
 			}
 			merged := given.Apply(kept).ForTransport(domain.TransportHTTP)
+			merged.OAuth = domain.Regranted(kept.OAuth, merged.OAuth)
 			if merged.Empty() {
 				return settings.Setting{}, nil, ErrNoMCPCredential
 			}
 			if err := domain.CheckHeaderNames(merged.Headers); err != nil {
+				return settings.Setting{}, nil, err
+			}
+			if err := withinEgress(egress, serverURL, merged); err != nil {
 				return settings.Setting{}, nil, err
 			}
 			value, err := json.Marshal(storedMCPUserCredential{
@@ -831,10 +844,11 @@ func (i *Integrations) DeleteMCPPersonalCredential(
 // personalCredentialTarget is the server a person may hold a credential for:
 // remote, not a GitHub App, and reached by one of their scopes. Its row is held
 // for share until the write commits, so it cannot move or change under it. A
-// server out of reach answers as one that does not exist.
+// server out of reach answers as one that does not exist. Its URL is answered
+// with it: the egress policy judges the address the row holds.
 func personalCredentialTarget(
 	ctx context.Context, tx settings.DB, name string, visible []domain.Scope,
-) (settings.ScopeKind, domain.Scope, error) {
+) (settings.ScopeKind, domain.Scope, string, error) {
 	var kind, company, area string
 	var raw []byte
 	err := tx.QueryRow(ctx, `
@@ -842,10 +856,10 @@ func personalCredentialTarget(
 		where kind = $1 and name = $2 for share`, string(settings.KindMCPServer), name,
 	).Scan(&kind, &company, &area, &raw)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", domain.Scope{}, ErrMCPServerUnknown
+		return "", domain.Scope{}, "", ErrMCPServerUnknown
 	}
 	if err != nil {
-		return "", domain.Scope{}, fmt.Errorf("admin: read MCP server %s: %w", name, err)
+		return "", domain.Scope{}, "", fmt.Errorf("admin: read MCP server %s: %w", name, err)
 	}
 	// Both ways, as the listing has it: a server the person's scopes inherit,
 	// and one stored in a scope a grant of theirs contains, such as an area
@@ -853,12 +867,12 @@ func personalCredentialTarget(
 	runtime := storedRuntimeScope(kind, company, area)
 	reached := func(v domain.Scope) bool { return runtime.Contains(v) || v.Contains(runtime) }
 	if !slices.ContainsFunc(visible, reached) {
-		return "", domain.Scope{}, ErrMCPServerUnknown
+		return "", domain.Scope{}, "", ErrMCPServerUnknown
 	}
 	var stored storedServer
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &stored); err != nil {
-			return "", domain.Scope{}, fmt.Errorf("admin: decode MCP server %s: %w", name, err)
+			return "", domain.Scope{}, "", fmt.Errorf("admin: decode MCP server %s: %w", name, err)
 		}
 	}
 	transport := stored.Transport
@@ -866,12 +880,12 @@ func personalCredentialTarget(
 		transport = domain.TransportStdio
 	}
 	if transport != domain.TransportHTTP {
-		return "", domain.Scope{}, ErrMCPPersonalCredentialLocal
+		return "", domain.Scope{}, "", ErrMCPPersonalCredentialLocal
 	}
 	if stored.GitHubApp != nil {
-		return "", domain.Scope{}, ErrMCPPersonalCredentialApp
+		return "", domain.Scope{}, "", ErrMCPPersonalCredentialApp
 	}
-	return settings.ScopeKind(kind), domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}, nil
+	return settings.ScopeKind(kind), domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}, stored.URL, nil
 }
 
 func mcpUserCredentialName(server string, principal domain.UserID) string {
