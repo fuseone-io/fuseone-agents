@@ -4753,6 +4753,11 @@ paths:
                     keeps the stored key.
                 oauthLogin:
                   allOf: [{ $ref: '#/components/schemas/MCPOAuthLoginInput' }]
+                  # Kept as the bytes sent: only an object with nothing in it
+                  # removes the sign-in, and a decoded struct cannot tell that
+                  # from one sent with a null or an unknown field.
+                  x-go-type: json.RawMessage
+                  x-go-type-skip-optional-pointer: true
                   description: >
                     How a person signs in to this server from their browser, so
                     the tools act as them. Omit to keep the stored configuration.
@@ -4762,7 +4767,11 @@ paths:
                     remote server, never one acting as a GitHub App; the
                     authorization and token endpoints are held to the server's
                     egress policy. A server with a sign-in configured takes a
-                    personal credential for every tool call.
+                    personal credential for every tool call. A field sent as
+                    null, a field this API does not know, or null for the
+                    whole object is refused rather than read as a removal.
+                    `hasClientSecret`, which a read answers, is accepted and
+                    ignored, so a read sent back as a write changes nothing.
                 env:
                   type: object
                   additionalProperties: { type: string }
@@ -8424,7 +8433,9 @@ components:
           description: Where codes and refresh tokens are exchanged. Empty is found the same way.
         resource:
           type: string
-          description: The RFC 8707 resource indicator. Empty is the server's address.
+          description: >
+            The RFC 8707 resource indicator: any absolute URI, a URN among them,
+            with no fragment. Empty is the server's address.
         tokenAuthMethod:
           type: string
           enum: [none, client_secret_post, client_secret_basic]

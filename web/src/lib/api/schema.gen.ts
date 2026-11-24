@@ -5059,7 +5059,7 @@ export interface components {
             authorizeURL?: string;
             /** @description Where codes and refresh tokens are exchanged. Empty is found the same way. */
             tokenURL?: string;
-            /** @description The RFC 8707 resource indicator. Empty is the server's address. */
+            /** @description The RFC 8707 resource indicator: any absolute URI, a URN among them, with no fragment. Empty is the server's address. */
             resource?: string;
             /**
              * @description How the token endpoint is told which client asks. Defaults to client_secret_basic with a secret held, none without; a method that sends a secret is refused when none is held.
@@ -12306,7 +12306,7 @@ export interface operations {
                     oauth?: components["schemas"]["MCPOAuthGrant"];
                     /** @description GitHub App a remote server is reached as. The worker mints short-lived installation tokens from the App's private key and refreshes them before expiry. Omit to keep the stored App. Send an empty object to clear it. A non-empty App becomes the active HTTP credential and replaces stored bearer, header or OAuth material; one without a private key keeps the stored key. */
                     githubApp?: components["schemas"]["MCPGitHubApp"];
-                    /** @description How a person signs in to this server from their browser, so the tools act as them. Omit to keep the stored configuration. Send an empty object to remove it, with its client secret. Otherwise the fields given are the whole configuration, all but `clientSecret`, which is kept when omitted. Only for a remote server, never one acting as a GitHub App; the authorization and token endpoints are held to the server's egress policy. A server with a sign-in configured takes a personal credential for every tool call. */
+                    /** @description How a person signs in to this server from their browser, so the tools act as them. Omit to keep the stored configuration. Send an empty object to remove it, with its client secret. Otherwise the fields given are the whole configuration, all but `clientSecret`, which is kept when omitted. Only for a remote server, never one acting as a GitHub App; the authorization and token endpoints are held to the server's egress policy. A server with a sign-in configured takes a personal credential for every tool call. A field sent as null, a field this API does not know, or null for the whole object is refused rather than read as a removal. `hasClientSecret`, which a read answers, is accepted and ignored, so a read sent back as a write changes nothing. */
                     oauthLogin?: components["schemas"]["MCPOAuthLoginInput"];
                     /**
                      * @description Variables handed to a local server, and only to one. A program started inside the worker no longer inherits the worker's environment, so this is how it receives the credential it needs — explicitly, per server, from the vault.

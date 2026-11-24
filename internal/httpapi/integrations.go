@@ -112,9 +112,15 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
 		}, nil
 	}
+	login, err := oauthLoginFromRequest(req.Body.OauthLogin)
+	if err != nil {
+		return openapi.PutMCPServer400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
+		}, nil
+	}
 	revision, err := s.integrations.WriteMCPServer(ctx, admin.MCPServerWrite{
 		By: caller, Scope: connectorRuntimeScope(kind, stored), At: kind, Stored: stored,
-		Server: server, Given: creds, Login: oauthLoginFromRequest(req.Body.OauthLogin), Expect: expect,
+		Server: server, Given: creds, Login: login, Expect: expect,
 	})
 	if stale, ok := staleFrom(err); ok {
 		return openapi.PutMCPServer412ApplicationProblemPlusJSONResponse{

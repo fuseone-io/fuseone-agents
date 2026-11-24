@@ -117,7 +117,14 @@ func TestListMCPUserCredentials_aServerPeopleSignInTo_isOfferedAsTakingTheirOwn(
 func putSignIn(t *testing.T, s *Server, login *openapi.MCPOAuthLoginInput) openapi.PutMCPServerResponseObject {
 	t.Helper()
 	body := openapi.PutMCPServerJSONRequestBody{
-		Transport: ptr(openapi.TransportHttp), Url: ptr("https://mcp.example.com/signin"), OauthLogin: login,
+		Transport: ptr(openapi.TransportHttp), Url: ptr("https://mcp.example.com/signin"),
+	}
+	if login != nil {
+		raw, err := json.Marshal(login)
+		if err != nil {
+			t.Fatalf("encode the sign-in: %v", err)
+		}
+		body.OauthLogin = raw
 	}
 	resp, err := s.PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{Name: "signin", Body: &body})
 	if err != nil {
@@ -170,5 +177,33 @@ func TestPutMCPServer_anEmptySignIn_removesTheStoredOne(t *testing.T) {
 	putSignIn(t, s, &openapi.MCPOAuthLoginInput{})
 	if login := readSignIn(t, s); login != nil {
 		t.Errorf("oauthLogin = %+v after an empty one, want none", login)
+	}
+}
+
+// Only an object with nothing in it takes the sign-in back. One that decodes
+// to nothing for another reason — a field sent as null, or only fields the
+// door does not know — is a mistake, refused, and the sign-in kept.
+func TestPutMCPServer_aSignInThatOnlyLooksEmpty_isRefusedAndKeepsTheStoredOne(t *testing.T) {
+	s := mcpWorld(t)
+	putSignIn(t, s, &openapi.MCPOAuthLoginInput{ClientID: ptr("agents"), ClientSecret: ptr("s3cret")})
+	for name, raw := range map[string]string{
+		"a client ID sent as null": `{"clientID":null}`,
+		"only unknown fields":      `{"clientId":"agents"}`,
+		"the object itself null":   `null`,
+		"a secret sent as null":    `{"clientID":"agents","clientSecret":null}`,
+		// Ignored, it would save a sign-in without the endpoint meant.
+		"a misspelt field beside a known one": `{"clientID":"agents","tokenUrl":"https://mcp.example.com/token"}`,
+	} {
+		var body openapi.PutMCPServerJSONRequestBody
+		if err := json.Unmarshal([]byte(`{"transport":"http","url":"https://mcp.example.com/signin","oauthLogin":`+raw+`}`), &body); err != nil {
+			t.Fatalf("%s: decode: %v", name, err)
+		}
+		resp, err := s.PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{Name: "signin", Body: &body})
+		if bad, ok := resp.(openapi.PutMCPServer400ApplicationProblemPlusJSONResponse); err != nil || !ok || valueOr(bad.Type) != "fuseone:invalid-input" {
+			t.Errorf("%s: PutMCPServer = %#v, %v; want 400 invalid-input", name, resp, err)
+		}
+		if login := readSignIn(t, s); login == nil || !login.HasClientSecret {
+			t.Errorf("%s: oauthLogin = %+v; want the stored one kept, with its secret", name, login)
+		}
 	}
 }
