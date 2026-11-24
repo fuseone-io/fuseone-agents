@@ -1945,8 +1945,6 @@
     "oauthGroupTokens": "Tokens",
     "oauthGroupAdvanced": "Avançado",
     "oauthStoredClient": "Guardado: {{tokenURL}} · client {{clientID}}",
-    "oauthBearerConflict": "Preencha bearer token ou grant OAuth, não os dois.",
-    "remoteCredentialConflict": "Preencha só uma forma de credencial para este servidor.",
     "customHeader": "Header customizado",
     "customHeaderName": "Nome do header",
     "customHeaderNamePlaceholder": "apikey",
@@ -2144,7 +2142,6 @@
     "githubAppStored": "Age como App {{app}}, instalação {{installation}}.",
     "saveGitHubApp": "Salvar o GitHub App",
     "revokeGitHubApp": "Remover o GitHub App",
-    "githubAppConflict": "Um GitHub App substitui o token e o grant OAuth. Preencha só um deles.",
     "move": {
       "action": "Mover para…",
       "title": "Mover {{name}} para uma empresa ou área",
