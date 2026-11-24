@@ -12,6 +12,8 @@ import { StepsTextView } from "@/features/agents/steps-text-view";
 import { contradictions, undescribed } from "@/features/agents/steps-drift";
 import { useStepDrawing } from "@/features/agents/use-step-drawing";
 import { DriftWarning } from "@/features/agents/drift-warning";
+import { UnplacedWarning } from "@/features/agents/unplaced-warning";
+import { unplacedTools } from "@/features/agents/steps-unplaced";
 import { StepContradictionWarning } from "@/features/agents/step-contradiction-warning";
 import type { AgentDefinition, Policy, Tool } from "@/lib/api/client";
 
@@ -112,6 +114,7 @@ export function TabSteps({
 
       <div className="mx-auto w-full max-w-[820px] px-5 pt-4">
         <div className="flex flex-col gap-2">
+          <UnplacedWarning tools={unplacedTools(pack, steps)} />
           <DriftWarning tools={silent} />
           <StepContradictionWarning conflicts={conflicts} />
         </div>

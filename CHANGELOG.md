@@ -131,6 +131,15 @@ migration. Once a server has a sign-in, 0.138.0 is a rollback floor.
   connect and edit form asks the same question, so it no longer refuses a save for two shapes
   filled in: only one can be (#468, #469).
 
+### Fixed
+
+- **A tool no step reaches is named where the person looks for it.** The workbench refused to
+  publish such a draft, but the message did not say which tools, and the list sat at the top of
+  the panel, out of view: people placed the tool they had in mind and were refused again for
+  the others. The refusal now names the tools (its `detail` is the list, comma-separated), the
+  draft's tools mark each one "in no step", and the steps editor says the same beside its other
+  warnings, from what is on screen before anything is saved.
+
 ## [0.138.0] — 2026-11-24
 
 A personal MCP credential is held to its server's egress policy when it is saved, and every

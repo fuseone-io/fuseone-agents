@@ -76,6 +76,25 @@ describe("the workbench layout", () => {
     expect(await screen.findByRole("dialog", { name: "Etapas" })).toBeInTheDocument();
   });
 
+  // A granted tool no step reaches never runs: said beside the tool and in the
+  // steps editor, from what is on screen, before anything is saved.
+  it("marks a tool no step reaches, in the tools and in the steps editor", async () => {
+    serve({
+      [`GET ${DRAFT}`]: () => ({
+        body: draftOf({ tools: ["crm.lookup", "kb.search"], steps: [{ name: "Consultar", reaches: ["crm.lookup"] }] }),
+        etag: '"e1"',
+      }),
+      [`GET ${DRAFT}/turns`]: () => ({ body: { items: [], conversation: "open" } }),
+    });
+    openAt("/agents/triagem/workbench");
+    const row = (await screen.findByText("kb.search")).closest("li");
+    expect(within(row as HTMLElement).getByText("em nenhum passo")).toBeInTheDocument();
+    expect(within(screen.getByText("crm.lookup").closest("li") as HTMLElement).queryByText("em nenhum passo")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Editar etapas" }));
+    const steps = await screen.findByRole("dialog", { name: "Etapas" });
+    expect(within(steps).getByText(/Nenhum passo alcança kb\.search/)).toBeInTheDocument();
+  });
+
   // The instructions' lint, moved from the old editor: a tool they name that
   // the agent does not hold, enabled in place.
   it("says when the instructions name a tool the agent does not hold, and enables it", async () => {

@@ -88,9 +88,16 @@ describe("publishing from the workbench", () => {
     expect(screen.getByText(/^Salve as alterações antes de publicar/)).toBeInTheDocument();
   });
 
+  it("names the tools no step reaches when refused for them", async () => {
+    const type = "fuseone:publish-unplaced-tools";
+    world(() => ({ status: 400, body: { type, title: "refused", status: 400, detail: "kb.search, crm.refund" } }));
+    openAt("/agents/triagem/workbench");
+    await publishConfirmed();
+    expect(await screen.findByText(/Nenhum passo alcança kb\.search, crm\.refund/)).toBeInTheDocument();
+  });
+
   it.each([
     ["fuseone:publish-needs-never", 400, "Diga nas instruções o que o agente nunca deve fazer antes de publicar"],
-    ["fuseone:publish-unplaced-tools", 400, "Coloque cada ferramenta num passo ou tire-a das ferramentas"],
     ["fuseone:agent-moved", 412, "O agente foi publicado por outro caminho depois que este rascunho foi aberto"],
   ])("says what to do when refused with %s", async (type, status, said) => {
     world(() => ({ status, body: { type, title: "refused", status } }));
