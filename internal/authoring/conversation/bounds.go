@@ -82,7 +82,7 @@ type projectedTool struct {
 /*
 Project is what the model is shown of a draft: the whole definition in the
 publication's own format, the blocks with their ids, what publication still
-needs, and what the scope offers. No secret and no address: a definition holds
+needs, the tools no step reaches, and what the scope offers. No secret and no address: a definition holds
 none, and a tool is shown by id, effect and description, never its server.
 Larger than MaxProjectionBytes, the turn is refused rather than cut.
 */
@@ -97,9 +97,13 @@ func Project(d draft.Draft, missing []string, offer Offer) (string, error) {
 		Definition string              `json:"definition"`
 		Blocks     []projectedBlock    `json:"blocks"`
 		Missing    []string            `json:"missing"`
+		Unplaced   []domain.ToolID     `json:"unplaced,omitempty"`
 		Tools      []projectedTool     `json:"toolsOffered"`
 		Providers  []projectedProvider `json:"providersOffered"`
-	}{Definition: string(definition), Missing: missing, Providers: projectProviders(offer.Providers)}
+	}{
+		Definition: string(definition), Missing: missing, Unplaced: d.Spec.Unplaced(),
+		Providers: projectProviders(offer.Providers),
+	}
 	for _, b := range d.Blocks {
 		out.Blocks = append(out.Blocks, projectedBlock{ID: b.ID, Kind: string(b.Kind), Label: b.Label, Text: b.Text})
 	}
