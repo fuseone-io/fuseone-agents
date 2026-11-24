@@ -30,6 +30,11 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.137.0] — 2026-11-24
+
+The workbench names a granted tool no step reaches, and refuses to publish it until it is
+placed (#464). No migration; the rollback floors of 0.136.0 hold.
+
 ### Fixed
 
 - **The workbench says when a granted tool can never run.** A run of an agent with steps is
@@ -40,7 +45,7 @@ field" is a commit message.
   `fuseone:publish-unplaced-tools`). The conversation is told the rule: adding a tool to an
   agent with steps comes with the step that places it, and a tool reported unavailable is
   looked for in the steps first. The JSON API, the `.agent.md` file and Terraform publish as
-  before.
+  before (#464).
 
 ## [0.136.0] — 2026-11-24
 
