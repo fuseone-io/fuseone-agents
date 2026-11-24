@@ -537,6 +537,29 @@ describe("the MCP connection panel", () => {
     ).toBeDisabled();
   });
 
+  it("stores a custom header for a server with no recipe, as headers and not a bearer", async () => {
+    const user = userEvent.setup();
+    render(<ConnectionPanel server={remote({ name: "crm" })} recipe={null} />);
+    const save = screen.getByRole("button", { name: "Salvar header" });
+    await user.type(screen.getByLabelText("Nome do header"), "apikey");
+    expect(save).toBeDisabled();
+    await user.type(screen.getByLabelText("Valor do header"), "k-1");
+    await user.click(save);
+    expect(api.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ headers: { apikey: "k-1" } }));
+    expect(api.mutateAsync.mock.calls[0]?.[0]).not.toHaveProperty("token", expect.anything());
+  });
+
+  it("offers no custom header while nobody knows yet whether a recipe describes the server", () => {
+    render(<ConnectionPanel server={remote({ name: "crm" })} recipe={undefined} />);
+    expect(screen.getAllByLabelText(/token/i).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText("Nome do header")).not.toBeInTheDocument();
+  });
+
+  it("offers no custom header where a recipe says what the server takes", () => {
+    render(<ConnectionPanel server={remote()} recipe={recipe([{ type: "bearer", principal: "service" }])} />);
+    expect(screen.queryByLabelText("Nome do header")).not.toBeInTheDocument();
+  });
+
   it("does not pretend unshaped header auth is editable", () => {
     const { container } = render(
       <ConnectionPanel

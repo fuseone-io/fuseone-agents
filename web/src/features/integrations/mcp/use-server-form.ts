@@ -1,6 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
+import { customHeaderCredential, customHeaderState } from "@/features/integrations/mcp/custom-header";
 import { toast } from "sonner";
 import {
   serverSchema,
@@ -144,6 +145,8 @@ function defaultServerValues(
     url: server?.url ?? "",
     token: "",
     headers: {},
+    customHeaderName: "",
+    customHeaderValue: "",
     env: "",
     dsn: "",
     oauthAccessToken: "",
@@ -186,6 +189,10 @@ function remoteCredential(
   headers: string[],
 ) {
   if (values.transport !== "http") return {};
+  const custom = { name: values.customHeaderName, value: values.customHeaderValue };
+  if (!plan.known && customHeaderState(custom) === "complete") {
+    return { headers: customHeaderCredential(custom) };
+  }
   if (values.token !== "" && plan.secret?.type === "bearer") {
     return { token: values.token };
   }

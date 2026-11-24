@@ -31,6 +31,7 @@ import {
   StoredOAuthOnly,
 } from "@/features/integrations/mcp/oauth-fields";
 import { GitHubAppSection } from "@/features/integrations/mcp/github-app-section";
+import { CustomHeaderSection } from "@/features/integrations/mcp/custom-header-section";
 import { CallAuthNote } from "@/features/integrations/mcp/call-auth-note";
 import { EgressNote } from "@/features/integrations/mcp/egress-note";
 import { MCPHealthNote } from "@/features/integrations/mcp/health-note";
@@ -204,6 +205,13 @@ export function ConnectionPanel({
         )}
         {remoteSecretConflict && (
           <p className="text-xs text-danger">{t("mcp.remoteCredentialConflict")}</p>
+        )}
+        {!local && recipe === null && (
+          <CustomHeaderSection
+            pending={put.isPending}
+            kept={server.hasSecret === true && server.hasOAuth !== true && !server.githubApp}
+            write={write}
+          />
         )}
         {!local && (remotePlan.githubApp !== null || server.githubApp) && (
           <GitHubAppSection server={server} pending={put.isPending} write={write} />

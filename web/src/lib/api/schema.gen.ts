@@ -5045,7 +5045,7 @@ export interface components {
         MCPUserCredentialInput: {
             /** @description Bearer token for this signed-in user. Omit to keep the stored one. A non-empty token replaces stored headers or OAuth material. */
             token?: string;
-            /** @description Exact HTTP headers for this signed-in user. Omit to keep stored headers. A non-empty object replaces stored bearer or OAuth material. */
+            /** @description Exact HTTP headers for this signed-in user. Omit to keep stored headers. A non-empty object replaces stored bearer or OAuth material. Judged as a server's headers are: each name must be an HTTP token the transport does not set itself (Host, Content-Type, Content-Length, Accept, Last-Event-ID, the hop-by-hop headers, and every header under the MCP protocol's Mcp- prefix), and no value may hold a line break or another control character. A refused header is a 400 that names the header and never its value. */
             headers?: {
                 [key: string]: string;
             };
@@ -12247,7 +12247,7 @@ export interface operations {
                     protocolMode?: components["schemas"]["MCPProtocolMode"];
                     /** @description Bearer token for a remote server. Omit to keep the stored one — correcting a URL must not demand re-entering a secret nobody has to hand. */
                     token?: string;
-                    /** @description Exact HTTP headers for a remote server whose credential is not a bearer token, such as Api-Key or Authorization: Basic. Omit to keep stored headers. Send an empty object to remove them. A non-empty object becomes the active HTTP credential and replaces stored bearer or OAuth material. */
+                    /** @description Exact HTTP headers for a remote server whose credential is not a bearer token, such as Api-Key or Authorization: Basic. Omit to keep stored headers. Send an empty object to remove them. A non-empty object becomes the active HTTP credential and replaces stored bearer or OAuth material. Each name must be an HTTP token the transport does not set itself: Host, Content-Type, Content-Length, Accept, Last-Event-ID, the hop-by-hop headers, and every header under the MCP protocol's Mcp- prefix (Mcp-Session-Id, Mcp-Method, Mcp-Name, Mcp-Param-*) are refused. No value may hold a line break or another control character. A refused header is a 400 that names the header and never its value. Only the headers a write sends are judged, so headers stored before keep working. */
                     headers?: {
                         [key: string]: string;
                     };

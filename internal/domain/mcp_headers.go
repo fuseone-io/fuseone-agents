@@ -2,7 +2,9 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"net/textproto"
+	"strings"
 )
 
 // ErrHeaderCollision is a header map that names one header twice. It names no
@@ -31,3 +33,77 @@ func CheckHeaderNames(headers map[string]string) error {
 	}
 	return nil
 }
+
+// ErrHeaderInvalid is a written header HTTP cannot send, or one the transport
+// owns. It names the header and never its value, which is the credential.
+var ErrHeaderInvalid = errors.New("mcp headers: invalid header")
+
+/*
+transportHeaders are the headers the HTTP transport and the MCP SDK set
+themselves. A credential header is applied after the SDK builds the request, so
+one of these written as a credential would replace what the connection depends
+on: the address, the body's framing, the session and the point it resumes
+from. Canonical, as net/http keys them.
+
+Every header the SDK names lives under Mcp- (Mcp-Session-Id, Mcp-Method,
+Mcp-Name, Mcp-Param-*, as of go-sdk 1.7), and a gateway may authorise a call by
+them: a credential that rewrote Mcp-Name would have the call read as another
+tool. So the whole prefix is the protocol's, refused rather than listed, and a
+header a later SDK adds there is refused the day it appears.
+*/
+var transportHeaders = map[string]bool{
+	"Host": true, "Content-Length": true, "Content-Type": true, "Transfer-Encoding": true,
+	"Connection": true, "Keep-Alive": true, "Upgrade": true, "Te": true, "Trailer": true,
+	"Proxy-Connection": true, "Accept": true, "Last-Event-Id": true,
+}
+
+// protocolPrefix is the MCP protocol's own header namespace.
+const protocolPrefix = "Mcp-"
+
+func ownedByTransport(name string) bool {
+	canonical := textproto.CanonicalMIMEHeaderKey(name)
+	return transportHeaders[canonical] || strings.HasPrefix(canonical, protocolPrefix)
+}
+
+/*
+CheckWrittenHeaders judges the headers a write gives a server: each name an
+HTTP token the transport does not own (the MCP protocol's Mcp- headers among
+them), each value free of control characters
+but tab, and no name given twice. Judged at the write, on what was sent and not
+on what is stored, so a person typing a header sees the refusal, and a server
+configured before this rule keeps working until somebody rewrites its headers.
+*/
+func CheckWrittenHeaders(headers map[string]string) error {
+	if err := CheckHeaderNames(headers); err != nil {
+		return err
+	}
+	for name, value := range headers {
+		switch {
+		case !isHTTPToken(name):
+			return fmt.Errorf("%w: %q is not a header name HTTP can send; use letters, digits and - _ .",
+				ErrHeaderInvalid, name)
+		case ownedByTransport(name):
+			return fmt.Errorf("%w: %s is set by the MCP transport and cannot carry a credential",
+				ErrHeaderInvalid, textproto.CanonicalMIMEHeaderKey(name))
+		case strings.ContainsFunc(value, isControl):
+			return fmt.Errorf("%w: the value of %s holds a line break or another control character",
+				ErrHeaderInvalid, name)
+		}
+	}
+	return nil
+}
+
+// isHTTPToken is RFC 9110's token: what a header name may be.
+func isHTTPToken(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		if r > 0x7e || r <= ' ' || strings.ContainsRune(`"(),/:;<=>?@[\]{}`, r) {
+			return false
+		}
+	}
+	return true
+}
+
+func isControl(r rune) bool { return (r < ' ' && r != '\t') || r == 0x7f }

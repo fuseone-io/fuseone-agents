@@ -4721,7 +4721,16 @@ paths:
                     not a bearer token, such as Api-Key or Authorization:
                     Basic. Omit to keep stored headers. Send an empty object
                     to remove them. A non-empty object becomes the active HTTP
-                    credential and replaces stored bearer or OAuth material.
+                    credential and replaces stored bearer or OAuth material. Each
+                    name must be an HTTP token the transport does not set
+                    itself: Host, Content-Type, Content-Length, Accept,
+                    Last-Event-ID, the hop-by-hop headers, and every header
+                    under the MCP protocol's Mcp- prefix (Mcp-Session-Id,
+                    Mcp-Method, Mcp-Name, Mcp-Param-*) are refused. No value
+                    may hold a line break or another control character. A
+                    refused header is a 400 that names the header and never
+                    its value. Only the headers a write sends are judged, so
+                    headers stored before keep working.
                 oauth:
                   allOf: [{ $ref: '#/components/schemas/MCPOAuthGrant' }]
                   description: >
@@ -8364,7 +8373,12 @@ components:
           description: >
             Exact HTTP headers for this signed-in user. Omit to keep stored
             headers. A non-empty object replaces stored bearer or OAuth
-            material.
+            material. Judged as a server's headers are: each name must be an
+            HTTP token the transport does not set itself (Host, Content-Type,
+            Content-Length, Accept, Last-Event-ID, the hop-by-hop headers, and
+            every header under the MCP protocol's Mcp- prefix), and no value
+            may hold a line break or another control character. A refused
+            header is a 400 that names the header and never its value.
         oauth:
           allOf: [{ $ref: '#/components/schemas/MCPOAuthGrant' }]
           description: >

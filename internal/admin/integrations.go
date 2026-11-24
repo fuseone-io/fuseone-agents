@@ -254,6 +254,11 @@ func (i *Integrations) mcpRevision(set settings.Setting) domain.Revision {
 func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (domain.Revision, error) {
 	by, scope, server, given := w.By, w.Scope, w.Server, w.Given
 	at, storedScope := w.At, w.Stored
+	// Judged on what this write gives, not on what is stored: a header kept
+	// from before the rule keeps working until somebody rewrites it.
+	if err := domain.CheckWrittenHeaders(given.Headers); err != nil {
+		return "", err
+	}
 	if at == "" {
 		at, storedScope = settings.ScopeInstallation, domain.Scope{}
 	}
@@ -723,6 +728,9 @@ func (i *Integrations) WriteMCPPersonalCredential(ctx context.Context, w Persona
 	by, scope, name, given := w.By, w.Scope, w.Server, w.Given
 	if strings.TrimSpace(name) == "" {
 		return ErrNoName
+	}
+	if err := domain.CheckWrittenHeaders(given.Headers); err != nil {
+		return err
 	}
 	// Where the server is stored, read under its row's lock by the guard: the
 	// credential records it, and is handed only for that row (NT-019).
