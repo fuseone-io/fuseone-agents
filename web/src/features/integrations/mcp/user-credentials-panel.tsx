@@ -1,46 +1,18 @@
 import { useMemo, useState } from "react";
 import { KeyRound, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
 import { Mono } from "@/components/shared/mono";
-import { problemMessage } from "@/lib/api/problem-message";
 import { cn } from "@/lib/utils";
-import type { MCPOAuthGrant, MCPUserCredential } from "@/features/integrations/api";
+import type { MCPUserCredential } from "@/features/integrations/api";
 import type { CredentialServer } from "@/features/integrations/mcp/credential-server";
-import {
-  useDeleteMCPUserCredential,
-  usePutMCPUserCredential,
-} from "@/features/integrations/api";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 import { CatalogueIcon } from "@/features/integrations/mcp/catalogue-icons";
 import {
   AuthModeBadges,
   RecipeStatusBadge,
 } from "@/features/integrations/mcp/recipe-badges";
-import {
-  headerNames,
-  remoteAuthPlan,
-} from "@/features/integrations/mcp/auth-plan";
-import { CredentialFields } from "@/features/integrations/mcp/credential-fields";
-import {
-  blankCredential,
-  remoteCredential,
-} from "@/features/integrations/mcp/credential-value";
-import {
-  oauthExpiryIsValid,
-  oauthFromValue,
-  oauthHasValue,
-} from "@/features/integrations/mcp/oauth-credential";
-import {
-  OAuthFields,
-  StoredOAuthOnly,
-} from "@/features/integrations/mcp/oauth-fields";
-import {
-  remoteTokenHint,
-  remoteTokenLabel,
-} from "@/features/integrations/mcp/credential-labels";
+import { PersonalCredentialForm } from "@/features/integrations/mcp/personal-credential-form";
 
 export function UserCredentialsPanel({
   servers,
@@ -166,32 +138,7 @@ function PersonalCredentialEditor({
   credential: MCPUserCredential | null;
 }) {
   const { t } = useTranslation();
-  const put = usePutMCPUserCredential();
-  const remove = useDeleteMCPUserCredential();
-  const remotePlan = remoteAuthPlan(recipe?.authModes, recipe !== null);
-  const remoteHeaders = headerNames(remotePlan.multiHeaders);
   const userOnlyCredentials = recipe?.requiresPersonalCredential === true;
-  const [value, setValue] = useState(() => blankCredential());
-  const oauthChanged = oauthHasValue(value);
-  const secretChanged = remotePlan.secret !== null && value.token.trim() !== "";
-  const headersChanged = remoteHeaders.some(
-    (header) => value.headers[header]?.trim() !== "",
-  );
-  const headersComplete =
-    remoteHeaders.length > 0 &&
-    remoteHeaders.every((header) => value.headers[header]?.trim() !== "");
-  const remoteSecretConflict = secretChanged && headersChanged;
-  const remoteConflict =
-    remotePlan.oauth !== null &&
-    oauthChanged &&
-    (secretChanged || headersChanged);
-  const oauthExpiryInvalid =
-    remotePlan.oauth !== null && !oauthExpiryIsValid(value);
-  const canWrite =
-    remotePlan.secret !== null ||
-    remoteHeaders.length > 0 ||
-    remotePlan.oauth !== null;
-  const changed = secretChanged || headersComplete || oauthChanged;
   const hasSharedCredential = server.hasSecret === true || server.hasOAuth === true;
   const hasSharedOnly = hasSharedCredential && !credential;
   const sharedCredentialText = sharedCredentialHint({
@@ -200,28 +147,6 @@ function PersonalCredentialEditor({
     hasSharedOnly,
     t,
   });
-
-  async function save(
-    input: { token?: string; headers?: Record<string, string>; oauth?: MCPOAuthGrant },
-  ) {
-    try {
-      await put.mutateAsync({ name: server.name, ...input });
-      setValue(blankCredential());
-      toast.success(t("mcp.personalCredentialSaved"));
-    } catch (problem) {
-      toast.error(problemMessage(problem, t));
-    }
-  }
-
-  async function revoke() {
-    try {
-      await remove.mutateAsync(server.name);
-      setValue(blankCredential());
-      toast.success(t("mcp.personalCredentialRemoved"));
-    } catch (problem) {
-      toast.error(problemMessage(problem, t));
-    }
-  }
 
   return (
     <section className="min-w-0 overflow-y-auto p-5">
@@ -278,63 +203,12 @@ function PersonalCredentialEditor({
           </p>
         </div>
 
-        <CredentialFields
-          local={false}
-          hasSecret={credential?.hasCredential === true && credential.hasOAuth !== true}
-          hasConfigFile={false}
-          showRemoteToken={remotePlan.secret !== null}
-          remoteTokenLabel={remoteTokenLabel(remotePlan.secret, t)}
-          remoteTokenHint={remoteTokenHint(remotePlan.secret, t)}
-          remoteHeaders={remoteHeaders}
-          remoteHeadersHint={t("mcp.remoteHeadersHint")}
-          value={value}
-          onChange={(next) => setValue((current) => ({ ...current, ...next }))}
-          onRevoke={() => void revoke()}
-          onRevokeConfigFile={() => undefined}
+        <PersonalCredentialForm
+          key={server.name}
+          server={server}
+          recipe={recipe}
+          credential={credential}
         />
-        {remoteHeaders.length > 0 && headersChanged && !headersComplete && (
-          <p className="text-xs text-danger">{t("mcp.remoteHeadersIncomplete")}</p>
-        )}
-        {remotePlan.oauth !== null && (
-          <OAuthFields
-            value={value}
-            hasOAuth={credential?.hasOAuth === true}
-            conflict={remoteConflict}
-            invalidExpiry={oauthExpiryInvalid}
-            onChange={setValue}
-            onRevoke={() => void revoke()}
-          />
-        )}
-        {remoteSecretConflict && (
-          <p className="text-xs text-danger">{t("mcp.remoteCredentialConflict")}</p>
-        )}
-        {remotePlan.oauth === null && credential?.hasOAuth === true && (
-          <StoredOAuthOnly onRevoke={() => void revoke()} />
-        )}
-
-        <div className="flex justify-end">
-          <Button
-            onClick={() =>
-              void save(
-                remotePlan.oauth !== null && oauthChanged
-                  ? { oauth: oauthFromValue(value) }
-                  : remoteCredential(value, remotePlan, remoteHeaders),
-              )
-            }
-            disabled={
-              put.isPending ||
-              remove.isPending ||
-              remoteSecretConflict ||
-              remoteConflict ||
-              oauthExpiryInvalid ||
-              (headersChanged && !headersComplete) ||
-              !canWrite ||
-              !changed
-            }
-          >
-            {t("mcp.savePersonalCredential")}
-          </Button>
-        </div>
       </div>
     </section>
   );

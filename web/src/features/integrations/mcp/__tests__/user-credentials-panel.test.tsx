@@ -157,34 +157,45 @@ describe("personal MCP credentials", () => {
     });
   });
 
-  it("does not choose between two credential shapes for the user", async () => {
+  it("asks which shape the user's credential takes, and sends only that one", async () => {
     open({
       recipes: [
         {
           ...datadog,
           authModes: [
             { type: "bearer", principal: "service", label: "Access token" },
-            {
-              type: "headers",
-              principal: "service",
-              label: "Header token",
-              headers: ["Api-Key"],
-            },
+            { type: "headers", principal: "service", label: "Header token", headers: ["Api-Key"] },
           ],
         },
       ],
     });
 
     await userEvent.type(screen.getByLabelText(/access token/i), "bearer");
+    await userEvent.click(screen.getByRole("radio", { name: /^Cabeçalhos/ }));
+    expect(screen.queryByLabelText(/access token/i)).not.toBeInTheDocument();
     await userEvent.type(screen.getByLabelText("Api-Key"), "api_secret");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar minha credencial" }));
 
-    expect(
-      screen.getByText(/preencha só uma forma de credencial/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Salvar minha credencial" }),
-    ).toBeDisabled();
-    expect(api.putAsync).not.toHaveBeenCalled();
+    expect(api.putAsync).toHaveBeenCalledWith({ name: "datadog", headers: { "Api-Key": "api_secret" } });
+  });
+
+  it("starts the user's shape empty after switching away from it and back", async () => {
+    open({
+      recipes: [
+        {
+          ...datadog,
+          authModes: [
+            { type: "bearer", principal: "service", label: "Access token" },
+            { type: "headers", principal: "service", label: "Header token", headers: ["Api-Key"] },
+          ],
+        },
+      ],
+    });
+
+    await userEvent.type(screen.getByLabelText(/access token/i), "bearer");
+    await userEvent.click(screen.getByRole("radio", { name: /^Cabeçalhos/ }));
+    await userEvent.click(screen.getByRole("radio", { name: /^Token/ }));
+    expect(screen.getByLabelText(/access token/i)).toHaveValue("");
   });
 
   it("removes the signed-in user's credential without touching shared credentials", async () => {
