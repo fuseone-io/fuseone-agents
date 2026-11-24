@@ -30,6 +30,13 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.138.0] — 2026-11-24
+
+A personal MCP credential is held to its server's egress policy when it is saved, and every
+replica keeps a server's browser sign-in, which no write sets yet (#467, #470). No migration; the
+rollback floors of 0.137.0 hold. Once the next release writes a sign-in, 0.138.0 becomes a floor:
+an older binary drops it when it rewrites the server.
+
 ### Added
 
 - **A remote server can hold how people sign in to it from their browser, and every replica
@@ -39,7 +46,7 @@ field" is a commit message.
   one yet: the write comes in the next release, once every replica keeps what this one stores, so
   an older replica cannot rewrite a server and drop it. A server with a sign-in takes a personal
   credential for every tool call, as a recipe for people alone already did, and Credentials says
-  so (`signIn`, `requiresPersonal`).
+  so (`signIn`, `requiresPersonal`) (#470).
 
 ### Fixed
 
@@ -50,7 +57,7 @@ field" is a commit message.
   credential: 400 `fuseone:egress-not-allowed` naming the origin alone. A person re-sending the
   tokens they hold no longer counts as a new grant, as on the server's credential. Credentials
   already stored are unchanged, and servers of the installation are held to no policy, as
-  before.
+  before (#467).
 
 ## [0.137.0] — 2026-11-24
 
