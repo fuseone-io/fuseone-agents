@@ -1343,6 +1343,35 @@ func TestReconciler_aUserOnlyRecipeCarriesTheCredentialPolicyToTheConnection(t *
 	}
 }
 
+// A server people sign in to from their browser acts as the caller on every
+// call, with no recipe to say so.
+func TestReconciler_aServerPeopleSignInTo_carriesThePersonalPolicyToTheConnection(t *testing.T) {
+	t.Parallel()
+
+	server := domain.MCPServer{
+		Name: "signin", Transport: domain.TransportHTTP, URL: "https://signin.example.com/mcp", Enabled: true,
+		OAuthLogin: &domain.MCPOAuthLogin{ClientID: "agents", TokenAuthMethod: domain.TokenAuthNone},
+	}
+	configured := &probeServers{servers: []domain.MCPServer{server}}
+	r := newReconciler(tools.NewCatalog(engine.NewMemoryContent()), configured, recordingHealth{})
+
+	seen := false
+	r.connectTo = func(
+		ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
+		_ domain.MCPCredentials, _ OAuthGrantStore, _ MCPUserCredentialStore, policy credentialPolicy,
+		_ stdioEgressObserver,
+	) error {
+		seen = policy.requirePersonal
+		return catalog.AddServer(ctx, server.Name, &testSession{tools: []*mcp.Tool{{Name: "search"}}}, server.Surface)
+	}
+
+	r.reconcile(t.Context())
+
+	if !seen {
+		t.Fatal("connected a server people sign in to without requiring a personal credential for calls")
+	}
+}
+
 func TestReconciler_aKnownLegacyRecipeCarriesTheProtocolToTheConnection(t *testing.T) {
 	t.Parallel()
 

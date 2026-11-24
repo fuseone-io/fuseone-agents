@@ -28,29 +28,31 @@ func (i *Integrations) MCPPersonalCredentialServers(
 	}
 	out := make([]domain.MCPCredentialServer, 0, len(rows))
 	for _, row := range rows {
-		offered, err := personallyCredentialed(row, visible)
+		offered, signIn, err := personallyCredentialed(row, visible)
 		if err != nil {
 			return nil, err
 		}
 		if offered {
-			out = append(out, domain.MCPCredentialServer{Name: row.Name, Scope: row.Scope, Shared: row.HasSecret})
+			out = append(out, domain.MCPCredentialServer{
+				Name: row.Name, Scope: row.Scope, Shared: row.HasSecret, SignIn: signIn,
+			})
 		}
 	}
 	slices.SortFunc(out, func(a, b domain.MCPCredentialServer) int { return strings.Compare(a.Name, b.Name) })
 	return out, nil
 }
 
-func personallyCredentialed(row settings.Setting, visible []domain.Scope) (bool, error) {
+func personallyCredentialed(row settings.Setting, visible []domain.Scope) (offered, signIn bool, err error) {
 	runtime := mcpServerRuntimeScope(row.ScopeKind, row.Scope)
 	reached := func(v domain.Scope) bool { return runtime.Contains(v) || v.Contains(runtime) }
 	if !slices.ContainsFunc(visible, reached) {
-		return false, nil
+		return false, false, nil
 	}
 	var stored storedServer
 	if len(row.Value) > 0 {
 		if err := json.Unmarshal(row.Value, &stored); err != nil {
-			return false, fmt.Errorf("admin: decode MCP server %s: %w", row.Name, err)
+			return false, false, fmt.Errorf("admin: decode MCP server %s: %w", row.Name, err)
 		}
 	}
-	return stored.Transport == domain.TransportHTTP && stored.GitHubApp == nil, nil
+	return stored.Transport == domain.TransportHTTP && stored.GitHubApp == nil, stored.OAuthLogin != nil, nil
 }

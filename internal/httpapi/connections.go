@@ -126,7 +126,7 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 		}
 		server := mcpServerConfig(srv)
 		server.Editable = ptr(editable)
-		server.CallAuth = ptr(callAuth.forServer(srv.Name, srv.TransportOf()))
+		server.CallAuth = ptr(callAuth.forServer(srv))
 		server.Egress = ptr(s.mcpEgress(srv))
 		// Absent when no worker has tried yet, which is a different thing from
 		// a server that failed — and the screen has to be able to say so.
@@ -216,18 +216,19 @@ func remoteServerNames(servers []domain.MCPServer) []string {
 	return out
 }
 
-func (a mcpCallAuth) forServer(name, transport string) openapi.MCPServerCallAuth {
+func (a mcpCallAuth) forServer(server domain.MCPServer) openapi.MCPServerCallAuth {
 	policy := openapi.MCPServerCallAuthPolicyUnknown
-	hasPersonal := a.personal[name]
-	if transport == domain.TransportStdio {
+	hasPersonal := a.personal[server.Name]
+	userOnly, known := a.known[server.Name]
+	switch {
+	case server.TransportOf() == domain.TransportStdio:
 		policy = openapi.MCPServerCallAuthPolicyLocalProcess
 		hasPersonal = false
-	} else if requiresPersonal, ok := a.known[name]; ok {
-		if requiresPersonal {
-			policy = openapi.MCPServerCallAuthPolicyPersonalRequired
-		} else {
-			policy = openapi.MCPServerCallAuthPolicyInstallationOrService
-		}
+	// A browser sign-in says it with no recipe needed.
+	case server.TakesPersonalCredential(userOnly):
+		policy = openapi.MCPServerCallAuthPolicyPersonalRequired
+	case known:
+		policy = openapi.MCPServerCallAuthPolicyInstallationOrService
 	}
 	return openapi.MCPServerCallAuth{
 		Policy:                      policy,

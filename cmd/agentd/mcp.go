@@ -1015,11 +1015,10 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool 
 	if store, ok := r.servers.(MCPUserCredentialStore); ok {
 		personal = store
 	}
-	policy := credentialPolicy{}
-	if server.TransportOf() == domain.TransportHTTP &&
-		r.policy != nil && r.policy.RequiresPersonalCredential(server.Name) {
-		policy.requirePersonal = true
-	}
+	// The recipe saying only people hold credentials for it, or a browser
+	// sign-in configured on it: every call then acts as the caller.
+	userOnly := r.policy != nil && r.policy.RequiresPersonalCredential(server.Name)
+	policy := credentialPolicy{requirePersonal: server.TakesPersonalCredential(userOnly)}
 	if err := r.connectTo(ctx, r.catalog, server, creds, oauth, personal, policy, r.egress); err != nil {
 		// Recorded and skipped, never fatal. One broken integration used to
 		// mean nothing on the installation ran, including every agent that
