@@ -18,16 +18,10 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import type { ServerFormValues } from "@/features/integrations/server-schema";
-import {
-  dsnEnvMode,
-  headerNames,
-  remoteAuthPlan,
-  type AuthMode,
-  type RemoteAuthPlan,
-} from "@/features/integrations/mcp/auth-plan";
+import { dsnEnvMode } from "@/features/integrations/mcp/auth-plan";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
-import { GitHubAppFormFields } from "@/features/integrations/mcp/github-app-form-fields";
-import { CustomHeaderFormFields } from "@/features/integrations/mcp/custom-header-form-fields";
+import type { MCPServer } from "@/features/integrations/api";
+import { ServerAuthFields } from "@/features/integrations/mcp/server-auth-fields";
 
 /**
  * The half of the form that depends on how the server is reached.
@@ -38,20 +32,19 @@ import { CustomHeaderFormFields } from "@/features/integrations/mcp/custom-heade
  */
 export function ServerFields({
   form,
-  hasSecret,
-  hasConfigFile,
+  server,
   recipe,
 }: {
   form: UseFormReturn<ServerFormValues>;
-  hasSecret: boolean;
-  hasConfigFile: boolean;
+  /** The server as stored, or null for one being connected. */
+  server?: MCPServer | null;
   recipe?: ServerRecipe | null;
 }) {
   const { t } = useTranslation();
+  const hasSecret = server?.hasSecret === true;
+  const hasConfigFile = server?.hasConfigFile === true;
 
   if (form.watch("transport") === "http") {
-    const auth = remoteAuthPlan(recipe?.authModes, recipe !== undefined && recipe !== null);
-    const headers = headerNames(auth.multiHeaders);
     return (
       <>
         <Field
@@ -60,27 +53,7 @@ export function ServerFields({
           label={t("integrations.url")}
           placeholder="https://api.example.com/mcp/"
         />
-        <RemoteAuthNotice plan={auth} />
-        {auth.secret !== null && (
-          <Field
-            form={form}
-            name="token"
-            label={auth.secret.label ?? t("mcp.remoteBearerToken")}
-            placeholder=""
-            hint={
-              hasSecret
-                ? t("integrations.tokenKept")
-                : remoteTokenHint(auth.secret, t)
-            }
-          />
-        )}
-        {headers.length > 0 && (
-          <HeaderFields form={form} headers={headers} hasSecret={hasSecret} />
-        )}
-        {/* Only where the recipe is read and there is none: undefined is not knowing yet. */}
-        {recipe === null && <CustomHeaderFormFields form={form} kept={hasSecret} />}
-        {auth.oauth !== null && <OAuthFormFields form={form} />}
-        {auth.githubApp !== null && <GitHubAppFormFields form={form} />}
+        <ServerAuthFields form={form} server={server} recipe={recipe} />
         <RateLimitFields form={form} />
         <ResultCacheFields form={form} />
       </>
@@ -243,153 +216,6 @@ function ResultCacheFields({ form }: { form: UseFormReturn<ServerFormValues> }) 
   );
 }
 
-function remoteTokenHint(
-  mode: AuthMode,
-  t: ReturnType<typeof useTranslation>["t"],
-) {
-  const header = mode.header ?? "Authorization";
-  const prefix = mode.prefix;
-  if (!prefix) return t("mcp.remoteHeaderHint", { header });
-  return t("mcp.remoteBearerHint", { header, prefix });
-}
-
-function RemoteAuthNotice({ plan }: { plan: RemoteAuthPlan }) {
-  const { t } = useTranslation();
-  if (!plan.known) {
-    return (
-      <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
-        {t("mcp.authUnknownShape")}
-      </p>
-    );
-  }
-  if (
-    plan.noAuth !== null &&
-    plan.secret === null &&
-    plan.multiHeaders === null &&
-    plan.oauth === null
-  ) {
-    return (
-      <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
-        {t("mcp.authNoCredential")}
-      </p>
-    );
-  }
-  if (plan.unsupported.length === 0) return null;
-  const modes = plan.unsupported
-    .map((mode) => mode.label ?? t(`mcp.authMode.${mode.type}`))
-    .join(", ");
-  return (
-    <p className="rounded-lg border border-warning/30 bg-warning-surface px-3 py-2 text-xs text-warning">
-      {t("mcp.authShapeUnsupported", { modes })}
-    </p>
-  );
-}
-
-function HeaderFields({
-  form,
-  headers,
-  hasSecret,
-}: {
-  form: UseFormReturn<ServerFormValues>;
-  headers: string[];
-  hasSecret: boolean;
-}) {
-  const { t } = useTranslation();
-  const error = form.formState.errors.headers;
-  const message = typeof error?.message === "string" ? error.message : undefined;
-  return (
-    <div className="space-y-3 rounded-lg border p-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        {headers.map((header) => (
-          <div key={header} className="min-w-0 space-y-1.5">
-            <FormLabel htmlFor={headerInputID(header)}>{header}</FormLabel>
-            <Input
-              id={headerInputID(header)}
-              type="password"
-              autoComplete="off"
-              className="font-mono"
-              value={(form.watch("headers") ?? {})[header] ?? ""}
-              onChange={(event) =>
-                form.setValue(
-                  "headers",
-                  { ...(form.getValues("headers") ?? {}), [header]: event.target.value },
-                  { shouldDirty: true, shouldValidate: true },
-                )
-              }
-            />
-          </div>
-        ))}
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {hasSecret ? t("integrations.tokenKept") : t("mcp.remoteHeadersHint")}
-      </p>
-      {message && <p className="text-xs text-danger">{t(message)}</p>}
-    </div>
-  );
-}
-
-function OAuthFormFields({ form }: { form: UseFormReturn<ServerFormValues> }) {
-  const { t } = useTranslation();
-  return (
-    <div className="space-y-3 rounded-lg border p-3">
-      <p className="text-xs text-muted-foreground">{t("mcp.oauthHint")}</p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field
-          form={form}
-          name="oauthAccessToken"
-          label={t("mcp.oauthAccessToken")}
-          placeholder=""
-          password
-        />
-        <Field
-          form={form}
-          name="oauthRefreshToken"
-          label={t("mcp.oauthRefreshToken")}
-          placeholder=""
-          password
-        />
-        <Field
-          form={form}
-          name="oauthTokenURL"
-          label={t("mcp.oauthTokenURL")}
-          placeholder={t("mcp.oauthTokenURLPlaceholder")}
-        />
-        <Field
-          form={form}
-          name="oauthClientID"
-          label={t("mcp.oauthClientID")}
-          placeholder=""
-        />
-        <Field
-          form={form}
-          name="oauthClientSecret"
-          label={t("mcp.oauthClientSecret")}
-          placeholder=""
-          password
-        />
-        <Field
-          form={form}
-          name="oauthTokenType"
-          label={t("mcp.oauthTokenType")}
-          placeholder={t("mcp.oauthTokenTypePlaceholder")}
-        />
-        <Field
-          form={form}
-          name="oauthExpiresAtUnix"
-          label={t("mcp.oauthExpiresAtUnix")}
-          placeholder=""
-        />
-        <TextAreaField
-          form={form}
-          name="oauthScopes"
-          label={t("mcp.oauthScopes")}
-          placeholder={t("mcp.oauthScopesPlaceholder")}
-        />
-      </div>
-    </div>
-  );
-}
-
 /**
  * What a local server is, said where the decision is made.
  *
@@ -545,8 +371,4 @@ function TranslatedMessage({
   const fallback = useTranslation().t;
   if (!message) return null;
   return <p className="text-sm text-destructive">{(t ?? fallback)(message)}</p>;
-}
-
-function headerInputID(header: string) {
-  return `header-${header.replace(/[^A-Za-z0-9_-]/g, "-")}`;
 }

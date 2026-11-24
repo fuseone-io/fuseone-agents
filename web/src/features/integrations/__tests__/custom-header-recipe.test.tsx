@@ -67,7 +67,8 @@ describe("the custom header follows the server's recipe", () => {
   it("on the connected editor, is offered for a server with no recipe", async () => {
     world("crm");
     show(<ServerEditor server={server("crm")} onClose={() => {}} />);
-    expect(await screen.findByLabelText("Header name")).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("radio", { name: /^Custom header/ }));
+    expect(screen.getByLabelText("Header name")).toBeInTheDocument();
   });
 
   it.each([

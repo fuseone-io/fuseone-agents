@@ -60,8 +60,7 @@ export function ServerForm({
               <ServerFormBody
                 form={form}
                 editing={server !== null}
-                hasSecret={server?.hasSecret === true}
-                hasConfigFile={server?.hasConfigFile === true}
+                server={server}
                 recipe={recipe}
               />
           </PropertiesSheetBody>

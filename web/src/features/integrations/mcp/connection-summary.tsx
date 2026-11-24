@@ -13,7 +13,7 @@ export function RemoteAuthSummary({ plan }: { plan: RemoteAuthPlan }) {
     );
   }
 
-  if (plan.noAuth !== null && plan.secret === null && plan.oauth === null) {
+  if (plan.noAuth !== null && plan.secret === null && plan.multiHeaders === null && plan.oauth === null) {
     return (
       <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
         {t("mcp.authNoCredential")}

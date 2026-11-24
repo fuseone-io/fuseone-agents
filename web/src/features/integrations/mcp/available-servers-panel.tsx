@@ -592,8 +592,7 @@ function ConnectServerPanel({
               <ServerFormBody
                 form={form}
                 editing={false}
-                hasSecret={false}
-                hasConfigFile={false}
+                server={null}
                 recipe={recipe}
               />
             </form>

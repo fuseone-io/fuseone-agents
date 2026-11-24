@@ -1,33 +1,16 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
-import { customHeaderCredential, customHeaderState } from "@/features/integrations/mcp/custom-header";
 import { toast } from "sonner";
 import {
   serverSchema,
   type ServerFormValues,
 } from "@/features/integrations/server-schema";
 import { usePutMCPServer, type MCPServer } from "@/features/integrations/api";
-import {
-  dsnEnvMode,
-  headerCredential,
-  headerNames,
-  multiHeaderCredential,
-  remoteAuthPlan,
-  type AuthMode,
-  type RemoteAuthPlan,
-} from "@/features/integrations/mcp/auth-plan";
+import { dsnEnvMode, type AuthMode } from "@/features/integrations/mcp/auth-plan";
+import { formChoice, formCredential, serverFormAuth } from "@/features/integrations/mcp/server-form-auth";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
-import {
-  oauthFromValue,
-  oauthHasValue,
-} from "@/features/integrations/mcp/oauth-credential";
-import {
-  blankGitHubApp,
-  githubAppFromValue,
-  githubAppHasValue,
-  githubAppHeaders,
-} from "@/features/integrations/mcp/github-app-credential";
+import { blankGitHubApp } from "@/features/integrations/mcp/github-app-credential";
 import { problemMessage } from "@/lib/api/problem-message";
 import { serverRefusal } from "@/features/integrations/mcp/server-refusal";
 import { useActiveScope, type Scope } from "@/features/scope/active-scope";
@@ -62,10 +45,9 @@ export function useServerForm(
   });
 
   async function submit(values: ServerFormValues) {
-    const remotePlan = remoteAuthPlan(recipe?.authModes, recipe !== undefined && recipe !== null);
-    const remoteHeaders = headerNames(remotePlan.multiHeaders);
+    const auth = serverFormAuth(recipe, server);
     const dsnMode = values.transport === "stdio" ? dsnEnvMode(recipe?.authModes) : null;
-    if (headersIncomplete(values, remoteHeaders)) {
+    if (formChoice(auth, values.authChoice) === "headers" && headersIncomplete(values, auth.headers)) {
       form.setError("headers", { message: "mcp.remoteHeadersIncomplete" });
       return;
     }
@@ -78,21 +60,12 @@ export function useServerForm(
         command: values.command,
         args: values.args.split(/\s+/).filter(Boolean),
         url: values.url,
-        // Left empty means "leave what is stored", which is this form's whole
-        // reason for not demanding a secret to correct an address. Removing
-        // one is a separate gesture, on the server's own page.
-        ...remoteCredential(values, remotePlan, remoteHeaders),
+        // The shape shown, and nothing typed under another. Left empty means
+        // "leave what is stored", which is this form's whole reason for not
+        // demanding a secret to correct an address. Removing one is a
+        // separate gesture, on the server's own page.
+        ...formCredential(values, auth),
         env: localEnv(values, dsnMode),
-        oauth: oauthHasValue(values) ? oauthFromValue(values) : undefined,
-        githubApp:
-          values.transport === "http" && githubAppHasValue(values)
-            ? githubAppFromValue(values)
-            : undefined,
-        // An App leaves no secret header to send (the schema refuses the
-        // pair), so the only headers beside it are its configuration.
-        ...(values.transport === "http" && githubAppHasValue(values)
-          ? { headers: githubAppHeaders(values) }
-          : {}),
         configFile: values.configFile || undefined,
         configFileEnv: values.configFileEnv,
         rateLimit: rateLimitFromValues(values),
@@ -143,6 +116,7 @@ function defaultServerValues(
     command: server?.command ?? "",
     args: (server?.args ?? []).join(" "),
     url: server?.url ?? "",
+    authChoice: null,
     token: "",
     headers: {},
     customHeaderName: "",
@@ -181,28 +155,6 @@ function defaultServerValues(
 function headersIncomplete(values: ServerFormValues, headers: string[]) {
   const filled = (header: string) => values.headers[header]?.trim() !== "";
   return headers.some(filled) && !(headers.length > 0 && headers.every(filled));
-}
-
-function remoteCredential(
-  values: ServerFormValues,
-  plan: RemoteAuthPlan,
-  headers: string[],
-) {
-  if (values.transport !== "http") return {};
-  const custom = { name: values.customHeaderName, value: values.customHeaderValue };
-  if (!plan.known && customHeaderState(custom) === "complete") {
-    return { headers: customHeaderCredential(custom) };
-  }
-  if (values.token !== "" && plan.secret?.type === "bearer") {
-    return { token: values.token };
-  }
-  if (values.token !== "" && plan.secret) {
-    return { headers: headerCredential(plan.secret, values.token) };
-  }
-  if (headers.length > 0 && headers.every((header) => values.headers[header]?.trim() !== "")) {
-    return { headers: multiHeaderCredential(headers, values.headers) };
-  }
-  return { token: values.token || undefined };
 }
 
 function localEnv(values: ServerFormValues, dsnMode: AuthMode | null) {

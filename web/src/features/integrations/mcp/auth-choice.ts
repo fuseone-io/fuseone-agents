@@ -67,3 +67,17 @@ export function initialChoice(
 function isAuthorization(name: string) {
   return name.trim().toLowerCase() === "authorization";
 }
+
+/**
+ * The shape a form shows: the one somebody picked while it is still offered,
+ * else the one stored or the first offered. Worked out on every render, since a
+ * recipe can arrive after the form and a pick made before it was a guess.
+ */
+export function effectiveChoice(
+  picked: AuthChoice | null,
+  choices: AuthChoice[],
+  stored: StoredShape,
+  plan: RemoteAuthPlan,
+): AuthChoice | null {
+  return picked !== null && choices.includes(picked) ? picked : initialChoice(choices, stored, plan);
+}

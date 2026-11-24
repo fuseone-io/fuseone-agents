@@ -15,6 +15,7 @@ import { ServerTransportField } from "@/features/integrations/server-transport-f
 import { ScopeFields } from "@/features/integrations/scope/scope-fields";
 import type { ServerFormValues } from "@/features/integrations/server-schema";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
+import type { MCPServer } from "@/features/integrations/api";
 
 /** Everything a tool server is, in the order somebody fills it: what it is
  *  called, where it is stored, how it is reached, and then whichever half
@@ -22,14 +23,13 @@ import type { ServerRecipe } from "@/features/integrations/mcp/api";
 export function ServerFormBody({
   form,
   editing,
-  hasSecret,
-  hasConfigFile,
+  server,
   recipe,
 }: {
   form: UseFormReturn<ServerFormValues>;
   editing: boolean;
-  hasSecret: boolean;
-  hasConfigFile: boolean;
+  /** The server as stored, or null for one being connected. */
+  server?: MCPServer | null;
   recipe?: ServerRecipe | null;
 }) {
   const { t } = useTranslation();
@@ -63,12 +63,7 @@ export function ServerFormBody({
 
       <ServerTransportField form={form} />
 
-      <ServerFields
-        form={form}
-        hasSecret={hasSecret}
-        hasConfigFile={hasConfigFile}
-        recipe={recipe}
-      />
+      <ServerFields form={form} server={server} recipe={recipe} />
 
       <FormField
         control={form.control}
