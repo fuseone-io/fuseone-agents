@@ -13,12 +13,18 @@ import (
 type unplacedTools struct{ tools []domain.ToolID }
 
 func (u unplacedTools) Error() string {
+	return "no step reaches " + u.Detail() +
+		": a run is offered only what its steps reach, so place each in a step or take it out of tools"
+}
+
+// Detail is the refusal's detail: the tools alone, comma-separated, so the
+// console names them in the reader's language rather than quoting this one.
+func (u unplacedTools) Detail() string {
 	names := make([]string, 0, len(u.tools))
 	for _, t := range u.tools {
 		names = append(names, string(t))
 	}
-	return "no step reaches " + strings.Join(names, ", ") +
-		": a run is offered only what its steps reach, so place each in a step or take it out of tools"
+	return strings.Join(names, ", ")
 }
 
 // checkPlaced refuses a definition with a tool no step reaches.

@@ -230,8 +230,8 @@ func TestActivate_aToolNoStepReaches_isRefusedNamingIt(t *testing.T) {
 	resp := activate(t, activationServer(f, newPublisher()), inArea("cx", domain.RoleAuthor), liveTag(), nil)
 	bad, ok := resp.(openapi.ActivateAgentVersion400ApplicationProblemPlusJSONResponse)
 	if !ok || bad.Type == nil || *bad.Type != string(CodePublishUnplacedTools) ||
-		bad.Detail == nil || !strings.Contains(*bad.Detail, "rootly.create_alert") {
-		t.Fatalf("answer = %T %+v, want 400 publish-unplaced-tools naming the tool", resp, resp)
+		bad.Detail == nil || *bad.Detail != "rootly.create_alert" {
+		t.Fatalf("answer = %T %+v, want 400 publish-unplaced-tools whose detail is the tool, for the console to name", resp, resp)
 	}
 }
 
