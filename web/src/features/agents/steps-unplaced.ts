@@ -1,9 +1,7 @@
 import type { components } from "@/lib/api/schema.gen";
+import { PLATFORM_TOOLS } from "@/features/agents/platform-tools";
 
 type AgentStep = components["schemas"]["AgentStep"];
-
-/** The platform's own tools, offered whatever the step (`domain.PlatformTools`). */
-const PLATFORM_PREFIX = "$fuseone.";
 
 /**
  * Each granted tool no step reaches, in the order granted.
@@ -16,5 +14,5 @@ const PLATFORM_PREFIX = "$fuseone.";
 export function unplacedTools(tools: string[], steps: AgentStep[]): string[] {
   if (steps.length === 0) return [];
   const placed = new Set(steps.flatMap((step) => step.reaches ?? []));
-  return tools.filter((tool) => !placed.has(tool) && !tool.startsWith(PLATFORM_PREFIX));
+  return tools.filter((tool) => !placed.has(tool) && !PLATFORM_TOOLS.has(tool));
 }

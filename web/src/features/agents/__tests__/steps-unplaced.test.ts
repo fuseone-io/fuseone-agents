@@ -19,4 +19,10 @@ describe("unplacedTools", () => {
   it("never lists a platform tool: the platform offers it whatever the step", () => {
     expect(unplacedTools(["$fuseone.memory.find"], [{ name: "Pensar" }])).toEqual([]);
   });
+
+  // The set is explicit, as the server's is: a typo of a platform tool, or a
+  // vendor squatting the sigil, is not the platform's and is listed.
+  it("lists a tool that only looks like the platform's", () => {
+    expect(unplacedTools(["$fuseone.memory.fnd"], [{ name: "Pensar" }])).toEqual(["$fuseone.memory.fnd"]);
+  });
 });
