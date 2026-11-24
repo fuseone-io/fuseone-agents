@@ -39,6 +39,10 @@ const (
 	KindModelProvider     Kind = "model_provider"
 	KindMCPServer         Kind = "mcp_server"
 	KindMCPUserCredential Kind = "mcp_user_credential"
+	// KindMCPOAuthLogin is the client secret of a server's browser sign-in,
+	// sealed beside the server at its scope and under its name. What is not
+	// secret of that sign-in is the server row's own value.
+	KindMCPOAuthLogin     Kind = "mcp_oauth_login"
 	KindConnectorInstance Kind = "connector_instance"
 	KindPack              Kind = "capability_pack"
 	KindBudget            Kind = "budget"

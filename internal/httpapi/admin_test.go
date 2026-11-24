@@ -633,6 +633,24 @@ func TestListIntegrations_explainsPersonalCredentialRequirementForCaller(t *test
 	}
 }
 
+// No recipe describes it, and still every call acts as the caller: people
+// sign in to it from their browser.
+func TestListIntegrations_aServerPeopleSignInTo_requiresAPersonalCredential(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{servers: []domain.MCPServer{{
+		Name: "signin", Transport: domain.TransportHTTP, URL: "https://signin.example/mcp", Enabled: true,
+		OAuthLogin: &domain.MCPOAuthLogin{ClientID: "agents", TokenAuthMethod: domain.TokenAuthNone},
+	}}}
+	resp, err := serverWith(t, admin).ListIntegrations(as(domain.RoleCurator), openapi.ListIntegrationsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListIntegrations: %v", err)
+	}
+	if auth := callAuthOf(t, resp, "signin"); auth.Policy != openapi.MCPServerCallAuthPolicyPersonalRequired {
+		t.Errorf("call auth = %+v, want personal required", auth)
+	}
+}
+
 func TestListIntegrations_reportsTheCallersPersonalCredentialPresence(t *testing.T) {
 	t.Parallel()
 

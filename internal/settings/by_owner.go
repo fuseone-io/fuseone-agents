@@ -72,6 +72,17 @@ func scanSettings(rows pgx.Rows, kind Kind) ([]Setting, error) {
 
 // Fingerprint names what a row seals, without saying what it is, or nothing when
 // there is nothing to name. Bound to the row, as sealing it was.
+// Mark names a secret without revealing it, keyed by the vault and by a
+// context of the caller's rather than a row's: the same secret has the same
+// mark wherever it is stored, so moving it between scopes leaves the mark,
+// and everything computed from it, unchanged.
+func (s *Store) Mark(material []byte, context string) string {
+	if s.vault == nil || len(material) == 0 {
+		return ""
+	}
+	return s.vault.Fingerprint(material, context)
+}
+
 func (s *Store) Fingerprint(set Setting, material []byte) string {
 	if s.vault == nil || len(material) == 0 {
 		return ""

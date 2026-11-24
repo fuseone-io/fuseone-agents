@@ -228,6 +228,7 @@ func mcpServerConfig(srv domain.MCPServer) openapi.MCPServer {
 		HasSecret:          ptr(srv.HasSecret),
 		HasOAuth:           ptr(srv.HasOAuth),
 		GithubApp:          githubAppToResponse(srv.GitHubApp),
+		OauthLogin:         oauthLoginToResponse(srv.OAuthLogin),
 		HasVariables:       ptr(srv.HasVariables),
 		HasConfigFile:      ptr(srv.HasConfigFile),
 		Managed:            ptr(true),

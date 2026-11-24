@@ -36,6 +36,12 @@ func (i *Integrations) judgeMove(ctx context.Context, tx settings.DB, m MCPServe
 	if err := withinEgress(egressOrNone(egress), server.URL, domain.ReadMCPCredentials(stored.Secret)); err != nil {
 		return err
 	}
+	if login := server.OAuthLogin; login != nil {
+		// Its sign-in endpoints are requests of the server's too.
+		if err := originsWithin(egressOrNone(egress), nonEmpty(login.AuthorizeURL, login.TokenURL)); err != nil {
+			return err
+		}
+	}
 	if m.Strand {
 		return nil
 	}

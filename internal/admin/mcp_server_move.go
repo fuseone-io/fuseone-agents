@@ -89,6 +89,9 @@ func (i *Integrations) MoveMCPServer(ctx context.Context, m MCPServerMove) (doma
 	if err := i.repointPersonalCredentials(ctx, tx, m.Name, to, m.To); err != nil {
 		return "", err
 	}
+	if err := i.moveLoginSecret(ctx, tx, m.Name, to, m.To, m.By); err != nil {
+		return "", err
+	}
 	if err := recordMove(ctx, tx, m); err != nil {
 		return "", err
 	}

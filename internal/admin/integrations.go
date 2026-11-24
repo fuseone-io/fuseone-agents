@@ -88,6 +88,9 @@ type storedServer struct {
 	HasOAuth bool `json:"hasOAuth,omitempty"`
 	// GitHubApp is the non-secret half of a GitHub App credential.
 	GitHubApp *storedGitHubApp `json:"githubApp,omitempty"`
+	// OAuthLogin is the public half of a browser sign-in; its client secret
+	// is sealed in a row of its own (KindMCPOAuthLogin).
+	OAuthLogin *storedOAuthLogin `json:"oauthLogin,omitempty"`
 	/*
 		Surface is which of the server's tools this installation brought in.
 
@@ -201,6 +204,7 @@ func serverFromRow(row settings.Setting) (domain.MCPServer, error) {
 		HasSecret:             row.HasSecret,
 		HasOAuth:              stored.HasOAuth,
 		GitHubApp:             stored.GitHubApp.summary(),
+		OAuthLogin:            stored.OAuthLogin.login(),
 		HasVariables:          hasVariables,
 		HasConfigFile:         stored.HasConfigFile,
 		ConfigFileEnv:         configFileEnv(stored.ConfigFileEnv),
@@ -240,6 +244,8 @@ type MCPServerWrite struct {
 	Stored domain.Scope
 	Server domain.MCPServer
 	Given  domain.MCPCredentialPatch
+	// Login is the browser sign-in configuration. Nil keeps what is stored.
+	Login  *domain.MCPOAuthLoginPatch
 	Expect domain.IfMatch
 }
 
@@ -321,7 +327,13 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 	// stored.
 	var egress *domain.MCPEgress
 	var toolsRemoved int64
+	// What the write does to the sign-in's sealed secret, decided by the fold
+	// and carried out after the server row, in the same transaction.
+	var loginSecret domain.LoginSecretChange
 	return writeRevised(ctx, i.pool, i.settings, folded{
+		then: func(ctx context.Context, tx settings.DB) error {
+			return i.writeLoginSecret(ctx, tx, at, storedScope, server.Name, by, loginSecret)
+		},
 		by: by, scope: scope, action: "mcp_server.configured", target: server.Name,
 		// The guard takes the row's lock, after the name's: a removal takes
 		// the name then the row, and the two orders must agree (NT-019).
@@ -409,6 +421,11 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 			if err := withinEgress(egress, server.URL, merged); err != nil {
 				return settings.Setting{}, nil, err
 			}
+			login, err := i.foldLogin(was.OAuthLogin, w, merged, egress)
+			if err != nil {
+				return settings.Setting{}, nil, err
+			}
+			loginSecret = login.secret
 			// Judged on what will be stored, not on what was sent: an edit
 			// that only moves the URL still decides where the token goes.
 			if merged.GitHubApp != nil && !merged.GitHubApp.Empty() {
@@ -433,6 +450,7 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 				HasVariables:          len(merged.Env) > 0,
 				HasOAuth:              merged.OAuth != nil && !merged.OAuth.Empty(),
 				GitHubApp:             storedGitHubAppOf(merged.GitHubApp),
+				OAuthLogin:            login.stored,
 				HasConfigFile:         merged.ConfigFile != "",
 				AcceptsLocalExecution: server.AcceptsLocalExecution,
 			})
@@ -467,14 +485,19 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 					"hasOAuth":              merged.OAuth != nil && !merged.OAuth.Empty(),
 					"githubAppChanged":      given.GitHubApp != nil,
 					"hasGitHubApp":          merged.GitHubApp != nil,
-					"configFileChanged":     given.ConfigFile != nil,
-					"hasConfigFile":         merged.ConfigFile != "",
-					"configFileEnv":         configEnv,
-					"surface":               surfaceSize(surface),
-					"rateLimit":             rateLimitDetail(rateLimit),
-					"cache":                 resultCacheDetail(cache),
-					"stdioEgress":           stdioEgressDetail(stdioEgress),
-					"toolsRemoved":          toolsRemoved,
+					// The sign-in as booleans only: never its configuration, nor
+					// whether a given secret is new beyond that it was sent.
+					"oauthLoginChanged":       w.Login != nil,
+					"oauthLoginSecretChanged": login.secret.Set != nil || login.secret.Remove,
+					"hasOAuthLogin":           login.stored != nil,
+					"configFileChanged":       given.ConfigFile != nil,
+					"hasConfigFile":           merged.ConfigFile != "",
+					"configFileEnv":           configEnv,
+					"surface":                 surfaceSize(surface),
+					"rateLimit":               rateLimitDetail(rateLimit),
+					"cache":                   resultCacheDetail(cache),
+					"stdioEgress":             stdioEgressDetail(stdioEgress),
+					"toolsRemoved":            toolsRemoved,
 				}, nil
 		},
 	})
@@ -1231,6 +1254,10 @@ func (i *Integrations) RemoveMCPServer(ctx context.Context, r Removal) error {
 		return err
 	}
 	if err := i.settings.DeleteTx(ctx, tx, kind, at, settings.KindMCPServer, name); err != nil {
+		return err
+	}
+	// Its sign-in's secret goes with it: nothing is left to sign in to.
+	if err := i.settings.DeleteTx(ctx, tx, kind, at, settings.KindMCPOAuthLogin, name); err != nil {
 		return err
 	}
 	tag, err := tx.Exec(ctx, `

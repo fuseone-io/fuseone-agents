@@ -10,4 +10,7 @@ type MCPCredentialServer struct {
 	// Shared says the server holds a credential of its own, used when the
 	// person has none.
 	Shared bool
+	// SignIn says people sign in to the server from their browser, so every
+	// call on it takes their own credential.
+	SignIn bool
 }

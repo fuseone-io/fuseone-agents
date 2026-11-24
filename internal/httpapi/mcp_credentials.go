@@ -56,14 +56,16 @@ func (s *Server) ListMCPUserCredentials(
 	}
 	offered := make([]openapi.MCPCredentialServer, 0, len(servers))
 	for _, server := range servers {
-		offered = append(offered, mcpCredentialServerOf(server))
+		item := mcpCredentialServerOf(server)
+		item.RequiresPersonal = server.SignIn || s.recipeUserOnly(server.Name)
+		offered = append(offered, item)
 	}
 	body.Servers = &offered
 	return body, nil
 }
 
 func mcpCredentialServerOf(server domain.MCPCredentialServer) openapi.MCPCredentialServer {
-	out := openapi.MCPCredentialServer{Name: server.Name, Shared: server.Shared,
+	out := openapi.MCPCredentialServer{Name: server.Name, Shared: server.Shared, SignIn: server.SignIn,
 		ScopeKind: openapi.MCPCredentialServerScopeKindInstallation}
 	if server.Scope.Company == "" {
 		return out
@@ -168,4 +170,18 @@ func mcpUserCredentialOf(credential domain.MCPPersonalCredential) openapi.MCPUse
 		HasHeaders: credential.HasHeaders, HasOAuth: credential.HasOAuth,
 		UpdatedBy: ptr(credential.UpdatedBy), UpdatedAt: ptr(credential.UpdatedAt),
 	}
+}
+
+// recipeUserOnly is whether the recipe describing a server says only people
+// hold credentials for it.
+func (s *Server) recipeUserOnly(name string) bool {
+	if s.known == nil {
+		return false
+	}
+	for _, entry := range s.known.All() {
+		if entry.Server == name {
+			return entry.RequiresPersonalCredential()
+		}
+	}
+	return false
 }

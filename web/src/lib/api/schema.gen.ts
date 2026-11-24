@@ -5048,6 +5048,17 @@ export interface components {
             /** @description Always true for a stored App; the key itself never comes back. */
             hasPrivateKey: boolean;
         };
+        /** @description A server's browser sign-in configuration as read: everything but the client secret, which a reader only learns is held. */
+        MCPOAuthLogin: {
+            clientID: string;
+            scopes?: string[];
+            authorizeURL?: string;
+            tokenURL?: string;
+            resource?: string;
+            /** @enum {string} */
+            tokenAuthMethod: "none" | "client_secret_post" | "client_secret_basic";
+            hasClientSecret: boolean;
+        };
         MCPUserCredentialInput: {
             /** @description Bearer token for this signed-in user. Omit to keep the stored one. A non-empty token replaces stored headers or OAuth material. */
             token?: string;
@@ -5083,6 +5094,10 @@ export interface components {
             area?: string;
             /** @description The server holds a credential of its own, used when the person has none. */
             shared: boolean;
+            /** @description People sign in to this server from their browser. */
+            signIn: boolean;
+            /** @description Every tool call on this server takes the person's own credential: its recipe says so, or people sign in to it. The shared credential, if any, only discovers its tools. */
+            requiresPersonal: boolean;
         };
         /** @description Per-worker token bucket for outgoing tool calls to one MCP server. With multiple worker replicas, each process has its own bucket; this is an operational guard against bursts, not an installation-wide quota. Set both fields to zero to disable it. */
         MCPRateLimit: {
@@ -5516,6 +5531,8 @@ export interface components {
             hasOAuth?: boolean;
             /** @description Present when the credential is a GitHub App. The private key never comes back through this API. */
             githubApp?: components["schemas"]["MCPGitHubAppSummary"];
+            /** @description Present when people sign in to this server from their browser. The client secret never comes back through this API. */
+            oauthLogin?: components["schemas"]["MCPOAuthLogin"];
             /** @description The sealed credential document includes environment variables for a local process. The values never come back through this API. */
             hasVariables?: boolean;
             /** @description The sealed credential document includes a platform-managed configuration file. The content never comes back through this API. */
