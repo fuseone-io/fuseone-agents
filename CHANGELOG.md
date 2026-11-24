@@ -30,6 +30,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.136.0] — 2026-11-24
+
+A generic MCP server can authenticate with a header of its own, and a new egress policy no
+longer erases the one its scope already has (#461, #462). No migration; the rollback floors of
+0.135.0 hold.
+
 ### Added
 
 - **A generic MCP server can authenticate with a custom header.** A remote server with no recipe
@@ -37,7 +43,7 @@ field" is a commit message.
   of its own, such as `apikey`, could not be connected from the console. The connection form
   and the server's page now take a header name and its value, sealed in the vault and sent as
   that exact header in place of the bearer. Both read the server's recipe first, and offer the
-  field only where no recipe describes the server.
+  field only where no recipe describes the server (#461).
 
 ### Changed
 
@@ -46,7 +52,7 @@ field" is a commit message.
   Content-Type, Accept, Last-Event-ID, and every header under the MCP protocol's `Mcp-` prefix,
   such as Mcp-Session-Id, Mcp-Method, Mcp-Name and Mcp-Param-*) or a value with a line break is
   refused with a 400 that names the header, never its value. Only what a write sends is
-  judged: headers stored before keep working.
+  judged: headers stored before keep working (#461).
 
 ### Fixed
 
@@ -57,7 +63,7 @@ field" is a commit message.
   it read: `If-None-Match: *` to create, the policy's `etag` in `If-Match` to edit or remove.
   The API answers 412 rather than replace a policy that exists or changed since, and lists each
   policy's `etag`. Without either header the API replaces as before, so existing clients keep
-  working.
+  working (#462).
 
 ## [0.135.0] — 2026-11-22
 
