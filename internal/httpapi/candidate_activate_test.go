@@ -219,6 +219,22 @@ func TestActivate_aDefinitionWithNoNeverBlock_isRefused(t *testing.T) {
 	}
 }
 
+// A candidate is published from the workbench, so the workbench's checklist
+// holds there too: a tool no step reaches would never run.
+func TestActivate_aToolNoStepReaches_isRefusedNamingIt(t *testing.T) {
+	t.Parallel()
+	f := newFakeActivations(&fakeCorpus{})
+	f.activated.Spec.Tools = []domain.ToolID{"crm.lookup", "rootly.create_alert"}
+	f.activated.Spec.Steps = []spec.Step{{Name: "Look up", Reaches: []domain.ToolID{"crm.lookup"}}}
+
+	resp := activate(t, activationServer(f, newPublisher()), inArea("cx", domain.RoleAuthor), liveTag(), nil)
+	bad, ok := resp.(openapi.ActivateAgentVersion400ApplicationProblemPlusJSONResponse)
+	if !ok || bad.Type == nil || *bad.Type != string(CodePublishUnplacedTools) ||
+		bad.Detail == nil || !strings.Contains(*bad.Detail, "rootly.create_alert") {
+		t.Fatalf("answer = %T %+v, want 400 publish-unplaced-tools naming the tool", resp, resp)
+	}
+}
+
 func TestActivate_storeRefusals_becomeThePublicationsAnswers(t *testing.T) {
 	t.Parallel()
 	conflicts := map[error]Code{

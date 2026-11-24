@@ -16,6 +16,10 @@ func draftView(o drafts.Opened) openapi.AgentDraft {
 		Definition: definitionOf(o.Draft.Definition()),
 		Blocks:     make([]openapi.DraftBlock, 0, len(o.Draft.Blocks)),
 		Missing:    make([]openapi.AgentDraftMissing, 0, len(o.Missing)),
+		Unplaced:   []string{},
+	}
+	for _, t := range o.Draft.Definition().Unplaced() {
+		out.Unplaced = append(out.Unplaced, string(t))
 	}
 	if o.BaseVersion != "" {
 		out.BaseVersionId = ptr(string(o.BaseVersion))

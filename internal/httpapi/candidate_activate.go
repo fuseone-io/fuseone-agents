@@ -65,7 +65,7 @@ func (s *Server) ActivateAgentVersion(
 		return activationAbsent(req.AgentId), err
 	}
 	a := spec.Activation{Agent: agent, Version: version, Scope: scope, By: callerOf(ctx),
-		Guard: guard, Accept: acceptNever}
+		Guard: guard, Accept: acceptWorkbench}
 	var (
 		activated spec.Activated
 		refused   activationReply
@@ -161,10 +161,11 @@ func (s *Server) activationAnswered(ctx context.Context, a spec.Activated) activ
 	return out
 }
 
-// acceptNever is the workbench's checklist on the definition the store activates.
-func acceptNever(s spec.Spec) error {
+// acceptWorkbench is the workbench's checklist on the definition the store
+// activates: a never block, and every tool placed in a step.
+func acceptWorkbench(s spec.Spec) error {
 	if !hasNever(blocks.Parse(s.Instructions)) {
 		return errNeedsNever
 	}
-	return nil
+	return checkPlaced(s)
 }

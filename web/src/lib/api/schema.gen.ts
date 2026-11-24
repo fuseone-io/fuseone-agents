@@ -576,8 +576,10 @@ export interface paths {
          *
          *     Until candidates exist, a draft whose instructions have no `never`
          *     block is refused (400, `fuseone:publish-needs-never`), as activation
-         *     will. The JSON API, the `.agent.md` file and Terraform publish without
-         *     it.
+         *     will. So is a draft with a tool no step reaches (400,
+         *     `fuseone:publish-unplaced-tools`, naming the tools): a run is offered
+         *     only what its steps reach, so that tool would never run. The JSON
+         *     API, the `.agent.md` file and Terraform publish without either.
          *
          *     The agent's schedules and webhooks move with the version, in the same
          *     transaction. A webhook path another agent already answers on, or a
@@ -746,6 +748,7 @@ export interface paths {
          *
          *     Refused, changing nothing: a definition the publication would refuse
          *     (400), one with no `never` block (400 `fuseone:publish-needs-never`),
+         *     one with a tool no step reaches (400 `fuseone:publish-unplaced-tools`),
          *     an agent that moved out of the version's scope (409
          *     `fuseone:candidate-scope-moved`), an autonomous agent (409
          *     `fuseone:stage-refused`), a candidate with no readable seal (409
@@ -6562,6 +6565,15 @@ export interface components {
             blocks: components["schemas"]["DraftBlock"][];
             /** @description What publication still needs and the draft lacks. */
             missing: ("instructions" | "tools" | "budget" | "provider")[];
+            /**
+             * @description Tools in the definition that no step reaches, in the order of
+             *     `tools`. A run of an agent with steps is offered only what its
+             *     steps reach, so a run never receives these. Empty when the draft
+             *     has no steps, and a platform tool is never listed: the platform
+             *     offers it whatever the step. Publishing from the workbench is
+             *     refused while it is not empty.
+             */
+            unplaced: string[];
         };
         DraftSeal: {
             version: string;

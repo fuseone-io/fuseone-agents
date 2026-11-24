@@ -72,8 +72,8 @@ func (s *Server) PublishAgentDraft(
 
 /*
 publishable is the draft as the version it would become, refused if it may
-not be one: a draft with no "never" block (until candidates exist), a
-destination the caller may not publish into (404, as the draft's own scope
+not be one: a draft with no "never" block (until candidates exist), one
+with a tool no step reaches, a destination the caller may not publish into (404, as the draft's own scope
 is), or a definition the publication's checks refuse.
 */
 func (s *Server) publishable(ctx context.Context, o drafts.Opened) (spec.Spec, domain.Scope, publishRefusal, error) {
@@ -89,6 +89,9 @@ func (s *Server) publishable(ctx context.Context, o drafts.Opened) (spec.Spec, d
 	_, published, err := canonical(definition)
 	if err != nil {
 		return spec.Spec{}, scope, draftPublishInvalid(CodeInvalidInput, err.Error()), nil
+	}
+	if err := checkPlaced(published); err != nil {
+		return spec.Spec{}, scope, draftPublishInvalid(CodePublishUnplacedTools, err.Error()), nil
 	}
 	detail, err := s.checker().Check(ctx, published, clockOr(s.clock).Now())
 	if err != nil || detail != "" {
