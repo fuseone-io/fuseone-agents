@@ -2612,6 +2612,7 @@
     "turn-in-flight": "Outro turno desta conversa ainda está em andamento. Espere a resposta.",
     "turn-too-large": "A mensagem, ou o rascunho junto com ela, passa do tamanho de um turno.",
     "publish-needs-never": "Diga nas instruções o que o agente nunca deve fazer antes de publicar: peça ao assistente um bloco \"Nunca\".",
+    "publish-unplaced-tools": "Uma ferramenta deste rascunho não está em nenhum passo, então uma execução nunca a receberia. Coloque cada ferramenta num passo ou tire-a das ferramentas: o painel do rascunho lista quais são.",
     "agent-moved": "O agente foi publicado por outro caminho depois que este rascunho foi aberto. Descarte o rascunho e abra outro sobre a versão atual.",
     "version-collision": "O identificador de versão deste texto já identifica outro texto. Mude o rascunho e tente de novo.",
     "version-digest-unknown": "Este identificador de versão foi publicado antes de o conteúdo ser registrado, então não dá para provar que é o mesmo texto. Mude o rascunho e tente de novo.",
@@ -3524,6 +3525,8 @@
     "areaRequired": "Escolha a área",
     "missingTitle": "Para publicar ainda falta",
     "complete": "Nada falta para publicar.",
+    "unplacedTitle": "Nenhum passo alcança estas ferramentas",
+    "unplacedHint": "Uma execução de um agente com passos só recebe o que os passos alcançam, então nunca recebe estas. Coloque cada uma num passo ou tire-a das ferramentas. Uma ferramenta no último passo fica disponível durante toda a execução.",
     "missing": {
       "instructions": "Instruções",
       "tools": "Ferramentas",

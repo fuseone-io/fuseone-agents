@@ -35,6 +35,8 @@ func activationRefused(agent string, err error) (activationReply, bool) {
 		return nil, false
 	case errors.Is(err, errNeedsNever):
 		return activationInvalid(CodePublishNeedsNever, err.Error()), true
+	case errors.As(err, new(unplacedTools)):
+		return activationInvalid(CodePublishUnplacedTools, err.Error()), true
 	case errors.As(err, new(checkRefusal)):
 		return activationInvalid(CodeInvalidInput, err.Error()), true
 	case agentAbsent(err), errors.Is(err, spec.ErrCandidateNotFound):

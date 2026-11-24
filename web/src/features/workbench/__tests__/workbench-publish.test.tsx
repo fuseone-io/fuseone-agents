@@ -90,6 +90,7 @@ describe("publishing from the workbench", () => {
 
   it.each([
     ["fuseone:publish-needs-never", 400, "Diga nas instruções o que o agente nunca deve fazer antes de publicar"],
+    ["fuseone:publish-unplaced-tools", 400, "Coloque cada ferramenta num passo ou tire-a das ferramentas"],
     ["fuseone:agent-moved", 412, "O agente foi publicado por outro caminho depois que este rascunho foi aberto"],
   ])("says what to do when refused with %s", async (type, status, said) => {
     world(() => ({ status, body: { type, title: "refused", status } }));

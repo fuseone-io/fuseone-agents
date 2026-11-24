@@ -85,3 +85,31 @@ func stepProblems(steps []Step, tools []domain.ToolID) []string {
 	}
 	return problems
 }
+
+/*
+Unplaced is every tool in the pack that no step reaches, in the pack's order.
+
+A run of an agent with steps is offered only what its steps reach (see
+engine.EnvelopeFor), so a tool granted and placed in no step is never offered:
+the run reports it as not available, and the person reading the list of tools
+sees it granted. With no steps a run keeps its whole pack, and a platform tool
+is offered whatever the step, so neither is ever listed.
+*/
+func (s Spec) Unplaced() []domain.ToolID {
+	if len(s.Steps) == 0 {
+		return nil
+	}
+	placed := make(map[domain.ToolID]bool)
+	for _, step := range s.Steps {
+		for _, tool := range step.Reaches {
+			placed[tool] = true
+		}
+	}
+	var out []domain.ToolID
+	for _, tool := range s.Tools {
+		if !placed[tool] && !tool.PlatformOwned() {
+			out = append(out, tool)
+		}
+	}
+	return out
+}

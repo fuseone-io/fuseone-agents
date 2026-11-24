@@ -30,6 +30,18 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The workbench says when a granted tool can never run.** A run of an agent with steps is
+  offered only what its steps reach, so a tool in `tools` that no step reaches is never offered,
+  and the run reported it as not available while the draft showed it granted. The draft now
+  lists those tools (`unplaced`), the panel names them, and publishing or activating from the
+  workbench is refused until each is placed in a step or taken out of the tools (400
+  `fuseone:publish-unplaced-tools`). The conversation is told the rule: adding a tool to an
+  agent with steps comes with the step that places it, and a tool reported unavailable is
+  looked for in the steps first. The JSON API, the `.agent.md` file and Terraform publish as
+  before.
+
 ## [0.136.0] — 2026-11-24
 
 A generic MCP server can authenticate with a header of its own, and a new egress policy no
