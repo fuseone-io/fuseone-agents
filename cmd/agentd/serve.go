@@ -158,6 +158,9 @@ func serve(args []string) error {
 			WithAdministration(curator,
 				workitem.NewToolList(memory.NewToolList(connectortools.NewToolList(curator, connectorSettings))),
 				integrations).
+			// A person signing in to a remote MCP server from their browser,
+			// back at this installation's address.
+			WithMCPSignIn(mcpSignIn(integrations, *baseURL)).
 			WithConnectorInstances(connectorInstances).
 			WithAgents(spec.NewRegistry(identity.pool)).
 			// The stages a version declares, read one version at a time.
@@ -283,6 +286,7 @@ func serve(args []string) error {
 		root.Handle("GET /api/v1/healthz", apiProblems(apiHandler))
 		root.Handle("GET /api/v1/readyz", apiProblems(apiHandler))
 		identity.routes.Mount(root)
+		mountMCPSignInReturn(root, api, identity.auth.Middleware)
 		// Uploaded logos and icons, outside the session middleware for the
 		// same reason as branding itself: the sign-in screen shows them.
 		httpapi.NewBrandAssetRoute(admin.NewBrandAssets(identity.pool)).Mount(root)
