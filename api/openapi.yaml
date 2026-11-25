@@ -3763,6 +3763,41 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /integrations/mcp-credentials/{name}/oauth/start:
+    post:
+      tags: [integrations]
+      operationId: startMCPUserSignIn
+      summary: Begin signing in to a remote MCP server from the browser
+      description: |
+        For a server whose administrator configured a browser sign-in
+        (`oauthLogin`), answers the address to send the signed-in person's
+        browser to. The authorization and token endpoints are those the
+        configuration names, and otherwise those the server's metadata names;
+        the token endpoint is held to the server's egress policy. The sign-in
+        is good for ten minutes and one return, to `/auth/mcp/callback`, in
+        the same person's session, which then stores their personal credential
+        and sends the browser back to the console's Credentials.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: The configured MCP server name.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Where to send the browser.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MCPSignInStart' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No server of that name the caller reaches has a browser sign-in.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /admin/people:
     get:
       tags: [admin]
@@ -8443,6 +8478,14 @@ components:
             How the token endpoint is told which client asks. Defaults to
             client_secret_basic with a secret held, none without; a method that
             sends a secret is refused when none is held.
+
+    MCPSignInStart:
+      type: object
+      required: [authorizeURL]
+      properties:
+        authorizeURL:
+          type: string
+          description: The authorization endpoint, asking for a code under PKCE for this sign-in.
 
     MCPOAuthLogin:
       type: object

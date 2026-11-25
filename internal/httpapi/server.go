@@ -107,6 +107,9 @@ type Server struct {
 	// drafts is the workbench's drafts (NT-018 1b). Optional: unwired, the
 	// draft routes answer as for an agent with no draft.
 	drafts Drafts
+	// mcpSignIn is a person signing in to a remote MCP server from their
+	// browser. Optional: unwired, the door answers 404.
+	mcpSignIn *MCPSignInConfig
 	// candidates lists and reads sealed candidates (NT-018 phase 2). Optional.
 	candidates Candidates
 	// activations makes a candidate or a published version current (NT-018 phase 2).
