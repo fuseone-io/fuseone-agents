@@ -30,6 +30,18 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **A grant got through a server's browser sign-in refreshes as the server's client.** A
+  person's grant marked as coming from the sign-in holds no client secret: each refresh reads the
+  server's sign-in configuration and secret as they are then, authenticates by the method it
+  names (`none`, `client_secret_post` or `client_secret_basic`), and asks for the grant's
+  resource (RFC 8707). A secret rotated on the server holds for everyone at once; a sign-in that
+  now names another client is told to sign in again rather than asked as it. Nothing creates
+  such a grant yet: the browser round trip that does comes in the next release, once every
+  replica refreshes one. Once one exists, never roll back below this release: an older binary
+  rewrites the grant without its mark and refreshes it with no secret.
+
 ## [0.139.0] — 2026-11-25
 
 A remote server's browser sign-in is written with the server, and a credential is entered one
@@ -47,15 +59,6 @@ migration. Once a server has a sign-in, 0.138.0 is a rollback floor.
 
 ### Added
 
-- **A grant got through a server's browser sign-in refreshes as the server's client.** A
-  person's grant marked as coming from the sign-in holds no client secret: each refresh reads the
-  server's sign-in configuration and secret as they are then, authenticates by the method it
-  names (`none`, `client_secret_post` or `client_secret_basic`), and asks for the grant's
-  resource (RFC 8707). A secret rotated on the server holds for everyone at once; a sign-in that
-  now names another client is told to sign in again rather than asked as it. Nothing creates
-  such a grant yet: the browser round trip that does comes in the next release, once every
-  replica refreshes one. Once one exists, never roll back below this release: an older binary
-  rewrites the grant without its mark and refreshes it with no secret.
 - **A remote server's browser sign-in is written with the server.** The server's write takes
   `oauthLogin`: omitted keeps it, an empty object removes it with its client secret, and
   otherwise the fields are the configuration, whole, with a secret left out kept. A configuration
