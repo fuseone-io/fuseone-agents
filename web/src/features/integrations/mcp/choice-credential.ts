@@ -7,7 +7,7 @@ import {
 import {
   oauthExpiryIsValid,
   oauthFromValue,
-  oauthHasValue,
+  oauthIsUsable,
 } from "@/features/integrations/mcp/oauth-credential";
 import type { MCPOAuthGrant } from "@/features/integrations/api";
 
@@ -54,7 +54,7 @@ export function chosenReady(
     case "headers":
       return headers.length > 0 && headers.every((header) => (value.headers[header] ?? "").trim() !== "");
     case "oauth":
-      return oauthHasValue(value) && oauthExpiryIsValid(value);
+      return oauthIsUsable(value) && oauthExpiryIsValid(value);
     default:
       return false;
   }

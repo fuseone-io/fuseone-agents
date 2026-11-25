@@ -92,7 +92,7 @@ export function ServerAuthFields({
             value={form.watch()}
             onChange={(field, next) => form.setValue(field, next, { shouldDirty: true, shouldValidate: true })}
           />
-          <OAuthExpiryError form={form} />
+          <OAuthErrors form={form} />
         </div>
       )}
       {choice === "githubApp" && <GitHubAppFormFields form={form} />}
@@ -100,8 +100,16 @@ export function ServerAuthFields({
   );
 }
 
-function OAuthExpiryError({ form }: { form: UseFormReturn<ServerFormValues> }) {
+// The grant's refusals: an expiry that is not Unix seconds, and a grant with no token.
+function OAuthErrors({ form }: { form: UseFormReturn<ServerFormValues> }) {
   const { t } = useTranslation();
-  const message = form.formState.errors.oauthExpiresAtUnix?.message;
-  return message ? <p className="text-xs text-danger">{t(message)}</p> : null;
+  const { errors } = form.formState;
+  const messages = [errors.oauthExpiresAtUnix?.message, errors.oauthAccessToken?.message].filter(
+    (message): message is string => Boolean(message),
+  );
+  return messages.map((message) => (
+    <p key={message} className="text-xs text-danger">
+      {t(message)}
+    </p>
+  ));
 }
