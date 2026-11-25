@@ -19,7 +19,7 @@ func TestCheckOAuthUsable_aGrantWithNothingToSend_isRefused(t *testing.T) {
 		{"an access token alone", &domain.MCPOAuthGrant{AccessToken: "access"}, nil},
 		{"a refresh token and where to spend it", &domain.MCPOAuthGrant{
 			RefreshToken: "refresh", TokenURL: "https://idp.example.com/token"}, nil},
-		// What a connection form leaves when it fills the client in by itself.
+		// The client typed in and no token: the sign-in's details in the wrong place.
 		{"the client and nothing else", &domain.MCPOAuthGrant{
 			ClientID: "agents", TokenURL: "https://idp.example.com/token",
 			Scopes: []string{"openid"}}, domain.ErrMCPOAuthUnusable},

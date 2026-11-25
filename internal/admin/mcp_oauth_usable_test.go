@@ -14,12 +14,12 @@ refused when it is written, not when it is used.
 
 The worker cannot send it and cannot renew it, so it refuses to build the
 server's client at all — and before this, the write stored it, replacing
-whatever worked. A connection form that fills the client in by itself is how
-one gets written: saved without tokens, the server stopped answering with no
-screen saying why.
+whatever worked. The client typed into the manual grant, as if it were the
+browser sign-in's configuration, is how one gets written: saved without
+tokens, the server stopped answering with no screen saying why.
 */
 
-// The client filled in, the tokens not: what the bug accepted.
+// The client typed in, no token: what the bug accepted.
 var clientOnly = domain.MCPOAuthGrant{
 	ClientID: "agents", TokenURL: "https://idp.example.com/token", Scopes: []string{"openid"},
 }

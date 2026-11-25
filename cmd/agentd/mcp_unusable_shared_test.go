@@ -20,7 +20,7 @@ credential included — and the message named the grant nobody was calling with.
 The refusal now belongs to the requests that would have carried it.
 */
 
-// What the connection form stored: the client filled in, the tokens not.
+// What a save stored: the client typed in, no token.
 var unusableShared = domain.MCPCredentials{OAuth: &domain.MCPOAuthGrant{
 	ClientID: "agents", TokenURL: "https://idp.example.com/token",
 }}
