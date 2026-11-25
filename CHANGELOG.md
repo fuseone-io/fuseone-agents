@@ -30,9 +30,15 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.139.0] — 2026-11-25
+
+A remote server's browser sign-in is written with the server, and a credential is entered one
+shape at a time on a server's page, in Credentials and in the connect form (#471, #468, #469). No
+migration. Once a server has a sign-in, 0.138.0 is a rollback floor.
+
 ### Upgrade notes
 
-- **Once a server has a browser sign-in, never roll back below the release that keeps one.**
+- **Once a server has a browser sign-in, never roll back below 0.138.0, the release that keeps one.**
   A binary from before it does not know the field and drops it the next time it rewrites the
   server, on an edit or a refresh of the shared grant: the server would stop taking personal
   credentials with nobody having decided so. Deploy this release only after the one before it is
@@ -45,7 +51,7 @@ field" is a commit message.
   `oauthLogin`: omitted keeps it, an empty object removes it with its client secret, and
   otherwise the fields are the configuration, whole, with a secret left out kept. A configuration
   no sign-in could use is 400 `fuseone:invalid-input`. The sign-in itself, the browser round trip,
-  comes in a later release.
+  comes in a later release (#471).
 
 ### Changed
 
@@ -57,7 +63,7 @@ field" is a commit message.
   fields are grouped (token endpoint and client, then the tokens), with token type, expiry and
   scopes under Advanced, and a stored grant says which token endpoint and client it uses. The
   connect and edit form asks the same question, so it no longer refuses a save for two shapes
-  filled in: only one can be.
+  filled in: only one can be (#468, #469).
 
 ## [0.138.0] — 2026-11-24
 
