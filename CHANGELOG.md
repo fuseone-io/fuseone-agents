@@ -30,6 +30,11 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.143.0] — 2026-11-25
+
+The workbench names the tools no step reaches, in the publish refusal, in the draft's tools and
+beside the steps editor (#466). No migration. The rollback floors of 0.140.0 hold.
+
 ### Fixed
 
 - **A tool no step reaches is named where the person looks for it.** The workbench refused to
@@ -37,7 +42,7 @@ field" is a commit message.
   the panel, out of view: people placed the tool they had in mind and were refused again for
   the others. The refusal now names the tools (its `detail` is the list, comma-separated), the
   draft's tools mark each one "in no step", and the steps editor says the same beside its other
-  warnings, from what is on screen before anything is saved.
+  warnings, from what is on screen before anything is saved (#466).
 
 ## [0.142.0] — 2026-11-25
 
