@@ -25,27 +25,42 @@ func (i *Integrations) MCPOAuthLoginClient(
 	ctx context.Context, runtime domain.Scope, name string,
 ) (domain.MCPOAuthLogin, string, error) {
 	kind, at := storedAt(runtime)
-	row, err := i.settings.Get(ctx, kind, at, settings.KindMCPServer, name)
-	if errors.Is(err, settings.ErrNotFound) {
-		return domain.MCPOAuthLogin{}, "", fmt.Errorf("%w: %s", ErrNoMCPOAuthLogin, name)
-	}
+	var (
+		login  domain.MCPOAuthLogin
+		secret string
+	)
+	// One snapshot for both rows: read apart, a rotation committed between
+	// them would pair one version's client with another's secret, and send
+	// the new secret to the old configuration's token endpoint.
+	err := i.settings.ReadSnapshot(ctx, func(db settings.DB) error {
+		row, err := i.settings.RevealOn(ctx, db, kind, at, settings.KindMCPServer, name)
+		if errors.Is(err, settings.ErrNotFound) {
+			return fmt.Errorf("%w: %s", ErrNoMCPOAuthLogin, name)
+		}
+		if err != nil {
+			return err
+		}
+		var stored storedServer
+		if err := json.Unmarshal(row.Value, &stored); err != nil {
+			return fmt.Errorf("admin: decode MCP server %s: %w", name, err)
+		}
+		configured := stored.OAuthLogin.login()
+		if configured == nil {
+			return fmt.Errorf("%w: %s", ErrNoMCPOAuthLogin, name)
+		}
+		login = *configured
+		if !login.HasClientSecret {
+			return nil
+		}
+		sealed, err := i.settings.RevealOn(ctx, db, kind, at, settings.KindMCPOAuthLogin, name)
+		if err != nil {
+			return fmt.Errorf("admin: open the sign-in secret of %s: %w", name, err)
+		}
+		secret = sealed.Secret
+		return nil
+	})
 	if err != nil {
 		return domain.MCPOAuthLogin{}, "", err
 	}
-	var stored storedServer
-	if err := json.Unmarshal(row.Value, &stored); err != nil {
-		return domain.MCPOAuthLogin{}, "", fmt.Errorf("admin: decode MCP server %s: %w", name, err)
-	}
-	login := stored.OAuthLogin.login()
-	if login == nil {
-		return domain.MCPOAuthLogin{}, "", fmt.Errorf("%w: %s", ErrNoMCPOAuthLogin, name)
-	}
-	if !login.HasClientSecret {
-		return *login, "", nil
-	}
-	sealed, err := i.settings.Reveal(ctx, kind, at, settings.KindMCPOAuthLogin, name)
-	if err != nil {
-		return domain.MCPOAuthLogin{}, "", fmt.Errorf("admin: open the sign-in secret of %s: %w", name, err)
-	}
-	return *login, sealed.Secret, nil
+	return login, secret, nil
 }
