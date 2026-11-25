@@ -292,3 +292,39 @@ func TestMCPOAuthLoginClient_isTheServersConfigurationAndSecretNow(t *testing.T)
 		t.Errorf("after removal: err = %v, want ErrNoMCPOAuthLogin", err)
 	}
 }
+
+// The server a person signs in to: one their scopes reach, remote, with a
+// sign-in configured. Out of reach answers as one that does not exist.
+func TestMCPSignInServer_isAServerTheCallerReaches_withASignIn(t *testing.T) {
+	w := withSigninWorld(t)
+	ctx := context.Background()
+	if _, err := writeLogin(w, &domain.MCPOAuthLoginPatch{ClientID: "agents"}); err != nil {
+		t.Fatalf("configure: %v", err)
+	}
+	got, err := w.integrations.MCPSignInServer(ctx, signin, []domain.Scope{cxScope})
+	if err != nil || got.Name != signin || got.OAuthLogin == nil || got.UpdatedAt.IsZero() {
+		t.Fatalf("MCPSignInServer = %+v, %v; want the server with its sign-in and revision", got, err)
+	}
+	if _, err := w.integrations.MCPSignInServer(ctx, movable, []domain.Scope{cxScope}); !errors.Is(err, admin.ErrNoMCPOAuthLogin) {
+		t.Errorf("a server with no sign-in: err = %v, want ErrNoMCPOAuthLogin", err)
+	}
+	if _, err := w.integrations.MCPSignInServer(ctx, "nobody", []domain.Scope{cxScope}); !errors.Is(err, admin.ErrMCPServerUnknown) {
+		t.Errorf("a name nobody holds: err = %v, want ErrMCPServerUnknown", err)
+	}
+}
+
+func TestMCPSignInServer_anAreasServer_isOutOfReachOfAnotherArea(t *testing.T) {
+	w := withSigninWorld(t)
+	ctx := context.Background()
+	if _, err := w.integrations.WriteMCPServer(ctx, admin.MCPServerWrite{
+		By: "usr_cx", Scope: cxScope, At: settings.ScopeArea, Stored: cxScope,
+		Server: domain.MCPServer{Name: "cx-signin", Transport: domain.TransportHTTP, URL: "https://mcp.example.com/cx", Enabled: true},
+		Login:  &domain.MCPOAuthLoginPatch{ClientID: "agents"},
+	}); err != nil {
+		t.Fatalf("configure: %v", err)
+	}
+	finance := domain.Scope{Company: "acme", Area: "finance"}
+	if _, err := w.integrations.MCPSignInServer(ctx, "cx-signin", []domain.Scope{finance}); !errors.Is(err, admin.ErrMCPServerUnknown) {
+		t.Errorf("from finance: err = %v, want ErrMCPServerUnknown", err)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
@@ -66,4 +67,34 @@ func (i *Integrations) MCPOAuthLoginClient(
 		return SignInClient{}, err
 	}
 	return out, nil
+}
+
+/*
+MCPSignInServer is the server a person may sign in to: one their scopes
+reach, as the personal credentials have it, remote, with a sign-in
+configured. It is read with the policy for its scope and the revision of its
+row, which a sign-in in flight is held to when the browser comes back. A
+server out of reach answers as one that does not exist.
+*/
+func (i *Integrations) MCPSignInServer(
+	ctx context.Context, name string, visible []domain.Scope,
+) (domain.MCPServer, error) {
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		return domain.MCPServer{}, err
+	}
+	for _, server := range servers {
+		if server.Name != name {
+			continue
+		}
+		reached := func(v domain.Scope) bool { return server.Scope.Contains(v) || v.Contains(server.Scope) }
+		switch {
+		case !slices.ContainsFunc(visible, reached):
+			return domain.MCPServer{}, fmt.Errorf("%w: %s", ErrMCPServerUnknown, name)
+		case server.TransportOf() != domain.TransportHTTP || server.OAuthLogin == nil:
+			return domain.MCPServer{}, fmt.Errorf("%w: %s", ErrNoMCPOAuthLogin, name)
+		}
+		return server, nil
+	}
+	return domain.MCPServer{}, fmt.Errorf("%w: %s", ErrMCPServerUnknown, name)
 }
