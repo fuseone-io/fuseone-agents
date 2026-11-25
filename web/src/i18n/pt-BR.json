@@ -2156,6 +2156,46 @@
       "egressRefused": "A política de egress de {{scope}} não lista {{origin}}. Peça à administração da plataforma para acrescentar essa origem antes de mover.",
       "notAtInstallation": "Este servidor já não está na instalação. Recarregue a página.",
       "stale": "O servidor mudou desde que a página foi aberta. Recarregue antes de mover."
+    },
+    "signIn": {
+      "title": "Login pelo navegador",
+      "hint": "Cada pessoa entra com a própria conta em Credenciais, e os agentes dela chamam este servidor como ela.",
+      "callback": "URL de retorno para cadastrar no provedor de identidade",
+      "copyCallback": "Copiar a URL de retorno",
+      "copied": "URL de retorno copiada.",
+      "copyFailed": "Não foi possível copiar. Selecione a URL e copie à mão.",
+      "stored": "Configurado com o client {{clientID}}, sem client secret.",
+      "storedWithSecret": "Configurado com o client {{clientID}}. Há um client secret guardado; deixe o campo em branco para mantê-lo.",
+      "clientID": "Client ID",
+      "clientSecret": "Client secret",
+      "scopes": "Escopos",
+      "advanced": "Endpoints e método",
+      "authorizeURL": "Endpoint de autorização",
+      "tokenURL": "Endpoint de token",
+      "resource": "Resource (RFC 8707)",
+      "tokenAuthMethod": "Como o client se identifica no endpoint de token",
+      "method": {
+        "auto": "Automático",
+        "none": "Nenhum (client público)",
+        "client_secret_post": "client_secret_post",
+        "client_secret_basic": "client_secret_basic"
+      },
+      "save": "Salvar o login pelo navegador",
+      "remove": "Remover o login pelo navegador",
+      "removeSecret": "Remover o client secret",
+      "clientRequired": "Informe o client ID.",
+      "connect": "Conectar pelo navegador",
+      "connecting": "Abrindo o login…",
+      "connectHint": "Você entra com a sua conta neste servidor; o token fica guardado como a sua credencial pessoal e é renovado sozinho.",
+      "return": {
+        "connected": "Conectado. Seus agentes já chamam {{server}} como você.",
+        "denied": "O login foi recusado no provedor.",
+        "expired": "O login expirou ou já foi usado. Comece de novo.",
+        "not_yours": "Esse login foi iniciado por outra pessoa. Comece de novo com a sua conta.",
+        "changed": "A configuração do servidor mudou durante o login. Comece de novo.",
+        "refused": "O provedor não aceitou o login.",
+        "failed": "O login deu certo, mas a credencial não pôde ser guardada."
+      }
     }
   },
   "narrative": {

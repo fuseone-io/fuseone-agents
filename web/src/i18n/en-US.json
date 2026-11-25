@@ -2156,6 +2156,46 @@
       "egressRefused": "The egress policy of {{scope}} does not list {{origin}}. Ask the platform's administration to add that origin before moving.",
       "notAtInstallation": "This server is no longer at the installation. Reload the page.",
       "stale": "The server changed since the page opened. Reload before moving."
+    },
+    "signIn": {
+      "title": "Browser sign-in",
+      "hint": "Each person signs in with their own account in Credentials, and their agents call this server as them.",
+      "callback": "Callback URL to register with the identity provider",
+      "copyCallback": "Copy the callback URL",
+      "copied": "Callback URL copied.",
+      "copyFailed": "Could not copy. Select the URL and copy it by hand.",
+      "stored": "Configured with client {{clientID}}, with no client secret.",
+      "storedWithSecret": "Configured with client {{clientID}}. A client secret is stored; leave the field blank to keep it.",
+      "clientID": "Client ID",
+      "clientSecret": "Client secret",
+      "scopes": "Scopes",
+      "advanced": "Endpoints and method",
+      "authorizeURL": "Authorization endpoint",
+      "tokenURL": "Token endpoint",
+      "resource": "Resource (RFC 8707)",
+      "tokenAuthMethod": "How the client identifies itself at the token endpoint",
+      "method": {
+        "auto": "Automatic",
+        "none": "None (public client)",
+        "client_secret_post": "client_secret_post",
+        "client_secret_basic": "client_secret_basic"
+      },
+      "save": "Save the browser sign-in",
+      "remove": "Remove the browser sign-in",
+      "removeSecret": "Remove the client secret",
+      "clientRequired": "Enter the client ID.",
+      "connect": "Connect in the browser",
+      "connecting": "Opening the sign-in…",
+      "connectHint": "You sign in to this server with your own account; the token is kept as your personal credential and renewed on its own.",
+      "return": {
+        "connected": "Connected. Your agents now call {{server}} as you.",
+        "denied": "The sign-in was declined at the provider.",
+        "expired": "The sign-in expired or was already used. Start again.",
+        "not_yours": "This sign-in was started by someone else. Start again with your own account.",
+        "changed": "The server's configuration changed during the sign-in. Start again.",
+        "refused": "The provider did not accept the sign-in.",
+        "failed": "The sign-in worked, but the credential could not be stored."
+      }
     }
   },
   "narrative": {

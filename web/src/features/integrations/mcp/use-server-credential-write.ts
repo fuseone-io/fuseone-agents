@@ -7,6 +7,7 @@ import {
   usePutMCPServer,
   type MCPGitHubApp,
   type MCPOAuthGrant,
+  type MCPOAuthLoginInput,
   type MCPServer,
 } from "@/features/integrations/api";
 
@@ -15,6 +16,7 @@ export type ServerCredentialWrite = {
   headers?: Record<string, string>;
   oauth?: MCPOAuthGrant;
   githubApp?: MCPGitHubApp;
+  oauthLogin?: MCPOAuthLoginInput;
   env?: Record<string, string>;
   configFile?: string;
   configFileEnv?: string;
@@ -57,6 +59,7 @@ export function useServerCredentialWrite(server: MCPServer, revision?: ServerRev
         headers: credential.headers,
         oauth: credential.oauth,
         githubApp: credential.githubApp,
+        oauthLogin: credential.oauthLogin,
         env: credential.env,
         configFile: credential.configFile,
         configFileEnv: credential.configFileEnv,

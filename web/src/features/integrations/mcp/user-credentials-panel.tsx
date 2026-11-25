@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useInRouterContext } from "react-router-dom";
 import { KeyRound, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
@@ -13,6 +14,7 @@ import {
   RecipeStatusBadge,
 } from "@/features/integrations/mcp/recipe-badges";
 import { PersonalCredentialForm } from "@/features/integrations/mcp/personal-credential-form";
+import { SignInReturn } from "@/features/integrations/mcp/sign-in-return";
 
 export function UserCredentialsPanel({
   servers,
@@ -31,6 +33,8 @@ export function UserCredentialsPanel({
 }) {
   const { t } = useTranslation();
   const [chosen, setChosen] = useState<string | null>(null);
+  // Outside a router, as in a test of the panel alone, nothing comes back.
+  const routed = useInRouterContext();
   const recipesByServer = useMemo(
     () => new Map(recipes.map((recipe) => [recipe.server, recipe])),
     [recipes],
@@ -52,20 +56,27 @@ export function UserCredentialsPanel({
     remoteServers[0] ??
     null;
 
-  if (isLoading) return <LoadingRows rows={4} />;
-  if (error) return <ErrorState error={error} onRetry={onRetry} />;
+  const returned = routed ? <SignInReturn onServer={setChosen} /> : null;
+  if (isLoading) return <>{returned}<LoadingRows rows={4} /></>;
+  if (error) return <>{returned}<ErrorState error={error} onRetry={onRetry} /></>;
   if (remoteServers.length === 0) {
+    // A sign-in can return to a page that lists nothing now: its outcome is
+    // still said, and still taken out of the address.
     return (
-      <EmptyState
+      <>
+        {returned}
+        <EmptyState
         icon={<KeyRound className="size-6" />}
         title={t("mcp.noPersonalCredentialServers")}
         hint={t("mcp.noPersonalCredentialServersHint")}
-      />
+        />
+      </>
     );
   }
 
   return (
     <div className="grid min-h-[560px] overflow-hidden rounded-lg border bg-background lg:grid-cols-[20rem_minmax(0,1fr)]">
+      {returned}
       <aside className="min-h-0 border-b bg-card lg:border-r lg:border-b-0">
         <div className="border-b p-4">
           <h2 className="text-sm font-medium">{t("mcp.personalCredentials")}</h2>
@@ -138,7 +149,8 @@ function PersonalCredentialEditor({
   credential: MCPUserCredential | null;
 }) {
   const { t } = useTranslation();
-  const userOnlyCredentials = recipe?.requiresPersonalCredential === true;
+  // The recipe saying so, or the server: people sign in to it.
+  const userOnlyCredentials = recipe?.requiresPersonalCredential === true || server.requiresPersonal === true;
   const hasSharedCredential = server.hasSecret === true || server.hasOAuth === true;
   const hasSharedOnly = hasSharedCredential && !credential;
   const sharedCredentialText = sharedCredentialHint({
