@@ -8,6 +8,8 @@ export type MCPUserCredential = components["schemas"]["MCPUserCredential"];
 export type MCPCredentialServer = components["schemas"]["MCPCredentialServer"];
 export type MCPOAuthGrant = components["schemas"]["MCPOAuthGrant"];
 export type MCPOAuthClient = components["schemas"]["MCPOAuthClient"];
+export type MCPOAuthLogin = components["schemas"]["MCPOAuthLogin"];
+export type MCPOAuthLoginInput = components["schemas"]["MCPOAuthLoginInput"];
 export type MCPGitHubApp = components["schemas"]["MCPGitHubApp"];
 export type ModelProvider = components["schemas"]["ModelProvider"];
 export type IntegrationHealth = components["schemas"]["IntegrationHealth"];
@@ -142,6 +144,13 @@ export function usePutMCPServer() {
        */
       githubApp?: MCPGitHubApp;
       /**
+       * How people sign in to the server from their browser. Absent leaves
+       * the stored one; an empty object removes it with its client secret.
+       * Otherwise it is the configuration, whole, and a client secret left
+       * out is kept.
+       */
+      oauthLogin?: MCPOAuthLoginInput;
+      /**
        * Variables a local server is given. Omitted when the field was left
        * alone, because an empty object means "clear them" and an absent one
        * means "leave what is stored" — an edit to a command must not silently
@@ -183,6 +192,7 @@ export function usePutMCPServer() {
             headers: input.headers,
             oauth: input.oauth,
             githubApp: input.githubApp,
+            oauthLogin: input.oauthLogin,
             env: input.env,
             configFile: input.configFile,
             configFileEnv: input.configFileEnv,
@@ -354,6 +364,21 @@ export function usePutMCPUserCredential() {
       void queryClient.invalidateQueries({
         queryKey: integrationKeys.mcpCredentials(),
       }),
+  });
+}
+
+/**
+ * Begins the signed-in person's browser sign-in to a server, and answers the
+ * address to send their browser to. Nothing is stored until it comes back.
+ */
+export function useStartMCPSignIn() {
+  return useMutation({
+    mutationFn: async (name: string) =>
+      unwrap(
+        await api.POST("/integrations/mcp-credentials/{name}/oauth/start", {
+          params: { path: { name } },
+        }),
+      ),
   });
 }
 

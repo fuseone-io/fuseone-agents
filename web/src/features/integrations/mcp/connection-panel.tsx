@@ -12,6 +12,7 @@ import { MCPHealthNote } from "@/features/integrations/mcp/health-note";
 import { ConnectionRow, RemoteAuthSummary } from "@/features/integrations/mcp/connection-summary";
 import { LocalCredentialEditor } from "@/features/integrations/mcp/local-credential-editor";
 import { RemoteCredentialEditor } from "@/features/integrations/mcp/remote-credential-editor";
+import { SignInConfigSection } from "@/features/integrations/mcp/sign-in-config-section";
 import {
   useServerCredentialWrite,
   type ServerRevision,
@@ -80,6 +81,8 @@ export function ConnectionPanel({
         ) : (
           <RemoteCredentialEditor server={server} recipe={recipe} connection={connection} />
         )}
+        {/* People sign in as themselves; a server acting as an App has nobody to sign in. */}
+        {!local && !server.githubApp && <SignInConfigSection server={server} connection={connection} />}
 
         <Button
           type="button"
