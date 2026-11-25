@@ -15,6 +15,7 @@ import { authChoices, type AuthChoice } from "@/features/integrations/mcp/auth-c
 import { secretShapeOffered, useAuthChoice } from "@/features/integrations/mcp/use-auth-choice";
 import { StoredSecretOnly } from "@/features/integrations/mcp/stored-secret-only";
 import { AuthChoicePicker } from "@/features/integrations/mcp/auth-choice-picker";
+import { BrowserSignIn } from "@/features/integrations/mcp/browser-sign-in";
 import { chosenCredential, chosenReady, type ChosenCredential } from "@/features/integrations/mcp/choice-credential";
 import { CredentialFields } from "@/features/integrations/mcp/credential-fields";
 import { blankCredential } from "@/features/integrations/mcp/credential-value";
@@ -80,6 +81,7 @@ export function PersonalCredentialForm({
 
   return (
     <>
+      {server.signIn && <BrowserSignIn server={server.name} />}
       <AuthChoicePicker id="personal-auth" choices={choices} value={choice} onChange={choose} />
       {(choice === "token" || choice === "headers" || (choice === null && !storedSecret)) && (
         <CredentialFields
