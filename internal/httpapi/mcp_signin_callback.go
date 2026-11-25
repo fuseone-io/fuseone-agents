@@ -101,8 +101,12 @@ func (s *Server) exchange(
 	ctx context.Context, server domain.MCPServer, flow admin.MCPOAuthFlow, code string,
 ) (domain.MCPOAuthGrant, string) {
 	cfg := s.mcpSignIn
+	// Read with the secret, in one snapshot: the configuration the secret is
+	// for must be the one the sign-in began under, or the secret now in force
+	// would go to an endpoint of another (a change between this read and the
+	// server's revision checked above is caught here).
 	login, secret, err := cfg.Store.MCPOAuthLoginClient(ctx, server.Scope, server.Name)
-	if err != nil || login.ClientID != flow.ClientID {
+	if err != nil || login.Identity() != flow.SignInConfig {
 		return domain.MCPOAuthGrant{}, signInChanged
 	}
 	tokens, err := mcpauth.ExchangeCode(ctx, cfg.Client(server), mcpauth.CodeExchange{
@@ -118,7 +122,7 @@ func (s *Server) exchange(
 	grant := domain.MCPOAuthGrant{
 		AccessToken: tokens.AccessToken, RefreshToken: tokens.RefreshToken,
 		TokenURL: flow.TokenURL, ClientID: flow.ClientID, TokenType: tokens.TokenType,
-		Scopes: tokens.Scopes, SignIn: true, Resource: flow.Resource,
+		Scopes: tokens.Scopes, SignIn: true, Resource: flow.Resource, SignInConfig: flow.SignInConfig,
 	}
 	if tokens.ExpiresIn > 0 {
 		grant.ExpiresAtUnix = cfg.Now().Add(time.Duration(tokens.ExpiresIn) * time.Second).Unix()

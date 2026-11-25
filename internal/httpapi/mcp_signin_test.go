@@ -137,6 +137,9 @@ func TestSignInCallback_storesThePersonsOwnCredential_andGoesBackToCredentials(t
 		t.Fatalf("personal credential = %+v, %v, %v", creds, found, err)
 	}
 	g := creds.OAuth
+	if g.SignInConfig == "" {
+		t.Errorf("grant %+v is bound to no configuration", g)
+	}
 	if g.AccessToken != "person-access" || g.RefreshToken != "person-refresh" || !g.SignIn ||
 		g.ClientSecret != "" || g.ClientID != "agents" || g.ExpiresAtUnix != signInNow.Add(10*time.Minute).Unix() {
 		t.Errorf("grant = %+v; want the person's tokens, marked as signed in, no secret held", g)
@@ -278,5 +281,44 @@ func TestEndpointsRefused(t *testing.T) {
 	loopback := mcpauth.Endpoints{AuthorizeURL: "http://127.0.0.1:9/auth", TokenURL: "http://localhost:9/token"}
 	if p := endpointsRefused(loopback, nil); p != nil {
 		t.Errorf("this machine over http: %+v", p)
+	}
+}
+
+// staleRead is the store as a return that read the server before a change and
+// its client after it would see it: the server at the revision the sign-in
+// began on, the client and secret as they are now.
+type staleRead struct {
+	*admin.Integrations
+	then domain.MCPServer
+}
+
+func (s staleRead) MCPSignInServer(context.Context, string, []domain.Scope) (domain.MCPServer, error) {
+	return s.then, nil
+}
+
+// The window between reading the server and reading its client is closed by
+// the configuration's identity, read in the same snapshot as the secret: a
+// token endpoint changed meanwhile, the client kept, is refused before the new
+// secret leaves.
+func TestSignInCallback_aConfigurationChangedBetweenItsReads_isRefusedBeforeTheSecretLeaves(t *testing.T) {
+	w := newSignInWorld(t)
+	q := w.start(t, as(domain.RoleAuthor))
+	then, err := w.store.MCPSignInServer(context.Background(), "signin", []domain.Scope{adminScope})
+	if err != nil {
+		t.Fatalf("MCPSignInServer: %v", err)
+	}
+	moved := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Error("the new secret was sent to the token endpoint the sign-in did not begin under")
+	}))
+	t.Cleanup(moved.Close)
+	w.configure(t, domain.MCPOAuthLoginPatch{ClientID: "agents", ClientSecret: ptr("new-secret"),
+		AuthorizeURL: w.idp.URL + "/authorize", TokenURL: moved.URL + "/token"})
+	w.s.mcpSignIn.Store = staleRead{Integrations: w.store, then: then}
+
+	if got := landedOn(t, w.back(as(domain.RoleAuthor), "code=c&state="+url.QueryEscape(q.Get("state")))); got != "changed" {
+		t.Errorf("oauth = %q, want changed", got)
+	}
+	if w.asked != nil {
+		t.Errorf("a token endpoint was asked: %v", w.asked)
 	}
 }

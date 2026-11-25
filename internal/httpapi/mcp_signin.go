@@ -112,7 +112,7 @@ func (s *Server) beginSignIn(
 	if err := cfg.Store.BeginMCPOAuthFlow(ctx, admin.MCPOAuthFlow{
 		State: state, Verifier: verifier, Principal: principal,
 		Server: server.Name, ServerScope: server.Scope, ServerAt: server.UpdatedAt,
-		ClientID: login.ClientID, TokenAuthMethod: login.TokenAuthMethod,
+		ClientID: login.ClientID, TokenAuthMethod: login.TokenAuthMethod, SignInConfig: login.Identity(),
 		TokenURL: endpoints.TokenURL, Resource: resource,
 		Issuer: endpoints.Issuer, IssParameter: endpoints.IssParameter,
 		RedirectURI: redirect, ExpiresAt: now.Add(signInLifetime),
