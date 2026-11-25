@@ -22,10 +22,11 @@ type SignInClientStore interface {
 
 var _ SignInClientStore = (*admin.Integrations)(nil)
 
-// errSignInClientChanged is a server whose sign-in now names another client
-// than the one the person's grant was issued to: its refresh token is that
-// client's, and asking as another would be refused at best.
-var errSignInClientChanged = errors.New("the server's sign-in now names another client; sign in again")
+// errSignInClientChanged is a server whose sign-in configuration is no longer
+// the one the person's grant was got under: another client, endpoint, method
+// or resource. Its refresh token belongs to that configuration, and sending
+// the secret now in force to the old endpoint would hand it to whoever holds it.
+var errSignInClientChanged = errors.New("the server's sign-in configuration changed since this grant was got; sign in again")
 
 // refreshed is the grant after a refresh: a grant pasted by a person carries
 // its own client, and one got through the sign-in asks the server for it.
@@ -52,7 +53,9 @@ type signInClient struct {
 func refreshSignInGrant(
 	ctx context.Context, hc *http.Client, grant domain.MCPOAuthGrant, client signInClient,
 ) (domain.MCPOAuthGrant, error) {
-	if client.login.ClientID != grant.ClientID {
+	// The configuration the grant was got under, the secret aside: a token
+	// endpoint changed with the client kept must not receive the new secret.
+	if grant.SignInConfig == "" || client.login.Identity() != grant.SignInConfig {
 		return domain.MCPOAuthGrant{}, errSignInClientChanged
 	}
 	tokens, err := mcpauth.Refresh(ctx, hc, mcpauth.TokenRequest{

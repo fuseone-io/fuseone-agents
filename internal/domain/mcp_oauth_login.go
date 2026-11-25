@@ -1,10 +1,13 @@
 package domain
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -198,4 +201,23 @@ A local process has nobody's credential to take.
 */
 func (s MCPServer) TakesPersonalCredential(userOnly bool) bool {
 	return s.TransportOf() == TransportHTTP && (userOnly || s.OAuthLogin != nil)
+}
+
+/*
+Identity names the configuration a token request is made under, all but the
+client secret: the client, the endpoints, the resource, the method and the
+scopes. A grant got through the sign-in records it, and a refresh under any
+other identity is refused, so the secret now in force is never sent to an
+endpoint of another configuration. Rotating the secret alone keeps it.
+*/
+func (l MCPOAuthLogin) Identity() string {
+	h := sha256.New()
+	for _, part := range append([]string{
+		l.ClientID, l.AuthorizeURL, l.TokenURL, l.Resource, l.TokenAuthMethod,
+	}, l.Scopes...) {
+		h.Write([]byte(strconv.Itoa(len(part))))
+		h.Write([]byte{':'})
+		h.Write([]byte(part))
+	}
+	return "login-" + hex.EncodeToString(h.Sum(nil)[:16])
 }

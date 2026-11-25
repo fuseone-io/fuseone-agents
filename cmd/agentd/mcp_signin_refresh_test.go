@@ -56,7 +56,8 @@ func TestAuthenticatedClient_aSignInGrant_refreshesAsTheServersClientNow(t *test
 
 	grant := domain.MCPOAuthGrant{
 		AccessToken: "expired", RefreshToken: "refresh", TokenURL: remote.URL + "/token", ClientID: "agents",
-		SignIn: true, Resource: "https://mcp.example.com/mcp", ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
+		SignIn: true, SignInConfig: store.login.Identity(), Resource: "https://mcp.example.com/mcp",
+		ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
 	}
 	client, err := authenticatedClient("signin", domain.MCPCredentials{}, store,
 		personalCreds{"usr_ana": domain.MCPCredentials{OAuth: &grant}})
@@ -101,5 +102,37 @@ func TestAuthenticatedClient_aSignInGrantForAnotherClient_isNotRefreshed(t *test
 	}
 	if asked {
 		t.Error("the token endpoint was asked as another client")
+	}
+}
+
+// The secret now in force must never be sent where the configuration it
+// belongs to does not send it: a grant got under another token endpoint,
+// with the client kept, asks the person to sign in again.
+func TestAuthenticatedClient_aSignInGrantUnderAnotherConfiguration_isNotRefreshed(t *testing.T) {
+	t.Parallel()
+	asked := false
+	old := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { asked = true }))
+	t.Cleanup(old.Close)
+	now := domain.MCPOAuthLogin{ClientID: "agents", TokenURL: "https://new.example.com/token",
+		TokenAuthMethod: domain.TokenAuthClientSecretBasic, HasClientSecret: true}
+	then := now
+	then.TokenURL = old.URL + "/token"
+	store := &signInStore{login: now, secret: "new-secret"}
+	grant := domain.MCPOAuthGrant{
+		AccessToken: "expired", RefreshToken: "refresh", TokenURL: old.URL + "/token", ClientID: "agents",
+		SignIn: true, SignInConfig: then.Identity(), ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
+	}
+	client, err := authenticatedClient("signin", domain.MCPCredentials{}, store,
+		personalCreds{"usr_ana": domain.MCPCredentials{OAuth: &grant}})
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	req, _ := http.NewRequestWithContext(tools.WithCaller(t.Context(), "usr_ana"), http.MethodGet, old.URL+"/resource", nil)
+	if resp, err := client.Do(req); err == nil {
+		_ = resp.Body.Close()
+		t.Error("the call went out with a grant of another configuration")
+	}
+	if asked {
+		t.Error("the new secret was sent to the old token endpoint")
 	}
 }

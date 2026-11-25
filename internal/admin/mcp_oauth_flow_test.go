@@ -25,7 +25,7 @@ func flowFor(state string, principal domain.UserID) admin.MCPOAuthFlow {
 	return admin.MCPOAuthFlow{
 		State: state, Verifier: "verifier-" + state, Principal: principal,
 		Server: signin, ServerScope: domain.Scope{Company: domain.Installation},
-		ClientID: "agents", TokenAuthMethod: domain.TokenAuthNone,
+		ClientID: "agents", TokenAuthMethod: domain.TokenAuthNone, SignInConfig: "login-begun-under",
 		TokenURL: "https://idp.example.com/token", Issuer: "https://idp.example.com",
 		RedirectURI: "https://agents.example.com/auth/mcp/callback",
 		ExpiresAt:   flowNow.Add(10 * time.Minute),
@@ -48,7 +48,8 @@ func TestMCPOAuthFlow_isConsumedOnce_byThePersonWhoBeganIt(t *testing.T) {
 		t.Fatalf("Begin: %v", err)
 	}
 	got, err := w.integrations.ConsumeMCPOAuthFlow(ctx, "st-1", "usr_ana", flowNow.Add(time.Minute))
-	if err != nil || got.Verifier != "verifier-st-1" || got.Server != signin || got.TokenURL != "https://idp.example.com/token" {
+	if err != nil || got.Verifier != "verifier-st-1" || got.Server != signin || got.TokenURL != "https://idp.example.com/token" ||
+		got.SignInConfig != "login-begun-under" {
 		t.Fatalf("Consume = %+v, %v; want the flow and its verifier", got, err)
 	}
 	if _, err := w.integrations.ConsumeMCPOAuthFlow(ctx, "st-1", "usr_ana", flowNow.Add(time.Minute)); !errors.Is(err, admin.ErrMCPOAuthFlowUnknown) {

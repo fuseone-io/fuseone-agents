@@ -35,9 +35,13 @@ type MCPOAuthFlow struct {
 	ServerAt        time.Time
 	ClientID        string
 	TokenAuthMethod string
-	TokenURL        string
-	Resource        string
-	Issuer          string
+	// SignInConfig is the identity of the sign-in configuration the code is
+	// to be exchanged under (domain.MCPOAuthLogin.Identity): a return to
+	// any other is refused, and the grant it stores is bound to it.
+	SignInConfig string
+	TokenURL     string
+	Resource     string
+	Issuer       string
 	// IssParameter is the authorization server saying its answers name it
 	// (RFC 9207): a return then without the issuer, or with another, is refused.
 	IssParameter bool
@@ -52,6 +56,7 @@ type storedOAuthFlow struct {
 	ServerAt        time.Time `json:"serverAt"`
 	ClientID        string    `json:"clientID"`
 	TokenAuthMethod string    `json:"tokenAuthMethod"`
+	SignInConfig    string    `json:"signInConfig"`
 	TokenURL        string    `json:"tokenURL"`
 	Resource        string    `json:"resource,omitempty"`
 	Issuer          string    `json:"issuer,omitempty"`
@@ -87,7 +92,7 @@ func (i *Integrations) BeginMCPOAuthFlow(ctx context.Context, f MCPOAuthFlow, no
 	}
 	value, err := json.Marshal(storedOAuthFlow{
 		Principal: string(f.Principal), Server: f.Server, Scope: string(scope), ServerAt: f.ServerAt,
-		ClientID: f.ClientID, TokenAuthMethod: f.TokenAuthMethod, TokenURL: f.TokenURL,
+		ClientID: f.ClientID, TokenAuthMethod: f.TokenAuthMethod, SignInConfig: f.SignInConfig, TokenURL: f.TokenURL,
 		Resource: f.Resource, Issuer: f.Issuer, IssParameter: f.IssParameter,
 		RedirectURI: f.RedirectURI, ExpiresAt: f.ExpiresAt,
 	})
@@ -165,7 +170,8 @@ func judgeFlow(row settings.Setting, state string, principal domain.UserID, now 
 	return MCPOAuthFlow{
 		State: state, Verifier: row.Secret, Principal: principal,
 		Server: stored.Server, ServerScope: scope, ServerAt: stored.ServerAt,
-		ClientID: stored.ClientID, TokenAuthMethod: stored.TokenAuthMethod, TokenURL: stored.TokenURL,
+		ClientID: stored.ClientID, TokenAuthMethod: stored.TokenAuthMethod, SignInConfig: stored.SignInConfig,
+		TokenURL: stored.TokenURL,
 		Resource: stored.Resource, Issuer: stored.Issuer, IssParameter: stored.IssParameter,
 		RedirectURI: stored.RedirectURI, ExpiresAt: stored.ExpiresAt,
 	}, nil

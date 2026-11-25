@@ -92,6 +92,9 @@ type MCPOAuthGrant struct {
 	SignIn bool `json:"signIn,omitempty"`
 	// Resource is the RFC 8707 resource indicator every refresh asks for.
 	Resource string `json:"resource,omitempty"`
+	// SignInConfig is the identity of the sign-in configuration the grant was
+	// got under (MCPOAuthLogin.Identity): a refresh under any other is refused.
+	SignInConfig string `json:"signInConfig,omitempty"`
 	// Generation names the tokens a person last pasted, and a worker's rotation keeps it.
 	// It is what a revision counts in place of the tokens themselves (see Regranted).
 	Generation string `json:"generation,omitempty"`
@@ -128,7 +131,8 @@ func (g MCPOAuthGrant) Equal(other MCPOAuthGrant) bool {
 		g.TokenType == other.TokenType &&
 		g.ExpiresAtUnix == other.ExpiresAtUnix &&
 		slices.Equal(g.Scopes, other.Scopes) &&
-		g.SignIn == other.SignIn && g.Resource == other.Resource
+		g.SignIn == other.SignIn && g.Resource == other.Resource &&
+		g.SignInConfig == other.SignInConfig
 }
 
 func cloneOAuth(g *MCPOAuthGrant) *MCPOAuthGrant {
