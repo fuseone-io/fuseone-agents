@@ -2455,6 +2455,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/integrations/mcp-credentials/{name}/oauth/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin signing in to a remote MCP server from the browser
+         * @description For a server whose administrator configured a browser sign-in
+         *     (`oauthLogin`), answers the address to send the signed-in person's
+         *     browser to. The authorization and token endpoints are those the
+         *     configuration names, and otherwise those the server's metadata names;
+         *     the token endpoint is held to the server's egress policy. The sign-in
+         *     is good for ten minutes and one return, to `/auth/mcp/callback`, in
+         *     the same person's session, which then stores their personal credential
+         *     and sends the browser back to the console's Credentials.
+         */
+        post: operations["startMCPUserSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/people": {
         parameters: {
             query?: never;
@@ -5066,6 +5093,10 @@ export interface components {
              * @enum {string}
              */
             tokenAuthMethod?: "none" | "client_secret_post" | "client_secret_basic";
+        };
+        MCPSignInStart: {
+            /** @description The authorization endpoint, asking for a code under PKCE for this sign-in. */
+            authorizeURL: string;
         };
         /** @description A server's browser sign-in configuration as read: everything but the client secret, which a reader only learns is held. */
         MCPOAuthLogin: {
@@ -11382,6 +11413,41 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    startMCPUserSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The configured MCP server name. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Where to send the browser. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPSignInStart"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description No server of that name the caller reaches has a browser sign-in. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listPeople: {

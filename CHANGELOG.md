@@ -30,6 +30,23 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **A person signs in to a remote MCP server from their browser.** For a server with a sign-in
+  configured, `POST /integrations/mcp-credentials/{name}/oauth/start` answers the address to send
+  the browser to: the configured endpoints, else those the server's metadata names, the token
+  endpoint held to the server's egress policy, under PKCE S256 with a state good for ten minutes
+  and one return. The browser comes back to `/auth/mcp/callback`, inside the session: the return
+  must be the same person's, to the same server row at the same revision, with the issuer the
+  authorization server was found at when it names itself (RFC 9207). The code is then exchanged as
+  the server's client and stored as the person's own credential, holding no client secret, and the
+  browser is sent to Credentials with `oauth=connected` or a code from a closed set (`denied`,
+  `expired`, `not_yours`, `changed`, `refused`, `failed`). The installation's address
+  (`--base-url`, `FUSEONE_BASE_URL`) must be https, and its `/auth/mcp/callback` registered with
+  the authorization server as a redirect URI. Deploy this only once the release before it is on
+  every replica: one before it refreshes the grant this stores with no secret. The console's
+  button comes in a later release.
+
 ## [0.140.0] — 2026-11-25
 
 A grant got through a server's browser sign-in refreshes as the server's client, bound to the
