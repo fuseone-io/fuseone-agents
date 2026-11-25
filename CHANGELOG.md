@@ -39,6 +39,18 @@ provider; the console's button comes in the next release. The rollback floors of
 
 ### Added
 
+- **The console configures a server's browser sign-in, and connects each person's account.** A
+  remote server's page has a **Browser sign-in** section: the client people sign in through, its
+  secret (never shown back; left blank it is kept, and it has its own removal), the scopes and,
+  under **Endpoints and method**, the authorization and token endpoints, the resource and how the
+  client identifies itself, with the callback URL to register with the identity provider and a
+  button to copy it. It is not offered for a local process or a server acting as a GitHub App. In
+  Credentials, a server people sign in to has **Connect in the browser**: it begins the sign-in
+  and sends the browser to the provider, says so while it opens, and says why when it cannot. The
+  browser comes back to Credentials on that server with the outcome said once and taken out of the
+  address. A server with a sign-in is described as taking the person's own credential, as a recipe
+  for people alone already was. Release this only once the release with the sign-in's doors is on
+  every replica: before it, the button's request is answered 404.
 - **A person signs in to a remote MCP server from their browser.** For a server with a sign-in
   configured, `POST /integrations/mcp-credentials/{name}/oauth/start` answers the address to send
   the browser to: the configured endpoints, else those the server's metadata names, the token
