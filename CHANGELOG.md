@@ -30,6 +30,16 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Fixed
+
+- **An OAuth grant with no token is refused when it is saved, not when it is used.** A grant with
+  neither an access token nor a refresh token with its token URL saved, replaced the credential
+  that worked, and then made the worker stop answering for the server on every pass. It is now
+  refused as invalid input, for the server's credential and for a person's own, and the console
+  refuses it before saving and points to the browser sign-in, where a client typed in alone
+  belongs. A server people sign in to is no longer taken down by such a grant already stored:
+  it refuses only the discovery that would carry it, and a person's own credential still works.
+
 ## [0.143.0] — 2026-11-25
 
 The workbench names the tools no step reaches, in the publish refusal, in the draft's tools and

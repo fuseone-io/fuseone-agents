@@ -262,9 +262,11 @@ func authenticatedClientWithPolicy(
 ) (*http.Client, error) {
 	base := baseHTTPTransport()
 	creds = creds.ForTransport(domain.TransportHTTP)
-	if creds.OAuth != nil && !creds.OAuth.Empty() &&
-		creds.OAuth.AccessToken == "" && !creds.OAuth.CanRefresh() {
-		return nil, fmt.Errorf("oauth grant has no access token and cannot refresh")
+	// A server that takes each person's own credential uses the shared one
+	// only to discover; refused here, it would take every person's call down
+	// with it. Its discovery is refused instead, by credentials below.
+	if domain.CheckOAuthUsable(creds.OAuth) != nil && !policy.requirePersonal {
+		return nil, errUnusableGrant
 	}
 	if creds.Empty() && personal == nil && !policy.requirePersonal {
 		return nil, nil
@@ -408,8 +410,7 @@ func (a *credentialAuth) credentials(ctx context.Context) (domain.MCPCredentials
 		}
 		if found {
 			creds = creds.ForTransport(domain.TransportHTTP)
-			if creds.OAuth != nil && !creds.OAuth.Empty() &&
-				creds.OAuth.AccessToken == "" && !creds.OAuth.CanRefresh() {
+			if domain.CheckOAuthUsable(creds.OAuth) != nil {
 				return domain.MCPCredentials{}, "", credentialFailure(
 					tools.CodeMCPPersonalCredentialInvalid, a.server,
 					"personal oauth grant has no access token and cannot refresh", nil)
@@ -432,8 +433,15 @@ func (a *credentialAuth) credentials(ctx context.Context) (domain.MCPCredentials
 			tools.CodeMCPPersonalCredentialMissing, a.server,
 			fmt.Sprintf("no personal MCP credential is configured for %s", principal), nil)
 	}
+	if domain.CheckOAuthUsable(a.shared.OAuth) != nil {
+		return domain.MCPCredentials{}, "", errUnusableGrant
+	}
 	return a.shared, "", nil
 }
+
+// errUnusableGrant is the shared grant no request could carry, named as the
+// worker has always named it.
+var errUnusableGrant = errors.New("oauth grant has no access token and cannot refresh")
 
 func (a *credentialAuth) oauthRoundTrip(
 	r *http.Request, owner domain.UserID, grant domain.MCPOAuthGrant,

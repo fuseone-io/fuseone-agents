@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { githubAppIdsValid } from "@/features/integrations/mcp/github-app-credential";
 import { customHeaderError } from "@/features/integrations/mcp/custom-header";
+import { oauthHasValue, oauthIsUsable } from "@/features/integrations/mcp/oauth-credential";
 
 /**
  * What a tool server needs depends on how it is reached.
@@ -112,6 +113,15 @@ export const serverSchema = z
       message: "mcp.oauthExpiryInvalid",
     },
   )
+  /*
+   * A manual grant with no token, refused as the server refuses it. The client
+   * typed in alone belongs to the browser sign-in; saved here it replaced the
+   * credential that worked.
+   */
+  .refine((v) => v.transport !== "http" || !oauthHasValue(v) || oauthIsUsable(v), {
+    path: ["oauthAccessToken"],
+    message: "mcp.oauthNothingToSend",
+  })
   .superRefine((v, ctx) => {
     if (v.transport !== "http") return;
     const header = { name: v.customHeaderName, value: v.customHeaderValue };

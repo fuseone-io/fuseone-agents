@@ -141,6 +141,17 @@ describe("the MCP server properties sheet", () => {
       expect(screen.getByLabelText(/expira em/i)).toBeInTheDocument();
     });
 
+    // The client typed in alone belongs to the browser sign-in; saved here it
+    // replaced the credential that worked.
+    it("refuses a manual grant with no token, and sends nothing", async () => {
+      const user = userEvent.setup();
+      render(<ServerForm server={server()} onClose={vi.fn()} />);
+      await user.type(screen.getByLabelText("Client ID OAuth"), "agents");
+      await user.click(screen.getByRole("button", { name: "Salvar" }));
+      expect(await screen.findByText(/não tem o que enviar/)).toBeInTheDocument();
+      expect(api.mutateAsync).not.toHaveBeenCalled();
+    });
+
     it("starts a shape empty after switching away from it and back", async () => {
       const user = userEvent.setup();
       render(<ServerForm server={server()} onClose={vi.fn()} />);

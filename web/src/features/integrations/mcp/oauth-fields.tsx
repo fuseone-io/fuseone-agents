@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Mono } from "@/components/shared/mono";
 import type { CredentialValue } from "@/features/integrations/mcp/credential-value";
 import { OAuthGrantFields } from "@/features/integrations/mcp/oauth-grant-fields";
+import { oauthHasValue, oauthIsUsable } from "@/features/integrations/mcp/oauth-credential";
 import type { MCPOAuthClient } from "@/features/integrations/api";
 
 export function OAuthFields({
@@ -37,6 +38,9 @@ export function OAuthFields({
       <OAuthGrantFields value={value} onChange={(field, next) => onChange({ ...value, [field]: next })} />
       {invalidExpiry && (
         <p className="text-xs text-danger">{t("mcp.oauthExpiryInvalid")}</p>
+      )}
+      {oauthHasValue(value) && !oauthIsUsable(value) && (
+        <p className="text-xs text-danger">{t("mcp.oauthNothingToSend")}</p>
       )}
       {stored.hasOAuth && (
         <Button

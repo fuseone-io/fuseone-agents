@@ -24,6 +24,16 @@ export function oauthHasValue(value: OAuthCredentialInput) {
   ].some((part) => part.trim() !== "");
 }
 
+/**
+ * Whether a request could carry the grant: an access token, or a refresh
+ * token with the token URL to renew one at. The server refuses any other
+ * grant that holds something, and so does the worker.
+ */
+export function oauthIsUsable(value: OAuthCredentialInput) {
+  const present = (part: string) => part.trim() !== "";
+  return present(value.oauthAccessToken) || (present(value.oauthRefreshToken) && present(value.oauthTokenURL));
+}
+
 export function oauthExpiryIsValid(value: OAuthCredentialInput) {
   const raw = value.oauthExpiresAtUnix.trim();
   return raw === "" || /^\d+$/.test(raw);

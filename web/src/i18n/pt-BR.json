@@ -1956,6 +1956,7 @@
     "customHeaderNameInvalid": "Use só letras, números e - _ . no nome do header.",
     "saveCustomHeader": "Salvar header",
     "oauthExpiryInvalid": "A expiração deve ser em segundos Unix.",
+    "oauthNothingToSend": "Sem token de acesso, nem token de renovação com a URL de token, esta concessão não tem o que enviar. Para cada pessoa entrar com a própria conta, configure o Login pelo navegador na página do servidor.",
     "remoteBearerToken": "Token bearer",
     "remoteBearerHint": "Guardado no cofre e enviado como {{header}}: {{prefix}} …",
     "remoteHeaderHint": "Guardado no cofre e enviado no header {{header}}.",
