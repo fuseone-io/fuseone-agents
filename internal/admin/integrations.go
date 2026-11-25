@@ -415,6 +415,9 @@ func (i *Integrations) WriteMCPServer(ctx context.Context, w MCPServerWrite) (do
 			held := domain.ReadMCPCredentials(stored.Secret)
 			merged := given.Apply(held).ForTransport(transport)
 			merged.OAuth = domain.Regranted(held.OAuth, merged.OAuth)
+			if err := domain.CheckOAuthUsable(merged.OAuth); err != nil {
+				return settings.Setting{}, nil, err
+			}
 			if err := domain.CheckHeaderNames(merged.Headers); err != nil {
 				return settings.Setting{}, nil, err
 			}
@@ -796,6 +799,9 @@ func (i *Integrations) WriteMCPPersonalCredential(ctx context.Context, w Persona
 			merged.OAuth = domain.Regranted(kept.OAuth, merged.OAuth)
 			if merged.Empty() {
 				return settings.Setting{}, nil, ErrNoMCPCredential
+			}
+			if err := domain.CheckOAuthUsable(merged.OAuth); err != nil {
+				return settings.Setting{}, nil, err
 			}
 			if err := domain.CheckHeaderNames(merged.Headers); err != nil {
 				return settings.Setting{}, nil, err

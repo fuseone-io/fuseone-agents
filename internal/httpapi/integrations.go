@@ -139,7 +139,7 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 		}, nil
 	}
 	if errors.Is(err, admin.ErrAreaServerIsRemote) || errors.Is(err, admin.ErrEgressAddressInvalid) ||
-		errors.Is(err, domain.ErrMCPOAuthLoginInvalid) {
+		errors.Is(err, domain.ErrMCPOAuthLoginInvalid) || errors.Is(err, domain.ErrMCPOAuthUnusable) {
 		return openapi.PutMCPServer400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(invalid(err.Error())),
 		}, nil
