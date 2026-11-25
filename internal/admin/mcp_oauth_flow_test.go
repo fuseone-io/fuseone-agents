@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -117,31 +116,35 @@ func TestBeginMCPOAuthFlow_clearsTheExpired(t *testing.T) {
 	}
 }
 
-func TestConsumeMCPOAuthFlow_twoReturnsAtOnce_oneUsesIt(t *testing.T) {
+// Decided under the row's lock: a return that reads the request while another
+// holds it waits, and then finds it gone, rather than both using it.
+func TestConsumeMCPOAuthFlow_waitsForAReturnHoldingIt_andFindsItSpent(t *testing.T) {
 	w := withFlows(t)
 	ctx := context.Background()
 	if err := w.integrations.BeginMCPOAuthFlow(ctx, flowFor("st-race", "usr_ana"), flowNow); err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
-	var wg sync.WaitGroup
-	results := make(chan error, 2)
-	for range 2 {
-		wg.Go(func() {
-			_, err := w.integrations.ConsumeMCPOAuthFlow(ctx, "st-race", "usr_ana", flowNow)
-			results <- err
-		})
+	tx, err := w.pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
 	}
-	wg.Wait()
-	close(results)
-	used := 0
-	for err := range results {
-		if err == nil {
-			used++
-		} else if !errors.Is(err, admin.ErrMCPOAuthFlowUnknown) {
-			t.Errorf("unexpected err: %v", err)
-		}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `
+		delete from settings where kind = 'mcp_oauth_flow'`); err != nil {
+		t.Fatalf("hold and spend the request: %v", err)
 	}
-	if used != 1 {
-		t.Errorf("used %d times, want once", used)
+	done := make(chan error, 1)
+	go func() {
+		_, err := w.integrations.ConsumeMCPOAuthFlow(ctx, "st-race", "usr_ana", flowNow)
+		done <- err
+	}()
+	if !waitForRowWait(t, w.pool) {
+		t.Fatal("the return never waited for the one holding the request")
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if err := <-done; !errors.Is(err, admin.ErrMCPOAuthFlowUnknown) {
+		t.Errorf("err = %v, want ErrMCPOAuthFlowUnknown: the request was spent meanwhile", err)
 	}
 }
