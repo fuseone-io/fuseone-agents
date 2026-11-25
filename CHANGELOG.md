@@ -30,6 +30,13 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.141.0] — 2026-11-25
+
+A person signs in to a remote MCP server from their browser through the API: the start answers
+where to send the browser, and the return stores the person's own credential (#474). No
+migration. Requires `--base-url` on https and `/auth/mcp/callback` registered with the identity
+provider; the console's button comes in the next release. The rollback floors of 0.140.0 hold.
+
 ### Added
 
 - **A person signs in to a remote MCP server from their browser.** For a server with a sign-in
@@ -45,7 +52,7 @@ field" is a commit message.
   (`--base-url`, `FUSEONE_BASE_URL`) must be https, and its `/auth/mcp/callback` registered with
   the authorization server as a redirect URI. Deploy this only once the release before it is on
   every replica: one before it refreshes the grant this stores with no secret. The console's
-  button comes in a later release.
+  button comes in a later release (#474).
 
 ## [0.140.0] — 2026-11-25
 
