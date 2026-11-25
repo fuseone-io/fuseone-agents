@@ -513,7 +513,7 @@ func (t *oauthTransport) token(ctx context.Context) (string, string, error) {
 		return "", "", fmt.Errorf("oauth access token expired and no refresh token is configured")
 	}
 	was := t.grant
-	next, err := refreshOAuthGrant(ctx, t.refresh, t.grant)
+	next, err := t.refreshed(ctx)
 	if err != nil {
 		return "", "", err
 	}
