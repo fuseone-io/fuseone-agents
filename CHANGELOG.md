@@ -30,6 +30,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.142.0] — 2026-11-25
+
+The console configures a remote MCP server's browser sign-in and lets each person connect their
+own account from Credentials (#475). No migration, and nothing to configure beyond 0.141.0. The
+rollback floors of 0.140.0 hold.
+
 ### Added
 
 - **The console configures a server's browser sign-in, and connects each person's account.** A
@@ -43,7 +49,7 @@ field" is a commit message.
   browser comes back to Credentials on that server with the outcome said once and taken out of the
   address. A server with a sign-in is described as taking the person's own credential, as a recipe
   for people alone already was. Release this only once the release with the sign-in's doors is on
-  every replica: before it, the button's request is answered 404.
+  every replica: before it, the button's request is answered 404 (#475).
 
 ## [0.141.0] — 2026-11-25
 
