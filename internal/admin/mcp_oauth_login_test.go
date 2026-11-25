@@ -266,3 +266,29 @@ func TestRefreshMCPServerOAuth_keepsTheServersSignIn(t *testing.T) {
 		t.Error("the refresh dropped the sign-in")
 	}
 }
+
+// A grant got through the sign-in refreshes as the server's client, read at
+// each refresh: a secret rotated on the server holds for every person at
+// once, and nobody signs in again for it.
+func TestMCPOAuthLoginClient_isTheServersConfigurationAndSecretNow(t *testing.T) {
+	w := withSigninWorld(t)
+	if _, err := writeLogin(w, &domain.MCPOAuthLoginPatch{ClientID: "agents", ClientSecret: ptr("s1")}); err != nil {
+		t.Fatalf("configure: %v", err)
+	}
+	if _, err := writeLogin(w, &domain.MCPOAuthLoginPatch{ClientID: "agents", ClientSecret: ptr("s2")}); err != nil {
+		t.Fatalf("rotate: %v", err)
+	}
+	installation := domain.Scope{Company: domain.Installation}
+	login, secret, err := w.integrations.MCPOAuthLoginClient(context.Background(), installation, signin)
+	if err != nil || login.ClientID != "agents" || secret != "s2" ||
+		login.TokenAuthMethod != domain.TokenAuthClientSecretBasic {
+		t.Fatalf("MCPOAuthLoginClient = %+v, %q, %v; want agents, s2, basic", login, secret, err)
+	}
+
+	if _, err := writeLogin(w, &domain.MCPOAuthLoginPatch{Remove: true}); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if _, _, err := w.integrations.MCPOAuthLoginClient(context.Background(), installation, signin); !errors.Is(err, admin.ErrNoMCPOAuthLogin) {
+		t.Errorf("after removal: err = %v, want ErrNoMCPOAuthLogin", err)
+	}
+}
