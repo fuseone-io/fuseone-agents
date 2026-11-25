@@ -118,3 +118,50 @@ func TestAuthorizeURL_asksForACodeWithPKCEStateAndResource(t *testing.T) {
 		}
 	}
 }
+
+// RFC 9728 §3.1: a document at the origin's well-known address describes the
+// origin. A server that publishes only there is found, its metadata held to
+// the origin as the resource, not to the server's own path.
+func TestDiscover_aServerPublishingOnlyAtItsOrigin_isFound(t *testing.T) {
+	t.Parallel()
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		issuer := srv.URL
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/.well-known/oauth-protected-resource":
+			_ = json.NewEncoder(w).Encode(map[string]any{"resource": srv.URL, "authorization_servers": []string{issuer}})
+		case "/.well-known/oauth-authorization-server":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer": issuer, "authorization_endpoint": issuer + "/auth", "token_endpoint": issuer + "/token",
+				"code_challenge_methods_supported": []string{"S256"},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	got, err := mcpauth.Discover(t0(), srv.Client(), srv.URL+"/mcp", domain.MCPOAuthLogin{ClientID: "agents"})
+	if err != nil || got.TokenURL != srv.URL+"/token" {
+		t.Errorf("Discover = %+v, %v; want the origin's metadata", got, err)
+	}
+}
+
+// The path's own document is still held to the server's address: one that
+// names another resource is not taken for this server's.
+func TestDiscover_thePathsDocumentNamingAnotherResource_isNotTaken(t *testing.T) {
+	t.Parallel()
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/.well-known/oauth-protected-resource/mcp" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"resource": srv.URL + "/other", "authorization_servers": []string{srv.URL}})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	if _, err := mcpauth.Discover(t0(), srv.Client(), srv.URL+"/mcp", domain.MCPOAuthLogin{ClientID: "agents"}); !errors.Is(err, mcpauth.ErrDiscovery) {
+		t.Errorf("err = %v, want ErrDiscovery", err)
+	}
+}

@@ -41,11 +41,7 @@ func Discover(ctx context.Context, hc *http.Client, serverURL string, login doma
 	if login.AuthorizeURL != "" && login.TokenURL != "" {
 		return Endpoints{AuthorizeURL: login.AuthorizeURL, TokenURL: login.TokenURL}, nil
 	}
-	resource := login.Resource
-	if resource == "" {
-		resource = serverURL
-	}
-	issuer, err := authorizationServer(ctx, hc, serverURL, resource)
+	issuer, err := authorizationServer(ctx, hc, serverURL, login.Resource)
 	if err != nil {
 		return Endpoints{}, err
 	}
@@ -67,20 +63,53 @@ func Discover(ctx context.Context, hc *http.Client, serverURL string, login doma
 }
 
 // authorizationServer is the first authorization server the server's
-// protected resource metadata names: at the well-known path with the
-// server's path inserted, then at the origin's (RFC 9728 §3.1).
-func authorizationServer(ctx context.Context, hc *http.Client, serverURL, resource string) (string, error) {
+// protected resource metadata names (RFC 9728 §3.1). The document at the
+// well-known path with the server's path inserted describes the server, and is
+// held to its address, or to the configured resource; the document at the
+// origin's well-known address describes the origin, and is held to that.
+func authorizationServer(ctx context.Context, hc *http.Client, serverURL, configured string) (string, error) {
 	u, err := url.Parse(serverURL)
 	if err != nil || u.Host == "" {
 		return "", fmt.Errorf("%w: the server's address is not an address", ErrDiscovery)
 	}
-	for _, at := range wellKnown(u, "oauth-protected-resource") {
-		prm, err := oauthex.GetProtectedResourceMetadata(ctx, at, resource, hc)
+	for _, c := range resourceDocuments(u, configured) {
+		prm, err := oauthex.GetProtectedResourceMetadata(ctx, c.metadata, c.resource, hc)
 		if err == nil && prm != nil && len(prm.AuthorizationServers) > 0 {
 			return prm.AuthorizationServers[0], nil
 		}
 	}
 	return "", fmt.Errorf("%w: the server publishes no protected resource metadata naming an authorization server", ErrDiscovery)
+}
+
+// resourceDocument is where a protected resource's metadata may be, and the
+// resource that document must describe to be this server's.
+type resourceDocument struct {
+	metadata, resource string
+}
+
+func resourceDocuments(u *url.URL, configured string) []resourceDocument {
+	origin := u.Scheme + "://" + u.Host
+	path := strings.TrimSuffix(u.Path, "/")
+	at := origin + "/.well-known/oauth-protected-resource"
+	if path == "" {
+		resource := configured
+		if resource == "" {
+			resource = u.String()
+		}
+		return []resourceDocument{{at, resource}}
+	}
+	own := configured
+	if own == "" {
+		own = u.String()
+	}
+	out := []resourceDocument{{at + path, own}}
+	if configured != "" {
+		// A resource the administrator named is the one any document must
+		// describe, wherever it is published.
+		return append(out, resourceDocument{at, configured})
+	}
+	// The origin's document names the origin, with or without the slash.
+	return append(out, resourceDocument{at, origin}, resourceDocument{at, origin + "/"})
 }
 
 // serverMetadata is the authorization server's metadata: RFC 8414 with the
