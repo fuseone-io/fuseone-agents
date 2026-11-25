@@ -30,17 +30,26 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.140.0] — 2026-11-25
+
+A grant got through a server's browser sign-in refreshes as the server's client, bound to the
+configuration and the endpoint in effect it was got under (#473). Nothing creates such a grant
+yet. No migration. Once one exists, 0.140.0 is a rollback floor, beside 0.138.0.
+
 ### Added
 
 - **A grant got through a server's browser sign-in refreshes as the server's client.** A
   person's grant marked as coming from the sign-in holds no client secret: each refresh reads the
   server's sign-in configuration and secret as they are then, authenticates by the method it
   names (`none`, `client_secret_post` or `client_secret_basic`), and asks for the grant's
-  resource (RFC 8707). A secret rotated on the server holds for everyone at once; a sign-in that
-  now names another client is told to sign in again rather than asked as it. Nothing creates
+  resource (RFC 8707). A secret rotated on the server holds for everyone at once. The grant is
+  bound to the configuration it was got under and to the token endpoint and resource in effect,
+  resolved again before each refresh (found again by discovery where none is configured): a
+  grant got under another client, method, scope or endpoint, a token endpoint the metadata has
+  since moved included, is told to sign in again, and the secret never leaves for it. Nothing creates
   such a grant yet: the browser round trip that does comes in the next release, once every
   replica refreshes one. Once one exists, never roll back below this release: an older binary
-  rewrites the grant without its mark and refreshes it with no secret.
+  rewrites the grant without its mark and refreshes it with no secret (#473).
 
 ## [0.139.0] — 2026-11-25
 
