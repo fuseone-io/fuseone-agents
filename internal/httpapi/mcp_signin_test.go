@@ -322,3 +322,68 @@ func TestSignInCallback_aConfigurationChangedBetweenItsReads_isRefusedBeforeTheS
 		t.Errorf("a token endpoint was asked: %v", w.asked)
 	}
 }
+
+// rewrite sends every request to the test's provider, whatever address it is
+// for: the sign-in's addresses stay the https ones a real server would have.
+type rewrite struct{ to *url.URL }
+
+func (r rewrite) RoundTrip(req *http.Request) (*http.Response, error) {
+	out := req.Clone(req.Context())
+	out.URL.Scheme, out.URL.Host = r.to.Scheme, r.to.Host
+	return http.DefaultTransport.RoundTrip(out)
+}
+
+// discoveredWorld is a server whose sign-in configures no endpoint: they are
+// found in its metadata, whose token endpoint the test can move.
+func discoveredWorld(t *testing.T) (*signInWorld, *string, *[]string) {
+	t.Helper()
+	w := newSignInWorld(t)
+	tokenPath, asked := "/token-v1", &[]string{}
+	idp := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/.well-known/oauth-protected-resource/signin":
+			_ = json.NewEncoder(rw).Encode(map[string]any{"resource": "https://mcp.example.com/signin",
+				"authorization_servers": []string{"https://idp.example.com"}})
+		case "/.well-known/oauth-authorization-server":
+			_ = json.NewEncoder(rw).Encode(map[string]any{"issuer": "https://idp.example.com",
+				"authorization_endpoint": "https://idp.example.com/auth", "token_endpoint": "https://idp.example.com" + tokenPath,
+				"code_challenge_methods_supported": []string{"S256"}})
+		case "/token-v1", "/token-v2":
+			*asked = append(*asked, r.URL.Path)
+			_, _ = rw.Write([]byte(`{"access_token":"a","refresh_token":"r","expires_in":60}`))
+		default:
+			http.NotFound(rw, r)
+		}
+	}))
+	t.Cleanup(idp.Close)
+	to, _ := url.Parse(idp.URL)
+	w.s.mcpSignIn.Client = func(domain.MCPServer) *http.Client { return &http.Client{Transport: rewrite{to: to}} }
+	w.configure(t, domain.MCPOAuthLoginPatch{ClientID: "agents", ClientSecret: ptr("server-secret")})
+	return w, &tokenPath, asked
+}
+
+// Found, not configured: the return resolves the token endpoint again, and a
+// metadata that moved it since the sign-in began sends the code nowhere.
+func TestSignInCallback_aFoundTokenEndpointMovedMeanwhile_isRefused(t *testing.T) {
+	w, tokenPath, asked := discoveredWorld(t)
+	q := w.start(t, as(domain.RoleAuthor))
+	*tokenPath = "/token-v2"
+	if got := landedOn(t, w.back(as(domain.RoleAuthor), "code=c&state="+url.QueryEscape(q.Get("state")))); got != "changed" {
+		t.Errorf("oauth = %q, want changed", got)
+	}
+	if len(*asked) != 0 {
+		t.Errorf("token endpoints asked: %v; want none", *asked)
+	}
+}
+
+func TestSignInCallback_aFoundTokenEndpointThatHolds_isWhereTheCodeGoes(t *testing.T) {
+	w, _, asked := discoveredWorld(t)
+	q := w.start(t, as(domain.RoleAuthor))
+	if got := landedOn(t, w.back(as(domain.RoleAuthor), "code=c&state="+url.QueryEscape(q.Get("state")))); got != "connected" {
+		t.Errorf("oauth = %q, want connected", got)
+	}
+	if len(*asked) != 1 || (*asked)[0] != "/token-v1" {
+		t.Errorf("token endpoints asked: %v; want /token-v1 once", *asked)
+	}
+}

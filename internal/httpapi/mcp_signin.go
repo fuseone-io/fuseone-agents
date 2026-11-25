@@ -25,7 +25,7 @@ const callbackPath = "/auth/mcp/callback"
 // its consumer.
 type MCPSignIns interface {
 	MCPSignInServer(ctx context.Context, name string, visible []domain.Scope) (domain.MCPServer, error)
-	MCPOAuthLoginClient(ctx context.Context, runtime domain.Scope, name string) (domain.MCPOAuthLogin, string, error)
+	MCPOAuthLoginClient(ctx context.Context, runtime domain.Scope, name string) (admin.SignInClient, error)
 	BeginMCPOAuthFlow(ctx context.Context, f admin.MCPOAuthFlow, now time.Time) error
 	ConsumeMCPOAuthFlow(ctx context.Context, state string, principal domain.UserID, now time.Time) (admin.MCPOAuthFlow, error)
 }
@@ -112,7 +112,7 @@ func (s *Server) beginSignIn(
 	if err := cfg.Store.BeginMCPOAuthFlow(ctx, admin.MCPOAuthFlow{
 		State: state, Verifier: verifier, Principal: principal,
 		Server: server.Name, ServerScope: server.Scope, ServerAt: server.UpdatedAt,
-		ClientID: login.ClientID, TokenAuthMethod: login.TokenAuthMethod, SignInConfig: login.Identity(),
+		ClientID: login.ClientID, TokenAuthMethod: login.TokenAuthMethod, SignInConfig: login.Identity(endpoints.TokenURL, resource),
 		TokenURL: endpoints.TokenURL, Resource: resource,
 		Issuer: endpoints.Issuer, IssParameter: endpoints.IssParameter,
 		RedirectURI: redirect, ExpiresAt: now.Add(signInLifetime),

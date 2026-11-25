@@ -101,18 +101,28 @@ func (s *Server) exchange(
 	ctx context.Context, server domain.MCPServer, flow admin.MCPOAuthFlow, code string,
 ) (domain.MCPOAuthGrant, string) {
 	cfg := s.mcpSignIn
-	// Read with the secret, in one snapshot: the configuration the secret is
-	// for must be the one the sign-in began under, or the secret now in force
-	// would go to an endpoint of another (a change between this read and the
-	// server's revision checked above is caught here).
-	login, secret, err := cfg.Store.MCPOAuthLoginClient(ctx, server.Scope, server.Name)
-	if err != nil || login.Identity() != flow.SignInConfig {
+	/*
+		Read with the secret, in one snapshot, and resolved again: the
+		configuration the secret is for, and the token endpoint and resource
+		in effect now (found again where none is configured), must be those
+		the sign-in began under, or the secret now in force would go to an
+		endpoint of another. A change between this read and the server's
+		revision checked above is caught here, and so is metadata that moved
+		the endpoint since the start.
+	*/
+	client, err := cfg.Store.MCPOAuthLoginClient(ctx, server.Scope, server.Name)
+	if err != nil {
 		return domain.MCPOAuthGrant{}, signInChanged
 	}
-	tokens, err := mcpauth.ExchangeCode(ctx, cfg.Client(server), mcpauth.CodeExchange{
+	hc := cfg.Client(server)
+	tokenURL, resource, err := mcpauth.InEffect(ctx, hc, client.ServerURL, client.Login)
+	if err != nil || client.Login.Identity(tokenURL, resource) != flow.SignInConfig {
+		return domain.MCPOAuthGrant{}, signInChanged
+	}
+	tokens, err := mcpauth.ExchangeCode(ctx, hc, mcpauth.CodeExchange{
 		Token: mcpauth.TokenRequest{
-			TokenURL: flow.TokenURL, Resource: flow.Resource,
-			Client: mcpauth.Client{ID: flow.ClientID, Secret: secret, Method: login.TokenAuthMethod},
+			TokenURL: tokenURL, Resource: resource,
+			Client: mcpauth.Client{ID: flow.ClientID, Secret: client.Secret, Method: client.Login.TokenAuthMethod},
 		},
 		Code: code, Verifier: flow.Verifier, RedirectURI: flow.RedirectURI,
 	})
