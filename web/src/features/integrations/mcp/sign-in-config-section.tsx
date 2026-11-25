@@ -40,7 +40,15 @@ export function SignInConfigSection({ server, connection }: { server: MCPServer;
     if (await connection.write({ oauthLogin: signInInput(values) })) form.setValue("clientSecret", "");
   }
 
-  async function copy() {
+  // The method goes back to the default with the secret, in the form too: a
+  // save after it must not send a method that needs a secret with none held.
+  async function removeSecret(login: NonNullable<typeof stored>) {
+    if (!(await connection.write({ oauthLogin: withoutSecret(login) }))) return;
+    form.setValue("clientSecret", "");
+    form.setValue("tokenAuthMethod", "auto");
+  }
+
+    async function copy() {
     try {
       await navigator.clipboard.writeText(callback);
       toast.success(t("mcp.signIn.copied"));
@@ -77,7 +85,7 @@ export function SignInConfigSection({ server, connection }: { server: MCPServer;
             </Button>
             {stored?.hasClientSecret && (
               <Button type="button" variant="outline" size="sm" className="text-danger" disabled={connection.pending}
-                onClick={() => void connection.write({ oauthLogin: withoutSecret(stored) })}>
+                onClick={() => void removeSecret(stored)}>
                 <Trash2 className="size-3.5" />
                 {t("mcp.signIn.removeSecret")}
               </Button>

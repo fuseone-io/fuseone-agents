@@ -58,14 +58,19 @@ export function UserCredentialsPanel({
 
   const returned = routed ? <SignInReturn onServer={setChosen} /> : null;
   if (isLoading) return <>{returned}<LoadingRows rows={4} /></>;
-  if (error) return <ErrorState error={error} onRetry={onRetry} />;
+  if (error) return <>{returned}<ErrorState error={error} onRetry={onRetry} /></>;
   if (remoteServers.length === 0) {
+    // A sign-in can return to a page that lists nothing now: its outcome is
+    // still said, and still taken out of the address.
     return (
-      <EmptyState
+      <>
+        {returned}
+        <EmptyState
         icon={<KeyRound className="size-6" />}
         title={t("mcp.noPersonalCredentialServers")}
         hint={t("mcp.noPersonalCredentialServersHint")}
-      />
+        />
+      </>
     );
   }
 

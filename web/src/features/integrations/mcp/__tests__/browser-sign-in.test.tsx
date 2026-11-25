@@ -98,6 +98,14 @@ describe("connecting in the browser", () => {
     expect(toast.error).toHaveBeenCalledWith("Esse login foi iniciado por outra pessoa. Comece de novo com a sua conta.");
   });
 
+  // The last server can go while its sign-in is in flight: the return still
+  // says why, on a page that now lists nothing, and still leaves the address.
+  it("says the outcome even when no server is left to list", () => {
+    open("/integrations/credentials?oauth=changed&server=dpg", []);
+    expect(toast.error).toHaveBeenCalledWith("A configuração do servidor mudou durante o login. Comece de novo.");
+    expect(screen.getByTestId("where")).toHaveTextContent(/^\/integrations\/credentials$/);
+  });
+
   // The server says every call takes a personal credential, with no recipe to say so.
   it("tells a server that takes personal credentials apart from one with a fallback", () => {
     open("/integrations/credentials?server=dpg");

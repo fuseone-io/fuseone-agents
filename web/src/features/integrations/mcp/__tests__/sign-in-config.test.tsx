@@ -103,6 +103,31 @@ describe("the browser sign-in on a server's page", () => {
     expect(sent().oauthLogin).toEqual({ clientID: "data-platform", scopes: ["openid"], clientSecret: "" });
   });
 
+  // After the secret goes, the form follows: a save that kept the old method
+  // would send one that needs a secret with none held, and be refused.
+  it("follows a removed secret, so the next save sends no method that needs one", async () => {
+    const user = userEvent.setup();
+    render(<ConnectionPanel server={remote({
+      oauthLogin: { clientID: "data-platform", tokenAuthMethod: "client_secret_basic", hasClientSecret: true },
+    })} />);
+    await user.click(within(section()).getByRole("button", { name: "Remover o client secret" }));
+    await user.type(within(section()).getByLabelText("Escopos"), "openid");
+    await user.click(within(section()).getByRole("button", { name: "Salvar o login pelo navegador" }));
+    expect(sent().oauthLogin).toEqual({ clientID: "data-platform", scopes: ["openid"] });
+  });
+
+  // Read again after a save, the stored configuration is what the form opens
+  // on: never an older one it would write back.
+  it("opens again on the stored sign-in when it changes", () => {
+    const { rerender } = render(<ConnectionPanel server={remote({
+      oauthLogin: { clientID: "data-platform", tokenAuthMethod: "none", hasClientSecret: false },
+    })} />);
+    rerender(<ConnectionPanel server={remote({
+      oauthLogin: { clientID: "data-platform-2", tokenAuthMethod: "none", hasClientSecret: false },
+    })} />);
+    expect(within(section()).getByLabelText("Client ID")).toHaveValue("data-platform-2");
+  });
+
   it("refuses to save a sign-in with no client", async () => {
     const user = userEvent.setup();
     render(<ConnectionPanel server={remote()} />);

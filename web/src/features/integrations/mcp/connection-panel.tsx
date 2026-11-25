@@ -82,7 +82,11 @@ export function ConnectionPanel({
           <RemoteCredentialEditor server={server} recipe={recipe} connection={connection} />
         )}
         {/* People sign in as themselves; a server acting as an App has nobody to sign in. */}
-        {!local && !server.githubApp && <SignInConfigSection server={server} connection={connection} />}
+        {!local && !server.githubApp && (
+          // Opened again on what is stored whenever that changes, so the form
+          // never holds an older configuration than the one it would replace.
+          <SignInConfigSection key={JSON.stringify(server.oauthLogin ?? null)} server={server} connection={connection} />
+        )}
 
         <Button
           type="button"
