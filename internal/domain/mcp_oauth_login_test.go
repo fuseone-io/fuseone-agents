@@ -155,3 +155,13 @@ func TestMCPOAuthLoginPatch_anAuthorizeEndpointsQuery_isKept(t *testing.T) {
 		t.Errorf("Apply = %+v, %v; want the query kept", got, err)
 	}
 }
+
+// RFC 8707 takes any absolute URI as a resource, a URN among them: it names
+// the server and is never fetched, so it needs no host.
+func TestMCPOAuthLoginPatch_aResourceURNWithNoHost_isKept(t *testing.T) {
+	t.Parallel()
+	got, _, err := domain.MCPOAuthLoginPatch{ClientID: "agents", Resource: "urn:example:service"}.Apply(nil)
+	if err != nil || got.Resource != "urn:example:service" {
+		t.Errorf("Apply = %+v, %v; want the URN kept", got, err)
+	}
+}

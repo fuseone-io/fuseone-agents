@@ -30,6 +30,23 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Once a server has a browser sign-in, never roll back below the release that keeps one.**
+  A binary from before it does not know the field and drops it the next time it rewrites the
+  server, on an edit or a refresh of the shared grant: the server would stop taking personal
+  credentials with nobody having decided so. Deploy this release only after the one before it is
+  on every replica, for the same reason, and configure no sign-in until this one is on every
+  replica: one still on the release before answers the write with 204 and stores nothing of it.
+
+### Added
+
+- **A remote server's browser sign-in is written with the server.** The server's write takes
+  `oauthLogin`: omitted keeps it, an empty object removes it with its client secret, and
+  otherwise the fields are the configuration, whole, with a secret left out kept. A configuration
+  no sign-in could use is 400 `fuseone:invalid-input`. The sign-in itself, the browser round trip,
+  comes in a later release.
+
 ### Changed
 
 - **A server's credential and a person's own are entered one shape at a time.** On a remote

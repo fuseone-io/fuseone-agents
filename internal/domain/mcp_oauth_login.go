@@ -127,19 +127,17 @@ func (l *MCPOAuthLogin) valid() error {
 		return fmt.Errorf("%w: %s sends a client secret, and none is held",
 			ErrMCPOAuthLoginInvalid, l.TokenAuthMethod)
 	}
-	for _, address := range []struct {
-		what, raw string
-		query     bool
-	}{
+	for _, address := range []openRule{
 		// The browser opens it, and a policy name may ride in its query.
-		{"authorization endpoint", l.AuthorizeURL, true},
+		{what: "authorization endpoint", raw: l.AuthorizeURL, query: true, host: true},
 		// Codes and refresh tokens go there in a body; a query is where a
 		// key would hide.
-		{"token endpoint", l.TokenURL, false},
-		// RFC 8707 allows a query and refuses a fragment.
-		{"resource", l.Resource, true},
+		{what: "token endpoint", raw: l.TokenURL, host: true},
+		// RFC 8707: any absolute URI, a URN among them, with a query allowed
+		// and a fragment refused. It names the server and is never fetched.
+		{what: "resource", raw: l.Resource, query: true},
 	} {
-		if err := openAddress(address.what, address.raw, address.query); err != nil {
+		if err := address.check(); err != nil {
 			return err
 		}
 	}
@@ -147,18 +145,26 @@ func (l *MCPOAuthLogin) valid() error {
 }
 
 /*
-openAddress refuses an address that cannot be stored in the open and read
-back by anyone who reads the server: one carrying a user or password, a
-fragment, or, where none belongs, a query. The refusal never repeats the
-address, since what makes it wrong may be a credential.
+openRule says what one address of a sign-in may be. check refuses one that
+cannot be stored in the open and read back by anyone who reads the server: one
+carrying a user or password, a fragment, or, where none belongs, a query. The
+refusal never repeats the address, since what makes it wrong may be a
+credential.
 */
-func openAddress(what, raw string, query bool) error {
+type openRule struct {
+	what, raw string
+	// query allows one; host requires one, for an address that is fetched.
+	query, host bool
+}
+
+func (r openRule) check() error {
+	what, raw, query := r.what, r.raw, r.query
 	if raw == "" {
 		return nil
 	}
 	u, err := url.Parse(raw)
 	switch {
-	case err != nil || !u.IsAbs() || u.Host == "":
+	case err != nil || !u.IsAbs() || (r.host && u.Host == ""):
 		return fmt.Errorf("%w: the %s is not an absolute address", ErrMCPOAuthLoginInvalid, what)
 	case u.User != nil:
 		return fmt.Errorf("%w: the %s carries a user or password, and is stored and read in the open",
