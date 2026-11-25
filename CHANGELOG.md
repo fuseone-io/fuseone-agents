@@ -30,13 +30,6 @@ field" is a commit message.
 
 ## [Unreleased]
 
-## [0.141.0] — 2026-11-25
-
-A person signs in to a remote MCP server from their browser through the API: the start answers
-where to send the browser, and the return stores the person's own credential (#474). No
-migration. Requires `--base-url` on https and `/auth/mcp/callback` registered with the identity
-provider; the console's button comes in the next release. The rollback floors of 0.140.0 hold.
-
 ### Added
 
 - **The console configures a server's browser sign-in, and connects each person's account.** A
@@ -51,6 +44,16 @@ provider; the console's button comes in the next release. The rollback floors of
   address. A server with a sign-in is described as taking the person's own credential, as a recipe
   for people alone already was. Release this only once the release with the sign-in's doors is on
   every replica: before it, the button's request is answered 404.
+
+## [0.141.0] — 2026-11-25
+
+A person signs in to a remote MCP server from their browser through the API: the start answers
+where to send the browser, and the return stores the person's own credential (#474). No
+migration. Requires `--base-url` on https and `/auth/mcp/callback` registered with the identity
+provider; the console's button comes in the next release. The rollback floors of 0.140.0 hold.
+
+### Added
+
 - **A person signs in to a remote MCP server from their browser.** For a server with a sign-in
   configured, `POST /integrations/mcp-credentials/{name}/oauth/start` answers the address to send
   the browser to: the configured endpoints, else those the server's metadata names, the token
