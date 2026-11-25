@@ -7,6 +7,7 @@ export type MCPServer = components["schemas"]["MCPServer"];
 export type MCPUserCredential = components["schemas"]["MCPUserCredential"];
 export type MCPCredentialServer = components["schemas"]["MCPCredentialServer"];
 export type MCPOAuthGrant = components["schemas"]["MCPOAuthGrant"];
+export type MCPOAuthClient = components["schemas"]["MCPOAuthClient"];
 export type MCPGitHubApp = components["schemas"]["MCPGitHubApp"];
 export type ModelProvider = components["schemas"]["ModelProvider"];
 export type IntegrationHealth = components["schemas"]["IntegrationHealth"];
