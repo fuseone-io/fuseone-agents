@@ -165,3 +165,21 @@ func TestDiscover_thePathsDocumentNamingAnotherResource_isNotTaken(t *testing.T)
 		t.Errorf("err = %v, want ErrDiscovery", err)
 	}
 }
+
+// Where a sign-in's token requests go now: the configured endpoint, else the
+// one the metadata names at this moment; the configured resource, else the
+// server's address. What a refresh holds a grant to before the secret leaves.
+func TestInEffect_isTheConfiguredOrTheFoundEndpoint_andTheResource(t *testing.T) {
+	t.Parallel()
+	srv, server := discoveryWorld(t)
+	token, resource, err := mcpauth.InEffect(t0(), srv.Client(), server, domain.MCPOAuthLogin{ClientID: "agents"})
+	if err != nil || token != srv.URL+"/realms/agents/token" || resource != server {
+		t.Errorf("found: %q, %q, %v", token, resource, err)
+	}
+	token, resource, err = mcpauth.InEffect(t0(), srv.Client(), server, domain.MCPOAuthLogin{
+		ClientID: "agents", TokenURL: "https://relay.example.com/token", Resource: "urn:example:mcp",
+	})
+	if err != nil || token != "https://relay.example.com/token" || resource != "urn:example:mcp" {
+		t.Errorf("configured: %q, %q, %v", token, resource, err)
+	}
+}

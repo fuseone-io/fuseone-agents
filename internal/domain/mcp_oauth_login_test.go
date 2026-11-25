@@ -166,31 +166,40 @@ func TestMCPOAuthLoginPatch_aResourceURNWithNoHost_isKept(t *testing.T) {
 	}
 }
 
-// A grant is bound to the configuration it was got under, all but the secret:
-// rotating the secret alone keeps the identity, changing anything a token
-// request is sent to or by moves it.
+// A grant is bound to the configuration it was got under, all but the secret,
+// and to where its token requests actually go: the token endpoint and the
+// resource in effect, configured or found. Rotating the secret alone keeps
+// the identity; changing anything a token request is sent to or by moves it.
 func TestMCPOAuthLogin_identity_movesWithAllButTheSecret(t *testing.T) {
 	t.Parallel()
+	const token, resource = "https://idp.example.com/token", "https://mcp.example.com/mcp"
 	base := domain.MCPOAuthLogin{ClientID: "agents", Scopes: []string{"openid"},
-		TokenURL: "https://idp.example.com/token", TokenAuthMethod: domain.TokenAuthClientSecretBasic, HasClientSecret: true}
+		TokenAuthMethod: domain.TokenAuthClientSecretBasic, HasClientSecret: true}
 	// Whether a secret is held, and which, are not part of it.
 	same := base
 	same.HasClientSecret = false
-	if base.Identity() != same.Identity() || base.Identity() == "" {
-		t.Fatalf("identity %q vs %q; want equal and set", base.Identity(), same.Identity())
+	if base.Identity(token, resource) != same.Identity(token, resource) || base.Identity(token, resource) == "" {
+		t.Fatalf("identity %q vs %q; want equal and set", base.Identity(token, resource), same.Identity(token, resource))
 	}
 	for name, change := range map[string]func(*domain.MCPOAuthLogin){
-		"the client":         func(l *domain.MCPOAuthLogin) { l.ClientID = "agents-2" },
-		"the token endpoint": func(l *domain.MCPOAuthLogin) { l.TokenURL = "https://other.example.com/token" },
-		"the authorize one":  func(l *domain.MCPOAuthLogin) { l.AuthorizeURL = "https://idp.example.com/auth" },
-		"the resource":       func(l *domain.MCPOAuthLogin) { l.Resource = "https://mcp.example.com/" },
-		"the method":         func(l *domain.MCPOAuthLogin) { l.TokenAuthMethod = domain.TokenAuthClientSecretPost },
-		"the scopes":         func(l *domain.MCPOAuthLogin) { l.Scopes = []string{"openid", "profile"} },
+		"the client":              func(l *domain.MCPOAuthLogin) { l.ClientID = "agents-2" },
+		"the configured token":    func(l *domain.MCPOAuthLogin) { l.TokenURL = token },
+		"the authorize one":       func(l *domain.MCPOAuthLogin) { l.AuthorizeURL = "https://idp.example.com/auth" },
+		"the configured resource": func(l *domain.MCPOAuthLogin) { l.Resource = resource },
+		"the method":              func(l *domain.MCPOAuthLogin) { l.TokenAuthMethod = domain.TokenAuthClientSecretPost },
+		"the scopes":              func(l *domain.MCPOAuthLogin) { l.Scopes = []string{"openid", "profile"} },
 	} {
 		changed := base
 		change(&changed)
-		if changed.Identity() == base.Identity() {
+		if changed.Identity(token, resource) == base.Identity(token, resource) {
 			t.Errorf("%s changed and the identity did not", name)
 		}
+	}
+	// Found rather than configured: what is in effect is in it too.
+	if base.Identity("https://idp.example.com/token-2", resource) == base.Identity(token, resource) {
+		t.Error("the token endpoint in effect changed and the identity did not")
+	}
+	if base.Identity(token, "https://mcp.example.com/other") == base.Identity(token, resource) {
+		t.Error("the resource in effect changed and the identity did not")
 	}
 }

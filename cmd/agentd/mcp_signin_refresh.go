@@ -17,7 +17,7 @@ import (
 // finds the client it refreshes as: the server's configuration as it is now,
 // and its secret.
 type SignInClientStore interface {
-	MCPOAuthLoginClient(ctx context.Context, runtime domain.Scope, server string) (domain.MCPOAuthLogin, string, error)
+	MCPOAuthLoginClient(ctx context.Context, runtime domain.Scope, server string) (admin.SignInClient, error)
 }
 
 var _ SignInClientStore = (*admin.Integrations)(nil)
@@ -38,30 +38,34 @@ func (t *oauthTransport) refreshed(ctx context.Context) (domain.MCPOAuthGrant, e
 	if !ok {
 		return domain.MCPOAuthGrant{}, errors.New("oauth refresh: no store answers a sign-in's client")
 	}
-	login, secret, err := clients.MCPOAuthLoginClient(ctx, t.scope, t.server)
+	client, err := clients.MCPOAuthLoginClient(ctx, t.scope, t.server)
 	if err != nil {
 		return domain.MCPOAuthGrant{}, fmt.Errorf("oauth refresh: %w", err)
 	}
-	return refreshSignInGrant(ctx, t.refresh, t.grant, signInClient{login: login, secret: secret})
-}
-
-type signInClient struct {
-	login  domain.MCPOAuthLogin
-	secret string
+	return refreshSignInGrant(ctx, t.refresh, t.grant, client)
 }
 
 func refreshSignInGrant(
-	ctx context.Context, hc *http.Client, grant domain.MCPOAuthGrant, client signInClient,
+	ctx context.Context, hc *http.Client, grant domain.MCPOAuthGrant, client admin.SignInClient,
 ) (domain.MCPOAuthGrant, error) {
-	// The configuration the grant was got under, the secret aside: a token
-	// endpoint changed with the client kept must not receive the new secret.
-	if grant.SignInConfig == "" || client.login.Identity() != grant.SignInConfig {
+	/*
+		Where the token request goes now, resolved again before the secret
+		leaves: the configured endpoint, else the one the metadata names at
+		this moment. The grant is held to the configuration it was got under
+		and to that endpoint and resource, so the secret now in force never
+		goes to an endpoint the grant was not got at, configured or found.
+	*/
+	tokenURL, resource, err := mcpauth.InEffect(ctx, hc, client.ServerURL, client.Login)
+	if err != nil {
+		return domain.MCPOAuthGrant{}, fmt.Errorf("oauth refresh: %w", err)
+	}
+	if grant.SignInConfig == "" || client.Login.Identity(tokenURL, resource) != grant.SignInConfig {
 		return domain.MCPOAuthGrant{}, errSignInClientChanged
 	}
 	tokens, err := mcpauth.Refresh(ctx, hc, mcpauth.TokenRequest{
-		TokenURL: grant.TokenURL,
-		Client:   mcpauth.Client{ID: grant.ClientID, Secret: client.secret, Method: client.login.TokenAuthMethod},
-		Resource: grant.Resource,
+		TokenURL: tokenURL,
+		Client:   mcpauth.Client{ID: grant.ClientID, Secret: client.Secret, Method: client.Login.TokenAuthMethod},
+		Resource: resource,
 	}, grant.RefreshToken)
 	if err != nil {
 		return domain.MCPOAuthGrant{}, fmt.Errorf("oauth refresh: %w", err)

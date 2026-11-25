@@ -185,3 +185,25 @@ func Challenge(verifier string) string {
 	sum := sha256.Sum256([]byte(verifier))
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
+
+/*
+InEffect is where a sign-in's token requests go now, and the resource they
+ask for: the configured token endpoint, else the one the server's metadata
+names at this moment; the configured resource, else the server's address. A
+refresh resolves it again before the secret leaves, so a grant got at an
+endpoint found once is not refreshed at it after the metadata moved on.
+*/
+func InEffect(ctx context.Context, hc *http.Client, serverURL string, login domain.MCPOAuthLogin) (string, string, error) {
+	resource := login.Resource
+	if resource == "" {
+		resource = serverURL
+	}
+	if login.TokenURL != "" {
+		return login.TokenURL, resource, nil
+	}
+	found, err := Discover(ctx, hc, serverURL, login)
+	if err != nil {
+		return "", "", err
+	}
+	return found.TokenURL, resource, nil
+}

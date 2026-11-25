@@ -205,15 +205,17 @@ func (s MCPServer) TakesPersonalCredential(userOnly bool) bool {
 
 /*
 Identity names the configuration a token request is made under, all but the
-client secret: the client, the endpoints, the resource, the method and the
-scopes. A grant got through the sign-in records it, and a refresh under any
-other identity is refused, so the secret now in force is never sent to an
-endpoint of another configuration. Rotating the secret alone keeps it.
+client secret, and where that request actually goes: the client, the
+configured endpoints, the method and the scopes, with the token endpoint and
+the resource in effect, whether configured or found. A grant got through the
+sign-in records it, and a refresh under any other is refused, so the secret
+now in force is never sent to an endpoint the grant was not got at, even one
+found by discovery that has since moved. Rotating the secret alone keeps it.
 */
-func (l MCPOAuthLogin) Identity() string {
+func (l MCPOAuthLogin) Identity(tokenURL, resource string) string {
 	h := sha256.New()
 	for _, part := range append([]string{
-		l.ClientID, l.AuthorizeURL, l.TokenURL, l.Resource, l.TokenAuthMethod,
+		l.ClientID, l.AuthorizeURL, l.TokenURL, l.Resource, l.TokenAuthMethod, tokenURL, resource,
 	}, l.Scopes...) {
 		h.Write([]byte(strconv.Itoa(len(part))))
 		h.Write([]byte{':'})

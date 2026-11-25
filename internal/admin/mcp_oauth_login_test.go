@@ -279,16 +279,16 @@ func TestMCPOAuthLoginClient_isTheServersConfigurationAndSecretNow(t *testing.T)
 		t.Fatalf("rotate: %v", err)
 	}
 	installation := domain.Scope{Company: domain.Installation}
-	login, secret, err := w.integrations.MCPOAuthLoginClient(context.Background(), installation, signin)
-	if err != nil || login.ClientID != "agents" || secret != "s2" ||
-		login.TokenAuthMethod != domain.TokenAuthClientSecretBasic {
-		t.Fatalf("MCPOAuthLoginClient = %+v, %q, %v; want agents, s2, basic", login, secret, err)
+	client, err := w.integrations.MCPOAuthLoginClient(context.Background(), installation, signin)
+	if err != nil || client.Login.ClientID != "agents" || client.Secret != "s2" ||
+		client.Login.TokenAuthMethod != domain.TokenAuthClientSecretBasic || client.ServerURL != signinServer().URL {
+		t.Fatalf("MCPOAuthLoginClient = %+v, %v; want agents, s2, basic, at the server's address", client, err)
 	}
 
 	if _, err := writeLogin(w, &domain.MCPOAuthLoginPatch{Remove: true}); err != nil {
 		t.Fatalf("remove: %v", err)
 	}
-	if _, _, err := w.integrations.MCPOAuthLoginClient(context.Background(), installation, signin); !errors.Is(err, admin.ErrNoMCPOAuthLogin) {
+	if _, err := w.integrations.MCPOAuthLoginClient(context.Background(), installation, signin); !errors.Is(err, admin.ErrNoMCPOAuthLogin) {
 		t.Errorf("after removal: err = %v, want ErrNoMCPOAuthLogin", err)
 	}
 }

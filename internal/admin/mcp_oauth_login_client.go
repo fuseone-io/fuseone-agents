@@ -14,24 +14,27 @@ import (
 // removed, or it moved, since the grant was got.
 var ErrNoMCPOAuthLogin = errors.New("admin: the server has no browser sign-in")
 
+// SignInClient is a sign-in's client as it is now: the configuration, its
+// secret, and the address of the server it is for, read together.
+type SignInClient struct {
+	Login     domain.MCPOAuthLogin
+	Secret    string
+	ServerURL string
+}
+
 /*
 MCPOAuthLoginClient is the client a grant got through the server's browser
-sign-in refreshes as: the server's configuration as it is now, and its
-client secret, read at the scope the server is stored at. Read at each
-refresh rather than copied into every person's grant, so a secret rotated on
-the server holds for everyone at once.
+sign-in refreshes as: the server's configuration as it is now, its client
+secret and its address, read at the scope the server is stored at, in one
+snapshot. Read at each refresh rather than copied into every person's grant,
+so a secret rotated on the server holds for everyone at once; read together,
+so one version's client is never paired with another's secret or address.
 */
 func (i *Integrations) MCPOAuthLoginClient(
 	ctx context.Context, runtime domain.Scope, name string,
-) (domain.MCPOAuthLogin, string, error) {
+) (SignInClient, error) {
 	kind, at := storedAt(runtime)
-	var (
-		login  domain.MCPOAuthLogin
-		secret string
-	)
-	// One snapshot for both rows: read apart, a rotation committed between
-	// them would pair one version's client with another's secret, and send
-	// the new secret to the old configuration's token endpoint.
+	var out SignInClient
 	err := i.settings.ReadSnapshot(ctx, func(db settings.DB) error {
 		row, err := i.settings.RevealOn(ctx, db, kind, at, settings.KindMCPServer, name)
 		if errors.Is(err, settings.ErrNotFound) {
@@ -48,19 +51,19 @@ func (i *Integrations) MCPOAuthLoginClient(
 		if configured == nil {
 			return fmt.Errorf("%w: %s", ErrNoMCPOAuthLogin, name)
 		}
-		login = *configured
-		if !login.HasClientSecret {
+		out.Login, out.ServerURL = *configured, stored.URL
+		if !out.Login.HasClientSecret {
 			return nil
 		}
 		sealed, err := i.settings.RevealOn(ctx, db, kind, at, settings.KindMCPOAuthLogin, name)
 		if err != nil {
 			return fmt.Errorf("admin: open the sign-in secret of %s: %w", name, err)
 		}
-		secret = sealed.Secret
+		out.Secret = sealed.Secret
 		return nil
 	})
 	if err != nil {
-		return domain.MCPOAuthLogin{}, "", err
+		return SignInClient{}, err
 	}
-	return login, secret, nil
+	return out, nil
 }
