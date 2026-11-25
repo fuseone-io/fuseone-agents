@@ -90,8 +90,9 @@ func (s *Server) publishable(ctx context.Context, o drafts.Opened) (spec.Spec, d
 	if err != nil {
 		return spec.Spec{}, scope, draftPublishInvalid(CodeInvalidInput, err.Error()), nil
 	}
-	if err := checkPlaced(published); err != nil {
-		return spec.Spec{}, scope, draftPublishInvalid(CodePublishUnplacedTools, err.Error()), nil
+	var unplaced unplacedTools
+	if errors.As(checkPlaced(published), &unplaced) {
+		return spec.Spec{}, scope, draftPublishInvalid(CodePublishUnplacedTools, unplaced.Detail()), nil
 	}
 	detail, err := s.checker().Check(ctx, published, clockOr(s.clock).Now())
 	if err != nil || detail != "" {

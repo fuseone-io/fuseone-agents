@@ -30,13 +30,14 @@ var activationConflicts = []struct {
 // activationRefused is an activation the store refused for a reason the caller can act
 // on, answered as a publication answers the same cause.
 func activationRefused(agent string, err error) (activationReply, bool) {
+	var unplaced unplacedTools
 	switch {
 	case err == nil:
 		return nil, false
 	case errors.Is(err, errNeedsNever):
 		return activationInvalid(CodePublishNeedsNever, err.Error()), true
-	case errors.As(err, new(unplacedTools)):
-		return activationInvalid(CodePublishUnplacedTools, err.Error()), true
+	case errors.As(err, &unplaced):
+		return activationInvalid(CodePublishUnplacedTools, unplaced.Detail()), true
 	case errors.As(err, new(checkRefusal)):
 		return activationInvalid(CodeInvalidInput, err.Error()), true
 	case agentAbsent(err), errors.Is(err, spec.ErrCandidateNotFound):

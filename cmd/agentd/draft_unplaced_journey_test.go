@@ -3,7 +3,6 @@ package main
 import (
 	"net/http"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/fuseone/agents/internal/authoring/blocks"
@@ -38,8 +37,10 @@ func TestDraftPublish_aToolNoStepReaches_isListedAndRefusedUntilPlaced(t *testin
 	}
 	refused := w.publish(t, areaAuthor("factory"), tag)
 	wantStatus(t, "an unplaced tool", refused, http.StatusBadRequest)
-	if problemType(t, refused) != "fuseone:publish-unplaced-tools" || !strings.Contains(refused.Body.String(), "kb.search") {
-		t.Fatalf("refusal = %s, want publish-unplaced-tools naming kb.search", refused.Body.String())
+	var problem struct{ Type, Detail string }
+	decode(t, refused, &problem)
+	if problem.Type != "fuseone:publish-unplaced-tools" || problem.Detail != "kb.search" {
+		t.Fatalf("refusal = %s, want publish-unplaced-tools whose detail is kb.search", refused.Body.String())
 	}
 
 	placed := w.apply(t, areaAuthor("factory"), w.agent, tag,

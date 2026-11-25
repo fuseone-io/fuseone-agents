@@ -577,7 +577,8 @@ export interface paths {
          *     Until candidates exist, a draft whose instructions have no `never`
          *     block is refused (400, `fuseone:publish-needs-never`), as activation
          *     will. So is a draft with a tool no step reaches (400,
-         *     `fuseone:publish-unplaced-tools`, naming the tools): a run is offered
+         *     `fuseone:publish-unplaced-tools`, its `detail` the tools,
+         *     comma-separated): a run is offered
          *     only what its steps reach, so that tool would never run. The JSON
          *     API, the `.agent.md` file and Terraform publish without either.
          *
@@ -748,7 +749,8 @@ export interface paths {
          *
          *     Refused, changing nothing: a definition the publication would refuse
          *     (400), one with no `never` block (400 `fuseone:publish-needs-never`),
-         *     one with a tool no step reaches (400 `fuseone:publish-unplaced-tools`),
+         *     one with a tool no step reaches (400 `fuseone:publish-unplaced-tools`,
+         *     its `detail` the tools, comma-separated),
          *     an agent that moved out of the version's scope (409
          *     `fuseone:candidate-scope-moved`), an autonomous agent (409
          *     `fuseone:stage-refused`), a candidate with no readable seal (409
