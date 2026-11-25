@@ -30,6 +30,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.144.0] — 2026-11-25
+
+An OAuth grant with no token is refused when it is saved, and one already stored no longer takes
+down the calls people make with their own credential (#481). No migration. The rollback floors of
+0.140.0 hold.
+
 ### Fixed
 
 - **An OAuth grant with no token is refused when it is saved, not when it is used.** A grant with
@@ -38,7 +44,8 @@ field" is a commit message.
   refused as invalid input, for the server's credential and for a person's own, and the console
   refuses it before saving and points to the browser sign-in, where a client typed in alone
   belongs. A server people sign in to is no longer taken down by such a grant already stored:
-  it refuses only the discovery that would carry it, and a person's own credential still works.
+  it refuses only the discovery that would carry it, and a person's own credential still works
+  (#481).
 
 ## [0.143.0] — 2026-11-25
 
