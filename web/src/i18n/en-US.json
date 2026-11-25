@@ -1945,8 +1945,6 @@
     "oauthGroupTokens": "Tokens",
     "oauthGroupAdvanced": "Advanced",
     "oauthStoredClient": "Stored: {{tokenURL}} · client {{clientID}}",
-    "oauthBearerConflict": "Fill either bearer token or OAuth grant, not both.",
-    "remoteCredentialConflict": "Fill only one credential shape for this server.",
     "customHeader": "Custom header",
     "customHeaderName": "Header name",
     "customHeaderNamePlaceholder": "apikey",
@@ -2144,7 +2142,6 @@
     "githubAppStored": "Acts as App {{app}}, installation {{installation}}.",
     "saveGitHubApp": "Save GitHub App",
     "revokeGitHubApp": "Remove GitHub App",
-    "githubAppConflict": "A GitHub App replaces the token and the OAuth grant. Fill in only one.",
     "move": {
       "action": "Move to…",
       "title": "Move {{name}} to a company or area",

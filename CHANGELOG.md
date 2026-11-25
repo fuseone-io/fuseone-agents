@@ -39,7 +39,8 @@ field" is a commit message.
   the new one empty, so a value typed under another shape is never written. The OAuth grant's
   fields are grouped (token endpoint and client, then the tokens), with token type, expiry and
   scopes under Advanced, and a stored grant says which token endpoint and client it uses. The
-  connect and edit form is unchanged for now.
+  connect and edit form asks the same question, so it no longer refuses a save for two shapes
+  filled in: only one can be.
 
 ## [0.138.0] — 2026-11-24
 

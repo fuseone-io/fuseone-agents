@@ -23,7 +23,6 @@ export function GitHubAppFormFields({ form }: { form: UseFormReturn<ServerFormVa
   const value = Object.fromEntries(
     FIELDS.map((name, i) => [name, watched[i] ?? ""]),
   ) as GitHubAppInput;
-  const conflict = form.formState.errors.githubAppId?.message === "mcp.githubAppConflict";
 
   function onChange(next: GitHubAppInput) {
     for (const name of FIELDS) {
@@ -37,7 +36,6 @@ export function GitHubAppFormFields({ form }: { form: UseFormReturn<ServerFormVa
     <div className="space-y-3 rounded-lg border p-3">
       <p className="text-sm font-medium">{t("mcp.githubApp")}</p>
       <GitHubAppFields value={value} onChange={onChange} />
-      {conflict && <p className="text-xs text-danger">{t("mcp.githubAppConflict")}</p>}
     </div>
   );
 }

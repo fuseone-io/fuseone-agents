@@ -1,10 +1,6 @@
 import { z } from "zod";
-import {
-  githubAppHasValue,
-  githubAppIdsValid,
-} from "@/features/integrations/mcp/github-app-credential";
-import { oauthHasValue } from "@/features/integrations/mcp/oauth-credential";
-import { customHeaderError, customHeaderState } from "@/features/integrations/mcp/custom-header";
+import { githubAppIdsValid } from "@/features/integrations/mcp/github-app-credential";
+import { customHeaderError } from "@/features/integrations/mcp/custom-header";
 
 /**
  * What a tool server needs depends on how it is reached.
@@ -29,6 +25,10 @@ export const serverSchema = z
     command: z.string(),
     args: z.string(),
     url: z.string(),
+    // The credential's shape, once somebody picks one; null is the one the
+    // form opens on, stored or first offered. Switching clears the others, and
+    // a save sends only the shape shown (formCredential).
+    authChoice: z.enum(["token", "headers", "customHeader", "oauth", "githubApp"]).nullable(),
     token: z.string(),
     headers: z.record(z.string(), z.string()),
     // A header a server with no recipe is reached with, such as apikey.
@@ -112,64 +112,16 @@ export const serverSchema = z
       message: "mcp.oauthExpiryInvalid",
     },
   )
-  .refine(
-    (v) =>
-      v.transport !== "http" ||
-      v.token.trim() === "" ||
-      Object.values(v.headers).every((part) => part.trim() === ""),
-    {
-      path: ["token"],
-      message: "mcp.remoteCredentialConflict",
-    },
-  )
-  .refine(
-    (v) =>
-      v.transport !== "http" ||
-      (v.token.trim() === "" && Object.values(v.headers).every((part) => part.trim() === "")) ||
-      [
-        v.oauthAccessToken,
-        v.oauthRefreshToken,
-        v.oauthTokenURL,
-        v.oauthClientID,
-        v.oauthClientSecret,
-        v.oauthTokenType,
-        v.oauthExpiresAtUnix,
-        v.oauthScopes,
-      ].every((part) => part.trim() === ""),
-    {
-      path: ["token"],
-      message: "mcp.oauthBearerConflict",
-    },
-  )
   .superRefine((v, ctx) => {
     if (v.transport !== "http") return;
     const header = { name: v.customHeaderName, value: v.customHeaderValue };
     const error = customHeaderError(header);
     if (error) ctx.addIssue({ code: "custom", path: ["customHeaderName"], message: error });
   })
-  .refine(
-    (v) =>
-      v.transport !== "http" ||
-      customHeaderState({ name: v.customHeaderName, value: v.customHeaderValue }) === "empty" ||
-      (v.token.trim() === "" &&
-        Object.values(v.headers).every((part) => part.trim() === "") &&
-        !oauthHasValue(v) &&
-        !githubAppHasValue(v)),
-    { path: ["token"], message: "mcp.remoteCredentialConflict" },
-  )
   .refine((v) => v.transport !== "http" || githubAppIdsValid(v), {
     path: ["githubAppId"],
     message: "mcp.githubAppIdsInvalid",
   })
-  .refine(
-    (v) =>
-      v.transport !== "http" ||
-      !githubAppHasValue(v) ||
-      (v.token.trim() === "" &&
-        Object.values(v.headers).every((part) => part.trim() === "") &&
-        !oauthHasValue(v)),
-    { path: ["githubAppId"], message: "mcp.githubAppConflict" },
-  )
   .refine((v) => rateLimitComplete(v), {
     path: ["rateLimitPerSecond"],
     message: "mcp.rateLimitPairInvalid",

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { RemoteAuthPlan } from "@/features/integrations/mcp/auth-plan";
 import {
-  initialChoice,
+  effectiveChoice,
   type AuthChoice,
   type StoredShape,
 } from "@/features/integrations/mcp/auth-choice";
@@ -21,9 +21,7 @@ export function useAuthChoice(
   plan: RemoteAuthPlan,
 ): [AuthChoice | null, (choice: AuthChoice) => void] {
   const [picked, setPicked] = useState<AuthChoice | null>(null);
-  const choice =
-    picked !== null && choices.includes(picked) ? picked : initialChoice(choices, stored, plan);
-  return [choice, setPicked];
+  return [effectiveChoice(picked, choices, stored, plan), setPicked];
 }
 
 /** Whether a stored token or header has a shape here that can show it. */

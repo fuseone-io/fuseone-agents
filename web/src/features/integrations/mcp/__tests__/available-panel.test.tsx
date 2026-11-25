@@ -258,23 +258,22 @@ describe("available MCP servers", () => {
     );
   });
 
-  it("refuses the initial-connect credential conflict instead of choosing one", async () => {
+  // One shape at a time: what was typed under the token is never sent once
+  // the headers are the shape chosen.
+  it("connects with the shape chosen alone", async () => {
     open([datadogWithBearer]);
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "Conectar Datadog" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Conectar Datadog" }));
     await userEvent.type(screen.getByLabelText(/service access token/i), "sat");
+    await userEvent.click(screen.getByRole("radio", { name: /^Cabeçalhos/ }));
     await userEvent.type(screen.getByLabelText("DD_API_KEY"), "api_secret");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Conectar sistema" }),
-    );
+    await userEvent.type(screen.getByLabelText("DD_APPLICATION_KEY"), "app_secret");
+    await userEvent.click(screen.getByRole("button", { name: "Conectar sistema" }));
 
-    expect(api.mutateAsync).not.toHaveBeenCalled();
-    expect(
-      await screen.findByText(/preencha só uma forma de credencial/i),
-    ).toBeInTheDocument();
-    expect(api.mutateAsync).not.toHaveBeenCalled();
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ headers: { DD_API_KEY: "api_secret", DD_APPLICATION_KEY: "app_secret" } }),
+    );
+    expect(api.mutateAsync.mock.calls[0]?.[0]).not.toHaveProperty("token", expect.anything());
   });
 });
 

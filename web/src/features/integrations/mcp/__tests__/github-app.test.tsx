@@ -167,6 +167,7 @@ describe("the GitHub App credential", () => {
     renderCatalogue();
 
     await user.click(screen.getByRole("button", { name: "Conectar GitHub" }));
+    await user.click(screen.getByRole("radio", { name: /^GitHub App/ }));
     await user.type(screen.getByLabelText("ID do App"), "5550600");
     await user.type(screen.getByLabelText("ID da instalação"), "91");
     await user.click(screen.getByLabelText("Chave privada (PEM)"));

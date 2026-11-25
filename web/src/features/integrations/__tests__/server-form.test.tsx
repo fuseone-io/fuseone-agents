@@ -17,10 +17,12 @@ vi.mock("@/features/integrations/api", async (importOriginal) => {
   };
 });
 
-// The catalogue answers with no recipe for these servers: a custom server.
+// The catalogue answers with no recipe for these servers, a custom server,
+// unless a test says it has not answered yet or answers with one.
+const catalogue = vi.hoisted(() => ({ data: { items: [] } as { items: unknown[] } | undefined }));
 vi.mock("@/features/integrations/mcp/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/features/integrations/mcp/api")>();
-  return { ...actual, useRecipes: () => ({ data: { items: [] } }) };
+  return { ...actual, useRecipes: () => ({ data: catalogue.data }) };
 });
 
 vi.mock("sonner", () => ({
@@ -44,6 +46,7 @@ describe("the MCP server properties sheet", () => {
     Element.prototype.scrollIntoView ??= () => {};
     api.mutateAsync.mockReset();
     api.mutateAsync.mockResolvedValue(undefined);
+    catalogue.data = { items: [] };
   });
 
   it("keeps the connection form full-height with a scrollable body", () => {
@@ -122,12 +125,60 @@ describe("the MCP server properties sheet", () => {
       }),
     );
   });
+  describe("the credential's shape", () => {
+    it("opens on the one stored, with only its fields", () => {
+      render(<ServerForm server={server()} onClose={vi.fn()} />);
+      expect(screen.getByRole("radio", { name: /^OAuth/ })).toBeChecked();
+      expect(screen.queryByLabelText("Token bearer")).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/access token oauth/i)).toBeInTheDocument();
+    });
+
+    it("keeps the OAuth grant's rarely needed fields under Advanced", async () => {
+      const user = userEvent.setup();
+      render(<ServerForm server={server()} onClose={vi.fn()} />);
+      expect(screen.queryByLabelText(/expira em/i)).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: /avançado/i }));
+      expect(screen.getByLabelText(/expira em/i)).toBeInTheDocument();
+    });
+
+    it("starts a shape empty after switching away from it and back", async () => {
+      const user = userEvent.setup();
+      render(<ServerForm server={server()} onClose={vi.fn()} />);
+      await user.type(screen.getByLabelText(/access token oauth/i), "access");
+      await user.click(screen.getByRole("radio", { name: /^Token/ }));
+      await user.click(screen.getByRole("radio", { name: /^OAuth/ }));
+      expect(screen.getByLabelText(/access token oauth/i)).toHaveValue("");
+    });
+  });
+
+  // A recipe that arrives after the sheet can change the shape shown with
+  // nobody touching it: what was typed under the old one goes with it, or an
+  // invalid value nobody can see any more would refuse every save.
+  it("clears the shape a late recipe takes away, so the one it offers saves", async () => {
+    const user = userEvent.setup();
+    catalogue.data = undefined;
+    const docs: MCPServer = { name: "docs", transport: "http", url: "https://docs.example/mcp", enabled: true };
+    const { rerender } = render(<ServerForm server={docs} onClose={vi.fn()} />);
+    await user.click(screen.getByRole("radio", { name: /^OAuth/ }));
+    await user.click(screen.getByRole("button", { name: /avançado/i }));
+    await user.type(screen.getByLabelText(/expira em/i), "soon");
+
+    catalogue.data = { items: [{ server: "docs", title: "Docs", category: "knowledge",
+      authModes: [{ type: "headers", principal: "service", headers: ["Api-Key"] }] }] };
+    rerender(<ServerForm server={docs} onClose={vi.fn()} />);
+    await user.type(await screen.findByLabelText("Api-Key"), "key");
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(api.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ headers: { "Api-Key": "key" } }));
+  });
+
   describe("a custom header for a server with no recipe", () => {
     const generic = (): MCPServer => ({ name: "crm", transport: "http", url: "https://crm.example/mcp", enabled: true });
 
     async function fill(name: string, value: string) {
       const user = userEvent.setup();
       render(<ServerForm server={generic()} onClose={vi.fn()} />);
+      await user.click(screen.getByRole("radio", { name: /^Cabeçalho próprio/ }));
       if (name) await user.type(screen.getByLabelText("Nome do header"), name);
       if (value) await user.type(screen.getByLabelText("Valor do header"), value);
       return user;
@@ -140,12 +191,17 @@ describe("the MCP server properties sheet", () => {
       expect(api.mutateAsync.mock.calls[0]?.[0]).not.toHaveProperty("token", expect.anything());
     });
 
-    it("refuses a header beside a bearer token", async () => {
-      const user = await fill("apikey", "k-123");
+    // One shape at a time: a token typed before switching is never sent.
+    it("sends the header alone after a token was typed under another shape", async () => {
+      const user = userEvent.setup();
+      render(<ServerForm server={generic()} onClose={vi.fn()} />);
       await user.type(screen.getByLabelText("Token bearer"), "t-1");
+      await user.click(screen.getByRole("radio", { name: /^Cabeçalho próprio/ }));
+      await user.type(screen.getByLabelText("Nome do header"), "apikey");
+      await user.type(screen.getByLabelText("Valor do header"), "k-123");
       await user.click(screen.getByRole("button", { name: "Salvar" }));
-      expect(await screen.findByText("Preencha só uma forma de credencial para este servidor.")).toBeInTheDocument();
-      expect(api.mutateAsync).not.toHaveBeenCalled();
+      expect(api.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ headers: { apikey: "k-123" } }));
+      expect(api.mutateAsync.mock.calls[0]?.[0]).not.toHaveProperty("token", expect.anything());
     });
 
     it.each([
