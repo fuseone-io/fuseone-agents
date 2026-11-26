@@ -30,6 +30,18 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Changed
+
+- **A server that takes each person's own credential gives each person their own session.** One
+  session for everybody was initialized with the shared credential, and a person's token rode
+  only on the requests after it, so a server that knows who is calling by the token it saw at
+  initialize answered everybody as nobody. Now each person's calls go through a session opened
+  with their own credential, from its initialize: opened on their first call, kept while they
+  use it, and closed after ten idle minutes or, at 32 open on one worker, to make room for
+  another person. A session with a call in flight is never closed for that; a call waits for a
+  place instead. Someone with no credential of their own gets no session, and is refused as
+  before. Discovery still uses the server's shared session.
+
 ## [0.144.0] — 2026-11-25
 
 An OAuth grant with no token is refused when it is saved, and one already stored no longer takes
