@@ -39,8 +39,10 @@ field" is a commit message.
   with their own credential, from its initialize: opened on their first call, kept while they
   use it, and closed after ten idle minutes or, at 32 open on one worker, to make room for
   another person. A session with a call in flight is never closed for that; a call waits for a
-  place instead. Someone with no credential of their own gets no session, and is refused as
-  before. Discovery still uses the server's shared session.
+  place instead. A person who changes their credential — a new token, new headers, new tokens
+  pasted or signed in — is opened a new session with it on their next call, while the worker
+  renewing their access token keeps the one they have. Someone with no credential of their own
+  gets no session, and is refused as before. Discovery still uses the server's shared session.
 
 ## [0.144.0] — 2026-11-25
 
