@@ -26,8 +26,26 @@ func personalSessions(
 		return tools.WithPersonalSessions(tools.PersonalSessions{})
 	}
 	return tools.WithPersonalSessions(tools.PersonalSessions{
-		Open: personalOpener(server, creds, oauth, personal, policy),
+		Open:     personalOpener(server, creds, oauth, personal, policy),
+		Identity: personalIdentity(server, personal),
 	})
+}
+
+// personalIdentity is who the person's credential speaks as now. None stored
+// is an identity too, the empty one: the open that follows is refused.
+func personalIdentity(
+	server domain.MCPServer, personal MCPUserCredentialStore,
+) func(context.Context, domain.UserID) (string, error) {
+	return func(ctx context.Context, who domain.UserID) (string, error) {
+		if personal == nil {
+			return "", nil
+		}
+		creds, found, err := personal.MCPPersonalCredential(ctx, server.Scope, server.Name, who)
+		if err != nil || !found {
+			return "", err
+		}
+		return creds.ForTransport(domain.TransportHTTP).SessionIdentity(), nil
+	}
 }
 
 // personalOpener is the open itself. Whatever context it is handed — a call's,

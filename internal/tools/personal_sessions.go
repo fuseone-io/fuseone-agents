@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -26,6 +27,11 @@ while they use it, and closed when it has sat idle, or to make room.
 */
 type PersonalSessions struct {
 	Open PersonalOpener
+	// Identity is who the person's credential speaks as now (see
+	// domain.MCPCredentials.SessionIdentity). A session opened under another
+	// is retired and the call goes to a new one. Nil is one identity per
+	// person.
+	Identity func(ctx context.Context, principal domain.UserID) (string, error)
 	// Limit is how many may be open at once for the server, on this worker.
 	// Zero is DefaultPersonalSessionLimit.
 	Limit int
@@ -55,10 +61,11 @@ func WithPersonalSessions(sessions PersonalSessions) ServerOption {
 var errPersonalSessionsClosed = errors.New("tools: the server's personal sessions are closed")
 
 type personalPool struct {
-	open  PersonalOpener
-	limit int
-	idle  time.Duration
-	now   func() time.Time
+	open     PersonalOpener
+	identity func(ctx context.Context, principal domain.UserID) (string, error)
+	limit    int
+	idle     time.Duration
+	now      func() time.Time
 
 	mu      sync.Mutex
 	slots   map[domain.UserID]*personalSlot
@@ -70,6 +77,7 @@ type personalPool struct {
 
 type personalSlot struct {
 	session  Session
+	identity string
 	busy     int
 	lastUsed time.Time
 	// retired is a slot no longer offered, closed when its last call returns.
@@ -85,7 +93,7 @@ func newPersonalPool(sessions PersonalSessions, now func() time.Time) *personalP
 		idle = DefaultPersonalSessionIdle
 	}
 	return &personalPool{
-		open: sessions.Open, limit: limit, idle: idle, now: now,
+		open: sessions.Open, identity: sessions.Identity, limit: limit, idle: idle, now: now,
 		slots:   make(map[domain.UserID]*personalSlot),
 		opening: make(map[domain.UserID]chan struct{}),
 		changed: make(chan struct{}),
@@ -103,8 +111,12 @@ one has a call in flight, the call waits for a place, and gives up when its
 context does.
 */
 func (p *personalPool) acquire(ctx context.Context, who domain.UserID) (*personalSlot, error) {
+	identity, err := p.identityOf(ctx, who)
+	if err != nil {
+		return nil, fmt.Errorf("read %s's credential: %w", who, err)
+	}
 	for {
-		slot, wait, stale, err := p.next(who)
+		slot, wait, stale, err := p.next(who, identity)
 		closeAll(stale)
 		switch {
 		case err != nil:
@@ -119,13 +131,20 @@ func (p *personalPool) acquire(ctx context.Context, who domain.UserID) (*persona
 				return nil, ctx.Err()
 			}
 		}
-		return p.opened(ctx, who)
+		return p.opened(ctx, who, identity)
 	}
+}
+
+func (p *personalPool) identityOf(ctx context.Context, who domain.UserID) (string, error) {
+	if p.identity == nil {
+		return "", nil
+	}
+	return p.identity(ctx, who)
 }
 
 // next decides, under the lock, what acquire does: use a slot, wait, or open
 // (all three nil). stale are the sessions to close once the lock is let go.
-func (p *personalPool) next(who domain.UserID) (*personalSlot, <-chan struct{}, []Session, error) {
+func (p *personalPool) next(who domain.UserID, identity string) (*personalSlot, <-chan struct{}, []Session, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
@@ -133,6 +152,15 @@ func (p *personalPool) next(who domain.UserID) (*personalSlot, <-chan struct{}, 
 	}
 	now := p.now()
 	stale := p.expireLocked(now)
+	if slot := p.slots[who]; slot != nil && slot.identity != identity {
+		// Opened as somebody the credential no longer speaks for: retired,
+		// and closed now if no call is still on it.
+		delete(p.slots, who)
+		slot.retired = true
+		if slot.busy == 0 {
+			stale = append(stale, slot.session)
+		}
+	}
 	if slot := p.slots[who]; slot != nil {
 		slot.busy++
 		slot.lastUsed = now
@@ -152,7 +180,7 @@ func (p *personalPool) next(who domain.UserID) (*personalSlot, <-chan struct{}, 
 	return nil, nil, stale, nil
 }
 
-func (p *personalPool) opened(ctx context.Context, who domain.UserID) (*personalSlot, error) {
+func (p *personalPool) opened(ctx context.Context, who domain.UserID, identity string) (*personalSlot, error) {
 	session, err := p.open(ctx, who)
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -166,7 +194,7 @@ func (p *personalPool) opened(ctx context.Context, who domain.UserID) (*personal
 		_ = session.Close()
 		return nil, errPersonalSessionsClosed
 	}
-	slot := &personalSlot{session: session, busy: 1, lastUsed: p.now()}
+	slot := &personalSlot{session: session, identity: identity, busy: 1, lastUsed: p.now()}
 	p.slots[who] = slot
 	return slot, nil
 }
@@ -198,10 +226,12 @@ func (p *personalPool) retire(who domain.UserID, slot *personalSlot, err error) 
 	slot.retired = true
 }
 
-// shut closes every session as its server goes: an idle one now, a busy one
-// when its last call returns.
-func (p *personalPool) shut() {
+// detach stops the pool as its server goes and answers the idle sessions to
+// close; a busy one closes when its last call returns. The closes are I/O, left
+// to the caller to make once it holds no lock other servers' calls wait on.
+func (p *personalPool) detach() []Session {
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.closed = true
 	var idle []Session
 	for who, slot := range p.slots {
@@ -212,8 +242,7 @@ func (p *personalPool) shut() {
 		}
 	}
 	p.signalLocked()
-	p.mu.Unlock()
-	closeAll(idle)
+	return idle
 }
 
 func (p *personalPool) expireLocked(now time.Time) []Session {

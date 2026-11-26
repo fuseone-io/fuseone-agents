@@ -10,14 +10,19 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 )
 
+// toolCall is where a call goes, all of it read in one snapshot with the
+// entry it is for.
+type toolCall struct {
+	server   string
+	shared   Session
+	personal *personalPool
+	who      domain.UserID
+}
+
 // callTool runs the call on the person's session when the server has them,
 // else on the shared one; either way a dead connection retires what failed.
-func (c *Catalog) callTool(
-	ctx context.Context, server string, shared Session, who domain.UserID, params *mcp.CallToolParams,
-) (*mcp.CallToolResult, error) {
-	c.mu.RLock()
-	pool := c.personal[server]
-	c.mu.RUnlock()
+func (c *Catalog) callTool(ctx context.Context, to toolCall, params *mcp.CallToolParams) (*mcp.CallToolResult, error) {
+	server, shared, pool, who := to.server, to.shared, to.personal, to.who
 	if pool == nil || who == "" {
 		res, err := shared.CallTool(ctx, params)
 		if err != nil {

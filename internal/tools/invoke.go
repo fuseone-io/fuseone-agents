@@ -39,6 +39,9 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	c.mu.RLock()
 	entry, known := c.entries[call.Tool]
 	session, connected := c.sessions[entry.Server]
+	// Read with the entry: a reconnect after this read must not hand the call
+	// the sessions of a definition the Gate never judged.
+	personal := c.personal[entry.Server]
 	cache := c.caches[entry.Server]
 	timeout := c.timeout
 	if chosen, ok := c.timeouts[entry.Server]; ok {
@@ -109,10 +112,9 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	callCtx = WithInvocation(callCtx)
 	callCtx = WithCaller(callCtx, call.OnBehalfOf)
 
-	res, err := c.callTool(callCtx, entry.Server, session, call.OnBehalfOf, &mcp.CallToolParams{
-		Name:      entry.RemoteName,
-		Arguments: args,
-	})
+	res, err := c.callTool(callCtx, toolCall{
+		server: entry.Server, shared: session, personal: personal, who: call.OnBehalfOf,
+	}, &mcp.CallToolParams{Name: entry.RemoteName, Arguments: args})
 	if err != nil {
 		code := failureCodeOf(err, CodeMCPInvokeError)
 		out.Failed = true

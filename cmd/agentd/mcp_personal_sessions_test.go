@@ -3,15 +3,19 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/tools"
@@ -175,5 +179,94 @@ func TestPersonalOpener_fromAContextNamingNobody_refusesSomeoneWithNoCredential(
 	}
 	if got := ids.initializedWith(); len(got) != 0 {
 		t.Errorf("sessions initialized with %v, want none", got)
+	}
+}
+
+// A person who changes their credential speaks as the new one from the next
+// call: a server that fixed the old at initialize must not keep answering it.
+func TestConnectServer_aPersonWhoChangesTheirCredential_isOpenedAnewWithIt(t *testing.T) {
+	t.Parallel()
+	ids, url := newIdentityServer(t)
+	creds := personalCreds{"usr_ana": {Token: "first"}}
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	t.Cleanup(func() { _ = catalog.Close() })
+	server := domain.MCPServer{Name: "dpg", Transport: domain.TransportHTTP, URL: url, Enabled: true}
+	if err := connectServer(t.Context(), catalog, server, domain.MCPCredentials{Token: "shared"}, nil,
+		creds, credentialPolicy{requirePersonal: true}, nil); err != nil {
+		t.Fatalf("connectServer: %v", err)
+	}
+	call := func() {
+		t.Helper()
+		if res, err := catalog.Invoke(t.Context(), engine.Call{RunID: "run-1", Seq: 1, Tool: "dpg.whoami", OnBehalfOf: "usr_ana"}); err != nil || res.Failed {
+			t.Fatalf("call = %+v, %v", res, err)
+		}
+	}
+	call()
+	creds["usr_ana"] = domain.MCPCredentials{Token: "second"}
+	call()
+	want := []string{"Bearer first → Bearer first", "Bearer second → Bearer second"}
+	if got := ids.callsBy(); !slices.Equal(got, want) {
+		t.Errorf("calls = %v, want the second on a session the new token opened", got)
+	}
+}
+
+// rotatingStore keeps a person's refreshed grant as the store does: under the
+// generation the person's write gave it (domain.KeptGeneration).
+type rotatingStore struct {
+	mu    sync.Mutex
+	creds personalCreds
+}
+
+func (s *rotatingStore) MCPPersonalCredential(
+	ctx context.Context, at domain.Scope, name string, who domain.UserID,
+) (domain.MCPCredentials, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.creds.MCPPersonalCredential(ctx, at, name, who)
+}
+
+func (s *rotatingStore) RefreshMCPServerOAuth(_ context.Context, r admin.MCPOAuthRefresh) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	kept := domain.KeptGeneration(r.Was, r.Next)
+	s.creds[r.Principal] = domain.MCPCredentials{OAuth: &kept}
+	return nil
+}
+
+// The worker renewing a person's access token is nobody changing anything:
+// the session that grant opened carries on.
+func TestConnectServer_aPersonsGrantRenewedByTheWorker_keepsTheirSession(t *testing.T) {
+	t.Parallel()
+	ids, url := newIdentityServer(t)
+	var issued int
+	var mu sync.Mutex
+	idp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		issued++
+		n := issued
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token": fmt.Sprintf("ana-%d", n), "refresh_token": "refresh", "expires_in": 1,
+		})
+	}))
+	t.Cleanup(idp.Close)
+	store := &rotatingStore{creds: personalCreds{"usr_ana": {OAuth: &domain.MCPOAuthGrant{
+		AccessToken: "ana-0", RefreshToken: "refresh", TokenURL: idp.URL,
+		ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(), Generation: "gen-1",
+	}}}}
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	t.Cleanup(func() { _ = catalog.Close() })
+	server := domain.MCPServer{Name: "dpg", Transport: domain.TransportHTTP, URL: url, Enabled: true}
+	if err := connectServer(t.Context(), catalog, server, domain.MCPCredentials{Token: "shared"}, store,
+		store, credentialPolicy{requirePersonal: true}, nil); err != nil {
+		t.Fatalf("connectServer: %v", err)
+	}
+	for range 2 {
+		if res, err := catalog.Invoke(t.Context(), engine.Call{RunID: "run-1", Seq: 1, Tool: "dpg.whoami", OnBehalfOf: "usr_ana"}); err != nil || res.Failed {
+			t.Fatalf("call = %+v, %v", res, err)
+		}
+	}
+	if got := ids.initializedWith(); len(got) != 2 {
+		t.Errorf("sessions initialized with %v, want the shared discovery session and one of Ana's", got)
 	}
 }
