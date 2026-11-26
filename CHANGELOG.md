@@ -30,6 +30,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.145.0] — 2026-11-26
+
+A server that takes each person's own credential gives each person their own session, opened
+with that credential from its initialize (#483). No migration. The rollback floors of 0.140.0
+hold.
+
 ### Changed
 
 - **A server that takes each person's own credential gives each person their own session.** One
@@ -43,8 +49,11 @@ field" is a commit message.
   pasted or signed in — is opened a new session with it on their next call, while the worker
   renewing their access token keeps the one they have. A change that lands while a session is
   opening, or with a call on its way, never sends that call on the session the old credential
-  opened: the request is stopped before it leaves, and the call runs on a new session. Someone with no credential of their own
-  gets no session, and is refused as before. Discovery still uses the server's shared session.
+  opened: the request is stopped before it leaves, and the call runs on a new session. That
+  old session is not closed on the server, since closing it would carry the new credential;
+  nothing runs on it, and a server that keeps sessions should expire idle ones itself. Someone
+  with no credential of their own gets no session, and is refused as before. Discovery still
+  uses the server's shared session (#483).
 
 ## [0.144.0] — 2026-11-25
 
