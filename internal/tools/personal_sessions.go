@@ -70,8 +70,9 @@ type personalPool struct {
 	opening map[domain.UserID]chan struct{}
 	// changed is closed, and replaced, whenever a place may have come free.
 	changed chan struct{}
-	// draining are retired slots with a call still on them: still open, so
-	// still counted against the limit until their last call returns.
+	// draining are sessions no longer offered that are still open: a call
+	// still on them, or a close not yet returned. They count against the
+	// limit until closed.
 	draining int
 	closed   bool
 }
@@ -118,7 +119,7 @@ func (p *personalPool) acquire(ctx context.Context, who domain.UserID) (*persona
 	}
 	for {
 		slot, wait, stale, err := p.next(who, identity)
-		closeAll(stale)
+		p.closeCounted(stale)
 		switch {
 		case err != nil:
 			return nil, err
@@ -145,14 +146,18 @@ func (p *personalPool) identityOf(ctx context.Context, who domain.UserID) (strin
 
 // next decides, under the lock, what acquire does: use a slot, wait, or open
 // (all three nil). stale are the sessions to close once the lock is let go.
-func (p *personalPool) next(who domain.UserID, identity string) (*personalSlot, <-chan struct{}, []Session, error) {
+func (p *personalPool) next(who domain.UserID, identity string) (slot *personalSlot, wait <-chan struct{}, stale []Session, err error) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
+	defer func() {
+		// Each one keeps its place until closeCounted has closed it.
+		p.draining += len(stale)
+		p.mu.Unlock()
+	}()
 	if p.closed {
 		return nil, nil, nil, errPersonalSessionsClosed
 	}
 	now := p.now()
-	stale := p.expireLocked(now)
+	stale = p.expireLocked(now)
 	if slot := p.slots[who]; slot != nil && slot.identity != identity {
 		// Opened as somebody the credential no longer speaks for: retired,
 		// and closed now if no call is still on it.

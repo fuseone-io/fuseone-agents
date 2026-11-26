@@ -41,6 +41,8 @@ type personSession struct {
 	err    error
 	// callHook, when set, decides each call: what to hold it on, and its error.
 	callHook func() (chan struct{}, error)
+	// closeHold, when set, keeps Close from returning until it is closed.
+	closeHold chan struct{}
 }
 
 func (s *personSession) ListTools(context.Context, *mcp.ListToolsParams) (*mcp.ListToolsResult, error) {
@@ -73,6 +75,12 @@ func (s *personSession) CallTool(ctx context.Context, _ *mcp.CallToolParams) (*m
 }
 
 func (s *personSession) Close() error {
+	s.mu.Lock()
+	hold := s.closeHold
+	s.mu.Unlock()
+	if hold != nil {
+		<-hold
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed = true

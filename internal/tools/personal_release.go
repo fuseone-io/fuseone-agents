@@ -12,20 +12,32 @@ import (
 // How a person's session stops being offered: its call returns, its
 // connection dies, its credential changes, it sits idle, or its server goes.
 
-// release ends one call on the slot.
+// release ends one call on the slot, and closes it if it was retired and this
+// was its last.
 func (p *personalPool) release(slot *personalSlot) {
 	p.mu.Lock()
 	slot.busy--
 	slot.lastUsed = p.now()
 	done := slot.retired && slot.busy == 0
-	if done {
-		p.draining--
-	}
 	p.signalLocked()
 	p.mu.Unlock()
 	if done {
-		_ = slot.session.Close()
+		// Already counted in draining, since retireLocked saw it busy.
+		p.closeCounted([]Session{slot.session})
 	}
+}
+
+// closeCounted closes sessions counted in draining, and only once each close
+// has returned gives their places back: until then the connection is open.
+func (p *personalPool) closeCounted(sessions []Session) {
+	if len(sessions) == 0 {
+		return
+	}
+	closeAll(sessions)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.draining -= len(sessions)
+	p.signalLocked()
 }
 
 // retire stops offering the slot when err says its connection is gone. A
