@@ -83,6 +83,7 @@ func connectServer(
 		// server no row describes, a --mcp flag's, and the catalogue reads
 		// that as the installation's.
 		tools.WithScope(server.Scope),
+		personalSessions(server, creds, oauth, personal, policy),
 	); err != nil {
 		_ = managed.Close()
 		return fmt.Errorf("import tools from %s: %w", server.Name, err)
