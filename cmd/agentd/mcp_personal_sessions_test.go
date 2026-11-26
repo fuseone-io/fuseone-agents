@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -268,5 +269,32 @@ func TestConnectServer_aPersonsGrantRenewedByTheWorker_keepsTheirSession(t *test
 	}
 	if got := ids.initializedWith(); len(got) != 2 {
 		t.Errorf("sessions initialized with %v, want the shared discovery session and one of Ana's", got)
+	}
+}
+
+// unreadableCreds is a personal store that cannot be read.
+type unreadableCreds struct{}
+
+func (unreadableCreds) MCPPersonalCredential(
+	context.Context, domain.Scope, string, domain.UserID,
+) (domain.MCPCredentials, bool, error) {
+	return domain.MCPCredentials{}, false, errors.New("vault: sealed")
+}
+
+// A credential that cannot be read is said as such, with the code the trail
+// and the metrics read, whichever path reads it first.
+func TestConnectServer_aPersonalCredentialThatCannotBeRead_keepsItsCode(t *testing.T) {
+	t.Parallel()
+	_, url := newIdentityServer(t)
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	t.Cleanup(func() { _ = catalog.Close() })
+	server := domain.MCPServer{Name: "dpg", Transport: domain.TransportHTTP, URL: url, Enabled: true}
+	if err := connectServer(t.Context(), catalog, server, domain.MCPCredentials{Token: "shared"}, nil,
+		unreadableCreds{}, credentialPolicy{requirePersonal: true}, nil); err != nil {
+		t.Fatalf("connectServer: %v", err)
+	}
+	res, err := catalog.Invoke(t.Context(), engine.Call{RunID: "run-1", Seq: 1, Tool: "dpg.whoami", OnBehalfOf: "usr_ana"})
+	if err == nil || res.ErrorCode != tools.CodeMCPPersonalCredentialRead {
+		t.Fatalf("call = %q, %v; want %s", res.ErrorCode, err, tools.CodeMCPPersonalCredentialRead)
 	}
 }

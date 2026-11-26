@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/fuseone/agents/internal/domain"
 )
 
@@ -72,7 +70,10 @@ type personalPool struct {
 	opening map[domain.UserID]chan struct{}
 	// changed is closed, and replaced, whenever a place may have come free.
 	changed chan struct{}
-	closed  bool
+	// draining are retired slots with a call still on them: still open, so
+	// still counted against the limit until their last call returns.
+	draining int
+	closed   bool
 }
 
 type personalSlot struct {
@@ -155,8 +156,7 @@ func (p *personalPool) next(who domain.UserID, identity string) (*personalSlot, 
 	if slot := p.slots[who]; slot != nil && slot.identity != identity {
 		// Opened as somebody the credential no longer speaks for: retired,
 		// and closed now if no call is still on it.
-		delete(p.slots, who)
-		slot.retired = true
+		p.retireLocked(who, slot)
 		if slot.busy == 0 {
 			stale = append(stale, slot.session)
 		}
@@ -169,7 +169,7 @@ func (p *personalPool) next(who domain.UserID, identity string) (*personalSlot, 
 	if opening, ok := p.opening[who]; ok {
 		return nil, opening, stale, nil
 	}
-	if len(p.slots)+len(p.opening) >= p.limit {
+	if len(p.slots)+len(p.opening)+p.draining >= p.limit {
 		evicted, ok := p.evictLocked()
 		if !ok {
 			return nil, p.changed, stale, nil
@@ -197,81 +197,6 @@ func (p *personalPool) opened(ctx context.Context, who domain.UserID, identity s
 	slot := &personalSlot{session: session, identity: identity, busy: 1, lastUsed: p.now()}
 	p.slots[who] = slot
 	return slot, nil
-}
-
-// release ends one call on the slot.
-func (p *personalPool) release(slot *personalSlot) {
-	p.mu.Lock()
-	slot.busy--
-	slot.lastUsed = p.now()
-	done := slot.retired && slot.busy == 0
-	p.signalLocked()
-	p.mu.Unlock()
-	if done {
-		_ = slot.session.Close()
-	}
-}
-
-// retire stops offering the slot when err says its connection is gone. A
-// tool's own error is an answer, and the session that gave it stays.
-func (p *personalPool) retire(who domain.UserID, slot *personalSlot, err error) {
-	if !errors.Is(err, mcp.ErrConnectionClosed) {
-		return
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.slots[who] == slot {
-		delete(p.slots, who)
-	}
-	slot.retired = true
-}
-
-// detach stops the pool as its server goes and answers the idle sessions to
-// close; a busy one closes when its last call returns. The closes are I/O, left
-// to the caller to make once it holds no lock other servers' calls wait on.
-func (p *personalPool) detach() []Session {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.closed = true
-	var idle []Session
-	for who, slot := range p.slots {
-		delete(p.slots, who)
-		slot.retired = true
-		if slot.busy == 0 {
-			idle = append(idle, slot.session)
-		}
-	}
-	p.signalLocked()
-	return idle
-}
-
-func (p *personalPool) expireLocked(now time.Time) []Session {
-	var stale []Session
-	for who, slot := range p.slots {
-		if slot.busy == 0 && now.Sub(slot.lastUsed) > p.idle {
-			delete(p.slots, who)
-			stale = append(stale, slot.session)
-		}
-	}
-	return stale
-}
-
-// evictLocked takes the least recently used slot with no call in flight.
-func (p *personalPool) evictLocked() (Session, bool) {
-	var (
-		oldest *personalSlot
-		owner  domain.UserID
-	)
-	for who, slot := range p.slots {
-		if slot.busy == 0 && (oldest == nil || slot.lastUsed.Before(oldest.lastUsed)) {
-			oldest, owner = slot, who
-		}
-	}
-	if oldest == nil {
-		return nil, false
-	}
-	delete(p.slots, owner)
-	return oldest.session, true
 }
 
 func (p *personalPool) signalLocked() {

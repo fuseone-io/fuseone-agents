@@ -41,8 +41,13 @@ func personalIdentity(
 			return "", nil
 		}
 		creds, found, err := personal.MCPPersonalCredential(ctx, server.Scope, server.Name, who)
-		if err != nil || !found {
-			return "", err
+		if err != nil {
+			// The same refusal the transport gives when it reads it.
+			return "", credentialFailure(tools.CodeMCPPersonalCredentialRead, server.Name,
+				fmt.Sprintf("read personal MCP credential for %s", who), err)
+		}
+		if !found {
+			return "", nil
 		}
 		return creds.ForTransport(domain.TransportHTTP).SessionIdentity(), nil
 	}

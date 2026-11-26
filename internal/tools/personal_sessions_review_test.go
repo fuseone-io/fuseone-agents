@@ -199,3 +199,89 @@ func erpServer() *fakeServer {
 	s := lookupServer()
 	return s
 }
+
+/*
+A retired session that still has a call on it is still open: it counts against
+the limit until its last call returns. Otherwise every change of credential, or
+every dead connection with a call left on it, would open one more than the limit
+allows (second review of #483).
+*/
+func TestInvoke_aRetiredSessionStillBusy_keepsCountingAgainstTheLimit(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		hold := make(chan struct{})
+		o := &opener{}
+		o.shape = func(s *personSession) {
+			if len(o.opened) == 0 {
+				s.hold = hold
+			}
+		}
+		ids := &identities{ids: map[domain.UserID]string{"usr_ana": "first"}}
+		c := tools.NewCatalog(engine.NewMemoryContent())
+		if err := c.AddServer(context.Background(), "crm", lookupServer(), nil, tools.WithPersonalSessions(tools.PersonalSessions{
+			Open: o.open, Identity: ids.of, Limit: 1,
+		})); err != nil {
+			t.Fatalf("AddServer: %v", err)
+		}
+		first := make(chan error, 1)
+		go func() { _, err := callAs(t.Context(), c, "usr_ana"); first <- err }()
+		synctest.Wait()
+
+		ids.set("usr_ana", "second")
+		second := make(chan error, 1)
+		go func() { _, err := callAs(t.Context(), c, "usr_ana"); second <- err }()
+		synctest.Wait()
+		if n := len(o.whoOpened()); n != 1 {
+			t.Fatalf("opened %d with the retired session still busy, want the call to wait at the limit of 1", n)
+		}
+		close(hold)
+		if err := <-first; err != nil {
+			t.Fatalf("first call: %v", err)
+		}
+		if err := <-second; err != nil {
+			t.Fatalf("second call: %v", err)
+		}
+		if n := len(o.whoOpened()); n != 2 || !o.session(0).isClosed() {
+			t.Errorf("opened %d, first closed=%v; want the new one opened once the old one closed", n, o.session(0).isClosed())
+		}
+	})
+}
+
+// The same for a connection that died with another call still on it.
+func TestInvoke_aDeadSessionWithACallLeft_keepsCountingAgainstTheLimit(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		hold := make(chan struct{})
+		var mu sync.Mutex
+		var held bool
+		o := &opener{}
+		o.shape = func(s *personSession) {
+			if len(o.opened) == 0 {
+				s.callHook = func() (chan struct{}, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					if !held {
+						held = true
+						return hold, nil
+					}
+					return nil, closedErr
+				}
+			}
+		}
+		c, _ := personal(t, o, 1, lookupServer())
+		stuck := make(chan error, 1)
+		go func() { _, err := callAs(t.Context(), c, "usr_ana"); stuck <- err }()
+		synctest.Wait()
+		_, _ = callAs(t.Context(), c, "usr_ana") // reports the connection dead
+
+		bia := make(chan error, 1)
+		go func() { _, err := callAs(t.Context(), c, "usr_bia"); bia <- err }()
+		synctest.Wait()
+		if n := len(o.whoOpened()); n != 1 {
+			t.Fatalf("opened %d with the dead session still busy, want Bia waiting at the limit of 1", n)
+		}
+		close(hold)
+		<-stuck
+		if err := <-bia; err != nil {
+			t.Fatalf("Bia's call: %v", err)
+		}
+	})
+}

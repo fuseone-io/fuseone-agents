@@ -39,6 +39,8 @@ type personSession struct {
 	hold   chan struct{}
 	result *mcp.CallToolResult
 	err    error
+	// callHook, when set, decides each call: what to hold it on, and its error.
+	callHook func() (chan struct{}, error)
 }
 
 func (s *personSession) ListTools(context.Context, *mcp.ListToolsParams) (*mcp.ListToolsResult, error) {
@@ -49,7 +51,11 @@ func (s *personSession) CallTool(ctx context.Context, _ *mcp.CallToolParams) (*m
 	s.mu.Lock()
 	s.calls++
 	hold, result, err := s.hold, s.result, s.err
+	hook := s.callHook
 	s.mu.Unlock()
+	if hook != nil {
+		hold, err = hook()
+	}
 	if hold != nil {
 		select {
 		case <-hold:
