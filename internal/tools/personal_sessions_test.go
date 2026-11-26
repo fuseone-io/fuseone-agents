@@ -98,13 +98,16 @@ func (s *personSession) isClosed() bool {
 type opener struct {
 	mu     sync.Mutex
 	opened []*personSession
-	fail   error
-	gate   chan struct{}
-	shape  func(*personSession)
+	// as is the identity each open was asked to open as, refused or not.
+	as    []string
+	fail  error
+	gate  chan struct{}
+	shape func(*personSession)
 }
 
-func (o *opener) open(ctx context.Context, who domain.UserID) (tools.Session, error) {
+func (o *opener) open(ctx context.Context, who domain.UserID, identity string) (tools.Session, error) {
 	o.mu.Lock()
+	o.as = append(o.as, identity)
 	gate, fail := o.gate, o.fail
 	o.fail = nil
 	o.mu.Unlock()

@@ -41,7 +41,9 @@ field" is a commit message.
   another person. A session with a call in flight is never closed for that; a call waits for a
   place instead. A person who changes their credential — a new token, new headers, new tokens
   pasted or signed in — is opened a new session with it on their next call, while the worker
-  renewing their access token keeps the one they have. Someone with no credential of their own
+  renewing their access token keeps the one they have. A change that lands while a session is
+  opening, or with a call on its way, never sends that call on the session the old credential
+  opened: the request is stopped before it leaves, and the call runs on a new session. Someone with no credential of their own
   gets no session, and is refused as before. Discovery still uses the server's shared session.
 
 ## [0.144.0] — 2026-11-25

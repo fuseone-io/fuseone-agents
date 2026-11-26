@@ -59,7 +59,7 @@ func personalOpener(
 	server domain.MCPServer, creds domain.MCPCredentials,
 	oauth OAuthGrantStore, personal MCPUserCredentialStore, policy credentialPolicy,
 ) tools.PersonalOpener {
-	return func(ctx context.Context, who domain.UserID) (tools.Session, error) {
+	return func(ctx context.Context, who domain.UserID, identity string) (tools.Session, error) {
 		transport, _, err := transportFor(ctx, server, creds, oauth, personal, policy, nil)
 		if err != nil {
 			return nil, err
@@ -68,7 +68,7 @@ func personalOpener(
 		if !ok {
 			return nil, fmt.Errorf("%s: a person's session needs an HTTP transport", server.Name)
 		}
-		streamable.HTTPClient = onBehalfOf(streamable.HTTPClient, who)
+		streamable.HTTPClient = onBehalfOf(streamable.HTTPClient, who, identity)
 		client := mcp.NewClient(&mcp.Implementation{Name: "fuseone-agents", Version: version}, nil)
 		session, err := client.Connect(ctx, streamable, nil)
 		if err != nil {
@@ -78,23 +78,56 @@ func personalOpener(
 	}
 }
 
-// onBehalfOf makes every request the client sends one made for who.
-func onBehalfOf(client *http.Client, who domain.UserID) *http.Client {
+// onBehalfOf makes every request the client sends one made for who, on a
+// session opened as identity: one whose credential has moved on is refused.
+func onBehalfOf(client *http.Client, who domain.UserID, identity string) *http.Client {
 	out := *client
 	base := client.Transport
 	if base == nil {
 		base = http.DefaultTransport
 	}
-	out.Transport = personRoundTripper{who: who, base: base}
+	out.Transport = personRoundTripper{who: who, identity: identity, base: base}
 	return &out
 }
 
 type personRoundTripper struct {
-	who  domain.UserID
-	base http.RoundTripper
+	who      domain.UserID
+	identity string
+	base     http.RoundTripper
 }
 
 func (p personRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
 	ctx := tools.WithInvocation(tools.WithCaller(r.Context(), p.who))
+	ctx = tools.WithSessionIdentity(ctx, p.identity)
 	return p.base.RoundTrip(r.WithContext(ctx))
+}
+
+/*
+personalCredentials is the person's own credential, as it is now. On a session
+opened as one identity of it (tools.WithSessionIdentity), a credential that
+speaks as another is refused before the request is sent: the server tied the
+session to the old one, and would run it as the old account.
+*/
+func (a *credentialAuth) personalCredentials(
+	ctx context.Context, principal domain.UserID,
+) (domain.MCPCredentials, bool, error) {
+	creds, found, err := a.personal.MCPPersonalCredential(ctx, a.scope, a.server, principal)
+	if err != nil {
+		return domain.MCPCredentials{}, false, credentialFailure(
+			tools.CodeMCPPersonalCredentialRead, a.server,
+			fmt.Sprintf("read personal MCP credential for %s", principal), err)
+	}
+	if !found {
+		return domain.MCPCredentials{}, false, nil
+	}
+	creds = creds.ForTransport(domain.TransportHTTP)
+	if opened, ok := tools.SessionIdentityFrom(ctx); ok && creds.SessionIdentity() != opened {
+		return domain.MCPCredentials{}, false, fmt.Errorf("%s for %s: %w", a.server, principal, tools.ErrSessionIdentityChanged)
+	}
+	if domain.CheckOAuthUsable(creds.OAuth) != nil {
+		return domain.MCPCredentials{}, false, credentialFailure(
+			tools.CodeMCPPersonalCredentialInvalid, a.server,
+			"personal oauth grant has no access token and cannot refresh", nil)
+	}
+	return creds, true, nil
 }

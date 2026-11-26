@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -22,22 +23,33 @@ type toolCall struct {
 // callTool runs the call on the person's session when the server has them,
 // else on the shared one; either way a dead connection retires what failed.
 func (c *Catalog) callTool(ctx context.Context, to toolCall, params *mcp.CallToolParams) (*mcp.CallToolResult, error) {
-	server, shared, pool, who := to.server, to.shared, to.personal, to.who
-	if pool == nil || who == "" {
+	server, shared := to.server, to.shared
+	if to.personal == nil || to.who == "" {
 		res, err := shared.CallTool(ctx, params)
 		if err != nil {
 			c.retireIfDead(server, shared, err)
 		}
 		return res, err
 	}
-	slot, err := pool.acquire(ctx, who)
-	if err != nil {
-		return nil, fmt.Errorf("open %s's session on %s: %w", who, server, err)
+	for try := 1; ; try++ {
+		res, err := callPersonal(ctx, to, params)
+		// Refused for a moved identity is refused before it was sent: safe to
+		// run again, on a session opened as the identity read now.
+		if !errors.Is(err, ErrSessionIdentityChanged) || try == identityTries {
+			return res, err
+		}
 	}
-	defer pool.release(slot)
+}
+
+func callPersonal(ctx context.Context, to toolCall, params *mcp.CallToolParams) (*mcp.CallToolResult, error) {
+	slot, err := to.personal.acquire(ctx, to.who)
+	if err != nil {
+		return nil, fmt.Errorf("open %s's session on %s: %w", to.who, to.server, err)
+	}
+	defer to.personal.release(slot)
 	res, err := slot.session.CallTool(ctx, params)
 	if err != nil {
-		pool.retire(who, slot, err)
+		to.personal.retire(to.who, slot, err)
 	}
 	return res, err
 }

@@ -10,9 +10,10 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 )
 
-// PersonalOpener opens a session on one server for one person: its initialize,
-// and every request after it, carry that person's credential.
-type PersonalOpener func(ctx context.Context, principal domain.UserID) (Session, error)
+// PersonalOpener opens a session on one server for one person, as identity:
+// its initialize, and every request after it, carry that person's credential,
+// and are refused with ErrSessionIdentityChanged once it speaks as another.
+type PersonalOpener func(ctx context.Context, principal domain.UserID, identity string) (Session, error)
 
 /*
 PersonalSessions serves a server's calls from a session per person.
@@ -186,7 +187,7 @@ func (p *personalPool) next(who domain.UserID, identity string) (slot *personalS
 }
 
 func (p *personalPool) opened(ctx context.Context, who domain.UserID, identity string) (*personalSlot, error) {
-	session, err := p.open(ctx, who)
+	session, err := p.open(ctx, who, identity)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	close(p.opening[who])

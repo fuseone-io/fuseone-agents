@@ -35,6 +35,9 @@ type identityServer struct {
 	mu       sync.Mutex
 	openedBy map[string]string   // session id → Authorization at initialize
 	calls    map[string][]string // session id → Authorization of each tools/call
+	// beforeInitialize, when set, runs as an initialize arrives, before it is
+	// answered.
+	beforeInitialize func(auth string)
 }
 
 func newIdentityServer(t *testing.T) (*identityServer, string) {
@@ -61,6 +64,7 @@ func newIdentityServer(t *testing.T) (*identityServer, string) {
 			ids.called(r.Header.Get("Mcp-Session-Id"), auth)
 		}
 		if bytes.Contains(body, []byte(`"method":"initialize"`)) {
+			ids.initializing(auth)
 			w = &onHeader{ResponseWriter: w, wrote: func(h http.Header) { ids.opened(h.Get("Mcp-Session-Id"), auth) }}
 		}
 		handler.ServeHTTP(w, r)
@@ -73,6 +77,15 @@ func (s *identityServer) opened(session, auth string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.openedBy[session] = auth
+}
+
+func (s *identityServer) initializing(auth string) {
+	s.mu.Lock()
+	hook := s.beforeInitialize
+	s.mu.Unlock()
+	if hook != nil {
+		hook(auth)
+	}
 }
 
 func (s *identityServer) called(session, auth string) {
@@ -182,9 +195,10 @@ func TestConnectServer_aPersonWithNoCredential_getsNoSessionOpenedWithTheSharedO
 func openAs(t *testing.T, url string, who domain.UserID) (tools.Session, error) {
 	t.Helper()
 	server := domain.MCPServer{Name: "dpg", Transport: domain.TransportHTTP, URL: url, Enabled: true}
+	ana := domain.MCPCredentials{Token: "ana"}
 	open := personalOpener(server, domain.MCPCredentials{Token: "shared"}, nil,
-		personalCreds{"usr_ana": {Token: "ana"}}, credentialPolicy{requirePersonal: true})
-	return open(context.Background(), who)
+		personalCreds{"usr_ana": ana}, credentialPolicy{requirePersonal: true})
+	return open(context.Background(), who, ana.ForTransport(domain.TransportHTTP).SessionIdentity())
 }
 
 func TestPersonalOpener_fromAContextNamingNobody_opensAndCallsAsThePerson(t *testing.T) {
@@ -256,6 +270,12 @@ func (s *rotatingStore) MCPPersonalCredential(
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.creds.MCPPersonalCredential(ctx, at, name, who)
+}
+
+func (s *rotatingStore) set(who domain.UserID, creds domain.MCPCredentials) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.creds[who] = creds
 }
 
 func (s *rotatingStore) RefreshMCPServerOAuth(_ context.Context, r admin.MCPOAuthRefresh) error {

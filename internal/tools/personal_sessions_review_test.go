@@ -164,7 +164,7 @@ func TestRemoveServer_closingItsSessions_doesNotHoldOtherServersCalls(t *testing
 	t.Parallel()
 	release := make(chan struct{})
 	defer close(release)
-	slow := func(_ context.Context, who domain.UserID) (tools.Session, error) {
+	slow := func(_ context.Context, who domain.UserID, _ string) (tools.Session, error) {
 		return slowClose{personSession: &personSession{who: who}, release: release}, nil
 	}
 	c := tools.NewCatalog(engine.NewMemoryContent())

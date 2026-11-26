@@ -40,10 +40,11 @@ func (p *personalPool) closeCounted(sessions []Session) {
 	p.signalLocked()
 }
 
-// retire stops offering the slot when err says its connection is gone. A
-// tool's own error is an answer, and the session that gave it stays.
+// retire stops offering the slot when err says its connection is gone, or
+// that it speaks as an identity the credential no longer does. A tool's own
+// error is an answer, and the session that gave it stays.
 func (p *personalPool) retire(who domain.UserID, slot *personalSlot, err error) {
-	if !errors.Is(err, mcp.ErrConnectionClosed) {
+	if !errors.Is(err, mcp.ErrConnectionClosed) && !errors.Is(err, ErrSessionIdentityChanged) {
 		return
 	}
 	p.mu.Lock()
