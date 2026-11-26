@@ -83,6 +83,7 @@ func connectServer(
 		// server no row describes, a --mcp flag's, and the catalogue reads
 		// that as the installation's.
 		tools.WithScope(server.Scope),
+		personalSessions(server, creds, oauth, personal, policy),
 	); err != nil {
 		_ = managed.Close()
 		return fmt.Errorf("import tools from %s: %w", server.Name, err)
@@ -402,20 +403,9 @@ func (a *credentialAuth) credentials(ctx context.Context) (domain.MCPCredentials
 	}
 	principal, hasCaller := tools.CallerFrom(ctx)
 	if hasCaller && a.personal != nil {
-		creds, found, err := a.personal.MCPPersonalCredential(ctx, a.scope, a.server, principal)
-		if err != nil {
-			return domain.MCPCredentials{}, "", credentialFailure(
-				tools.CodeMCPPersonalCredentialRead, a.server,
-				fmt.Sprintf("read personal MCP credential for %s", principal), err)
-		}
-		if found {
-			creds = creds.ForTransport(domain.TransportHTTP)
-			if domain.CheckOAuthUsable(creds.OAuth) != nil {
-				return domain.MCPCredentials{}, "", credentialFailure(
-					tools.CodeMCPPersonalCredentialInvalid, a.server,
-					"personal oauth grant has no access token and cannot refresh", nil)
-			}
-			return creds, principal, nil
+		creds, found, err := a.personalCredentials(ctx, principal)
+		if err != nil || found {
+			return creds, principal, err
 		}
 	}
 	if a.policy.requirePersonal && tools.IsInvocation(ctx) {

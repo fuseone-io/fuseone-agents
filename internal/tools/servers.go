@@ -46,6 +46,9 @@ func (c *Catalog) AddServer(
 	for _, option := range options {
 		option(&opts)
 	}
+	var retiring []Session
+	// Run after the unlock below: closing a person's session is a request.
+	defer func() { closeAll(retiring) }()
 
 	listed, err := session.ListTools(ctx, nil)
 	if err != nil {
@@ -90,6 +93,14 @@ func (c *Catalog) AddServer(
 	}
 	c.provenance[name] = opts.provenance
 	c.scopes[name] = serverScope(opts.scope)
+	// A person's session was opened under the configuration being replaced.
+	if pool := c.personal[name]; pool != nil {
+		retiring = pool.detach()
+		delete(c.personal, name)
+	}
+	if opts.personal != nil {
+		c.personal[name] = newPersonalPool(*opts.personal, c.clockOrNow())
+	}
 	for id, entry := range c.entries {
 		if entry.Server == name {
 			delete(c.entries, id)
@@ -120,6 +131,8 @@ func (c *Catalog) AddServer(
 // from a desired state rather than from knowledge of what is connected. A
 // server whose session died still has tools to drop, so they go either way.
 func (c *Catalog) RemoveServer(name string) error {
+	var retiring []Session
+	defer func() { closeAll(retiring) }()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -130,6 +143,10 @@ func (c *Catalog) RemoveServer(name string) error {
 	delete(c.caches, name)
 	delete(c.provenance, name)
 	delete(c.scopes, name)
+	if pool := c.personal[name]; pool != nil {
+		retiring = pool.detach()
+		delete(c.personal, name)
+	}
 	for id, entry := range c.entries {
 		if entry.Server == name {
 			delete(c.entries, id)
@@ -146,6 +163,8 @@ func (c *Catalog) RemoveServer(name string) error {
 
 // Close shuts every session down.
 func (c *Catalog) Close() error {
+	var retiring []Session
+	defer func() { closeAll(retiring) }()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -156,6 +175,10 @@ func (c *Catalog) Close() error {
 		}
 	}
 	clear(c.sessions)
+	for _, pool := range c.personal {
+		retiring = append(retiring, pool.detach()...)
+	}
+	clear(c.personal)
 	clear(c.limiters)
 	clear(c.caches)
 	clear(c.provenance)

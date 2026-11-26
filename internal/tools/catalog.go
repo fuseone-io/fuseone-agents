@@ -136,6 +136,9 @@ type Catalog struct {
 	// scopes is where each server belongs (NT-019). Absent is the
 	// installation's: a server a --mcp flag connected names no row.
 	scopes map[string]domain.Scope
+	// personal are the servers whose calls on behalf of a person are served
+	// from that person's own session.
+	personal map[string]*personalPool
 
 	content engine.ContentStore
 	timeout time.Duration
@@ -224,6 +227,7 @@ func NewCatalog(content engine.ContentStore) *Catalog {
 		caches:     make(map[string]*resultCache),
 		provenance: make(map[string]domain.ToolProvenance),
 		scopes:     make(map[string]domain.Scope),
+		personal:   make(map[string]*personalPool),
 		content:    content,
 		timeout:    60 * time.Second,
 		clock:      time.Now,
