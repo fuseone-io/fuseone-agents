@@ -46,6 +46,7 @@ type serverOptions struct {
 	callTimeout time.Duration
 	provenance  domain.ToolProvenance
 	scope       domain.Scope
+	personal    *PersonalSessions
 }
 
 type ServerOption func(*serverOptions)

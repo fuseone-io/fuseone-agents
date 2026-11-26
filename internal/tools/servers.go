@@ -90,6 +90,14 @@ func (c *Catalog) AddServer(
 	}
 	c.provenance[name] = opts.provenance
 	c.scopes[name] = serverScope(opts.scope)
+	// A person's session was opened under the configuration being replaced.
+	if pool := c.personal[name]; pool != nil {
+		pool.shut()
+		delete(c.personal, name)
+	}
+	if opts.personal != nil {
+		c.personal[name] = newPersonalPool(*opts.personal, c.clockOrNow())
+	}
 	for id, entry := range c.entries {
 		if entry.Server == name {
 			delete(c.entries, id)
@@ -130,6 +138,10 @@ func (c *Catalog) RemoveServer(name string) error {
 	delete(c.caches, name)
 	delete(c.provenance, name)
 	delete(c.scopes, name)
+	if pool := c.personal[name]; pool != nil {
+		pool.shut()
+		delete(c.personal, name)
+	}
 	for id, entry := range c.entries {
 		if entry.Server == name {
 			delete(c.entries, id)
@@ -156,6 +168,10 @@ func (c *Catalog) Close() error {
 		}
 	}
 	clear(c.sessions)
+	for _, pool := range c.personal {
+		pool.shut()
+	}
+	clear(c.personal)
 	clear(c.limiters)
 	clear(c.caches)
 	clear(c.provenance)
