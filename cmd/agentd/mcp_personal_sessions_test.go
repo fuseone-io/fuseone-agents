@@ -139,3 +139,41 @@ func TestConnectServer_aPersonWithNoCredential_getsNoSessionOpenedWithTheSharedO
 		t.Errorf("sessions initialized with %v, want the discovery session alone", got)
 	}
 }
+
+// The open is the person's whatever context it is handed: discovery on a
+// person's behalf will open from one that names nobody.
+func openAs(t *testing.T, url string, who domain.UserID) (tools.Session, error) {
+	t.Helper()
+	server := domain.MCPServer{Name: "dpg", Transport: domain.TransportHTTP, URL: url, Enabled: true}
+	open := personalOpener(server, domain.MCPCredentials{Token: "shared"}, nil,
+		personalCreds{"usr_ana": {Token: "ana"}}, credentialPolicy{requirePersonal: true})
+	return open(context.Background(), who)
+}
+
+func TestPersonalOpener_fromAContextNamingNobody_opensAndCallsAsThePerson(t *testing.T) {
+	t.Parallel()
+	ids, url := newIdentityServer(t)
+	session, err := openAs(t, url, "usr_ana")
+	if err != nil {
+		t.Fatalf("open as Ana: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	if _, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "whoami"}); err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if got := ids.callsBy(); !slices.Equal(got, []string{"Bearer ana → Bearer ana"}) {
+		t.Errorf("calls = %v, want Ana's session opened and called with her token", got)
+	}
+}
+
+func TestPersonalOpener_fromAContextNamingNobody_refusesSomeoneWithNoCredential(t *testing.T) {
+	t.Parallel()
+	ids, url := newIdentityServer(t)
+	if session, err := openAs(t, url, "usr_cai"); err == nil {
+		_ = session.Close()
+		t.Fatal("opened a session for Cai, who has no credential")
+	}
+	if got := ids.initializedWith(); len(got) != 0 {
+		t.Errorf("sessions initialized with %v, want none", got)
+	}
+}

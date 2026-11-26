@@ -26,24 +26,33 @@ func personalSessions(
 		return tools.WithPersonalSessions(tools.PersonalSessions{})
 	}
 	return tools.WithPersonalSessions(tools.PersonalSessions{
-		Open: func(ctx context.Context, who domain.UserID) (tools.Session, error) {
-			transport, _, err := transportFor(ctx, server, creds, oauth, personal, policy, nil)
-			if err != nil {
-				return nil, err
-			}
-			streamable, ok := transport.(*mcp.StreamableClientTransport)
-			if !ok {
-				return nil, fmt.Errorf("%s: a person's session needs an HTTP transport", server.Name)
-			}
-			streamable.HTTPClient = onBehalfOf(streamable.HTTPClient, who)
-			client := mcp.NewClient(&mcp.Implementation{Name: "fuseone-agents", Version: version}, nil)
-			session, err := client.Connect(ctx, streamable, nil)
-			if err != nil {
-				return nil, fmt.Errorf("connect %s for %s: %w", server.Name, who, err)
-			}
-			return session, nil
-		},
+		Open: personalOpener(server, creds, oauth, personal, policy),
 	})
+}
+
+// personalOpener is the open itself. Whatever context it is handed — a call's,
+// or one that names nobody — the session it opens is the person's.
+func personalOpener(
+	server domain.MCPServer, creds domain.MCPCredentials,
+	oauth OAuthGrantStore, personal MCPUserCredentialStore, policy credentialPolicy,
+) tools.PersonalOpener {
+	return func(ctx context.Context, who domain.UserID) (tools.Session, error) {
+		transport, _, err := transportFor(ctx, server, creds, oauth, personal, policy, nil)
+		if err != nil {
+			return nil, err
+		}
+		streamable, ok := transport.(*mcp.StreamableClientTransport)
+		if !ok {
+			return nil, fmt.Errorf("%s: a person's session needs an HTTP transport", server.Name)
+		}
+		streamable.HTTPClient = onBehalfOf(streamable.HTTPClient, who)
+		client := mcp.NewClient(&mcp.Implementation{Name: "fuseone-agents", Version: version}, nil)
+		session, err := client.Connect(ctx, streamable, nil)
+		if err != nil {
+			return nil, fmt.Errorf("connect %s for %s: %w", server.Name, who, err)
+		}
+		return session, nil
+	}
 }
 
 // onBehalfOf makes every request the client sends one made for who.
