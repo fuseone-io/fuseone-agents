@@ -54,21 +54,53 @@ func newIdentityServer(t *testing.T) (*identityServer, string) {
 		}
 		body, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(bytes.NewReader(body))
+		// Each request is recorded before the client can see its answer: the
+		// client may have its response, and the call return, while the
+		// handler is still running.
+		if bytes.Contains(body, []byte(`"method":"tools/call"`)) {
+			ids.called(r.Header.Get("Mcp-Session-Id"), auth)
+		}
+		if bytes.Contains(body, []byte(`"method":"initialize"`)) {
+			w = &onHeader{ResponseWriter: w, wrote: func(h http.Header) { ids.opened(h.Get("Mcp-Session-Id"), auth) }}
+		}
 		handler.ServeHTTP(w, r)
-		ids.observe(w.Header().Get("Mcp-Session-Id"), r.Header.Get("Mcp-Session-Id"), auth, body)
 	}))
 	t.Cleanup(remote.Close)
 	return ids, remote.URL
 }
 
-func (s *identityServer) observe(answered, asked, auth string, body []byte) {
+func (s *identityServer) opened(session, auth string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	switch {
-	case bytes.Contains(body, []byte(`"method":"initialize"`)):
-		s.openedBy[answered] = auth
-	case bytes.Contains(body, []byte(`"method":"tools/call"`)):
-		s.calls[asked] = append(s.calls[asked], auth)
+	s.openedBy[session] = auth
+}
+
+func (s *identityServer) called(session, auth string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls[session] = append(s.calls[session], auth)
+}
+
+// onHeader tells wrote the header of the response as it is sent.
+type onHeader struct {
+	http.ResponseWriter
+	wrote func(http.Header)
+	once  sync.Once
+}
+
+func (w *onHeader) WriteHeader(code int) {
+	w.once.Do(func() { w.wrote(w.Header()) })
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *onHeader) Write(b []byte) (int, error) {
+	w.once.Do(func() { w.wrote(w.Header()) })
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *onHeader) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
 	}
 }
 
