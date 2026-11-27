@@ -143,7 +143,21 @@ func (w discoveryWorld) invoke(t *testing.T, who domain.UserID) (engine.ToolResu
 
 func TestReconcile_aServerOnlyAPersonCanDiscover_isDiscoveredAsWhoeverConnectedLast(t *testing.T) {
 	t.Parallel()
+	for _, refusal := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		t.Run(http.StatusText(refusal), func(t *testing.T) {
+			t.Parallel()
+			discoversAsAna(t, refusal)
+		})
+	}
+}
+
+// discoversAsAna is the server refusing discovery as nobody with refusal.
+func discoversAsAna(t *testing.T, refusal int) {
+	t.Helper()
 	ids, url := newIdentityServer(t)
+	ids.mu.Lock()
+	ids.refuseWith = refusal
+	ids.mu.Unlock()
 	w := withDiscovery(t, url)
 
 	w.r.reconcile(t.Context())
@@ -380,17 +394,27 @@ func TestReconcile_anotherPersonDiscoveringNow_handsDiscoveryOver(t *testing.T) 
 	}
 }
 
-func TestReconcile_theLastPersonLeaving_disconnectsTheServer(t *testing.T) {
+// The catalogue it learned as them goes with them, and the administration is
+// told: otherwise every screen keeps offering tools no worker holds.
+func TestReconcile_theLastPersonLeaving_disconnectsTheServerAndPublishesItGone(t *testing.T) {
 	t.Parallel()
 	_, url := newIdentityServer(t)
 	w := withDiscovery(t, url)
+	publisher := &recordingPublisher{}
+	w.r.publishingTo(publisher)
 	w.r.reconcile(t.Context())
+	if len(publisher.entries) != 1 {
+		t.Fatalf("published %d tools, want dpg's one", len(publisher.entries))
+	}
 
 	w.store.update(func(s *discoveryStore) { s.creds, s.discoverer = personalCreds{}, "" })
 	w.r.reconcile(t.Context())
 
 	if w.catalog.Connected("dpg") || w.health["dpg"].Reachable {
 		t.Error("dpg stayed connected as a person who left")
+	}
+	if publisher.calls != 2 || len(publisher.entries) != 0 {
+		t.Errorf("%d publications, the last with %d tools; want a second one with none", publisher.calls, len(publisher.entries))
 	}
 }
 
@@ -481,5 +505,30 @@ func TestRefusingDiscovery_aPersonsRequestRefused_passesAsTheServerAnswered(t *t
 	asNobody, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, remote.URL, nil)
 	if _, err := rt.RoundTrip(asNobody); !errors.Is(err, errDiscoveryRefused) {
 		t.Errorf("nobody's request err = %v, want errDiscoveryRefused", err)
+	}
+}
+
+// Once per person for the life of the worker: Ana, then Bia, then Ana again,
+// and Ana leaving and coming back, are two people discovered as.
+func TestReconcile_aPersonDiscoveredAsAgain_isNotRecordedAgain(t *testing.T) {
+	t.Parallel()
+	_, url := newIdentityServer(t)
+	w := withDiscovery(t, url)
+	as := func(who domain.UserID) {
+		t.Helper()
+		w.store.update(func(s *discoveryStore) { s.discoverer = who })
+		w.r.reconcile(t.Context())
+	}
+
+	as("usr_ana")
+	as("usr_bia")
+	as("usr_ana")
+	as("")
+	as("usr_ana")
+
+	got := w.store.trail()
+	slices.Sort(got)
+	if want := []string{"dpg as usr_ana by worker-1", "dpg as usr_bia by worker-1"}; !slices.Equal(got, want) {
+		t.Errorf("trail = %v, want %v", got, want)
 	}
 }

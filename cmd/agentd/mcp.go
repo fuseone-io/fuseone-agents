@@ -772,10 +772,10 @@ type reconciler struct {
 	// unpublished is a publication the administration refused, still owed.
 	unpublished bool
 	// discovering is each server discovered as a person, and as whom;
-	// announced, whom this worker has said it discovered each as; owedTrail,
-	// what it has yet to write of that (delivery 3).
+	// announced, each server and person this worker has said it discovered
+	// as; owedTrail, what it has yet to write of that (delivery 3).
 	discovering map[string]discoverer
-	announced   map[string]domain.UserID
+	announced   map[string]struct{}
 	owedTrail   map[string]admin.MCPDiscoveredOnBehalf
 }
 
@@ -788,7 +788,7 @@ func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorde
 		flags:       make(map[string]domain.MCPServer),
 		holder:      defaultOwner(),
 		discovering: make(map[string]discoverer),
-		announced:   make(map[string]domain.UserID),
+		announced:   make(map[string]struct{}),
 		owedTrail:   make(map[string]admin.MCPDiscoveredOnBehalf),
 	}
 }
@@ -854,7 +854,7 @@ func (r *reconciler) reconcile(ctx context.Context) {
 	// a live session is leased.
 	changed := r.reviveFlagServers(ctx)
 	changed = r.renewLeases(ctx) || changed
-	r.retireMovedDiscoverers(ctx, wanted)
+	changed = r.retireMovedDiscoverers(ctx, wanted) || changed
 	changed = r.disconnectStale(wanted) || changed
 	for name, server := range wanted {
 		if _, already := r.connected[name]; already {

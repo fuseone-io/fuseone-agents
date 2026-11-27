@@ -47,9 +47,10 @@ field" is a commit message.
   A run with no person, a schedule's, is refused rather than run as whoever discovered, and each
   person's calls still go through their own session. The worker discovers again when that
   person changes or removes their credential, or someone else connects since. With nobody
-  connected, the server says so. The trail records `mcp_server.discovered_on_behalf` by the
-  worker, with the person's id and the worker's name and nothing else, once per worker for each
-  person it starts discovering as, and again after a restart. No migration.
+  connected, the server says so, and the tools learned as the last person leave the catalogue.
+  The trail records `mcp_server.discovered_on_behalf` by the worker, with the person's id and the
+  worker's name and nothing else, once per worker for each person it discovers as, and again
+  after a restart. No migration.
 
 ## [0.145.0] — 2026-11-26
 

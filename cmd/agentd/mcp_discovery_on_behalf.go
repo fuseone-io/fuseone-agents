@@ -144,10 +144,13 @@ somebody configured theirs since. The pass below discovers it again. A session
 opened as an identity the person has moved on from would be refused on its next
 request, and one opened as a person who left would keep their catalogue.
 
-A store that cannot say keeps the session: not knowing is not a change.
+A store that cannot say keeps the session: not knowing is not a change. It
+reports whether any session ended, so the catalogue is published without the
+tools learned as them even when nobody takes their place.
 */
-func (r *reconciler) retireMovedDiscoverers(ctx context.Context, wanted map[string]domain.MCPServer) {
+func (r *reconciler) retireMovedDiscoverers(ctx context.Context, wanted map[string]domain.MCPServer) bool {
 	personal, _ := r.servers.(MCPUserCredentialStore)
+	retired := false
 	for name, was := range r.discovering {
 		server, still := wanted[name]
 		if !still {
@@ -156,7 +159,6 @@ func (r *reconciler) retireMovedDiscoverers(ctx context.Context, wanted map[stri
 		now, err := r.discovererOf(ctx, r.withProtocol(server), personal)
 		switch {
 		case errors.Is(err, errNobodyToDiscoverAs):
-			delete(r.announced, name)
 		case err != nil:
 			slog.Warn("could not read who discovers a tool server; keeping its session", "server", name, "err", err)
 			continue
@@ -169,23 +171,26 @@ func (r *reconciler) retireMovedDiscoverers(ctx context.Context, wanted map[stri
 		delete(r.connected, name)
 		delete(r.generations, name)
 		delete(r.discovering, name)
+		retired = true
 	}
+	return retired
 }
 
 // discoveredAs remembers who the server was discovered as, and owes the trail
-// a record when that is a person this worker has not said it discovered as.
+// a record the first time this worker discovers it as that person: once per
+// server and person for the life of the worker, whoever came between.
 func (r *reconciler) discoveredAs(server domain.MCPServer, as *discoverer) {
 	if as == nil {
 		delete(r.discovering, server.Name)
-		delete(r.announced, server.Name)
 		return
 	}
 	r.discovering[server.Name] = *as
-	if r.announced[server.Name] == as.who {
+	key := server.Name + "\x00" + string(as.who)
+	if _, said := r.announced[key]; said {
 		return
 	}
-	r.announced[server.Name] = as.who
-	r.owedTrail[server.Name+"\x00"+string(as.who)] = admin.MCPDiscoveredOnBehalf{
+	r.announced[key] = struct{}{}
+	r.owedTrail[key] = admin.MCPDiscoveredOnBehalf{
 		Server: server.Name, Scope: server.Scope, Principal: as.who, Holder: r.holder,
 	}
 }
