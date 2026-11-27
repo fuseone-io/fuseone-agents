@@ -51,7 +51,8 @@ signal left — it is what keeps a server whose entries were dropped on
 disconnect parking its runs while the reconciler fails to bring it back.
 
 A server implicated either way that is configured and enabled refuses the
-turn, retryably, before any money is spent. Every other undescribable tool
+turn before any money is spent: for good when it waits for a person, and
+retryably otherwise. Every other undescribable tool
 is a decision, not an outage: the absence is stated to the model, so its
 account of the run is accurate, and on the planned step, so the trail says
 what the prompt could not offer. Platform-owned tools are never in question.
@@ -91,17 +92,42 @@ func (r *Runner) unavailableTools(
 	if r.deps.Connections == nil || r.deps.Servers == nil {
 		return missing, nil
 	}
-	// Sorted so the server a park names is the same one every attempt.
+	if err := r.refusal(ctx, implicated); err != nil {
+		return nil, err
+	}
+	return missing, nil
+}
+
+/*
+refusal is what the implicated servers refuse the turn with, or a read that
+failed, and nil when they let it run. Every one is asked: a server waiting for
+a person ends the run whichever sorts first, so an ordinary outage is kept and
+returned only when none waits. Sorted so the outage a park names is the same
+one every attempt. A read that fails is returned as it is, never taken for an
+answer.
+*/
+func (r *Runner) refusal(ctx context.Context, implicated map[string][]domain.ToolID) error {
+	var outage error
 	for _, server := range slices.Sorted(maps.Keys(implicated)) {
 		expected, err := r.deps.Servers.Expected(ctx, server)
 		if err != nil {
-			return nil, fmt.Errorf("engine: ask whether server %s is expected: %w", server, err)
+			return fmt.Errorf("engine: ask whether server %s is expected: %w", server, err)
 		}
-		if expected {
-			return nil, &ToolServerUnavailableError{Server: server, Tools: implicated[server]}
+		if !expected {
+			continue
+		}
+		waiting, err := r.deps.Servers.AwaitingPerson(ctx, server)
+		if err != nil {
+			return fmt.Errorf("engine: ask whether server %s waits for a person: %w", server, err)
+		}
+		if waiting {
+			return &AwaitingPersonError{Server: server, Tools: implicated[server]}
+		}
+		if outage == nil {
+			outage = &ToolServerUnavailableError{Server: server, Tools: implicated[server]}
 		}
 	}
-	return missing, nil
+	return outage
 }
 
 func toolStrings(ids []domain.ToolID) []string {

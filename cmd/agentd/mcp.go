@@ -1031,7 +1031,7 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool 
 		// never touches it.
 		slog.Error("tool server did not answer; its tools are unavailable",
 			"server", server.Name, "transport", server.TransportOf(), "err", err)
-		observe(ctx, r.health, server.Name, false, 0, err.Error())
+		r.unreached(ctx, server, err)
 		return false
 	}
 	if r.rulings != nil {

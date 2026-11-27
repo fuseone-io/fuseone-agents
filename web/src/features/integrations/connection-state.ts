@@ -3,8 +3,9 @@ import type { IntegrationHealth } from "@/features/integrations/api";
 /**
  * What a connection is, in one place.
  *
- * Four states, and collapsing them is how a screen starts lying: switched off,
- * configured but never reached, reached and refusing, answering. A server can
+ * Five states, and collapsing them is how a screen starts lying: switched off,
+ * configured but never reached, waiting for a person to connect an account,
+ * reached and refusing, answering. A server can
  * be enabled, correct and unreachable all at once, and only one of those three
  * is somebody's opinion.
  *
@@ -22,6 +23,15 @@ export function stateOf(
       label: "integrations.stateOff",
       pill: "bg-muted text-muted-foreground",
       tile: "border-border bg-muted text-muted-foreground",
+    };
+  }
+  if (health && !health.reachable && health.awaitingPerson) {
+    // Only a person can discover it, and nobody has connected an account:
+    // the fix is somebody connecting, not somebody debugging the server.
+    return {
+      label: "integrations.awaitingPerson",
+      pill: "bg-warning-surface text-warning",
+      tile: "border-warning bg-warning-surface text-warning",
     };
   }
   if (health && !health.reachable) {

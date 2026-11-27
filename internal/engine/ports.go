@@ -269,8 +269,14 @@ type Schemas interface {
 // that is configured and enabled is expected to be connected, so its tools
 // being undescribable is an outage to back off from, not a decision to
 // respect.
+//
+// An expected server can also be waiting for a person: only a person can
+// discover it, and nobody has connected an account to discover it as. That
+// will not end by backing off, so the turn is refused for good (#483,
+// delivery 3b). Asked only of a server already expected and missing.
 type Servers interface {
 	Expected(ctx context.Context, server string) (bool, error)
+	AwaitingPerson(ctx context.Context, server string) (bool, error)
 }
 
 // Connections names the MCP server a tool is registered under on this

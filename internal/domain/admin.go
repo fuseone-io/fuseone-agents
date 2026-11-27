@@ -380,6 +380,13 @@ type IntegrationHealth struct {
 	// different credentials and failure modes, so one cannot stand in for the
 	// other.
 	ToolCall *IntegrationToolCallHealth
+	// AwaitingPerson is a server only a person can discover, observed with
+	// nobody connected to discover as (#483, delivery 3b).
+	AwaitingPerson bool
+	// AwaitingGeneration is the server configuration's UpdatedAt the wait was
+	// observed under, zero when it is not waiting. A reader honours the wait
+	// only while it is still the configuration's.
+	AwaitingGeneration time.Time
 }
 
 // IntegrationToolCallHealth is what a concrete tools/call attempt proved.

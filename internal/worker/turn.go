@@ -133,6 +133,9 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 		log.Warn("lease lost mid-turn; leaving the run to its successor")
 		return true, nil
 	}
+	if ended, err := w.awaitingPerson(ctx, claim, advErr, log); ended {
+		return true, err
+	}
 	if advErr != nil {
 		return true, w.failed(ctx, claim, start, resolved.Fallback, advErr, log)
 	}
