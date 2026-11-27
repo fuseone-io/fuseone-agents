@@ -38,6 +38,8 @@ type identityServer struct {
 	// beforeInitialize, when set, runs as an initialize arrives, before it is
 	// answered.
 	beforeInitialize func(auth string)
+	// anonymous counts the requests that carried no token, refused.
+	anonymous int
 }
 
 func newIdentityServer(t *testing.T) (*identityServer, string) {
@@ -52,6 +54,9 @@ func newIdentityServer(t *testing.T) (*identityServer, string) {
 	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		if auth == "" {
+			ids.mu.Lock()
+			ids.anonymous++
+			ids.mu.Unlock()
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
