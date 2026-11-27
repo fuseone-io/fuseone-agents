@@ -2,8 +2,9 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -37,14 +38,21 @@ func (i *Integrations) MCPPersonalDiscoverer(
 		bestAt time.Time
 	)
 	for _, row := range rows {
-		var stored storedMCPUserCredential
-		if err := json.Unmarshal(row.Value, &stored); err != nil {
-			return "", false, fmt.Errorf("%w: %s: %v", ErrMCPPersonalCredentialCorrupt, row.Name, err)
+		// The value has to name the person and the server its key does, as
+		// when one person's credential is read: one naming another would be
+		// discovered as whoever the value says.
+		who := rowPrincipal(row.Name)
+		if who == "" {
+			return "", false, fmt.Errorf("%w: %s", ErrMCPPersonalCredentialCorrupt, row.Name)
 		}
-		if !row.HasSecret || rowServer(stored, row.Name) != name || !sameServerRow(stored.serverRuntime(), at) {
+		stored, err := storedPersonalCredential(row, name, who)
+		if err != nil {
+			return "", false, err
+		}
+		if !row.HasSecret || !sameServerRow(stored.serverRuntime(), at) {
 			continue
 		}
-		who, when := domain.UserID(stored.Principal), stored.configuredOr(row.UpdatedAt)
+		when := stored.configuredOr(row.UpdatedAt)
 		if best == "" || when.After(bestAt) || (when.Equal(bestAt) && who < best) {
 			best, bestAt = who, when
 		}
@@ -80,4 +88,18 @@ func (i *Integrations) RecordMCPDiscoveredOnBehalf(ctx context.Context, d MCPDis
 		Action: "mcp_server.discovered_on_behalf", Target: d.Server,
 		Detail: map[string]string{"principal": string(d.Principal), "holder": d.Holder},
 	})
+}
+
+// rowPrincipal is the person a credential's key names; nobody when the key
+// does not decode.
+func rowPrincipal(name string) domain.UserID {
+	_, encoded, ok := strings.Cut(name, ".")
+	if !ok {
+		return ""
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return ""
+	}
+	return domain.UserID(raw)
 }

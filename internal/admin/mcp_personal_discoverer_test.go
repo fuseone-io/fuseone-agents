@@ -256,3 +256,38 @@ func TestRecordMCPDiscoveredOnBehalf_namesThePersonAndTheWorker_byIdsAlone(t *te
 		t.Errorf("detail = %v, want %v and nothing else", detail, want)
 	}
 }
+
+// A row that reads as JSON but names another person, or nobody, than its key
+// is as corrupt as one that does not read: picked, it would discover as
+// whoever the value says.
+func TestMCPPersonalDiscoverer_aRowWhosePrincipalIsNotItsKeys_isAnError(t *testing.T) {
+	for name, principal := range map[string]string{"another person": "usr_cai", "nobody": ""} {
+		t.Run(name, func(t *testing.T) {
+			w := withTwoPeople(t)
+			if _, err := w.pool.Exec(context.Background(), `update settings
+				set value = jsonb_set(value, '{principal}', to_jsonb($1::text))
+				where kind = 'mcp_user_credential' and value->>'principal' = 'usr_bia'`, principal); err != nil {
+				t.Fatalf("rewrite Bia's principal: %v", err)
+			}
+
+			_, _, err := w.integrations.MCPPersonalDiscoverer(context.Background(), cxScope, "github")
+			if !errors.Is(err, admin.ErrMCPPersonalCredentialCorrupt) {
+				t.Errorf("err = %v, want the row refused as corrupt", err)
+			}
+		})
+	}
+}
+
+func TestMCPPersonalDiscoverer_aKeyThatNamesNobody_isAnError(t *testing.T) {
+	w := withTwoPeople(t)
+	if _, err := w.pool.Exec(context.Background(), `update settings
+		set name = split_part(name, '.', 1) || '.!', value = jsonb_set(value, '{principal}', '""')
+		where kind = 'mcp_user_credential' and value->>'principal' = 'usr_bia'`); err != nil {
+		t.Fatalf("rewrite Bia's key: %v", err)
+	}
+
+	_, _, err := w.integrations.MCPPersonalDiscoverer(context.Background(), cxScope, "github")
+	if !errors.Is(err, admin.ErrMCPPersonalCredentialCorrupt) {
+		t.Errorf("err = %v, want the row refused as corrupt", err)
+	}
+}
