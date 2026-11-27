@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -135,6 +136,9 @@ type storedMCPUserCredential struct {
 	// ServerAt is the row of the server it was stored for (NT-019). Absent,
 	// it was stored before credentials named one: the installation's.
 	ServerAt *requestedAt `json:"serverAt,omitempty"`
+	// ConfiguredAt is when the person last wrote it, kept through every
+	// rewrite by the system: who discovers the server is read from it.
+	ConfiguredAt time.Time `json:"configuredAt,omitzero"`
 }
 
 // Integrations configures what the platform talks to.
@@ -768,6 +772,9 @@ func (i *Integrations) WriteMCPPersonalCredential(ctx context.Context, w Persona
 		// shared until the commit, as the server's own write reads it: the
 		// worker refreshes this grant through the same guard (NT-019).
 		egress *domain.MCPEgress
+		// configured is the write's own time, the one its row is stamped
+		// with: one clock for rows that recorded it and rows that did not.
+		configured time.Time
 	)
 
 	key := mcpUserCredentialName(name, by)
@@ -777,8 +784,10 @@ func (i *Integrations) WriteMCPPersonalCredential(ctx context.Context, w Persona
 			if err != nil {
 				return err
 			}
-			egress, err = i.egressAtTx(ctx, tx, serverKind, serverAt)
-			return err
+			if egress, err = i.egressAtTx(ctx, tx, serverKind, serverAt); err != nil {
+				return err
+			}
+			return tx.QueryRow(ctx, `select now()`).Scan(&configured)
 		},
 		by: by, scope: scope, action: "mcp_credential.configured", target: name,
 		set: settings.Setting{
@@ -811,9 +820,10 @@ func (i *Integrations) WriteMCPPersonalCredential(ctx context.Context, w Persona
 			}
 			value, err := json.Marshal(storedMCPUserCredential{
 				Server: name, Principal: string(by),
-				ServerAt:   serverRow(serverKind, serverAt),
-				HasHeaders: len(merged.Headers) > 0,
-				HasOAuth:   merged.OAuth != nil && !merged.OAuth.Empty(),
+				ServerAt:     serverRow(serverKind, serverAt),
+				HasHeaders:   len(merged.Headers) > 0,
+				HasOAuth:     merged.OAuth != nil && !merged.OAuth.Empty(),
+				ConfiguredAt: configured,
 			})
 			if err != nil {
 				return settings.Setting{}, nil, fmt.Errorf(
@@ -1167,6 +1177,9 @@ func (i *Integrations) refreshMCPPersonalOAuth(ctx context.Context, r MCPOAuthRe
 				Server: name, Principal: string(principal), ServerAt: held.ServerAt,
 				HasHeaders: len(merged.Headers) > 0,
 				HasOAuth:   merged.OAuth != nil && !merged.OAuth.Empty(),
+				// The worker's rewrite, not the person's: when they configured
+				// it stays what it was.
+				ConfiguredAt: held.configuredOr(stored.UpdatedAt),
 			})
 			if err != nil {
 				return settings.Setting{}, nil, fmt.Errorf(
