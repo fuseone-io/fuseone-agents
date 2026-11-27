@@ -30,6 +30,14 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.146.0] — 2026-11-27
+
+A server that takes each person's own credential, and that nothing else can discover, is
+discovered as whoever connected their account to it last (#485). With nobody connected, a run
+that needs it ends `failed` with `mcp_personal_credential_missing`, and the console shows the
+server as waiting for a person (#486). Migration `0129` is additive, and the previous binary
+keeps working on it. The rollback floors of 0.140.0 hold.
+
 ### Changed
 
 - **A server that takes each person's own credential, and that nothing else can discover, is
@@ -50,7 +58,7 @@ field" is a commit message.
   connected, the server says so, and the tools learned as the last person leave the catalogue.
   The trail records `mcp_server.discovered_on_behalf` by the worker, with the person's id and the
   worker's name and nothing else, once per worker for each person it discovers as, and again
-  after a restart. No migration.
+  after a restart. No migration (#485).
 - **A run that needs a server waiting for a person ends `failed` with
   `mcp_personal_credential_missing`.** Only a person can discover that server, and nobody has
   connected an account to it. Such a run used to retry `tool_server_unavailable` until it parked,
@@ -59,14 +67,14 @@ field" is a commit message.
   it is still true. The worker must have seen the server unreachable for this reason, under its
   current configuration, and the store must say again that nobody has connected. A store that
   cannot answer is a fault the run retries, never "nobody". A tool call that finds its caller
-  without a credential carries the same code, and it still parks as before.
+  without a credential carries the same code, and it still parks as before (#486).
 - **The console shows "waiting for a person" for such a server, in place of "not answering".**
   The API's `health.awaitingPerson` is true only while the server is unreachable and the
   observation was made under its current configuration. Migration `0129` adds two columns to
   `integration_health`. The previous binary never writes them and keeps working. A row it
   writes over keeps the old wait, so the console and a run honour it only while the row says
   unreachable under the current configuration, and a run only when the store again says nobody
-  has connected.
+  has connected (#486).
 
 ## [0.145.0] — 2026-11-26
 
