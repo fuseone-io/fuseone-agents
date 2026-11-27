@@ -29,6 +29,27 @@ describe("a connected system's card", () => {
     expect(screen.getByText("não responde")).toBeInTheDocument();
   });
 
+  it("says a server waits for a person, rather than that it does not answer", () => {
+    // Only a person can discover it and nobody has connected an account: the
+    // fix is somebody connecting, not somebody debugging the server.
+    render(
+      <IntegrationCard
+        {...base}
+        enabled
+        health={{
+          reachable: false,
+          awaitingPerson: true,
+          toolCount: 0,
+          observedAt: "2026-11-27T09:00:00Z",
+        }}
+      />,
+    );
+
+    const pill = screen.getByText("aguardando uma pessoa");
+    expect(pill).toHaveClass("text-warning");
+    expect(screen.queryByText("não responde")).not.toBeInTheDocument();
+  });
+
   it("says when nobody has tried, rather than implying health", () => {
     // "Never tried" and "tried and failed" are different facts. Collapsing
     // them lets a server nobody connected to look fine.
