@@ -5812,6 +5812,13 @@ export interface components {
              */
             lastReachableAt?: string;
             /**
+             * @description Only a person can discover this server, and nobody has connected an
+             *     account to discover it as. True only while the server is unreachable
+             *     and the observation was made under its current configuration. A run
+             *     that needs it ends failed with mcp_personal_credential_missing.
+             */
+            awaitingPerson?: boolean;
+            /**
              * @description The last concrete tools/call observation. Discovery can work while
              *     calls fail because credentials, rate limits and runtime policy sit
              *     on a different path.

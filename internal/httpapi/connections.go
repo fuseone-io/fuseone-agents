@@ -52,27 +52,6 @@ type Integrations interface {
 	MCPEgressPolicies(ctx context.Context) ([]admin.MCPEgressPolicy, error)
 }
 
-func healthFrom(seen domain.IntegrationHealth) openapi.IntegrationHealth {
-	out := openapi.IntegrationHealth{
-		Reachable: seen.Reachable, ToolCount: seen.ToolCount,
-		Detail: ptr(seen.Detail), ObservedAt: seen.ObservedAt,
-		ObservedBy: ptr(seen.ObservedBy),
-	}
-	if seen.LastReachableAt != nil {
-		out.LastReachableAt = seen.LastReachableAt
-	}
-	if seen.ToolCall != nil {
-		out.ToolCall = &openapi.IntegrationToolCallHealth{
-			Ok:         seen.ToolCall.OK,
-			Code:       seen.ToolCall.Code,
-			ObservedAt: seen.ToolCall.ObservedAt,
-			ObservedBy: ptr(seen.ToolCall.ObservedBy),
-			LastOkAt:   seen.ToolCall.LastOKAt,
-		}
-	}
-	return out
-}
-
 func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegrationsRequestObject) (openapi.ListIntegrationsResponseObject, error) {
 	// A reader of the platform's, as before, or whoever configures in some
 	// scope: an area's administrator lists its own servers and the ones it
@@ -132,6 +111,9 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 		// a server that failed — and the screen has to be able to say so.
 		if seen, tried := observed[srv.Name]; tried {
 			server.Health = ptr(healthFrom(seen))
+			if awaitingPerson(srv, seen) {
+				server.Health.AwaitingPerson = ptr(true)
+			}
 		}
 		body.McpServers = append(body.McpServers, server)
 	}
