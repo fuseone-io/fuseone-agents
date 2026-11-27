@@ -82,7 +82,7 @@ func (w *Worker) failRun(ctx context.Context, claim domain.Claim, failed domain.
 	return w.release(ctx, claim, domain.ClaimOutcome{})
 }
 
-// failureUnwritten is a candidate failure that could not be appended: left to
+// failureUnwritten is a failure failRun could not append: left to
 // the successor when the lease is gone, handed back when the run moved, and
 // otherwise supervised like any other fault.
 func (w *Worker) failureUnwritten(ctx context.Context, claim domain.Claim, err error) error {
@@ -101,7 +101,7 @@ func (w *Worker) failureUnwritten(ctx context.Context, claim domain.Claim, err e
 	// Supervised like any other fault: backed off and counted, so a store
 	// that keeps refusing the write is not retried in a tight loop, and the
 	// run parks once its attempts run out.
-	w.log.Error("could not record the candidate failure", "run", claim.RunID, "err", err)
+	w.log.Error("could not record the run's failure", "run", claim.RunID, "err", err)
 	if outcome := w.failure(claim, err); !outcome.Parked {
 		return w.release(ctx, claim, outcome)
 	}
