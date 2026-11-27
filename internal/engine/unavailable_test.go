@@ -408,7 +408,7 @@ func (a *awaiting) AwaitingPerson(_ context.Context, server string) (bool, error
 	return a.waiting[server], a.err
 }
 
-func awaitingHarness(t *testing.T, servers *awaiting) (*harness, *capturingPlanner) {
+func awaitingHarness(t *testing.T, servers Servers) (*harness, *capturingPlanner) {
 	t.Helper()
 	h := newHarness(t)
 	planner := &capturingPlanner{}
@@ -476,4 +476,87 @@ func TestPlan_notKnowingWhetherAServerWaitsForAPerson_isNeitherRefusal(t *testin
 	if err == nil || errors.As(err, &waiting) || errors.As(err, &unavailable) {
 		t.Fatalf("Advance err = %v, want the read's failure and no refusal", err)
 	}
+}
+
+// The wait wins over an ordinary outage, whatever the order: a run needing a
+// server that waits for a person ends, even when another it needs is merely
+// down and sorts first. Otherwise the ending would depend on the names.
+func TestPlan_anOutageSortingBeforeAServerWaitingForAPerson_stillEndsTheRun(t *testing.T) {
+	t.Parallel()
+	h, planner := awaitingHarness(t, &awaiting{
+		expecting: expecting{servers: map[string]bool{"aaa": true, "zzz": true}},
+		waiting:   map[string]bool{"zzz": true},
+	})
+	h.runner.deps.Connections = holding{
+		owner: map[domain.ToolID]string{"aaa.list": "aaa", "zzz.list": "zzz"},
+		live:  map[string]bool{},
+	}
+	start := h.start(t, generousBudget())
+	start.Pack = gate.NewPack("aaa.list", "zzz.list")
+
+	_, err := h.runner.Advance(context.Background(), start)
+
+	var waiting *AwaitingPersonError
+	if !errors.As(err, &waiting) || waiting.Server != "zzz" {
+		t.Fatalf("Advance err = %v, want AwaitingPersonError for zzz", err)
+	}
+	if len(planner.inputs) != 0 {
+		t.Errorf("the model was called %d times", len(planner.inputs))
+	}
+}
+
+// With no server waiting, the outage named is the first, every attempt.
+func TestPlan_twoServersDownAndNoneWaiting_namesTheFirstOutage(t *testing.T) {
+	t.Parallel()
+	h, _ := awaitingHarness(t, &awaiting{
+		expecting: expecting{servers: map[string]bool{"aaa": true, "zzz": true}},
+	})
+	h.runner.deps.Connections = holding{
+		owner: map[domain.ToolID]string{"aaa.list": "aaa", "zzz.list": "zzz"},
+		live:  map[string]bool{},
+	}
+	start := h.start(t, generousBudget())
+	start.Pack = gate.NewPack("zzz.list", "aaa.list")
+
+	_, err := h.runner.Advance(context.Background(), start)
+
+	var unavailable *ToolServerUnavailableError
+	if !errors.As(err, &unavailable) || unavailable.Server != "aaa" {
+		t.Fatalf("Advance err = %v, want the outage of aaa", err)
+	}
+}
+
+// A read failing on a later server is not inferred away by an earlier outage.
+func TestPlan_aReadFailingAfterAnOutage_isTheReadsFailure(t *testing.T) {
+	t.Parallel()
+	h, _ := awaitingHarness(t, &awaitingFailingOn{
+		awaiting: awaiting{expecting: expecting{servers: map[string]bool{"aaa": true, "zzz": true}}},
+		failing:  "zzz",
+	})
+	h.runner.deps.Connections = holding{
+		owner: map[domain.ToolID]string{"aaa.list": "aaa", "zzz.list": "zzz"},
+		live:  map[string]bool{},
+	}
+	start := h.start(t, generousBudget())
+	start.Pack = gate.NewPack("aaa.list", "zzz.list")
+
+	_, err := h.runner.Advance(context.Background(), start)
+
+	var unavailable *ToolServerUnavailableError
+	if err == nil || errors.As(err, &unavailable) {
+		t.Fatalf("Advance err = %v, want the read's failure on zzz", err)
+	}
+}
+
+// awaitingFailingOn cannot say whether one server waits for a person.
+type awaitingFailingOn struct {
+	awaiting
+	failing string
+}
+
+func (a *awaitingFailingOn) AwaitingPerson(ctx context.Context, server string) (bool, error) {
+	if server == a.failing {
+		return false, errors.New("settings unreachable")
+	}
+	return a.awaiting.AwaitingPerson(ctx, server)
 }
