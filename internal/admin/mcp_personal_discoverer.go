@@ -60,3 +60,24 @@ func (c storedMCPUserCredential) configuredOr(written time.Time) time.Time {
 	}
 	return c.ConfiguredAt
 }
+
+// MCPDiscoveredOnBehalf is one worker having discovered a server as a person.
+type MCPDiscoveredOnBehalf struct {
+	Server string
+	// Scope is where the server row is stored (NT-019).
+	Scope     domain.Scope
+	Principal domain.UserID
+	// Holder is the worker, as it names itself in its publications.
+	Holder string
+}
+
+// RecordMCPDiscoveredOnBehalf records which credential a worker learned the
+// server's catalogue with, by ids alone. One worker's record: every worker, and
+// every restart of one, discovers on its own and says so.
+func (i *Integrations) RecordMCPDiscoveredOnBehalf(ctx context.Context, d MCPDiscoveredOnBehalf) error {
+	return Record(ctx, i.pool, Event{
+		Principal: domain.SystemWorker, Scope: mcpServerRuntimeScope(storedAt(d.Scope)),
+		Action: "mcp_server.discovered_on_behalf", Target: d.Server,
+		Detail: map[string]string{"principal": string(d.Principal), "holder": d.Holder},
+	})
+}

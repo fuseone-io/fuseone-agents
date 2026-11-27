@@ -225,3 +225,34 @@ func TestMCPPersonalDiscoverer_legacyRows_keepTheirOrderThroughAMove(t *testing.
 		t.Errorf("discoverer = %q after the move, want usr_bia, who configured last", got)
 	}
 }
+
+// The trail says which credential discovered the server, by ids alone: whose,
+// and which worker. Nothing of the credential and nothing the server answered.
+func TestRecordMCPDiscoveredOnBehalf_namesThePersonAndTheWorker_byIdsAlone(t *testing.T) {
+	w := withAreaServer(t)
+	ctx := context.Background()
+	if _, err := w.pool.Exec(ctx, `delete from admin_events where action = 'mcp_server.discovered_on_behalf'`); err != nil {
+		t.Fatalf("clean: %v", err)
+	}
+
+	if err := w.integrations.RecordMCPDiscoveredOnBehalf(ctx, admin.MCPDiscoveredOnBehalf{
+		Server: "github", Scope: cxScope, Principal: "usr_ana", Holder: "worker-1",
+	}); err != nil {
+		t.Fatalf("RecordMCPDiscoveredOnBehalf: %v", err)
+	}
+
+	var principal, company, area, target string
+	var detail map[string]any
+	if err := w.pool.QueryRow(ctx, `select principal_id, company_id, area_id, target, detail
+		from admin_events where action = 'mcp_server.discovered_on_behalf'`).
+		Scan(&principal, &company, &area, &target, &detail); err != nil {
+		t.Fatalf("read the event: %v", err)
+	}
+	if principal != string(domain.SystemWorker) || company != "acme" || area != "cx" || target != "github" {
+		t.Errorf("event by %s at %s/%s on %s, want the worker's, at acme/cx, on github", principal, company, area, target)
+	}
+	want := map[string]any{"principal": "usr_ana", "holder": "worker-1"}
+	if len(detail) != len(want) || detail["principal"] != want["principal"] || detail["holder"] != want["holder"] {
+		t.Errorf("detail = %v, want %v and nothing else", detail, want)
+	}
+}
