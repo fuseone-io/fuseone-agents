@@ -266,7 +266,9 @@ func (p *workerParts) deps(gate engine.Gate, metrics *worker.MetricsRegistry) en
 		deps.Connections = p.catalog
 	}
 	if p.integrations != nil {
-		deps.Servers = expectedServers{servers: p.integrations}
+		servers := expectedServers{servers: p.integrations, discoverers: p.integrations}
+		servers.health, _ = p.health.(observations)
+		deps.Servers = servers
 	}
 	return deps
 }

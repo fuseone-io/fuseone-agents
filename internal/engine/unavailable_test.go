@@ -35,6 +35,8 @@ func (e *expecting) Expected(_ context.Context, server string) (bool, error) {
 	return e.servers[server], nil
 }
 
+func (e *expecting) AwaitingPerson(context.Context, string) (bool, error) { return false, nil }
+
 // holding answers which server owns a tool on this worker and whether that
 // server's session is live. Ownership is per tool, as registration makes it.
 type holding struct {
@@ -392,5 +394,86 @@ func TestPlan_aLiveServerThatStoppedOfferingATool_isANoteNotAnOutage(t *testing.
 	}
 	if servers.asks != 0 {
 		t.Errorf("settings were read %d times for a live server", servers.asks)
+	}
+}
+
+// awaiting is a server configured, enabled and waiting for a person.
+type awaiting struct {
+	expecting
+	waiting map[string]bool
+	err     error
+}
+
+func (a *awaiting) AwaitingPerson(_ context.Context, server string) (bool, error) {
+	return a.waiting[server], a.err
+}
+
+func awaitingHarness(t *testing.T, servers *awaiting) (*harness, *capturingPlanner) {
+	t.Helper()
+	h := newHarness(t)
+	planner := &capturingPlanner{}
+	h.runner.deps.Planner = planner
+	h.runner.deps.Schemas = describing{}
+	h.runner.deps.Connections = crmHeld(false)
+	h.runner.deps.Servers = servers
+	return h, planner
+}
+
+// A server waiting for a person will not connect by retrying: nobody connected
+// an account to discover it as, and no run can bring one. The turn is refused
+// before the model, by a type the worker ends the run on (#483, delivery 3b).
+func TestPlan_aPackToolOfAServerWaitingForAPerson_isRefusedTerminallyBeforeTheModel(t *testing.T) {
+	t.Parallel()
+	h, planner := awaitingHarness(t, &awaiting{
+		expecting: expecting{servers: map[string]bool{"crm": true}},
+		waiting:   map[string]bool{"crm": true},
+	})
+
+	_, err := h.runner.Advance(context.Background(), h.start(t, generousBudget()))
+
+	var waiting *AwaitingPersonError
+	if !errors.As(err, &waiting) || waiting.Server != "crm" {
+		t.Fatalf("Advance err = %v, want AwaitingPersonError for crm", err)
+	}
+	var unavailable *ToolServerUnavailableError
+	if errors.As(err, &unavailable) {
+		t.Error("the refusal is also a retryable outage; the worker would back off instead of ending the run")
+	}
+	if s := waiting.Summary(); s.Code != "mcp_personal_credential_missing" || s.Retryable || s.Provider != "crm" {
+		t.Errorf("summary = %+v, want a terminal mcp_personal_credential_missing naming crm", s)
+	}
+	if len(planner.inputs) != 0 {
+		t.Errorf("the model was called %d times", len(planner.inputs))
+	}
+}
+
+func TestPlan_aServerNotWaitingForAPerson_staysARetryableOutage(t *testing.T) {
+	t.Parallel()
+	h, _ := awaitingHarness(t, &awaiting{expecting: expecting{servers: map[string]bool{"crm": true}}})
+
+	_, err := h.runner.Advance(context.Background(), h.start(t, generousBudget()))
+
+	var unavailable *ToolServerUnavailableError
+	if !errors.As(err, &unavailable) {
+		t.Fatalf("Advance err = %v, want the retryable outage", err)
+	}
+}
+
+// Not knowing whether the server waits for a person is not knowing: the turn
+// fails with the read's error, supervised like any fault, never ended.
+func TestPlan_notKnowingWhetherAServerWaitsForAPerson_isNeitherRefusal(t *testing.T) {
+	t.Parallel()
+	h, _ := awaitingHarness(t, &awaiting{
+		expecting: expecting{servers: map[string]bool{"crm": true}},
+		waiting:   map[string]bool{"crm": true},
+		err:       errors.New("settings unreachable"),
+	})
+
+	_, err := h.runner.Advance(context.Background(), h.start(t, generousBudget()))
+
+	var waiting *AwaitingPersonError
+	var unavailable *ToolServerUnavailableError
+	if err == nil || errors.As(err, &waiting) || errors.As(err, &unavailable) {
+		t.Fatalf("Advance err = %v, want the read's failure and no refusal", err)
 	}
 }

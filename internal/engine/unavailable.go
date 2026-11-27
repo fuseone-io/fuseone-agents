@@ -97,9 +97,17 @@ func (r *Runner) unavailableTools(
 		if err != nil {
 			return nil, fmt.Errorf("engine: ask whether server %s is expected: %w", server, err)
 		}
-		if expected {
-			return nil, &ToolServerUnavailableError{Server: server, Tools: implicated[server]}
+		if !expected {
+			continue
 		}
+		waiting, err := r.deps.Servers.AwaitingPerson(ctx, server)
+		if err != nil {
+			return nil, fmt.Errorf("engine: ask whether server %s waits for a person: %w", server, err)
+		}
+		if waiting {
+			return nil, &AwaitingPersonError{Server: server, Tools: implicated[server]}
+		}
+		return nil, &ToolServerUnavailableError{Server: server, Tools: implicated[server]}
 	}
 	return missing, nil
 }
