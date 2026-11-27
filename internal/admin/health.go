@@ -3,8 +3,11 @@ package admin
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -29,10 +32,11 @@ func (h *Health) Record(ctx context.Context, obs domain.IntegrationHealth) error
 	_, err := h.pool.Exec(ctx, `
 		insert into integration_health (
 			name, reachable, tool_count, detail, observed_at, observed_by,
-			last_reachable_at
+			last_reachable_at, awaiting_person, awaiting_generation
 		)
 		values ($1, $2, $3, $4, $5, $6,
-			case when $2::boolean then $5::timestamptz else null::timestamptz end)
+			case when $2::boolean then $5::timestamptz else null::timestamptz end,
+			$7, $8)
 		on conflict (name) do update set
 			reachable = excluded.reachable,
 			tool_count = excluded.tool_count,
@@ -42,8 +46,11 @@ func (h *Health) Record(ctx context.Context, obs domain.IntegrationHealth) error
 			last_reachable_at = case
 				when excluded.reachable then excluded.observed_at
 				else integration_health.last_reachable_at
-			end`,
-		obs.Name, obs.Reachable, obs.ToolCount, obs.Detail, obs.ObservedAt.UTC(), obs.ObservedBy)
+			end,
+			awaiting_person = excluded.awaiting_person,
+			awaiting_generation = excluded.awaiting_generation`,
+		obs.Name, obs.Reachable, obs.ToolCount, obs.Detail, obs.ObservedAt.UTC(), obs.ObservedBy,
+		obs.AwaitingPerson, awaitingGeneration(obs))
 	if err != nil {
 		return fmt.Errorf("admin: record health of %s: %w", obs.Name, err)
 	}
@@ -94,14 +101,37 @@ func (h *Health) Forget(ctx context.Context, name string) error {
 	return nil
 }
 
+const healthColumns = `name, reachable, tool_count, detail, observed_at, observed_by,
+	last_reachable_at, tool_call_ok, tool_call_code,
+	tool_call_observed_at, tool_call_observed_by,
+	last_tool_call_ok_at, awaiting_person, awaiting_generation`
+
+// awaitingGeneration is the wait's generation as stored: none unless waiting,
+// so a row that stops waiting cannot keep a generation a reader would match.
+func awaitingGeneration(obs domain.IntegrationHealth) *time.Time {
+	if !obs.AwaitingPerson || obs.AwaitingGeneration.IsZero() {
+		return nil
+	}
+	at := obs.AwaitingGeneration.UTC()
+	return &at
+}
+
+// Of returns the latest observation of one server, and whether there is one.
+func (h *Health) Of(ctx context.Context, name string) (domain.IntegrationHealth, bool, error) {
+	obs, err := scanHealth(h.pool.QueryRow(ctx,
+		`select `+healthColumns+` from integration_health where name = $1`, name))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.IntegrationHealth{}, false, nil
+	}
+	if err != nil {
+		return domain.IntegrationHealth{}, false, fmt.Errorf("admin: read health of %s: %w", name, err)
+	}
+	return obs, true, nil
+}
+
 // All returns the latest observation of every server, by name.
 func (h *Health) All(ctx context.Context) (map[string]domain.IntegrationHealth, error) {
-	rows, err := h.pool.Query(ctx, `
-		select name, reachable, tool_count, detail, observed_at, observed_by,
-		       last_reachable_at, tool_call_ok, tool_call_code,
-		       tool_call_observed_at, tool_call_observed_by,
-		       last_tool_call_ok_at
-		from integration_health`)
+	rows, err := h.pool.Query(ctx, `select `+healthColumns+` from integration_health`)
 	if err != nil {
 		return nil, fmt.Errorf("admin: read health: %w", err)
 	}
@@ -127,12 +157,16 @@ func scanHealth(row healthRow) (domain.IntegrationHealth, error) {
 	var observed, lastReachable sql.NullTime
 	var callOK sql.NullBool
 	var callCode, callBy string
-	var callObserved, lastCallOK sql.NullTime
+	var callObserved, lastCallOK, awaitingAt sql.NullTime
 	err := row.Scan(&obs.Name, &obs.Reachable, &obs.ToolCount,
 		&obs.Detail, &observed, &obs.ObservedBy, &lastReachable,
-		&callOK, &callCode, &callObserved, &callBy, &lastCallOK)
+		&callOK, &callCode, &callObserved, &callBy, &lastCallOK,
+		&obs.AwaitingPerson, &awaitingAt)
 	if err != nil {
 		return domain.IntegrationHealth{}, err
+	}
+	if awaitingAt.Valid {
+		obs.AwaitingGeneration = awaitingAt.Time.UTC()
 	}
 	obs.ObservedAt = observed.Time.UTC()
 	if lastReachable.Valid {
