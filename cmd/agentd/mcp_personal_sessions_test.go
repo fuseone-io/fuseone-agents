@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -38,6 +39,10 @@ type identityServer struct {
 	// beforeInitialize, when set, runs as an initialize arrives, before it is
 	// answered.
 	beforeInitialize func(auth string)
+	// anonymous counts the requests that carried no token, refused with
+	// refuseWith, 401 when zero.
+	anonymous  int
+	refuseWith int
 }
 
 func newIdentityServer(t *testing.T) (*identityServer, string) {
@@ -52,7 +57,11 @@ func newIdentityServer(t *testing.T) (*identityServer, string) {
 	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		if auth == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			ids.mu.Lock()
+			ids.anonymous++
+			status := cmp.Or(ids.refuseWith, http.StatusUnauthorized)
+			ids.mu.Unlock()
+			http.Error(w, http.StatusText(status), status)
 			return
 		}
 		body, _ := io.ReadAll(r.Body)

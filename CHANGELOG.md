@@ -30,6 +30,28 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Changed
+
+- **A server that takes each person's own credential, and that nothing else can discover, is
+  discovered as whoever connected their account to it last.** Its catalogue used to be learned
+  with the shared credential or not at all, so a server that refuses everybody but a person
+  stayed with no tools, and nobody could call one. The shared credential still comes first, and
+  with none the server is tried as nobody, since some discover without one. The worker turns to
+  a person when the shared grant holds nothing a request could carry, or when the server
+  answers that discovery with 401 or 403. A server that is down stays "not answering". The
+  person is the one who configured their credential for that server last, and the smaller id
+  on a tie, so every worker picks the same one. The worker renewing a token, or a move of the
+  server to an area, does not change who that is. There is no failover between people: if the
+  last one's credential is refused, the server stays unreachable until they reconnect or remove
+  it, even when an earlier person's would work. The session opened that way only lists tools.
+  A run with no person, a schedule's, is refused rather than run as whoever discovered, and each
+  person's calls still go through their own session. The worker discovers again when that
+  person changes or removes their credential, or someone else connects since. With nobody
+  connected, the server says so, and the tools learned as the last person leave the catalogue.
+  The trail records `mcp_server.discovered_on_behalf` by the worker, with the person's id and the
+  worker's name and nothing else, once per worker for each person it discovers as, and again
+  after a restart. No migration.
+
 ## [0.145.0] — 2026-11-26
 
 A server that takes each person's own credential gives each person their own session, opened

@@ -165,6 +165,9 @@ func (i *Integrations) repointPersonalCredentials(
 		if rowServer(stored, row.Name) != server {
 			continue
 		}
+		// Every credential of the server is rewritten at one time: a row
+		// stored before the instant was recorded keeps its own (delivery 3).
+		stored.ConfiguredAt = stored.configuredOr(row.UpdatedAt)
 		stored.ServerAt = serverRow(kind, to)
 		value, err := json.Marshal(stored)
 		if err != nil {

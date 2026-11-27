@@ -74,6 +74,9 @@ func connectServer(
 	if cleanup != nil {
 		managed = cleanupSession{Session: session, cleanup: cleanup}
 	}
+	if policy.discoverAs != nil {
+		managed = discoveryOnly{Session: managed, server: server.Name}
+	}
 	if err := catalog.AddServer(ctx, server.Name, managed, server.Surface,
 		tools.WithRateLimit(server.RateLimit),
 		tools.WithResultCache(server.Cache),
@@ -83,7 +86,7 @@ func connectServer(
 		// server no row describes, a --mcp flag's, and the catalogue reads
 		// that as the installation's.
 		tools.WithScope(server.Scope),
-		personalSessions(server, creds, oauth, personal, policy),
+		personalSessions(server, creds, oauth, personal, policy.forCalls()),
 	); err != nil {
 		_ = managed.Close()
 		return fmt.Errorf("import tools from %s: %w", server.Name, err)
@@ -111,6 +114,7 @@ func transportFor(
 		client = withTolerantCancel(server.Name, client)
 		client = applyCallTimeout(server, client)
 		client = withEgress(server, client)
+		client = discoveryClient(client, policy)
 		return &mcp.StreamableClientTransport{
 			Endpoint:   server.URL,
 			HTTPClient: client,
@@ -285,6 +289,9 @@ func authenticatedClientWithPolicy(
 
 type credentialPolicy struct {
 	requirePersonal bool
+	// discoverAs is the person a discovery session is opened as; nil is
+	// with the shared credential, or as nobody.
+	discoverAs *discoverer
 }
 
 func baseHTTPTransport() http.RoundTripper {
@@ -764,6 +771,12 @@ type reconciler struct {
 	rediscovery rediscoveries
 	// unpublished is a publication the administration refused, still owed.
 	unpublished bool
+	// discovering is each server discovered as a person, and as whom;
+	// announced, each server and person this worker has said it discovered
+	// as; owedTrail, what it has yet to write of that (delivery 3).
+	discovering map[string]discoverer
+	announced   map[string]struct{}
+	owedTrail   map[string]admin.MCPDiscoveredOnBehalf
 }
 
 func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorder) *reconciler {
@@ -774,6 +787,9 @@ func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorde
 		generations: make(map[string]time.Time),
 		flags:       make(map[string]domain.MCPServer),
 		holder:      defaultOwner(),
+		discovering: make(map[string]discoverer),
+		announced:   make(map[string]struct{}),
+		owedTrail:   make(map[string]admin.MCPDiscoveredOnBehalf),
 	}
 }
 
@@ -838,6 +854,7 @@ func (r *reconciler) reconcile(ctx context.Context) {
 	// a live session is leased.
 	changed := r.reviveFlagServers(ctx)
 	changed = r.renewLeases(ctx) || changed
+	changed = r.retireMovedDiscoverers(ctx, wanted) || changed
 	changed = r.disconnectStale(wanted) || changed
 	for name, server := range wanted {
 		if _, already := r.connected[name]; already {
@@ -872,6 +889,7 @@ func (r *reconciler) reconcile(ctx context.Context) {
 		}
 		r.unpublished = err != nil
 	}
+	r.settleTrail(ctx)
 }
 
 // publication is the catalogue with each server's standing: the
@@ -921,6 +939,7 @@ func (r *reconciler) disconnectStale(wanted map[string]domain.MCPServer) bool {
 		}
 		delete(r.connected, name)
 		delete(r.generations, name)
+		delete(r.discovering, name)
 		withdrew = withdrew || !still
 	}
 	return withdrew
@@ -1005,19 +1024,8 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool 
 		return false
 	}
 
-	var oauth OAuthGrantStore
-	if store, ok := r.servers.(OAuthGrantStore); ok {
-		oauth = store
-	}
-	var personal MCPUserCredentialStore
-	if store, ok := r.servers.(MCPUserCredentialStore); ok {
-		personal = store
-	}
-	// The recipe saying only people hold credentials for it, or a browser
-	// sign-in configured on it: every call then acts as the caller.
-	userOnly := r.policy != nil && r.policy.RequiresPersonalCredential(server.Name)
-	policy := credentialPolicy{requirePersonal: server.TakesPersonalCredential(userOnly)}
-	if err := r.connectTo(ctx, r.catalog, server, creds, oauth, personal, policy, r.egress); err != nil {
+	as, err := r.reach(ctx, r.linkFor(server, creds))
+	if err != nil {
 		// Recorded and skipped, never fatal. One broken integration used to
 		// mean nothing on the installation ran, including every agent that
 		// never touches it.
@@ -1037,6 +1045,7 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool 
 
 	r.connected[server.Name] = fingerprint(server)
 	r.generations[server.Name] = server.UpdatedAt
+	r.discoveredAs(server, as)
 	r.answeredByConnecting(ctx, server)
 	count := r.catalog.CountFrom(server.Name)
 	slog.Info("tool server connected",
