@@ -51,6 +51,22 @@ field" is a commit message.
   The trail records `mcp_server.discovered_on_behalf` by the worker, with the person's id and the
   worker's name and nothing else, once per worker for each person it discovers as, and again
   after a restart. No migration.
+- **A run that needs a server waiting for a person ends `failed` with
+  `mcp_personal_credential_missing`.** Only a person can discover that server, and nobody has
+  connected an account to it. Such a run used to retry `tool_server_unavailable` until it parked,
+  and no retry could bring a person. It is refused before the model is called. Connecting an
+  account afterwards does not resume it; a new run does the work. The refusal stands only while
+  it is still true. The worker must have seen the server unreachable for this reason, under its
+  current configuration, and the store must say again that nobody has connected. A store that
+  cannot answer is a fault the run retries, never "nobody". A tool call that finds its caller
+  without a credential carries the same code, and it still parks as before.
+- **The console shows "waiting for a person" for such a server, in place of "not answering".**
+  The API's `health.awaitingPerson` is true only while the server is unreachable and the
+  observation was made under its current configuration. Migration `0129` adds two columns to
+  `integration_health`. The previous binary never writes them and keeps working. A row it
+  writes over keeps the old wait, so the console and a run honour it only while the row says
+  unreachable under the current configuration, and a run only when the store again says nobody
+  has connected.
 
 ## [0.145.0] — 2026-11-26
 
